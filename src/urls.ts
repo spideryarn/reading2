@@ -266,8 +266,16 @@ export function webLinks(text: string): WebLink[] {
   return out;
 }
 
-/** `https://user:pass@host/` — a label built into the address itself. */
-function hasCredentials(url: string): boolean {
+/**
+ * `https://user:pass@host/` — a label built into the address itself.
+ *
+ * Exported since 2026-08-31, because a link the *parser* found needs the same
+ * two refusals a bare one gets. `mdast-util-from-markdown` hands back whatever
+ * string was between the brackets, so `[here](javascript:…)` and
+ * `[here](https://user:pass@host/)` both arrive as ordinary `link` nodes and are
+ * checked in src/web/Cited.tsx § drawLink. Two kinds of link, one answer.
+ */
+export function hasCredentials(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.username !== "" || parsed.password !== "";
@@ -279,13 +287,20 @@ function hasCredentials(url: string): boolean {
 /**
  * The same text with every link blanked out, character for character.
  *
- * For the server's citation counters, which look for block-id *shapes* in an
- * answer: `https://example.com/notes/spya-k3m9qt` carries one, and counting it
- * records either a citation the reader never sees or a hallucinated id that was
- * never hallucinated — and both of those numbers are watched
+ * For the citation counters, which look for block-id *shapes* in an answer:
+ * `https://example.com/notes/spya-k3m9qt` carries one, and counting it records
+ * either a citation the reader never sees or a hallucinated id that was never
+ * hallucinated — and both of those numbers are watched
  * (src/converse.ts § `unknownCitedIds`). The renderer takes links out before it
  * looks for citations; this is how the counters do the same thing, using the
  * same matcher rather than a second one that can disagree.
+ *
+ * **Its one caller is now `citableText` (src/citable.ts)**, which does the rest
+ * of that job — a code span, a link's label and an image's alt text are not
+ * citable either, and no regex can tell where those are once the renderer is
+ * parsing. This is the bare-address half of the answer and it stays here,
+ * beside the matcher, because the server and the renderer must agree about
+ * where an address stops.
  *
  * Spaces rather than deletion so that every other offset in the string is
  * unchanged.
@@ -297,3 +312,4 @@ export function withoutWebLinks(text: string): string {
   }
   return out;
 }
+

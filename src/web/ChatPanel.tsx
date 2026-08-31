@@ -33,20 +33,19 @@
  * prompt in src/converse.ts), and that has not changed. What changed on
  * 2026-08-31 is that the shapes the prompt already permits are now **drawn**:
  * before it, a short bullet list — which FORMAT allows in as many words —
- * arrived as one paragraph reading `- one - two - three`. markdown.ts finds the
- * blocks, Cited.tsx draws them, and docs/plans/chat-markdown.md says which
- * shapes are read and, more usefully, which are refused.
+ * arrived as one paragraph reading `- one - two - three`. Cited.tsx parses and
+ * draws them, and docs/plans/chat-markdown.md says which shapes are read and,
+ * more usefully, which are refused.
  *
  * **What has not changed is that none of it is HTML.** Rendering arbitrary
  * model output as markup is the one thing docs/project/security.md is about, so
  * every pass here returns runs of *string* handed to React, which escapes them.
- * There is no Markdown library here, and the reason is NOT that they all return
- * HTML — `react-markdown` does not. It is that the inline layer is not Markdown
- * at all: a block id has no syntax, it is matched by shape and checked against
- * the article, and a link prints its real host beside the model's label. A
- * library would replace the block half and leave every interesting rule where
- * it is. docs/plans/chat-markdown.md § No Markdown library states the trade,
- * including a reviewer's case for making it the other way.
+ * The parsing is `mdast-util-from-markdown`'s — the tokenizer remark is built on,
+ * which returns an AST and stops. What stays ours is the part no parser can do:
+ * a block id has no syntax, it is matched by shape and checked against the
+ * article; bare addresses are matched by the same code the server uses; and a
+ * link is scheme-checked and prints its real host beside the model's label.
+ * docs/plans/chat-markdown.md § The library, and why this one.
  *
  * Three things model syntax reaches that are not text nodes, all of them
  * constrained: the `href` of a link the model wrote, which is opt-in and
@@ -1676,9 +1675,9 @@ function Answer({
        reason the dock's placeholder buttons share one — Tooltip.tsx. */
     <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
       {/* The blocks, the chips, the hover cards, the web links and the marks
-          all live in Cited.tsx and markdown.ts, shared with the summary panel.
-          Two copies of what a citation looks like would drift, and a chip that
-          means something slightly different depending on which band it is in is
+          all live in Cited.tsx, shared with the summary panel. Two copies of
+          what a citation looks like would drift, and a chip that means
+          something slightly different depending on which band it is in is
           worse than either version. */}
       <CitedMarkdown
         text={text}
@@ -1692,8 +1691,8 @@ function Answer({
         partial={live}
         /* Chat, and only chat, for both of the opt-in flags. The prompt here
            has a rule governing what a model may link (converse.ts § LINKING TO
-           THE WEB) and asks for the shapes markdown.ts reads; the summary
-           prompt asks for plain sentences and has neither. Cited.tsx § links,
+           THE WEB) and asks for the shapes this draws; the summary prompt asks
+           for plain sentences and has neither. Cited.tsx § links,
            Cited.tsx § CitedMarkdown. */
         links
       />

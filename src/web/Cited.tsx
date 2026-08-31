@@ -1,5 +1,6 @@
 /**
- * Model prose with `[spya-k3m9qt]` in it, drawn as something you can press.
+ * Model prose, drawn — the marks, the blocks, and `[spya-k3m9qt]` turned into
+ * something you can press.
  *
  * **One definition, two panels.** This was chat's, privately, until the
  * summaries needed the same thing (Greg, 2026-08-26: *"Add block-ids to the
@@ -7,39 +8,61 @@
  * rich-tooltips"*). Two copies of "how a citation looks and what hovering one
  * shows" would drift, and the day they drift is the day a reader learns that a
  * chip means something slightly different depending on which band it is in.
- * Same reasoning as src/quote-match.ts and src/web/search-hits.ts: where two
- * features answer one question, they answer it in one file.
  *
- * The rules the chips obey live next door in citations.ts, which is DOM-free
- * and tested. This file is only the drawing.
+ * ## Where the Markdown comes from
  *
- * **Text is rendered as text, never `dangerouslySetInnerHTML`.** This is model
- * output. The article's own HTML is sanitised twice before it is trusted
- * (docs/project/security.md) and nothing here earns an exemption; every splitter
- * in citations.ts, and every block in markdown.ts, returns *string*, and React
- * escapes strings.
+ * `mdast-util-from-markdown`, which is the tokenizer `remark-parse` is built
+ * on. It gives back an **AST and stops** — no HTML at any stage, no `hast`, no
+ * `remark-rehype`, nothing to sanitise. This file walks that tree into React
+ * elements.
  *
- * The one thing here that reaches an **attribute** rather than a text node is a
- * link the model wrote, and it is off unless a caller asks for it — see `links`.
+ * It replaced a hand-rolled parser on 2026-08-31, the day after that parser was
+ * written, on Greg's call after a review found seven defects in it — six of them
+ * text the model wrote that never reached the reader. The reasoning, the
+ * measurements and the library comparison are in docs/plans/chat-markdown.md.
+ * The short version: **CommonMark is a specification with edge cases, and we do
+ * not want to be the ones who know them all.**
+ *
+ * ## What is still ours, and why
+ *
+ * The library owns *structure* and the marks that have syntax. Three things it
+ * cannot own:
+ *
+ *  - **Block ids have no syntax at all.** A bare `spya-k3m9qt` in ordinary prose
+ *    is a citation if this article has that id and nothing otherwise, so it is
+ *    matched on shape inside `text` nodes, by `splitCitations` — untouched by
+ *    this rewrite, along with its two bug-history paragraphs.
+ *  - **Bare URLs stay ours**, and that is not taste. `webLinks` in src/urls.ts is
+ *    shared with the *server*, which strips links before counting cited ids so
+ *    that an id inside a URL is not read as a hallucination. Letting the parser
+ *    decide what a bare URL is would give the two sides two answers. So
+ *    `remark-gfm` is deliberately **not** installed: its autolink literals are
+ *    the one thing it offers that we would have to override anyway, and the rest
+ *    of it is tables and footnotes we do not want.
+ *  - **A link is checked before it is drawn** — scheme, credentials, the real
+ *    host printed beside the model's label. See `drawLink`.
+ *
+ * ## Nothing here becomes markup
+ *
+ * This is model output. The article's own HTML is sanitised twice before it is
+ * trusted (docs/project/security.md) and nothing here earns an exemption.
+ * Every leaf reaches React as a **string**, which React escapes. Two node kinds
+ * make that explicit rather than incidental: an `html` node — the model wrote
+ * `<b>` — is drawn as its own characters, and so is an `image`, because an
+ * `<img src>` built from model output is a request to an address a hostile page
+ * chose. `sourceOf` is how both do it.
  */
-import { createElement, Fragment, type ReactElement } from "react";
+import { createElement, Fragment, useMemo, type ReactElement, type ReactNode } from "react";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef, shortBlockId } from "./BlockRef.js";
-import { type MdBlock, parseBlocks } from "./markdown.js";
 import { Tooltip } from "./Tooltip.js";
-import {
-  emphasise,
-  type EmphasisedRun,
-  snippet,
-  splitCitations,
-  splitEmphasis,
-  splitInline,
-  splitItalic,
-} from "./citations.js";
+import { snippet, splitCitations, splitLinks } from "./citations.js";
 import type { BlockId } from "../types.js";
-import { hostOf } from "../urls.js";
+import { hasCredentials, hostOf, isWebUrl } from "../urls.js";
 
 interface Props {
-  /** One run of model prose. Paragraph splitting is the caller's business. */
+  /** One run of model prose, or a whole answer. */
   text: string;
   /** Every block this article has, id to plain text. Also the "is this real" check. */
   blocks: Map<string, string>;
@@ -57,18 +80,17 @@ interface Props {
    */
   live?: boolean;
   /**
-   * This run of text may be **half-written** — it is the last paragraph of an
-   * answer that is still arriving.
+   * The **end** of this text may be half-written — the answer is still arriving.
    *
    * A separate flag from `live`, and deliberately: `live` is about how much
-   * machinery to mount while the text keeps changing, and this is about
-   * trusting the last few characters. Only the tail of a streaming answer is
-   * unfinished, so only the caller knows which paragraph gets it. See
-   * `splitLinks`.
+   * machinery to mount while the text keeps changing, and this is about trusting
+   * the last few characters. Only a bare address needs it — a `[label](url)` is
+   * proof its own address finished, and so is `<https://…>` — so it reaches
+   * exactly one place, the last `text` node in the tree. See `splitLinks`.
    */
   partial?: boolean;
   /**
-   * Draw `[label](https://…)` and bare addresses as links. **Off by default.**
+   * Draw links. **Off by default.**
    *
    * Opt-in rather than on everywhere, and the reason is a boundary rather than
    * a preference. An `href` built from model output is a place a hostile page
@@ -80,35 +102,57 @@ interface Props {
    *
    * The first version of this turned links on for every caller of this file, on
    * the argument that a mark meaning two things in two bands is worse than
-   * either. That argument is about *appearance*; this is about what an
-   * attacker can reach. Raised by a GPT Sol review, 2026-08-27.
+   * either. That argument is about *appearance*; this is about what an attacker
+   * can reach. Raised by a GPT Sol review, 2026-08-27.
    */
   links?: boolean;
   /** Class for the chip wrapper, so each band can size its own. */
   className?: string;
 }
 
+/** Everything the walk below needs, gathered once per render. */
+interface Ctx {
+  blocks: Map<string, string>;
+  onJump(id: BlockId): void;
+  live: boolean;
+  links: boolean;
+  className: string | undefined;
+  /** The source, for drawing a node as the characters the model wrote. */
+  source: string;
+  /** The last `text` node in the tree, if its tail is not to be trusted. */
+  tail: Text | null;
+}
+
 /**
- * Model prose, drawn.
+ * A whole answer, with its blocks drawn as well as its marks.
  *
- * **Four passes, in this order: code spans, then links inside what is left,
- * then emphasis across both, then citations.** None of them can move. Code is
- * first because what is inside backticks is shown as written, so it must reach
- * none of the others. Links come before citations because `splitCitations`
- * matches a bare run of ids by shape and a URL can carry that shape inside its
- * path (`splitLinks` says why at length). Emphasis has to see the links and the
- * code rather than the gaps between them, or `**[The paper](https://…)**` and
- * ``**bold with `code` in it**`` print their own asterisks (`emphasise`).
- *
- * The first three are `splitInline`, which returns ONE run list precisely so
- * emphasis can pair markers across the whole paragraph.
- *
- * A link's label gets emphasis and nothing else. An id inside a label is not a
- * citation: it is the words the model chose for a destination, and turning part
- * of them into a chip would put a second, differently-behaved thing inside
- * something the reader is about to press.
+ * Chat's, and only chat's. The summary prompt asks for plain sentences and gets
+ * them, and a summary is dense enough that a stray `#` becoming a heading would
+ * be worse than a stray `#` — so summaries use `CitedText`, which reads the same
+ * marks and refuses the same structure.
  */
-export function CitedText({
+export function CitedMarkdown(props: Props): ReactElement {
+  return <Drawn {...props} flat={false} />;
+}
+
+/**
+ * One run of model prose: the marks and the citation chips, and **no structure**.
+ *
+ * The summary panel's, where the text sits inside a `<p>` that is already
+ * `white-space: pre-wrap`, so paragraphs are blank lines rather than elements.
+ *
+ * A block that is not a paragraph is drawn as **the characters the model wrote**
+ * — see `drawBlock`. That is the one behaviour here worth being deliberate
+ * about: flattening a list to its items' text would delete the `- ` from every
+ * line, and silently deleting what the model wrote is the failure this whole
+ * area keeps having. Showing the marker is what the panel did before any of
+ * this existed.
+ */
+export function CitedText(props: Props): ReactElement {
+  return <Drawn {...props} flat />;
+}
+
+function Drawn({
   text,
   blocks,
   onJump,
@@ -116,106 +160,384 @@ export function CitedText({
   partial = false,
   links = false,
   className,
-}: Props): ReactElement {
-  const runs = emphasise(splitInline(text, links, partial));
-  const ctx = { blocks, onJump, live, ...(className ? { className } : {}) };
-  return (
-    <>
-      {runs.map((run, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-        <Fragment key={`r${i}`}>{draw(run, ctx)}</Fragment>
-      ))}
-    </>
-  );
-}
-
-/** One run of a paragraph: a code span, a link, or prose with chips in it. */
-function draw(
-  run: EmphasisedRun,
-  ctx: Omit<Props, "text" | "partial" | "links">,
-): ReactElement {
-  if (run.kind === "code") return wrap(<code className="fmt-code">{run.text}</code>, run.bold);
-  if (run.kind === "link" && run.url) return link(run.text, run.url, run.bold);
-  return wrap(cited(run.text, ctx), run.bold);
-}
-
-/** `<strong>` around a run the model asked to emphasise, and nothing otherwise. */
-function wrap(content: ReactElement, bold: boolean): ReactElement {
-  return bold ? <strong>{content}</strong> : content;
+  flat,
+}: Props & { flat: boolean }): ReactElement {
+  /* Parsed once per distinct answer. A streamed answer changes on every token
+     so this misses on every token by design — measured at ~1.5ms for a 4KB
+     answer, which is the budget it has to fit in. What the memo removes is the
+     re-parse on every UNRELATED re-render of the panel around it. */
+  const tree = useMemo(() => fromMarkdown(text), [text]);
+  const ctx: Ctx = {
+    blocks,
+    onJump,
+    live,
+    links,
+    className,
+    source: text,
+    tail: partial ? lastText(tree, text) : null,
+  };
+  return <>{drawBlocks(tree.children, ctx, flat)}</>;
 }
 
 /**
- * One link the model wrote, and the host it actually goes to.
+ * The last `text` node in the tree — the only place a half-written address can
+ * be.
+ *
+ * By position rather than by walk order, because the two agree and the first is
+ * one line. Everything above the tail has finished arriving, whatever block it
+ * sits in: the first version of this passed the flag only to the last
+ * *paragraph*, so a URL still arriving inside a quote or a heading was linked
+ * two tokens before it became something else. Found by a GPT Sol review,
+ * 2026-08-31.
+ */
+function lastText(tree: Root, source: string): Text | null {
+  let last: Text | null = null;
+  const walk = (node: Nodes) => {
+    if (node.type === "text") {
+      if (!last || (node.position?.end.offset ?? 0) > (last.position?.end.offset ?? 0)) last = node;
+      return;
+    }
+    if ("children" in node) for (const child of node.children) walk(child);
+  };
+  walk(tree);
+  /* **Only if it really is the end of the answer.** An answer whose last block
+     is a code fence has its greatest-offset `text` node somewhere above it —
+     that text has finished arriving, and suppressing a link in it left a
+     finished URL unclickable until the whole answer landed. Over-suppression
+     rather than a premature link, but a flicker either way. GPT Sol, 2026-08-31. */
+  const ends = (last as Text | null)?.position?.end.offset ?? -1;
+  return ends === source.trimEnd().length ? last : null;
+}
+
+/**
+ * A node as the characters the model actually typed.
+ *
+ * The fallback for everything this file does not draw — raw HTML, images,
+ * reference links and their definitions, and anything a future CommonMark
+ * construct adds. **It cannot lose text**, which is why it is a slice of the
+ * source rather than a reconstruction: whatever we failed to understand, the
+ * reader still sees exactly what arrived.
+ *
+ * Positions are on every node `mdast-util-from-markdown` produces, so the
+ * fallback below is for a future parser rather than this one. It falls back to
+ * the node's own `value` rather than to `""`, because a review pointed out that
+ * "cannot lose text" and "whatever CommonMark grows next" are a stronger pair of
+ * claims than `""` supports: an `html` or `code` node still knows its own
+ * characters even if it has forgotten where they came from.
+ */
+function sourceOf(node: Nodes, ctx: Ctx): string {
+  const from = node.position?.start.offset;
+  const to = node.position?.end.offset;
+  if (from !== undefined && to !== undefined) return ctx.source.slice(from, to);
+  return "value" in node && typeof node.value === "string" ? node.value : "";
+}
+
+/**
+ * How deep a quote inside a list inside a quote may go before we stop reading
+ * structure and draw the rest as its own characters.
+ *
+ * The parser handles 6,000 nested `>` markers without complaint; **this walk
+ * does not**, and that distinction cost the first version of this rewrite a
+ * defect. `drawBlocks` → `drawBlock` → `drawBlocks` is several stack frames per
+ * level, and a review measured `RangeError: Maximum call stack size exceeded` at
+ * around 2,400 levels. In this panel that is not a bad answer, it is the
+ * conversation gone: the render throws and the reader loses the thread.
+ *
+ * The hand-rolled parser had this cap. Deleting the parser deleted it, which is
+ * the shape of mistake a rewrite makes — the guard lived in the thing being
+ * replaced rather than in the thing that needed it. GPT Sol, 2026-08-31.
+ *
+ * Twelve is past anything a model writes and nowhere near the stack.
+ * `citableText` (src/citable.ts) stops at the same depth, so the server counts
+ * citations in exactly the text the reader is shown chips in.
+ */
+const MAX_DEPTH = 12;
+
+/**
+ * A run of blocks.
+ *
+ * In flat mode the blank line goes **between** them and not after each, which
+ * is a sentence's worth of care for a reason: `.summ-text` is `pre-wrap`, so a
+ * trailing `\n\n` is a visible empty line under every summary in the panel.
+ * The first version of this appended one and seven older tests in
+ * chat-web-links-render.test.tsx went red on the whitespace — which is exactly
+ * what they were for.
+ */
+function drawBlocks(nodes: RootContent[], ctx: Ctx, flat: boolean, depth = 0): ReactNode[] {
+  return nodes.map((node, i) => {
+    const before = i > 0 ? nodes[i - 1] : undefined;
+    return (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`b${i}`}>
+        {before && between(before, node, ctx, flat, depth)}
+        {drawBlock(node, ctx, flat, depth)}
+      </Fragment>
+    );
+  });
+}
+
+/**
+ * What goes between two blocks.
+ *
+ * Usually nothing — a `<p>` and a `<ul>` space themselves. Two cases need
+ * characters, and both are about **not losing what the model wrote**:
+ *
+ *  - **Either side is drawn as its own source.** A node's position covers the
+ *    node; the blank line *between* two nodes belongs to neither, so two raw
+ *    blocks in a row ran together on screen —
+ *    `[a]: https://a.example[b]: https://b.example`. Found by a GPT Sol review,
+ *    2026-08-31, which is also the review that pointed out the claim "`sourceOf`
+ *    cannot lose text" was therefore false. The gap is taken from the source, so
+ *    it is whatever the model actually typed.
+ *  - **Flat mode**, where a paragraph break is a blank line rather than an
+ *    element — see `CitedText`.
+ */
+function between(
+  before: RootContent,
+  after: RootContent,
+  ctx: Ctx,
+  flat: boolean,
+  depth: number,
+): string {
+  if (asSource(before, flat, depth) || asSource(after, flat, depth)) {
+    const from = before.position?.end.offset;
+    const to = after.position?.start.offset;
+    if (from !== undefined && to !== undefined && to > from) return ctx.source.slice(from, to);
+  }
+  return flat ? "\n\n" : "";
+}
+
+/** Is this block drawn as the characters the model typed rather than as itself? */
+function asSource(node: RootContent, flat: boolean, depth: number): boolean {
+  if (depth >= MAX_DEPTH) return true;
+  if (flat) return node.type !== "paragraph";
+  return !DRAWN.has(node.type);
+}
+
+/** The block kinds `drawBlock` has an element for. Everything else is source. */
+const DRAWN = new Set(["paragraph", "heading", "list", "blockquote", "code", "thematicBreak"]);
+
+function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): ReactNode {
+  // Past the cap nothing is structure — see MAX_DEPTH.
+  if (depth >= MAX_DEPTH) return sourceOf(node, ctx);
+  if (node.type === "paragraph") {
+    const inner = inline(node.children, ctx);
+    /* In flat mode a paragraph is its own contents; the blank line between one
+       paragraph and the next is `drawBlocks`'s, which is what `.summ-text`'s
+       `pre-wrap` has always shown. */
+    return flat ? inner : <p>{inner}</p>;
+  }
+  // Structure is chat's. A summary shows the characters instead — see CitedText.
+  if (flat) return sourceOf(node, ctx);
+
+  switch (node.type) {
+    case "heading":
+      /* `h4` and down, never `h1`. The panel's own title is the `h2` above
+         these, so an answer that starts with `#` must not outrank it — a
+         document outline that says the reply is the page is worse than a
+         heading a step smaller than the model imagined. */
+      return createElement(
+        `h${Math.min(6, node.depth + 3)}`,
+        { className: "fmt-h" },
+        inline(node.children, ctx),
+      );
+    case "list":
+      return drawList(node, ctx, depth);
+    case "blockquote":
+      return (
+        <blockquote className="fmt-quote">
+          {drawBlocks(node.children, ctx, false, depth + 1)}
+        </blockquote>
+      );
+    case "code":
+      /* No highlighting and no language badge. The face and the box are what
+         make code readable at this size; the rest is a library. An unclosed
+         fence still lands here — CommonMark says a code block runs to the end
+         of its container — which is what a reader watching an answer arrive
+         should see. */
+      return (
+        <pre className="fmt-pre">
+          <code>{node.value}</code>
+        </pre>
+      );
+    case "thematicBreak":
+      return <hr className="fmt-rule" />;
+    default:
+      // `html`, `definition`, and whatever CommonMark grows next.
+      return sourceOf(node, ctx);
+  }
+}
+
+/**
+ * One list.
+ *
+ * `start` is carried through, so a model that numbers from 3 — which happens
+ * when it continues a list across two answers — gets a 3 rather than a 1
+ * silently correcting it.
+ *
+ * An item whose content is a single paragraph loses the `<p>`, which is the
+ * difference between a tight list and one with a blank line between every
+ * bullet. mdast decides looseness for the whole list (`spread`); this decides
+ * it per item, which is simpler and looks the same on everything a model writes.
+ */
+function drawList(node: RootContent & { type: "list" }, ctx: Ctx, depth: number): ReactElement {
+  const items = node.children.map((item, i) => {
+    const only = item.children.length === 1 ? item.children[0] : undefined;
+    return (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <li key={`i${i}`}>
+        {only?.type === "paragraph"
+          ? inline(only.children, ctx)
+          : drawBlocks(item.children, ctx, false, depth + 1)}
+      </li>
+    );
+  });
+  return node.ordered ? (
+    <ol className="fmt-list" start={node.start ?? 1}>
+      {items}
+    </ol>
+  ) : (
+    <ul className="fmt-list">{items}</ul>
+  );
+}
+
+/** The marks inside a block. `label` renders a link's own words — see `drawLink`. */
+function inline(nodes: PhrasingContent[], ctx: Ctx, label = false): ReactNode[] {
+  return nodes.map((node, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+    <Fragment key={`p${i}`}>{drawPhrase(node, ctx, label)}</Fragment>
+  ));
+}
+
+function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean): ReactNode {
+  switch (node.type) {
+    case "text":
+      return label ? node.value : leaf(node, ctx);
+    case "strong":
+      return <strong>{inline(node.children, ctx, label)}</strong>;
+    case "emphasis":
+      return <em>{inline(node.children, ctx, label)}</em>;
+    case "inlineCode":
+      /* Shown as written, and reaching no other rule: `**` in a code span is two
+         asterisks a reader asked about, and a block id in one is a string being
+         discussed rather than a place to go. */
+      return <code className="fmt-code">{node.value}</code>;
+    case "break":
+      return <br />;
+    case "link":
+      // A link inside a link's own label is not a link. Nor is one at all
+      // where the caller has not opted in.
+      return label || !ctx.links ? sourceOf(node, ctx) : drawLink(node, ctx);
+    default:
+      // `image`, `html`, `linkReference`, `footnoteReference`, …
+      return sourceOf(node, ctx);
+  }
+}
+
+/**
+ * A `text` node: the bare addresses in it, and the citation chips between them.
+ *
+ * `splitLinks` rather than the parser, because `webLinks` is shared with the
+ * server — see this file's header. It runs first for the reason it always did:
+ * `splitCitations` matches a bare run of ids by *shape*, and
+ * `https://example.com/notes/spya-k3m9qt` carries that shape inside its path.
+ */
+function leaf(node: Text, ctx: Ctx): ReactNode {
+  if (!ctx.links) return cited(node.value, ctx);
+  return splitLinks(node.value, node === ctx.tail).map((run, i) =>
+    run.kind === "link" ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`l${i}`}>{anchor(run.text, run.url)}</Fragment>
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`t${i}`}>{cited(run.text, ctx)}</Fragment>
+    ),
+  );
+}
+
+/**
+ * A `[label](url)` or `<https://…>` the parser found.
+ *
+ * **The checks are ours and they happen here**, because the parser will hand
+ * back any string at all as a `url` — `javascript:`, an address with
+ * credentials in it, a `mailto:`. `isWebUrl` and `hasCredentials` are the same
+ * two refusals `webLinks` makes about a bare address, so both kinds of link get
+ * the same answer. A refused link is drawn as the characters the model typed,
+ * which loses nothing and links nowhere.
+ */
+function drawLink(node: PhrasingContent & { type: "link" }, ctx: Ctx): ReactNode {
+  if (!isWebUrl(node.url) || hasCredentials(node.url)) return sourceOf(node, ctx);
+  /* `<https://…>` — CommonMark's angle autolink, which needs no `remark-gfm` —
+     arrives with the address as its own label. Handing `anchor` the plain
+     string lets it see that and skip the host, which would otherwise print the
+     address twice on one line. */
+  const only = node.children.length === 1 ? node.children[0] : undefined;
+  if (only?.type === "text") return anchor(only.value, node.url);
+  return anchor(inline(node.children, ctx, true), node.url);
+}
+
+/**
+ * One link, and the host it actually goes to.
  *
  * **The host is printed, quietly, beside the label.** That is not decoration:
  * the label is the model's to choose, the model has just been reading pages we
- * do not control, and `[the Anthropic paper](https://not-anthropic.example/)`
- * is a plausible sentence with a hostile destination. The hover card shows the
- * real address, but a card takes 320ms of rest to open and a click does not
- * wait for it — so the one fact that cannot be faked is on the page rather than
- * behind a gesture. Raised by a GPT Sol review, 2026-08-27, which is also where
- * the credentials refusal in `webLinks` came from.
+ * do not control, and `[the Anthropic paper](https://not-anthropic.example/)` is
+ * a plausible sentence with a hostile destination. The hover card shows the real
+ * address, but a card takes 320ms of rest to open and a click does not wait for
+ * it — so the one fact that cannot be faked is on the page rather than behind a
+ * gesture. Raised by a GPT Sol review, 2026-08-27, which is also where the
+ * credentials refusal came from.
  *
  * Not printed when the label already *is* the address, which would say it twice.
  *
- * Three guards besides, all of them reuses: the scheme was checked by
- * `isWebUrl` inside `webLinks`; the label and the URL are *strings* that React
- * escapes, never HTML; and `noreferrer` as well as `noopener`, because the
- * article's own URL is a reading history and a model-supplied destination is
- * not owed it. docs/plans/chat-web-links.md.
+ * Two more guards, both reuses: the label and the URL are strings React escapes,
+ * never HTML; and `noreferrer` as well as `noopener`, because the article's own
+ * URL is a reading history and a model-supplied destination is not owed it.
+ * docs/plans/chat-web-links.md.
  */
-function link(label: string, url: string, bold: boolean): ReactElement {
+function anchor(label: ReactNode, url: string): ReactElement {
   const host = hostOf(url);
-  const anchor = (
-    <a className="cited-link" href={url} target="_blank" rel="noopener noreferrer">
-      {emphasised(label)}
-    </a>
-  );
+  const shown = typeof label === "string" ? label : "";
   return (
     <>
-      {wrap(anchor, bold)}
-      {host !== "" && label !== url && <span className="cited-link-host">{host}</span>}
+      <a className="cited-link" href={url} target="_blank" rel="noopener noreferrer">
+        {label}
+      </a>
+      {host !== "" && shown !== url && <span className="cited-link-host">{host}</span>}
     </>
   );
 }
 
 /** The citation chips and the prose between them — one link-free run of text. */
-function cited(
-  text: string,
-  { blocks, onJump, live, className }: Omit<Props, "text" | "partial" | "links">,
-): ReactElement {
-  return (
-    <>
-      {splitCitations(text, blocks).map((seg, i) =>
-        seg.kind === "text" ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
-          <Fragment key={`t${i}`}>{emphasised(seg.text)}</Fragment>
-        ) : (
-          <span
-            className={["cite", className].filter(Boolean).join(" ")}
-            // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
-            key={`c${i}`}
-          >
-            {seg.ids.map((id) =>
-              live ? (
-                <BlockRef key={id} id={id} onJump={onJump} />
-              ) : (
-                <Tooltip
-                  key={id}
-                  placement="top"
-                  className="tip-cite"
-                  content={<CitedBlock id={id} text={blocks.get(id) ?? ""} />}
-                >
-                  <span className="cite-hit">
-                    <BlockRef id={id} onJump={onJump} />
-                  </span>
-                </Tooltip>
-              ),
-            )}
-          </span>
-        ),
-      )}
-    </>
+function cited(text: string, ctx: Ctx): ReactNode {
+  return splitCitations(text, ctx.blocks).map((seg, i) =>
+    seg.kind === "text" ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`s${i}`}>{seg.text}</Fragment>
+    ) : (
+      <span
+        className={["cite", ctx.className].filter(Boolean).join(" ")}
+        // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+        key={`c${i}`}
+      >
+        {seg.ids.map((id) =>
+          ctx.live ? (
+            <BlockRef key={id} id={id} onJump={ctx.onJump} />
+          ) : (
+            <Tooltip
+              key={id}
+              placement="top"
+              className="tip-cite"
+              content={<CitedBlock id={id} text={ctx.blocks.get(id) ?? ""} />}
+            >
+              <span className="cite-hit">
+                <BlockRef id={id} onJump={ctx.onJump} />
+              </span>
+            </Tooltip>
+          ),
+        )}
+      </span>
+    ),
   );
 }
 
@@ -229,13 +551,13 @@ function cited(
  * the model against the article without leaving the sentence they are reading.
  * That check is the whole justification for both features that use this
  * (docs/plans/chat-mode.md § Say the awkward thing first, and
- * docs/project/summaries.md § A summary is a door), and until it existed it
- * cost a jump and a scroll back.
+ * docs/project/summaries.md § A summary is a door), and until it existed it cost
+ * a jump and a scroll back.
  *
  * Truncated, deliberately and not generously. Enough to recognise the paragraph
- * and see whether it says what the summary claims; not enough to read instead
- * of going there. The original version learned the same thing about search
- * results and kept two lengths for it —
+ * and see whether it says what the summary claims; not enough to read instead of
+ * going there. The original version learned the same thing about search results
+ * and kept two lengths for it —
  * docs/project/original-version/search-and-chat.md.
  */
 function CitedBlock({ id, text }: { id: BlockId; text: string }) {
@@ -253,179 +575,4 @@ function CitedBlock({ id, text }: { id: BlockId; text: string }) {
       <div className="tip-cite-go">Click to go there</div>
     </>
   );
-}
-
-/**
- * `**like this**` → a bold run, and everything else left alone.
- *
- * Both prompts ask for plain sentences and mostly get them, but a model bolds a
- * term it is introducing whatever you tell it, and printing the asterisks makes
- * the app look like it cannot read its own model's output.
- *
- * **This and the other inline marks belong to both panels; the blocks belong to
- * chat.** `CitedText` is shared, so a summary reads bold, italic, code spans and
- * block ids too. That line is not arbitrary: an inline mark is a thing a model
- * does whatever you tell it, and a summary printing its own asterisks looks
- * broken; a heading or a bullet list is *structure*, which a summary was never
- * asked for and would be worse for. `CitedMarkdown` is the blocks, and only
- * chat passes it.
- */
-function emphasised(text: string): (string | ReactElement)[] {
-  return splitEmphasis(text).map((run, i) =>
-    run.bold ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-      <strong key={`b${i}`}>{italicised(run.text)}</strong>
-    ) : (
-      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-      <Fragment key={`i${i}`}>{italicised(run.text)}</Fragment>
-    ),
-  );
-}
-
-/**
- * `*like this*` → an emphasised run, inside whatever the bold pass left.
- *
- * The innermost pass, and it has to be: by the time a string reaches here every
- * `**` that had a partner has been consumed, so a surviving `*` is either a
- * single marker or it is arithmetic. `splitItalic` says which.
- */
-function italicised(text: string): (string | ReactElement)[] {
-  return splitItalic(text).map((run, i) =>
-    run.italic ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-      <em key={`e${i}`}>{run.text}</em>
-    ) : (
-      run.text
-    ),
-  );
-}
-
-/**
- * A whole answer, with its **blocks** drawn as well as its marks.
- *
- * `CitedText` is one run of prose; this is a model's reply, which since
- * 2026-08-31 may contain a bullet list, a numbered list, a heading, a quote, a
- * rule or a block of code. Greg asked for it after finding that a list the
- * prompt explicitly permits arrived on screen as `- one - two - three`, held on
- * separate lines only by a `white-space: pre-wrap` in the stylesheet that was
- * there to make the bug survivable.
- *
- * **Still no HTML anywhere in this.** markdown.ts finds the blocks and returns
- * *data*; each block's text comes back here as a string and is handed to
- * `CitedText`, which returns runs of string that React escapes. There is no
- * stage at which model output becomes markup, which is what keeps this on the
- * right side of docs/project/security.md — see markdown.ts § Why we parse this
- * ourselves.
- *
- * Opt-in, like `links`, and for a smaller reason: only chat's prompt asks for
- * these shapes. The summary panel's asks for plain sentences and gets them, and
- * a summary is dense enough that a stray `#` becoming a heading would be worse
- * than a stray `#`.
- */
-export function CitedMarkdown({
-  text,
-  blocks,
-  onJump,
-  live = false,
-  partial = false,
-  links = false,
-  className,
-}: Props): ReactElement {
-  const ctx = { blocks, onJump, live, links, ...(className ? { className } : {}) };
-  return <>{drawBlocks(parseBlocks(text), ctx, partial)}</>;
-}
-
-/** What every block below needs to draw its inline runs. */
-type Ctx = Omit<Props, "text" | "partial">;
-
-/**
- * A list of blocks.
- *
- * `partial` reaches **only the last text in the answer**, wherever that is — the
- * end of a paragraph, of a heading, of the last item of a list, or of the last
- * line of a quote. Everything above it has finished arriving.
- *
- * The first version passed `false` for headings and quotes on the reasoning
- * that a block inside one is closed by the structure around it. That is true of
- * a *finished* answer and false of the one case the flag exists for: while an
- * answer streams, the tail can be inside a quote, and `> See https://good.exa`
- * was drawn as a link two tokens before it became `…example.evil.example/x`.
- * A link the reader can press in the second before its destination changes is
- * exactly what `splitLinks` refuses for a paragraph. Found by a GPT Sol review,
- * 2026-08-31.
- */
-function drawBlocks(list: MdBlock[], ctx: Ctx, partial: boolean): ReactElement[] {
-  return list.map((block, i) => (
-    // biome-ignore lint/suspicious/noArrayIndexKey: blocks of one immutable string, rebuilt whole
-    <Fragment key={`b${i}`}>{drawBlock(block, ctx, partial && i === list.length - 1)}</Fragment>
-  ));
-}
-
-function drawBlock(block: MdBlock, ctx: Ctx, partial: boolean): ReactElement {
-  switch (block.kind) {
-    case "para":
-      return <p>{inline(block.text, ctx, partial)}</p>;
-    case "heading":
-      /* `h4` and down, never `h1`. The panel's own title is the `h2` above
-         these, so an answer that starts with `#` must not outrank it — a
-         document outline that says the reply is the page is worse than a
-         heading a step smaller than the model imagined. */
-      return createElement(
-        `h${Math.min(6, block.level + 3)}`,
-        { className: "fmt-h" },
-        inline(block.text, ctx, partial),
-      );
-    case "rule":
-      return <hr className="fmt-rule" />;
-    case "code":
-      /* No highlighting and no language badge. The face and the box are what
-         make code readable at this size; the rest is a library. */
-      return (
-        <pre className="fmt-pre">
-          <code>{block.text}</code>
-        </pre>
-      );
-    case "quote":
-      return <blockquote className="fmt-quote">{drawBlocks(block.blocks, ctx, partial)}</blockquote>;
-    case "list":
-      return drawList(block, ctx, partial);
-  }
-}
-
-/**
- * One list.
- *
- * `start` is carried through, so a model that numbers from 3 — which happens
- * when it continues a list across two answers — gets a 3 rather than a 1
- * silently correcting it.
- *
- * An item whose content is a single paragraph is drawn **without** the `<p>`,
- * which is the difference between a tight list and one with a blank line
- * between every bullet. CommonMark decides tightness for the whole list; this
- * decides it per item, which is simpler and looks the same on everything a
- * model writes.
- */
-function drawList(block: MdBlock & { kind: "list" }, ctx: Ctx, partial: boolean): ReactElement {
-  const items = block.items.map((item, i) => {
-    const last = partial && i === block.items.length - 1;
-    const only = item.length === 1 ? item[0] : undefined;
-    return (
-      // biome-ignore lint/suspicious/noArrayIndexKey: items of one immutable string, rebuilt whole
-      <li key={`i${i}`}>
-        {only?.kind === "para" ? inline(only.text, ctx, last) : drawBlocks(item, ctx, last)}
-      </li>
-    );
-  });
-  return block.ordered ? (
-    <ol className="fmt-list" start={block.start}>
-      {items}
-    </ol>
-  ) : (
-    <ul className="fmt-list">{items}</ul>
-  );
-}
-
-/** A block's text, with the marks and the citation chips in it. */
-function inline(text: string, ctx: Ctx, partial: boolean): ReactElement {
-  return <CitedText text={text} partial={partial} {...ctx} />;
 }

@@ -8,7 +8,7 @@
  * router and nothing links to it. docs/plans/chat-markdown.md.
  */
 import { createRoot } from "react-dom/client";
-import { CitedMarkdown } from "./Cited.js";
+import { CitedMarkdown, CitedText } from "./Cited.js";
 import { MODE_MIN, SPINE_W } from "./layout.js";
 import type { BlockId } from "../types.js";
 import "./styles.css";
@@ -141,4 +141,49 @@ function Preview() {
   );
 }
 
-createRoot(document.getElementById("root") as HTMLElement).render(<Preview />);
+/**
+ * The summary panel's path, which is the same component in **flat** mode.
+ *
+ * Worth having on this page because it is the half with no structure: marks
+ * yes, blocks no, and a block that is not a paragraph drawn as the characters
+ * the model wrote rather than flattened — which would delete the `- ` from
+ * every line of a list. docs/plans/chat-markdown.md § Two things left alone.
+ */
+const SUMMARIES: [string, string][] = [
+  [
+    "an ordinary summary, with marks and a citation",
+    "He argues that **mattering** is what a functional duplicate lacks [spya-k3m9qt], and that the question is prior to the empirical one.",
+  ],
+  [
+    "two paragraphs — blank lines, not elements",
+    "The first move is the one that matters.\n\nEverything after it is consequence.",
+  ],
+  [
+    "a list, which a summary must show rather than flatten",
+    "Two things:\n\n- the first\n- the second",
+  ],
+];
+
+function Summaries() {
+  return (
+    <div style={{ width: MODE_MIN, padding: "0.7rem" }}>
+      {SUMMARIES.map(([label, text]) => (
+        <div key={label}>
+          <div style={{ margin: "1.2rem 0 0.4rem", color: "#888", font: "11px/1.3 monospace" }}>
+            {label}
+          </div>
+          <p className="summ-text">
+            <CitedText text={text} blocks={BLOCKS} onJump={(id: BlockId) => console.log(id)} />
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root") as HTMLElement).render(
+  <>
+    <Preview />
+    <Summaries />
+  </>,
+);

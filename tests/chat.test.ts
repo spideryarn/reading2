@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import { ChatConflict, titleFrom, withEdit, withRetry } from "../src/chat.js";
 import { nextModeIndex } from "../src/web/Dock.js";
 import { recentHistory, unknownCitedIds } from "../src/converse.js";
-import { snippet, splitCitations, splitEmphasis, unknownIds } from "../src/web/citations.js";
+import { snippet, splitCitations, unknownIds } from "../src/web/citations.js";
 import { SUGGESTIONS } from "../src/web/ChatPanel.js";
 import { fitView, MODE_IDEAL, MODE_MIN } from "../src/web/layout.js";
 import type { ChatMessage, ChatThread } from "../src/types.js";
@@ -399,43 +399,11 @@ describe("splitCitations — the bug the space-eating pattern had", () => {
   });
 });
 
-describe("splitEmphasis — the only Markdown we interpret", () => {
-  const shape = (text: string) =>
-    splitEmphasis(text).map((r) => (r.bold ? `b:${r.text}` : r.text));
-
-  /* Found in a browser test on 2026-08-25: the prompt asks for plain prose and
-     gets it, but a model bolds the term it is introducing whatever you tell it,
-     and the literal asterisks made the app look unable to read its own output. */
-  it("turns a bolded term into a bold run", () => {
-    expect(shape("He calls it **computational functionalism** here.")).toEqual([
-      "He calls it ",
-      "b:computational functionalism",
-      " here.",
-    ]);
-  });
-
-  it("handles two bolded runs in one paragraph", () => {
-    expect(shape("**one** and **two**")).toEqual(["b:one", " and ", "b:two"]);
-  });
-
-  it("leaves text with no emphasis as a single run", () => {
-    expect(shape("nothing to see")).toEqual(["nothing to see"]);
-  });
-
-  /* Guessing where an unclosed run was meant to stop is how you embolden the
-     rest of a paragraph. */
-  it("leaves an unmatched pair of asterisks literal", () => {
-    expect(shape("a **b c")).toEqual(["a **b c"]);
-  });
-
-  it("does not reach across a line break to find its closing pair", () => {
-    expect(shape("a **b\nc** d")).toEqual(["a **b\nc** d"]);
-  });
-
-  it("leaves single asterisks alone — they are not our syntax", () => {
-    expect(shape("2 * 3 * 4")).toEqual(["2 * 3 * 4"]);
-  });
-});
+/* `splitEmphasis` was here — "the only Markdown we interpret", which it was
+   for six days. It went on 2026-08-31 along with the rest of the hand-rolled
+   inline parser; a parser reads `**bold**` and we no longer own a rule about
+   it. Its cases live on as DOM assertions in
+   tests/chat-markdown-render.test.tsx. docs/plans/chat-markdown.md. */
 
 describe("nextModeIndex — the mode switch's keyboard, without a browser", () => {
   /* A count, not the real one. `nextModeIndex` is pure index arithmetic and

@@ -97,7 +97,7 @@ import {
   parseToolArgs,
   runTool,
 } from "./chat-tools.js";
-import { withoutWebLinks } from "./urls.js";
+import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type OpenRouterMessage,
@@ -1057,14 +1057,19 @@ export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): Ch
  * hallucination nobody hallucinated, and both of those numbers are the ones
  * watched to tell whether the citation prompt is still working.
  *
- * `withoutWebLinks` is the **same matcher the renderer uses** (src/urls.ts), so
- * the two cannot disagree about where an address stops. Found by a GPT Sol
- * review, 2026-08-27, which also pointed out that the client/server agreement
- * test could not catch it: both sides shared the same raw-regex mistake.
+ * `citableText` (src/citable.ts) is the **one definition** of where in an answer
+ * a citation can appear, shared with the renderer. It used to be a regex here,
+ * which was right while the renderer was a regex too and wrong the day the
+ * renderer started parsing: a raw matcher and an AST disagree about a titled
+ * link, a code span with a newline in it, and an id inside emphasis inside a
+ * URL. That file has the cases. Found by GPT Sol reviews on 2026-08-27 and
+ * again on 2026-08-31 — the second of which also pointed out that the
+ * client/server agreement test could not catch the first, because both sides
+ * shared the same raw-regex mistake.
  */
 export function citedBlockIds(text: string, known: Set<string>): string[] {
   const good = new Set<string>();
-  for (const id of withoutWebLinks(text).match(/spya-[a-z0-9]{6}/g) ?? []) {
+  for (const id of citableText(text).match(/spya-[a-z0-9]{6}/g) ?? []) {
     if (ID_PATTERN.test(id) && known.has(id)) good.add(id);
   }
   return [...good];
@@ -1084,8 +1089,9 @@ function idsOf(blocks: Block[]): Set<string> {
  * stray `[see above]` is not mistaken for one.
  */
 export function unknownCitedIds(text: string, known: Set<string>): string[] {
-  // Links out first — see `citedBlockIds` above for what counting them costs.
-  const cited = withoutWebLinks(text).match(/spya-[a-z0-9]{6}/g) ?? [];
+  // Everything the reader is not offered a chip in, out first — see
+  // `citedBlockIds` above for what counting any of it costs.
+  const cited = citableText(text).match(/spya-[a-z0-9]{6}/g) ?? [];
   const bad = new Set<string>();
   for (const id of cited) {
     if (!ID_PATTERN.test(id)) continue; // not one of ours; the client shows it as text

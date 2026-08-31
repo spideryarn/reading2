@@ -21,7 +21,7 @@
  * docs/plans/chat-web-links.md.
  */
 import { describe, expect, it } from "vitest";
-import { emphasise, splitCitations, splitLinks } from "../src/web/citations.js";
+import { splitCitations, splitLinks } from "../src/web/citations.js";
 import { withoutWebLinks } from "../src/urls.js";
 
 /** Compact enough to read a whole paragraph's parse in one line. */
@@ -299,67 +299,13 @@ describe("withoutWebLinks — what the server counts ids in", () => {
   });
 });
 
-describe("emphasise — bold that spans a link", () => {
-  const shape = (para: string) =>
-    emphasise(splitLinks(para)).map((r) => `${r.bold ? "b" : "-"}:${r.kind}:${r.text}`);
-
-  /* The shape a model actually writes when it links a paper it is naming. The
-     first version parsed emphasis inside each gap between links, so all three
-     runs held one unpartnered marker and the reader got literal asterisks. */
-  it("bolds a link the model wrapped whole", () => {
-    expect(shape("**[The paper](https://a.example/x)**")).toEqual(["b:link:The paper"]);
-  });
-
-  it("bolds prose either side of a link", () => {
-    expect(shape("**see [here](https://a.example/x) now**")).toEqual([
-      "b:text:see ",
-      "b:link:here",
-      "b:text: now",
-    ]);
-  });
-
-  it("leaves an unpartnered marker literal, as it always has", () => {
-    expect(shape("**see [here](https://a.example/x)")).toEqual([
-      "-:text:**see ",
-      "-:link:here",
-    ]);
-  });
-
-  /* Both guards exist to stop the toggle eating characters. A paragraph with no
-     link never goes near it, so nothing an ordinary answer or a summary does
-     can have changed; and `****` encloses nothing, which a toggle would consume
-     whole and emit none of. */
-  it("leaves `****` beside a link literal rather than swallowing it", () => {
-    expect(shape("**** [here](https://a.example/x) ****")).toEqual([
-      "-:text:**** ",
-      "-:link:here",
-      "-:text: ****",
-    ]);
-  });
-
-  it("bolds a pair containing a single star, in either path", () => {
-    /* This used to assert the opposite — `a **b*c** d` stayed literal, because
-       `splitEmphasis` matched `[^*\n]+` and refused any `*` inside a pair. That
-       was one of the two documented disagreements between this function and
-       `splitEmphasis`, and it stopped being defensible on 2026-08-31, when
-       italics arrived: `**this is *italic* too**` is an ordinary thing for a
-       model to write and it printed all six of its asterisks. `splitEmphasis`
-       now allows a lone `*` through (never `**`, so an unpartnered pair is
-       still literal), the inner pair is the italic pass's, and the two paths
-       agree here for the first time. docs/plans/chat-markdown.md. */
-    expect(shape("a **b*c** d")).toEqual(["-:text:a ", "b:text:b*c", "-:text: d"]);
-  });
-
-  it("still pairs ordinary bold in a paragraph with no links", () => {
-    expect(shape("A **bold** word and **another**.")).toEqual([
-      "-:text:A ",
-      "b:text:bold",
-      "-:text: word and ",
-      "b:text:another",
-      "-:text:.",
-    ]);
-  });
-});
+/* `emphasise` and its "bold paired across the links" rule used to live here.
+   Both went on 2026-08-31 with the hand-rolled inline parser: `mdast-util-from-
+   markdown` gets `**[The paper](https://…)**` right by parsing it, so there is
+   no pairing logic left to test. What the shapes it covered now assert is in
+   tests/chat-markdown-render.test.tsx, against the DOM, which is where the
+   claim "the reader sees bold" was always really being made.
+   docs/plans/chat-markdown.md. */
 
 describe("splitLinks — an answer that is still arriving", () => {
   const para = "The paper is at https://arxiv.org/abs/2212.133";
