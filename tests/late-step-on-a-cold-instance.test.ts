@@ -126,19 +126,48 @@ describe("a single-step job on an instance that never ingested the article", () 
     expect(file?.blocks.length).toBeGreaterThan(0);
   });
 
-  it("tweets runs from the store rather than the job's empty directory", async () => {
+  /**
+   * **The next two are pinned to the defect, not to the fix.**
+   *
+   * They read `.rejects.toThrow(/ENOENT.*blocks\.json/)`, which is the bug, and
+   * they are green because the bug is present. When stage 3 of
+   * docs/plans/finish-the-database-move.md lands, **flip them back to the
+   * `.resolves` form in this comment** — the assertion is written out below each
+   * one so the change is a swap rather than a rewrite.
+   *
+   * Why not simply leave them red, which is what they were until 2026-08-31.
+   * `npm test` is this project's declared gate (docs/project/code-quality-overview.md)
+   * and several agents share this tree. A gate that is known to be red is a gate
+   * everybody learns to read past, and the next real breakage arrives into a
+   * suite nobody trusts — which is docs/reusable/silent-success.md wearing the
+   * opposite costume. Greg's first instinct was to leave them red and he was
+   * right that the fault must stay visible; this keeps it visible without
+   * spending the gate.
+   *
+   * **Why the exact error rather than `it.fails`.** `it.fails` passes on *any*
+   * throw, so it would go on being green if this stopped being an ENOENT on
+   * `blocks.json` and became something else entirely — a stubbed model failing,
+   * a renamed artefact, a permissions error. The regex names the one failure
+   * this file is about, so the test still reddens when the defect changes shape
+   * as well as when it disappears. ⟨Sol⟩, 2026-08-31.
+   */
+  it("tweets cannot reach the article, and fails on the blocks it cannot see", async () => {
     answers.push(JSON.stringify({ tweets: ["A post about the article.", "And a second one."] }));
-    await expect(STEPS.tweets.run(coldContext(), store)).resolves.toMatchObject({
-      detail: expect.stringContaining("posts"),
-    });
+    /* When fixed:
+         await expect(STEPS.tweets.run(coldContext(), store)).resolves.toMatchObject({
+           detail: expect.stringContaining("posts"),
+         }); */
+    await expect(STEPS.tweets.run(coldContext(), store)).rejects.toThrow(/ENOENT.*blocks\.json/);
   });
 
-  it("arc runs from the store rather than the job's empty directory", async () => {
+  it("arc cannot reach the article, and fails on the blocks it cannot see", async () => {
     answers.push(
       JSON.stringify({
         entries: [{ partId: "part-1", sentence: "The piece opens by asking what it is like." }],
       }),
     );
-    await expect(STEPS.arc.run(coldContext(), store)).resolves.toBeTruthy();
+    /* When fixed:
+         await expect(STEPS.arc.run(coldContext(), store)).resolves.toBeTruthy(); */
+    await expect(STEPS.arc.run(coldContext(), store)).rejects.toThrow(/ENOENT.*blocks\.json/);
   });
 });

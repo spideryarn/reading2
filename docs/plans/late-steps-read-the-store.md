@@ -1,7 +1,15 @@
 # Late steps read the store, not `ctx.dir`
 
-**Status:** plan, unbuilt. One failing test is in the tree
-(`tests/late-step-on-a-cold-instance.test.ts`) and is red for the production reason.
+**Status:** plan, unbuilt. The repro is in the tree at
+`tests/late-step-on-a-cold-instance.test.ts` and it is **green, because it asserts the defect**:
+its two live cases expect `ENOENT` on `blocks.json` rather than a result. It was unmarked and red
+until 2026-08-31, and was pinned this way so that `npm test` stays a gate several agents can read —
+the fault has to stay visible without the suite going permanently red
+([code-quality-overview.md](../project/code-quality-overview.md)).
+
+**When this plan is built, flip both cases back to their `.resolves` form**, which is written out in
+a comment beside each one. The regex names the exact failure, so the test reddens if the defect
+disappears *and* if it turns into a different error — which `it.fails` would not.
 
 ## What happened
 
