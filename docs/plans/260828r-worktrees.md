@@ -19,7 +19,8 @@ records what was rejected and why, but the work list at the bottom is much short
 ## What changed on 2026-08-31, and what it deletes
 
 Four of this plan's premises stopped being true in the three days after it was written. Each one
-removes work rather than adding it, and together they cut the build from seven steps to four.
+removes work rather than adding it. A third Sol review then put two pieces back — see
+[the reviews](#status) — so the net is a noticeably smaller build, not a trivial one.
 
 **1. Claude Code has native worktrees, and this machine has them.** `claude --version` is 2.1.252 and
 `claude --help` lists `-w, --worktree [name]` and `--tmux`. The documented feature
@@ -79,12 +80,18 @@ What exists now:
 Also done, outside the code: the sixteen stale worktree registrations were classified and cleared,
 and `node_modules` and `dist` are marked ignored to Dropbox.
 
-Two reviews are worth reading before continuing, because both changed the design and the second one
-overturned a fix that looked finished:
+Three reviews are worth reading before continuing, because each one changed the design:
 
 - [`260828r-worktrees-review-sol.md`](260828r-worktrees-review-sol.md) — the plan review.
 - [`260828r-worktrees-code-review-sol.md`](260828r-worktrees-code-review-sol.md) — the code review. Its findings 4, 5
   and 6 are all addressed; its finding 1 is why the lock does not steal.
+- [`260828r-worktrees-review-2-sol.md`](260828r-worktrees-review-2-sol.md) — the review of *this*
+  revision, and the most useful of the three, because it was asked to attack the deletions. It
+  accepted the two big ones (the cache, the single install mechanism) and caught two places where
+  machinery had been removed that was load-bearing: **the port hash, which collides ~99.96% of the
+  time at ten worktrees**, and **the assumption that Claude Code's cleanup protects `data/`, which it
+  cannot, because ignored files are invisible to every check it makes**. Both are fixed above; both
+  were verified here rather than taken on trust.
 
 ### Things that will waste your time if you do not know them
 
@@ -352,14 +359,26 @@ So the recommendation stands but the reason changes from safety to waste: with t
 many times a day, every push would queue a full build — on one concurrent build slot — that is
 guaranteed to fail at the store the moment anyone opens it.
 
+**Naming only `dev` is not enough, and this is the part the first draft got wrong.** A branch not
+named in `deploymentEnabled` defaults to **`true`**, so the moment agents start pushing
+`worktree-*` branches — which the whole convention above requires them to do — every one of those
+pushes builds a preview carrying the model-provider keys. The rule has to be default-deny:
+
 ```json
-"git": { "deploymentEnabled": { "dev": false } }
+"git": { "deploymentEnabled": { "*": false, "main": true } }
 ```
 
-in [`vercel.json`](../../vercel.json). The key is per-branch and a branch not named in it defaults to
-`true`, so this silences `dev` and leaves `main`'s production auto-deploy — which the pipeline
-depends on — untouched. A one-off preview is still available by hand with `vercel deploy`, which
-`deploymentEnabled` does not affect.
+in [`vercel.json`](../../vercel.json), with the wildcard form **verified against a real push** rather
+than assumed, since a deny rule that silently matches nothing looks exactly like one that works. If
+the wildcard is not supported, the fallback is an `ignoreCommand` that exits 0 for everything except
+the production branch.
+
+`main` must stay `true`: the pipeline depends on the push to `main` producing a `target: production`
+deployment. A one-off preview is still available by hand with `vercel deploy`, which
+`deploymentEnabled` does not affect — worth knowing, because it means this setting is a convenience
+guard, not a security boundary. The real fix for the keys is to take
+`ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` off the Preview environment, and that should be done
+regardless.
 
 ### The base-branch catch
 
@@ -379,6 +398,28 @@ Two ways out, and they want deciding together with the branch switch:
 
 Prefer the first. Note that `main` stays the Vercel *production* branch either way — Vercel's
 production branch and GitHub's default branch are separate settings.
+
+**And changing GitHub's default branch is not enough on its own.** Claude Code resolves "fresh"
+through `origin/HEAD`, which is a *local* ref in each clone and does not follow a change made on
+GitHub. This checkout right now:
+
+```
+$ git symbolic-ref refs/remotes/origin/HEAD
+refs/remotes/origin/main
+```
+
+So the first worktree created after the switch would quietly branch from `main` — the exact silent
+wrong-base failure of row 1, arriving by a route the original plan did not anticipate. After changing
+the default branch, on **every clone including the box**:
+
+```bash
+git fetch origin dev
+git remote set-head origin -a
+git symbolic-ref refs/remotes/origin/HEAD     # must print refs/remotes/origin/dev
+```
+
+And keep row 1's rule: printing the base is not checking it. Worktree setup should assert that its
+starting sha equals a freshly-fetched `origin/dev`.
 
 ### What Step 0 is, in full
 
@@ -476,7 +517,7 @@ leaves:
 | Copying `.env.local` in | native, via `.worktreeinclude` — a gitignore-syntax file listing gitignored files to copy |
 | Keeping one session out of another's files | native, and stronger than a script could be |
 | Locking a worktree while a session runs, and releasing a killed session's lock | native |
-| Removing a clean worktree at session exit; sweeping old subagent/background worktrees | native, and it already refuses to remove one holding changed files, untracked files **or unpushed commits** |
+| Removing a clean worktree at session exit; sweeping old subagent/background worktrees | native — but read the next section before trusting it, because "clean" does not mean what this repo needs it to mean |
 | **Installing dependencies** | **ours** — the docs are explicit that a worktree is a fresh checkout and nothing installs for you |
 | **Allocating a dev-server port** | **ours** |
 | **The database** | **ours** |
@@ -491,6 +532,63 @@ There is one gap worth naming: **there is no post-creation hook**. `WorktreeCrea
 creation rather than running after it, so "create the worktree and then `npm ci`" cannot be
 automatic without giving up the defaults. Until that changes, the install is the first thing an agent
 does in a new worktree, and `AGENTS.md` has to say so.
+
+### The native cleanup cannot see `data/`, and that is the one that bites
+
+This is the finding that most changes the shape of the answer, and it came from the second Sol
+review. The native sweep skips a worktree that holds "changed files, untracked files, or unpushed
+commits" — which sounds like it covers everything. It does not cover **ignored** files, and this
+repo's two most valuable uncommitted things are both ignored: `data/`, which holds pipeline output
+that cost real model calls, and `.env.local`.
+
+Verified rather than reasoned, in a throwaway repo with `data/` in `.gitignore` and a file inside it:
+
+```
+$ git status --porcelain=v1 --untracked-files=all
+                                    ← nothing. The file is invisible to the guard.
+$ git status --porcelain --ignored
+!! data/                            ← only this flag sees it
+```
+
+So a worktree whose entire content is a fresh, expensive pipeline run reads as clean to git and
+**qualifies for automatic removal**. The original plan knew this — it is failure row 12, and the
+reason `rm` was to record a manifest of ignored state at creation. What the revision got wrong was
+assuming the native sweep's "unpushed commits" check subsumed it. It does not, and a `WorktreeRemove`
+hook cannot veto the removal: hook failure there is informational.
+
+The sweep only reaches subagent and *backgrounded* worktrees older than `cleanupPeriodDays`, so this
+is not a hair trigger. But it is silent, it lands on work that has no other copy, and it is exactly
+the class this repo writes postmortems about. Three ways to close it, in order of preference:
+
+1. **Do not put paid pipeline output in a worktree.** Run `fetch`/`extract`/`toc` and the rest in the
+   primary, and let worktrees hold code work only. Cheapest, and it also sidesteps failure row 10
+   (two worktrees paying for the same artefact).
+2. **Do not copy `data/` into worktrees at all** — leave the directory empty and let a worktree that
+   genuinely needs an article fetch it. Then there is nothing valuable to lose.
+3. **Take creation out of Claude Code's hands** with a `WorktreeCreate` hook, so the worktrees carry
+   no cleanup marker and the native sweep leaves them alone entirely, and our guarded sweep owns
+   removal. This is the expensive option and it costs `.worktreeinclude` as well.
+
+Option 1 is a policy line in `AGENTS.md` and should be the v1 answer. It also means step 2's `data/`
+copy can be dropped, which removes the only per-OS line in the whole plan.
+
+### Two repo scanners walk straight into `.claude/worktrees/`
+
+Also from the second review, and also verified. Dropbox-ignoring the directory and gitignoring it
+does nothing about tooling that walks the tree itself:
+
+- [`scripts/typecheck.ts`](../../scripts/typecheck.ts) recursively discovers `tsconfig.json` files
+  and skips only `SKIP = new Set(["node_modules", ".git", "dist", ".temp"])`. With ten worktrees
+  nested inside the repo, `npm run typecheck` in the primary would walk into all ten and typecheck
+  peers' half-finished code — or fail because of it.
+- [`vite.config.ts`](../../vite.config.ts) sets `watch: { ignored: ["**/data/**", "**/docs/**",
+  "**/evals/**"] }`. `.claude` is not in that list, so the primary's dev server would watch every
+  worktree and reload on peers' edits.
+
+Both need an explicit exclusion, and the wider point is that **anything that walks the repo has to be
+audited before worktrees land inside it** — `check.ts`, `knip`, `biome`, `jscpd`, the doc-links test.
+This is the strongest argument for relocating worktrees outside the repo after all, and it should be
+weighed against the cost of a `WorktreeCreate` hook rather than assumed away.
 
 ### `worktree:new <slug>` — superseded, kept for the reasoning
 
@@ -603,13 +701,18 @@ named `cache` destroys the install.
 
 > **Superseded 2026-08-31.** This section exists because a *cache* keyed without the script policy
 > would serve a tree built under one policy to a worktree expecting another. With no cache, that
-> failure has nowhere to happen. What is left is worth one line rather than a work item: npm 11 does
-> block these scripts by default here — the fresh install printed
-> `npm warn install-scripts` for `esbuild@0.25.12`, `esbuild@0.28.2` and `fsevents@2.3.3` — and
-> **everything still works**, because those packages ship prebuilt platform binaries. `esbuild
-> --version` prints `0.28.2` and `sentry-cli --version` prints `2.58.6` from a tree whose install
-> scripts never ran. Committing the policy is still the right thing to do eventually; it is no longer
-> blocking anything.
+> failure has nowhere to happen. npm 11 does block these scripts by default here — the fresh install
+> reported **five**, which is what the original section said and what a first re-reading of the log
+> tail got wrong: `esbuild@0.18.20`, `esbuild@0.25.12`, `esbuild@0.28.2`, `@sentry/cli@2.58.6` and
+> `fsevents@2.3.3`. Everything still works, because those packages ship prebuilt platform binaries;
+> `esbuild --version` prints `0.28.2` and `sentry-cli --version` prints `2.58.6` from a tree whose
+> install scripts never ran.
+>
+> **"Moot" is too strong, though, and the second review was right to push back.** A blocked install
+> script can leave a package that installs cleanly and fails only when its generated or downloaded
+> artefact is first used — weeks later, in one code path, on one platform. Committing the policy, and
+> pinning the Node and npm versions with it, is cheap and still worth doing. It is simply no longer a
+> prerequisite for anything.
 
 An earlier draft of this plan reasoned that because the repo has no `preinstall`, `postinstall` or
 `prepare` script, lifecycle scripts could be left out of the fingerprint. **That reasoning is wrong**,
@@ -659,14 +762,22 @@ creations. Two things have changed the recommendation:
   point: its worktree docs tell a human to "pick any free port ≥ 5184… increment to avoid
   collisions", and there is no registry, lock or allocator script anywhere in that repo. This is a
   gap in their tooling, not a pattern.
-- **A deterministic port needs no allocation at all.** Hash the worktree name into the range —
-  `5274 + (hash(name) % N)` — and the same worktree always gets the same port, with no registry file,
-  no lock, and no race to lose. This is the pattern the parallel-agent tooling has converged on. Its
-  cost is birthday collisions: with ten slots, two worktrees can hash to the same port. That is
-  exactly what `strictPort: true` turns into a loud refusal, and the fix is to rename the worktree.
+- **A deterministic hash of the worktree name was recommended here and it was wrong.** The idea —
+  `5274 + (hash(name) % N)`, no registry, no lock, no race — is the pattern the parallel-agent tooling
+  has converged on, and it is fine when the slots vastly outnumber the worktrees. Here they do not.
+  The Supabase redirect allow-list caps the range at about ten, and **ten worktrees into ten slots
+  collide with probability 1 − 10!/10¹⁰ ≈ 99.96%.** Five worktrees already collide about 70% of the
+  time. It is not a rare birthday case; it is the normal case.
+  Widening the range does not rescue it either: ten into a hundred still collides 37% of the time.
 
-Prefer the deterministic hash. It is fewer moving parts than an atomic lease, and the failure it
-admits is the one `strictPort` already catches.
+  Worse, `strictPort` does not make the collision safe, only loud on one side. It stops the *second*
+  server starting; it does nothing about a browser aimed at that port, which reaches the **first**
+  worktree's server and reports success — failure row 5, which this plan already knew about and
+  which the hash proposal quietly contradicted.
+
+**So: keep the atomic lease.** [`scripts/lockfile.ts`](../../scripts/lockfile.ts) is the primitive
+and it already exists. `strictPort: true` stays as the backstop, and the identity endpoint of failure
+row 5 stays mandatory rather than optional.
 
 **Changing the port breaks sign-in, and breaks it quietly.** `supabase/config.toml:217` pins
 `site_url = "http://localhost:5273"`, and `additional_redirect_urls` lists that exact port and no
@@ -912,17 +1023,22 @@ Everything the native feature does not do, and nothing it does.
    cannot duplicate a tracked file.
 3. **`worktree.baseRef`**, decided together with the GitHub default branch — see
    [the base-branch catch](#the-base-branch-catch).
-4. **`npm run worktree:setup`**, run inside a fresh worktree: `npm ci --prefer-offline --no-audit
-   --no-fund`, clone `data/` from the primary, write the port, and print what it did. It has to be
-   run by hand or by the agent, because `WorktreeCreate` replaces creation rather than following it.
-5. `tmutil addexclusion` on the new `node_modules`, on macOS.
+4. **Exclusions for every scanner that walks the repo** — `SKIP` in
+   [`scripts/typecheck.ts`](../../scripts/typecheck.ts) and `watch.ignored` in
+   [`vite.config.ts`](../../vite.config.ts) at minimum, then an audit of `check.ts`, knip, biome and
+   jscpd. Without this the primary typechecks ten peers' half-finished trees.
+5. **`npm run worktree:setup`**, run inside a fresh worktree: `npm ci --prefer-offline --no-audit
+   --no-fund`, write the leased port, record a creation timestamp, and print what it did. It has to
+   be run by hand or by the agent, because `WorktreeCreate` replaces creation rather than following
+   it.
+6. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
-`data/` is a copy rather than a symlink, and that reasoning has not changed: the tests create and
-delete directories under `data/`, so a link would point that at the real one. The *how* is the one
-place a per-OS line survives, and it is a one-liner rather than a fork: `cp -c -R` on macOS to get
-clonefile sharing, plain `cp -a` on the box, where 27 MB apparent is not worth a second mechanism.
-Do not reach for `cp --reflink=auto` on the box — ext4 has no reflink and it falls back to a full
-copy without saying so.
+**`data/` is deliberately not copied in.** The original plan cloned it from the primary; the second
+review showed why that is a liability rather than a convenience — a worktree holding fresh pipeline
+output reads as clean to every check both our sweep and Claude Code's own make, because ignored files
+are invisible to `git status` without `--ignored`. So worktrees start with an empty `data/`, paid
+pipeline work happens in the primary, and a worktree that genuinely needs an article fetches it. That
+also removes the only per-OS line in the plan, since there is no longer anything to copy.
 
 ### 3. Ports, as one unit
 
@@ -930,8 +1046,8 @@ Half of this is worse than none, because each half hides the other's failure.
 
 1. `SPIDERYARN_DEV_PORT` in [`vite.config.ts`](../../vite.config.ts) (currently hardcodes `5273`),
    with **`strictPort: true`**.
-2. A **deterministic port from the worktree name**, not a scan-then-pick and not a lease — see
-   [Ports](#ports).
+2. An **atomic port lease** on [`scripts/lockfile.ts`](../../scripts/lockfile.ts), not a
+   scan-then-pick and not a hash — see [Ports](#ports) for why the hash was proposed and withdrawn.
 3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml),
    **then restart Supabase and check the running container**: the file is not re-read automatically
    ([setup-dev.md](../project/setup-dev.md)).
@@ -960,7 +1076,12 @@ expects. Today about a dozen Postgres suites **skip themselves silently** when t
 misconfigured worktree reports green while testing nothing. `npm test` may stay usable without a
 database; schema and store work must run `test:db` before landing.
 
-Plus the migration-number collision check described under [Postgres](#postgres).
+Plus the migration-number collision check described under [Postgres](#postgres) — and the second
+review is right that **policy alone is too quiet to trust here**. Two automated refusals are needed,
+not a convention: landing or rebasing must reject duplicate migration numbers, and the migration
+wrapper must check that the database's ledger is an exact prefix of the checkout's migrations
+*before* applying anything, holding the lease across the whole check-and-apply. A lease alone stops
+two migrations running at once; it does nothing about two branches independently minting `0037_`.
 
 ### 5. `worktree:sweep` — the part the native cleanup does not do
 
@@ -969,17 +1090,29 @@ or unpushed commits, and holds a `git worktree lock` while a session runs. What 
 whether the work **landed**. So the script is small, and its shape is Rebel's:
 
 - **`classify`** — read-only. For each worktree: merged (`git merge-base --is-ancestor <branch>
-  origin/dev`, after a fresh fetch), clean (`git status --porcelain=v1 --untracked-files=all`), and
-  **age of the last commit**. Prints a table, writes JSON, deletes nothing.
+  origin/dev`, after a fresh fetch), clean — and clean means **both** `git status --porcelain=v1
+  --untracked-files=all` *and* `--ignored`, because the first cannot see `data/` — and **how old the
+  worktree is**. Prints a table, writes JSON, deletes nothing.
 - **`remove --branch <name>`** — the only destructive path, per-branch with no bulk flag, and it
   **re-runs every guard itself** with a fresh fetch rather than trusting the classification. Refuses,
   naming the blocker, if the worktree is the current checkout, unmerged, dirty, under the age
   threshold, or if the fetch failed.
 
-The age guard is the one that is easy to leave out and must not be — failure row 13. And the removal
-guard the original plan identified stays: `data/` and `.env.local` are both gitignored, so a clean
-`git status` will report "safe" and then delete real work. Record a manifest of ignored state at
-creation and refuse removal when it has changed, unless given an explicit discard flag.
+The age guard is the one that is easy to leave out and must not be — failure row 13. But **age of the
+last commit is the wrong clock**, as the second review pointed out: a worktree created ten minutes
+ago from a month-old commit passes that test immediately. Record a **creation timestamp** at setup
+and age from that. A `git worktree lock` held by a running session is an unconditional blocker on top
+of it, but not proof of activity in the other direction — a `SIGKILL`ed session leaves the lock
+behind, so fail closed and make a human clear it rather than auto-unlocking. Best positive signal of
+all is an explicit `worktree:done` marker; age is only ever a grace period.
+
+And the removal guard the original plan identified stays, now with a verified mechanism: `data/` and
+`.env.local` are both gitignored, so a clean `git status` reports "safe" and then deletes real work.
+Record a manifest of ignored state at creation and refuse removal when it has changed, unless given
+an explicit discard flag. See [The native cleanup cannot see
+`data/`](#the-native-cleanup-cannot-see-data-and-that-is-the-one-that-bites) — the same blind spot
+sits in Claude Code's own sweep, which is why the v1 answer is to keep paid pipeline output out of
+worktrees entirely.
 
 ### 6. Docs, alongside each step rather than batched
 
@@ -1073,6 +1206,13 @@ From the ranked table above, the two with no mechanism behind them:
 npm run typecheck                     # all three projects; ignore rename-preview.tsx
 npx vitest run tests/lockfile.test.ts tests/worktree-admin.test.ts tests/monitoring-config.test.ts
 ```
+
+**The isolation is a documented guarantee, not a check you have seen work.** Before relying on it,
+build a disposable repository and try to escape a worktree in it on purpose: an absolute-path `Edit`
+into the main checkout, `git -C`, `--git-dir`, a `GIT_DIR` variable, a `cd` then git, and a symlink
+pointing out. Assert a canary file in the main checkout is untouched and the worktree is locked.
+Make it part of what gets re-run when Claude Code updates, because this is a guarantee that could
+regress in a release and would do so silently.
 
 And the rule this work kept proving: **break it on purpose first.** Every fix in step 1 was watched
 failing before it was trusted — reverting `"wx"` to `"w"` and `--force --force` to `--force` turned
