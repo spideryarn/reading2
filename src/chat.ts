@@ -30,6 +30,7 @@ import type {
   ChatThread,
   ReviewStance,
   ThreadKind,
+  ToolRun,
 } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
@@ -372,6 +373,149 @@ export function withTurn(
     updatedAt: at,
     messages: [...base.messages, user, reply],
   };
+  return {
+    threads: existing
+      ? threads.map((t) => (t.id === thread.id ? thread : t))
+      : [...threads, thread],
+    thread,
+    user,
+    reply,
+  };
+}
+
+/**
+ * One spoken exchange, both halves known, ready to append.
+ *
+ * Deliberately not a `Turn`: that type describes a question **about to be
+ * answered**, and half its fields (`stance`, and the pending row `beginTurn`
+ * writes) only make sense while an answer is still coming.
+ */
+export interface SpokenTurn {
+  threadId: string;
+  /** What the reader said. May be empty if the transcription failed. */
+  question: string;
+  /** What the companion said. */
+  answer: string;
+  passages?: { blockIds: string[]; why: string }[];
+  tools?: ToolRun[];
+  /** The reader talked over it, so the text may run past what they heard. */
+  interrupted?: boolean;
+  model?: string;
+  /**
+   * **The message this caller believes is last, or `null` for "this thread is
+   * empty".**
+   *
+   * Required, not optional, and that is the difference from `edit`'s version of
+   * the same guard. There it is a safety net over a destructive operation; here
+   * it is the *only* thing standing between a replayed request and a duplicated
+   * turn, so a caller with no opinion must not be able to skip it by omission.
+   *
+   * It buys idempotency for free, which is why there is no exchange-id column:
+   * a POST that is retried after succeeding presents a tail the first one has
+   * already moved, so it conflicts instead of appending twice. Two *different*
+   * exchanges racing present the same tail, and the loser conflicts and retries
+   * with the new one — which is correct, because they have to be ordered.
+   *
+   * `null` rather than absent for the empty thread, so "I think this is new"
+   * and "I forgot to say" stay different states. A reader can press Live before
+   * typing anything, and that case is real.
+   */
+  expectedTailId: string | null;
+}
+
+/**
+ * **Append a finished exchange — both rows, `done`, in one write.**
+ *
+ * Live conversation's counterpart to `withTurn`, and pure for the same reason:
+ * this is an invariant, and an invariant with two implementations is an
+ * invariant with two behaviours. The filesystem store calls it inside its
+ * mutex, the Postgres store inside its transaction, and neither owns the rule.
+ *
+ * ## Why not `beginTurn` then `finishTurn`
+ *
+ * Because both halves are already known, so the pending row `beginTurn` exists
+ * to create has nothing to be pending for — and a crash between the two calls
+ * would leave a false unfinished answer in a conversation nobody is answering.
+ * There is also a concrete obstacle: the Postgres store's `finish` refuses
+ * without the attempt token `begin` returned (src/store/pg-chat.ts), so the
+ * pair is not two free-function calls. GPT Sol's review of
+ * docs/plans/live-conversation-in-chat.md, finding 4.
+ *
+ * ## The rows are ordinary
+ *
+ * `status: "done"` on both, no attempt, no stance. A spoken turn is a turn: the
+ * renderer, the retry path and the prompt builder all treat it exactly as they
+ * treat a typed one, which is the whole point of putting it in the same thread.
+ * The only two fields it can carry that a typed turn cannot are `passages` and
+ * `interrupted`, and both are absent unless there is something to say.
+ */
+export function withSpokenTurn(
+  threads: ChatThread[],
+  spoken: SpokenTurn,
+  at: string,
+): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
+  const { threadId, expectedTailId } = spoken;
+  const existing = threads.find((t) => t.id === threadId);
+
+  /* **The guard, and it runs before anything is minted.** `null` means the
+     caller believes there is nothing here yet — which is true both for a thread
+     that does not exist and for one created but never spoken into. */
+  const tail = existing?.messages.at(-1)?.id ?? null;
+  if (tail !== expectedTailId) {
+    throw new ChatConflict(
+      "This conversation has moved on since the live session started. Reload and try again.",
+    );
+  }
+
+  const ids = taken(threads);
+  const user: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "user",
+    text: spoken.question,
+    createdAt: at,
+    status: "done",
+  };
+  const reply: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "assistant",
+    text: spoken.answer,
+    createdAt: at,
+    status: "done",
+    /* Conditional spreads throughout, never `x: undefined`. The two stores are
+       compared field for field by tests/store-roundtrip.test.ts, where an
+       absent key and an explicit undefined are not the same thing. */
+    ...(spoken.passages && spoken.passages.length > 0 ? { passages: spoken.passages } : {}),
+    ...(spoken.tools && spoken.tools.length > 0 ? { tools: spoken.tools } : {}),
+    ...(spoken.interrupted ? { interrupted: true } : {}),
+    ...(spoken.model ? { model: spoken.model } : {}),
+  };
+
+  const base: ChatThread = existing ?? {
+    /* Same rule as `withTurn`: the client's id is honoured only if it is one of
+       ours and free, so a duplicate cannot append to a stranger's thread. */
+    id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
+    title: "New chat",
+    createdAt: at,
+    updatedAt: at,
+    /* Always `chat`. Live conversation has no review stance and no anchor —
+       and a spoken review is a mode nobody has designed, so inventing one here
+       by passing a kind through would be deciding it by accident. */
+    kind: "chat",
+    messages: [],
+  };
+  const thread: ChatThread = {
+    ...base,
+    /* The first thing said names the thread, exactly as the first typed
+       question does. A spoken opener whose transcription failed leaves the
+       default rather than titling the conversation with the empty string. */
+    title:
+      base.messages.length === 0 && spoken.question.trim() !== ""
+        ? titleFrom(spoken.question)
+        : base.title,
+    updatedAt: at,
+    messages: [...base.messages, user, reply],
+  };
+
   return {
     threads: existing
       ? threads.map((t) => (t.id === thread.id ? thread : t))

@@ -43,6 +43,7 @@
  */
 
 import type { AdminUser } from "../admin.js";
+import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { AnswerPatch, NewComment } from "../comments.js";
@@ -56,6 +57,7 @@ import type {
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
+  QuotesFound,
   LibraryEntry,
   LibraryHit,
   ListOptions,
@@ -101,6 +103,17 @@ export interface ArticleReader {
 
   /** The glossary, plus staleness. Computed at read time, never stored. */
   loadGlossary(slug: string): Promise<GlossaryFound>;
+
+  /**
+   * The quotes, plus staleness.
+   *
+   * Computed at read time like the rest, and `stale` matters more here than
+   * anywhere else in the band: a stale quote list holds block ids that may no
+   * longer exist *and* words that may no longer be in the piece, so it is the
+   * one artefact whose staleness can make it false rather than merely dated.
+   * src/quotes.ts § `isStale`.
+   */
+  loadQuotes(slug: string): Promise<QuotesFound>;
 
   /** The summaries at every rung, plus staleness. */
   loadSummaries(slug: string): Promise<SummariesFound>;
@@ -558,6 +571,20 @@ export interface ChatStore {
     opts?: { expectedTailId?: string; now?: () => string },
   ): Promise<Turn & { discarded: number }>;
 
+  /**
+   * **Append a finished exchange — both rows, both `done`, in one write.**
+   *
+   * Live conversation's write path. Unlike `begin`/`finish` there is nothing
+   * pending in between: the reader spoke, the model answered, and both halves
+   * are known before anything is stored.
+   *
+   * `expectedTailId` is required and may be `null` for "I believe this thread
+   * is empty". It is the guard *and* the idempotency: a retried request finds
+   * the tail already moved and gets `ChatConflict` rather than appending the
+   * turn twice. See `SpokenTurn` in src/chat.ts.
+   */
+  appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<Turn>;
+
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
 
@@ -730,6 +757,61 @@ export interface AdminStore {
    * about the default order.
    */
   listUsersAcrossOwners(): Promise<AdminUser[]>;
+}
+
+/* --------------------------------------------- the document it came from -- */
+
+/**
+ * **The file this article was made from**, for `GET /api/source/:slug`.
+ *
+ * It exists for one reason, and it is the reason a scan is shown at all: a
+ * transcription of a photographed page has nothing to check it against, so the
+ * only real verification available is a person looking at the ink
+ * (docs/plans/pdf-ingestion.md).
+ *
+ * ## Why it is its own contract rather than a method on `ArticleReader`
+ *
+ * Because it is the only read in this file whose answer is **bytes**, and the
+ * two stores keep those bytes in genuinely different places: the filesystem has
+ * `data/<slug>/raw.pdf` beside the manifest that names it, and Postgres has a
+ * *reference* — `raw_source_sha256` plus `raw_source_kind` — to a
+ * content-addressed object in the `sources` bucket. Everything on
+ * `ArticleReader` is JSON assembled from rows; this is one object fetched over
+ * a second protocol, and folding it in would give that interface a method whose
+ * failure modes nothing else there has.
+ *
+ * ## Why the method says `Pdf` and not `Document`
+ *
+ * Because the content type is the security boundary. This is a stranger's file
+ * served from our own origin, so the one thing that must never happen is
+ * serving it as anything a browser will execute — `text/html` from our origin
+ * *is* stored XSS. A method that returned "the source document, whatever kind
+ * it is" would put a `Content-Type` decision at the call site, where the next
+ * person adding a kind would make it by accident. Named this way, the route
+ * writes `application/pdf` because that is the only thing it can be given, and
+ * serving anything else has to be a deliberate second method.
+ *
+ * That is also why a web page's source is simply `null` rather than an error:
+ * the route says the same sentence for "no such document" and "not a PDF", so
+ * the store need not tell them apart.
+ */
+export interface SourceStore {
+  /**
+   * The PDF, or `null` when this article was not made from one.
+   *
+   * **`null` is "there is no PDF here", never "I could not fetch it".** A
+   * reference that points at nothing, or at bytes that do not hash to their own
+   * name, **throws** — see the Postgres adapter. The row asserting an object
+   * exists and the object being absent is a fault somebody has to look at, and
+   * answering `null` would report an article with a scan as an article with
+   * none, to the one reader who is looking at the scan.
+   *
+   * Owner-filtered where the store has owners at all: the Postgres adapter
+   * resolves the slug through `ownedSlug`, so a stranger gets `null` rather than
+   * somebody else's paper. `src/routes.ts` authorises through `shelfStore` first
+   * regardless, which is the ordering tests/owner-isolation.test.ts pins.
+   */
+  readPdf(slug: string): Promise<Uint8Array | null>;
 }
 
 /* ------------------------------------------------------------- sharing -- */
