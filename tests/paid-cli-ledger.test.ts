@@ -1,5 +1,5 @@
 /**
- * **The eight stage CLIs listed below open the ledger before they spend** — and
+ * **The stage CLIs listed below open the ledger before they spend** — and
  * nothing here claims that is every CLI that spends. What is checked and what
  * is not is spelled out under *The edge of this*, because the first version of
  * this header said "every paid CLI" and one of the npm scripts in this very
@@ -117,7 +117,7 @@
  *
  * Four tests, and each is narrower than the sentence people will remember:
  *
- * - **`wraps every listed stage CLI entrypoint`** checks the nine modules in
+ * - **`wraps every listed stage CLI entrypoint`** checks the ten modules in
  *   `PAID_CLIS`, and nothing else. It says nothing about evals, which open the
  *   ledger with the `"eval"` scope.
  * - **`names every package.json entry module that imports a provider seam`**
@@ -167,6 +167,7 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
   "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
   "src/quotes.ts": "npm run quotes — streamMessage",
   "src/timeline.ts": "npm run timeline — streamMessage",
+  "src/quiz.ts": "npm run quiz — streamMessage",
   "src/hierarchy.ts": "npm run hierarchy — streamMessage",
   "src/tweets.ts": "npm run tweets — streamMessage",
 };

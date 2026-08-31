@@ -37,6 +37,7 @@
     "ideas": "tsx src/ideas.ts",
     "quotes": "tsx src/quotes.ts",
     "timeline": "tsx src/timeline.ts",
+    "quiz": "tsx src/quiz.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
@@ -44,7 +45,6 @@
     "db:seed-owner": "tsx scripts/db-seed-owner.ts",
     "db:admin-password": "tsx scripts/db-admin-password.ts",
     "setup": "tsx scripts/setup-local.ts",
-    "db:import": "tsx scripts/db-import.ts",
     "db:export": "tsx scripts/db-export.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
@@ -53,6 +53,7 @@
     "eval:caching": "tsx evals/prompt-caching.ts",
     "eval:reorder": "tsx evals/reorder-quality.ts",
     "eval:review": "tsx evals/review-stances.ts",
+    "eval:quiz": "tsx evals/quiz.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
     "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
     "typecheck:committed": "tsx scripts/typecheck-committed.ts"

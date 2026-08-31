@@ -347,35 +347,68 @@ producing routes nothing called, neither of which is an abandonable increment.
 Each stage ends green (`npm test`, `npm run typecheck`, `npm run check`), committed, docs updated in
 the same commit, and the diff sent to GPT Sol.
 
-### Stage 1 — both prompts, and an eval, before any product
+### Stage 1 — both prompts, and an eval, before any product ✅ **done**
 
 No routes, no UI, no store. Two prompts and a CLI that runs them end to end, so the first thing
 anybody looks at is a real batch of questions and a real mark.
 
-- [ ] `src/quiz.ts`: `QUIZ_SYSTEM`, `PROMPT_VERSION = "quiz/1"`, `generateQuiz`, band quotas,
+- [x] `src/quiz.ts`: `QUIZ_SYSTEM`, `PROMPT_VERSION = "quiz/1"`, `generateQuiz`, band quotas,
       `orderQuestions`, evidence validation (ids **and** quotes, via `findQuote`), the `Dropped`
       counters, refuse-on-empty, `stageCli`. `npm run quiz -- data/<slug>` prints the batch.
-- [ ] `src/quiz-mark.ts`: `QUIZ_MARK_SYSTEM` and the generator, callable from a script.
-- [ ] `evals/quiz.ts`, on `evals/review-stances.ts`'s shape, wrapped in `withLedger("eval", …)`.
+- [x] `src/quiz-mark.ts`: `QUIZ_MARK_SYSTEM` and the generator, callable from a script.
+- [x] `evals/quiz.ts`, on `evals/review-stances.ts`'s shape, wrapped in `withLedger("eval", …)`.
       **The cases are the point**, and these are the ones the first draft was missing:
       a right answer worded nothing like the reference · a right answer drawn from a *different*
       passage than the question's evidence · a confidently wrong answer · "no idea" · a half answer ·
       an answer *more complete* than the reference · **a deliberately poisoned reference answer,
       valid ids and all**, to prove the article wins · an ill-posed question the article does not
       settle.
-- [ ] Run it. **Read every answer.** Revise both prompts against what comes back and run again.
-- [ ] Pure unit tests: ordering (an easy-peripheral question precedes a hard-central one — the
+- [x] Run it. **Read every answer.** Revise both prompts against what comes back and run again.
+- [x] Pure unit tests: ordering (an easy-peripheral question precedes a hard-central one — the
       assertion the first plan had backwards), quota enforcement, an invented id drops its question,
       an unfindable quote drops its evidence, a batch with nothing left fails.
 
 *Abandonable as:* two prompts and an eval, with numbers committed. Nothing user-facing, nothing
 half-wired.
 
+#### What stage 1 actually found
+
+- **The poisoned reference works.** Handed a draft answer that says the *opposite* of the passage it
+  cites, with valid ids, the marker quoted the article, said *"the reference answer has this
+  backwards"*, and sided with the reader. That is the behaviour the whole design turns on and it is
+  confirmed against real output, not asserted.
+- **Band quota**: `min(3, floor(surviving / 4))` — 3 each end at twelve, 1 at four, **none at three
+  or fewer**, so an all-`medium` full batch fails while a genuinely short article cannot fail on
+  bands. The count rule stays a ceiling, never a floor.
+- **Stage 1 could not avoid all registration.** `streamMessage("quiz", …)` and
+  `openRouterStream("quiz-mark", …)` do not compile without the `models.ts` / `ai-call.ts` rows the
+  plan filed under stage 2. Those landed early; nothing store-, step- or route-shaped did.
+- **Residual, and honest:** the and-ban lands about 80% of the time, and the tone bans slip 0–3 times
+  per eight replies with an *unchanged* prompt — two runs of identical prompts scored 0 and 3. That
+  is variance rather than regression, and tuning against noise was the wrong move. Stage 4's eval
+  re-checks it. The one to watch is a closing clause like *"both present and correctly tied
+  together"*, which is review-mode's fault 6 wearing a friendly face.
+
+#### Two findings that outlive this feature
+
+**Generation failed to parse twice in nine calls** — `not valid JSON: it breaks at position 5824 of
+11381`, mid-answer, neither a refusal nor a truncation, and four deliberate reproductions all parsed.
+**Every stage on this wire has the same exposure**, and it is undiagnosable by design: `parseJsonFrom`
+withholds the content and no stage writes the raw answer. The right fix is a retry in
+[`src/jobs.ts`](../../src/jobs.ts) covering all the stages, not a private one here. Its own piece of
+work — written up in `evals/quiz.ts`'s header.
+
+**An instrument nearly reported a failure it had invented.** A counter said 5 of 20 quotes were cited
+to the wrong block; three of those were the counter's own quotation-pairing breaking on a length
+floor, and two were the model rewriting the article's curly quotes as straight ones. Corrected
+reading: **0 of 24**. Recorded because it is [silent-success.md](../reusable/silent-success.md) with
+the sign flipped — the check was wrong in the direction that invents work.
+
 ### Stage 2 — a thin vertical slice
 
 One question, one answer, one streamed reply, visible in the browser.
 
-- [ ] The artefact registration in full — the checklist below, migration `0041_quiz.sql` included.
+- [ ] The artefact registration in full — the checklist below, the migration included.
 - [ ] `GET /api/quiz/:slug`, the job wiring for `useStepJob(slug, "quiz")`,
       `POST /api/quiz/:slug/mark` with `batchId` binding, the 409s, the explicit `done` frame and its
       failure states, the two AI tasks, the telemetry line.
@@ -456,10 +489,10 @@ and `quotes`. Most of it the compiler demands; the second list is the dangerous 
 - `ArticleReader` contract, `fs.ts`, `store/index.ts`, `api.ts`, `routes.ts` (doc line, import,
   regex, handler), `styles.css`, and the docs.
 
-**Migration `0041_quiz.sql`**, hand-written against the next free number (0040 is the current tail):
+**The migration**, hand-written against the next free number — **0041 through 0044 were taken by peers while this plan was being written**, so check `drizzle/` rather than trusting this sentence:
 add the `quiz` jsonb column to `article_revisions`, then **drop and re-add**
 `revision_step_runs_step` with the full step list — Postgres has no ALTER for a check expression, and
-that constraint has been forgotten five times already. Hand-write `drizzle/meta/0041_snapshot.json`
+that constraint has been forgotten five times already. Hand-write the matching `drizzle/meta/<n>_snapshot.json`
 and the `_journal.json` entry too, or the next generated migration re-emits the column.
 `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT` against `STEP_ORDER` in both
 directions and is what stops a sixth drift.
@@ -475,6 +508,70 @@ directions and is what stops a sixth drift.
 stage's `stamp` claims match what it actually writes — and **`timeline` was never added to it**, so
 that stage has been uncovered since it shipped. We add `quiz` *and* `timeline` in stage 1. The
 machinery is open and the list is three characters wide; leaving it is how it stays wrong.
+
+## Two things Greg asked for that v1 does not build
+
+Both were asked for on 2026-08-31, after the plan was written and reviewed, and both are
+**deferred on his call**. They are here rather than in the list below because each has a seam that v1
+must not close, and naming the seam is most of the future work.
+
+### Spoken quizzing — the article asks out loud
+
+> ideally this would work well with Live Dialogue mode — Greg
+
+**Deferred entirely**, Greg's decision when offered it. Worth writing down anyway, because the shape
+is already settled and the reason it is cheap is the reason the artefact exists.
+
+[Live conversation](../project/live-conversation.md) is **bound to a thread** — a session is seeded
+from one conversation's history and appends spoken turns to it — and a quiz deliberately has no
+thread. So a Live button *inside* the Quiz panel would have to invent one, which is the decision at
+the top of this plan running backwards. The shape that costs almost nothing instead:
+
+**a tool the live companion can call.** In a spoken *Recall* session the reader says "quiz me", the
+model calls `next_quiz_question`, gets a question and its reference answer out of the cached pool,
+asks it aloud, and responds to the spoken answer — pointing at passages with the `show_passage` tool
+it already has. One entry in `CHAT_TOOLS` ([`src/live.ts`](../../src/live.ts) reuses that list
+rather than restating it, on purpose) plus a short section in the live prompt carrying the
+*article-beats-reference* and *no-grading* rules.
+
+That works **because the questions are an artefact rather than something generated inside a
+conversation**. The panel is one reader of the pool; the live model would be a second. Had the
+questions been generated per session, there would be nothing for a tool to return.
+
+**What v1 must not foreclose, and does not:** `orderQuestions` is pure and exported, so a caller can
+order the pool differently; the panel renders whatever order it is handed rather than assuming the
+stored one; and the reference answer travels with the question, so a tool result is self-contained.
+
+Note that talking is **already** possible in v1, just not listening: the answer box is the existing
+`useDictationField`, so answers can be spoken. What is deferred is the questions being *asked* aloud.
+
+### Questions that know what you already remembered
+
+> it should ideally/eventually take into account if the user has provided a freeform brain dump of
+> what they remember — Greg
+
+**Deferred**, and the "eventually" is his. This is the one requirement that genuinely pulls against
+*"a cached per-article artefact"*: questions chosen for what a particular reader forgot are not the
+article's questions any more.
+
+The resolution is a **pool and a view over it**, not a second artefact:
+
+- the cached batch stays what it is — the article's question **pool**, shared, current, cheap;
+- a reader's free-recall thread for this article is read, and a small model call **selects and
+  re-orders** the pool against it, pushing what they did not mention to the front.
+
+That is cheaper than regenerating as well as simpler: the call carries the pool and the recall, not
+the whole article. It also makes the two sub-modes into one flow, in the order that is
+pedagogically right — dump what you have first, then get asked about the gaps — which is a better
+argument for building it than the feature request was.
+
+**The seam is `orderQuestions` being a pure function over the pool rather than an order baked into
+the artefact for ever.** v1 stores a sorted batch for determinism, and nothing prevents a second,
+reader-aware ordering being computed at read time.
+
+And the note above is worth repeating here: in a **spoken** session this requirement solves itself,
+because the brain dump and the quiz would be the same conversation and the model has just heard it.
+Whichever of these two gets built first makes the other smaller.
 
 ## Open, deferred
 
