@@ -1,8 +1,24 @@
 # The AI gateway: one vendor, two wires
 
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
-*recorded*. Since 2026-08-27 there are no exceptions — not the pipeline, not chat, not embeddings,
-not dictation, not the PDF reader.
+*recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation and the PDF
+reader alike.
+
+**There is one exception, and it arrived on 2026-08-31.** Live conversation mode talks to OpenAI
+directly, because OpenRouter has no realtime API to route to — its audio endpoints are batch speech
+and batch transcription, and there is no duplex speech-to-speech. It is not a routing preference; it
+was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a single
+`OPENROUTER_API_KEY`*") is answered at length in
+[live-conversation.md](../plans/live-conversation.md).
+
+Two things about it belong here rather than there, because they are properties of *this* claim.
+**The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
+and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
+And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
+a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
+`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead. That is a
+hole with a name, not a to-do — live-conversation.md § What is missing, and it must be closed before
+readers see the feature.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
@@ -440,6 +456,13 @@ Two were raw **on purpose**, and that is the case worth understanding:
 So the rule is not *"everything uses the seam"*. It is **a bypass has to be declared, and a declared
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
+
+**And there is now one call that does neither**, which is the live-conversation spike at the top of
+this doc. It is the case the register cannot yet hold: its money is spent on a wire this server never
+sees, and a `Declaration` for it cannot be typed until `ProviderAccount` and `Wire` widen. So it is
+in the scan's `ALLOWED` list, where a reason is written down but no row is ever produced — which is
+weaker than every other entry here and is exactly why it is named in the opening paragraphs rather
+than left for somebody to find at the bottom of a table.
 
 - [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register. One entry per
   bypass: which account it bills, which file may use it, why the seam is wrong for it, and whether it
