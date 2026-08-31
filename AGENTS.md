@@ -231,6 +231,9 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
   rather than the line that broke, which commit introduced it, the fix that's right for the long
   term, and what would have caught the whole class of it.
+- **"Close this tab if successful" means exactly that** — close it with the recipe in
+  [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
+  and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
 
 ### Delegating
 
