@@ -351,8 +351,12 @@ Greg, 2026-08-31, on what it should reach:
 2. **Personal token.** Settings → Developer settings → Personal access tokens → Fine-grained tokens
    → Generate new token. **Resource owner: `gregdetre`.** Only select repositories: `gjdutils`,
    `healthyselfjournal`, `healthyselfapp`. Permissions: **Contents: Read and write**, Metadata: Read
-   (mandatory and automatic), and Pull requests: Read and write if agents should open PRs. Set an
-   expiry — 90 days makes rotation a habit rather than an incident.
+   (mandatory and automatic), and Pull requests: Read and write if agents should open PRs.
+   **Expiry: none.** Greg's call, 2026-08-31, overriding the "90 days makes rotation a habit"
+   advice that used to sit here — a token that expires on a box nobody is watching does not prompt
+   a rotation, it produces `Repository not found` at three in the morning in a doc nobody re-reads.
+   The trade is a live credential with no end date, so the thing that retires these tokens is
+   revoking them on github.com, deliberately, and nothing else will.
 3. **Org token.** The same flow with **Resource owner: `spideryarn`**, repositories `reading2`,
    `hellozenno`, `reading`, `spideryarn`. Tokens created by an org owner need no separate approval;
    tokens created by anyone else sit pending, and while pending they can read only public repos —
@@ -373,8 +377,9 @@ code change, no config change, no restart.
 ### Why not the simpler-looking options
 
 - **Not `gh auth login`.** On a headless box with no Secret Service, `gh` falls back to a plaintext,
-  non-expiring, account-wide OAuth token in `~/.config/gh/hosts.yml`. Broader blast radius and no
-  expiry, for no convenience gain over pasting a token once.
+  **account-wide** OAuth token in `~/.config/gh/hosts.yml` — every repo Greg can reach, not the
+  seven. Ours are non-expiring too now, so the difference is blast radius alone, and that is still
+  the whole argument: seven repositories under two owners, versus everything.
 - **Not `GH_TOKEN` in a shell profile.** `gjd-remote` starts agents over non-interactive ssh, which
   sources neither `.bashrc` nor `.bash_profile` — see the comment at `scripts/gjd-remote.ts:341`.
   An exported token works when a human tests it in a login shell and is missing inside every real
@@ -530,7 +535,7 @@ extends the check on its own.
 
 **These are for sessions a human can answer for, not for headless automation.** A `claude -p` run
 asked to call one of them gets `you haven't granted it yet` and cannot prompt, because nobody is
-there — it is not a misconfiguration and there is nothing to fix. `gjd-remote new` starts
+there — it is not a misconfiguration and there is nothing to fix. `gjd-remote new-claude` starts
 interactive tmux sessions, so agents on the box are fine. A script that shells out to `claude -p` is
 not, and it will report the tool *missing* rather than blocked, which is the confusing way round. It tells a *missing login* apart from a *stale checkout* — a box that
 has not pulled the commit adding `.mcp.json` is told to pull, not sent off to do a browser ceremony
