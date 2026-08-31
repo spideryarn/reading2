@@ -117,19 +117,33 @@ const HOMES: Record<string, string> = {
  */
 const NOT_MIGRATED: Record<string, string> = {
   ".DS_Store": "macOS. Not ours.",
-  /* A cache, and the only one an article directory holds. One file per page
+  /* **This entry said the opposite until 2026-08-31, and it was stale.** It read
+     "a decision not to migrate it, not an omission" — a cache, one file per page
      range, keyed on the PDF's bytes + the prompt version + the reader, holding
      the model's raw answer so that fixing the renderer or the checker costs
-     nothing (docs/plans/pdf-ingestion.md). Deleting it costs a re-transcription
-     and nothing else, and its key is derivable from what IS migrated — so it is
-     a decision not to migrate it, not an omission.
+     nothing (docs/plans/pdf-ingestion.md).
 
-     The one thing that decision gives up, and it is worth knowing before
-     agreeing with it: a witness pass built later for scans would be re-run over
-     these cached responses rather than paid for again. That is cheap to lose
-     today and would not be if the cache were the only copy of an expensive
-     reading of a document nobody can re-fetch. */
-  "pdf-chunks": "a cache, not an artefact — the model's raw answer per page range, replayable",
+     That decision was reversed and this list was never told. `src/db/schema.ts`
+     § checkpoints names **both** checkpoint forms as the table's Postgres home,
+     and `src/store/checkpoints.ts`'s namespace is a closed set containing
+     exactly `toc-labels` and `pdf-chunk`. So it is migrated in the only sense
+     this list asks about: it has a home, and the home was chosen deliberately.
+
+     It stays in this list rather than moving to `HOMES` for one reason — it is
+     a **directory**, not a file, and `HOMES` is keyed by filename. The entry
+     below says where it goes so that the two lists stop contradicting each
+     other. ⟨Sol⟩, 2026-08-31, on a review of `labels-progress.json`: PDF chunks
+     and label checkpoints are in the same state, and either both are exempt or
+     neither is.
+
+     Like `labels-progress.json`, the destination and both adapters exist and
+     **no caller is wired** — `src/pdf-read.ts` still reads and writes
+     `data/<slug>/pdf-chunks` directly. Nothing here expires when that changes,
+     which is the honest limit of this file: a name in any of these three lists
+     makes the canary green whether or not the value is true. Only a behavioural
+     test that runs a caller through a `CheckpointStore` and proves a second
+     store instance reuses the entry can redden on the wiring. */
+  "pdf-chunks": "checkpoints (namespace 'pdf-chunk') — decided, not yet wired",
   /* Not an artefact either, and not migrated *as a file* — but the thing it
      records is already in the schema. One marker per step that has started and
      not finished, which is what stops a step killed between two of its own
