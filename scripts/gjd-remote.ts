@@ -88,7 +88,7 @@ function ssh(remote: string, opts: { check?: boolean } = {}): string {
  * That failure looks exactly like a blocked firewall — two causes, one symptom.
  */
 function moshWorks(): boolean {
-  const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${HOST()} -- true`;
+  const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${shq(HOST())} -- true`;
   const r = spawnSync("script", ["-q", "/dev/null", "sh", "-c", probe], {
     encoding: "utf8",
     timeout: 6000,
@@ -107,10 +107,12 @@ function moshWorks(): boolean {
  *         `a || b` dies with "execvp: a || b: No such file or directory".
  */
 function attachCmd(name: string, transport: "mosh" | "ssh"): string {
-  const inner = `tmux attach -d -t =${name} || exec bash -l`;
+  // No `|| exec bash -l` here: a failed attach must fail. The job script keeps
+  // the session alive after Claude exits, so nothing needs this as a safety net.
+  const inner = `tmux attach -d -t =${name}`;
   return transport === "mosh"
-    ? `LANG=C.UTF-8 mosh ${HOST()} -- sh -c ${shq(inner)}`
-    : `ssh -t ${HOST()} ${shq(inner)}`;
+    ? `LANG=C.UTF-8 mosh ${shq(HOST())} -- sh -c ${shq(inner)}`
+    : `ssh -t ${shq(HOST())} ${shq(inner)}`;
 }
 
 function attach(name: string): never {
@@ -187,36 +189,55 @@ function cmdNew(
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
   const dir = opts.dir ?? `/home/${USER}`;
+  // A newline in dir could otherwise close the remote heredoc early. The job
+  // file is scp'd rather than heredoc'd now, which removes that boundary
+  // entirely, but a dir with control characters is a mistake either way.
+  if (/[\r\n]/.test(dir)) die("--dir may not contain newlines");
+  // cd failing must not silently start Claude in the wrong tree.
+  const dirOk = spawnSync("ssh", ["-o", "BatchMode=yes", HOST(), `test -d ${shq(dir)}`]).status === 0;
+  if (!dirOk) die(`no such directory on the box: ${dir}`);
+
   const promptPath = `/home/${USER}/gjd-remote/prompts/${name}.md`;
   const jobPath = `/home/${USER}/gjd-remote/jobs/${name}.sh`;
-
   ssh(`mkdir -p /home/${USER}/gjd-remote/prompts /home/${USER}/gjd-remote/jobs`);
 
+  const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-"));
+  const scp = (local: string, remote: string) => {
+    const r = spawnSync("scp", ["-q", local, `${HOST()}:${remote}`], { encoding: "utf8" });
+    if (r.status !== 0) die(`scp to ${remote} failed: ${(r.stderr || "").trim()}`);
+  };
+
   if (opts.prompt) {
-    const tmp = path.join(mkdtempSync(path.join(tmpdir(), "gjd-remote-")), `${name}.md`);
-    writeFileSync(tmp, opts.prompt, "utf8");
-    const r = spawnSync("scp", ["-q", tmp, `${HOST()}:${promptPath}`], { encoding: "utf8" });
-    if (r.status !== 0) die(`scp of the prompt failed: ${(r.stderr || "").trim()}`);
+    const f = path.join(stage, `${name}.md`);
+    writeFileSync(f, opts.prompt, "utf8");
+    scp(f, promptPath);
   }
 
   // Non-interactive ssh sources NEITHER .bashrc NOR .bash_profile, so the job
-  // gets a stock PATH with no ~/.local/bin. Append, never substitute: the bug
-  // that bit the fleet twice was `PATH=$PATH || default`, where the fallback
-  // only fires when PATH is undefined, never when it is set-but-incomplete.
+  // gets a stock PATH. Append, never substitute: `PATH=$PATH || default` only
+  // fires when PATH is undefined, never when it is set-but-incomplete, which is
+  // the shape tmux and cron actually hand you.
+  //
+  // The prompt is read with "$(cat ...)" in DOUBLE quotes. It was single-quoted
+  // in the first version, which suppresses the substitution entirely and passed
+  // Claude the literal text `$(cat /home/greg/...)` — the whole feature was
+  // broken and nothing would have shown it but reading Claude's first reply.
   const job = [
     `#!/usr/bin/env bash`,
     `export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:$PATH"`,
     `export LANG=C.UTF-8`,
-    `cd ${shq(dir)} || cd /home/${USER}`,
-    opts.prompt ? `claude ${shq("$(cat " + promptPath + ")")}` : `claude`,
+    `cd ${shq(dir)} || { echo "FATAL: cannot cd to ${dir}"; exec bash -l; }`,
+    opts.prompt ? `claude "$(cat -- ${promptPath})"` : `claude`,
     `echo`,
     `echo "--- claude exited; shell follows, session stays alive ---"`,
     `exec bash -l`,
     ``,
   ].join("\n");
 
-  // Written via a quoted heredoc so nothing in it is expanded on the way.
-  ssh(`cat > ${jobPath} <<'REMOTEJOB'\n${job}REMOTEJOB\nchmod +x ${jobPath}`);
+  const jobLocal = path.join(stage, `${name}.sh`);
+  writeFileSync(jobLocal, job, "utf8");
+  scp(jobLocal, jobPath);
+  ssh(`chmod +x ${jobPath}`);
   ssh(`tmux new-session -d -s ${name} ${shq(`bash ${jobPath}`)}`);
 
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
@@ -231,7 +252,7 @@ function cmdNew(
  */
 function cmdDoctor(): void {
   const ip = host();
-  console.log(bold(`box ${ip}`));
+  console.log(bold(`gjd-remote → ${ip}`));
 
   const reach = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST(), "true"]);
   if (reach.status !== 0) {
@@ -241,7 +262,12 @@ function cmdDoctor(): void {
   }
   console.log(green("✓ ssh"));
 
-  console.log(moshWorks() ? green("✓ mosh") : red("✗ mosh (UDP blocked, or a zero-width pty)"));
+  const localMosh = spawnSync("sh", ["-c", "command -v mosh"], { encoding: "utf8" }).status === 0;
+  if (!localMosh) {
+    console.log(red("✗ mosh: not installed on THIS Mac") + dim("  (brew install mosh)"));
+  } else {
+    console.log(moshWorks() ? green("✓ mosh") : red("✗ mosh: installed both ends, but the probe failed (UDP blocked?)"));
+  }
 
   const status = ssh(`cloud-init status 2>/dev/null || echo 'status: unknown'`, { check: false });
   console.log(`  cloud-init: ${status.replace(/^status:\s*/, "")}`);
@@ -313,9 +339,17 @@ function main(): void {
 
     case "resume":
     case "attach": {
-      const name = rest[0] ?? sessions().at(-1)?.name;
+      const live = sessions();
+      // `tmux ls` order is not a newest-first contract, so sort explicitly.
+      const newest = [...live].sort((a, b) => a.created.getTime() - b.created.getTime()).at(-1);
+      const name = rest[0] ?? newest?.name;
       if (!name) die("no sessions to attach to");
       if (!SLUG.test(name)) die(`'${name}' is not a valid session name`);
+      // Without this, a typo'd name lands you in a login shell that looks
+      // exactly like a successful attach until you wonder where your work went.
+      if (!live.some((x) => x.name === name)) {
+        die(`no session '${name}'. Live: ${live.map((x) => x.name).join(", ") || "none"}`);
+      }
       return attach(name);
     }
 

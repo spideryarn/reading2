@@ -74,8 +74,12 @@ Remote Control, claude.ai connectors and `/schedule`.
 ## Rebuilding
 
 ```
-terraform taint hcloud_server.box && terraform apply
+tofu -chdir=infra/hetzner apply -replace=hcloud_server.box
 ```
+
+`-replace`, not the deprecated `taint`: the replacement shows up in the plan you review, so you can
+confirm it is replacing the server and the attachment while leaving the volume alone — rather than
+marking it tainted and finding out at apply time.
 
 The volume detaches, the server is recreated, cloud-init re-seeds nothing (it sees an existing
 `/mnt/data/home`) and the box comes back as itself.

@@ -78,6 +78,11 @@ write_files:
       sleep 1
       pgrep -f "x11vnc .*:99" >/dev/null || (x11vnc -display :99 -localhost -nopw -forever -shared -quiet >/dev/null 2>&1 &)
       pgrep -f "websockify" >/dev/null || (websockify --web=/usr/share/novnc 127.0.0.1:6080 localhost:5900 >/dev/null 2>&1 &)
+      sleep 1
+      # Backgrounding something successfully is not the same as it running.
+      for check in "Xvfb :99" "x11vnc .*:99" websockify; do
+        pgrep -f "$check" >/dev/null || { echo "FAILED to start: $check" >&2; exit 1; }
+      done
       echo "Tunnel:  ssh -L 6080:localhost:6080 ${username}@<ip>"
       echo "Open:    http://localhost:6080/vnc.html"
 
@@ -190,17 +195,57 @@ write_files:
       mountpoint -q /home || mount --bind /mnt/data/home /home
 
       echo "=== node ==="
-      run 180 "nodesource repo" bash -c 'curl -fsSL https://deb.nodesource.com/setup_${node_major}.x | bash -'
+      # The first build died here, and quietly: Ubuntu 24.04 already had its own
+      # nodejs 18 installed, so `apt-get install nodejs` reported "already the
+      # newest version" and did nothing. Ubuntu's nodejs package does not ship
+      # npm -- that is a separate package -- so the next line failed with
+      # "npm: command not found" and took the whole build with it.
+      #
+      # Two changes. The repo is added explicitly rather than by piping
+      # NodeSource's setup script into a shell, so a failure to add it is
+      # visible rather than inferred. And it is PINNED above the distro, so apt
+      # cannot prefer Ubuntu's older package just because it is already there.
+      run 60 "nodesource key" bash -o pipefail -c 'curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/nodesource.gpg'
+      chmod 0644 /usr/share/keyrings/nodesource.gpg
+      echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${node_major}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list
+      printf 'Package: nodejs\nPin: origin deb.nodesource.com\nPin-Priority: 600\n' \
+        > /etc/apt/preferences.d/nodesource
+      # --error-on=any: a plain `apt-get update` tolerates a repository that
+      # failed to refresh, which is precisely how you end up installing the
+      # distro's package while believing you added a repo.
+      run 180 "apt update (nodesource)" bash -c 'apt-get -o DPkg::Lock::Timeout=600 --error-on=any -y update'
+
+      # Assert the CANDIDATE before installing, not just the result afterwards.
+      # The first build's failure was visible here and nowhere else: apt would
+      # have said Candidate: 18.19.1 while we believed we had asked for 26.
+      CAND=$(apt-cache policy nodejs | awk '/Candidate:/{print $2}')
+      case "$CAND" in
+        ${node_major}.*) echo "nodejs candidate $CAND" ;;
+        *) echo "FATAL: nodejs candidate is '$CAND', wanted ${node_major}.x - the NodeSource repo is not winning" >&2; exit 1 ;;
+      esac
       run 300 "install nodejs" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install nodejs'
+
+      # Assert rather than assume. Both of these were true on the failed build:
+      # a nodejs existed, and it was the wrong one with no npm beside it.
+      NODE_V=$(node -v 2>/dev/null || echo none)
+      case "$NODE_V" in
+        v${node_major}.*) echo "node $NODE_V" ;;
+        *) echo "FATAL: wanted node v${node_major}.x, got $NODE_V - the NodeSource repo did not win" >&2; exit 1 ;;
+      esac
+      command -v npm >/dev/null || { echo "FATAL: node installed but npm is missing" >&2; exit 1; }
+
       run 300 "install claude code" npm install -g @anthropic-ai/claude-code
+      command -v claude >/dev/null || { echo "FATAL: npm reported success but claude is not on PATH" >&2; exit 1; }
 
       echo "=== chrome ==="
       # chrome-devtools-mcp needs real Chrome stable, not Playwright's Chromium.
       # amd64 only: this block is wrong on an ARM (CAX) server.
-      run 60 "chrome signing key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg'
+      run 60 "chrome signing key" bash -o pipefail -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg'
+      chmod 0644 /usr/share/keyrings/google-chrome.gpg
       echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
         > /etc/apt/sources.list.d/google-chrome.list
-      run 180 "apt update" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y update'
+      run 180 "apt update" bash -c 'apt-get -o DPkg::Lock::Timeout=600 --error-on=any -y update'
       run 300 "install chrome" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install google-chrome-stable'
 
       echo "=== playwright ==="
@@ -242,15 +287,17 @@ write_files:
       # The docs warn the server NAME must not directly follow --env or the CLI
       # reads it as another KEY=value pair, hence --scope sitting between them.
       CAP="NODE_OPTIONS=--max-old-space-size=512"
-      # Prime suspect for the first build's hang: claude has never run for this
-      # user, so any first-run prompt here waits on stdin forever at zero CPU.
-      # stdin closed AND a timeout, because either alone would have let it hang.
+      # No uncapped fallback. The previous version retried without the cap on
+      # ANY failure, which could quietly remove the exact OOM protection this
+      # exists for while the verification below still passed.
+      #
+      # `remove` first, ignoring "not found": on a REBUILD the user-scoped
+      # registrations are already on the volume, and `add` refuses a duplicate
+      # name -- so the second rebuild would die here.
       add_mcp() {
         name=$1; shift
-        if ! timeout 60 su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null; then
-          echo "WARN: capped add failed for $name; retrying uncapped" >&2
-          timeout 60 su - "$USER_NAME" -c "claude mcp add --scope user $name -- $* </dev/null" </dev/null
-        fi
+        timeout 60 su - "$USER_NAME" -c "claude mcp remove --scope user $name </dev/null" </dev/null 2>/dev/null || true
+        timeout 60 su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null
       }
       add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated"
       add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
@@ -265,14 +312,16 @@ write_files:
       # Every one of these has a way of silently not happening.
       fail=0
       check() { if eval "$2" >/dev/null 2>&1; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
-      check "/home is the volume"      'mountpoint -q /home'
+      check "/home is the volume"      'test "$(stat -c %d /home)" = "$(stat -c %d /mnt/data/home)"'
       check "swap active"              'swapon --show | grep -q swapfile'
-      check "claude installed"         'command -v claude'
-      check "chrome installed"         'command -v google-chrome'
-      check "playwright chromium"      'su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright" | grep -q chromium'
-      check "playwright mcp"           'su - '"$USER_NAME"' -c "claude mcp list" | grep -q playwright'
-      check "devtools mcp"             'su - '"$USER_NAME"' -c "claude mcp list" | grep -q chrome-devtools'
-      check "tmux config"              'test -f /home/'"$USER_NAME"'/.tmux.conf'
+      check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${node_major}\."'
+      check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
+      check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+      check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
+      check "playwright chromium runs" 'timeout 60 su - '"$USER_NAME"' -c "npx --yes playwright@latest cr --version" 2>/dev/null || su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome"'
+      check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'
+      check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'
+      check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'
       check "sshd config valid"        'sshd -t'
       check "password auth off"        'sshd -T | grep -qi "^passwordauthentication no"'
       check "root login off"           'sshd -T | grep -qi "^permitrootlogin no"'
@@ -283,7 +332,12 @@ write_files:
       echo "PROVISION OK"
 
 runcmd:
-  - bash /usr/local/sbin/provision.sh 2>&1 | tee /var/log/provision.log
+  # `bash -o pipefail -c`, not a bare pipeline. A string runcmd entry is
+  # interpreted by sh, so the pipeline's status is TEE's -- always zero. That is
+  # exactly why the first build reported `cloud-init: done` after provisioning
+  # had already died at line 55. The failure was never hidden in the log; it was
+  # hidden from cloud-init.
+  - bash -o pipefail -c 'bash /usr/local/sbin/provision.sh 2>&1 | tee /var/log/provision.log'
 
 final_message: |
   Box up after $UPTIME s.
