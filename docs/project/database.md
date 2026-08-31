@@ -381,6 +381,83 @@ only because `spideryarn` is not an exposed schema. The `postgres` password must
 Creating those roles is the one genuinely manual step — it needs passwords, which do not belong in a
 migration file — and it is [step 1](../plans/260825f-postgres-migration.md#the-order-of-work).
 
+## A watermark is not a ledger
+
+**drizzle does not track which migrations ran.** Its node-postgres migrator reads *one* row —
+`select … from __drizzle_migrations order by created_at desc limit 1` — **once**, before its loop,
+and then applies every journal entry whose `when` is strictly greater than that number. It never
+compares the hashes it stored, and it never asks whether an older entry is missing. Read it in
+`node_modules/drizzle-orm/pg-core/dialect.cjs`, `PgDialect.migrate`; the hash is `sha256` of the
+whole `.sql` file (`node_modules/drizzle-orm/migrator.cjs`).
+
+So **an entry stamped below the newest applied row is skipped for ever, in silence**, under a
+`✓ migrations applied`. On 2026-08-31 that was four migrations on Greg's laptop —
+`0032_jobs_concurrency_cap`, `0033_quotes`, `0034_flowery_wolfsbane`, `0036_drop_summary_column` —
+none of which could ever run again. `article_revisions.quotes` did not exist while the command that
+was supposed to create it reported success. [silent-success.md](../reusable/silent-success.md)
+again, and the same shape as [the accident above](#the-four-migrations-that-were-not-there-and-the-command-that-said-they-were).
+
+Two things sank them:
+
+- `0035_timeline`'s journal entry was written **by hand** with a round `when` of `1788200000000`,
+  later than every migration around it including `0036`'s real `1788175229610`. Any database that
+  applies `0035` can never apply `0036`.
+- two local migrations, generated later the same evening and then renumbered into
+  `0037_experimental_features_and_callout_blocks`, left ledger rows that raised the watermark above
+  origin's `0032`–`0034`.
+
+**The published timestamps were not corrected**, and must not be. Production may have applied
+`0032`–`0035` correctly; re-stamping them makes them re-run there and fail.
+
+### The guard
+
+[`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts) holds the judgements, and
+[`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) runs them **before** `migrate()` as well as
+after. Before matters: the migrator commits every pending file in one transaction, so a post-hoc
+check would notice the gap only once the migrations *after* it had already run against a schema that
+never had it.
+
+The preflight refuses — exit non-zero, no DDL, and no `✓` — unless all of:
+
+1. the applied journal entries are a contiguous prefix **in journal order**, which is not timestamp
+   order;
+2. the pending ones are the remaining suffix;
+3. **every pending entry's `when` clears the newest `created_at` in the ledger.** This is the one
+   that catches the defect. A database through `0034` is fine — both `0035` and `0036` clear its
+   watermark, inverted stamps and all. A database through `0035` is broken, because `0036` never
+   can;
+4. every applied row's hash matches the file on disk;
+5. the journal itself has no duplicate tags, no duplicate stamps, no broken indices and a `.sql`
+   file for every entry.
+
+**Rows the journal has never heard of** get a policy rather than a rule, because a laptop
+legitimately carries them and production never should. Remote: refuse. Laptop with anything still
+pending: refuse, because an orphan row may be the same DDL as a pending migration under a new
+number — clear it before migrating. Laptop with nothing pending: report and carry on, so a
+renumbered local migration does not wedge the machine for ever. "Remote" is
+`isLocalDatabaseUrl` in [`src/db/ssl.ts`](../../src/db/ssl.ts), the same test that decides TLS and
+that guards remote runs, so local cannot mean one thing to the guard and another to the thing it
+guards.
+
+The **postflight** asserts that every journal entry ends with exactly one matching `(when, hash)`
+row. It is metadata, not schema: it is green by construction for anyone who inserts bookkeeping rows
+by hand, so it catches "the migrator said yes and applied nothing" and cannot catch "the row is
+there and the column is not". `npm run db:check` and
+[`src/db/schema-drift.ts`](../../src/db/schema-drift.ts) are the other half — and that file's own
+header says which things it does not cover.
+
+The whole run holds a **session advisory lock**. drizzle takes none, so without it two invocations
+read the same watermark and both attempt the same DDL.
+
+**Never hand-write a `when`.** [tests/migration-journal.test.ts](../../tests/migration-journal.test.ts)
+fails on any entry stamped no later than one above it in the journal. The published `0035`/`0036`
+pair is grandfathered by name *and* by both timestamps, so regenerating either file takes the
+exemption away rather than inheriting it.
+
+The whole story, including why `0033_quotes` could not be replayed verbatim and what the repair
+recorded instead, is in
+[the postmortem](../postmortems/260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md).
+
 ## Roles
 
 **Applied to the real project on 2026-08-26.** What follows is what was actually run, which is not
