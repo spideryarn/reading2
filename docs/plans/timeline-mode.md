@@ -560,6 +560,50 @@ The profile does **not** go in the stamp. Who is reading changes what an *idea* 
 bring" is defined by the reader — but it does not change when something happened. Leaving it out is a
 decision, not an omission, and it means one fewer reason to regenerate.
 
+### Why Timeline gets its own fingerprint, and does not widen the shared one
+
+**Corrected during Stage 0, against this plan's own instruction**, and the implementer was right to
+push back.
+
+The obvious move is to add `publishedAt` to `MetaFingerprint`, which `arc`, `tweets`, `glossary`,
+`summary` and `quotes` are all judged on. It would have fired immediately rather than theoretically:
+the date arrives **by re-extraction**, so the first article re-extracted — which Stage 0 itself does
+— marks all five of those artefacts stale and re-runs five paid stages over bytes **no model ever
+saw**. Not one of their prompts prints a publication date.
+
+[`src/source-hash.ts`](../../src/source-hash.ts) already says as much in its own comments, and
+already has the precedent: `MetaFingerprintWithUrl` exists as a **separate type** rather than as a
+widened `MetaFingerprint`, for exactly this reason.
+
+So Timeline gets `MetaFingerprintDated` / `datedArticleFingerprint`, which satisfies the review's
+point better than the instruction would have: **the date is in the hash of the stage that names it,
+and no other.**
+
+Three smaller corrections from the same pass:
+
+- `MetaFingerprint` carries title, byline and **siteName**. The url is on `MetaFingerprintWithUrl`.
+  This plan said otherwise.
+- The bundled `@mozilla/readability` types **do** expose `publishedTime`. No cast, no workaround.
+- **The publisher's own timezone is kept rather than normalised to UTC.** `new Date(s).toISOString()`
+  looks like the obvious tidy-up and it moves the calendar day — 8pm on 31 December in New York
+  becomes 1 January — and the calendar day is the entire point of this field.
+
+### There is no publication date until stage 2 is taught to keep one
+
+Found by ingesting the test article rather than by reading the types. `Meta` carried
+`{ slug, title, byline, siteName, lang, url, fetchedAt, excerpt }` and nothing else. `fetchedAt` is
+when **we** downloaded it — two days after publication on this article, and potentially fifteen years
+after on an older one — so it is not a fallback, it is the wrong number wearing the right shape.
+
+The date was in the page all along: Readability returns
+`publishedTime: "2026-08-29T22:47:53+00:00"` and `src/extract.ts` dropped it on the floor.
+
+**Every article ingested before 2026-08-31 has no `publishedAt`, and never will unless it is
+re-extracted.** So the no-frame path is not an edge case handled for completeness — it is the path
+most of the corpus takes, and it must be the well-tested one. On such an article every year-less date
+stays year-less and the row falls back to `order`, which is a correct answer and a much less useful
+one.
+
 ### Most articles are not chronological
 
 This is the mode that will most often have nothing to say, and it must say so plainly rather than
