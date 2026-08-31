@@ -41,14 +41,15 @@ screenshots are large and the reasoning is small.
 
 Two things about that box will catch you out:
 
-- **Use system Chrome, never the bundled chromium.** `~/.cache/ms-playwright/chromium-1234` was
-  downloaded by `@playwright/mcp` at its own pinned build number. A project that installs its own
-  `playwright` pins a different one and dies with "Executable doesn't exist". The smoke test sets
-  `executablePath` explicitly for exactly this reason.
-- **Nothing on the box owns `playwright-core`.** The repo checkout does not install it. The smoke
-  test borrows whichever copy it can find and prints which one it used — see `PLAYWRIGHT_ROOTS` in
-  the script. If you need a pinned Playwright, install it and expect to run
-  `npx playwright install chromium` too.
+- **There is one browser on that box, and it is system Chrome.** Both MCPs launch
+  `/opt/google/chrome/chrome`, and the smoke test names it in `executablePath`. Set it yourself in
+  any script you write. A bare `chromium.launch()` asks for Playwright's *bundled* chromium at
+  whatever revision your client version wants, and dies with "Executable doesn't exist" — measured
+  on 2026-08-31, when `~/.cache/ms-playwright` held revision 1234 and the MCP's client wanted 1237.
+- **`playwright-core` is a pinned devDependency of this repo**, so a checkout that has run `npm ci`
+  has the version our lockfile names. On a box with no checkout the smoke test falls back to
+  borrowing a copy from the npx cache, at whatever version the MCPs bundled; it prints which root it
+  used, so a run on the fallback tells you so. See `PLAYWRIGHT_ROOTS` in the script.
 
 ## The trap both halves share
 

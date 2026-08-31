@@ -3,10 +3,11 @@
 A cheatsheet for **controlling a real browser from a script** — open a page, click things, read
 state back — aimed at an agent that cannot see the screen and has to work from artefacts.
 
-**Playwright is not installed in this repo, and on the laptop you do not want it** — browser work
-there goes through the Chrome extension. Which mechanism belongs on which machine is one page:
-[browser-control.md](../project/browser-control.md). Read that first if you are not already sure
-you want this one.
+**On the laptop you do not want this** — browser work there goes through the Chrome extension. Which
+mechanism belongs on which machine is one page:
+[browser-control.md](../project/browser-control.md). Read that first if you are not already sure you
+want this one. (`playwright-core` is a devDependency of the repo this doc lives in, pinned for the
+remote box; the full `playwright` package, and the browser download it brings, is not.)
 
 **On the remote box this is the live mechanism**, not a someday — the Chrome extension cannot follow
 you there, so scripts and the Playwright MCP are all there is.

@@ -41,16 +41,28 @@ const CHROME = process.env.GJD_SMOKE_CHROME ?? "/usr/bin/google-chrome-stable";
 const VIEWPORT = { width: 1024, height: 640 };
 
 /**
- * Where playwright-core might live on the box, best first. There is no global
- * install and this script deliberately installs nothing, so it borrows one:
- * the repo checkout once it exists, otherwise whatever the MCPs pulled into the
- * npx cache. GJD_SMOKE_PLAYWRIGHT overrides the lot.
+ * Where playwright-core might live on the box, best first. This script
+ * deliberately installs nothing, so it borrows a copy.
+ *
+ * The repo checkout is the one that is meant to win: `playwright-core` is a
+ * pinned devDependency of this repo, so a checkout that has run `npm ci` has
+ * exactly the version our lockfile names, on the box and on the laptop alike.
+ * The npx cache is a fallback for a box with no checkout yet, and it is luck
+ * rather than a plan — its version is whatever the MCPs happened to bundle.
+ * The script prints which root it used, so a run on the fallback says so.
+ *
+ * `~/smoke` used to be on this list and has been removed on purpose. It was a
+ * scratch directory a session made by hand on 2026-08-31, and it quietly became
+ * the thing the check depended on — a hand-made `npm init` default that nothing
+ * provisions, nothing pins, and any tidy-up would delete.
+ *
+ * GJD_SMOKE_PLAYWRIGHT overrides the lot.
  */
 const PLAYWRIGHT_ROOTS = () => {
   const home = homedir();
   const roots = [];
   if (process.env.GJD_SMOKE_PLAYWRIGHT) roots.push(process.env.GJD_SMOKE_PLAYWRIGHT);
-  roots.push(path.join(home, "code/spideryarn2"), process.cwd(), path.join(home, "smoke"));
+  roots.push(path.join(home, "code/spideryarn2"), process.cwd());
   const npx = path.join(home, ".npm/_npx");
   try {
     for (const d of readdirSync(npx)) roots.push(path.join(npx, d));
