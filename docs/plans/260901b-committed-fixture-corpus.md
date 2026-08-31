@@ -40,6 +40,33 @@ this machine. [deployment.md](../project/deployment.md) had already named that e
 `doc-links` test will accept a link into gitignored `output/`, which nobody else can follow" — and it
 took a corpus to make it visible.
 
+Two more surfaced late, both worth knowing before anyone runs the corpus suite:
+
+- **`tests/statusline.test.ts`** ("names the git branch it is standing in") fails in a detached-HEAD
+  worktree, which is what the gate builds. It arrived in `28abfdf` and belongs to that work, not this
+  one — but it will fail the gate for everybody until it tolerates a detached HEAD.
+- **`tests/pdf-bundle-trace.test.ts`** needs a build first. It passes *in* the gate, which runs
+  `build` before `test`, and fails in a bare worktree run. Not a defect; a reason a bare run and the
+  gate disagree.
+
+### The gate links `.env.local`, so a corpus run writes into the laptop's database
+
+[`deploy.ts:593`](../../scripts/deploy.ts) symlinks the real `.env.local` into the gate worktree —
+"only the tests need the personal state, so only they get it". That state includes `DATABASE_URL`,
+so **a gate run against the corpus writes corpus-derived reader state into the same local Postgres
+the laptop uses.** Observed rather than predicted: after a corpus worktree run, a local
+`store-parity` failed on `writes > agrees about glossary`, the filesystem holding Greg's real lookups
+and Postgres holding the fixture's.
+
+Nothing is lost — running `store-roundtrip` re-seeds and restores it — but it is surprising, and it
+is one of the two honesty limits `deployment.md` now records rather than hides.
+
+It also exposed a **cross-suite dependency the laptop's real data had always hidden**:
+`store-parity` never seeds glossary lookups itself and depends on `store-roundtrip` having run first.
+On a machine with a rich `data/` that is invisible, because the filesystem side always had lookups to
+compare. Against a small corpus it is load-bearing, and it is the kind of ordering dependency that
+makes a suite pass in one order and fail in another for reasons no failure message mentions.
+
 `data/` (64 MB) and `output/` (11 MB) are gitignored and doing two jobs at once — the pipeline's
 disposable scratch store, and the test suite's fixture corpus. That is why the directory is
 simultaneously too big to commit and too necessary to delete, and why four separate pieces of work
