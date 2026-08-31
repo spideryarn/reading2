@@ -881,7 +881,7 @@ Done: the test article re-extracted and `data/openai-huggingface/meta.json` carr
 article ingested before today still has none, so **the no-frame path is the common one and gets the
 tests**.
 
-### Stage 1 — the parser, and nothing else
+### Stage 1 — the parser, and nothing else ✅ done
 
 `src/timeline-time.ts`: read a block's text and a temporal phrase, return a `When` or nothing. Plus
 the trivial ordering function and the `orderConflicts` comparison. No model call, no I/O, no UI.
@@ -899,6 +899,45 @@ in the occurrence · month-end and leap-day arithmetic · duplicate and invalid 
 
 **No `Date` objects anywhere.** ISO strings end to end, compared as strings, so a timezone cannot
 move a day across the server/client line.
+
+**Landed** as `f5d0867` + `6d4fa4b`: [`src/timeline-time.ts`](../../src/timeline-time.ts) and
+[`tests/timeline-time.test.ts`](../../tests/timeline-time.test.ts), 69 tests.
+
+The implementation inverted what this plan asked for, and the inversion is the reason it works. It
+**never looks for the model's string**. It scans the *block* for date expressions, scans the phrase
+for the same, and uses the phrase only to choose which of the block's own dates is meant — **by
+parsed value, not by substring**. Both halves of the old failure die from that one change: `[F]rom`
+never has to be reproduced by anybody, because the bracket sits between two of the block's own
+tokens; and `July 1` cannot select `July 11`, because 07-01 ≠ 07-11.
+
+Verified independently against the real article before it was accepted:
+
+```
+"July 1"      vs a block holding July 10 and July 11   ->  REFUSED
+"on August 3" vs a block that does not contain it      ->  REFUSED
+"from July 13 through July 19"  (the [F]rom row)       ->  2026-07-13 .. 2026-07-19 extended
+"By May 12"   (block also holds May 26)                ->  — .. 2026-05-12
+"on May 26"   (same block)                             ->  2026-05-26 .. 2026-05-26
+"On July 7" with no publication date                   ->  REFUSED, rather than guessing a year
+```
+
+**Three contradictions in this plan came out of it**, all recorded above: "not until" is a lower
+bound and the plan had it as an upper one; the prompt still asked the model for `extent` after the
+data model gave it to the parser; and the year rule said *pick* in one place and *widen* in another.
+
+**Twenty-four guards, broken one at a time. Two survived, and both were real gaps** — a cue reaching
+across a date, and an exclusive lower bound on a *month*, where `shiftDay(end, +1)` and
+`shiftDay(start, +1)` are indistinguishable at day precision and only a month-wide interval tells
+them apart. Both have tests now.
+
+The tests **pin thirteen of the article's blocks verbatim** — real ids, curly apostrophes, the
+`[F]rom` bracket — so the cases are the article's own without the suite depending on gitignored
+`data/`.
+
+**Hand-off gap for Stage 2:** `direction` is unwired until `modality` is passed into it, and that is
+a fault in the artefact rather than an unused parameter. Twenty-two of the article's expressions are
+history and resolve correctly backwards; **two are forecasts and would resolve backwards too**,
+dating a prediction before the piece was written.
 
 ### Stage 2 — the generator, in its own file
 
