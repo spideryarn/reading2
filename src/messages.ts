@@ -203,7 +203,7 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * A claimant takes a job for one step and its lease says how long that step may
  * take. A lease that runs out means the process holding it is gone — frozen by
  * the host, restarted, or killed — and the job would otherwise sit `running`
- * for ever, holding the one running slot with it.
+ * for ever, blocking its article and counting against the concurrency cap.
  *
  * The sentence says what happened and offers the retry, because this is the one
  * failure where retrying is not just permitted but likely to work: `stepIsDone`

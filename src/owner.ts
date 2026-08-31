@@ -187,8 +187,8 @@ export function requestOwner(): OwnerId | null {
  * `AsyncLocalStorage` context is captured when an async resource is created,
  * and a p-queue task is a plain callback stored in an array — so the context it
  * runs in is whoever's continuation happened to drain the queue, not whoever
- * enqueued it. Measured, because it is not what you would guess: with
- * concurrency 1, Alice's job followed by Bob's gives
+ * enqueued it. Measured, because it is not what you would guess: with the queue
+ * at concurrency 1, as it was then, Alice's job followed by Bob's gives
  *
  *     a-start: alice   a-end: alice
  *     b-start: alice   b-end: alice
