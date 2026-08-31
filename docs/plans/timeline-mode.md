@@ -1079,7 +1079,7 @@ The remaining cut is set by **which files other sessions are holding**: everythi
 nobody else has open comes first, and the plumbing that reaches into five contended files goes last
 and goes fast.
 
-### Stage 0 — the publication date
+### Stage 0 — the publication date ✅ done
 
 `publishedAt` on `Meta`, populated in `src/extract.ts`, and added explicitly to the metadata
 fingerprint. **One line of extraction**, not a scraper: Readability already returns
@@ -1218,7 +1218,7 @@ both runs. Not the parser's fault: it has no date to place, and refusing is corr
 list as a `words` row. **The prompt never says that a span containing other events is itself an
 event**, and its "topic on a line" ban probably reads as forbidding exactly that.
 
-### Stage 3 — the panel
+### Stage 3 — the panel ✅ done
 
 `TimelinePanel.tsx`, `useTimeline.ts`, `modes.ts`, `title-text.ts`, `Dock.tsx`, `visitor.ts`,
 `params.ts`, `App.tsx`, `styles.css`, `search-hits.ts`, a preview page, and the three table-tests
@@ -1232,13 +1232,34 @@ times too wide; and every scrollable child of `.mode-band` needs
 Done: all five marks, the `⊘` state, the legend, the prediction divider, an expanded row, the empty
 state and the two-event state — **looked at in a browser**, in both themes, in a subagent.
 
-### Stage 4 — the plumbing, last and fast
+### Stage 4 — the plumbing, last and fast ✅ done
 
 `pipeline.ts`, `models.ts`, `jobs.ts`, `store/*`, `db/schema.ts`, the migration, `routes.ts`,
 `api.ts`, and the table-tests in [§ Changed — the tests](#changed-the-tests-that-are-tables).
 Mechanical and compiler-guided, done in one sitting against a freshly-read `src/ideas.ts`.
 
 **Writing the migration is free; applying it is Greg's call**, locally as well as remotely.
+
+### What is owed, and what has never been exercised
+
+Written down rather than left as a feeling.
+
+- **`TimelineEvent` and friends are declared twice** — in `src/types.ts`, where the panel can reach
+  them, and still in `src/timeline.ts` / `src/timeline-time.ts`. They had to move a stage early
+  because `tests/client-imports.test.ts` keeps `src/web/` to pure leaves and a stage with a CLI is
+  not one. Deleting the copies is owed; both files say so.
+- **`TimelineBand`'s five effects in `App.tsx` are a second copy of `useIdeasMode`'s** — the same five
+  rules, each of which was got wrong once in Ideas before it was got right. Not merged because
+  another session was rewriting `App.tsx` at the time. A shared hook over
+  `{found, openKey, onFound, onOpenKey, onJump}` is the right shape.
+- **The `["timeline", loadTimeline]` row in `tests/store-parity.test.ts` has never run** — red or
+  green. A wedged `jobs` row for an unrelated article aborts that suite and `store-roundtrip` at
+  setup, skipping 379 tests. Clearing it is a database write and needs Greg.
+- **[Two prompt gaps](#two-prompt-gaps-for-a-follow-up)** — the container span, and the same event
+  told twice.
+- **One article.** Everything measured here comes from a piece unusually dense with dates. The claim
+  that [most articles are not chronological](#most-articles-are-not-chronological) has still not been
+  tested against a single one.
 
 ### Reviews
 
