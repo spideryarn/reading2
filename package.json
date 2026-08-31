@@ -50,7 +50,8 @@
     "eval:reorder": "tsx evals/reorder-quality.ts",
     "eval:review": "tsx evals/review-stances.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
-    "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts"
+    "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
+    "sessions": "tsx scripts/tmux-sessions.ts"
   },
   "keywords": [],
   "author": "",
