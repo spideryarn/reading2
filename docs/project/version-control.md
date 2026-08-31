@@ -199,6 +199,28 @@ in there that are not yours? Use that form, not bare `git diff`, which asks "how
 differ from the *index*" and in this tree is a question about your colleagues rather than your files
 ([below](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29)).
 
+#### And a third consequence: **there is no earlier version of the file to commit** (2026-08-31)
+
+The two above are about hunks you did not mean to take. This one is about a commit you cannot make
+at all, and it costs a wrong commit *message* rather than wrong contents.
+
+A stage-2 commit was planned as two: the work, and then the fixes for a review that had come back
+NO-SHIP. By the time it was written the agent holding `src/fetch.ts` had already applied its fixes
+to that file — and a pathspec commits the working tree, so **committing `src/fetch.ts` at all meant
+committing the fixed one**. There was no pre-fix version left anywhere: not in the index, which the
+pathspec ignores, and not on disk, which is where the fix was. The split existed only in the plan.
+
+The commit went in saying the fixes were "part-landed and complete in the next commit". They had
+landed in full, so the log entry implied a fault was still live at a commit where it was not.
+Amending was already unavailable — another session had committed on top — so the correction is its
+own commit (`5cf7827`), which is the right shape: a message that was wrong about the tree is worth a
+line in the history rather than a quiet rewrite.
+
+**The rule.** Decide what a commit *says* from `git diff HEAD -- <paths>` at the moment you write
+the message, never from what you asked somebody to do. In a tree where agents edit the files you are
+about to name, the plan and the working tree diverge silently, and the pathspec always believes the
+working tree.
+
 | | |
 |---|---|
 | **Nobody else is in the file** | The recipe above. Nothing further to think about. |
