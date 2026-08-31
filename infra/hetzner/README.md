@@ -72,9 +72,11 @@ Then, in this order, from the repo root on the laptop:
    the browser stack, the MCP servers, and provisioning. It knows **nothing** about steps 3–7 —
    there is no check for the checkout, `.env.local`, the database, the migrations, the owner row or
    the fixtures, and the browser smoke deliberately uses a global `playwright-core` so that it works
-   on a clean `/home` with no checkout at all. **A box where you skipped 3 through 7 gets a green
-   doctor.**
-10. **Then check the work**, which is the step that actually proves 3–7: on the box,
+   on a clean `/home` with no checkout at all. The `mcp` check is the one exception — it `cd`s into
+   the checkout and needs the OAuth logins, so it catches a missing step 3 and a missing step 7.
+   **Everything between them — the environment, the database, the migrations, the owner row, the
+   fixtures — doctor cannot see at all.**
+10. **Then check the work**, which is the step that actually proves 4, 5 and 6: on the box,
     `REQUIRE_POSTGRES=1 npm test`. That is stage 3's exit criterion in
     [the plan](../../docs/plans/260831x-remote-box-dev-environment.md), and
     [`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) makes an absent database say so
@@ -461,10 +463,13 @@ can take production offline, and **`update_project_deployment_protection`**, whi
 Neither is routine work, and Vercel's own guidance is that its MCP has whatever access the account
 has and wants human confirmation for every workflow.
 
-**`deploy_to_vercel` is deliberately left open**, and that is a judgement rather than an oversight:
-deploying is ordinary work here, sessions run in normal permission mode (`gjd-remote` passes no
-`--dangerously-skip-permissions`), so it prompts. If unattended deploys ever become the worry, it is
-one more line.
+**`deploy_to_vercel` is on the `ask` list rather than denied.** Deploying is ordinary work here, so
+refusing it outright would be wrong — but the reasoning that had it simply unlisted was wrong too.
+"`gjd-remote` passes no `--dangerously-skip-permissions`, so it prompts" does not follow: terminal
+sessions on Pro/Max/Team default to Auto mode, where a classifier can approve an action without
+asking anybody. An `ask` rule forces the prompt; being unmatched does not. `get_access_to_vercel_url`
+is denied outright — it mints an unauthenticated shareable link to a protected deployment, which is
+a way of publishing something by accident.
 
 **Syntax.** `mcp__<server>__<tool>` for one tool, `mcp__<server>` for a whole server, `mcp__*` for
 every server. `mcp__<server>__*` works too, but the bare form is the one the CLI's own help
@@ -472,12 +477,13 @@ documents. Denied tools are removed from the model's tool list rather than refus
 proved on the box by denying `mcp__supabase__list_tables` and watching that one tool disappear while
 the other ten stayed. Deny also beat an explicit allow of the same name.
 
-**This is a guard rail, not a wall, and it matters which.** A session on that box can write
-`.claude/settings.local.json`, which takes precedence over the project settings — so an agent that
-edits the repo can re-allow what this denies. It stops the accidental reach, not a determined one.
-The only version an agent cannot touch is a managed-settings file deployed outside the repo, and we
-do not have one. Say "guard rail" when describing this to somebody; calling it a control would be
-false.
+**This is a guard rail, not a wall, and it matters which.** Not because a local `allow` can beat
+it — it cannot; deny wins over allow whichever settings file each comes from, and an earlier version
+of this paragraph had that backwards. It is a guard rail because the file itself is in the repo, and
+an agent on the box can edit or delete the deny entry, or reach Vercel through the CLI, the API or a
+browser instead. It stops the accidental reach, not a determined one. The only version an agent
+cannot touch is a managed-settings file deployed outside the repo, and we do not have one. Say
+"guard rail" when describing this; calling it a control would be false.
 
 ### ⚑ The one manual step, per box
 
@@ -538,8 +544,17 @@ something nobody was checking, and it would have gone quietly false the first af
 pointed `.env.local` at production and then pushed. Since 2026-08-31 `push-env` refuses to send
 `DATABASE_URL`, `SUPABASE_URL` or `VITE_SUPABASE_URL` unless the value is loopback
 ([`MUST_BE_LOCAL` in `scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)), reusing the
-migrator's own `isLocalDatabaseUrl` so "local" cannot mean two different things in one repo. Found
-by GPT Sol. It serves 11 tools, verified by a
+migrator's own `isLocalDatabaseUrl` so "local" cannot mean two different things in one repo.
+
+**And a loopback URL is still not the whole story**, which was the second half of the same finding:
+a production `SUPABASE_SERVICE_ROLE_KEY` bypasses every policy in the database it belongs to and
+would sail past a check that only reads URLs. The local stack's keys say who they are — JWTs with
+`iss: supabase-demo` and no project `ref`, where a hosted project's carry `iss: supabase` and its
+ref — so `push-env` reads the issuer of any Supabase-shaped value it is about to send and refuses
+anything not issued by the local stack. It needs no list of known-bad values, it is keyed off the
+shape rather than the key name so a JWT added to the allowlist later is covered the day it is added,
+and a token whose payload will not decode is refused rather than waved through. Both found by GPT
+Sol. It serves 11 tools, verified by a
 `tools/list` call on 2026-08-31: `search_docs`, `list_tables`, `list_extensions`, `list_migrations`,
 `apply_migration`, `execute_sql`, `query_logs`, `get_advisors`, `get_project_url`,
 `get_publishable_keys`, `generate_typescript_types`.

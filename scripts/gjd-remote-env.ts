@@ -228,6 +228,35 @@ export type EnvPayload = {
   problems: string[];
 };
 
+/**
+ * Who issued this, if it is a Supabase JWT at all?
+ *
+ * Returns the `iss` claim, `"not-a-jwt"` for anything that is not one, and
+ * `"unreadable"` for something JWT-shaped whose payload will not decode —
+ * which must NOT come out as "fine", for the same reason `isLocalDatabaseUrl`
+ * fails closed: "I cannot tell what this is" is not "yes, it is the local one".
+ *
+ * Only the header/payload structure and the `iss` claim are ever looked at, and
+ * neither the value nor the project ref is ever returned or logged.
+ */
+export function supabaseJwtIssuer(value: string): string {
+  const parts = value.split(".");
+  if (parts.length !== 3 || parts[0] === "" || parts[1] === "") return "not-a-jwt";
+  let payload: unknown;
+  try {
+    payload = JSON.parse(Buffer.from(parts[1] ?? "", "base64url").toString("utf8"));
+  } catch {
+    return "unreadable";
+  }
+  if (typeof payload !== "object" || payload === null) return "unreadable";
+  const claims = payload as Record<string, unknown>;
+  /* Not every JWT is Supabase's. One without these claims is somebody else's
+     token and none of this function's business. */
+  if (!("iss" in claims) && !("role" in claims) && !("ref" in claims)) return "not-a-jwt";
+  const iss = claims["iss"];
+  return typeof iss === "string" ? iss : "unreadable";
+}
+
 export function buildEnvPayload(localText: string): EnvPayload {
   const { values: local, problems } = scanEnv(localText);
   const allowed = new Set(ALLOWLIST);
@@ -245,6 +274,25 @@ export function buildEnvPayload(localText: string): EnvPayload {
      had not. The KEY is named and the value never is — the host would usually
      be harmless, but "usually" is not a rule this file can apply to a string it
      has not parsed. */
+  /* A loopback URL is not the whole story. A production SUPABASE_SERVICE_ROLE_KEY
+     bypasses every policy in the database it belongs to, and it would sail past
+     a check that only reads URLs. The local stack's keys say so themselves —
+     they are JWTs with `iss: supabase-demo` and no project `ref`, where a hosted
+     project's carry `iss: supabase` and its ref — so this needs no list of
+     known-bad values and no secret leaves the file. Keyed off the SHAPE rather
+     than the key name, so a Supabase JWT added to the allowlist under any name
+     is covered the day it is added. GPT Sol, 2026-08-31. */
+  for (const [key, value] of pushed) {
+    const verdict = supabaseJwtIssuer(value);
+    if (verdict === "not-a-jwt") continue;
+    if (verdict !== "supabase-demo") {
+      problems.push(
+        `${key} is a Supabase key issued by something other than the local stack, and only the ` +
+          `local stack's keys go on the box. (Its issuer, not its value, is what was read.)`,
+      );
+    }
+  }
+
   for (const key of MUST_BE_LOCAL) {
     const value = pushed.get(key);
     if (value !== undefined && !isLocalDatabaseUrl(value)) {
@@ -259,9 +307,10 @@ export function buildEnvPayload(localText: string): EnvPayload {
   // nothing changed, and the file's mtime already says when.
   const header = [
     `# Written by \`gjd-remote push-env\` from the laptop's ${ENV_BASENAME}.`,
-    `# Only the keys on the allowlist in scripts/gjd-remote-env.ts are here —`,
-    `# production credentials are deliberately absent. Edits made on the box are`,
-    `# overwritten by the next push.`,
+    `# Only the keys on the allowlist in scripts/gjd-remote-env.ts are here, and`,
+    `# every Supabase target in them is the LOCAL stack — checked, not assumed.`,
+    `# Paid model-provider keys ARE here; what is absent is production data.`,
+    `# Edits made on the box are overwritten by the next push.`,
     ``,
   ];
   const body = [...pushed].map(([k, v]) => `${k}=${serialiseValue(v)}`);

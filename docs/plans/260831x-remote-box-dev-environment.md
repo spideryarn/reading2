@@ -375,6 +375,37 @@ to be present, and the guard refuses a remote URL without the opt-in — so it i
 not one slip. But `setup-local.ts` calls itself "local by construction" and that is a shade stronger
 than what holds. Raised with Greg and with the session that owns that script.
 
+**Sol's second pass found the guard I had just written was bypassable — and so was the one it
+copied.** `pg` parses connection strings with `pg-connection-string`, which honours libpq's `host`
+and `hostaddr` as *query parameters* and lets them override the authority. So
+
+```
+postgres://u:p@127.0.0.1:54362/db?host=remote.example.com
+```
+
+parses to `{ host: "remote.example.com" }` while `new URL(...).hostname` says `127.0.0.1`. Verified
+against the installed `pg-connection-string`, not argued about. That defeated the new `push-env`
+check *and* [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)'s guard against migrating
+production — which would have let a migration reach a remote host while printing a `Target:` line
+naming the loopback address, with TLS off, because `isLocalDatabaseUrl` decides that too. Fixed in
+[`src/db/ssl.ts`](../../src/db/ssl.ts) for every caller at once: a URL carrying a host override is
+refused rather than resolved, because nothing we run needs one and resolving it would mean keeping
+two spellings of the host correct forever. Three tests, red first.
+
+**The same review's second half:** a production `SUPABASE_SERVICE_ROLE_KEY` would still have reached
+the box beside perfectly loopback URLs. `push-env` now reads the `iss` claim of any Supabase-shaped
+value and refuses anything not issued by `supabase-demo`, failing closed on a payload it cannot
+decode. And the banner it writes said "production credentials are deliberately absent" while
+deliberately carrying paid model-provider keys — narrowed to say what is actually true.
+
+**Two more of my sentences were wrong, in opposite directions.** I wrote that a local `allow` beats
+a project `deny`; it does not — deny wins whichever file each comes from, and the real weakness is
+that an agent can edit or delete the deny entry. And I wrote that unmatched Vercel tools "prompt
+because there is no `--dangerously-skip-permissions`", which does not follow: terminal sessions
+default to Auto mode, where a classifier can approve without asking. `deploy_to_vercel` is on the
+`ask` list now, which forces the prompt; `get_access_to_vercel_url` is denied, because it mints an
+unauthenticated shareable link to a protected deployment.
+
 ## The `provision.sh` refactor — approved, with a correction
 
 Extract it from the cloud-init heredoc into `infra/hetzner/provision.sh`, so it is shellcheck-able

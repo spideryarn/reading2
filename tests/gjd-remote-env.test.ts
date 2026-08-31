@@ -179,3 +179,45 @@ describe("the local-only keys", () => {
     expect(buildEnvPayload(without).problems.join(" ")).not.toContain("SUPABASE_URL");
   });
 });
+
+/**
+ * Loopback URLs are not the whole story: a production `SUPABASE_SERVICE_ROLE_KEY`
+ * would sail past a URL check and land on a box shared by autonomous agents.
+ * The local stack's keys are distinguishable without any secret changing hands —
+ * they are JWTs issued by `supabase-demo` and carry no project `ref`, where a
+ * hosted project's carry `iss: supabase` and its ref. Second finding by GPT Sol
+ * on the same banner, 2026-08-31.
+ */
+describe("Supabase keys that are not the local stack's", () => {
+  const jwt = (payload: Record<string, unknown>) =>
+    ["eyJhbGciOiJIUzI1NiJ9", Buffer.from(JSON.stringify(payload)).toString("base64url"), "sig"].join(".");
+
+  const base = [
+    "DATABASE_URL=postgres://postgres:pw@127.0.0.1:54362/postgres",
+    "SUPABASE_URL=http://127.0.0.1:54361",
+    "VITE_SUPABASE_URL=http://127.0.0.1:54361",
+  ];
+  const withKey = (v: string) => [...base, `SUPABASE_SERVICE_ROLE_KEY=${v}`].join("\n");
+
+  it("accepts the local stack's own service-role key", () => {
+    expect(buildEnvPayload(withKey(jwt({ iss: "supabase-demo", role: "service_role" }))).problems).toEqual([]);
+  });
+
+  it("refuses a hosted project's service-role key even beside loopback URLs", () => {
+    const got = buildEnvPayload(withKey(jwt({ iss: "supabase", role: "service_role", ref: "abcdefghijklm" })));
+    expect(got.problems.join(" ")).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    // Never the value, and never the project it belongs to.
+    expect(got.problems.join(" ")).not.toContain("abcdefghijklm");
+  });
+
+  it("leaves values that are not Supabase JWTs alone", () => {
+    const env = [...base, "OPENROUTER_API_KEY=sk-or-v1-not-a-jwt", "CODEX_API_KEY=plain"].join("\n");
+    expect(buildEnvPayload(env).problems).toEqual([]);
+  });
+
+  // Fail closed: a JWT we cannot read is not evidence that it is the local one.
+  it("refuses a Supabase-shaped key whose payload will not decode", () => {
+    const got = buildEnvPayload(withKey("eyJhbGciOiJIUzI1NiJ9.@@@notbase64@@@.sig"));
+    expect(got.problems.join(" ")).toContain("SUPABASE_SERVICE_ROLE_KEY");
+  });
+});
