@@ -53,7 +53,7 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ChartScatter,
   ChevronDown,
@@ -64,6 +64,7 @@ import {
   Route,
   Waypoints,
 } from "lucide-react";
+import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId } from "../types.js";
 import {
   DIAGRAMS,
@@ -74,6 +75,7 @@ import {
   type DiagramNode,
   type LinkKind,
   nodeAt,
+  paragraphStops,
   stepStops,
 } from "./diagram.js";
 import { layoutDiagram } from "./diagrams.js";
@@ -83,7 +85,7 @@ import { type UseProjection, useProjection } from "./useProjection.js";
 import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
-import { stepTarget } from "./keynav.js";
+import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { SketchView } from "./SketchView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -99,7 +101,17 @@ interface Props {
   root: SummaryNode | null;
   kind: DiagramKind;
   onKind(kind: DiagramKind): void;
-  /** Where the reader is, as a row index into the article's blocks. */
+  /**
+   * Where the reader is, as a row index into the article's blocks — **whatever
+   * `?at=` holds**, which is usually a section and is not always one: the scroll
+   * spy writes the section, and a deliberate jump is allowed to leave the
+   * paragraph it aimed at (position.ts § positionToWrite).
+   *
+   * The fallback rather than the answer since 2026-08-31: on a picture drawn at
+   * paragraph resolution the panel measures the row itself (`useReaderRow`),
+   * and this is what it uses before the first measurement and on Force, whose
+   * nodes are sections anyway.
+   */
   atRow: number | null;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
@@ -346,15 +358,124 @@ function rank(kind: LinkKind): number {
 const PART_HUES = 8;
 
 /**
- * The second paragraph on both step buttons' cards.
+ * **Where the reader actually is, in article rows** — measured from the page
+ * rather than read off `?at=`.
  *
- * Written once because it is the same fact about both, and because the thing it
- * has to say is the thing neither arrow can show: **the unit is whatever the
- * picture is made of**, which is sections on Force and single paragraphs on the
- * two scatters. The readout between them is the only other place that says so.
+ * `?at=` names the **section** the reader is in, deliberately and for three
+ * good reasons (position.ts § the header), and this panel used it as though it
+ * named the paragraph. On a picture whose vertical axis *is* the article that
+ * shows: measured on scaling-hypothesis on 2026-08-31, the you-are-here line
+ * sat one to three paragraphs behind the reading line and then jumped, rather
+ * than following. Greg, the same day: *"if I click up/down to move paragraphs
+ * in the text, it doesn't update the position correspondingly in the diagram"*.
+ *
+ * `measureRow` is **keynav.ts's**, the same one `swipe.ts` uses, for the reason
+ * written down there: a finger and a key must not disagree about which item the
+ * reader is in. A picture drawn against the article is the third thing that
+ * must not disagree, and a fourth idea of the reading line is how three of them
+ * end up saying different numbers.
+ *
+ * **`enabled` is the gate, and Force is the reason for it.** Only the two
+ * scatters draw at paragraph resolution; Force's nodes are sections, so a finer
+ * row would move its mark at exactly the moments `?at=` already does while
+ * re-rendering it on every paragraph crossing — and Force's layout is the
+ * 300-tick d3 simulation that was taken off `atRow` on 2026-08-27 for precisely
+ * that cost. Off, this installs no listener and the panel pays nothing.
+ *
+ * One `requestAnimationFrame` per burst of scrolling, which is the shape
+ * `useReadingPosition` and `watchBarVisibility` both use. `setRow` with an
+ * unchanged number re-renders nothing, so a screenful of scrolling inside one
+ * paragraph does no React work at all — but it is **not** free, and an earlier
+ * draft of this sentence said "a rect read per frame" and was wrong by a factor
+ * of the article's length. `measureRow` reads the rect of *every* row, so it is
+ * a few hundred reads per frame on a long article. Nothing writes between them,
+ * so there is no layout thrash and the cost is small; it is stated because the
+ * cheaper version — the tops are monotonic, so a binary search would do it in
+ * nine — is available if it ever shows up in a profile, and because a second
+ * private idea of the reading line is a price this app has decided not to pay
+ * (keynav.ts § measureRow). ⟨Sol⟩, 2026-08-31.
+ *
+ * **A reflow is heard through the table, not through a key.** Scrolling is not
+ * the only thing that puts a different row under the reading line: a column
+ * toggle, the spine going away, a resize, a late image, a font swap all rewrap
+ * the article without moving the page one pixel, and a measurement taken before
+ * one of them describes a page that no longer exists with nothing downstream
+ * able to tell. So a `ResizeObserver` watches the article's own table, which is
+ * the element all of those resize.
+ *
+ * **`useColumnContext` takes a `layoutKey` prop as well as observing, and this
+ * deliberately does not.** That key is App.tsx's string of the reader's own
+ * choices, and it cannot see a late image or a font swap — which is why that
+ * hook needs the observer too, and which makes the observer the load-bearing
+ * half. Every reflow the key describes changes the table's box, so the observer
+ * already hears them; threading a prop through two components to hear them
+ * twice is a part touching another part for nothing. Sol pushed for the key at
+ * the plan stage and for the observer on the built code; this keeps the one
+ * that subsumes the other. If a reflow ever turns up that moves the rows
+ * *inside* a table whose box has not changed, the key is what to add.
+ *
+ * **This is the mark's row, not the step's.** A press reads the page there and
+ * then (`stepFrom` in the panel), because state is at best one frame behind and
+ * a button must not step from where the reader was last time the browser
+ * painted.
+ *
+ * **`assume` is how a press moves the mark without waiting to be told.** Every
+ * other route into this state is a measurement, and a measurement costs a
+ * frame: the press scrolls, the scroll event fires, a frame runs, the row
+ * lands. Watched in a browser on 2026-08-31 that showed as a readout a press
+ * behind — `9, 10, 10, 12, 12, 14` over six presses of ↓, each of which had in
+ * fact moved the article exactly one paragraph — and as the same block reading
+ * `9 / 145` when opened directly and `10 / 145` when stepped onto. A press is
+ * the one case where the answer is known before the page has moved, because we
+ * are the ones moving it. The next measurement overwrites it either way, so an
+ * interrupted jump corrects itself rather than leaving a lie on screen.
  */
-const STEP_HOW =
-  "The same step the ↑ and ↓ keys make, and it steps by a row of the picture rather than by a node — so one press is always one visible move. Part-way into something, the first press goes to the top of what you are in before it steps past it, which is the rule every music player uses.";
+function useReaderRow(enabled: boolean): [number | null, (row: number) => void] {
+  const [row, setRow] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      /* Back to `?at=` rather than the last row measured before the toggle:
+         a stale number is worse than a coarse one, because nothing later can
+         tell it is stale. */
+      setRow(null);
+      return;
+    }
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      setRow(measureRow());
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    window.addEventListener("scroll", schedule, { passive: true });
+    /* The article's own table, which is the element every row lives in — found
+       through a row rather than by a class, because that is the selector
+       `measureRow` itself uses and the two must be looking at the same table.
+       `ResizeObserver` is absent in some test DOMs, hence the guard. */
+    const table = document.querySelector("tbody tr[data-block]")?.closest("table") ?? null;
+    const ro = table && typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (table && ro) ro.observe(table);
+    /* The first measurement of all: arriving at a picture is not a scroll, and
+       the mark has to be right before the reader touches anything. */
+    measure();
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      ro?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [enabled]);
+  /* Gated on `enabled` so a press on a picture reading `?at=` does not set state
+     nothing will read — the return below would throw the value away, and the
+     render would happen anyway. */
+  const assume = useCallback(
+    (next: number) => {
+      if (enabled) setRow(next);
+    },
+    [enabled],
+  );
+  return [enabled ? row : null, assume];
+}
 
 export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, axis, onAxis, hue, onHue }: Props) {
   useRenderCount("DiagramPanel");
@@ -550,6 +671,44 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const flat = drawingPoints;
   const ramp = drawingPoints && hue === "progress";
 
+  /**
+   * **Where the reader is, for everything this panel draws** — the mark, the
+   * you-are-here line and the readout.
+   *
+   * Measured on a picture made of paragraphs, and `?at=` on every other — see
+   * `useReaderRow`. `atRow` is also the fallback for the moment before the
+   * first measurement and for a reader who has not scrolled at all.
+   *
+   * **A press does not use this**, and that is deliberate rather than an
+   * oversight: `stepFrom` measures the page there and then, or takes the row
+   * its own last press aimed at. State is a frame behind and a chain is not
+   * state at all.
+   */
+  const [measuredRow, assumeRow] = useReaderRow(drawingPoints);
+  const readerRow = measuredRow ?? atRow;
+
+  /**
+   * **Where the reader is, and where the mark goes, are two answers** — and on
+   * the two scatters they part company inside the apparatus.
+   *
+   * Both pictures plot the argument and nothing else, and both already say so:
+   * `bodyRowOf` asks the *block* rather than the range, so a reader three
+   * endnotes deep gets `nowY: null` and no line (scatter.ts). But a dot's range
+   * is stretched to tile the article, and a note stranded in the middle of the
+   * body falls inside one — so `nodeAt` would happily light that dot, brighten
+   * Trail's chain around it, put its card up as "you are here" and count it in
+   * the readout, all while the line the same picture draws had honestly
+   * withheld itself. Two parts of one picture disagreeing about whether the
+   * reader is in it. ⟨Sol⟩, 2026-08-31.
+   *
+   * So the mark takes the same predicate the line already used, and the ladder
+   * keeps the raw row: a press should step from where the reader physically is,
+   * even when that is somewhere the picture cannot draw them.
+   */
+  const inApparatus =
+    drawingPoints && readerRow !== null && !isBody(blocks[readerRow] ?? {});
+  const markRow = inApparatus ? null : readerRow;
+
   /* The three most distinctive words in each topic, for the lane legend.
      Computed here rather than on the server: it reuses `terms()`, which is the
      app's one idea of what a distinctive word is, and it costs one pass over
@@ -578,8 +737,15 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
      `drift` and `trail` keep it — see `NEEDS_AT_ROW` above, and note that the
      first version of this left both of them out. GPT Sol's finding,
-     2026-08-27. */
-  const followsReader = NEEDS_AT_ROW.has(kind) ? atRow : null;
+     2026-08-27.
+
+     **The saving got bigger on 2026-08-31**, when `readerRow` started being
+     measured per paragraph rather than read off `?at=` per section: excluding
+     Force here is now what keeps the simulation off a value that changes a
+     dozen times a screen. It is also why `useReaderRow` is gated rather than
+     always on — Force is not merely uninterested in the finer row, it must not
+     be handed it. */
+  const followsReader = NEEDS_AT_ROW.has(kind) ? markRow : null;
   const layout: DiagramLayout | null = useMemo(() => {
     if (!root || box === null || box.w === 0) return null;
     return layoutDiagram(
@@ -615,7 +781,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
      nodes rather than from the tree, so a closed section's mark lands on the
      closed section rather than vanishing. */
-  const here = useMemo(() => nodeAt(layout?.nodes ?? [], atRow), [layout, atRow]);
+  const here = useMemo(() => nodeAt(layout?.nodes ?? [], markRow), [layout, markRow]);
 
   /**
    * **The sequence chain, graded by how far each line is from the reader.**
@@ -664,15 +830,40 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      memoised on it, so it costs nothing per press. */
   const rowOf = useMemo(() => new Map(blocks.map((b, i) => [b.id, i])), [blocks]);
 
-  /** The ladder the ↑ / ↓ buttons walk — see `stepStops` in diagram.ts. */
-  const stops = useMemo(() => stepStops(layout?.nodes ?? [], rowOf), [layout, rowOf]);
+  /**
+   * The ladder the ↑ / ↓ buttons walk — **and which ladder depends on what the
+   * picture is made of.**
+   *
+   * A picture of sections steps by the rows it draws (`stepStops`); a picture
+   * of paragraphs steps by the article's paragraphs (`paragraphStops`), because
+   * a short paragraph gets no dot and is still somewhere the reader is
+   * standing. Both files' headers carry the reasoning; the switch is here
+   * because `drawingPoints` is the panel's own word for "this picture is made
+   * of paragraphs", and it is the same flag `unit` reads below — so the label
+   * and the ladder cannot come apart.
+   */
+  const stops = useMemo(
+    () =>
+      drawingPoints
+        ? paragraphStops(blocks, layout?.nodes ?? [])
+        : stepStops(layout?.nodes ?? [], rowOf),
+    [drawingPoints, blocks, layout, rowOf],
+  );
   const starts = useMemo(() => stops.map((s) => s.row), [stops]);
 
   /* Where in that ladder the reader is standing, 1-based, for the readout
      between the two buttons. The same arithmetic the reading-position code
-     uses, over rows rather than pixels. */
-  const readerRow = atRow ?? starts[0] ?? 0;
-  const rung = starts.length > 0 ? activeSectionIndex(starts, readerRow) + 1 : 0;
+     uses, over rows rather than pixels.
+
+     **Zero means "not on the ladder at all"**, which the readout draws as "—".
+     That is the apparatus, and it is a fact worth stating rather than rounding
+     to the nearest paragraph of the argument — the same answer the you-are-here
+     line gives by not being drawn. Not knowing yet is a different thing and
+     still falls back to the first rung: the reader is somewhere, we just have
+     not measured. */
+  const rowForRung = readerRow ?? starts[0] ?? 0;
+  const rung =
+    starts.length === 0 || inApparatus ? 0 : activeSectionIndex(starts, rowForRung) + 1;
   /**
    * What one press moves by, in the reader's own words — **read off what is
    * drawn rather than off which toggle is pressed.**
@@ -688,8 +879,82 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const unit = drawingPoints ? "paragraph" : deepest >= 2 ? "section" : "part";
 
   /**
+   * **The row a press steps from** — the page, measured now, except while our
+   * own last press is still landing, when it is where that press was going.
+   *
+   * Two rules, and both of them are keynav.ts's rather than a second opinion:
+   *
+   * **Measured at press time, not read out of `readerRow`.** That value is
+   * React state a frame behind the world at best, and a button that steps from
+   * where the reader was when the browser last painted is the bug this whole
+   * change is fixing, in miniature. A press is a discrete event; it can afford
+   * one measurement.
+   *
+   * **And chained, because scrolling is animated.** `scrollToBlock` glides for
+   * `SCROLL_MS`, firing exactly the scroll events a hand would, so a second
+   * press mid-flight measures a row half way between two rungs and lands short
+   * — two presses, one rung of movement. So the row the last press *aimed at*
+   * stands for `CHAIN_MS`, which is the glide plus a margin, and after any real
+   * pause the world is measured afresh.
+   *
+   * **A timer rather than `glideTarget()`, which was the first attempt.** The
+   * glide clears its own handle in the same tick as its final `scrollTo`
+   * (scroll.ts § tick), so between that and the scroll event it causes there is
+   * a gap where nothing is in flight and the measurement is still mid-air. A
+   * press in the gap steps from the wrong row, rarely and invisibly. ⟨Sol⟩,
+   * 2026-08-31. The timer has no gap, and `CHAIN_MS` is already the constant
+   * for exactly this.
+   *
+   * The reader taking the page back drops it, on the same two events
+   * `scroll.ts`'s own `bail` listens for. **Not `pointerdown`**, which keynav
+   * can afford to include and this cannot: here the press *is* a pointerdown,
+   * so dropping on it would clear the chain a moment before every click that
+   * sets one.
+   */
+  const chain = useRef<number | null>(null);
+  const chainTimer = useRef(0);
+  useEffect(() => {
+    /**
+     * **Anything the reader does that is not another press of these buttons
+     * ends the chain** — and the exception, rather than the rule, is what took
+     * two goes to get right.
+     *
+     * The first version dropped on `wheel` and `touchstart` unconditionally.
+     * ⟨Sol⟩, 2026-08-31: on an iPad every tap *is* a `touchstart`, so the
+     * second tap of a rapid pair cleared the chain a moment before the `click`
+     * that wanted it — reintroducing the race on the one device these buttons
+     * were built for, while the test passed because `button.click()` fires no
+     * touch. The rule is therefore about *where* the gesture landed, not which
+     * gesture it was, and with that in hand the list can be the wide one:
+     * a scrollbar drag and PageDown fire neither `wheel` nor `touchstart`, and
+     * both leave the reader somewhere the last press knows nothing about.
+     *
+     * It also covers every jump out of this panel that is not a step — a click
+     * on a dot, the footer card, the picture's own arrow keys — because each
+     * of them begins with a pointer or a key outside this bar. One rule rather
+     * than a wrapper round `onJump` as well, which was the first attempt and is
+     * the version that goes stale the next time something new can jump.
+     */
+    const drop = (e: Event) => {
+      if ((e.target as Element | null)?.closest?.(".diag-step")) return;
+      chain.current = null;
+      window.clearTimeout(chainTimer.current);
+    };
+    for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+      window.addEventListener(type, drop, { passive: true });
+    }
+    return () => {
+      for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+        window.removeEventListener(type, drop);
+      }
+      window.clearTimeout(chainTimer.current);
+    };
+  }, []);
+  const stepFrom = (): number => chain.current ?? measureRow();
+
+  /**
    * One step through the article, and the picture follows because it is drawn
-   * from `atRow`.
+   * from the same row.
    *
    * `stepTarget` is **keynav.ts's**, not a second copy of the rule: ↓ is always
    * the next item, and ↑ part-way into an item goes to the top of the item you
@@ -698,7 +963,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
    * the arrow keys about what ↑ means would be worse than not having them.
    */
   const stepTo = (dir: -1 | 1) => {
-    const row = stepTarget(starts, readerRow, dir);
+    const row = stepTarget(starts, stepFrom(), dir);
     if (row === null) return;
     /* The stop carries its own block, rather than this asking `nodeAt` again.
        Two lookups of the same fact is how they come to disagree — and on a
@@ -707,10 +972,34 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     const stop = stops.find((s) => s.row === row);
     if (!stop) return;
     setRoving(stop.id);
+    /* The mark moves now rather than a frame later, when the scroll this is
+       about to start gets measured — see `assume` in `useReaderRow`. */
+    assumeRow(row);
+    chain.current = row;
+    window.clearTimeout(chainTimer.current);
+    chainTimer.current = window.setTimeout(() => {
+      chain.current = null;
+    }, CHAIN_MS);
     onJump(stop.blockId);
   };
+  /**
+   * Whether that press would go anywhere, for the greyed-out look.
+   *
+   * **The chain first, exactly as `stepFrom` does**, and then the last measured
+   * row rather than a fresh measurement: this runs on every render, and
+   * `measureRow` reads a rect per row of the article.
+   *
+   * The chain is the half that matters, and leaving it out was a bug ⟨Sol⟩
+   * found: it does not clear when the scroll-derived state catches up, it
+   * clears on a timer, so a Previous that had just stepped off the first rung
+   * went on announcing itself unavailable while working, and a Next that had
+   * just landed on the last rung went on looking live while doing nothing —
+   * for as long as the reader kept pressing. Reading a ref in render is
+   * ordinarily how you get a value nothing re-renders for; here the press that
+   * writes it also calls `setRoving`, so a render always follows.
+   */
   const canStep = (dir: -1 | 1) =>
-    starts.length > 0 && stepTarget(starts, readerRow, dir) !== null;
+    starts.length > 0 && stepTarget(starts, chain.current ?? rowForRung, dir) !== null;
 
   /* The pointer's position, mirrored into a ref so the follow-scroll below can
      read it without re-running every time the pointer leaves the picture. */
@@ -741,7 +1030,20 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   useEffect(() => {
     if (here === null || hovering.current) return;
     const el = scroller.current;
-    const g = el?.querySelector<SVGGElement>(`[data-diag-id="${here}"]`);
+    /* **The line where there is one, the node where there is not**, and on
+       Drift that is the difference between following the reader and following
+       the nearest dot. Drift's `nowY` moves with every paragraph; `here` moves
+       only when a *dot* changes, and a long run of paragraphs too short to
+       place is one dot. Keying the scroll on the node alone let the line — the
+       thing the reader is actually watching — walk off the bottom of the
+       scroller while the picture sat still. ⟨Sol⟩, 2026-08-31.
+
+       The other two pictures have no line, and there the node is the mark, so
+       the same two lines of code do the right thing for all three. */
+    const nowY = layout?.nowY ?? null;
+    const g =
+      (nowY === null ? null : el?.querySelector<SVGLineElement>("line.diag-now")) ??
+      el?.querySelector<SVGGElement>(`[data-diag-id="${here}"]`);
     if (!el || !g) return;
     const box = g.getBoundingClientRect();
     const view = el.getBoundingClientRect();
@@ -756,7 +1058,10 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
        the right thing to lose. */
     if (typeof el.scrollTo === "function") el.scrollTo({ top, behavior: "smooth" });
     else el.scrollTop = top;
-  }, [here]);
+    /* `layout` rather than `layout.nowY`, because the element this reads is
+       drawn by the render `layout` produced — depending on the number alone
+       would let a fresh picture keep an old scroll position. */
+  }, [here, layout]);
 
   /**
    * What the graph says about the node the card is describing: which other
@@ -1416,45 +1721,46 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           The readout in the middle is not decoration — it is what says which
           unit a press moves by, which is the one thing that changes between
           pictures (a section on Tree and Force, a paragraph on the two
-          scatters) and the one thing a pair of arrows cannot show. */}
+          scatters) and the one thing a pair of arrows cannot show.
+
+          **The two buttons carry no hover card, and that is a removal.** They
+          had one each, and Greg, 2026-08-31: *"the tooltip isn't that helpful
+          and gets in the way, so get rid of them for the big Up/Down
+          buttons"*. It gets in the way literally: the card opens upwards over
+          the bottom of the picture, which is the part of the picture a reader
+          reaching for these buttons is looking at. And what it said — that ↓
+          moves on one paragraph — is what a downward chevron above a readout
+          saying `12 / 47` already says. The readout keeps its card, because
+          the one thing that is genuinely not guessable is what a press moves
+          *by*, and that is the sentence the readout's card carries. */}
       <div className="diag-step">
-        <Tooltip
-          placement="top"
-          keepSide
-          className="tip-soon"
-          content={
-            <ControlTip
-              head={`Previous ${unit}`}
-              what={
-                canStep(-1)
-                  ? `Moves the article back one ${unit}, and the mark in the picture with it.`
-                  : `Nothing to go back to — you are at the first ${unit} the picture draws.`
-              }
-              how={STEP_HOW}
-            />
-          }
+        {/* **`aria-disabled`, not `disabled`.** At the ends of the article one
+            of these does nothing, and it stays focusable rather than dropping
+            out of the tab order between presses — a keyboard reader stepping
+            to the last paragraph should not have focus vanish from under them.
+            It keeps its greyed look, announces itself as unavailable, and the
+            press does nothing: `stepTo` already returns when `stepTarget`
+            gives no row, and `canStep` asks `stepTarget` the same question from
+            the same place, so the button was never doing anything at the ends
+            anyway. (The two can still differ by a frame outside a chain, where
+            one measures the page and the other reads the last measurement —
+            see `canStep`.)
+
+            The original reason was stronger and is gone with the hover card —
+            a `disabled` button fires no mouse events, so the sentence saying
+            *why* it was dead was unreachable by the reader asking. Said
+            plainly rather than left in place, because a comment that still
+            claims a card exists is how the next person concludes one is
+            missing. */}
+        <button
+          type="button"
+          className="diag-step-btn"
+          onClick={() => stepTo(-1)}
+          aria-disabled={!canStep(-1)}
+          aria-label={`Previous ${unit}`}
         >
-          {/* **`aria-disabled`, not `disabled`, and the card is the whole
-              reason.** A disabled button cannot be focused and does not fire
-              mouse events, so its card is unreachable by any route — and the
-              reader who most wants to know why this button is dead is exactly
-              the reader who cannot open the sentence saying so. So it stays in
-              the tab order, keeps its greyed look, announces itself as
-              unavailable, and the press does nothing. Nothing had to be added
-              for that last part: `stepTo` already returns when `stepTarget`
-              gives no row, which is the same condition `canStep` reports — so
-              the button was never doing anything at the ends anyway, and
-              `disabled` was only ever the styling and the announcement. */}
-          <button
-            type="button"
-            className="diag-step-btn"
-            onClick={() => stepTo(-1)}
-            aria-disabled={!canStep(-1)}
-            aria-label={`Previous ${unit}`}
-          >
-            <ChevronUp size={22} />
-          </button>
-        </Tooltip>
+          <ChevronUp size={22} />
+        </button>
         {/* `aria-live` off: this changes on every scroll, and a screen reader
             announcing "12 of 47" continuously while the reader moves down the
             page is noise over the prose they are actually reading. The buttons
@@ -1467,8 +1773,18 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             <ControlTip
               head="Where you are"
               what={
-                starts.length > 0
-                  ? `The ${unit} you are standing in, out of ${starts.length} the picture draws.`
+                rung === 0 && inApparatus
+                  ? "You are in the notes, which neither scatter draws — so there is no paragraph of the argument to be standing in."
+                  : starts.length > 0
+                  ? /* **"the ↑ and ↓ buttons walk", not "the picture draws".**
+                       They were the same number until 2026-08-31 and are not on
+                       the two scatters any more, where the ladder is the
+                       article's paragraphs and the dots are only the ones long
+                       enough to place (diagram.ts § paragraphStops). The strip
+                       above the picture is where the reader is told how many
+                       were left out; this sentence must not quietly claim to be
+                       that count as well. */
+                    `The ${unit} you are standing in, out of ${starts.length} the ↑ and ↓ buttons walk.`
                   : "There is nothing to step through in this picture yet."
               }
               how={`The unit is read off what is actually drawn rather than off which picture is lit — so it says ${unit} here, and would say something else on a picture made of different rows.`}
@@ -1484,35 +1800,18 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               the readout takes a tab stop it does not need for its own sake. */}
           {/* biome-ignore lint/a11y/noNoninteractiveTabindex: see above — the tab stop exists so the hover card on this readout is reachable by keyboard, which is the whole point of it not being a `title` */}
           <span className="diag-step-at" tabIndex={0}>
-            {starts.length > 0 ? `${rung} / ${starts.length}` : "—"}
+            {rung > 0 ? `${rung} / ${starts.length}` : "—"}
           </span>
         </Tooltip>
-        <Tooltip
-          placement="top"
-          keepSide
-          className="tip-soon"
-          content={
-            <ControlTip
-              head={`Next ${unit}`}
-              what={
-                canStep(1)
-                  ? `Moves the article on one ${unit}, and the mark in the picture with it.`
-                  : `Nothing to go on to — you are at the last ${unit} the picture draws.`
-              }
-              how={STEP_HOW}
-            />
-          }
+        <button
+          type="button"
+          className="diag-step-btn"
+          onClick={() => stepTo(1)}
+          aria-disabled={!canStep(1)}
+          aria-label={`Next ${unit}`}
         >
-          <button
-            type="button"
-            className="diag-step-btn"
-            onClick={() => stepTo(1)}
-            aria-disabled={!canStep(1)}
-            aria-label={`Next ${unit}`}
-          >
-            <ChevronDown size={22} />
-          </button>
-        </Tooltip>
+          <ChevronDown size={22} />
+        </button>
       </div>
 
       <DetailCard

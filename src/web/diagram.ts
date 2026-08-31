@@ -92,7 +92,8 @@
  * paragraph count are in the footer card whenever the pointer or the keyboard is
  * on it, and in its `aria-label` for anything reading the tree aloud.
  */
-import type { BlockId, NodeId } from "../types.js";
+import { isBody } from "../block-policy.js";
+import type { Block, BlockId, NodeId } from "../types.js";
 import type { SummaryNode } from "./tree.js";
 
 /**
@@ -806,6 +807,76 @@ export function stepStops(
   return [...best.entries()]
     .sort(([a], [b]) => a - b)
     .map(([row, n]) => ({ row, blockId: n.blockId, id: n.id }));
+}
+
+/**
+ * **The same ladder for a picture made of paragraphs — but its rungs are the
+ * article's paragraphs rather than the picture's dots.**
+ *
+ * Greg, 2026-08-31: *"If I press down, it seems to jump more than one
+ * paragraph."* He was right, and `stepStops` was the reason. On Drift and Trail
+ * a node is one embedded paragraph, and a block under `MIN_WORDS` is never
+ * embedded (src/article-vectors.ts) — so a dot ladder walks past every short
+ * paragraph in the article. Measured on Gwern's scaling-hypothesis, where the
+ * panel's own strip says *84 too short or not prose to place*: one press moved
+ * the reader two block rows, every time.
+ *
+ * A paragraph with no dot is still a paragraph the reader is standing in, and
+ * the picture already knows which dot answers for it — **a dot's range is
+ * stretched to tile the article** precisely so that the mark never blinks out
+ * (scatter.ts § dots). So the rung carries `nodeAt`'s answer, which is the same
+ * rule the you-are-here mark uses, and the two cannot disagree.
+ *
+ * **Body rows only.** The axis of both scatters is the argument, the dots stop
+ * at the last body row, and `nowY` is deliberately null in the apparatus — so a
+ * rung on an endnote would step the reader somewhere the picture says nothing
+ * about. Same predicate `bodyOrdinals` counts with, so the readout's
+ * denominator and the ladder are the same set.
+ *
+ * **What this gives up, said rather than discovered.** On Trail the only mark
+ * is the lit dot and the brightened chain, so where two paragraphs share a dot
+ * a press moves the text and not the picture. That is the inverse of the
+ * failure `stepStops` was written to avoid — three presses and the article
+ * moves nowhere — and it is the better half of the trade: the reader pressed a
+ * button to move through the article, and the article moved. On Drift nothing
+ * is given up at all, because `nowY` is continuous in the row.
+ *
+ * **One pass over the nodes filling a row → node array, not `nodeAt` per row.**
+ * The answer is the same one — deepest wins, and `tests/diagram.test.ts` asserts
+ * every rung against `nodeAt` so the two cannot drift apart — but the cost is
+ * not. Per row it is rows × nodes, which is 2M comparisons at the `MAX_BLOCKS`
+ * ceiling, and "memoised on the layout" is no defence on the two pictures this
+ * runs for: their layout is recomputed every time the reader crosses a
+ * paragraph, so that price would be paid a dozen times a screen. This is linear
+ * in the rows the nodes cover, which on a scatter is the article once, because
+ * the ranges tile it.
+ */
+export function paragraphStops(
+  blocks: readonly Block[],
+  nodes: readonly DiagramNode[],
+): StepStop[] {
+  const owner: (DiagramNode | null)[] = new Array(blocks.length).fill(null);
+  for (const n of nodes) {
+    /* Clamped, because a node's range is the tree's and the block array is the
+       article's — a layout held over from the instant before a re-ingest can
+       name a row that is no longer there. */
+    const to = Math.min(blocks.length - 1, n.endRow);
+    for (let row = Math.max(0, n.startRow); row <= to; row++) {
+      const held = owner[row];
+      if (!held || n.depth > held.depth) owner[row] = n;
+    }
+  }
+  const stops: StepStop[] = [];
+  blocks.forEach((block, row) => {
+    const node = owner[row];
+    /* No dot answers for this row, so there is nothing for a press to light.
+       With a drawn scatter this cannot happen below the last body row; with no
+       dots at all it is every row, and an empty ladder is what disables both
+       buttons rather than leaving them stepping at nothing. */
+    if (!node || !isBody(block)) return;
+    stops.push({ row, blockId: block.id, id: node.id });
+  });
+  return stops;
 }
 
 /**

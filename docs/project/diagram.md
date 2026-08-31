@@ -303,6 +303,10 @@ different clothes:
   unreachable by any route. `aria-disabled` now, which keeps the grey and the
   announcement and loses nothing: `stepTo` already returned early on the same
   condition `canStep` reports, so the press was never doing anything anyway.
+  **Those two cards have since gone** — Greg asked for them out on 2026-08-31
+  (§ the step bar below) — so what keeps the buttons `aria-disabled` is now the
+  weaker half of the argument: focus should not vanish from under a keyboard
+  reader who has stepped to the last paragraph.
 - **And the lane legend's chips are `<li>`s**, which cannot take focus either —
   so the two words a chip is too narrow to show were reachable by pointer only,
   which is the failure the `title` attribute already had there. ⟨Sol⟩ found this
@@ -805,12 +809,26 @@ in them. `layout.nodes` is in preorder, so on Force the root, part 1 and
 section 1.1 all begin on the same row — stepping by node would press ↓ three
 times and move the article nowhere, which reads as a broken button. Rows make
 one press always one visible move, and they make the *unit* come out right by
-itself: sections on Force, single paragraphs on Drift and Trail, because those
-are the rows those pictures draw. The readout between the buttons
-(`12 / 47`) is what says which. The step rule itself is `stepTarget` from
-`keynav.ts` rather than a second copy, so ↑ here means what ↑ means everywhere:
-part-way into an item it goes to the top of the item you are in before it steps
-back, which is the track-skip rule from every music player.
+itself: sections on Force, single paragraphs on Drift and Trail. The readout
+between the buttons (`12 / 47`) is what says which. The step rule itself is
+`stepTarget` from `keynav.ts` rather than a second copy, so ↑ here means what ↑
+means everywhere: part-way into an item it goes to the top of the item you are
+in before it steps back, which is the track-skip rule from every music player.
+
+**On the two scatters the rungs are the article's paragraphs, not the picture's
+dots**, and that is a correction made on 2026-08-31. Greg: *"If I press down, it
+seems to jump more than one paragraph."* He was right. A dot is one *embedded*
+paragraph, and a block under `MIN_WORDS` is never embedded
+([`src/article-vectors.ts`](../../src/article-vectors.ts)) — on gwern's scaling
+hypothesis the panel's own strip says *84 too short or not prose to place*, and
+one press moved the reader two block rows every time. A paragraph with no dot is
+still a paragraph the reader is standing in, and the picture already knows which
+dot answers for it, because **a dot's range is stretched to tile the article**.
+So `paragraphStops` walks the body rows and asks `nodeAt` which dot to light —
+the same function the you-are-here mark uses, so the two cannot disagree. What it
+gives up is stated where it is given up: on Trail, whose only mark is the lit dot,
+two paragraphs sharing a dot make a press that moves the text and not the
+picture. Drift gives up nothing, because its line is continuous in the row.
 
 **And the row is the row of the block a rung *jumps to*, not the row its range
 starts on.** Those are the same number on Force and they are not on a
@@ -835,6 +853,59 @@ pressed. An article with no sub-sections, or one whose parts the reader has
 folded away, steps by *part* — and a label that is confidently wrong about the
 unit is worse than no label, because the number beside it is a count of exactly
 that unit.
+
+**Two rows, not one.** The measured row is where a press steps *from*; a body-only copy of it is
+what the mark, the you-are-here line and the readout use. They part company inside the apparatus,
+which neither scatter draws: `bodyRowOf` already withheld the line there, but a note stranded
+mid-body falls inside a dot's tiled range, so `nodeAt` would light that dot and count the reader as a
+paragraph of the argument while the line beside it stayed honest. The readout says `—` there now.
+⟨Sol⟩, 2026-08-31.
+
+**A press moves the mark itself rather than waiting to be told.** Every other route into the panel's
+idea of where the reader is costs a frame — the press scrolls, the scroll fires, a frame runs, the
+row lands — and in a browser that showed as a readout one press behind: six presses of ↓ reading
+`9, 10, 10, 12, 12, 14`, each of which had moved the article exactly one paragraph, and the same
+block reading `9 / 145` opened directly and `10 / 145` stepped onto. A press is the one case where
+the answer is known before the page has moved, because we are the ones moving it. The next
+measurement overwrites it, so an interrupted jump corrects itself.
+
+**A press measures the page, and chains.** `readerRow` is React state and is a frame behind at best,
+so `stepTo` calls `measureRow()` itself; and because scrolling is animated, the row the last press
+aimed at stands for `CHAIN_MS` — keynav.ts's constant, for this exact problem — so two rapid presses
+count as two rather than landing half way. The first build asked `glideTarget()` instead and Sol
+found the gap: the glide clears its own handle in the same tick as its last `scrollTo`, leaving a
+window in which nothing is in flight and the measurement is still mid-air.
+
+**What ends the chain is *where* the gesture landed, not which gesture it was**, and getting that
+backwards broke the touch path the buttons exist for. The second build dropped the chain on any
+`wheel` or `touchstart` — and on an iPad every tap is a `touchstart`, so the second tap of a rapid
+pair cleared the chain a moment before the `click` that wanted it. The test passed throughout,
+because `button.click()` fires no touch. Anything outside `.diag-step` ends it now, which also
+catches the things neither of those events sees: a scrollbar drag, PageDown, keynav's own arrows, a
+click on a dot, the footer card's jump. Sol found both, 2026-08-31;
+`tests/diagram-step.test.tsx` holds them.
+
+**And the panel measures where the reader is rather than reading it off `?at=`.**
+`?at=` names the *section*, deliberately and for three good reasons
+([position.ts](../../src/web/position.ts)), and this panel believed it named the
+paragraph. Measured in a browser on 2026-08-31, Drift's you-are-here line sat one
+to three paragraphs behind the reading line and then jumped, which is Greg's
+third complaint the same day: *"if I click up/down to move paragraphs in the
+text, it doesn't update the position correspondingly in the diagram"*. It now
+uses `measureRow()` — keynav.ts's, the same one `swipe.ts` calls, because a
+finger, a key and a picture drawn against the article must not hold three
+different ideas of the reading line. Gated to Drift and Trail: Force's nodes are
+sections, so the finer row would move its mark at exactly the same moments while
+re-running the 300-tick simulation a dozen times a screen.
+
+**The two big buttons carry no hover card.** They had one each and Greg asked for
+them back out on 2026-08-31: *"the tooltip isn't that helpful and gets in the
+way"*. It got in the way literally — the card opens upwards over the bottom of
+the picture, which is what a reader reaching for these buttons is looking at —
+and a downward chevron above a readout saying `12 / 47` had already said it. The
+readout keeps its card, because what a press moves *by* is the one thing on this
+bar that is not guessable. `tests/diagram-panel-hover.test.tsx` holds both halves,
+including that neither button falls back to a `title`.
 
 #### The fallback was a bug factory, and it is gone
 
@@ -1273,7 +1344,7 @@ drifts is the one nobody is looking at when a prompt is being judged.
 
 **Its own component, not a fourth branch of `DiagramPanel`.** The other three
 are a `DiagramLayout` and every control under the chips is about it — the roving
-tabstop over `layout.nodes`, the step bar over `stepStops`, the footer card over
+tabstop over `layout.nodes`, the step bar over its ladder, the footer card over
 a `SummaryNode`. A scene is none of those and has its own. Splitting once, below
 the chip row, is what keeps the other three unbraided.
 

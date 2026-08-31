@@ -137,6 +137,26 @@ Before diagnosing anything that moves, print the three facts together:
    rafRuns: await new Promise(r => { requestAnimationFrame(() => r(true)); setTimeout(() => r(false), 400); }) })
 ```
 
+**And do not believe the first two.** On 2026-08-31 a tab reported `visible` and `hasFocus: true`
+throughout while two chained `requestAnimationFrame` callbacks took **3.3 to 4.7 seconds** to fire.
+`window.scrollBy` advanced `scrollY` by exactly 300 every time and the rows' own
+`getBoundingClientRect` did not move with it — so the page had scrolled and had not laid out. Every
+rAF-driven reading in the app froze together and caught up together, which looked exactly like one
+feature's position tracking lagging behind the reader, and a session had already written that up as
+a partial fix.
+
+So time the frames rather than asking the flags, and **run a control**: pick a second, unrelated
+value that reaches the page through the same rAF (here `?at=` in the URL, written by
+`useReadingPosition`). If your value and the control freeze on the same samples and catch up on the
+same samples, the finding is the browser and not the code.
+
+```js
+// frames per second, measured rather than assumed
+await new Promise(res => { const t0 = performance.now(); let n = 0;
+  const tick = () => { n++; performance.now() - t0 < 1000 ? requestAnimationFrame(tick) : res(n); };
+  requestAnimationFrame(tick); })
+```
+
 ### Work in your own tab
 
 Several agents drive this same browser. On 2026-08-26 a session's measurements were being

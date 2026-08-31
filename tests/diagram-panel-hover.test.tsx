@@ -744,7 +744,7 @@ describe("the controls explain themselves", () => {
     }
   });
 
-  it("puts a card on the step bar, which is the one built for a device titles do not reach", { timeout: 20000 }, async () => {
+  it("puts a card on the step bar's readout, and none on the two buttons", { timeout: 20000 }, async () => {
     mount("force");
     await settle();
     const bar = host.querySelector(".diag-step");
@@ -753,18 +753,37 @@ describe("the controls explain themselves", () => {
     expect(parts.length, "the bar should be two buttons and a readout").toBe(3);
 
     /* **The ↑ is greyed out here**, because the fixture stands the reader on
-       row 0 — and that is the case worth having. It was a `disabled` button,
-       which cannot be focused and fires no mouse events, so the card saying
-       *why it is dead* was unreachable by exactly the reader asking. */
+       row 0. It stays `aria-disabled` rather than `disabled` so that focus does
+       not vanish from under a keyboard reader at the ends of the article — the
+       stronger reason, an unreachable card explaining why it was dead, went
+       with the cards below. */
     expect(parts[0]?.getAttribute("aria-disabled"), "the fixture does not reach the greyed case").toBe("true");
 
-    const heads = ["Previous", "Where you are", "Next"];
-    for (const [i, part] of parts.entries()) {
-      const card = await cardFor(part);
-      expect(card.head, "the open card belongs to another control").toContain(heads[i] as string);
-      expect(isDetailed(card.body), `${card.head}'s card is a label, not an explanation`).toBe(true);
-      expect(part.hasAttribute("title"), "a step control fell back to a title").toBe(false);
+    /* **The two buttons carry nothing at all**, which is a removal. Greg,
+       2026-08-31: *"the tooltip isn't that helpful and gets in the way, so get
+       rid of them for the big Up/Down buttons"*. Asserted rather than left to
+       the eye, because a card that comes back would come back silently — the
+       Tooltip wrapper is three lines and the panel is full of them. `title` is
+       checked too: falling back to one would put the same words in the same
+       place by another mechanism. */
+    for (const button of [parts[0], parts[2]]) {
+      (button as HTMLElement).focus();
+      await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+      expect(
+        document.querySelectorAll('[role="tooltip"]'),
+        "a step button opened a card, which was deleted",
+      ).toHaveLength(0);
+      expect(button?.hasAttribute("title"), "a step button fell back to a title").toBe(false);
+      (button as HTMLElement).blur();
     }
+
+    /* The readout keeps its card, and it is the one worth keeping: it is the
+       only place that says what a press moves *by*, which is a section here and
+       a paragraph on the two scatters. */
+    const card = await cardFor(parts[1] as Element);
+    expect(card.head, "the open card belongs to another control").toContain("Where you are");
+    expect(isDetailed(card.body), "the readout's card is a label, not an explanation").toBe(true);
+    expect(parts[1]?.hasAttribute("title"), "the readout fell back to a title").toBe(false);
   });
 
   /* Seven controls at two 400ms waits each is over vitest's 5s default, and a
