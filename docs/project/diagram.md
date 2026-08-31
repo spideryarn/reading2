@@ -1039,12 +1039,12 @@ about fifty pixels of a 400px band, saying the same thing every time.
 >
 > — Greg, 2026-08-30
 
-So it is an `Info` icon at the right-hand end of the control row, carrying the
-same words in the panel's own hover card (`ScatterNote` in
+So it is an `Info` icon at the end of the panel's heading row, carrying the same
+words in the panel's own hover card (`ScatterNote` in
 [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
 
-Three things make that a move rather than a deletion, and each of them is the
-half a tooltip on its own would lose:
+Two things make that a move rather than a deletion, and each is the half a
+tooltip on its own would lose:
 
 - **The sentence is still announced.** An `.sr-only` `role="status"` carries the
   whole of it, so a reader who cannot see the picture still learns when the
@@ -1053,15 +1053,38 @@ half a tooltip on its own would lose:
 - **The counts are in the control's own name**, not only inside the card. "Info"
   is a noun, and a control whose whole accessible name is a noun is one a screen
   reader cannot skim.
-- **It cannot take a line of its own.** The chips wrap inside `.diag-opt-rows`
-  and the icon is the outer strip's second child, so the row is exactly as tall
-  with it as without. The first version used `margin-left: auto` on a wrapping
-  row, which right-aligns an item without stopping it starting a new line —
-  ⟨Sol⟩, 2026-08-30.
 
 `Info` rather than a warning triangle: paragraphs going unplaced is the ordinary
 case, and an alarm on the ordinary case is an alarm nobody reads by the second
 article.
+
+#### Why the heading row and not the control row
+
+The icon went on `.diag-opts` — the Sideways/Colour strip — first, on the
+reasoning that a row already drawn costs nothing to add to. That was wrong, and
+it is worth the paragraph because **two separate checks confirmed the absence of
+the old wording rather than the truth of the new one**, and both passed.
+
+`.diag-opts` wraps. An auto margin right-aligns an item on the line it lands on;
+it does not stop it starting a new one — so the first version's "costs no
+height" was simply false. Nesting the chips in an inner wrapping box fixed
+*which* item wrapped and not *whether* a line was spent, because the binding
+constraint is **total intrinsic width**, not alignment: at the ideal band width
+Drift's two chip groups and the icon do not fit on one line, so one of them wraps
+however the alignment is written.
+
+The browser sweep that found it (2026-08-31) also shows why the checks missed it.
+Drift was measured at its narrowest, where the chips already wrap and the icon
+rides free; Trail at its widest, where there is only one chip group and
+everything fits. The costly combination — Drift at the ideal width — was in
+neither.
+
+`.diag-head` has no `flex-wrap`, so it cannot gain a line at any width: it
+shrinks its heading instead. The claim is now a property of the markup rather
+than a measurement that happened to hold. That is the difference between fixing
+this and re-wording it, and it is the general lesson —
+[silent-success.md](../reusable/silent-success.md) applies to a *claim in a
+comment* exactly as it applies to code.
 
 ### Sideways on Drift: lanes or spread
 

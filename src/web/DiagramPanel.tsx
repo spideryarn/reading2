@@ -976,6 +976,37 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
       <div className="diag-head">
         <Network size={14} className="diag-head-icon" />
         <h2>Diagram</h2>
+        {/* **The scatter's caveat lives in this row, and the reason is that this
+            row cannot wrap.** It was four lines of prose above the picture until
+            2026-08-30 — Greg: *"It uses up valuable vertical real estate. Hide it
+            behind a tooltip or warning icon or something."*
+
+            It went onto the controls strip first, and that was wrong twice over
+            in a way worth writing down, because two of us checked it and both
+            checked the wrong thing. `.diag-opts` wraps, and **an auto margin
+            right-aligns an item on the line it lands on without stopping it
+            starting a new one** — so the first version's "costs no height" was
+            false. Nesting the chips in an inner box fixed *which* item wrapped
+            and not *whether* a line was spent, because the binding constraint is
+            **total intrinsic width**, not alignment: at the ideal band width
+            Drift's two chip groups and this icon do not fit on one line, so one
+            of them wraps whatever the alignment rules say.
+
+            This row is `display: flex` with no `flex-wrap`, so it cannot wrap at
+            all — items shrink instead — and `h2 { flex: 1 }` already pushes a
+            third child to the right. The claim is now a property of the markup
+            rather than a measurement that happened to hold at the two widths
+            somebody looked at.
+
+            **And that is the part to keep.** Both checks that missed it
+            confirmed the *absence of the old wording* rather than the truth of
+            the new: one measured Drift at its narrowest (where the chips already
+            wrap, so the icon rides free) and Trail at its widest (one chip group,
+            so it fits), and never the combination that costs a line. Found by a
+            browser sweep, 2026-08-31. */}
+        {drawingPoints && projection.status === "ready" && (
+          <ScatterNote projection={projection} />
+        )}
       </div>
 
       {/* One tab stop, arrows inside — the radio pattern, and the same shape
@@ -1082,107 +1113,65 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           control that is visibly present and inert is worse than one that is
           not there. */}
       {wantsPoints && (
-        /* **Two boxes, and the inner one is the only thing that wraps.**
-           `.diag-opts` used to be a single wrapping row with the icon in it, and
-           ⟨Sol⟩ was right that this made the claim below false: `margin-left:
-           auto` right-aligns an item, it does not reserve it a slot, so at a
-           width where the chips fit and the icon does not the icon took a line
-           of its own. The chips wrap inside `.diag-opt-rows`; the icon is the
-           outer row's second child and cannot start a line. */
         <div className="diag-opts">
-          <div className="diag-opt-rows">
-            {kind === "drift" && (
-              <Choice
-                label="Sideways"
-                value={axis}
-                onChange={onAxis}
-                options={[
-                  {
-                    value: "lanes",
-                    label: "Lanes",
-                    blurb:
-                      "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
-                    /* **Not “how central it is to its topic”**, which is what this
-                       card said first and is a sentence `laneX` was rewritten to
-                       stop being true: sideways inside a lane is the paragraph's
-                       own first component, on the same scale Spread shows across
-                       the whole band, so the two modes are two readings of one
-                       number. ⟨Sol⟩ caught the falsehood coming back, having
-                       caught it once in scatter.ts in August — the geometry looks
-                       identical either way, which is exactly why a card about it
-                       has to be checked against the code rather than the picture. */
-                    how: "Inside a lane, sideways is the same number Spread uses, scaled to that lane — so the two are two readings of one measurement rather than two different pictures. The number of lanes comes from the article's length and is capped at eight, which is a fact about a 300px band rather than about the article.",
-                  },
-                  {
-                    value: "spread",
-                    label: "Spread",
-                    blurb:
-                      "Every paragraph on one sliding scale — the single biggest axis of variation in the article.",
-                    how: "Honest about degree where Lanes is honest about grouping. Nothing more to buy: both are arithmetic over the same model call.",
-                  },
-                ]}
-              />
-            )}
+          {kind === "drift" && (
             <Choice
-              label="Colour"
-              value={hue}
-              onChange={onHue}
+              label="Sideways"
+              value={axis}
+              onChange={onAxis}
               options={[
                 {
-                  value: "section",
-                  label: "Section",
+                  value: "lanes",
+                  label: "Lanes",
                   blurb:
-                    "The same eight hues the rest of the app uses, one per part of the article, reused round it.",
-                  how: "Positional, and it means nothing beyond it: the hue says these dots belong together, so the eye can group them without reading anything.",
+                    "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
+                  /* **Not “how central it is to its topic”**, which is what this
+                     card said first and is a sentence `laneX` was rewritten to
+                     stop being true: sideways inside a lane is the paragraph's
+                     own first component, on the same scale Spread shows across
+                     the whole band, so the two modes are two readings of one
+                     number. ⟨Sol⟩ caught the falsehood coming back, having
+                     caught it once in scatter.ts in August — the geometry looks
+                     identical either way, which is exactly why a card about it
+                     has to be checked against the code rather than the picture. */
+                  how: "Inside a lane, sideways is the same number Spread uses, scaled to that lane — so the two are two readings of one measurement rather than two different pictures. The number of lanes comes from the article's length and is capped at eight, which is a fact about a 300px band rather than about the article.",
                 },
                 {
-                  value: "progress",
-                  label: "Progress",
-                  blurb: "Dark at the start of the article, bright at the end.",
-                  how: "The one setting that answers “does this piece travel through its subject or circle back over it?” without following the chain — which on a long article is a web you cannot trace.",
-                },
-                {
-                  value: "topic",
-                  label: "Topic",
-                  blurb: "The model’s own grouping — one hue per topic, the same one the Lanes columns use.",
-                  how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
+                  value: "spread",
+                  label: "Spread",
+                  blurb:
+                    "Every paragraph on one sliding scale — the single biggest axis of variation in the article.",
+                  how: "Honest about degree where Lanes is honest about grouping. Nothing more to buy: both are arithmetic over the same model call.",
                 },
               ]}
             />
-          </div>
-          {/* **What the two scatters have to say, on the row that is already
-              there.** It was four lines of 10.5px prose above the picture, and
-              in a band 400px wide that is about fifty pixels of the reader's
-              vertical space spent on a caveat they have read once. Greg,
-              2026-08-30: *"It uses up valuable vertical real estate. Hide it
-              behind a tooltip or warning icon or something."*
-
-              So it moves into this row rather than getting a shorter version of
-              its own line: it is the second child of a strip whose *first* child
-              is the box the chips wrap inside, so it sits at the right-hand end
-              of a row that is drawn whether or not it is there and **cannot add
-              a line of its own**. Right-alignment alone was not enough, and the
-              first version of this got it wrong — styles.css § `.diag-opt-rows`.
-
-              **The words are the same words, with one addition**: the
-              one-paragraph case gained a second sentence, because a card has two
-              paragraphs where a strip had one. Nothing else about them changed,
-              and that is the part worth guarding. Two components out of 1,024
-              throw away most of what the model saw, so a scatter that does not
-              say so is the silent-success shape with a picture on it, and the
-              number alone is worse than useless to a reader who does not know
-              what "variance" means. The
-              card says the thing a percentage cannot — *the projection can only
-              ever pull dots together, never push them apart* — and `ScatterNote`
-              keeps a `role="status"` copy for a screen reader, which is what
-              the strip was doing before and is the half a tooltip cannot do.
-
-              **Only when there is a picture to describe.** Waiting and failing
-              belong to `Waiting` inside the scroller, where the picture is
-              missing; a second voice up here would say it twice. */}
-          {drawingPoints && projection.status === "ready" && (
-            <ScatterNote projection={projection} />
           )}
+          <Choice
+            label="Colour"
+            value={hue}
+            onChange={onHue}
+            options={[
+              {
+                value: "section",
+                label: "Section",
+                blurb:
+                  "The same eight hues the rest of the app uses, one per part of the article, reused round it.",
+                how: "Positional, and it means nothing beyond it: the hue says these dots belong together, so the eye can group them without reading anything.",
+              },
+              {
+                value: "progress",
+                label: "Progress",
+                blurb: "Dark at the start of the article, bright at the end.",
+                how: "The one setting that answers “does this piece travel through its subject or circle back over it?” without following the chain — which on a long article is a web you cannot trace.",
+              },
+              {
+                value: "topic",
+                label: "Topic",
+                blurb: "The model’s own grouping — one hue per topic, the same one the Lanes columns use.",
+                how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -1889,12 +1878,15 @@ function kept(p: UseProjection): { what: string; how: string } {
 }
 
 /**
- * **The picture's own caveat, as an icon on the controls row.**
+ * **The picture's own caveat, as an icon on the heading row.**
  *
  * It was four lines of prose above the picture until 2026-08-30. Greg:
  *
  * > It uses up valuable vertical real estate. Hide it behind a tooltip or
  * > warning icon or something.
+ *
+ * It is rendered in `.diag-head` rather than on the controls strip, and **why**
+ * is at the call site: that row cannot wrap, and the strip can.
  *
  * Two things it keeps, because a hover card on its own would drop both.
  *

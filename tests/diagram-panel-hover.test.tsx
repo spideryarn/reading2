@@ -886,7 +886,7 @@ describe("what a scatter says about itself", () => {
         : new Response(JSON.stringify({ model: "m", blocks: 2, eligible: 2, omitted: 0, pairs: [] }), { status: 200 }),
     );
 
-  it("costs no line of its own", async () => {
+  it("stands in the heading row, and the scatter grows no strip", async () => {
     placedProjection();
     mount("drift");
     await settle();
@@ -895,7 +895,28 @@ describe("what a scatter says about itself", () => {
        is the whole of the change. Asserted as an absence because the height it
        used to take is exactly what a regression would hand back. */
     expect(host.querySelector(".diag-note"), "the scatter grew a strip again").toBeNull();
-    expect(host.querySelector(".diag-about"), "nothing says where the picture came from").not.toBeNull();
+    /* **Which row it is in, because that is the whole of the claim and jsdom
+       cannot check the rest of it.** This test was called "costs no line of its
+       own" and asserted only the two lines above — and no assertion it could
+       hold would have caught what was wrong, because jsdom has no layout and
+       wrapping is invisible to it. That is how three copies of a false claim got
+       past a green suite: the icon was on `.diag-opts`, which wraps, and at the
+       ideal band width Drift's two chip groups plus the icon do not fit on one
+       line. `.diag-head` has no `flex-wrap` and so cannot gain a line at any
+       width.
+
+       So the honest name is where it lives, and the honest assertion is the
+       parent. This can go red — if the icon is moved back onto a wrapping row it
+       fails here — and it does not pretend to measure a height. The height is
+       checked in a browser on preview-diag-note.html, which is the only place it
+       can be. ⟨Sol⟩ found the false claim; a browser sweep on 2026-08-31 found
+       that the fix for it had not fixed it. */
+    const icon = host.querySelector(".diag-about");
+    expect(icon, "nothing says where the picture came from").not.toBeNull();
+    expect(
+      icon?.parentElement?.className,
+      "the caveat is back on a row that can wrap",
+    ).toBe("diag-head");
   });
 
   it("still says it out loud when the picture lands", async () => {

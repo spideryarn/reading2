@@ -8405,46 +8405,36 @@ tr:hover .block-chat,
 /* The second control strip: what sideways means, and what colour means. Quieter
    than the kind chips above it, because these are ways of looking at one
    picture rather than a different picture. */
-/* **The strip does not wrap; the box inside it does.** That split is the whole
-   of `.diag-about`'s promise below — see `.diag-opt-rows`. */
 .diag-opts {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0 0.7rem;
-  padding: 0.3rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-/* Where the chips live and wrap. `min-width: 0` so a long row shrinks rather
-   than pushing the icon out of the band, which is what a flex item does by
-   default (its `min-width` is `auto`, i.e. its content). */
-.diag-opt-rows {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
 }
 .diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
-/* **The scatter's caveat, parked beside a row that already exists.**
-   The row is drawn whether or not this icon is on it, so the counts and the
-   flattening warning cost the reader **no** vertical space at all — where the
-   strip they replaced ran to four lines of 10.5px prose in a 400px band. See
-   DiagramPanel.tsx § ScatterNote, and note that the sentence itself is still in
-   the DOM as an `.sr-only` live region: this is a change to where it is *shown*,
-   not to whether it is said.
+/* **The scatter's caveat, at the end of the heading row.** It replaced four
+   lines of 10.5px prose above the picture, and the sentence itself is still in
+   the DOM as an `.sr-only` live region — this is a change to where it is
+   *shown*, not to whether it is said. DiagramPanel.tsx § ScatterNote.
 
-   **`flex: none` beside a growing `.diag-opt-rows` is what makes that true, and
-   `margin-left: auto` on a wrapping row was not.** Auto margins right-align an
-   item on the line it lands on; they do not stop it starting a new one. So at a
-   width where the chips fit and the icon did not, the icon took a line and the
-   claim above was false — ⟨Sol⟩, 2026-08-30, and the reason `.diag-opts` stopped
-   wrapping.
+   **It lives in `.diag-head` because `.diag-head` cannot wrap.** It was on
+   `.diag-opts` first, which does, and the "costs no vertical space" claim was
+   false there in a way that took two checks and a browser sweep to see. Auto
+   margins right-align an item on the line it lands on; they do not stop it
+   starting a new one — and nesting the chips in an inner wrapping box only moved
+   which item wrapped, because the binding constraint is **total intrinsic
+   width**, not alignment. At the ideal band width Drift's two chip groups plus
+   this icon do not fit on one line, so something wraps whichever way the
+   alignment is written. `.diag-head` has no `flex-wrap`, so it shrinks its
+   heading instead of gaining a line, and the claim is a property of the markup.
 
-   `cursor: help` rather than `pointer`, because pressing it does nothing —
-   the card is the whole of it. Sized to the row rather than to a thumb: it is
-   chrome beside three chips, and what this panel offers a finger is the step
-   bar. */
+   `flex: none` so it is the icon that keeps its size when that shrinking
+   happens; `h2 { flex: 1 }` above is what pushes it right.
+
+   `cursor: help` rather than `pointer`, because pressing it does nothing — the
+   card is the whole of it. Sized to the row rather than to a thumb: what this
+   panel offers a finger is the step bar. */
 .diag-about {
   flex: none;
   display: inline-flex;
