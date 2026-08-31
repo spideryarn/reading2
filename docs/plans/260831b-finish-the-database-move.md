@@ -1115,10 +1115,39 @@ apart. If you extend this list, say which kind each new line is.
   transient store failure *not* classified as corruption.
 - An upload's own slug on retry (`tests/pipeline-slug-claim-files.test.ts`).
 
+**Proven 2026-08-31, and it closes item 1:** the direct `openPgStoreSession` → `pgStoreSession` →
+`commit` path, driven with a **real stage's product** — a real queued `{ steps: ["blocks"] }` job,
+really claimed, through the real `STEPS` registry and `advanceJobWith`, nothing mocked
+(`tests/pg-session-real-step.test.ts`). Read back on another connection: a new revision published,
+`stamped_html` stage 3's own output, `revision_blocks` carrying the ids forward, the step run `done`,
+`jobs.draft_revision_id` cleared. `blocks` because it is the only real stage that costs nothing —
+`fetch`/`extract` want the network, the other eight are paid calls.
+
+**Item 1's heading overstated the gap, and that is worth correcting rather than quietly fixing.**
+`tests/store-pg-session.test.ts` has driven this path through `advanceJobWith` against local Postgres
+since 2026-08-30, sixteen cases, each mutation-tested. What was actually missing was a *real stage's
+product*: every case there uses `fakeArc`/`fakeTweets` returning hand-built literals. § *What is
+proven* worded it correctly ("never executed **in production or in a real ingest**"); the item did not.
+
 **Not proven, and each is a place to be careful:**
 
-- **The direct `pgStoreSession` commit path has never executed** in production or in a real ingest.
-  Stage 3 item 1 is about this and nothing else.
+- **The flip inherits a silent-success hazard, now observed rather than inferred.** With `commit`
+  writing nothing at all, the job still reported `done: true`, published a revision and cleared its
+  pointer. `REVISION_CARRY_POLICY` is a **denylist**, so `blocks`, `stampedHtml` and every late
+  artefact carry into a draft, and `assertProduced` reads the carried copy back and cannot tell a
+  written artefact from an inherited one. **After the flip, a stage whose write silently fails
+  publishes last revision's work and reports success.** The proving test only catches it because it
+  plants markers the real stage cannot reproduce — and neither marker is in `hashBlocks` or
+  `checkTree`, so the publication gate passes anyway. **Any future test of a post-flip stage needs a
+  deliberately-stale fixture or it proves nothing.**
+- **The publication gate reads the `toc` run row and no other.** A mutation that never called
+  `finishStep` published a revision whose `blocks` run was still `running`.
+  [`pg-session.ts`](../../src/store/pg-session.ts)'s own comment predicts this; it is now observed.
+- **A fresh ingest is still only covered by fakes** — `openOrBeginJobDraft` with no published
+  revision to copy needs the network. So is a multi-step walk: only the terminal `done` commit has
+  been driven with a real stage.
+- **The direct commit path has still never executed in production**, which is a different claim from
+  the one above and remains true.
 - **A pair corrupted consistently in both halves**, and any change outside a block (the `<title>`,
   say), are invisible to every guard here *and* to `blocksMatchTheirHtml`. Stated rather than fixed.
 - **A store that lies in `head` as well as in `get`** makes an over-long body surface as an ordinary
