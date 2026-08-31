@@ -580,6 +580,15 @@ So Timeline gets `MetaFingerprintDated` / `datedArticleFingerprint`, which satis
 point better than the instruction would have: **the date is in the hash of the stage that names it,
 and no other.**
 
+**What made it a trap rather than a preference:** `MetaFingerprint` feeds `arc`, `tweets`, `glossary`,
+`summary` and `quotes` directly, and `ideas` and `sketch` through `MetaFingerprintWithUrl`, which is
+built on it — so a fourth element in that array moves the head for seven stages at once. On today's
+corpus the change is **invisible while the field is absent**, which is exactly what makes it
+dangerous: it detonates on the *first re-extraction*, one article at a time, silently, months later.
+Stage 0 reproduced it directly — mutating the code to widen `MetaFingerprint` reddens the isolation
+test and nothing else — which is what turns "this would have been expensive" from an argument into
+evidence. No existing pinned hash changed.
+
 Three smaller corrections from the same pass:
 
 - `MetaFingerprint` carries title, byline and **siteName**. The url is on `MetaFingerprintWithUrl`.
