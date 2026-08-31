@@ -304,6 +304,12 @@ write_files:
 
       echo "=== ssh ==="
       systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+      # `sshd -t` refuses to validate without its privilege separation directory,
+      # which systemd creates as a RuntimeDirectory when ssh.service starts. This
+      # early in boot it may not exist yet, and the failure -- "Missing privilege
+      # separation directory: /run/sshd" -- reads as a broken sshd config rather
+      # than a missing directory.
+      mkdir -p /run/sshd
       sshd -t
       systemctl enable --now fail2ban
       systemctl restart ssh || systemctl restart sshd

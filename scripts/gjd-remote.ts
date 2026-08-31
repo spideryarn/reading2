@@ -28,6 +28,17 @@ const USER = "greg";
  *  nothing surprising may ever reach a shell. Same slug rule as the fleet. */
 const SLUG = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
+/**
+ * accept-new, not `no` and not the default `ask`.
+ *
+ * The default cannot prompt under BatchMode, so the first connection after a
+ * rebuild fails with "Host key verification failed" — which reads as a security
+ * alarm and is really just "I have never seen this machine". accept-new trusts
+ * a host it has no record of, and still REFUSES one whose key has changed,
+ * which is the case actually worth refusing.
+ */
+const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"];
+
 const dim = (s: string) => styleText("dim", s);
 const bold = (s: string) => styleText("bold", s);
 const red = (s: string) => styleText("red", s);
@@ -71,9 +82,7 @@ const HOST = () => `${USER}@${host()}`;
 
 /** Run a command on the box over ssh and return stdout. */
 function ssh(remote: string, opts: { check?: boolean } = {}): string {
-  const r = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST(), remote], {
-    encoding: "utf8",
-  });
+  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), remote], { encoding: "utf8" });
   if (opts.check !== false && r.status !== 0) {
     die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
   }
@@ -194,7 +203,7 @@ function cmdNew(
   // entirely, but a dir with control characters is a mistake either way.
   if (/[\r\n]/.test(dir)) die("--dir may not contain newlines");
   // cd failing must not silently start Claude in the wrong tree.
-  const dirOk = spawnSync("ssh", ["-o", "BatchMode=yes", HOST(), `test -d ${shq(dir)}`]).status === 0;
+  const dirOk = spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status === 0;
   if (!dirOk) die(`no such directory on the box: ${dir}`);
 
   const promptPath = `/home/${USER}/gjd-remote/prompts/${name}.md`;
@@ -203,7 +212,7 @@ function cmdNew(
 
   const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-"));
   const scp = (local: string, remote: string) => {
-    const r = spawnSync("scp", ["-q", local, `${HOST()}:${remote}`], { encoding: "utf8" });
+    const r = spawnSync("scp", ["-q", ...SSH_OPTS, local, `${HOST()}:${remote}`], { encoding: "utf8" });
     if (r.status !== 0) die(`scp to ${remote} failed: ${(r.stderr || "").trim()}`);
   };
 
@@ -254,10 +263,22 @@ function cmdDoctor(): void {
   const ip = host();
   console.log(bold(`gjd-remote → ${ip}`));
 
-  const reach = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST(), "true"]);
+  const reach = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
   if (reach.status !== 0) {
+    const err = reach.stderr ?? "";
+    // A rebuild puts a NEW machine on the OLD address, so the host key changes
+    // and ssh refuses with a wall of asterisks about a possible attack. It is
+    // alarming, it is expected here, and the fix is one command — but only ever
+    // run it when YOU just rebuilt the box.
+    if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(err)) {
+      console.log(red("✗ ssh: the host key changed"));
+      console.log(dim("  expected after a rebuild — a new machine on the same address."));
+      console.log(dim(`  if you just rebuilt:  ssh-keygen -R ${ip}`));
+      return;
+    }
     console.log(red("✗ ssh: cannot connect"));
-    console.log(dim("  the server may still be booting; `hcloud server list` shows its state"));
+    console.log(dim("  still booting? `hcloud server list` shows its state"));
+    console.log(dim(`  ${err.trim().split("\n").slice(-2).join(" ")}`));
     return;
   }
   console.log(green("✓ ssh"));
@@ -269,8 +290,10 @@ function cmdDoctor(): void {
     console.log(moshWorks() ? green("✓ mosh") : red("✗ mosh: installed both ends, but the probe failed (UDP blocked?)"));
   }
 
-  const status = ssh(`cloud-init status 2>/dev/null || echo 'status: unknown'`, { check: false });
-  console.log(`  cloud-init: ${status.replace(/^status:\s*/, "")}`);
+  const status = ssh(`cloud-init status 2>/dev/null; true`, { check: false });
+  const word = /status:\s*(\S+)/.exec(status)?.[1] ?? "unknown";
+  const colour = word === "done" ? green : word === "error" ? red : dim;
+  console.log(`  cloud-init: ${colour(word)}`);
 
   for (const tool of ["claude", "tmux", "mosh", "node", "google-chrome"]) {
     const found = ssh(`command -v ${tool} >/dev/null && echo yes || echo no`, { check: false });
