@@ -902,15 +902,19 @@ describe("what a scatter says about itself", () => {
        wrapping is invisible to it. That is how three copies of a false claim got
        past a green suite: the icon was on `.diag-opts`, which wraps, and at the
        ideal band width Drift's two chip groups plus the icon do not fit on one
-       line. `.diag-head` has no `flex-wrap` and so cannot gain a line at any
-       width.
+       line. `.diag-head` has no `flex-wrap`, so it cannot gain a flex line — and
+       `.diag-head h2` now carries the one-line-cut four, so it cannot gain a
+       *text* line either, which was the fourth version of the same mistake.
+       tests/diagram-css.test.ts holds those four; docs/project/diagram.md
+       § Why the heading row and not the control row has the whole sequence.
 
        So the honest name is where it lives, and the honest assertion is the
        parent. This can go red — if the icon is moved back onto a wrapping row it
-       fails here — and it does not pretend to measure a height. The height is
-       checked in a browser on preview-diag-note.html, which is the only place it
-       can be. ⟨Sol⟩ found the false claim; a browser sweep on 2026-08-31 found
-       that the fix for it had not fixed it. */
+       fails here — and it does not pretend to measure a height. The height was
+       measured elsewhere, on a throwaway preview page since deleted: 96 widths
+       from 180px to 560px on 2026-08-31, zero height cost at every one. ⟨Sol⟩
+       found the false claim; a browser sweep the same day found that the first
+       fix for it had not fixed it. */
     const icon = host.querySelector(".diag-about");
     expect(icon, "nothing says where the picture came from").not.toBeNull();
     expect(
