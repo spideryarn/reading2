@@ -36,6 +36,7 @@
     "glossary": "tsx src/glossary.ts",
     "ideas": "tsx src/ideas.ts",
     "quotes": "tsx src/quotes.ts",
+    "timeline": "tsx src/timeline.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",

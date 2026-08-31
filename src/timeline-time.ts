@@ -43,77 +43,36 @@
  * Pure: no model call, no file I/O, nothing from src/web.
  */
 import type { Span } from "./quote-match.js";
-import type { BlockId } from "./types.js";
+import type { BlockId, TimelineModality, When, WhenRefusal } from "./types.js";
 
 /**
- * `modality` on a timeline event.
+ * The three artefact-shaped types this file reads and writes now live in
+ * src/types.ts, beside `Ideas`, `Quotes` and every other artefact's, and they
+ * are re-exported here so the parser stays the one place a caller has to know
+ * about to use it.
  *
- * **Local on purpose, not by omission.** Stage 1 lands before the stage that
- * owns the artefact types, and reaching into src/types.ts while another session
- * holds it is how two agents overwrite each other. It moves there in Stage 4
- * with `TimelineEvent` and the rest of them, and this alias goes away.
+ * They were declared locally while Stage 1 was being built, because another
+ * session held src/types.ts and reaching into a file somebody else is editing
+ * is how two agents overwrite each other. Stage 4 moved them, as the note that
+ * stood here said it would.
  */
-export type TimelineModality = "happened" | "predicted" | "hypothetical";
+export type { TimelineModality, When, WhenRefusal };
 
 /**
  * Which side of the publication date a year-less expression resolves to.
  *
- * `"past"` — the default, and right for almost everything: an article
- * narrating what happened means the most recent July 7, not next year's.
- * `"future"` is for a prediction, and it is the one case where the default is
- * backwards — a January piece saying "in December we expect…" means the coming
- * December. Stage 2 has `modality` from the model and passes it.
+ * `"past"` — the default, and right for almost everything: an article narrating
+ * what happened means the most recent July 7, not next year's. `"future"` is
+ * for a prediction, and it is the one case where the default is backwards — a
+ * January piece saying "in December we expect…" means the coming December.
+ * Stage 2 has `modality` from the model and passes it.
+ *
+ * **This one did not move to src/types.ts with the others**, and that is the
+ * distinction the move was drawn on: it is an argument to `readWhen`, not a
+ * field of the artefact and not a value on the wire, so it belongs beside the
+ * function that reads it.
  */
 export type WhenDirection = "past" | "future";
-
-/**
- * When something happened, as an interval the article's own words support.
- *
- * Both ends are independently nullable, which is what carries a bound rather
- * than a point: "by 4 July" is `{ earliest: null, latest: "2026-07-04" }` and
- * says exactly what the article said — at or before, and no earlier bound.
- * Five of the twenty-four temporal expressions on the test article are this
- * shape, so flattening a bound to a point is not an edge case.
- */
-export interface When {
-  /** Earliest this could have been. null = unbounded below ("by 4 July"). */
-  earliest: string | null;
-  /** Latest this could have been. null = unbounded above ("after that"). */
-  latest: string | null;
-  /** Does the event FILL this interval, or sit somewhere inside it? */
-  extent: "instant" | "extended";
-  /**
-   * The article's own words this was read out of — **the block's slice**, not
-   * the model's copy of it. So `[F]rom July 13 through July 19` shows with its
-   * bracket, and `at` below is exact.
-   */
-  phrase: string;
-  /** Where in the block `phrase` sits, so the reader can go and check. */
-  at: { blockId: BlockId; start: number; end: number };
-  /** True when the parser supplied the year from the publication date. */
-  yearFilled: boolean;
-}
-
-/**
- * Why no `When` came back. Three of these are the plan's counters
- * (§ Three outcomes, not two); `noDateInPhrase` is deliberately not one.
- */
-export type WhenRefusal =
-  /**
-   * The words carry no absolute date at all — "Two weeks later", "within a few
-   * hours". **Not a failure.** The article did not date the event, so the row
-   * shows the words and draws no marks (plan § The marks). A panel that drew
-   * the "we could not read it" glyph here would be accusing the article of
-   * something it never did.
-   */
-  | "noDateInPhrase"
-  /** Date-shaped words we could not read: over the cap, or several dates that
-   * are not a range. */
-  | "unparseablePhrase"
-  /** The block does not carry that date, or not inside the occurrence. */
-  | "phraseNotInOccurrence"
-  /** A year-less date and no publication date to take the year from. */
-  | "noYearFrame";
 
 export type WhenResult = { ok: true; when: When } | { ok: false; reason: WhenRefusal };
 

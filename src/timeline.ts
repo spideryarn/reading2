@@ -84,13 +84,14 @@
  * label would break every saved `?event=` link on every regeneration. See
  * `evidenceKey`.
  *
- * ## Types live here for now
+ * ## The types moved to src/types.ts in Stage 4
  *
- * `TimelineEvent` and the rest belong in src/types.ts and move there in Stage 4
- * with the store plumbing. They are local because another session is holding
- * that file, and reaching into it to add five interfaces is how two agents
- * overwrite each other. Same reason `TimelineModality` is local to
- * src/timeline-time.ts.
+ * `Timeline`, `TimelineEvent`, `Dating` and the rest are declared there now,
+ * beside `Ideas` and `Quotes`, and re-exported from here so that a caller still
+ * only has to know about this file. They were local while this stage was being
+ * built because another session held src/types.ts, and reaching into a file
+ * somebody else is editing to add five interfaces is how two agents overwrite
+ * each other.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -124,7 +125,18 @@ import {
   type WhenDirection,
   type WhenRefusal,
 } from "./timeline-time.js";
-import type { Block, BlockId, Meta, Tree } from "./types.js";
+import type {
+  Block,
+  BlockId,
+  Dating,
+  Meta,
+  Timeline,
+  TimelineEvent,
+  TimelineEventId,
+  TimelineOccurrence,
+  Tree,
+} from "./types.js";
+import type { ArtifactStore } from "./store/artifacts.js";
 import { stageCli } from "./cli-ledger.js";
 
 /**
@@ -159,79 +171,19 @@ const MODALITIES: ReadonlySet<string> = new Set<TimelineModality>([
   "hypothetical",
 ]);
 
-/** An event id. A string like any other id here; named so the panel can say so. */
-export type TimelineEventId = string;
-
-/** Where in the article this event is mentioned. The same shape `ideas` uses. */
-export interface TimelineOccurrence {
-  blockId: BlockId;
-  /**
-   * **The article's own characters** — the block sliced at the offsets
-   * `findQuote` located, not the model's copy of them. See
-   * `validateOccurrences`; the panel shows this as what the article says.
-   */
-  quote: string;
-  /**
-   * A disambiguator between repeats, never the anchor: the client re-finds the
-   * words itself in the *rendered* text, which is a different offset space from
-   * `block.text`. src/web/annotate.ts § the header.
-   */
-  start: number;
-}
-
 /**
- * **Which of the four things happened to this event's date**, as one field the
- * panel can switch on.
+ * The artefact's own types — `Timeline`, `TimelineEvent`, `Dating` and the rest
+ * — live in src/types.ts as of Stage 4, beside `Ideas` and `Quotes` and every
+ * other artefact's. They are re-exported here because this file is what a
+ * caller already imports, and because the panel, the store and the routes were
+ * all written against these names.
  *
- * A union rather than `when: When | null` plus two flags, because the four cases
- * draw four different rows and three of the combinations those flags allow do
- * not exist: a parsed date with no `When`, a rejection carrying a date, a
- * words-shown row with no words. `AGENTS.md` § Writing code — let the types
- * carry it rather than a comment.
- *
- * | kind | the row draws |
- * |---|---|
- * | `dated` | the date and its marks |
- * | `words` | **the article's own words**, in the date column |
- * | `untimed` | nothing — the row is placed by `order` alone |
- * | `rejected` | **⊘**, and "the piece dates this and we could not read it" |
- *
- * The middle two are the pair most easily collapsed and must not be: a piece
- * that said "another month later" has dated the event as far as it ever will,
- * and drawing a blank there loses the only thing it told us. The last is the
- * one the review caught — demoting it to an ordinary blank makes "fails
- * visibly" true only inside a counter.
+ * They were declared locally while Stage 2 was being built, for the reason
+ * src/timeline-time.ts gives: another session held src/types.ts, and five
+ * interfaces reached into a file somebody else is editing is how work gets
+ * overwritten.
  */
-export type Dating =
-  /** The parser read a date out of the article's own characters. */
-  | { kind: "dated"; when: When }
-  /**
-   * The article's temporal words, which carry no date we can read out of them —
-   * "another month later", "within a few hours". Located in the quoted passage
-   * and **sliced out of the block**, so these are the article's characters.
-   */
-  | { kind: "words"; phrase: string }
-  /** The article puts no time on this at all. A correct answer, and a common one. */
-  | { kind: "untimed" }
-  /**
-   * The piece dates this and we could not read the date.
-   *
-   * `reason` is carried rather than dropped because the panel has something
-   * different to say for each, and one of them is the majority case on this
-   * shelf: `noYearFrame` means the article stated a day and a month and we had
-   * no publication date to take the year from, which is true of every article
-   * ingested before 2026-08-31. "We don't know which year" and "that date is
-   * not in the passage you quoted" are not the same sentence.
-   *
-   * `phrase` is the article's words where we could locate them, and explicitly
-   * `null` where we could not — a required nullable rather than an optional,
-   * so a caller cannot forget the case exists.
-   */
-  | {
-      kind: "rejected";
-      reason: Exclude<WhenRefusal, "noDateInPhrase">;
-      phrase: string | null;
-    };
+export type { Dating, Timeline, TimelineEvent, TimelineEventId, TimelineOccurrence };
 
 /**
  * The date, for the callers that only want that.
@@ -244,46 +196,6 @@ export type Dating =
  */
 export function whenOf(event: Pick<TimelineEvent, "dating">): When | null {
   return event.dating?.kind === "dated" ? event.dating.when : null;
-}
-
-export interface TimelineEvent {
-  id: TimelineEventId;
-  /** A handle, not a retelling. Under about ten words. */
-  label: string;
-  /** What the article said about when, and what we could make of it. */
-  dating: Dating;
-  /**
-   * The model's reading of where this sits in the sequence, and **the sort
-   * key** — Greg's call, 2026-08-31: the dates do not move anything. An event
-   * known only to be "by 4 July" may have happened on the 1st, and sorting it
-   * to the 4th would assert otherwise.
-   *
-   * `null` when the model did not number the event. Nullable rather than `NaN`
-   * because `JSON.stringify` writes `NaN` as `null` regardless, so a field
-   * typed `number` would have described the artefact wrongly the moment it was
-   * read back — and `orderKey` sorts either of them last within the partition.
-   */
-  order: number | null;
-  modality: TimelineModality;
-  occurrences: TimelineOccurrence[];
-}
-
-export interface Timeline {
-  version: string;
-  generator: string;
-  slug: string;
-  /** Blocks, tree **and the publication date** — see `inputFingerprint`. */
-  sourceHash: string;
-  /** In the order they are to be shown. Never re-sorted after this. */
-  events: TimelineEvent[];
-  /**
-   * Pairs where the article's own dates prove an order and the model put them
-   * the other way round. Changes nothing on screen; it is the only signal we
-   * get that the model has misread the chronology. See `countOrderConflicts`.
-   */
-  orderConflicts: number;
-  generatedAt: string;
-  elapsedMs: number;
 }
 
 /**
@@ -928,10 +840,63 @@ export function buildTimeline(
  *
  * Every road to `null` is the same road: no file, a truncated one, a document
  * of the wrong shape. That is right for the panel, which has one thing to say
- * either way, and wrong for the pipeline, which loses every `?event=` link on
- * one of them — Stage 4 wants a `previousTimelineFrom` reading the store's
- * baseline, the shape `previousIdeasFrom` has in src/ideas.ts.
+ * either way, and wrong for the pipeline, which would lose every `?event=` link
+ * on one of them — so the pipeline calls `previousTimelineFrom` above instead,
+ * and this is left to the CLI, where a person is watching and the worst case is
+ * a re-run in a directory they named by hand.
  */
+export class TimelineBaselineUnusable extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `timeline "${slug}": there is a previous timeline artefact and this store cannot read it — ` +
+        "it will not parse, is of the wrong shape, or is past the size the store reads back.\n" +
+        "Every id in it is one a reader's `?event=` links name (docs/project/timeline.md), so " +
+        "carrying on would mint a fresh id for every event and orphan all of them, quietly.\n" +
+        "Nothing has been written — the timeline is still the previous run's.\n" +
+        "Put it back from a backup, or delete it deliberately if this article's timeline really " +
+        "is starting again from nothing.",
+    );
+    this.name = "TimelineBaselineUnusable";
+  }
+}
+
+/**
+ * The previous timeline, **from the store** — the only thing this stage reads
+ * the old artefact for, and the reason `readTimeline` below is not what the
+ * pipeline calls.
+ *
+ * **Four states, and the same table `previousIdeasFrom` has in src/ideas.ts**,
+ * for the same reason: this stage inherits ids **only when `sourceHash`
+ * matches**, so a mismatch is a legitimate refusal to inherit rather than a
+ * fault.
+ *
+ * | | what it means | what happens |
+ * |---|---|---|
+ * | no previous timeline | a first run for this article | mint, quietly |
+ * | one whose `sourceHash` differs | the blocks, the tree or the publication date moved | mint, quietly — **correct, not an error** |
+ * | one this store cannot read | we cannot tell which of those two it was | **the stage fails** |
+ * | the store read throws | an infrastructure fault | **propagates; the stage fails** |
+ *
+ * Row two is `generateTimeline`'s to decide and not this function's, which is
+ * why this hands back the artefact rather than a map of ids: an id inherited
+ * across a re-extraction would carry a reader's link onto an event in text that
+ * is gone, and the comparison that stops that wants the whole artefact.
+ *
+ * Row three is the one that has to be told from row one, and it matters more
+ * here than for `ideas`: ids cannot be re-derived from the labels, because only
+ * 7 of 26 labels survived a regeneration when that was measured. A truncated
+ * `timeline.json` still holds every id; minting over it takes them away while
+ * reporting success.
+ */
+export async function previousTimelineFrom(
+  store: Pick<ArtifactStore, "readBaseline">,
+  slug: string,
+): Promise<Timeline | null> {
+  const outcome = await store.readBaseline(slug, "timeline", "timeline");
+  if (outcome.state === "unusable") throw new TimelineBaselineUnusable(slug);
+  return outcome.state === "ok" ? outcome.value : null;
+}
+
 export async function readTimeline(dir: string): Promise<Timeline | null> {
   const found = await readJsonOrNull<Timeline>(path.join(dir, "timeline.json"));
   /* A truncated write parses as `null`, and `null` is a perfectly good JSON

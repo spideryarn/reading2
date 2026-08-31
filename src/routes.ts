@@ -25,6 +25,7 @@
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
+ *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
@@ -88,6 +89,7 @@ import {
   loadIdeas,
   loadQuotes,
   loadSketch,
+  loadTimeline,
   loadTweets,
 } from "./store/index.js";
 /* **Pure functions only**, and that is the whole reason this import survived
@@ -128,6 +130,7 @@ import {
   liveSeedItems,
   liveSession,
   mintLiveToken,
+  SHOW_PASSAGE_TOOL,
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
@@ -1800,6 +1803,12 @@ async function spokenChat(
     }
   }
 
+  /* Loaded so the passage pointers can be checked against the real thing. It is
+     one read of an artefact this request already implies — a spoken exchange is
+     about this article — and it happens before the write so a bad pointer is an
+     ordinary 400 rather than a turn on disk with a dead reference in it. */
+  const known = new Set((await loadArticle(slug)).blocks.map((b) => b.id));
+
   const thread = await inTurnOrder(`${slug}/${threadId}`, () =>
     /* Under the conversation's turn order, like every other write to a thread.
        An append is safe beside a stream — src/chat.ts serialises the store —
@@ -1811,7 +1820,7 @@ async function spokenChat(
       question,
       answer,
       expectedTailId,
-      ...(parseSpokenPassages(passages) ?? {}),
+      ...(parseSpokenPassages(passages, known) ?? {}),
       ...(parseSpokenTools(tools) ?? {}),
       ...(interrupted === true ? { interrupted: true } : {}),
       model: LIVE_MODEL,
@@ -1875,6 +1884,7 @@ function shortened(text: string): string {
  */
 function parseSpokenPassages(
   x: unknown,
+  known: Set<string>,
 ): { passages: { blockIds: string[]; why: string }[] } | undefined {
   if (x === undefined) return undefined;
   if (!Array.isArray(x)) throw httpError(400, "passages must be a list");
@@ -1884,8 +1894,20 @@ function parseSpokenPassages(
     if (!Array.isArray(blockIds) || blockIds.length === 0 || blockIds.length > MAX_SPOKEN_ITEMS) {
       throw httpError(400, "each passage needs blockIds");
     }
-    if (!blockIds.every((id) => typeof id === "string" && isSpideryarnId(id))) {
-      throw httpError(400, "a passage pointed at something that is not a block id");
+    /* **Against the article, not against the shape.** `isSpideryarnId` alone
+       accepts `spya-zzzzzz`, which is well-formed and points at nothing — and
+       what gets stored is a pressable reference in the reader's own transcript
+       that scrolls nowhere for ever. A dead link that does nothing is worse
+       than a plain string: the reader presses it, the page does not move, and
+       there is no way to tell that from a bug in the scrolling. The typed path
+       has the same distinction and counts its misses (`unknownCitedIds` in
+       src/converse.ts); here we can simply refuse, because these ids came from
+       the article the browser is looking at. GPT Sol, reviewing the built code. */
+    const wrong = blockIds.find(
+      (id) => typeof id !== "string" || !isSpideryarnId(id) || !known.has(id),
+    );
+    if (wrong !== undefined) {
+      throw httpError(400, "a passage pointed at something that is not in this article");
     }
     return {
       blockIds: blockIds as string[],
@@ -1912,6 +1934,16 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
     const { name, label, detail } = (raw ?? {}) as Record<string, unknown>;
     if (typeof name !== "string" || typeof label !== "string") {
       throw httpError(400, "each tool run needs a name and a label");
+    }
+    /* **A receipt for something that could have happened.** The name is stored
+       and shown to the reader as a thing the companion did, and without this a
+       browser could file `delete_database` against its own transcript — a claim
+       the reader has no way to check and every reason to believe, since every
+       other row in that list is real. The set is the tools a live session is
+       actually given: `LIVE_SERVER_TOOLS` plus the one answered in the browser.
+       GPT Sol, reviewing the built code. */
+    if (!LIVE_SERVER_TOOLS.has(name) && name !== SHOW_PASSAGE_TOOL.name) {
+      throw httpError(400, "that is not a tool a live session runs");
     }
     return {
       name,
@@ -3827,6 +3859,11 @@ export async function serveAuthenticatedApi(
      the step replaces rather than appends, so re-running it already *is* "find
      them again". POST /api/jobs { slug, steps: ["quotes"] }. */
   const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(url);
+  /* The timeline — docs/project/timeline.md. GET only, and no DELETE, for the
+     reason `ideas` above has none: the step replaces rather than appends, so
+     rebuilding it is
+     POST /api/jobs { slug, steps: ["timeline"] }. */
+  const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(url);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -4090,6 +4127,15 @@ export async function serveAuthenticatedApi(
           await withProfileChanged<QuotesResponse>(at, () => loadQuotes(at), (found) => found.quotes),
         );
       }
+      return;
+    }
+    if (timeline && req.method === "GET") {
+      /* **No `withProfileChanged`**, unlike its five neighbours, and that is
+         the decision rather than an omission: this artefact was never written
+         for a profile, so there is no third staleness fact to add.
+         `TimelineResponse` in src/types.ts has two fields where the others have
+         three. docs/plans/timeline-mode.md § Freshness. */
+      send(res, 200, await loadTimeline(slugPart(timeline, 1)));
       return;
     }
     if (sketch && req.method === "GET") {

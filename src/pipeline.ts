@@ -1405,7 +1405,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
       let bytes: Uint8Array;
       try {
-        bytes = await readRawBytes(manifest);
+        bytes = await readRawBytes(manifest, { slug: ctx.slug });
       } catch (err) {
         /* **`blocked`, not an unclassified failure, and the distinction is
            about what the Retry button can do.** All three reasons —

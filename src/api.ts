@@ -39,6 +39,11 @@ import {
   readQuotes,
 } from "./quotes.js";
 import {
+  isStale as timelineIsStale,
+  PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
+  readTimeline,
+} from "./timeline.js";
+import {
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
@@ -63,6 +68,7 @@ import type {
   IdeasFound,
   QuotesFound,
   SketchFound,
+  TimelineFound,
   LibraryEntry,
   ListOptions,
   Meta,
@@ -512,6 +518,59 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
     stale:
       !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree, ideasMeta ?? null),
     outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+  };
+}
+
+/**
+ * The article's timeline, and whether it still describes it — the filesystem
+ * half. docs/project/timeline.md.
+ *
+ * Shaped on `loadIdeas` above, and it differs in exactly two places.
+ *
+ * **The publication date is in the staleness comparison**, which is true of no
+ * other artefact here. `inputFingerprint` in src/timeline.ts is
+ * `datedArticleFingerprint`, because the date is the reference frame every
+ * year-less date in the artefact was read against: a publisher re-dating a post
+ * changes almost every row of this and not one word of anything else.
+ *
+ * **And an empty `events` list is not a 404.** Most articles are not
+ * chronological, so a timeline with nothing in it is the expected answer for
+ * them and the panel has a sentence for it; sending the reader to a POST would
+ * pay for the same empty answer on every open.
+ */
+export async function loadTimeline(slug: string): Promise<TimelineFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const timeline = await readTimeline(dir);
+  if (!timeline) {
+    throw Object.assign(
+      new Error(
+        `No timeline for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* **Optional, and the absent case is the common one** — `publishedAt` only
+     arrives on re-extraction, so most of the shelf has no date and every
+     year-less expression in those articles stays undated. The fingerprint
+     hashes "no metadata" as a legitimate input rather than as no input at all,
+     which is what lets this comparison mean the same thing on both sides. */
+  const timelineMeta = await readJson<Meta>(path.join(dir, "meta.json"));
+  // Unknown counts as stale, the same way round as the ideas above.
+  return {
+    timeline,
+    stale:
+      !blocksFile ||
+      !tree ||
+      timelineIsStale(timeline, blocksFile.blocks, tree, timelineMeta ?? null),
+    outdated: timeline.version !== TIMELINE_PROMPT_VERSION,
   };
 }
 

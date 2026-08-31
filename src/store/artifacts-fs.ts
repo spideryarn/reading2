@@ -693,6 +693,6 @@ export const fsSourceStore: SourceStore = {
        answers 404 on `err.code === "ENOENT"`, which the filesystem blob store
        still raises for a missing object, so the route's behaviour is
        unchanged. */
-    return await readRawBytes(manifest);
+    return await readRawBytes(manifest, { slug });
   },
 };

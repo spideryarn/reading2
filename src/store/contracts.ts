@@ -67,6 +67,7 @@ import type {
   ArcFound,
   IdeasFound,
   SketchFound,
+  TimelineFound,
   ThreadFound,
   ThreadKind,
 } from "../types.js";
@@ -138,6 +139,23 @@ export interface ArticleReader {
    * `readSketch`'s job on arrival. So: a note, not a refusal to draw.
    */
   loadSketch(slug: string): Promise<SketchFound>;
+
+  /**
+   * The timeline, plus whether it still describes the article.
+   *
+   * Staleness is answered as `loadIdeas` answers it — at read time, against the
+   * blocks and the tree — **and against one thing no other artefact is judged
+   * on: the publication date** (src/timeline.ts § `inputFingerprint`). That is
+   * not defensive. The date is the reference frame a year-less "on July 7" is
+   * read against, so a publisher re-dating a post changes almost every row of
+   * this artefact and not one word of any other.
+   *
+   * `TimelineFound` has **two** staleness facts where its neighbours have
+   * three: there is no `profileChanged`, because this stage was never written
+   * for a profile. Who is reading changes what an *idea* is; it does not change
+   * when something happened.
+   */
+  loadTimeline(slug: string): Promise<TimelineFound>;
 
   /**
    * The arc, plus whether it still describes the article.
