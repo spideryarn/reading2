@@ -3725,17 +3725,111 @@ td.text.has-hit[data-hues="8"] {
 .chat-turn.model { color: var(--ink-soft); }
 .chat-turn.model p {
   margin: 0 0 0.6rem;
-  /* `pre-wrap`, not the default, and the reason is a wart you would only notice
-     on the answers that use it. ChatPanel splits an answer on BLANK lines into
-     paragraphs and interprets nothing else — so a model that writes a short
-     bullet list, which the prompt permits, separates its items with single
-     newlines. Collapsed to spaces those items run together on one line as
-     "- one - two - three", which reads as a formatting bug in the model rather
-     than in us. `pre-wrap` keeps the breaks and still wraps long lines. */
+  /* `pre-wrap`, not the default, and it is no longer load-bearing but is still
+     right. It used to be the whole of our list support: ChatPanel split an
+     answer on BLANK lines and interpreted nothing else, so a bullet list — which
+     the prompt permits — arrived as one paragraph and only this kept it off one
+     line reading "- one - two - three". markdown.ts now parses the list, and
+     what `pre-wrap` is left doing is honouring the single newlines a model puts
+     INSIDE a paragraph, which Markdown would collapse and a reader would notice.
+     Long lines still wrap. */
   white-space: pre-wrap;
 }
 .chat-turn.model p:last-child { margin-bottom: 0; }
 .chat-turn.model.failed { color: var(--ink-faint); }
+
+/* ---- the shapes a model writes ----
+   Lists, headings, quotes, rules and code in an answer. Drawn by Cited.tsx from
+   markdown.ts's blocks; see docs/plans/chat-markdown.md for what is and is
+   not interpreted.
+
+   `fmt-`, not the obvious markdown prefix, and that is not a preference.
+   tests/doc-links.test.ts scans every source file for bare references to a
+   document and checks the file exists — and a class name beginning with a dot
+   and those two letters IS one, as far as its pattern is concerned. Seventeen
+   broken links to a document that could never exist, on the first run.
+
+   All of it is quiet on purpose. This is a 22rem column beside the article, not
+   a document: a heading here is a slightly firmer line, not a title, and a list
+   is prose with hanging marks. Anything louder would compete with the piece the
+   reader is actually reading, which is the one thing the panel must not do. */
+.chat-turn.model .fmt-list {
+  margin: 0 0 0.6rem;
+  padding-left: 1.15rem;
+}
+.chat-turn.model .fmt-list:last-child { margin-bottom: 0; }
+/* A nested list is tighter than the one around it and carries no gap of its
+   own — it belongs to the line above, and a blank line before it would read as
+   a new thought. */
+.chat-turn.model .fmt-list .fmt-list { margin: 0.15rem 0 0; }
+.chat-turn.model .fmt-list li { margin: 0 0 0.25rem; }
+.chat-turn.model .fmt-list li:last-child { margin-bottom: 0; }
+/* An item's own paragraphs, where an item has more than one. `pre-wrap` for the
+   same reason `p` above has it. */
+.chat-turn.model .fmt-list li p { margin: 0 0 0.35rem; }
+/* The marks themselves, held back to --ink-faint so the words are what you see
+   and the bullet is only where the line starts. */
+.chat-turn.model .fmt-list li::marker { color: var(--ink-faint); }
+
+.chat-turn.model .fmt-h {
+  margin: 0.75rem 0 0.35rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* No gap above the first thing in an answer. */
+.chat-turn.model .fmt-h:first-child { margin-top: 0; }
+
+.chat-turn.model .fmt-quote {
+  margin: 0 0 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-faint);
+}
+.chat-turn.model .fmt-quote > :last-child { margin-bottom: 0; }
+
+.chat-turn.model .fmt-rule {
+  margin: 0.8rem 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* Code. `pre` scrolls sideways rather than wrapping, because a wrapped line of
+   code is a line that has silently changed meaning, and this column is narrow
+   enough that it would happen constantly. The horizontal scroll is inside the
+   block, so the panel itself never scrolls sideways. */
+.chat-turn.model .fmt-pre {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  overflow-x: auto;
+  /* Undoes `.chat-turn.model p`'s inheritance-free sibling above: a `pre` is
+     already pre, and `pre-wrap` here would be the wrapping we just refused. */
+  white-space: pre;
+}
+.chat-turn.model .fmt-pre code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* An inline code span, in any panel that draws model prose — it is Cited.tsx's,
+   not chat's, for the same reason `.cite` lost its prefix. Padded but not
+   boxed: a border on something a few characters wide inside a sentence reads as
+   a button. */
+.fmt-code {
+  padding: 0 0.2em;
+  border-radius: 0.25rem;
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  /* A long identifier in a 22rem column, same call as `.cited-link`. */
+  overflow-wrap: break-word;
+}
 
 .chat-thinking {
   display: inline-flex;

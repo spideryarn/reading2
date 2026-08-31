@@ -207,15 +207,18 @@ pretending it cannot happen.
 
 ### What of Markdown we interpret
 
-**Bold, and nothing else.** The prompt asks for plain paragraphs and gets them, but a model bolds
-the term it is introducing whatever you tell it, and printing the literal `**asterisks**` makes the
-app look unable to read its own model's output — found in a browser test on 2026-08-25.
+**Bold, when this was built — most of it since.** The prompt asks for plain paragraphs and gets
+them, but a model bolds the term it is introducing whatever you tell it, and printing the literal
+`**asterisks**` makes the app look unable to read its own model's output — found in a browser test
+on 2026-08-25. Links followed on 2026-08-27 ([chat-web-links.md](chat-web-links.md)), and on
+2026-08-31 the blocks the prompt had been asking for all along —
+[chat-markdown.md](chat-markdown.md), which is where the current list lives.
 
-The reason the list stops there is not laziness. Rendering model output as HTML is exactly what
-[security.md](../project/security.md) exists to prevent, and what makes this safe is that it never
-produces HTML at all: `splitEmphasis` returns runs of **text**, React escapes text, and there is no
-version of it that would want `dangerouslySetInnerHTML`. Anything added here has to keep that
-property.
+The property that governed the short list still governs the long one, and it is the thing to keep.
+Rendering model output as HTML is exactly what [security.md](../project/security.md) exists to
+prevent, and what makes this safe is that it never produces HTML at all: every splitter returns runs
+of **text**, React escapes text, and no version of any of them would want
+`dangerouslySetInnerHTML`. Anything added here has to keep that property.
 
 Blank lines separate paragraphs; single newlines are preserved by `white-space: pre-wrap`, so the
 occasional short bullet list the prompt permits does not collapse onto one line.
@@ -536,8 +539,10 @@ reasoned about but not once watched to work. Worth a human eyeball in an ordinar
 - **A message tree.** See [What a retry may touch](#what-a-retry-may-touch).
 - **Retry with a different model.** The app has one model, in one constant
   ([`src/models.ts`](../../src/models.ts)). A picker would be a decision surface with nothing behind it.
-- **Copy-as-markdown vs copy-as-rendered.** There is no rendered form — the answers are plain
-  paragraphs by instruction. One copy, no toggle.
+- **Copy-as-markdown vs copy-as-rendered.** One copy, no toggle. This was "there is no rendered
+  form" until 2026-08-31, when there started to be one ([chat-markdown.md](chat-markdown.md)) — but
+  the copy still hands over the model's own characters, which is the form worth having, and a
+  toggle would be a decision surface over a difference nobody has asked about.
 - **Thumbs up/down.** Cheap to build and decoration unless somebody reads the data. When
   [Q6](../project/open-questions.md#q6) — how would we know this is helping — gets an answer, this
   is one of the things that answer might need. Not before.
@@ -879,9 +884,9 @@ is worth the real thing.
   three things *inside the composer*, which is not the same thing as a shortcut map.
 - **A cited id that is real but wrong** — the model points at a neighbouring paragraph — is
   undetectable from here and uncounted. Only `unknownIds` catches an id that does not exist.
-- **Markdown beyond bold is literal.** `*italics*`, `` `code` `` and links come out as the
-  characters the model typed. Nothing has asked for them yet; the constraint on adding them is
-  above.
+- ~~**Markdown beyond bold is literal.**~~ Done: links on 2026-08-27, and lists, headings, quotes,
+  code and italics on 2026-08-31 — [chat-markdown.md](chat-markdown.md). Tables are still literal,
+  on purpose.
 - **The band's width does not remember anything.** It is `MODE_IDEAL` clamped by what the prose can
   spare, with no reader control. A drag handle is the obvious next thing to want.
 - **Narrow windows.** Below roughly 900px the band and `PROSE_MIN` together overflow and the page

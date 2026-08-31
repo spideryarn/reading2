@@ -15,17 +15,26 @@
  *
  * **Text is rendered as text, never `dangerouslySetInnerHTML`.** This is model
  * output. The article's own HTML is sanitised twice before it is trusted
- * (docs/project/security.md) and nothing here earns an exemption; `splitCitations`,
- * `splitEmphasis` and `splitLinks` return runs of *string*, and React escapes
- * strings.
+ * (docs/project/security.md) and nothing here earns an exemption; every splitter
+ * in citations.ts, and every block in markdown.ts, returns *string*, and React
+ * escapes strings.
  *
  * The one thing here that reaches an **attribute** rather than a text node is a
  * link the model wrote, and it is off unless a caller asks for it — see `links`.
  */
-import { Fragment, type ReactElement } from "react";
+import { createElement, Fragment, type ReactElement } from "react";
 import { BlockRef, shortBlockId } from "./BlockRef.js";
+import { type MdBlock, parseBlocks } from "./markdown.js";
 import { Tooltip } from "./Tooltip.js";
-import { emphasise, snippet, splitCitations, splitEmphasis, splitLinks } from "./citations.js";
+import {
+  emphasise,
+  type EmphasisedRun,
+  snippet,
+  splitCitations,
+  splitEmphasis,
+  splitInline,
+  splitItalic,
+} from "./citations.js";
 import type { BlockId } from "../types.js";
 import { hostOf } from "../urls.js";
 
@@ -82,12 +91,17 @@ interface Props {
 /**
  * Model prose, drawn.
  *
- * **Three passes, in this order: links, then emphasis across them, then
- * citations.** The first cannot move — `splitCitations` matches a bare run of
- * ids by shape, and a URL can carry that shape inside its path (`splitLinks`
- * says why at length). Emphasis has to see the links rather than the gaps
- * between them, or `**[The paper](https://…)**` prints its own asterisks
- * (`emphasise`).
+ * **Four passes, in this order: code spans, then links inside what is left,
+ * then emphasis across both, then citations.** None of them can move. Code is
+ * first because what is inside backticks is shown as written, so it must reach
+ * none of the others. Links come before citations because `splitCitations`
+ * matches a bare run of ids by shape and a URL can carry that shape inside its
+ * path (`splitLinks` says why at length). Emphasis has to see the links and the
+ * code rather than the gaps between them, or `**[The paper](https://…)**` and
+ * ``**bold with `code` in it**`` print their own asterisks (`emphasise`).
+ *
+ * The first three are `splitInline`, which returns ONE run list precisely so
+ * emphasis can pair markers across the whole paragraph.
  *
  * A link's label gets emphasis and nothing else. An id inside a label is not a
  * citation: it is the words the model chose for a destination, and turning part
@@ -103,25 +117,26 @@ export function CitedText({
   links = false,
   className,
 }: Props): ReactElement {
-  const runs = emphasise(links ? splitLinks(text, partial) : [{ kind: "text", text }]);
+  const runs = emphasise(splitInline(text, links, partial));
+  const ctx = { blocks, onJump, live, ...(className ? { className } : {}) };
   return (
     <>
-      {runs.map((run, i) =>
-        run.kind === "link" && run.url ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-          <Fragment key={`l${i}`}>{link(run.text, run.url, run.bold)}</Fragment>
-        ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-          <Fragment key={`r${i}`}>
-            {wrap(
-              cited(run.text, { blocks, onJump, live, ...(className ? { className } : {}) }),
-              run.bold,
-            )}
-          </Fragment>
-        ),
-      )}
+      {runs.map((run, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
+        <Fragment key={`r${i}`}>{draw(run, ctx)}</Fragment>
+      ))}
     </>
   );
+}
+
+/** One run of a paragraph: a code span, a link, or prose with chips in it. */
+function draw(
+  run: EmphasisedRun,
+  ctx: Omit<Props, "text" | "partial" | "links">,
+): ReactElement {
+  if (run.kind === "code") return wrap(<code className="fmt-code">{run.text}</code>, run.bold);
+  if (run.kind === "link" && run.url) return link(run.text, run.url, run.bold);
+  return wrap(cited(run.text, ctx), run.bold);
 }
 
 /** `<strong>` around a run the model asked to emphasise, and nothing otherwise. */
@@ -243,18 +258,174 @@ function CitedBlock({ id, text }: { id: BlockId; text: string }) {
 /**
  * `**like this**` → a bold run, and everything else left alone.
  *
- * The whole of the Markdown either panel interprets. Both prompts ask for plain
- * sentences and mostly get them, but a model bolds a term it is introducing
- * whatever you tell it, and printing the asterisks makes the app look like it
- * cannot read its own model's output.
+ * Both prompts ask for plain sentences and mostly get them, but a model bolds a
+ * term it is introducing whatever you tell it, and printing the asterisks makes
+ * the app look like it cannot read its own model's output.
+ *
+ * **This and the other inline marks belong to both panels; the blocks belong to
+ * chat.** `CitedText` is shared, so a summary reads bold, italic, code spans and
+ * block ids too. That line is not arbitrary: an inline mark is a thing a model
+ * does whatever you tell it, and a summary printing its own asterisks looks
+ * broken; a heading or a bullet list is *structure*, which a summary was never
+ * asked for and would be worse for. `CitedMarkdown` is the blocks, and only
+ * chat passes it.
  */
 function emphasised(text: string): (string | ReactElement)[] {
   return splitEmphasis(text).map((run, i) =>
     run.bold ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-      <strong key={`b${i}`}>{run.text}</strong>
+      <strong key={`b${i}`}>{italicised(run.text)}</strong>
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
+      <Fragment key={`i${i}`}>{italicised(run.text)}</Fragment>
+    ),
+  );
+}
+
+/**
+ * `*like this*` → an emphasised run, inside whatever the bold pass left.
+ *
+ * The innermost pass, and it has to be: by the time a string reaches here every
+ * `**` that had a partner has been consumed, so a surviving `*` is either a
+ * single marker or it is arithmetic. `splitItalic` says which.
+ */
+function italicised(text: string): (string | ReactElement)[] {
+  return splitItalic(text).map((run, i) =>
+    run.italic ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
+      <em key={`e${i}`}>{run.text}</em>
     ) : (
       run.text
     ),
   );
+}
+
+/**
+ * A whole answer, with its **blocks** drawn as well as its marks.
+ *
+ * `CitedText` is one run of prose; this is a model's reply, which since
+ * 2026-08-31 may contain a bullet list, a numbered list, a heading, a quote, a
+ * rule or a block of code. Greg asked for it after finding that a list the
+ * prompt explicitly permits arrived on screen as `- one - two - three`, held on
+ * separate lines only by a `white-space: pre-wrap` in the stylesheet that was
+ * there to make the bug survivable.
+ *
+ * **Still no HTML anywhere in this.** markdown.ts finds the blocks and returns
+ * *data*; each block's text comes back here as a string and is handed to
+ * `CitedText`, which returns runs of string that React escapes. There is no
+ * stage at which model output becomes markup, which is what keeps this on the
+ * right side of docs/project/security.md — see markdown.ts § Why we parse this
+ * ourselves.
+ *
+ * Opt-in, like `links`, and for a smaller reason: only chat's prompt asks for
+ * these shapes. The summary panel's asks for plain sentences and gets them, and
+ * a summary is dense enough that a stray `#` becoming a heading would be worse
+ * than a stray `#`.
+ */
+export function CitedMarkdown({
+  text,
+  blocks,
+  onJump,
+  live = false,
+  partial = false,
+  links = false,
+  className,
+}: Props): ReactElement {
+  const ctx = { blocks, onJump, live, links, ...(className ? { className } : {}) };
+  return <>{drawBlocks(parseBlocks(text), ctx, partial)}</>;
+}
+
+/** What every block below needs to draw its inline runs. */
+type Ctx = Omit<Props, "text" | "partial">;
+
+/**
+ * A list of blocks.
+ *
+ * `partial` reaches **only the last text in the answer**, wherever that is — the
+ * end of a paragraph, of a heading, of the last item of a list, or of the last
+ * line of a quote. Everything above it has finished arriving.
+ *
+ * The first version passed `false` for headings and quotes on the reasoning
+ * that a block inside one is closed by the structure around it. That is true of
+ * a *finished* answer and false of the one case the flag exists for: while an
+ * answer streams, the tail can be inside a quote, and `> See https://good.exa`
+ * was drawn as a link two tokens before it became `…example.evil.example/x`.
+ * A link the reader can press in the second before its destination changes is
+ * exactly what `splitLinks` refuses for a paragraph. Found by a GPT Sol review,
+ * 2026-08-31.
+ */
+function drawBlocks(list: MdBlock[], ctx: Ctx, partial: boolean): ReactElement[] {
+  return list.map((block, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: blocks of one immutable string, rebuilt whole
+    <Fragment key={`b${i}`}>{drawBlock(block, ctx, partial && i === list.length - 1)}</Fragment>
+  ));
+}
+
+function drawBlock(block: MdBlock, ctx: Ctx, partial: boolean): ReactElement {
+  switch (block.kind) {
+    case "para":
+      return <p>{inline(block.text, ctx, partial)}</p>;
+    case "heading":
+      /* `h4` and down, never `h1`. The panel's own title is the `h2` above
+         these, so an answer that starts with `#` must not outrank it — a
+         document outline that says the reply is the page is worse than a
+         heading a step smaller than the model imagined. */
+      return createElement(
+        `h${Math.min(6, block.level + 3)}`,
+        { className: "fmt-h" },
+        inline(block.text, ctx, partial),
+      );
+    case "rule":
+      return <hr className="fmt-rule" />;
+    case "code":
+      /* No highlighting and no language badge. The face and the box are what
+         make code readable at this size; the rest is a library. */
+      return (
+        <pre className="fmt-pre">
+          <code>{block.text}</code>
+        </pre>
+      );
+    case "quote":
+      return <blockquote className="fmt-quote">{drawBlocks(block.blocks, ctx, partial)}</blockquote>;
+    case "list":
+      return drawList(block, ctx, partial);
+  }
+}
+
+/**
+ * One list.
+ *
+ * `start` is carried through, so a model that numbers from 3 — which happens
+ * when it continues a list across two answers — gets a 3 rather than a 1
+ * silently correcting it.
+ *
+ * An item whose content is a single paragraph is drawn **without** the `<p>`,
+ * which is the difference between a tight list and one with a blank line
+ * between every bullet. CommonMark decides tightness for the whole list; this
+ * decides it per item, which is simpler and looks the same on everything a
+ * model writes.
+ */
+function drawList(block: MdBlock & { kind: "list" }, ctx: Ctx, partial: boolean): ReactElement {
+  const items = block.items.map((item, i) => {
+    const last = partial && i === block.items.length - 1;
+    const only = item.length === 1 ? item[0] : undefined;
+    return (
+      // biome-ignore lint/suspicious/noArrayIndexKey: items of one immutable string, rebuilt whole
+      <li key={`i${i}`}>
+        {only?.kind === "para" ? inline(only.text, ctx, last) : drawBlocks(item, ctx, last)}
+      </li>
+    );
+  });
+  return block.ordered ? (
+    <ol className="fmt-list" start={block.start}>
+      {items}
+    </ol>
+  ) : (
+    <ul className="fmt-list">{items}</ul>
+  );
+}
+
+/** A block's text, with the marks and the citation chips in it. */
+function inline(text: string, ctx: Ctx, partial: boolean): ReactElement {
+  return <CitedText text={text} partial={partial} {...ctx} />;
 }

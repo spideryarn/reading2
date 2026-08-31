@@ -337,10 +337,17 @@ describe("emphasise — bold that spans a link", () => {
     ]);
   });
 
-  it("leaves a link-free paragraph to the rule it always had", () => {
-    // `[^*\n]+` refuses a single `*` inside a pair, so this stays literal —
-    // exactly as it did before links existed.
-    expect(shape("a **b*c** d")).toEqual(["-:text:a **b*c** d"]);
+  it("bolds a pair containing a single star, in either path", () => {
+    /* This used to assert the opposite — `a **b*c** d` stayed literal, because
+       `splitEmphasis` matched `[^*\n]+` and refused any `*` inside a pair. That
+       was one of the two documented disagreements between this function and
+       `splitEmphasis`, and it stopped being defensible on 2026-08-31, when
+       italics arrived: `**this is *italic* too**` is an ordinary thing for a
+       model to write and it printed all six of its asterisks. `splitEmphasis`
+       now allows a lone `*` through (never `**`, so an unpartnered pair is
+       still literal), the inner pair is the italic pass's, and the two paths
+       agree here for the first time. docs/plans/chat-markdown.md. */
+    expect(shape("a **b*c** d")).toEqual(["-:text:a ", "b:text:b*c", "-:text: d"]);
   });
 
   it("still pairs ordinary bold in a paragraph with no links", () => {

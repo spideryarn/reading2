@@ -27,17 +27,32 @@
  * article on screen is what makes the citation a reading aid rather than a
  * footnote.
  *
- * ## What is deliberately absent
+ * ## Markdown, and what is still deliberately absent
  *
- * **Markdown, nearly all of it.** The answers are plain paragraphs by
- * instruction (the FORMAT section of the prompt in src/converse.ts), and
- * rendering arbitrary model output as HTML is the one thing
- * docs/project/security.md is about. Blank lines split paragraphs. Three other
- * things are interpreted and no more: `**bold**`, this article's block ids, and
- * — since 2026-08-27 — a link to the web, which is the only one of the three
- * that reaches an attribute rather than a text node. Every one of them is a
- * *string* handed to React, never HTML. Cited.tsx has each rule and
- * docs/plans/chat-web-links.md has the reasoning for the last.
+ * The answers are plain paragraphs by instruction (the FORMAT section of the
+ * prompt in src/converse.ts), and that has not changed. What changed on
+ * 2026-08-31 is that the shapes the prompt already permits are now **drawn**:
+ * before it, a short bullet list — which FORMAT allows in as many words —
+ * arrived as one paragraph reading `- one - two - three`. markdown.ts finds the
+ * blocks, Cited.tsx draws them, and docs/plans/chat-markdown.md says which
+ * shapes are read and, more usefully, which are refused.
+ *
+ * **What has not changed is that none of it is HTML.** Rendering arbitrary
+ * model output as markup is the one thing docs/project/security.md is about, so
+ * every pass here returns runs of *string* handed to React, which escapes them.
+ * There is no Markdown library here, and the reason is NOT that they all return
+ * HTML — `react-markdown` does not. It is that the inline layer is not Markdown
+ * at all: a block id has no syntax, it is matched by shape and checked against
+ * the article, and a link prints its real host beside the model's label. A
+ * library would replace the block half and leave every interesting rule where
+ * it is. docs/plans/chat-markdown.md § No Markdown library states the trade,
+ * including a reviewer's case for making it the other way.
+ *
+ * Three things model syntax reaches that are not text nodes, all of them
+ * constrained: the `href` of a link the model wrote, which is opt-in and
+ * scheme-checked (Cited.tsx § links, docs/plans/chat-web-links.md); an ordered
+ * list's `start`, which is a number; and a heading's element name, clamped to
+ * h4–h6.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -69,7 +84,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "../types.js";
-import { CitedText } from "./Cited.js";
+import { CitedMarkdown } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
@@ -1655,38 +1670,33 @@ function Answer({
   blocks: Map<string, string>;
   live: boolean;
 }) {
-  const paras = text.split(/\n{2,}/);
   return (
     /* One group for the whole answer, so moving along a row of citations shows
        each card immediately instead of waiting out the open delay again. Same
        reason the dock's placeholder buttons share one — Tooltip.tsx. */
     <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
-      {paras.map((para, p) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs of one immutable string
-        <p key={p}>
-          {/* The chips, the hover cards, the web links and the bold runs all
-              live in Cited.tsx, shared with the summary panel. Two copies of
-              what a citation looks like would drift, and a chip that means
-              something slightly different depending on which band it is in is
-              worse than either version. */}
-          <CitedText
-            text={para}
-            blocks={blocks}
-            onJump={onJump}
-            live={live}
-            /* Only the **last** paragraph of an answer still arriving can end
-               mid-address, and a bare URL cut in half is a link that goes
-               somewhere wrong for the second before the rest lands. Everything
-               above it is finished text. citations.ts § splitLinks. */
-            partial={live && p === paras.length - 1}
-            /* Chat, and only chat. The prompt here has a rule governing what a
-               model may link (converse.ts § LINKING TO THE WEB); the summary
-               prompt has none, so `CitedText` does not draw links for it.
-               Cited.tsx § links. */
-            links
-          />
-        </p>
-      ))}
+      {/* The blocks, the chips, the hover cards, the web links and the marks
+          all live in Cited.tsx and markdown.ts, shared with the summary panel.
+          Two copies of what a citation looks like would drift, and a chip that
+          means something slightly different depending on which band it is in is
+          worse than either version. */}
+      <CitedMarkdown
+        text={text}
+        blocks={blocks}
+        onJump={onJump}
+        live={live}
+        /* Only the **end** of an answer still arriving can be half-written, and
+           a bare URL cut in half is a link that goes somewhere wrong for the
+           second before the rest lands. Everything above it is finished text.
+           citations.ts § splitLinks, Cited.tsx § drawBlocks. */
+        partial={live}
+        /* Chat, and only chat, for both of the opt-in flags. The prompt here
+           has a rule governing what a model may link (converse.ts § LINKING TO
+           THE WEB) and asks for the shapes markdown.ts reads; the summary
+           prompt asks for plain sentences and has neither. Cited.tsx § links,
+           Cited.tsx § CitedMarkdown. */
+        links
+      />
     </TooltipGroup>
   );
 }
