@@ -94,23 +94,36 @@ Four things worth knowing before you rely on it:
   `supabase status` rather than against `SUPABASE_URL` — everything else in the run reads that
   variable, so a forwarded port would have every step agreeing with every other one.
 
-### One shelf, not two
+### One shelf, not two — and why it is not switched on
 
 By default the two accounts above mean the library you see when you sign in is **empty**, however
-much the CLI has ingested: those rows belong to `DEV_OWNER_ID`. Setting
+much the CLI has ingested: those rows belong to `DEV_OWNER_ID`. The setting that changes it is
 
 ```
 SPIDERYARN_OWNER_ID=<the admin id from src/admin.ts>
 ```
 
-in `.env.local` puts CLI, pipeline and `db:import` work on the shelf you actually look at. It is on
+which puts CLI, pipeline and `db:import` work on the shelf you actually look at. It is on
 `gjd-remote push-env`'s allowlist ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)),
-so a box gets it from the laptop and a fresh box is right from its first ingest — a line typed on
-the box alone would be destroyed by the next push, because that file is rebuilt rather than merged.
+so a box gets it from the laptop rather than needing a line typed on the box — which that file would
+destroy at the next push, since it rebuilds `.env.local` rather than merging into it.
 
-It does **not** move rows that already exist. On a database that has been used without it, older
-articles stay on the other shelf and — since `articles.slug` is globally unique — can block
-re-ingesting the same URL. Greg's call, 2026-08-31.
+**It is left blank on the laptop, and here is what happens if you set it without moving the rows
+first.** Measured 2026-08-31, not predicted: **eight test files go red.** Two shapes, and both are
+the same cause:
+
+- `store-shelf-reads` fails on `expected 0 to be greater than 0` — the shelf query runs as the new
+  owner and every fixture belongs to the old one, so the corpus it means to check is simply not
+  there.
+- `store-roundtrip` fails with `PublishRefused: the slug "fowler-phrenology" already belongs to
+  another reader`. `articles.slug` is unique across the whole install
+  ([src/owner.ts](../../src/owner.ts) says why), so your own articles, under the other id, block
+  re-ingesting their own URLs.
+
+Nothing is corrupted by trying it — unset the variable and the suite is green again — but it makes
+the point that this is **one setting and a data move, not one setting.** A database that has never
+been used without it, which is what a new box is, has neither problem: it is correct from its first
+ingest. An existing one needs its rows re-owned first, and that has deliberately not been done here.
 
 Docker has to be running first. On Greg's laptop the `docker` context points at **OrbStack**, so
 `open -a OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the

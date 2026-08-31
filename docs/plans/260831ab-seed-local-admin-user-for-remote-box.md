@@ -111,11 +111,22 @@ so a line typed on the box disappears at the next push.
 also changes who owns rows the *laptop's* CLI writes, and that was named at the point of choosing
 rather than inherited. A new box is therefore right from its first ingest.
 
-What it does not do is move rows that already exist, and both databases have some: 19 articles on
-the laptop and 14 on the box, all on the row-owner's shelf. Measuring that is what showed this was
-never box-specific — the signed-in library has been empty on the laptop all along. Re-owning them is
-a one-off `UPDATE` per database and is **not** done here: it is a data migration on somebody else's
-data, and it is worth doing deliberately rather than as a side effect of a convenience feature.
+**And then the tests said no, which is the part worth keeping.** Setting it on the laptop turned
+**eight test files red** — `store-shelf-reads` on `expected 0 to be greater than 0`, `store-roundtrip`
+on `PublishRefused: the slug "fowler-phrenology" already belongs to another reader`. Both are the
+documented consequence arriving immediately: 19 articles on the laptop and 14 on the box are on the
+row-owner's shelf, so switching without moving them makes the corpus invisible *and* makes its own
+slugs unavailable. Unset again, and green.
+
+So the key is on the allowlist and ready, and **the value is blank on both machines**. A new box —
+a database that has never been used without it — has neither problem and is correct from its first
+ingest, which is the case Greg asked about. An existing database needs a one-off `UPDATE` moving
+`owner_id` from `DEV_OWNER_ID` to the administrator, and that is not done here: it is a data
+migration over Greg's own reading, and it deserves to be a deliberate act rather than a side effect
+of a convenience feature.
+
+Measuring this is also what showed the problem was never box-specific. The signed-in library has
+been empty on the laptop all along.
 
 ## What the review changed
 
