@@ -1,6 +1,6 @@
-# The `box` CLI, and why it has no argument-parsing library
+# The `gjd-remote` CLI, and why it has no argument-parsing library
 
-The tool is [`scripts/box.ts`](../../scripts/box.ts). What it connects to is
+The tool is [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts). What it connects to is
 [remote-server-tmux-mosh.md](remote-server-tmux-mosh.md), which carries the tmux/mosh design and
 the traps; this doc is only about the library choice, recorded because
 [third-party-library-selection.md](../reusable/third-party-library-selection.md) asks for it and
@@ -65,6 +65,14 @@ Switch to Commander if any of these become true — the change is contained to `
 - Help text starts drifting from behaviour, which is the failure mode of hand-written help.
 - Anyone other than Greg has to maintain it.
 
-`cli-table3` was also recommended, for the `box ls` table. Not taken, for the same package.json
+`cli-table3` was also recommended, for the `gjd-remote ls` table. Not taken, for the same package.json
 reason and because three columns of padded strings do not need a library. If the listing grows
 columns that need wrapping or alignment, revisit that too.
+
+## The name
+
+It was `box` for an hour. Renamed on Greg's suggestion, and the rename is better than the
+suggestion knew: **`box` is already a common word in this repo** — diagram boxes, bounding boxes,
+`box` refs across a dozen files — so `grep box` was never going to find this tool, and a future
+agent reading `box` in a comment could reasonably think it meant either. `gjd-remote` collides with
+nothing and says whose it is.

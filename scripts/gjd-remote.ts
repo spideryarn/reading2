@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `box` — drive Claude Code sessions running in tmux on the Hetzner server.
+ * `gjd-remote` — drive Claude Code sessions running in tmux on the Hetzner server.
  *
  * The design, and the reasons behind each piece, are in
  * docs/research/remote-server-tmux-mosh.md. The short version: one tmux session
@@ -50,7 +50,7 @@ function shq(s: string): string {
  * rebuild, and a hardcoded IP would be wrong exactly when you most need it.
  */
 function host(): string {
-  if (process.env.BOX_HOST) return process.env.BOX_HOST;
+  if (process.env.GJD_REMOTE_HOST) return process.env.GJD_REMOTE_HOST;
   try {
     const out = execFileSync("tofu", ["-chdir=" + path.join(REPO, "infra/hetzner"), "output", "-json"], {
       encoding: "utf8",
@@ -62,7 +62,7 @@ function host(): string {
   } catch (err) {
     die(
       `could not read the server address from Terraform state (${(err as Error).message}).\n` +
-        `  Run this from the repo, or set BOX_HOST=<ip> to override.`,
+        `  Run this from the repo, or set GJD_REMOTE_HOST=<ip> to override.`,
     );
   }
 }
@@ -127,14 +127,20 @@ function sessions(): Session[] {
     `tmux ls -F '#{session_name}|#{session_created}|#{session_attached}|#{session_windows}' 2>/dev/null || true`,
   );
   if (!out) return [];
-  return out.split("\n").map((line) => {
+  return out.split("\n").flatMap((line) => {
     const [name, created, attached, windows] = line.split("|");
-    return {
-      name,
-      created: new Date(Number(created) * 1000),
-      attached: attached !== "0",
-      windows: Number(windows),
-    };
+    // A malformed line would otherwise become a session literally named
+    // "undefined", which `resume` would then fail to attach to for reasons
+    // that look nothing like the cause.
+    if (!name) return [];
+    return [
+      {
+        name,
+        created: new Date(Number(created) * 1000),
+        attached: attached !== "0",
+        windows: Number(windows),
+      },
+    ];
   });
 }
 
@@ -150,7 +156,7 @@ function age(d: Date): string {
 function cmdLs(): void {
   const list = sessions();
   if (list.length === 0) {
-    console.log(dim("no sessions. `box new <name>` to start one."));
+    console.log(dim("no sessions. `gjd-remote new <name>` to start one."));
     return;
   }
   const w = Math.max(4, ...list.map((s) => s.name.length));
@@ -173,18 +179,21 @@ function cmdLs(): void {
  * Lifted from MindstoneRebel's fleet, whose comment reads "keeps quoting sane
  * when prompts contain prose".
  */
-function cmdNew(name: string, opts: { prompt?: string; dir?: string; attach: boolean }): void {
+function cmdNew(
+  name: string,
+  opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean },
+): void {
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
-  if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'box resume ${name}'`);
+  if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
   const dir = opts.dir ?? `/home/${USER}`;
-  const promptPath = `/home/${USER}/box/prompts/${name}.md`;
-  const jobPath = `/home/${USER}/box/jobs/${name}.sh`;
+  const promptPath = `/home/${USER}/gjd-remote/prompts/${name}.md`;
+  const jobPath = `/home/${USER}/gjd-remote/jobs/${name}.sh`;
 
-  ssh(`mkdir -p /home/${USER}/box/prompts /home/${USER}/box/jobs`);
+  ssh(`mkdir -p /home/${USER}/gjd-remote/prompts /home/${USER}/gjd-remote/jobs`);
 
   if (opts.prompt) {
-    const tmp = path.join(mkdtempSync(path.join(tmpdir(), "box-")), `${name}.md`);
+    const tmp = path.join(mkdtempSync(path.join(tmpdir(), "gjd-remote-")), `${name}.md`);
     writeFileSync(tmp, opts.prompt, "utf8");
     const r = spawnSync("scp", ["-q", tmp, `${HOST()}:${promptPath}`], { encoding: "utf8" });
     if (r.status !== 0) die(`scp of the prompt failed: ${(r.stderr || "").trim()}`);
@@ -207,18 +216,18 @@ function cmdNew(name: string, opts: { prompt?: string; dir?: string; attach: boo
   ].join("\n");
 
   // Written via a quoted heredoc so nothing in it is expanded on the way.
-  ssh(`cat > ${jobPath} <<'BOXJOB'\n${job}BOXJOB\nchmod +x ${jobPath}`);
+  ssh(`cat > ${jobPath} <<'REMOTEJOB'\n${job}REMOTEJOB\nchmod +x ${jobPath}`);
   ssh(`tmux new-session -d -s ${name} ${shq(`bash ${jobPath}`)}`);
 
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
   if (opts.attach) attach(name);
-  else console.log(dim(`  box resume ${name}`));
+  else console.log(dim(`  gjd-remote resume ${name}`));
 }
 
 /**
  * Everything that can be checked from here, in one command — because Claude
  * Code's own shell cannot reach port 22, so an agent cannot run any of this
- * itself. Run `box doctor` and paste the output.
+ * itself. Run `gjd-remote doctor` and paste the output.
  */
 function cmdDoctor(): void {
   const ip = host();
@@ -259,20 +268,24 @@ function cmdDoctor(): void {
 
 // ---------------------------------------------------------------- main
 
-const HELP = `${bold("box")} — Claude Code sessions on the Hetzner server
+const HELP = `${bold("gjd-remote")} — Claude Code sessions on the Hetzner server
 
-  box                       list sessions
-  box new <name> [-p TEXT]  start a session, optionally with a first prompt
-              [-d DIR]      working directory on the box
-              [--no-attach] create it but stay here
-  box resume <name>         reattach (mosh, falling back to ssh)
-  box kill <name>           end a session
-  box doctor                check the box and print what is wrong
-  box ssh                   a plain shell, no tmux
-  box tunnel                forward noVNC to http://localhost:6080/vnc.html
+  gjd-remote                      list sessions
+  gjd-remote new <name>           start a session, and attach to it
+       -p, --prompt TEXT          give Claude a first prompt
+       -d, --dir DIR              working directory on the box
+           --no-attach            create it but stay here
+  gjd-remote resume [name]        reattach; no name means the newest
+  gjd-remote kill <name>          end a session
+  gjd-remote doctor               check the box and print what is wrong
+  gjd-remote ssh                  a plain shell, no tmux
+  gjd-remote tunnel               forward noVNC to http://localhost:6080/vnc.html
+
+Sessions survive your laptop sleeping, losing wifi, or rebooting — tmux keeps
+them, and mosh reconnects. They do not survive the server rebooting.
 
 The address is read from Terraform state, so it is never stale. Override with
-BOX_HOST=<ip>.`;
+GJD_REMOTE_HOST=<ip>.`;
 
 function main(): void {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -294,7 +307,7 @@ function main(): void {
         },
       });
       const name = positionals[0];
-      if (!name) die("box new <name>");
+      if (!name) die("gjd-remote new <name>");
       return cmdNew(name, { prompt: values.prompt, dir: values.dir, attach: !values["no-attach"] });
     }
 
@@ -308,7 +321,7 @@ function main(): void {
 
     case "kill": {
       const name = rest[0];
-      if (!name || !SLUG.test(name)) die("box kill <name>");
+      if (!name || !SLUG.test(name)) die("gjd-remote kill <name>");
       ssh(`tmux kill-session -t =${name}`);
       console.log(green(`✓ killed '${name}'`));
       return;
