@@ -1,0 +1,45 @@
+{
+  "version": "labels/1",
+  "generator": "claude-sonnet-5",
+  "slug": "todo",
+  "sourceHash": "f38330ad1804fe41",
+  "structureHash": "7aa87bf432a9a237",
+  "structureVersion": "toc/2",
+  "labels": {
+    "spya-shh76z": "The Top of My Todo List",
+    "spya-zdnrcx": "~1 min read",
+    "spya-jgwh3e": "April 2012",
+    "spya-up3g9y": "Bronnie Ware's list of dying people's regrets seems plausible to the author, who could make 4 of 5 mistakes",
+    "spya-fvqhme": "The 5 regrets paint a portrait of post-industrial man who shrinks to fit circumstances and turns dutifully till he stops",
+    "spya-mwupnd": "The mistakes producing these regrets are errors of omission, dangerous because made by default",
+    "spya-ycfbkt": "Since these mistakes happen by default, the author inverted the 5 regrets into 5 commands to be reminded",
+    "spya-kr5gze": "Don't ignore your dreams; don't work too much; say what you think; cultivate friendships; be happy",
+    "spya-dn2fm3": "The author put these commands at the top of his todo list file"
+  },
+  "batches": [
+    {
+      "blocks": [
+        "spya-shh76z",
+        "spya-zdnrcx",
+        "spya-jgwh3e",
+        "spya-up3g9y",
+        "spya-fvqhme",
+        "spya-mwupnd",
+        "spya-ycfbkt",
+        "spya-kr5gze",
+        "spya-dn2fm3"
+      ],
+      "setStarts": [
+        0,
+        4,
+        6,
+        8
+      ],
+      "inputTokens": 1629,
+      "outputTokens": 296,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "ms": 4819
+    }
+  ]
+}

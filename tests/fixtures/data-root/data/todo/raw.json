@@ -1,0 +1,13 @@
+{
+  "kind": "html",
+  "file": "raw.html",
+  "requestedUrl": "https://paulgraham.com/todo.html",
+  "url": "https://paulgraham.com/todo.html",
+  "contentType": "text/html",
+  "encoding": "windows-1252",
+  "bytes": 8014,
+  "sha256": "14f766cd32fa5dbe6bbefaf5204d268d8565bb5d1208c39bd719fcc491ae5178",
+  "storedSha256": "14f766cd32fa5dbe6bbefaf5204d268d8565bb5d1208c39bd719fcc491ae5178",
+  "storedBytes": 8014,
+  "fetchedAt": "2026-08-30T11:49:48.012Z"
+}

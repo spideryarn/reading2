@@ -1,0 +1,28 @@
+{
+  "runs": [
+    {
+      "id": "spya-fix300",
+      "criterion": "fixture criterion: where the piece says writing is thinking",
+      "createdAt": "2026-08-25T21:29:52.529Z",
+      "status": "done",
+      "model": "anthropic/claude-sonnet-5",
+      "hits": [
+        {
+          "blockId": "spya-z7zzwv",
+          "quote": "writing is thinking",
+          "confidence": 90,
+          "reasoning": "Fixture reasoning.",
+          "start": 60
+        }
+      ]
+    },
+    {
+      "id": "spya-fix301",
+      "criterion": "fixture criterion: something the piece does not say",
+      "createdAt": "2026-08-25T21:30:10.000Z",
+      "status": "done",
+      "model": "anthropic/claude-sonnet-5",
+      "hits": []
+    }
+  ]
+}

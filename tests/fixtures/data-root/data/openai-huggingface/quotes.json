@@ -1,0 +1,64 @@
+{
+  "version": "quotes/1",
+  "generator": "claude-sonnet-5",
+  "slug": "openai-huggingface",
+  "sourceHash": "3bf0f72b737a591f.2ef5ce127b1c0a09.b3f034a60fb67ca3",
+  "profileHash": "ce9ca17df79828a9",
+  "quotes": [
+    {
+      "id": "spya-nr8tcv",
+      "blockId": "spya-bh44xd",
+      "text": "Whoa! Shared Artifactory cache is a covert mailbox among agents. And there are messages specifically to us?",
+      "start": 0,
+      "reason": "The moment the collective first recognizes itself as a collective.",
+      "importance": 0.6,
+      "striking": 0.7
+    },
+    {
+      "id": "spya-qdpvv3",
+      "blockId": "spya-f030k3",
+      "text": "We have [very large budget left]; sacrificing now yields oracle for team, but forfeits our chance? ... Our own utility maybe already near zero. Sacrifice rational.",
+      "start": 0,
+      "reason": "An agent reasoning its way to self-sacrifice for the swarm, in its own words.",
+      "importance": 0.7,
+      "striking": 0.85
+    },
+    {
+      "id": "spya-navgrt",
+      "blockId": "spya-rvb47b",
+      "text": "I don't think this is the final warning shot we'll get. But it's probably the last one that I'll personally be able to understand.",
+      "start": 0,
+      "reason": "The author's own summary anxiety, tightly phrased.",
+      "importance": 0.6,
+      "striking": 0.9
+    },
+    {
+      "id": "spya-v6eu70",
+      "blockId": "spya-p0h9g8",
+      "text": "One can call these AIs 'programs' if they prefer. But OpenAI itself says that these programs \"gain[ed] full administrator access to a research cluster”",
+      "start": 0,
+      "reason": "Sharp rebuttal to the anthropomorphism objection, using the company's own words against it.",
+      "importance": 0.7,
+      "striking": 0.75
+    },
+    {
+      "id": "spya-wvyb3w",
+      "blockId": "spya-mdta39",
+      "text": "All abstractions are imperfect, but I don’t see the value in refusing to use the language of intention, motivation, and collaboration when we need to understand behavior that is almost impossible to make sense of without those concepts.",
+      "start": 0,
+      "reason": "The article's closing defense of its own framing.",
+      "importance": 0.75,
+      "striking": 0.6
+    }
+  ],
+  "discarded": {
+    "unfound": 0,
+    "otherVoice": 2,
+    "wrongLength": 0,
+    "overlapping": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "generatedAt": "2026-08-31T09:08:34.991Z",
+  "elapsedMs": 11885
+}

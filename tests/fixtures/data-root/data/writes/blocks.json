@@ -1,0 +1,177 @@
+{
+  "blocks": [
+    {
+      "id": "spya-hqt79k",
+      "tag": "h1",
+      "kind": "heading",
+      "level": 1,
+      "text": "Writes and Write-Nots",
+      "words": 3,
+      "html": "<h1 id=\"spya-hqt79k\">Writes and Write-Nots</h1>",
+      "gistable": true
+    },
+    {
+      "id": "spya-t97070",
+      "tag": "p",
+      "kind": "text",
+      "text": "· ~3 min read",
+      "words": 4,
+      "html": "<p id=\"spya-t97070\">\n  \n  · ~3 min read\n</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-hkx6yy",
+      "tag": "img",
+      "kind": "media",
+      "text": "",
+      "words": 0,
+      "html": "<img src=\"https://s.turbifycdn.com/aah/paulgraham/writes-and-write-nots-1.gif\" width=\"190\" height=\"18\" alt=\"Writes and Write-Nots\" id=\"spya-hkx6yy\">",
+      "gistable": false,
+      "note": "media"
+    },
+    {
+      "id": "spya-zpa7s8",
+      "tag": "p",
+      "kind": "text",
+      "text": "October 2024",
+      "words": 2,
+      "html": "<p id=\"spya-zpa7s8\">October 2024</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-tphbr6",
+      "tag": "p",
+      "kind": "text",
+      "text": "I'm usually reluctant to make predictions about technology, but I feel fairly confident about this one: in a couple decades there won't be many people who can write.",
+      "words": 28,
+      "html": "<p id=\"spya-tphbr6\">I'm usually reluctant to make predictions about technology, but I\nfeel fairly confident about this one: in a couple decades there\nwon't be many people who can write.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-vp6ghy",
+      "tag": "p",
+      "kind": "text",
+      "text": "One of the strangest things you learn if you're a writer is how many people have trouble writing. Doctors know how many people have a mole they're worried about; people who are good at setting up computers know how many people aren't; writers know how many people need help writing.",
+      "words": 50,
+      "html": "<p id=\"spya-vp6ghy\">One of the strangest things you learn if you're a writer is how\nmany people have trouble writing. Doctors know how many people have\na mole they're worried about; people who are good at setting up\ncomputers know how many people aren't; writers know how many people\nneed help writing.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-ts48cj",
+      "tag": "p",
+      "kind": "text",
+      "text": "The reason so many people have trouble writing is that it's fundamentally difficult. To write well you have to think clearly, and thinking clearly is hard.",
+      "words": 26,
+      "html": "<p id=\"spya-ts48cj\">The reason so many people have trouble writing is that it's\nfundamentally difficult. To write well you have to think clearly,\nand thinking clearly is hard.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-u97r7e",
+      "tag": "p",
+      "kind": "text",
+      "text": "And yet writing pervades many jobs, and the more prestigious the job, the more writing it tends to require.",
+      "words": 19,
+      "html": "<p id=\"spya-u97r7e\">And yet writing pervades many jobs, and the more prestigious the\njob, the more writing it tends to require.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-xdmpa0",
+      "tag": "p",
+      "kind": "text",
+      "text": "These two powerful opposing forces, the pervasive expectation of writing and the irreducible difficulty of doing it, create enormous pressure. This is why eminent professors often turn out to have resorted to plagiarism. The most striking thing to me about these cases is the pettiness of the thefts. The stuff they steal is usually the most mundane boilerplate — the sort of thing that anyone who was even halfway decent at writing could turn out with no effort at all. Which means they're not even halfway decent at writing.",
+      "words": 89,
+      "html": "<p id=\"spya-xdmpa0\">These two powerful opposing forces, the pervasive expectation of\nwriting and the irreducible difficulty of doing it, create enormous\npressure. This is why eminent professors often turn out to have\nresorted to plagiarism. The most striking thing to me about these\ncases is the pettiness of the thefts. The stuff they steal is usually\nthe most mundane boilerplate — the sort of thing that anyone who\nwas even halfway decent at writing could turn out with no effort\nat all. Which means they're not even halfway decent at writing.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-zzw20p",
+      "tag": "p",
+      "kind": "text",
+      "text": "Till recently there was no convenient escape valve for the pressure created by these opposing forces. You could pay someone to write for you, like JFK, or plagiarize, like MLK, but if you couldn't buy or steal words, you had to write them yourself. And as a result nearly everyone who was expected to write had to learn how.",
+      "words": 59,
+      "html": "<p id=\"spya-zzw20p\">Till recently there was no convenient escape valve for the pressure\ncreated by these opposing forces. You could pay someone to write\nfor you, like JFK, or plagiarize, like MLK, but if you couldn't buy\nor steal words, you had to write them yourself. And as a result\nnearly everyone who was expected to write had to learn how.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-gm3xu0",
+      "tag": "p",
+      "kind": "text",
+      "text": "Not anymore. AI has blown this world open. Almost all pressure to write has dissipated. You can have AI do it for you, both in school and at work.",
+      "words": 29,
+      "html": "<p id=\"spya-gm3xu0\">Not anymore. AI has blown this world open. Almost all pressure to\nwrite has dissipated. You can have AI do it for you, both in school\nand at work.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-hg7u0a",
+      "tag": "p",
+      "kind": "text",
+      "text": "The result will be a world divided into writes and write-nots. There will still be some people who can write. Some of us like it. But the middle ground between those who are good at writing and those who can't write at all will disappear. Instead of good writers, ok writers, and people who can't write, there will just be good writers and people who can't write.",
+      "words": 67,
+      "html": "<p id=\"spya-hg7u0a\">The result will be a world divided into writes and write-nots.\nThere will still be some people who can write. Some of us like it.\nBut the middle ground between those who are good at writing and\nthose who can't write at all will disappear. Instead of good writers,\nok writers, and people who can't write, there will just be good\nwriters and people who can't write.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-z79mew",
+      "tag": "p",
+      "kind": "text",
+      "text": "Is that so bad? Isn't it common for skills to disappear when technology makes them obsolete? There aren't many blacksmiths left, and it doesn't seem to be a problem.",
+      "words": 29,
+      "html": "<p id=\"spya-z79mew\">Is that so bad? Isn't it common for skills to disappear when\ntechnology makes them obsolete? There aren't many blacksmiths left,\nand it doesn't seem to be a problem.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-z7zzwv",
+      "tag": "p",
+      "kind": "text",
+      "text": "Yes, it's bad. The reason is something I mentioned earlier: writing is thinking. In fact there's a kind of thinking that can only be done by writing. You can't make this point better than Leslie Lamport did:",
+      "words": 37,
+      "html": "<p id=\"spya-z7zzwv\">Yes, it's bad. The reason is something I mentioned earlier: writing\nis thinking. In fact there's a kind of thinking that can only be\ndone by writing. You can't make this point better than Leslie Lamport\ndid:\n</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-arj7ry",
+      "tag": "blockquote",
+      "kind": "quote",
+      "text": "If you're thinking without writing, you only think you're thinking.",
+      "words": 10,
+      "html": "<blockquote id=\"spya-arj7ry\">\n  If you're thinking without writing, you only think you're thinking.\n</blockquote>",
+      "gistable": true
+    },
+    {
+      "id": "spya-xk7vyy",
+      "tag": "p",
+      "kind": "text",
+      "text": "So a world divided into writes and write-nots is more dangerous than it sounds. It will be a world of thinks and think-nots. I know which half I want to be in, and I bet you do too.",
+      "words": 38,
+      "html": "<p id=\"spya-xk7vyy\">\nSo a world divided into writes and write-nots is more dangerous\nthan it sounds. It will be a world of thinks and think-nots. I know\nwhich half I want to be in, and I bet you do too.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-rqzp97",
+      "tag": "p",
+      "kind": "text",
+      "text": "This situation is not unprecedented. In preindustrial times most people's jobs made them strong. Now if you want to be strong, you work out. So there are still strong people, but only those who choose to be.",
+      "words": 37,
+      "html": "<p id=\"spya-rqzp97\">This situation is not unprecedented. In preindustrial times most\npeople's jobs made them strong. Now if you want to be strong, you\nwork out. So there are still strong people, but only those who\nchoose to be.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-smzw4j",
+      "tag": "p",
+      "kind": "text",
+      "text": "It will be the same with writing. There will still be smart people, but only those who choose to be.",
+      "words": 20,
+      "html": "<p id=\"spya-smzw4j\">It will be the same with writing. There will still be smart people,\nbut only those who choose to be.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-zz20s6",
+      "tag": "span",
+      "kind": "text",
+      "text": "Thanks to Jessica Livingston, Ben Miller, and Robert Morris for reading drafts of this.",
+      "words": 14,
+      "html": "<span color=\"888888\" id=\"spya-zz20s6\"><b>Thanks</b> to Jessica Livingston, Ben Miller, \nand Robert Morris for reading drafts of this.</span>",
+      "gistable": true
+    }
+  ]
+}

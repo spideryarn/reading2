@@ -1,0 +1,242 @@
+{
+  "version": "ideas/1",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5.2fd04a5eb4dc04ad",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-ck35vc",
+      "name": "Under deep uncertainty, creating potential new moral patients should be avoided",
+      "provenance": "assumed",
+      "statement": "When we cannot know whether an action will bring into existence a being capable of suffering, the ethically responsible course is to refrain from that action rather than proceed and hope for the best.",
+      "whyYouNeedIt": "The flat imperative that 'nobody should be deliberately setting out to create conscious AI' only follows if uncertainty about moral status obligates caution rather than permission; the essay asserts this precautionary stance without arguing for it.",
+      "occurrences": [
+        {
+          "blockId": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason. Creating conscious machines would be an ethical disaster.",
+          "reasoning": "The prohibition is stated as self-evident, but it only holds if precaution under uncertainty is the correct ethical default.",
+          "start": 81
+        },
+        {
+          "blockId": "spya-zajp75",
+          "quote": "anyone who claims to know for sure what it would take to create real artificial consciousness, or for sure what it would take to avoid doing so, is overstepping what can reasonably be said",
+          "reasoning": "Establishes the uncertainty that the precautionary conclusion is built on, without stating the norm that uncertainty demands caution.",
+          "start": 102
+        },
+        {
+          "blockId": "spya-e68t9h",
+          "quote": "It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights.",
+          "reasoning": "Frames the stakes in terms of potential suffering, which only translates into an obligation to refrain if the precautionary principle is silently in play.",
+          "start": 59
+        }
+      ]
+    },
+    {
+      "id": "spya-rqsqa3",
+      "name": "Intelligence and consciousness are separable properties",
+      "provenance": "introduced",
+      "statement": "Intelligence is a functional matter of achieving goals through flexible behavior, while consciousness is a matter of subjective experience, of there being something it is like to be a system; the two need not co-occur.",
+      "occurrences": [
+        {
+          "blockId": "spya-nj888h",
+          "quote": "Intelligence is mainly about doing: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind.",
+          "reasoning": "States the functional, behavioral definition of intelligence that the essay contrasts with consciousness.",
+          "start": 53
+        },
+        {
+          "blockId": "spya-j0a9rq",
+          "quote": "Consciousness, in contrast to intelligence, is mostly about being.",
+          "reasoning": "Directly names the categorical split the whole essay hinges on.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-cqh2pq",
+          "quote": "We certainly should not just assume that consciousness will come along for the ride as AI gets smarter",
+          "reasoning": "This warning only makes sense if intelligence gains don't automatically imply consciousness gains.",
+          "start": 205
+        }
+      ]
+    },
+    {
+      "id": "spya-kbtmq9",
+      "name": "Belief in machine consciousness is driven by cognitive bias, not evidence",
+      "provenance": "introduced",
+      "statement": "Anthropocentrism, human exceptionalism, anthropomorphism, and pattern-seeking (pareidolia) systematically predispose people to see consciousness in AI systems whether or not it is actually present, especially when the system uses language.",
+      "occurrences": [
+        {
+          "blockId": "spya-cvaqgs",
+          "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+          "reasoning": "Names the biases as the causal explanation for the belief, prior to any evaluation of the belief's truth.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-k850tu",
+          "quote": "Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia",
+          "reasoning": "Extends the bias framework with a vivid perceptual analogy for why people 'see' consciousness that isn't there.",
+          "start": 39
+        }
+      ]
+    },
+    {
+      "id": "spya-vk58g2",
+      "name": "Exponential change creates a permanent illusion of imminent breakthrough",
+      "provenance": "introduced",
+      "statement": "Because an exponential curve looks equally steep from any point along it, people on such a curve always feel they are on the verge of a historic transition, regardless of how much progress has actually been made.",
+      "occurrences": [
+        {
+          "blockId": "spya-cke6sj",
+          "quote": "Exponential growth has the psychologically destabilizing property that what's ahead seems impossibly steep, and what's behind seems irrelevantly flat.",
+          "reasoning": "States the perceptual distortion produced by exponential framing.",
+          "start": 293
+        },
+        {
+          "blockId": "spya-cke6sj",
+          "quote": "it's tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness? But on an exponential curve, every point is an inflection point.",
+          "reasoning": "Directly ties the illusion to why observers keep believing conscious AI is just around the corner.",
+          "start": 559
+        }
+      ]
+    },
+    {
+      "id": "spya-pxwaje",
+      "name": "Computational functionalism is an unexamined assumption",
+      "provenance": "introduced",
+      "statement": "The belief that conscious AI is possible rests on computational functionalism, the claim that implementing the right computation is sufficient for consciousness, and this premise is usually taken for granted rather than defended.",
+      "occurrences": [
+        {
+          "blockId": "spya-wepmnr",
+          "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.",
+          "reasoning": "States the essay's central diagnostic claim about what conscious-AI proponents are implicitly relying on.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-qu7j89",
+          "quote": "They also generally sidestep defending computational functionalism, being content instead to assume it.",
+          "reasoning": "Reiterates that even sophisticated rival theories treat this as a starting axiom rather than an argued conclusion.",
+          "start": 468
+        }
+      ]
+    },
+    {
+      "id": "spya-vhcxxx",
+      "name": "Brains resist the software/hardware split",
+      "provenance": "introduced",
+      "statement": "Unlike engineered computers, biological brains have no clean separation between what they are made of and what they do, so their material composition cannot be abstracted away as mere 'implementation'.",
+      "occurrences": [
+        {
+          "blockId": "spya-b0086e",
+          "quote": "there's no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer",
+          "reasoning": "States the core claim that biological brains lack the abstraction layer computers are built on.",
+          "start": 53
+        },
+        {
+          "blockId": "spya-zw2m7u",
+          "quote": "brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are",
+          "reasoning": "Generalizes the claim beyond the specific McCulloch-Pitts discussion into a standing thesis about biological systems.",
+          "start": 68
+        },
+        {
+          "blockId": "spya-uwxe4h",
+          "quote": "The brain is not a Turing machine made of meat.",
+          "reasoning": "Crisp summary conclusion that only follows once the reader accepts the substrate-inseparability claim.",
+          "start": 529
+        }
+      ]
+    },
+    {
+      "id": "spya-rt2g6r",
+      "name": "Alternative computation ties function more tightly to substrate",
+      "provenance": "introduced",
+      "statement": "Beyond Turing-style digital algorithms, there are other kinds of computation and dynamics (analogue, neuromorphic, dynamical-systems processes) that are less substrate-flexible, meaning the further a system departs from standard digital computation the more its capacities depend on its specific physical makeup.",
+      "occurrences": [
+        {
+          "blockId": "spya-zg9me8",
+          "quote": "Analogue computers were again prominent at the birth of AI in the 1950s, in the guise of the long-neglected discipline of cybernetics",
+          "reasoning": "Introduces computation that predates and differs from Turing's discrete symbol-manipulation model.",
+          "start": 237
+        },
+        {
+          "blockId": "spya-sq9v5k",
+          "quote": "Many systems do what they do without it being reasonable or useful to describe them as being computational at all.",
+          "reasoning": "Uses the steam governor to show functional systems that aren't computational in any sense, widening what could matter for brains.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-gr2k02",
+          "quote": "the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy, and the more deeply tied we are to the properties of a particular material substrate",
+          "reasoning": "States the payoff of the argument: distance from Turing computation correlates with substrate-dependence.",
+          "start": 53
+        }
+      ]
+    },
+    {
+      "id": "spya-vhw8ag",
+      "name": "Consciousness may require being alive",
+      "provenance": "introduced",
+      "statement": "Biological naturalism holds that properties of living, self-sustaining biological systems (metabolism, autopoiesis, physiological self-regulation) may be necessary for consciousness, not merely incidental to it.",
+      "occurrences": [
+        {
+          "blockId": "spya-hj5y6s",
+          "quote": "This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness.",
+          "reasoning": "States the thesis directly as a named philosophical position.",
+          "start": 51
+        },
+        {
+          "blockId": "spya-vys3vj",
+          "quote": "A mathematical line can be drawn directly from the self-producing, autopoietic nature of biological material all the way to the Bayesian best-guessing that underpins our perceptual experiences of the world and of the self.",
+          "reasoning": "Connects living self-production causally to the predictive processes underlying experience.",
+          "start": 315
+        },
+        {
+          "blockId": "spya-pfkhtt",
+          "quote": "Perhaps it is life, rather than information processing, that breathes fire into the equations of experience.",
+          "reasoning": "Summarizes the conclusion of the argument in a single memorable claim.",
+          "start": 161
+        }
+      ]
+    },
+    {
+      "id": "spya-qzb5ex",
+      "name": "Simulating a process does not instantiate it",
+      "provenance": "introduced",
+      "statement": "A computational simulation of X generally lacks the causal powers of X itself and does not bring X into being, unless X is itself nothing but an algorithm; so simulating a brain would only produce consciousness if consciousness is already a purely computational phenomenon.",
+      "occurrences": [
+        {
+          "blockId": "spya-npjt4j",
+          "quote": "a computational simulation of X does not bring X into being — does not instantiate X — unless X is a computational process (specifically, an algorithm) itself",
+          "reasoning": "Gives the precise logical condition under which simulation would suffice, which functionalism must satisfy to be true.",
+          "start": 324
+        },
+        {
+          "blockId": "spya-xvm37k",
+          "quote": "If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.",
+          "reasoning": "Applies the principle to mind-uploading, showing the argument's practical bite against a popular techno-optimist scenario.",
+          "start": 277
+        }
+      ]
+    },
+    {
+      "id": "spya-tzz4bn",
+      "name": "Conscious-seeming AI raises different stakes than actually conscious AI",
+      "provenance": "introduced",
+      "statement": "Whether or not an AI system is really conscious, the fact that it convincingly seems conscious creates its own distinct ethical problems, including psychological harm to humans and the risk of misplaced rights, and this feeling of consciousness can persist even when we know intellectually it is false.",
+      "occurrences": [
+        {
+          "blockId": "spya-x63ycg",
+          "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+          "reasoning": "States the distinction as a load-bearing claim for the essay's practical recommendations.",
+          "start": 80
+        },
+        {
+          "blockId": "spya-xk9gne",
+          "quote": "even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is",
+          "reasoning": "Shows the risk survives correct belief, via the Müller-Lyer analogy, reinforcing that appearance and fact operate on different tracks.",
+          "start": 35
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-08-26T21:45:31.343Z",
+  "elapsedMs": 110359
+}

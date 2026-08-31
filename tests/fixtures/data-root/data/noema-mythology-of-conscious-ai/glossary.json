@@ -1,0 +1,280 @@
+{
+  "version": "glossary/3",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5",
+  "profileHash": "ce9ca17df79828a9",
+  "entries": [
+    {
+      "id": "spya-bugnh5",
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "A Google engineer who in 2022 publicly claimed the company's LaMDA chatbot was sentient and had feelings, based on his conversations with it; Google dismissed him citing violation of confidentiality policy.",
+      "difficulty": 0.3,
+      "centrality": 0.5,
+      "blocks": [
+        "spya-cvyfqe",
+        "spya-p8ky7g"
+      ]
+    },
+    {
+      "id": "spya-aksp24",
+      "name": "LaMDA",
+      "kind": "work",
+      "aliases": [],
+      "background": "Google's large language model chatbot system, the subject of Blake Lemoine's 2022 claims of sentience.",
+      "difficulty": 0.3,
+      "centrality": 0.35,
+      "blocks": [
+        "spya-cvyfqe"
+      ]
+    },
+    {
+      "id": "spya-ygzudf",
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The tendency to perceive meaningful patterns, especially faces, in random or ambiguous stimuli. Adam Becker's book uses it as a metaphor for the human tendency to project consciousness onto AI systems where none may exist.",
+      "background": "Adam Becker is a science writer and author of 'More Everything Forever,' a critique of techno-utopian thinking in Silicon Valley.",
+      "difficulty": 0.4,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-k850tu"
+      ]
+    },
+    {
+      "id": "spya-xtwesc",
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that implementing the right kind of computation or information processing is sufficient for consciousness to arise, regardless of the physical substrate doing the computing. Seth treats this as the load-bearing but rarely examined premise behind all claims of conscious AI.",
+      "difficulty": 0.5,
+      "centrality": 1,
+      "blocks": [
+        "spya-wepmnr",
+        "spya-cv97j7",
+        "spya-p4vmm0",
+        "spya-ezw0kc",
+        "spya-f0qxnb",
+        "spya-pbcr03",
+        "spya-ymbpwn",
+        "spya-mtzbbg",
+        "spya-nv6tp0",
+        "spya-qu7j89"
+      ]
+    },
+    {
+      "id": "spya-dkcw7h",
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "Universal Turing machine",
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "Seth uses 'Turing world' as his own shorthand for the whole paradigm of treating cognition as sequence-based, substrate-independent symbol manipulation. He argues brains and much of physical reality (continuous, stochastic, time-bound processes) fall outside this frame, so equating brain function with Turing computation understates what brains actually do.",
+      "background": "Alan Turing's abstract device reads and writes symbols on an infinite tape according to fixed rules; a universal Turing machine can simulate any other such machine, formalizing the modern concept of an algorithm.",
+      "difficulty": 0.4,
+      "centrality": 0.9,
+      "blocks": [
+        "spya-cf70dt",
+        "spya-dfujdu",
+        "spya-va8qxr",
+        "spya-v5vz2t",
+        "spya-p4vmm0",
+        "spya-uwxe4h",
+        "spya-gw0hsq",
+        "spya-n393ru",
+        "spya-gamzr3",
+        "spya-zg9me8",
+        "spya-gr2k02",
+        "spya-jvrmrh",
+        "spya-tb4wr2",
+        "spya-ymbpwn"
+      ]
+    },
+    {
+      "id": "spya-dqzvjf",
+      "name": "McCulloch-Pitts neuron",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The simplified abstract model of a neuron, formalized by Warren McCulloch and Walter Pitts, that sums weighted inputs and produces an output via a threshold or activation function. Seth traces the lineage from this model, through Kleene's proof of Turing-completeness for such networks, to today's artificial neural networks, and treats it as the historical root of the 'brain as computer' metaphor.",
+      "difficulty": 0.5,
+      "centrality": 0.5,
+      "blocks": [
+        "spya-qknqjx"
+      ]
+    },
+    {
+      "id": "spya-gasgpa",
+      "name": "Autopoiesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The self-producing, self-maintaining activity by which a living cell or organism continuously regenerates its own material conditions of existence. Seth treats this as a defining feature of life that has no equivalent in silicon and that he links to the deep entanglement of brain function with physical embodiment.",
+      "difficulty": 0.55,
+      "centrality": 0.5,
+      "blocks": [
+        "spya-cf8rt8"
+      ]
+    },
+    {
+      "id": "spya-kxry00",
+      "name": "Generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A philosophers' term Seth invokes for how deeply a brain's components are functionally interlocked across multiple scales, such that no single part (e.g., one neuron) can be swapped for a differently-made equivalent without disrupting the whole. He uses it to argue that Chalmers's neural-replacement thought experiment silently assumes away this entanglement.",
+      "difficulty": 0.6,
+      "centrality": 0.4,
+      "blocks": [
+        "spya-jnwfxp"
+      ]
+    },
+    {
+      "id": "spya-d86d0b",
+      "name": "Halting problem",
+      "kind": "concept",
+      "aliases": [],
+      "background": "Turing's proof that no general algorithm can determine, for every possible program and input, whether that program will eventually stop running or continue forever — a foundational example of a function no Turing machine can compute.",
+      "difficulty": 0.5,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-gw0hsq"
+      ]
+    },
+    {
+      "id": "spya-ze6vnh",
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A concept introduced by Geoffrey Hinton for algorithms inseparably tied to their specific physical substrate, such that the 'program' effectively dies when that particular implementation is destroyed — contrasted with standard software's portability across hardware. Seth cites it as an example of computation that is less substrate-flexible than classical digital computing.",
+      "difficulty": 0.55,
+      "centrality": 0.35,
+      "blocks": [
+        "spya-kjfjgm"
+      ]
+    },
+    {
+      "id": "spya-pkj2fp",
+      "name": "Watt Governor",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The mechanical device that regulates steam engine speed using swinging weights and a valve, given by cognitive scientist Tim van Gelder as an example of a system that performs regulation through pure physical dynamics rather than computation. Seth uses it to argue not everything that behaves adaptively is meaningfully described as computational.",
+      "difficulty": 0.4,
+      "centrality": 0.35,
+      "blocks": [
+        "spya-v8s83c"
+      ]
+    },
+    {
+      "id": "spya-jhu5r5",
+      "name": "4E cognitive science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "An umbrella label for approaches treating cognition as embodied, embedded, enactive, and extended — i.e., inseparable from an organism's body and environment — which Seth groups with dynamical-systems approaches as alternatives to purely algorithmic accounts of mind.",
+      "difficulty": 0.55,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-t54yqa"
+      ]
+    },
+    {
+      "id": "spya-a4skhm",
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The position, which Seth cautiously favors, that properties of being alive are necessary (though not necessarily sufficient) for consciousness — meaning silicon systems, however cleverly programmed, may be categorically unable to be conscious.",
+      "background": "The term and position are associated with philosopher John Searle, who argued consciousness is a biological phenomenon caused by specific neurobiological processes.",
+      "difficulty": 0.5,
+      "centrality": 0.85,
+      "blocks": [
+        "spya-hj5y6s",
+        "spya-nv6tp0"
+      ]
+    },
+    {
+      "id": "spya-vq3c6g",
+      "name": "Predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "Controlled hallucination",
+        "Interoceptive inference"
+      ],
+      "senseHere": "A framework in which conscious perception is understood as the brain's best guess about the causes of its sensory inputs, continually updated by prediction-error signals rather than read off directly from the senses. Seth extends this to bodily/emotional experience via 'interoceptive inference' — best-guessing about the body's internal physiological state — to argue that regulating a living body is intrinsic to why experience feels the way it does.",
+      "difficulty": 0.5,
+      "centrality": 0.75,
+      "blocks": [
+        "spya-dp8sem",
+        "spya-xhvztm",
+        "spya-f3bgh0",
+        "spya-hzp9yz",
+        "spya-ps0kap"
+      ]
+    },
+    {
+      "id": "spya-v0yxms",
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Nick Bostrom's argument that advanced civilizations would likely run many ancestor simulations, making it statistically more probable that any given observer exists inside one such simulation than in 'base' physical reality. Seth flags that this argument covertly assumes computational functionalism (that a suitably programmed computer would be conscious) without defending it.",
+      "background": "Nick Bostrom is a philosopher known for work on existential risk and superintelligence; his 2003 paper 'Are You Living in a Computer Simulation?' popularized this argument.",
+      "difficulty": 0.4,
+      "centrality": 0.45,
+      "blocks": [
+        "spya-bcnvp2"
+      ]
+    },
+    {
+      "id": "spya-c8gczs",
+      "name": "Cerebral organoids",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Brain-like tissue structures typically grown from human embryonic stem cells. Seth flags these, rather than large language models, as the technology he thinks poses a more credible risk of accidentally producing real consciousness.",
+      "difficulty": 0.45,
+      "centrality": 0.35,
+      "blocks": [
+        "spya-vs0vpj"
+      ]
+    },
+    {
+      "id": "spya-hpwurb",
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A classic visual illusion where two equal-length lines with different arrow-like endcaps appear to differ in length, and knowing the truth does not stop the illusion from persisting. Seth uses it as an analogy: even knowing an AI is not conscious, we may be unable to stop feeling that it is.",
+      "difficulty": 0.35,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-xk9gne",
+        "spya-tv922y"
+      ]
+    },
+    {
+      "id": "spya-wk6g9v",
+      "name": "Garland test",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Seth's name (after screenwriter/director Alex Garland) for the scenario in 'Ex Machina' where a human is told outright that an entity is a machine and the test becomes whether he still feels it is conscious. It is a test of human persuasion, not of actual machine consciousness — distinct from the Turing test.",
+      "difficulty": 0.5,
+      "centrality": 0.5,
+      "blocks": [
+        "spya-kqs33c"
+      ]
+    },
+    {
+      "id": "spya-ca30dv",
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A thought experiment, associated with David Chalmers, imagining brain parts progressively swapped for functionally identical silicon equivalents while consciousness is assumed to be preserved throughout, taken to show substrate independence. Seth argues it fails because a truly functionally identical silicon neuron (matching things like metabolic waste-clearing) is not achievable.",
+      "difficulty": 0.5,
+      "centrality": 0.55,
+      "blocks": []
+    }
+  ],
+  "passes": 1,
+  "generatedAt": "2026-08-27T07:29:28.689Z",
+  "elapsedMs": 35377
+}

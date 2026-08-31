@@ -1,0 +1,71 @@
+{
+  "version": "tweets/1",
+  "generator": "claude-opus-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "c45e857f541e3787",
+  "limit": 280,
+  "tweets": [
+    {
+      "text": "Seth argues that consciousness is very unlikely to arrive simply because AI gets smarter, and may be impossible for the silicon computers we know. The assumption underneath conscious AI — computational functionalism — is an assumption, not a finding.",
+      "chars": 250
+    },
+    {
+      "text": "Intelligence and consciousness are different things, Seth insists: intelligence is doing, achieving complex goals by flexible means; consciousness is being, there being something it is like to be you. They come together in us, which proves nothing in general.",
+      "chars": 259
+    },
+    {
+      "text": "Three biases bundle them anyway: anthropocentrism, human exceptionalism and anthropomorphism. When a machine does something we think of as distinctively human, we hand it understanding and experience too — pareidolia, in Adam Becker's phrase, a face seen in toast.",
+      "chars": 264
+    },
+    {
+      "text": "Language pulls hardest. Nobody calls AlphaFold conscious, Seth notes, though under the hood it resembles an LLM. Our vocabulary compounds it: saying models \"hallucinate\" quietly grants them experience. \"Confabulate\" would be the better word.",
+      "chars": 241
+    },
+    {
+      "text": "First argument: brains are not computers. There is no clean split between mindware and wetware; activity runs from cortical territories down to a molecular storm of metabolism, and each neuron regenerates itself. What a brain does cannot be prised from what it is.",
+      "chars": 264
+    },
+    {
+      "text": "This sinks the neural replacement thought experiment, Seth argues. Some neurons appear to spike to clear metabolic waste; a perfect silicon stand-in would need a silicon metabolism. The only seamless replacement for a biological neuron is a biological one.",
+      "chars": 256
+    },
+    {
+      "text": "Second: continuous and stochastic processes lie outside Turing computation. Analogue, neuromorphic and \"mortal\" computation, dynamical systems, a steam engine's governor — each step away from algorithms ties function more tightly to its material substrate.",
+      "chars": 256
+    },
+    {
+      "text": "None of this abandons functionalism, Seth stresses. Mind may still depend on the functional organization of an embodied brain. The confusion is conflating that liberal position with computational functionalism, which says the organization that matters is algorithmic.",
+      "chars": 267
+    },
+    {
+      "text": "Third: life probably matters. Perception, on predictive processing, is controlled hallucination, and its deepest layers are interoceptive predictions regulating the body, reaching down into metabolism. Perhaps life, not information processing, makes experience possible.",
+      "chars": 270
+    },
+    {
+      "text": "He flags the limits of this one himself: there is no knock-down argument for biological naturalism, and none yet exists. It remains a minority view, resting largely on the fact that everything most people agree is conscious is also alive.",
+      "chars": 238
+    },
+    {
+      "text": "Fourth: simulation is not instantiation. Simulated rain makes nothing wet; simulated digestion digests nothing. A whole-brain emulation yields consciousness only if consciousness is computational — which is the very thing at issue, and Bostrom simply assumes it.",
+      "chars": 262
+    },
+    {
+      "text": "Given the uncertainty, Seth's practical line: nobody should set out to build conscious machines. That would create new moral subjects and new forms of suffering, and rights we grant would limit our ability to switch them off. He worries more about cerebral organoids than LLMs.",
+      "chars": 277
+    },
+    {
+      "text": "Conscious-seeming systems are much closer than conscious ones, and the feeling may be as impenetrable as the Müller-Lyer illusion — knowing better won't dissolve it. Either we extend moral concern to them and distort it, or we withhold it and brutalize our own minds.",
+      "chars": 267
+    },
+    {
+      "text": "The nearer damage is to our self-image. Mistaking chatbots for minds mechanizes the mind and, in the dream of uploading, regresses to a Cartesian soul — when what makes us us may be closer to breath than thought: the inchoate feeling of being alive.",
+      "chars": 249
+    },
+    {
+      "text": "What stays unsettled: there is no consensus on the conditions for consciousness, so no definitive test; Seth allows he may be wrong; and nothing in his case rules out artificial consciousness altogether. The future history of AI, he says, is not yet written.",
+      "chars": 258
+    }
+  ],
+  "generatedAt": "2026-08-25T14:46:44.429Z",
+  "elapsedMs": 71117
+}

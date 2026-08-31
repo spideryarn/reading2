@@ -1,0 +1,97 @@
+{
+  "sanitizer": 3,
+  "blocks": [
+    {
+      "id": "spya-shh76z",
+      "tag": "h1",
+      "kind": "heading",
+      "level": 1,
+      "text": "The Top of My Todo List",
+      "words": 6,
+      "html": "<h1 id=\"spya-shh76z\">The Top of My Todo List</h1>",
+      "gistable": true
+    },
+    {
+      "id": "spya-zdnrcx",
+      "tag": "p",
+      "kind": "text",
+      "text": "· ~1 min read",
+      "words": 4,
+      "html": "<p id=\"spya-zdnrcx\">\n  \n  · ~1 min read\n</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-wbrket",
+      "tag": "img",
+      "kind": "media",
+      "text": "",
+      "words": 0,
+      "html": "<img src=\"https://s.turbifycdn.com/aah/paulgraham/the-top-of-my-todo-list-3.gif\" width=\"194\" height=\"18\" alt=\"The Top of My Todo List\" id=\"spya-wbrket\">",
+      "gistable": false,
+      "note": "media"
+    },
+    {
+      "id": "spya-jgwh3e",
+      "tag": "p",
+      "kind": "text",
+      "text": "April 2012",
+      "words": 2,
+      "html": "<p id=\"spya-jgwh3e\">April 2012</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-up3g9y",
+      "tag": "p",
+      "kind": "text",
+      "text": "A palliative care nurse called Bronnie Ware made a list of the biggest regrets of the dying. Her list seems plausible. I could see myself — can see myself — making at least 4 of these 5 mistakes.",
+      "words": 38,
+      "html": "<p id=\"spya-up3g9y\">A palliative care nurse called Bronnie Ware made a list of the\nbiggest <a href=\"http://bronnieware.com/regrets-of-the-dying/\">regrets\nof the dying</a>.  Her list seems plausible.  I could see\nmyself — <i>can</i> see myself — making at least 4 of these\n5 mistakes.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-fvqhme",
+      "tag": "p",
+      "kind": "text",
+      "text": "If you had to compress them into a single piece of advice, it might be: don't be a cog. The 5 regrets paint a portrait of post-industrial man, who shrinks himself into a shape that fits his circumstances, then turns dutifully till he stops.",
+      "words": 44,
+      "html": "<p id=\"spya-fvqhme\">If you had to compress them into a single piece of advice, it might\nbe: don't be a cog.  The 5 regrets paint a portrait of post-industrial\nman, who shrinks himself into a shape that fits his circumstances,\nthen turns dutifully till he stops.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-mwupnd",
+      "tag": "p",
+      "kind": "text",
+      "text": "The alarming thing is, the mistakes that produce these regrets are all errors of omission. You forget your dreams, ignore your family, suppress your feelings, neglect your friends, and forget to be happy. Errors of omission are a particularly dangerous type of mistake, because you make them by default.",
+      "words": 49,
+      "html": "<p id=\"spya-mwupnd\">The alarming thing is, the mistakes that produce these regrets are\nall errors of omission.  You forget your dreams, ignore your family,\nsuppress your feelings, neglect your friends, and forget to be\nhappy.  Errors of omission are a particularly dangerous type of\nmistake, because you make them by default.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-ycfbkt",
+      "tag": "p",
+      "kind": "text",
+      "text": "I would like to avoid making these mistakes. But how do you avoid mistakes you make by default? Ideally you transform your life so it has other defaults. But it may not be possible to do that completely. As long as these mistakes happen by default, you probably have to be reminded not to make them. So I inverted the 5 regrets, yielding a list of 5 commands",
+      "words": 68,
+      "html": "<p id=\"spya-ycfbkt\">I would like to avoid making these mistakes.  But how do you avoid\nmistakes you make by default?  Ideally you transform your life so\nit has other defaults.  But it may not be possible to do that\ncompletely. As long as these mistakes happen by default, you probably\nhave to be reminded not to make them.  So I inverted the 5 regrets,\nyielding a list of 5 commands\n</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-kr5gze",
+      "tag": "blockquote",
+      "kind": "quote",
+      "text": "Don't ignore your dreams; don't work too much; say what you think; cultivate friendships; be happy.",
+      "words": 16,
+      "html": "<blockquote id=\"spya-kr5gze\">\n   Don't ignore your dreams; don't work too much; say what you\n   think; cultivate friendships; be happy.\n</blockquote>",
+      "gistable": true
+    },
+    {
+      "id": "spya-dn2fm3",
+      "tag": "p",
+      "kind": "text",
+      "text": "which I then put at the top of the file I use as a todo list.",
+      "words": 16,
+      "html": "<p id=\"spya-dn2fm3\">\nwhich I then put at the top of the file I use as a todo list.</p>",
+      "gistable": true
+    }
+  ]
+}

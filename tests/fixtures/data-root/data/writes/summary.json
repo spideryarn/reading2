@@ -1,0 +1,93 @@
+{
+  "version": "summary/2",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e",
+  "entries": [
+    {
+      "range": [
+        "spya-hqt79k",
+        "spya-zz20s6"
+      ],
+      "depth": 0,
+      "short": "AI removes the pressure that once forced everyone to learn to write, so the middle ground of ok writers vanishes, leaving only good writers and people who can't write at all [spya-hg7u0a]. Because writing is thinking, this splits the world into thinks and think-nots [spya-xk7vyy], with intelligence surviving only in those who deliberately choose it, much as strength now survives only in those who work out [spya-smzw4j].",
+      "long": "In a couple decades few people will still be able to write, because writing requires clear thinking and clear thinking is irreducibly hard [spya-tphbr6 spya-ts48cj]. Yet prestigious jobs keep demanding writing anyway, and this clash between pervasive expectation and real difficulty used to force nearly everyone to learn, or else resort to petty plagiarism when they couldn't [spya-u97r7e spya-xdmpa0 spya-zzw20p]. AI has now dissolved that pressure entirely, letting anyone offload the work of writing at school or at work [spya-gm3xu0]. The result is not a gentler version of the same distribution of skill but a collapse of the middle: instead of good, ok, and non-writers, there will only be good writers and people who cannot write at all [spya-hg7u0a]. This matters more than the disappearance of a craft like blacksmithing, because writing is a form of thinking itself, sometimes the only way certain thoughts get thought at all — as Leslie Lamport put it, if you're thinking without writing, you only think you're thinking [spya-z7zzwv spya-arj7ry]. So a world split into writes and write-nots is really a world split into thinks and think-nots [spya-xk7vyy]. Much as industrial jobs once made people strong by default but now strength requires a deliberate choice to work out, intelligence will belong only to those who choose to pursue it [spya-rqzp97 spya-smzw4j]."
+    },
+    {
+      "range": [
+        "spya-hqt79k",
+        "spya-ts48cj"
+      ],
+      "depth": 1,
+      "short": "Writing is hard not by accident but because it requires clear thinking, which is why so many people quietly struggle with it — a fact only writers tend to notice [spya-vp6ghy spya-ts48cj].",
+      "long": "Many people have real trouble writing, a fact visible mainly to writers the way doctors notice worrying moles [spya-vp6ghy]. This isn't a minor technical gap but a consequence of writing being fundamentally difficult: to write well you must think clearly, and clear thinking is hard for almost everyone [spya-ts48cj]. This sets up the prediction that within a couple of decades very few people will be able to write at all [spya-tphbr6]."
+    },
+    {
+      "range": [
+        "spya-hqt79k",
+        "spya-zpa7s8"
+      ],
+      "depth": 2,
+      "short": "The essay Writes and Write-Nots opens, dated October 2024 [spya-zpa7s8].",
+      "long": "The piece is titled Writes and Write-Nots, marked as a roughly three-minute read from October 2024 [spya-t97070 spya-zpa7s8]."
+    },
+    {
+      "range": [
+        "spya-tphbr6",
+        "spya-ts48cj"
+      ],
+      "depth": 2,
+      "short": "Within a couple of decades, few people will still be able to write [spya-tphbr6], because writing well means thinking clearly, and clear thinking is fundamentally hard [spya-ts48cj] — which is exactly why so many people already struggle to write, a fact writers see up close the way doctors see worrying moles [spya-vp6ghy].",
+      "long": "A firm prediction opens the piece: in a couple of decades hardly anyone will be able to write [spya-tphbr6]. Writers are unusually placed to see how widespread the struggle already is, much as doctors notice moles or IT people notice bad setups [spya-vp6ghy], and the root cause is that writing well requires clear thinking, which is inherently difficult [spya-ts48cj]."
+    },
+    {
+      "range": [
+        "spya-u97r7e",
+        "spya-hg7u0a"
+      ],
+      "depth": 1,
+      "short": "Prestigious jobs demand writing that many people can't actually do, and until now the only escape from that pressure was paying someone or plagiarising [spya-zzw20p]; AI has now removed the pressure altogether, letting people offload writing entirely and erasing the middle tier of ok writers [spya-gm3xu0 spya-hg7u0a].",
+      "long": "The more prestigious a job, the more it tends to demand writing, and the collision between that expectation and writing's real difficulty creates enormous pressure — visible in eminent professors caught plagiarising even the most mundane boilerplate, proof they weren't even halfway decent writers [spya-u97r7e spya-xdmpa0]. Before AI there was no easy escape from this pressure: you could pay someone to write for you or steal words outright, but otherwise you had to learn to write yourself, so nearly everyone expected to write did [spya-zzw20p]. AI has now dissolved that pressure completely, letting people have it do the writing for them at school and work [spya-gm3xu0]. The predicted economic consequence is stark: the middle ground of merely ok writers disappears, leaving a world split only into good writers and people who cannot write at all [spya-hg7u0a]."
+    },
+    {
+      "range": [
+        "spya-u97r7e",
+        "spya-zzw20p"
+      ],
+      "depth": 2,
+      "short": "Prestigious jobs demand writing, but writing is irreducibly hard, so the two forces collide [spya-xdmpa0]. Before AI, there was no way out of that bind: you could pay someone to write for you or plagiarize, but otherwise you had to learn to write yourself, so nearly everyone did [spya-zzw20p]. The pettiness of famous plagiarism cases, stealing mundane boilerplate, shows just how far short of even basic competence the culprits fell [spya-xdmpa0].",
+      "long": "Writing pervades prestigious jobs even though it is genuinely hard, and that mismatch between pervasive expectation and irreducible difficulty creates enormous pressure [spya-u97r7e spya-xdmpa0]. Eminent professors caught plagiarizing reveal this pressure at work: strikingly, what they steal is usually trivial boilerplate that any halfway competent writer could produce effortlessly, exposing just how little writing ability they actually have [spya-xdmpa0]. Before AI existed, there was no easy escape from this bind: you could pay a ghostwriter like JFK or plagiarize like MLK, but absent those options, writing had to be done yourself, and that necessity forced nearly everyone expected to write to actually learn how [spya-zzw20p]."
+    },
+    {
+      "range": [
+        "spya-z79mew",
+        "spya-zz20s6"
+      ],
+      "depth": 1,
+      "short": "Losing writing isn't like losing blacksmithing, because writing is itself a kind of thinking — as Lamport says, thinking without writing means you only think you're thinking [spya-z7zzwv spya-arj7ry] — so the writes/write-nots split becomes a thinks/think-nots split [spya-xk7vyy], with intelligence surviving only by choice, the way strength now does [spya-rqzp97 spya-smzw4j].",
+      "long": "It might seem harmless for writing to go the way of blacksmithing, an obsolete skill nobody misses [spya-z79mew]. But writing is thinking, and some thinking can only happen through the act of writing — Leslie Lamport's line captures it exactly: if you're thinking without writing, you only think you're thinking [spya-z7zzwv spya-arj7ry]. So a world of writes and write-nots is really a world of thinks and think-nots, a far more dangerous division than it first sounds [spya-xk7vyy]. This has a precedent: preindustrial work used to make people strong automatically, but now strength requires the deliberate choice to work out [spya-rqzp97]. Writing, and the thinking bound up in it, will follow the same path — there will still be smart people, but only those who choose to be [spya-smzw4j]."
+    },
+    {
+      "range": [
+        "spya-z79mew",
+        "spya-xk7vyy"
+      ],
+      "depth": 2,
+      "short": "Blacksmithing died out harmlessly, but writing can't be shed the same way: it is itself a form of thinking, so losing it means losing certain thoughts entirely, not just a skill [spya-z7zzwv]. As Leslie Lamport put it, thinking without writing means you only think you're thinking [spya-arj7ry], so a split between writes and write-nots becomes a split between thinks and think-nots [spya-xk7vyy].",
+      "long": "Skills go obsolete all the time without harm, as with blacksmithing, but writing is different because it is not just a craft producing a product, it is a mode of thinking itself [spya-z7zzwv]; Leslie Lamport's line that thinking without writing means you only think you're thinking captures why some thoughts simply cannot exist without being written [spya-arj7ry], so a world sorted into people who can and cannot write is really a world sorted into people who can and cannot think, and the choice of which side to be on matters [spya-xk7vyy]."
+    },
+    {
+      "range": [
+        "spya-rqzp97",
+        "spya-zz20s6"
+      ],
+      "depth": 2,
+      "short": "There's precedent for this: preindustrial labour once made everyone strong by default, but now strength only comes to those who deliberately work out [spya-rqzp97]. Intelligence is heading the same way — it will persist, but only in people who choose to cultivate it, no longer as a byproduct of everyday necessity [spya-smzw4j].",
+      "long": "Strength used to be a side effect of ordinary preindustrial work, but once that work disappeared, strength became something only the deliberately strong possess, achieved through voluntary effort like going to the gym [spya-rqzp97]; smartness is following the same path, ceasing to be something forced on everyone by economic necessity to write and becoming instead a trait limited to those who actively choose to pursue it [spya-smzw4j]."
+    }
+  ],
+  "guidance": "I care about the economic argument — who stops writing and why — not the history of writing",
+  "missing": 0,
+  "generatedAt": "2026-08-25T22:12:09.659Z",
+  "elapsedMs": 19070
+}

@@ -1,0 +1,57 @@
+{
+  "threads": [
+    {
+      "id": "spya-fix100",
+      "title": "Fixture thread: an ordinary question",
+      "createdAt": "2026-08-25T21:12:45.478Z",
+      "updatedAt": "2026-08-25T21:13:10.000Z",
+      "kind": "chat",
+      "messages": [
+        {
+          "id": "spya-fix101",
+          "role": "user",
+          "text": "Fixture question. Stands in for something a reader typed.",
+          "createdAt": "2026-08-25T21:12:45.478Z",
+          "status": "done"
+        },
+        {
+          "id": "spya-fix102",
+          "role": "assistant",
+          "text": "Fixture answer, citing a real block id so the citation shape is real [spya-hg7u0a].",
+          "createdAt": "2026-08-25T21:13:10.000Z",
+          "status": "done",
+          "searches": 0,
+          "model": "anthropic/claude-sonnet-5"
+        }
+      ]
+    },
+    {
+      "id": "spya-fix200",
+      "title": "Fixture thread: a review",
+      "createdAt": "2026-08-26T09:00:00.000Z",
+      "updatedAt": "2026-08-26T09:01:00.000Z",
+      "kind": "review",
+      "anchor": {
+        "blockId": "spya-z7zzwv"
+      },
+      "messages": [
+        {
+          "id": "spya-fix201",
+          "role": "user",
+          "text": "Fixture review. Stands in for the reader saying what they took from it.",
+          "createdAt": "2026-08-26T09:00:00.000Z",
+          "status": "done"
+        },
+        {
+          "id": "spya-fix202",
+          "role": "assistant",
+          "text": "Fixture response to a review, in the balanced stance.",
+          "createdAt": "2026-08-26T09:01:00.000Z",
+          "status": "done",
+          "stance": "balanced",
+          "model": "anthropic/claude-sonnet-5"
+        }
+      ]
+    }
+  ]
+}

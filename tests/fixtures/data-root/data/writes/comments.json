@@ -1,0 +1,33 @@
+{
+  "comments": [
+    {
+      "id": "spya-fix001",
+      "blockId": "spya-arj7ry",
+      "quote": "you only think you're thinking",
+      "start": 37,
+      "createdAt": "2026-08-26T06:12:44.736Z",
+      "status": "none",
+      "body": "Fixture note: a bookmark with the reader's own words and no model call."
+    },
+    {
+      "id": "spya-fix002",
+      "blockId": "spya-hg7u0a",
+      "quote": "writes and write-nots",
+      "start": 36,
+      "createdAt": "2026-08-26T06:20:00.000Z",
+      "status": "done",
+      "answer": "Fixture answer. Stands in for an explanation the model produced, so that an answered comment — which is a different shape from a bookmark — is present in the corpus.",
+      "searches": 0,
+      "model": "anthropic/claude-sonnet-5"
+    },
+    {
+      "id": "spya-fix003",
+      "blockId": "zzzz00",
+      "quote": "Thanks to Jessica Livingston",
+      "start": 10,
+      "createdAt": "2026-08-26T06:30:00.000Z",
+      "status": "none",
+      "body": "Fixture note anchored to an id block_identities cannot hold, on purpose."
+    }
+  ]
+}

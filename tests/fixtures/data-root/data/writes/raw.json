@@ -1,0 +1,14 @@
+{
+  "kind": "html",
+  "file": "raw.html",
+  "requestedUrl": "https://paulgraham.com/writes.html",
+  "url": "https://paulgraham.com/writes.html",
+  "contentType": null,
+  "encoding": null,
+  "bytes": 9280,
+  "sha256": null,
+  "storedSha256": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+  "storedBytes": 9280,
+  "fetchedAt": "2026-08-25T11:09:34.025Z",
+  "backfilled": "Written 2026-08-26 for an article fetched before raw.json existed. contentType, encoding and sha256 are null because the fetched bytes are gone — raw.html holds the decoded string. See src/fetch.ts § RawManifest."
+}
