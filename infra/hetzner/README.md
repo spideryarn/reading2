@@ -98,7 +98,48 @@ x11vnc and websockify are all bound to localhost and reached through the tunnel.
 - **The MCP list is deliberately two.** N sessions × M MCP servers spawns unbounded Node processes;
   that, not RAM, is what falls over first. Argue before adding a third.
 - **There is no backup.** By choice — the code lives in remote git. Anything on this box that is
-  not pushed is not kept.
+  not pushed is not kept. Note the gap that hides: Claude Code **session transcripts** are not in
+  git either, and the volume protects against the server dying, not against the volume itself
+  being corrupted or the wrong thing deleted. MindstoneRebel backs transcripts off-box with rclone
+  on a best-effort, non-blocking basis. Undecided here — see the open question below.
+
+## Locked out? The console is the way back
+
+fail2ban bans an IP after 5 failed auths. With one operator and mosh in the mix that is easy to
+trip by accident, and the instinct — retry — is what deepens the ban. **Stop retrying.** Go to
+console.hetzner.com, open the server, and use the web console (VNC), which reaches the box over
+Hetzner's own out-of-band path and is not affected by fail2ban, the SSH firewall rule, or an sshd
+you have just misconfigured. From there: `fail2ban-client unban <ip>`.
+
+That path is also the reason `sshd -t` runs before the sshd restart during provisioning, and worth
+remembering before hand-editing sshd config on a box you are relying on.
+
+## Lessons taken from MindstoneRebel
+
+Greg runs a similar Hetzner box in `gdconsult_work/mindstone/MindstoneRebel`. Three of its
+hard-won lessons apply here, and are written down before they are needed rather than after.
+
+- **Never reap processes on resemblance.** Their `AGENT_ORPHAN_REAPER.md` records three
+  orphan-cleanup heuristics they built and abandoned, because each would have killed *live,
+  well-behaved* Claude Code processes: `claude bg-pty-host`, `bg-spare` and `daemon run` all sit at
+  ppid 1, idle, with no TTY — indistinguishable from "orphaned" by shape. A fleet of tmux'd
+  sessions is exactly that shape. If we ever automate cleanup here, it must kill on proof (an
+  env-var fingerprint, a deleted cwd) and carry an explicit never-kill list.
+- **A long-lived tmux server carries stale env.** Their session spawner passes `env KEY=val` inline
+  on every new session rather than trusting tmux inheritance, because the tmux server outlives the
+  invocations that started it and a session opened today can inherit a variable set months ago.
+  This box has exactly that shape: one tmux server, many sessions, running for weeks. Set env
+  explicitly per session; do not trust what the server happens to be holding.
+- **Pick a concurrency cap and write it down as load-bearing.** Their autopilot doc states "single
+  VM, single dispatcher, max 3 concurrent sessions" as an assumption other parts depend on, flagged
+  for revisit if the number changes. We have not picked ours, and CX53's real ceiling is unmeasured.
+  Measure it, then write the number down here rather than leaving it implicit.
+
+Two of their choices we deliberately did **not** copy. They run UFW on top of key-only SSH; here
+the Hetzner cloud firewall already sits outside the box, where a compromised host cannot rewrite
+it, and UFW would enforce the same rules a layer further in while adding a way to lock yourself
+out. And they provision no swap, adding one reactively when `npm ci` OOMs — we do it upfront,
+which is the better default for a box running many Node processes unattended.
 
 ## Reviewed, and one thing deliberately left open
 
