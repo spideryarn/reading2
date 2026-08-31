@@ -300,21 +300,66 @@ same per-article exclusion.
   sweep rather than a list, so a sixth cannot arrive quietly.
 - The stale `.dock-modes` comment in `styles.css` claiming one tab stop is fixed.
 
-## What is still Greg's to decide
+## The three decisions the review forced, and Greg's answers
 
-Three questions, none of which the code can answer:
+All three put to him on 2026-08-31, after the review.
 
-1. **Does a pasted link spend?** Finding 1's fix says no: only a click, Enter or Space starts a run,
-   and a link to an un-run mode shows the empty state with its button. That is the literal reading of
-   *"if the user clicks a mode"*, and it is what this plan now assumes — but it is worth confirming,
-   because the other reading is defensible and simpler.
-2. **What happens on Diagram?** Its picture chips each spend on selection, and three of the four are
-   plain requests rather than jobs, so they have no artefact and no dot. The auto-run decision Greg
-   made was about the sketch; the other three were described to him as free and are not.
-3. **The profile checkbox.** Every empty state currently lets the reader turn *use my profile* off
-   before pressing the paid button. An automatic run takes the default (on) and then disables the
-   control, so a reader who wanted an unprofiled first artefact has to stop and regenerate — paying
-   twice. Either say so plainly during an automatic run, or keep a real choice.
+### Only a real press spends. A link never does.
+
+*"if the user **clicks** a mode"* is taken literally. A **one-shot activation token** is set by the
+Dock on click / Enter / Space, handed down, and consumed by the panel only after its own GET says
+`none`. A pasted or bookmarked `?mode=ideas`, a Back/Forward step, and a link in from the metadata or
+tweets page all show the empty state with its button, and spend nothing.
+
+This is what closes finding 1, and it keeps the fourth principle intact: the Dock still never learns
+which step backs which mode. It says *the reader just pressed this*, which is the only thing it is in
+a position to know.
+
+### Diagram: the sketch only, and the other three are left exactly as they are
+
+Greg, on being told the picture chips are not free:
+
+> I don't understand why the other Diagram sub-modes are different. Perhaps a subagent should make
+> them work consistently? Or if there's a good reason they're different, just work on Sketch for now.
+
+**There is a good reason, and it is a real difference in kind rather than an accident:**
+
+- **The sketch is a pipeline step.** One model call over the whole article, writing a stored artefact
+  — 121–194 seconds, about $0.20, kept afterwards. It has a *has this ever been built* state, which
+  is the only state a readiness dot can express.
+- **Force, drift and trail are embeddings arithmetic.** `POST /api/similar/:slug` and
+  `POST /api/projection/:slug` — [`useSimilar.ts`](../../src/web/useSimilar.ts) describes its own
+  call as *"cheap, bounded and cached"*: the blocks are embedded the first time and served out of
+  memory afterwards. They write no artefact, so there is nothing to be built or unbuilt, so there is
+  no dot to draw.
+
+And the behaviour Greg is asking for is **already what those three do**: select the picture and it
+fetches. They arrived at auto-run independently, and this plan brings the sketch into line with its
+three neighbours rather than the other way round. From the reader's chair all four then behave
+identically — pick a picture, it appears — and the difference underneath is only which of them is
+worth marking.
+
+So: **no dot on the Diagram button at all**, and the sketch auto-runs on its own activation.
+
+**But there is one genuine inconsistency underneath, and it is a live bug rather than a design
+choice.** [`useProjection.ts`](../../src/web/useProjection.ts) records it, from a ⟨Sol⟩ review on
+2026-08-30: `similar.ts` calls `embedAll` itself instead of going through
+[`article-vectors.ts`](../../src/article-vectors.ts), which was built precisely so the two would
+share, **so a cold Force → Drift embeds the whole article twice**. That is the "make them work
+consistently" job and it is worth doing — it is pre-existing debt, it is already written up in
+`article-vectors.ts`, and it is nothing to do with readiness dots. **Not folded in here**, so that
+this plan does not quietly become two.
+
+### Auto-runs use the reader's profile, and say so as a fact
+
+Today's empty states let the reader untick *use my profile* before pressing the paid button. An
+automatic run has nobody to ask, so it takes the default — profile on — and the panel then states it
+in words: *"Using your reading profile."* **Not a disabled tickbox**, which reads as a choice the
+reader missed rather than a decision already taken. Changing it afterwards means regenerating, which
+is a second call, and the *find them again* control is where that lives.
+
+The alternative — a brief pause showing the tickbox before starting — was rejected because it puts
+back exactly the settle-delay timer that removing the arrow keys let us delete.
 
 ## Stages and actions
 
