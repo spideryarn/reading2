@@ -3915,7 +3915,22 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-input {
   flex: 1;
-  min-width: 0;
+  /**
+   * **A floor on the box, so a crowded row wraps instead of crushing it.**
+   *
+   * `min-width: 0` was right when the row held a textarea, Send and one
+   * microphone: it lets the box give way rather than overflow. With live
+   * conversation there are three more items, and the two that appear only while
+   * a session is running — the lit button and the word "Listening…" — do not
+   * shrink. At a 320px dock that left the textarea 58px wide, one word per
+   * line: nothing overflowed, nothing wrapped, and it read as broken.
+   *
+   * 7rem is about eight characters, which is the width at which the box still
+   * looks like somewhere to type. Below that the row wraps — `flex-wrap` is
+   * already on for the profile checkbox — and two clean lines beat one cramped
+   * one. Found in a browser pass at 320px, 2026-08-31.
+   */
+  min-width: 7rem;
   /* Height is set inline by the component as the content grows; this is the
      floor, and `resize: none` is what stops the reader dragging the box over
      the article it is supposed to sit beside. */

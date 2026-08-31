@@ -1,6 +1,8 @@
 /**
- * **Talking to the article out loud** — the server half of live conversation
- * mode, which is a spike as of 2026-08-31. docs/plans/live-conversation.md.
+ * **Talking to the article out loud** — the server half of live conversation.
+ * docs/project/live-conversation.md is the feature; the plans behind it are
+ * docs/plans/live-conversation.md (the wire, proven first as a spike) and
+ * docs/plans/live-conversation-in-chat.md (how it became a turn in a thread).
  *
  * Dictation (docs/project/dictation.md) is a microphone that fills a text box:
  * press, talk, press, and the words are typed for you. This is the other thing
@@ -39,7 +41,7 @@
  * are real options; neither is written.
  */
 
-import type { Block, ChatMessage, Meta } from "./types.js";
+import type { Block, ChatMessage, Meta, MicPlacement } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
@@ -94,8 +96,10 @@ export const LIVE_TRANSCRIBER = "gpt-live-transcribe";
  * genuinely their fact and not ours: the browser knows what the device is
  * called and they know where it is. src/web/live/mic-placement.ts guesses from
  * the device's own label and offers the choice; this end only maps the answer.
+ *
+ * **The type itself lives in src/types.ts**, which is the only file both ends
+ * can import — see the note there for what two copies of it would cost.
  */
-export type MicPlacement = "headset" | "laptop";
 
 /**
  * The two values the API takes, and it takes no others — `wibble` comes back
@@ -282,6 +286,26 @@ export function liveTools(): unknown[] {
     })),
   ];
 }
+
+/**
+ * **The tools a live session may ask our server to run**, which is not the same
+ * list as the one it is offered.
+ *
+ * `show_passage` is missing on purpose: it is answered in the browser, in the
+ * frame it arrives in, and a server that would run it is a second
+ * implementation of the one tool whose whole point is that it never leaves the
+ * page (see `SHOW_PASSAGE_TOOL`).
+ *
+ * It exists because the *browser* names the tool in a live session, where in
+ * typed chat our own server reads the name off the model's output. That is one
+ * step further out, so the route checks the name against this rather than
+ * handing anything at all to `runTool` — which would answer an unknown name
+ * with a helpful sentence listing the others, exactly the wrong reply to a
+ * caller that is not the model.
+ */
+export const LIVE_SERVER_TOOLS: ReadonlySet<string> = new Set(
+  CHAT_TOOLS.map((t) => t.function.name),
+);
 
 /**
  * Everything the model is told, as the one string realtime allows.
@@ -548,19 +572,22 @@ export async function mintLiveToken(
  * ## What this does not do
  *
  * Written down because each of these is a real hole rather than a to-do, and a
- * spike that lists them is worth more than one that reads as finished.
+ * feature that lists them is worth more than one that reads as finished.
+ *
+ * This list is shorter than it was: the transcripts **are** stored now, as
+ * ordinary chat rows — see `withSpokenTurn` in src/chat.ts and
+ * docs/project/live-conversation.md.
  *
  * - **Nothing is metered.** No row is written for a live session, so `npm run
  *   cost` cannot see this spend at all — see the header for why the usual seam
  *   cannot reach it. The two ways out are OpenAI's usage API after the fact, or
  *   forwarding the `response.done` events the browser already receives, which
  *   carry token counts. Neither is written.
- * - **Nothing caps a session.** A forgotten tab with a live connection open
- *   bills audio for as long as it stays open. A wall clock, an idle timeout and
- *   a per-reader ceiling all belong here before this is a feature.
- * - **Nothing is stored.** The transcripts exist only in the browser tab.
- *   Writing them into the thread (`beginTurn`/`finishTurn` in src/chat.ts) is
- *   the agreed shape and is not built.
+ * - **Nothing caps a session *here*.** The browser ends its own after five
+ *   minutes of quiet or twenty in total (`IDLE_CAP_MS` in
+ *   src/web/live/useLiveConversation.ts), which bounds the damage from a
+ *   forgotten tab. It is a clock a tab can be wrong about, though: a per-reader
+ *   ceiling this server could enforce does not exist.
  * - **The article is re-sent per session, not cached across them.** Realtime
  *   prices cached text input at a tenth of uncached, but the cache belongs to
  *   the session, so hanging up and starting again pays full price for the

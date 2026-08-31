@@ -22,6 +22,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { useLiveConversation } from "./live/useLiveConversation.js";
+import type { LiveWiring } from "./live/wiring.js";
 import {
   PLACEMENT_LABEL,
   rememberPlacement,
@@ -32,8 +33,58 @@ import {
 const SLUG =
   new URLSearchParams(location.search).get("slug") ?? "noema-mythology-of-conscious-ai";
 
+/** Where the spike's server is. scripts/live-spike.ts. */
+const SPIKE = "http://127.0.0.1:5399";
+
+/**
+ * **The spike server, in place of the app's own API** — and that is this page's
+ * entire reason to exist.
+ *
+ * The real routes are behind the auth gate, and a browser agent cannot get
+ * through one (docs/project/browser-testing.md). So the hook takes its two
+ * server calls as an argument and this supplies the unauthenticated pair. What
+ * is being tested — the SDP exchange, the data channel, the event names, the
+ * ledger, the tool loop — is the shipping code either way.
+ *
+ * There is no `speak`: there is no chat controller on this page and nothing to
+ * write into. The transcript below is the point here; in the app it is the
+ * thread. That difference is the one thing this page cannot check, which is
+ * what tests/chat-spoken-route.test.ts and tests/chat-spoken-operation.test.ts
+ * are for.
+ */
+const spikeWiring: LiveWiring = {
+  async ticket(slug, _threadId, placement) {
+    const res = await fetch(`${SPIKE}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, placement }),
+    });
+    const body = (await res.json()) as { token?: string; error?: string; model?: string };
+    if (!res.ok || !body.token) {
+      throw new Error(body.error ?? `could not start a session (${res.status})`);
+    }
+    /* No history and no tail: this page has no conversation behind it, so the
+       seeding barrier lifts immediately. That is a real difference from the app
+       and is why the barrier has its own tests rather than being checked here. */
+    return { token: body.token, expiresAt: 0, model: body.model ?? "", seed: [], tailId: null };
+  },
+  async runTool(slug, name, args) {
+    const res = await fetch(`${SPIKE}/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, name, args }),
+    });
+    const out = (await res.json()) as { content?: string; label?: string; detail?: string };
+    if (!res.ok) throw new Error(out.label ?? `tool failed (${res.status})`);
+    return { content: out.content ?? "", label: out.label ?? name, detail: out.detail ?? "" };
+  },
+};
+
+/** A conversation id this page invents and nothing ever stores. */
+const THREAD = "spya-preview";
+
 function Page() {
-  const live = useLiveConversation(SLUG);
+  const live = useLiveConversation(SLUG, { wiring: spikeWiring });
   const [typed, setTyped] = useState("");
   /* `null` means "let it work it out" — which is a real third option, not an
      absent value, so the select has three entries rather than a checkbox. */
@@ -50,13 +101,13 @@ function Page() {
       </p>
 
       <div className="row">
-        <button type="button" onClick={() => live.start({ microphone: true })} disabled={busy}>
+        <button type="button" onClick={() => live.start({ threadId: THREAD, microphone: true })} disabled={busy}>
           Talk (needs the mic)
         </button>
-        <button type="button" onClick={() => live.start({ microphone: false })} disabled={busy}>
+        <button type="button" onClick={() => live.start({ threadId: THREAD, microphone: false })} disabled={busy}>
           Connect silently
         </button>
-        <button type="button" onClick={live.stop} disabled={live.phase !== "live"}>
+        <button type="button" onClick={() => void live.stop()} disabled={live.phase !== "live"}>
           Hang up
         </button>
 

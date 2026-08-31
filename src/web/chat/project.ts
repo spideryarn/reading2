@@ -22,7 +22,7 @@
  * discard are taken back the moment the server refuses them, so they are drawn.
  */
 import type { ChatMessage, ChatThread } from "../../types.js";
-import type { ChatState, Operation, TurnOperation } from "./model.js";
+import type { ChatState, Operation, SpokenOperation, TurnOperation } from "./model.js";
 
 /**
  * One turn's rows, laid over the messages already there.
@@ -56,6 +56,23 @@ export function turnMessages(messages: ChatMessage[], op: TurnOperation): ChatMe
 }
 
 /**
+ * One spoken exchange's two rows, on the end of what is already there.
+ *
+ * Exported for the same reason `turnMessages` is: **the reducer does not call
+ * it.** A spoken append commits by taking the server's copy of the whole
+ * conversation, which is a different thing from what was drawn — the ids are
+ * the server's — so there is deliberately no `commit` that reuses this. It is
+ * exported so a test can assert what the reader saw before the answer came
+ * back, which is the half a 409 has to put right.
+ */
+export function spokenMessages(
+  messages: readonly ChatMessage[],
+  op: SpokenOperation,
+): ChatMessage[] {
+  return [...messages, op.question, op.reply];
+}
+
+/**
  * Lay one operation over the list.
  *
  * **Structural sharing is a requirement, not an optimisation.** A chat delta
@@ -77,6 +94,25 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
       if (messages === thread.messages) return threads;
       const next = threads.slice();
       next[at] = { ...thread, updatedAt: op.at, messages };
+      return next;
+    }
+    case "spoken": {
+      /* **Appended rather than written into `base`, and that is the whole of
+         the 409 path.** The server refuses an append behind a conversation that
+         has moved on, and when it does, dropping this operation puts the screen
+         back — the reader's spoken words come off because they were never
+         really there. A send may write its rows into `base` instead, because
+         nothing takes a typed question back; this one is taken back by exactly
+         one thing, and that thing happens. */
+      const at = threads.findIndex((t) => t.id === op.threadId);
+      if (at < 0) return threads;
+      const thread = threads[at] as ChatThread;
+      const next = threads.slice();
+      next[at] = {
+        ...thread,
+        updatedAt: op.at,
+        messages: spokenMessages(thread.messages, op),
+      };
       return next;
     }
     /* **A rename draws nothing**, and that is the rule rather than an

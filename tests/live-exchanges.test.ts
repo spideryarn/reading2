@@ -296,9 +296,16 @@ describe("hanging up", () => {
 });
 
 describe("the exchange id", () => {
-  it("is derived from the item, so a replayed write is recognisable", () => {
-    /* Not random: the server de-duplicates on this, and a fresh id on every
-       retry would append the same exchange twice. */
+  it("is derived from the item rather than minted fresh", () => {
+    /* **Nothing on the server reads this**, and the comment here used to say it
+       did — that a replayed POST was de-duplicated on it. It is not: the write
+       is guarded by `expectedTailId` alone, which is why there is no exchange-id
+       column at all (docs/project/live-conversation.md). GPT Sol caught the
+       claim on review; a test that describes a mechanism that does not exist is
+       worse than no test, because the next person changes the code to match it.
+       What the id is actually for is being *stable* — the same exchange rebuilt
+       from the same events is the same exchange, which is what lets a caller
+       recognise one it has already seen without keeping a list. */
     const a = new ExchangeLedger();
     const b = new ExchangeLedger();
     const one = feed(a, [userItem("u9"), transcribed("u9", "Q"), responseCreated("r"), spoke("A"), responseDone("r")]);
@@ -330,8 +337,8 @@ describe("what belongs to the exchange on screen", () => {
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
     const out = feed(l, [
-      { type: "response.output_audio_transcript.delta", item_id: "i1", delta: "A" },
-      { type: "response.output_audio_transcript.done", item_id: "i1", transcript: "A1" },
+      { type: "response.output_audio_transcript.delta", response_id: "r1", item_id: "i1", delta: "A" },
+      { type: "response.output_audio_transcript.done", response_id: "r1", item_id: "i1", transcript: "A1" },
       responseDone("r1"),
     ]);
     expect(out[0]?.itemIds).toEqual(["u1", "i1"]);
@@ -344,12 +351,12 @@ describe("what belongs to the exchange on screen", () => {
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
     feed(l, [
-      { type: "response.output_audio_transcript.delta", item_id: "i1", delta: "Let me look" },
+      { type: "response.output_audio_transcript.delta", response_id: "r1", item_id: "i1", delta: "Let me look" },
       responseWantsTool("r1"),
     ]);
     const out = feed(l, [
       responseCreated("r2"),
-      { type: "response.output_audio_transcript.done", item_id: "i2", transcript: "Found it." },
+      { type: "response.output_audio_transcript.done", response_id: "r2", item_id: "i2", transcript: "Found it." },
       responseDone("r2"),
     ]);
     expect(out[0]?.itemIds).toEqual(["u1", "i1", "i2"]);

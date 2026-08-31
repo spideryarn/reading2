@@ -24,8 +24,19 @@ process received*. Nobody here receives one — the usage exists only in the rea
 metering this needs a way for a tab to report what it spent and a reason for the server to believe
 it, which is a larger question than the register answers today. That is a hole with a name rather
 than a to-do:
-[live-conversation.md § What is not built](live-conversation.md#what-is-not-built), and it must be
-closed before readers see the feature.
+[live-conversation.md § What is not built](live-conversation.md#what-is-not-built).
+
+**Greg decided to ship with it open**, 2026-08-31: *"make a comment in `npm run cost` and
+cost-tracking docs re this gap, and let's accept it for now."* This paragraph used to say the hole
+must be closed before readers saw the feature, and that sentence is now out of date rather than
+merely unmet — recording the decision matters more than keeping the stronger wording, because the
+next reader will otherwise treat a shipped feature as a violation.
+
+What *was* closed instead is the part that costs money rather than visibility: a live session now
+ends itself after five minutes of quiet or twenty minutes in total
+([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) § the caps), so a forgotten
+tab bills minutes rather than the hour OpenAI would allow. The meter is still missing; the runaway
+is not.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction

@@ -2970,6 +2970,29 @@ export function ConversationBand({
   });
 
   /**
+   * **A session belongs to one conversation, so leaving that conversation ends
+   * it.**
+   *
+   * Not cosmetic. A session is *seeded* from its thread and *appends* to it, so
+   * one left running while the reader reads a different conversation is
+   * listening to them and writing what they say into a transcript they are not
+   * looking at. The panel is remounted on a thread switch and the session is
+   * not — that is the whole reason it is owned up here — so nothing else would
+   * notice.
+   *
+   * Deliberately not awaited: this is a reaction to a navigation that has
+   * already happened, and the flush it starts finishes on its own through the
+   * chat controller, which outlives this component for exactly that reason.
+   * The Send handoff is the path that has to wait, and it does.
+   */
+  const hangUp = useRef(live.stop);
+  hangUp.current = live.stop;
+  useEffect(() => {
+    if (live.phase === "idle" || live.phase === "failed") return;
+    if (live.threadId && live.threadId !== thread) void hangUp.current();
+  }, [thread, live.phase, live.threadId]);
+
+  /**
    * A counter that goes up whenever a *new* conversation is started, so the
    * composer knows to take focus.
    *

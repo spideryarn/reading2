@@ -35,10 +35,15 @@
  * second session onwards the label is there and the guess is real.
  */
 
+import type { MicPlacement } from "../../types.js";
 import { listInputs } from "../mic-devices.js";
 
-/** Near or far. The two values OpenAI's noise reduction distinguishes. */
-export type MicPlacement = "headset" | "laptop";
+/**
+ * Near or far, and **declared in src/types.ts** because the server end needs
+ * the same two words — see the note there. Re-exported so this file stays the
+ * one import for everything about placement on the client.
+ */
+export type { MicPlacement };
 
 /**
  * What an unknown device is assumed to be.
@@ -191,5 +196,5 @@ async function currentLabel(preferredDeviceId: string | null): Promise<string | 
 /** What to call it on screen. Short, because it sits inside a composer. */
 export const PLACEMENT_LABEL: Record<MicPlacement, string> = {
   headset: "Headset",
-  laptop: "Laptop mic",
+  laptop: "Laptop",
 };

@@ -95,6 +95,11 @@ beforeEach(() => {
     createDataChannel() {
       return { close() {}, addEventListener() {}, readyState: "connecting" };
     }
+    /* The hook listens for `connectionstatechange` — a failed ICE negotiation
+       is the session ending — so a stub without this throws inside `start` and
+       every test here fails for a reason that has nothing to do with the lock. */
+    addEventListener() {}
+    connectionState = "new";
     addTrack() {}
     getSenders() {
       return handedOut.map((t) => ({ track: { stop: () => { t.stopped = true; } } }));

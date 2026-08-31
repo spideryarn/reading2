@@ -45,6 +45,7 @@ import type {
   Registering,
   RenameOperation,
   RepairOperation,
+  SpokenOperation,
   Tombstone,
   TurnOperation,
 } from "./model.js";
@@ -124,6 +125,10 @@ function accepts(op: Operation, event: ChatResult): boolean {
     case "turn.disconnected":
     case "turn.refused":
       return op.kind === "turn";
+    case "spoken.succeeded":
+    case "spoken.refused":
+    case "spoken.failed":
+      return op.kind === "spoken";
     case "repair.succeeded":
     case "repair.failed":
       return op.kind === "repair";
@@ -372,6 +377,8 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
       return startTurn(state, event);
     case "intent.started":
       return startIntent(state, event);
+    case "spoken.started":
+      return startSpoken(state, event.op);
     case "recovery.started":
       return startRecovery(state, event.op);
     case "thread.begun":
@@ -416,6 +423,44 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
         ? unchanged(state)
         : { state: { ...state, error: event.error }, commands: NOTHING };
   }
+}
+
+/**
+ * Register a spoken exchange, and **write nothing**.
+ *
+ * The opposite of `startTurn`, which puts a send's rows straight into `base`.
+ * These two rows are drawn, because the one thing that can take them back does
+ * happen: the server refuses an append behind a conversation that has moved on,
+ * and a refusal is then a dropped map entry rather than a repair race.
+ *
+ * It supersedes nothing. Two spoken exchanges in one conversation are two
+ * appends and both belong on screen, exactly as two sends are — and they are
+ * *ordered* rather than raced, because the second one's `expectedTailId` is the
+ * first one's stored answer, which does not exist until the first has landed.
+ */
+function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcome {
+  return {
+    state: register<SpokenOperation>(state, op, () => false),
+    commands: [
+      {
+        type: "spoken",
+        opId: op.id,
+        slug: state.slug,
+        threadId: op.threadId,
+        question: op.question.text,
+        answer: op.reply.text,
+        expectedTailId: op.expectedTailId,
+        /* Conditional throughout, never `x: undefined`. The effect turns this
+           into a request body, and `exactOptionalPropertyTypes` is on for
+           exactly this: an explicit `undefined` here would be serialised as a
+           present key by nothing and dropped by `JSON.stringify`, which is the
+           right answer by accident rather than by rule. */
+        ...(op.reply.passages ? { passages: op.reply.passages } : {}),
+        ...(op.reply.tools ? { tools: op.reply.tools } : {}),
+        ...(op.reply.interrupted ? { interrupted: true } : {}),
+      },
+    ],
+  };
 }
 
 /**
@@ -1052,6 +1097,58 @@ function merged(mine: ChatThread, fresh: ChatThread, op: RepairOperation): ChatT
   };
 }
 
+/**
+ * The server's copy of a conversation a spoken exchange has just landed in,
+ * under what this tab already had.
+ *
+ * Two rules, and the second is the one that has been got wrong twice elsewhere
+ * in this file:
+ *
+ * - **a row this tab has and the server does not is kept**, appended. It is a
+ *   send's optimistic pair, written into `base` at registration under ids the
+ *   server has never heard of. `merged` keeps these for a repair for the same
+ *   reason. There is no `drop` here: nothing about this write says any other
+ *   row never happened;
+ * - **the title is the server's only if this write is what named the
+ *   conversation.** `namesThread` on a turn is the same question, and the two
+ *   times it has been answered wrongly were both a caller guessing at a fact
+ *   about the state. So it is decided in `namesIt` below, from the state, and
+ *   passed in.
+ */
+function underneath(mine: ChatThread, fresh: ChatThread, takeTitle: boolean): ChatThread {
+  const known = new Set(fresh.messages.map((m) => m.id));
+  const extra = mine.messages.filter((m) => !known.has(m.id));
+  return {
+    ...fresh,
+    title: takeTitle ? fresh.title : mine.title,
+    /* ISO-8601, so the later string is the later moment. */
+    updatedAt: fresh.updatedAt > mine.updatedAt ? fresh.updatedAt : mine.updatedAt,
+    messages: extra.length === 0 ? fresh.messages : [...fresh.messages, ...extra],
+  };
+}
+
+/**
+ * Does the server's stored title for this conversation belong on screen?
+ *
+ * Yes only when **this write is what created the conversation** — it was in
+ * `unnamed`, so the server had nothing written down before — **and the reader
+ * has not named it themselves in the meantime.** A held rename is a title
+ * already in `base` that nothing withdraws, and taking the server's blunt slice
+ * of the first spoken sentence over it is precisely the bug `readerNamed`
+ * exists to prevent, arriving from the other direction.
+ *
+ * Asked of the state rather than answered by the caller, because that is where
+ * both facts are and a caller that worked it out for itself has been wrong
+ * twice — see `namesThread` in model.ts.
+ */
+function namesIt(state: ChatState, threadId: string): boolean {
+  if (!state.unnamed.has(threadId)) return false;
+  for (const op of state.operations.values()) {
+    if (op.kind === "rename" && op.threadId === threadId) return false;
+  }
+  return true;
+}
+
 function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcome {
   switch (event.type) {
     case "load.succeeded":
@@ -1114,6 +1211,108 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
           operations: withoutOp(state, op.id),
           error: `Couldn't delete that conversation: ${event.error}`,
         },
+        commands: NOTHING,
+      };
+    case "spoken.succeeded": {
+      const retired = { ...state, operations: withoutOp(state, op.id) };
+      if (op.kind !== "spoken") return { state: retired, commands: NOTHING };
+      /* **Laid under what this tab knows, not over it** — the rule
+         `repair.succeeded` follows, and the reason is the same in a weaker
+         form. This copy was taken by the server *after* its own write, under
+         the conversation's turn order, so it is newer than a repair's snapshot
+         and the ordinary case is that it simply wins. What it may still be
+         missing is a row this tab has and the server has not written down: a
+         send registered a moment ago, whose optimistic pair lives in `base`
+         under ids the server has never heard of.
+
+         The design says one modality at a time and Send awaits the handoff, so
+         that overlap should not happen. "Should not" is exactly the sentence
+         this repo keeps having to retract, and the cost of merging instead of
+         replacing is one `Set` — against the cost of being wrong, which is a
+         question the reader typed vanishing off the screen with a live stream
+         still writing into it.
+
+         The drawn rows go with the operation. What replaces them is the same
+         two rows under the ids the server actually minted, which is what every
+         later append, retry and edit needs to name them by. */
+      const fresh = event.thread;
+      const mine = retired.base.find((t) => t.id === op.threadId);
+      const merged = mine ? underneath(mine, fresh, namesIt(retired, op.threadId)) : fresh;
+      const base = mine
+        ? retired.base.map((t) => (t.id === op.threadId ? merged : t))
+        : /* The reader pressed Live on a conversation this tab does not have in
+             `base` at all — it was discarded, or this controller was made after
+             the session started. Appending it is better than dropping the turn
+             on the floor. */
+          [...retired.base, fresh];
+      return {
+        state: {
+          ...retired,
+          base,
+          /* The server has now written this conversation down, so a rename or a
+             delete of it has something to name. The same transition
+             `turn.began` makes, for the same reason — see `ChatState.unnamed`. */
+          unnamed: knownAs(retired, op.threadId),
+        },
+        commands:
+          /* Only when it actually moved. `named` is what the panel's `?thread=`
+             follows, and firing it for an id that did not change would repoint
+             the URL at itself on every spoken turn. */
+          fresh.id === op.threadId
+            ? NOTHING
+            : [
+                {
+                  type: "named",
+                  opId: op.id,
+                  wasThreadId: op.threadId,
+                  threadId: fresh.id,
+                },
+              ],
+      };
+    }
+    case "spoken.refused": {
+      /* **The refusal and the repair are one decision**, exactly as
+         `turn.refused` says. Dropping the operation is the whole of putting the
+         screen back — these rows were drawn, never written — and the repair
+         then goes and asks, because a 409 here has three possible causes and
+         only the server can say which: somebody typed into this conversation,
+         somebody edited a turn away, or *this very request already succeeded*
+         and its response was lost. The third is why there is no exchange id,
+         and it is the one where the reader's words are already on disk and must
+         come back on screen. */
+      const repair: Registering<RepairOperation> = {
+        id: event.repair.id,
+        kind: "repair",
+        threadId: op.kind === "spoken" ? op.threadId : "",
+        /* Nothing to drop: a spoken append writes to `base` only when it
+           succeeds, so there is nothing of this operation's left in it. */
+        drop: [],
+        saw: state.base.find((t) => t.id === (op.kind === "spoken" ? op.threadId : "")) ?? null,
+      };
+      const dropped: ChatState = {
+        ...state,
+        operations: withoutOp(state, op.id),
+        error: event.error,
+      };
+      return {
+        state: register<RepairOperation>(
+          dropped,
+          repair,
+          (other) => other.kind === "repair" && other.threadId === repair.threadId,
+        ),
+        commands: [
+          { type: "repair", opId: repair.id, slug: state.slug, threadId: repair.threadId },
+        ],
+      };
+    }
+    case "spoken.failed":
+      /* Every attempt failed to reach the server, so the exchange is **not**
+         stored and the drawn rows go with the operation. That is harsh — the
+         reader watched those words happen — and it is still right: rows that
+         survive on screen and vanish on the next reload are a lie the reader
+         has no way to detect. The sentence they get says so; src/messages.ts. */
+      return {
+        state: { ...state, operations: withoutOp(state, op.id), error: event.error },
         commands: NOTHING,
       };
     case "repair.succeeded": {

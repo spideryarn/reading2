@@ -47,6 +47,9 @@ of compression, down the page for position and across for detail. Read that firs
 - **[quotes.md](quotes.md)** — the lines worth keeping: the piece's own sentences, chosen, checked
   against it and marked where they sit. The only mode whose list is the article rather than something
   a model wrote about it — open it for the two things verification cannot prove.
+- **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
+  they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
+  rows on the test article carry no date, and drawing them alike throws away what the article said.
 - **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
   search painted into the spine. Long; open it for the confidence unit or the colours.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and

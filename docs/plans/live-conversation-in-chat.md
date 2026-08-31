@@ -201,7 +201,7 @@ speaker.
 That is Greg's sequence exactly — "live for a bit, then type/dictate, then live again" — and it
 costs only the thing nobody asked for: talking and typing *simultaneously*.
 
-### 5. Who owns the connection — **built**
+### 5. Who owns the connection — **built**, and it was not enough on its own
 
 Not the keyed `ChatPanel`, which remounts on every thread switch. A stable article-level controller
 that the UI subscribes to, with each session bound immutably to `{ slug, threadId, sessionEpoch }`
@@ -209,6 +209,15 @@ so events from a dead session can never write. Thread switch, edit, delete, leav
 unmount, `pagehide`, a hidden tab, sleep/wake, a failed ICE — each has a defined behaviour, and the
 default on any doubt is: close, release the microphone, reload the thread, start a fresh seeded
 session. Never resume an old one.
+
+**Moving the ownership was done first and the epoch was not, and the second review caught it.** A
+session held above the keyed panel still leaks if the reader leaves *during* `start`: it awaits the
+placement, then the ticket, then the microphone, then a round trip to OpenAI, and a cleanup that
+tears down "whatever exists" finds nothing at all — while the abandoned attempt carries on and opens
+a connection nobody owns. So the epoch is bumped by every start and every stop and checked after
+every `await`. **A hidden tab is deliberately not a trigger**: a reader looking at another tab while
+talking is having a conversation, not abandoning one. The full table is in
+[live-conversation.md § The lifecycle](../project/live-conversation.md#the-lifecycle-which-is-the-most-failure-prone-part).
 
 ### 6. The seeding barrier — **built**
 
