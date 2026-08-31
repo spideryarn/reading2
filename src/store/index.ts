@@ -201,6 +201,9 @@ export const loadGlossary = reader.loadGlossary.bind(reader);
 export const loadSummaries = reader.loadSummaries.bind(reader);
 export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
+/* The one read whose answer is bytes. See `ArticleReader.loadSource` in
+   contracts.ts for what `null` means and what it deliberately does not. */
+export const loadSource = reader.loadSource.bind(reader);
 export const loadArc = reader.loadArc.bind(reader);
 
 /**

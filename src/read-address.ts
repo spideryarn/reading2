@@ -27,10 +27,13 @@ import { DEFAULT_MODE, isMode, type Mode } from "./modes.js";
  * src/title-text.ts exists to close. GPT Sol, 2026-08-30.
  *
  * **Unknown values land on the default rather than failing**, which is the rule
- * `modeParam` in src/web/params.ts already keeps: a link from a future version
- * with a mode this one has not got, or a pre-2026-08-29 `?mode=toc` link,
- * degrades to the article. `isMode` is the one place that decides, so the two
- * cannot answer differently.
+ * `modeParam` in src/web/params.ts already keeps: a link naming a mode this
+ * version has not got degrades to the article. `isMode` is the one place that
+ * decides, so the two cannot answer differently.
+ *
+ * It is a safety net and no longer a promise about any particular old link — the
+ * pre-2026-08-29 `?mode=toc` links rode on it until the default moved to `plain`
+ * on 2026-08-31, deliberately. src/modes.ts § DEFAULT_MODE.
  *
  * Deliberately tolerant of a malformed URL. This runs on a string a stranger
  * controls, and a throw here would be a 500 on an address that only wanted a

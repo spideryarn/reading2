@@ -95,6 +95,7 @@
 // and takes the DOM one.
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
+  AlignLeft,
   BookA,
   Lightbulb,
   ChevronUp,
@@ -276,10 +277,12 @@ interface Props {
  * list to be next in. Adding another is a row here — which is exactly what
  * Search and then Summary cost (docs/project/summaries.md).
  *
- * The order is deliberate and is not alphabetical: **contents first, because it
- * is the default** and the one you come back to. Left-to-right in the bar is
- * also the order the arrow keys travel, so the resting state being leftmost
- * means every other mode is reached by going right from the resting state.
+ * The order is deliberate and is not alphabetical: **Plain first, because it is
+ * the default** and the one you come back to — Hierarchy held that place until
+ * 2026-08-31 and now sits second, still first among the modes that show you
+ * something. Left-to-right in the bar is also the order the arrow keys travel,
+ * so the resting state being leftmost means every other mode is reached by
+ * going right from the resting state.
  *
  * The other four were reordered by hand on 2026-08-26 — Summary, Glossary,
  * Search, Chat — and the reasoning is in the file header under "The order".
@@ -287,7 +290,49 @@ interface Props {
  * to the conversation about it, and Chat is last because it is the one furthest
  * from the article's own words.
  */
-const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[] = [
+const MODES_UI: {
+  mode: Mode;
+  icon: typeof Info;
+  label: string;
+  blurb: string;
+  /**
+   * **Keep the word when every other button loses one.**
+   *
+   * The labels are dropped below 1100px and again at phone widths, because they
+   * are said twice — in the tooltip and in the `aria-label` — so dropping them
+   * costs a sighted reader a hover and a screen-reader user nothing (styles.css
+   * § the modes segment). Exactly one button is worth the width anyway: the one
+   * that gets you *out*, which a reader is reaching for precisely when they do
+   * not want to hover ten icons to find it. So on a phone the row is twelve
+   * glyphs and one word, and the word is the exit.
+   */
+  keepLabel?: true;
+}[] = [
+  /* **First, because it is the way out.** Greg asked for it in those terms —
+     *"the first (and largest?) icon in the bottom-bar, to make it easy for the
+     user to use that to get out of a mode to the text"*, 2026-08-31 — and it is
+     also the default, which is the rule this list already followed when
+     Hierarchy was leftmost.
+
+     Not drawn larger, and that is a deliberate departure from the ask. A
+     radiogroup of ten peers with one of them enlarged reads as a mistake before
+     it reads as emphasis. What it gets instead is its label, kept at narrow
+     widths where every other button loses one (styles.css § the modes segment) —
+     so on a phone the bar is eight icons and one word, and the word is the exit.
+     Cheap to change to a size bump if it does not read.
+
+     It is also **not the fix for the problem Greg hit**, and that is worth
+     saying here so nobody thinks it was: on a phone the bar this button sits in
+     is exactly what an on-screen keyboard covers, and what slides away when you
+     scroll. The fix for that is in styles.css § a small device — the bars stay
+     while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
+  {
+    mode: "plain",
+    icon: AlignLeft,
+    label: "Plain",
+    blurb: "Just the article — no columns, no panel",
+    keepLabel: true,
+  },
   {
     mode: "hierarchy",
     icon: ListTree,
@@ -491,7 +536,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
         </div>
       )}
 
-      {/* Above the bar rather than in it: it is a sentence, and the bar is eleven
+      {/* Above the bar rather than in it: it is a sentence, and the bar is twelve
           icons. Renders nothing at all except on an uninstalled iOS device that
           has not dismissed it — install-hint.ts. */}
       <InstallHint />
@@ -854,7 +899,7 @@ function DockModes({
                   text costs the sighted reader a hover and costs a screen
                   reader nothing — which is why the label is the thing that
                   gives way rather than the button. See § the modes segment. */}
-              <span className="dock-btn-label">{m.label}</span>
+              <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{m.label}</span>
             </button>
           </Tooltip>
         ))}
@@ -905,7 +950,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all eleven of the bar's labels with one rule rather than with
+          can drop all twelve of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}
@@ -954,7 +999,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all eleven of the bar's labels with one rule rather than with
+          can drop all twelve of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}

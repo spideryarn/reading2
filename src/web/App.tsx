@@ -35,6 +35,7 @@ import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
+import { TheOriginal } from "./SourceLink.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
@@ -113,6 +114,11 @@ import {
   type Rung,
   type TermSort,
 } from "./params.js";
+/* The mode's own name, from the one file that spells it — so the bar's close
+   button, the dock's button and the browser tab cannot say three things.
+   src/title-text.ts § MODE_LABEL. */
+import { MODE_LABEL } from "../title-text.js";
+import { X } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -165,8 +171,13 @@ import { useRenderCount } from "./perf.js";
 const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
 
 /**
- * The gist-column depths the outline band asks `useColumnContext` to measure:
- * none, because a mode has no gist columns and the band wants only `focusRow`.
+ * **No gist-column depths**, wanted in two places for the same reason and by two
+ * different questions.
+ *
+ *  - The outline band asks `useColumnContext` to measure none of them, because a
+ *    mode has no gist columns and the band wants only `focusRow`.
+ *  - Plain mode hands it to `fitView` as `chosen`, which is the whole of how
+ *    that mode empties the table — see `plainCols` below.
  *
  * Module-level so its identity is stable. A fresh `[]` each render would be a
  * new dependency each render, which restarts the hook's effect — and that
@@ -1158,15 +1169,36 @@ function Reader({
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
 
-  /* The tab: the article first, then the mode — and nothing for `hierarchy`,
-     which is the mode most tabs are in and so the one that distinguishes
-     nothing. See src/web/page-title.ts. */
+  /* The tab: the article first, then the mode — and nothing for whichever mode
+     is the default, which is the one most tabs are in and so the one that
+     distinguishes nothing. `plain` since 2026-08-31; the rule is about the
+     default rather than about any particular mode. See src/web/page-title.ts. */
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "article", mode }));
-  /* Any mode that is not the hierarchy takes the band. Written as
-     "not hierarchy" rather than as `chat || glossary` on purpose: the third mode
-     cost this line nothing, which is the property the slot was built for, and
-     the fourth should cost it nothing either. */
+  /* **Any mode that is not the hierarchy has no gist columns, and forces the
+     prose on.** Written as "not hierarchy" rather than as `chat || glossary` on
+     purpose: the third mode cost this line nothing, which is the property the
+     slot was built for, and the tenth cost it nothing either.
+
+     It is not the same question as "is a panel open" — `bandOpen` below is, and
+     Plain is where they differ. */
   const inMode = mode !== "hierarchy";
+  /**
+   * **Is there a panel in the middle band?** — which is a narrower question than
+   * `inMode`, and since Plain arrived on 2026-08-31 they have different answers.
+   *
+   * Plain is a mode with no band and no gist columns: the spine, the article,
+   * and nothing else. So it answers `inMode` the same way every other mode does
+   * — *the granularity controls do not apply here, and the prose is on whatever
+   * `?text=` says* — and answers this one the way `hierarchy` does.
+   *
+   * Two names rather than one `mode === …` test at each site, because the last
+   * time this file had one rule doing two jobs the two drifted: `proseVisible`
+   * exists in layout.ts precisely because "in a mode the prose is on" was
+   * asserted in the arithmetic and not in the component, which rendered a chat
+   * panel beside an entirely empty table. Naming both questions is what stops
+   * the third caller having to guess which one it wanted.
+   */
+  const bandOpen = inMode && mode !== "plain";
 
   /**
    * What stands between a visitor and the mode they have opened, if anything.
@@ -1201,6 +1233,23 @@ function Reader({
    */
   const proseOn = proseVisible(showText, inMode);
 
+  /**
+   * **The columns `fitView` is asked for, which in Plain is none of them.**
+   *
+   * Plain is `?cols=none` with a name, and it is expressed here rather than in
+   * layout.ts on purpose: `fitView`'s non-mode arm already handles an empty
+   * `chosen` exactly right — no gist columns, no leaf column, and `detailW`
+   * relaxing to the whole available width — so the mode costs that file nothing
+   * and cannot introduce a fourth width negotiation for somebody to get wrong.
+   *
+   * **The reader's own `?cols=` is not overwritten, only overridden.** It stays
+   * in the URL untouched, so leaving Plain for the hierarchy puts back the
+   * columns they had rather than the ones the window would have picked — the
+   * same property `?cols=` already has on a trip through chat (layout.ts
+   * § fitView).
+   */
+  const plainCols = mode === "plain" ? EMPTY_DEPTHS : cols;
+
   const fit = useMemo(
     () =>
       fitView({
@@ -1208,11 +1257,11 @@ function Reader({
         gistDepths,
         leafDepth: geometry.leafDepth,
         showText: proseOn,
-        chosen: cols,
-        modeBand: inMode,
+        chosen: plainCols,
+        modeBand: bandOpen,
         showSpine,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, proseOn, cols, inMode, showSpine],
+    [windowWidth, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
   );
 
   /**
@@ -1292,6 +1341,15 @@ function Reader({
   const [note, setNote] = useQueryState("note", noteParam);
   const comments = owner?.comments.comments ?? NO_COMMENTS;
   const commentError = owner?.comments.error ?? null;
+  /**
+   * A failed *view the original*, held here rather than beside the button.
+   *
+   * Component state and not a URL parameter, deliberately: it is a transient
+   * report about a request that just failed, not a place the reader is, and
+   * `?…=` is for the second of those (docs/project/url-state.md). It is also the
+   * one thing in this bar that a **reload** should clear.
+   */
+  const [sourceError, setSourceError] = useState<string | null>(null);
 
   /**
    * The floating chat, and the passage it is about.
@@ -1843,9 +1901,26 @@ function Reader({
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
         {!owner && <ViewOnlyChip />}
-        {/* Leftmost of the controls, because the rail it names is leftmost —
-            and before the mode/contents split, because it is the one control
-            that survives both. See `spineToggle` above. */}
+        {/* **The way to the original, first in the bar.**
+            Greg asked for it in the top bar, 2026-08-31; SourceLink.tsx says
+            why the masthead's existing link on the title is not an answer, and
+            what the three states are.
+
+            First rather than last, which was the obvious place for a fact about
+            the article rather than a control over the view. On a phone this bar
+            scrolls sideways and nothing in it shrinks, so a rightmost icon can
+            start past the edge of the screen — reachable only by scrolling a bar
+            most readers will not know scrolls. GPT Sol measured it, 2026-08-31.
+            Nothing that must be findable goes at that end. */}
+        <TheOriginal
+          meta={article.meta}
+          slug={slug}
+          owner={!!owner}
+          onError={setSourceError}
+        />
+        {/* Leftmost of the *view* controls, because the rail it names is
+            leftmost — and before the mode/contents split, because it is the one
+            control that survives both. See `spineToggle` above. */}
         {spineToggle}
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer
@@ -1857,14 +1932,47 @@ function Reader({
           <>
             <span className="controls-label">Mode</span>
             <span className="mode on">{mode}</span>
-            <button
-              type="button"
-              className="linky"
-              onClick={() => void setMode("hierarchy")}
-              title="Back to the table of contents columns"
-            >
-              back to contents
-            </button>
+            {/* **The way out, and it is an icon now.** It said `back to contents`
+                until 2026-08-31 — a 12px grey text link in a bar of pills, and
+                measured against the rest of the bar it was the quietest thing in
+                it. Greg asked for an icon and for the word `contents` to go, the
+                mode having been called Hierarchy since 2026-08-29.
+
+                **It names no destination on screen**, which is the other half
+                of the change. `back to Hierarchy` was the obvious rename and it
+                commits the bar to a claim that stops being true the moment the
+                default moves — which it did, the same day. `×` says *close
+                this*.
+
+                **It goes to `plain` by name, not to `DEFAULT_MODE`**, and the
+                two happen to be the same mode today. GPT Sol asked for the
+                literal, 2026-08-31, and the reason is that they are different
+                contracts: *where the reader lands with no instructions* and
+                *what closing a panel means* have no reason to agree, and if the
+                default moves again this button would silently start opening
+                whatever it moved to. Closing a band means the article, and
+                `plain` is the mode that is the article.
+
+                **Rejected: remembering which band-less mode the reader came
+                from.** One `useRef` and the same button starts doing two
+                different things depending on history the reader cannot see —
+                and a ref resets on remount, so it would be *mostly* consistent,
+                which is worse than either answer taken plainly.
+
+                Not rendered in Plain, where `bandOpen` is false: there is
+                nothing to close, and it would land where it already is.
+                docs/plans/plain-mode-and-the-way-out.md § 3. */}
+            {bandOpen && (
+              <button
+                type="button"
+                className="mode-close"
+                onClick={() => void setMode("plain")}
+                title={`Close ${MODE_LABEL[mode]} and go back to the article`}
+                aria-label={`Close ${MODE_LABEL[mode]}`}
+              >
+                <X size={14} aria-hidden />
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -1953,6 +2061,22 @@ function Reader({
         {commentError && (
           <span className="cmt-transport-error" title={commentError}>
             comments: {commentError}
+          </span>
+        )}
+        {/* A failed source download, said here rather than beside the button it
+            came from. The bar is a fixed-height row that scrolls sideways and
+            does not shrink its children, so a sentence next to the icon would
+            push the granularity pills off the screen — SourceLink.tsx § onError.
+            Shaped exactly on the line above it: a short label, the whole message
+            in the tooltip. */}
+        {sourceError && (
+          /* `role="alert"`, for the reason SourceLink.tsx gives beside its own
+             arm: the blank tab closing and a label appearing here are both
+             silent to a screen reader, so without this the press had no
+             outcome at all. The whole message is in the tooltip, which is
+             where a pointer reader finds it — hence `title` as well. */
+          <span role="alert" className="cmt-transport-error" title={sourceError}>
+            original: couldn't open it
           </span>
         )}
         <span className="provenance" title={article.tree.generator}>

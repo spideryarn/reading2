@@ -5,6 +5,12 @@ are in the article), the **prose** (what you are reading), and between them a **
 whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
 ideas, search, diagram and chat take turns in.
 
+**Two of the ten modes open no band at all**, and the default is one of them. `plain` is the article
+by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
+2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
+to be. So *a mode is open* and *a band is open* are separate questions
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
+
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
 of compression, down the page for position and across for detail. Read that first.
 

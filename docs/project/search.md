@@ -141,7 +141,8 @@ capped so that the hover card is enough to *judge* a hit and never enough to *re
 
 ## The mode band
 
-`?mode=search` is the fourth value in `MODES`, after `toc`, `chat` and `glossary`. Greg's original
+`?mode=search` is one value in `MODES` — the fourth to arrive, after the table of contents (called
+`toc` then and `hierarchy` since 2026-08-29), chat and the glossary. Greg's original
 framing of that band, from [chat-mode.md](../plans/chat-mode.md#gregs-reframing-which-is-the-actual-design):
 
 > I'm thinking that this might be a common pattern, that when we switch into a mode (e.g. Chat,

@@ -175,6 +175,7 @@ import type {
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
+import { isWebUrl } from "../urls.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -514,7 +515,20 @@ export function Metadata({
               timestamp is what you want when the answer is surprising. */}
           <Fetched iso={meta.fetchedAt} lead={facts.length > 0} />
         </p>
-        {meta.url && (
+        {/* **`isWebUrl`, and the address stays visible either way.** `meta.url` is
+            the revision's `final_url`; the fetcher validates one on the way in,
+            but an *imported* article's metadata is written straight into the
+            row, so a `javascript:` or `data:` value is reachable and an
+            unchecked anchor here is an active URL sink. This page is the one
+            that shows the whole address as text, so a refused scheme still gets
+            printed — the reader is entitled to see what we hold — it just does
+            not become a link. Third of three sinks on this field; GPT Sol found
+            the first two on 2026-08-31 and this one on the second pass.
+            src/urls.ts, docs/project/security.md. */}
+        {meta.url && !isWebUrl(meta.url) && (
+          <p className="tw:mt-1 tw:mb-0 tw:break-all tw:text-xs tw:text-ink-faint">{meta.url}</p>
+        )}
+        {meta.url && isWebUrl(meta.url) && (
           <p className="tw:mt-1 tw:mb-0 tw:text-xs">
             <a
               href={meta.url}

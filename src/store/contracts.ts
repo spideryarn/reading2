@@ -43,6 +43,7 @@
  */
 
 import type { AdminUser } from "../admin.js";
+import type { DocumentKind } from "../fetch.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { AnswerPatch, NewComment } from "../comments.js";
@@ -80,9 +81,55 @@ import type {
  * simply does not exist would start reporting as a server fault. That is the
  * kind of divergence a parity test on the happy path never sees.
  */
+/**
+ * **The document an article was made from, ready to be handed back.**
+ *
+ * `null` from `loadSource` means *this article kept no source document* — an
+ * ordinary state, and a 404. It does **not** mean the bytes could not be found:
+ * a revision that names a stored object and cannot produce it is a broken
+ * invariant, and the adapter throws (`MissingRawObject` / `CorruptRawObject` in
+ * src/store/export.ts, both `status: 500`). Collapsing the two would tell an
+ * owner their paper never existed because a bucket was misconfigured. GPT Sol
+ * made this the third of four blockers on the plan, 2026-08-31.
+ */
+export interface RawSource {
+  bytes: Uint8Array;
+  /**
+   * **The recorded kind, not a sniffed one**, wherever a record exists.
+   *
+   * It decides the `Content-Type`, and `raw_content_type` cannot: that column is
+   * the *origin's* header, so a perfectly good PDF fetched as
+   * `application/octet-stream` would be served as one — with `nosniff` set, which
+   * means the browser will not rescue it. GPT Sol, 2026-08-31.
+   */
+  kind: DocumentKind;
+  /**
+   * What the reader called the file when they uploaded it, if they uploaded it.
+   *
+   * Reader-controlled text on its way into a response header, so whoever builds
+   * the `Content-Disposition` escapes it — see `contentDisposition` in
+   * src/routes.ts. Absent for anything we fetched.
+   */
+  filename: string | null;
+}
+
 export interface ArticleReader {
   /** Everything needed for every zoom level. 404 when there are no artefacts. */
   loadArticle(slug: string): Promise<Article>;
+
+  /**
+   * **The raw document this article was made from**, or `null` if it kept none.
+   *
+   * The one read whose answer is bytes rather than JSON, and the one the reading
+   * view's *"view the original"* control is behind. Each adapter answers from
+   * where **its own** store keeps them and never from the other's: the
+   * filesystem one from `data/<slug>/`, the Postgres one from the object store
+   * the revision names — falling back, inside itself, to the legacy `raw_bytes`
+   * column for rows written before references existed. A Postgres deployment
+   * reaching for a local file is how this feature spent its life 404ing on
+   * Vercel while working on a laptop.
+   */
+  loadSource(slug: string): Promise<RawSource | null>;
 
   /**
    * The shelf. Never throws for an empty library — that is `[]`, not a fault.

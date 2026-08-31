@@ -179,16 +179,23 @@ describe("what a visitor is told, mode by mode", () => {
    * Before it, every mode but `toc` was marked and the only question was which
    * excuse to show. Now a marked button means the reader really cannot open the
    * band — and the sweep is written as a derivation from `MODES` rather than a
-   * list, so a ninth mode is covered whether or not whoever adds it remembers.
+   * list, so an eleventh mode is covered whether or not whoever adds it
+   * remembers.
    */
   it("marks only what a visitor cannot have, and derives that from MODES", () => {
     /* Nothing built: everything but the table of contents is marked, which is
        the old behaviour and still right for an article with no artefacts. */
-    /* `outline` joins `toc` as a mode a visitor always gets: like the table of
-       contents it is drawn from the tree in the payload they already hold and
-       reaches no artefact at all. docs/plans/outline-mode.md. */
+    /* `outline` joins the hierarchy as a mode a visitor always gets: like the
+       table of contents it is drawn from the tree in the payload they already
+       hold and reaches no artefact at all. docs/plans/outline-mode.md.
+
+       `plain` is the third, and the least expensive of the three: it reaches no
+       artefact *and* renders no band — it is the article and nothing else, so
+       there is nothing a visitor could be short of.
+       docs/plans/plain-mode-and-the-way-out.md. */
+    const FREE = ["plain", "hierarchy", "outline"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
-      MODES.filter((m: Mode) => m !== "hierarchy" && m !== "outline")
+      MODES.filter((m: Mode) => !FREE.includes(m))
         .slice()
         .sort(),
     );
@@ -207,6 +214,7 @@ describe("what a visitor is told, mode by mode", () => {
     for (const mode of MODES) {
       const gap = visitorGap(mode, EVERYTHING_BUILT);
       if (
+        mode === "plain" ||
         mode === "hierarchy" ||
         mode === "outline" ||
         mode === "glossary" ||

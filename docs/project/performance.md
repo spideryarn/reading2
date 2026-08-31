@@ -219,8 +219,9 @@ succeed:
 - **Six job pollers on the reading view.** This one was mine, it was wrong, and the code's own
   comments agreed with me — [`useJobs.ts`](../../src/web/useJobs.ts) still said "the reading view
   has one for the thread panel, one for the glossary and one for summaries". It has none. The bands
-  are mutually exclusive (`mode === …` in [`App.tsx`](../../src/web/App.tsx)) and the default mode is
-  `toc`, which opens no band at all. A stale comment is a fine reason to believe something false.
+  are mutually exclusive (`mode === …` in [`App.tsx`](../../src/web/App.tsx)) and the default mode
+  opens no band at all — `toc` when this was written, `hierarchy` after the 2026-08-29 rename, and
+  `plain` since 2026-08-31. A stale comment is a fine reason to believe something false.
 
 ## What was fixed
 

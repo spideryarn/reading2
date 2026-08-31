@@ -201,8 +201,9 @@ export const panelParam = createParser<Panel>({
 
 /**
  * Which **mode** the middle band is in — the columns between the spine and the
- * prose. Absent means the table of contents, which is the default and the only
- * one there was until 2026-08-25.
+ * prose. **Absent means `plain`**, the default since 2026-08-31: the article on
+ * its own, no band and no gist columns. It was the table of contents before
+ * that, which was also the only mode there was until 2026-08-25.
  *
  * Greg's framing, which is the reason this is a mode rather than a panel:
  *
@@ -216,23 +217,28 @@ export const panelParam = createParser<Panel>({
  * Naming it is what makes the next mode an addition to a list rather than a
  * second special case.
  *
- * **It does appear in URLs, and a first draft of this file's rename said it did
- * not.** `withMode` in src/web/Dock.tsx wrote the parameter unconditionally,
- * default included, so links carrying the old `?mode=toc` are real and shared.
- * They still work — see the unknown-value rule below — and `withMode` now omits
- * the parameter when the mode is the default, so URLs made from here on are
- * canonical. GPT Sol caught this, 2026-08-29.
+ * **The default does appear in URLs, and a first draft of this file's rename
+ * said it did not.** `withMode` in src/web/Dock.tsx wrote the parameter
+ * unconditionally, default included, so links carrying the old `?mode=toc` are
+ * real and shared. `withMode` omits the parameter when the mode is the default
+ * now, so URLs made from here on are canonical. GPT Sol caught this, 2026-08-29.
+ *
+ * Those old links **no longer land where they meant**, and that was decided
+ * rather than overlooked: `toc` survived only because the default happened to be
+ * the view it named, and the default is `plain` since 2026-08-31. Greg, asked
+ * directly: *"Can we tidy up/get rid of `toc` altogether. I'm not worried about
+ * breaking urls — we're in alpha and have no users yet."*
  *
  * **`push`, unlike `?panel=`.** A drawer is a glance; a mode is where you are.
- * Switching to chat and pressing Back should put the table of contents back,
+ * Switching to chat and pressing Back should put the article back,
  * the same way toggling a column does — and unlike opening and closing a panel,
  * you do not do it twice in ten seconds, so it will not fill the history.
  *
- * An unknown value parses to `hierarchy` rather than throwing, so a link from a
- * future version with a mode this one has not got degrades to the article
- * instead of to an error. **This is also what keeps every pre-2026-08-29
- * `?mode=toc` link working**: `toc` is now simply an unrecognised value, and an
- * unrecognised value lands on the default, which is the very view `toc` named. Same rule as `parseAsBlockId` and `panelParam`.
+ * An unknown value parses to the **default** rather than throwing, so a link
+ * from a future version with a mode this one has not got degrades to the article
+ * instead of to an error. Same rule as `parseAsBlockId` and `panelParam`. `toc`
+ * is one such unrecognised value among many now, with no story attached — see
+ * above.
  *
  * The Glossary that paragraph used to name as hypothetical arrived on
  * 2026-08-25 (docs/project/glossary.md), which is the first evidence that the

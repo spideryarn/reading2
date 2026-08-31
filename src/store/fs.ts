@@ -28,6 +28,7 @@ import {
   loadArc,
   loadIdeas,
   loadSketch,
+  loadSource,
   loadSummaries,
   loadTweets,
 } from "../api.js";
@@ -94,6 +95,7 @@ export const fsArticleReader: ArticleReader = {
   loadArc,
   loadIdeas,
   loadSketch,
+  loadSource,
 };
 
 /**

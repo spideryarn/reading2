@@ -19,6 +19,7 @@ import {
 import {
   findParam,
   matchParam,
+  DEFAULT_MODE,
   MODES,
   diagramAxisParam,
   diagramHueParam,
@@ -385,31 +386,41 @@ describe("search mode parameters", () => {
     expect(modeParam.parse("search")).toBe("search");
     // And a mode from a later version still shows the article.
     expect(modeParam.parse("summaries")).toBeNull();
-    expect(modeParam.defaultValue).toBe("hierarchy");
+    expect(modeParam.defaultValue).toBe(DEFAULT_MODE);
   });
 
   /**
-   * **The one test standing between every pre-rename link and a broken page.**
+   * **`toc` is an ordinary unrecognised string now, and this is what is left of
+   * the test that used to guard it.**
    *
-   * The mode was called `toc` until 2026-08-29. A first draft of that rename
-   * argued the change could not break a link, because `toc` was the default and
-   * "the default never appears in a URL" — which was false: `withMode` in
-   * src/web/Dock.tsx wrote the parameter unconditionally, default included, so
-   * every dock navigation stamped `?mode=toc` into a URL a reader could copy.
-   * GPT Sol caught it.
+   * The mode was called `toc` until 2026-08-29. Links carrying `?mode=toc` are
+   * real — `withMode` used to write the parameter unconditionally — and they
+   * went on working because `toc` became unrecognised, and an unrecognised mode
+   * falls back to the default, which was the very view `toc` named. A test stood
+   * here asserting exactly that, because until it existed the claim was an
+   * argument rather than an observation.
    *
-   * What actually keeps those links working is the unknown-value rule: `toc` is
-   * now simply unrecognised, and an unrecognised mode falls back to the default
-   * — which is `hierarchy`, the very view `toc` named. That is a safety net
-   * rather than a plan, and until this test existed it was an argument rather
-   * than an observation.
+   * **Moving the default to `plain` on 2026-08-31 ended the coincidence, and
+   * Greg said not to rebuild it.** Asked directly whether to alias the old name:
+   *
+   * > Can we tidy up/get rid of `toc` altogether. I'm not worried about breaking
+   * > urls — we're in alpha and have no users yet.
+   * >
+   * > — Greg, 2026-08-31
+   *
+   * So the guarantee is withdrawn on purpose and the test that asserted it is
+   * gone with it. What is kept is the half that is still true and still worth
+   * having: a mode name this version does not know lands the reader on the
+   * article rather than on an error. That is what the two lines below say, and
+   * `toc` is one such name among many.
    */
-  it("still shows the hierarchy for a link written before the rename", () => {
+  it("lands a mode name this version has never had on the default", () => {
     expect(MODES).not.toContain("toc");
     expect(modeParam.parse("toc")).toBeNull();
-    // null is what `withDefault` turns into the default, so the reader lands on
-    // the same view the old link meant rather than on an error.
-    expect(modeParam.defaultValue).toBe("hierarchy");
+    expect(modeParam.parse("fisheye")).toBeNull();
+    // null is what `withDefault` turns into the default, so an unrecognised
+    // name degrades to the article rather than to an error page.
+    expect(modeParam.defaultValue).toBe(DEFAULT_MODE);
   });
 });
 

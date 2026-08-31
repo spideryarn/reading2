@@ -59,8 +59,12 @@
  * docs/project/ingest-queue.md.
  */
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+/* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
+   is worth keeping. The last reader of the disk in this file was `sendSource`,
+   which went to `data/<slug>/raw.pdf` — so the route worked on a laptop and 404d
+   on Vercel, which has no such disk, for as long as it existed. Every route now
+   reaches its bytes through a store, and a fresh `readFile` in this file is the
+   shape of that bug coming back. */
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
@@ -82,6 +86,7 @@ import {
   loadArc,
   loadIdeas,
   loadSketch,
+  loadSource,
   loadSummaries,
   loadTweets,
 } from "./store/index.js";
@@ -103,7 +108,10 @@ import { isStorableColour } from "./searches.js";
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
-import { fsLocations } from "./store/artifacts-fs.js";
+/* The one media type this route serves, from the file that names it for the
+   writer too — so what goes into the bucket and what comes out of it cannot be
+   described two different ways. */
+import { CONTENT_TYPE } from "./store/blobs.js";
 import { adminStore, commentStore, visibilityStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
@@ -111,7 +119,6 @@ import { explainStream } from "./explain.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
@@ -226,7 +233,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * served from our origin — the one place a wrong content type becomes script.
  */
 async function sendSource(res: ServerResponse, slug: string): Promise<void> {
-  /* **Ask the store whose article this is, before reading a byte off disk.**
+  /* **Ask the store whose article this is, before reading a byte.**
    *
      This route was authenticated and *not* authorised: it took a slug, went
      straight to `data/<slug>/raw.pdf` and returned it, never once asking the
@@ -241,24 +248,97 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      one is right whenever `ownedSlug` is right, which is the property worth
      having. The answer is discarded — it is asked as a question, not read.
 
-     Under `SPIDERYARN_STORE=files` this checks nothing, because that store has
-     no owner column. That is the same hole src/store/index.ts refuses to boot
-     into in production, and it is why it does. */
+     **Kept even though `loadSource` is owner-filtered too** (the Postgres half
+     joins through `ownedSlug`). Two independent refusals on the one route that
+     hands back somebody's private document is worth the round trip, and the
+     filesystem store has no owner column at all — which is the hole
+     src/store/index.ts refuses to boot into in production, and why it does. */
   await shelfStore.read(slug);
 
-  /* `fsLocations`, not a path built here — the store is the layer allowed to
-     know where an article's files are, and a second copy of that knowledge is
-     how one of them ends up pointing somewhere else. src/store/artifacts-fs.ts. */
-  const { dir } = fsLocations(slug);
-  const manifest = await readRaw(dir);
-  if (manifest?.kind !== "pdf") throw httpError(404, "That article did not come from a PDF.");
-  const bytes = await readFile(path.join(dir, manifest.file));
+  /* **Through the store, not off the disk**, since 2026-08-31. This used to be
+     `fsLocations(slug)` plus a `readFile`, which meant the whole feature worked
+     on a laptop and 404d on Vercel — which has no such disk — for as long as it
+     existed. Each adapter answers from where its own store keeps the bytes:
+     `data/<slug>/` for the filesystem one, the object store the revision names
+     for the Postgres one, falling back inside itself to the legacy `raw_bytes`
+     column. Neither reaches into the other.
+
+     **`null` is the only "there is nothing here".** A revision that names a
+     stored object and cannot produce it throws `MissingRawObject`, and one whose
+     object hashes to something else throws `CorruptRawObject` — both carry
+     `status: 500`, so they arrive as server faults rather than as "this article
+     never had a source". Telling an owner their paper does not exist because a
+     bucket is misconfigured is the failure GPT Sol made a blocker of, 2026-08-31.
+     src/store/export.ts owns both. */
+  const source = await loadSource(slug);
+  if (!source) throw httpError(404, "That article did not come from a PDF.");
+  if (source.kind !== "pdf") throw httpError(404, "That article did not come from a PDF.");
+
   res.statusCode = 200;
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${slug}.pdf"`);
+  /* **From the recorded kind, never from `raw_content_type`.** That column is
+     the *origin's* header, and plenty of perfectly good PDFs arrive as
+     `application/octet-stream` — which, served back with `nosniff` below, is a
+     document the browser will refuse to open and will not rescue. GPT Sol,
+     2026-08-31. */
+  res.setHeader("Content-Type", CONTENT_TYPE.pdf);
+  res.setHeader("Content-Disposition", contentDisposition(source.filename ?? `${slug}.pdf`));
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Length", String(bytes.byteLength));
-  res.end(bytes);
+  /* The bytes actually being written, not a stored count. They are the same
+     number whenever both exist, and the one that is true when they are not. */
+  res.setHeader("Content-Length", String(source.bytes.byteLength));
+  res.end(Buffer.from(source.bytes));
+}
+
+/**
+ * **A `Content-Disposition` for a filename a reader chose.**
+ *
+ * The name comes off `raw_filename`, which is whatever the browser sent when
+ * somebody uploaded a PDF — so it is reader-controlled text on its way into a
+ * response header, and it may hold quotes, backslashes, newlines or any of
+ * Unicode. Interpolating it raw produces a malformed header at best.
+ *
+ * Two parameters, which is what RFC 6266 asks for and what every browser
+ * implements:
+ *
+ *  - `filename=` carries an ASCII fallback with everything awkward replaced, for
+ *    a client that does not read the second one.
+ *  - `filename*=` carries the real name, percent-encoded, per RFC 5987. A client
+ *    that understands it must prefer it.
+ *
+ * `inline`, not `attachment`: the reader pressed *view the original*, and a
+ * browser that can show a PDF should show it. Raised by GPT Sol, 2026-08-31.
+ */
+export function contentDisposition(filename: string): string {
+  /* **Well-formed first, or `encodeURIComponent` throws.** A lone UTF-16
+     surrogate is a legal JavaScript string and an illegal Unicode scalar, and
+     it can arrive here — the name came off a stranger's filesystem through a
+     browser. Without this, an imported filename turns *view the original* into
+     a `URIError` and a 500, which is the failure landing furthest from its
+     cause. GPT Sol, 2026-08-31.
+
+     Written out rather than `String.prototype.toWellFormed`, which does exactly
+     this and is ES2024: `tsconfig.json` sets `lib: ["ES2022"]`, and widening
+     the whole project's lib to reach one method is a change with a much larger
+     blast radius than five characters of regex. The alternation is the two
+     halves of "a surrogate with nothing on the other side of it". */
+  const safe = filename.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "\uFFFD",
+  );
+  /* Anything outside printable ASCII, plus the two characters that would end
+     the quoted string early. `_` rather than dropping them, so a name made
+     entirely of them is still a name. */
+  const ascii = safe.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  /* **`encodeURIComponent` is not RFC 5987 on its own.** It leaves `'`, `(`,
+     `)` and `*` alone, and none of those is in the `attr-char` set an extended
+     parameter is defined over — so `O'Brien (draft)*.pdf` produces a value a
+     strict client is entitled to reject, falling back to the lossy ASCII half
+     for a name that did not need it. Four characters, escaped by hand. */
+  const extended = encodeURIComponent(safe).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `inline; filename="${ascii}"; filename*=UTF-8''${extended}`;
 }
 
 /** An error carrying the HTTP status it should be reported as. */

@@ -48,6 +48,7 @@
 import { useMemo, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Article, Meta } from "../types.js";
+import { isWebUrl } from "../urls.js";
 import { Link } from "./Link.js";
 import { SourceLink } from "./SourceLink.js";
 import { LIBRARY_HREF } from "./router.js";
@@ -107,9 +108,19 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   const root = tree.nodes[tree.rootId];
 
   /** The heading itself, which is the same either way. */
+  /* **`isWebUrl`, since 2026-08-31, and it is not decoration.** `meta.url` is
+     the revision's `final_url`, which the fetcher validates — but an *imported*
+     article's metadata is written straight into the row, so a `javascript:` or
+     `data:` value is reachable here and this anchor would be an active URL sink.
+     It is the allowlist the rest of the app already uses for exactly this
+     (src/urls.ts, docs/project/security.md). GPT Sol found it while reviewing
+     the plan that added a *second* link to the same field, 2026-08-31 — the new
+     one is in the controls bar (SourceLink.tsx § TheOriginal) and checks the
+     same way. A `file://` URL, which a PDF read off a local path carries, falls
+     out here too and correctly: it is not an address anybody else can follow. */
   const heading = (
     <h1 className="tw:min-w-0 tw:flex-1">
-      {meta.url ? (
+      {meta.url && isWebUrl(meta.url) ? (
         <a href={meta.url} target="_blank" rel="noreferrer noopener">
           {meta.title}
         </a>

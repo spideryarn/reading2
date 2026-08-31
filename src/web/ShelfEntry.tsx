@@ -22,6 +22,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
+import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
@@ -340,7 +341,15 @@ export function Actions({
           <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
         </IconButton>
       )}
-      {entry.url && (
+      {/* **`isWebUrl`, since 2026-08-31.** A shelf row's `url` is the same
+          `final_url` the reading view's controls bar and the metadata page now
+          check, and for the same reason: the fetcher validates one on the way
+          in, but *imported* metadata is written straight into the row, so a
+          `javascript:` or `data:` value is reachable and this anchor would be an
+          active URL sink. No button rather than a dead one — the card has
+          nowhere to print the address, so there is nothing to keep. GPT Sol,
+          second pass, 2026-08-31. src/urls.ts, docs/project/security.md. */}
+      {entry.url && isWebUrl(entry.url) && (
         <a
           href={entry.url}
           target="_blank"

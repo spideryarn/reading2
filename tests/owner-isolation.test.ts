@@ -597,19 +597,57 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
     ).resolves.toBeTruthy();
   });
 
-  /** And the route really does ask, rather than the check merely existing. */
-  it("and the route asks before it touches the disk", async () => {
+  /**
+   * And the route really does ask, rather than the check merely existing.
+   *
+   * **It reads code, not comments, and that distinction is the whole reason
+   * this note is long.**
+   *
+   * It compared the ownership call against `fsLocations(slug)`, which
+   * `sendSource` stopped *calling* on 2026-08-31, when the route began reading
+   * through the store instead of off the disk. GPT Sol read the diff and
+   * predicted the test would fail — `indexOf` answers `-1` for a string that is
+   * not there, and nothing is `< -1`.
+   *
+   * **It did not fail.** The rewrite left a comment in `sendSource` explaining
+   * what the route used to do — *"This used to be `fsLocations(slug)` plus a
+   * `readFile`"* — and the regex matches the function's whole text, prose
+   * included. So the test went on passing, still asserting an ordering between
+   * a live call and a sentence about a call that no longer exists. Neither Sol
+   * reading the diff nor a green suite would have told you: one predicted the
+   * wrong outcome, the other reported the right outcome for the wrong reason.
+   * docs/reusable/silent-success.md.
+   *
+   * So the body has its comments stripped first, and then both operands are
+   * asserted present before their order is compared — because two `-1`s also
+   * satisfy `<`, which is the other way this assertion can go quiet.
+   */
+  it("and the route asks before it fetches the bytes", async () => {
     const { readFile } = await import("node:fs/promises");
     const { fileURLToPath } = await import("node:url");
     const source = await readFile(
       fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
       "utf8",
     );
-    const body = /async function sendSource\([\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    const whole = /async function sendSource\([\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    /* Comments out, so a sentence *about* a call cannot stand in for one. Crude
+       — it would eat a `//` inside a string literal — and there are none in this
+       function, which is a thing to re-check rather than assume if it ever
+       fails oddly. */
+    const body = whole.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+    /* Both present, asserted separately: two `-1`s satisfy `<` perfectly well,
+       so the ordering below proves nothing on its own. */
     expect(body).toContain("shelfStore.read(slug)");
-    /* Before `fsLocations`, not after. A check that runs after the file has been
-       read is not a check, and the order is the whole of it. */
-    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(body.indexOf("fsLocations(slug)"));
+    expect(body).toContain("loadSource(slug)");
+    /* And the comment-stripping does something, or the two lines above are
+       being satisfied by prose again. */
+    expect(body).not.toContain("fsLocations(slug)");
+    expect(whole).toContain("fsLocations(slug)");
+
+    /* Before the read, not after. A check that runs after the bytes have been
+       fetched is not a check, and the order is the whole of it. */
+    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(body.indexOf("loadSource(slug)"));
   });
 
   /** The reader profile is keyed on owner directly, rather than through a slug. */

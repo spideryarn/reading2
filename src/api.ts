@@ -39,11 +39,13 @@ import {
   readSketchFile,
 } from "./sketch.js";
 import { isStale as summariesStale, readSummaries } from "./summarise.js";
+import { readRaw } from "./fetch.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { createFsArtifactStore } from "./store/artifacts-fs.js";
+import type { RawSource } from "./store/contracts.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "./library-scalars.js";
 import { readingMinutes } from "./reading-time.js";
 import { sanitizeStoredBlocks } from "./sanitize.js";
@@ -435,6 +437,51 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
     ideas,
     stale: !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree),
     outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+  };
+}
+
+/**
+ * **The raw document this article was made from — the filesystem half.**
+ *
+ * `null` is *this article kept no source*, which is every HTML article fetched
+ * before manifests and every article whose `raw.json` names a file that is not
+ * there. A 404 for the reader, and an ordinary state.
+ *
+ * **It reads the filesystem and nothing else**, which is the whole point of it
+ * being the filesystem adapter: `sendSource` in src/routes.ts used to do this
+ * unconditionally, so a Postgres deployment on Vercel — which has no such disk —
+ * answered every *view the original* with a 404 while a laptop worked
+ * perfectly. The Postgres half is `pgArticleReader.loadSource`, and neither
+ * falls back to the other (src/store/fs.ts § this is not where a fallback
+ * lives).
+ *
+ * The kind comes off the manifest, which stage 1 wrote and which is the only
+ * recorded answer there is here.
+ */
+export async function loadSource(slug: string): Promise<RawSource | null> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const manifest = await readRaw(dir);
+  if (!manifest) return null;
+  /* `ENOENT` is the article that has a manifest and no file beside it — a
+     half-written directory, or one restored without its payload. Absent, not a
+     fault: there is nothing here to serve and nothing to repair on the server.
+     Anything else is a real filesystem failure and is allowed to throw. */
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path.join(dir, manifest.file));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+  return {
+    bytes,
+    kind: manifest.kind,
+    filename: manifest.origin === "upload" ? (manifest.filename ?? null) : null,
   };
 }
 

@@ -558,6 +558,68 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
 .controls button.linky:hover { color: var(--highlight); }
 
+/* **The way out of a mode** — App.tsx, beside the chip naming the mode you are
+   in. It was a `.linky` reading `back to contents` until 2026-08-31; the reason
+   it is an icon now, and names no destination, is in App.tsx where the button is.
+
+   Sized off `.linky` deliberately rather than off `.chat-icon`, which is the
+   other × in the app: this one sits in a row of pills and has to line up with
+   them, and `.linky` is the control in that row whose box was already worked out
+   against the pills (see its own note on the transparent border). Square, so the
+   glyph is centred rather than sitting in a lozenge meant for words. */
+.controls button.mode-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  /* The same 27.6px box the pills and `.linky` come out at, taken as a square. */
+  width: 1.725rem;
+  height: 1.725rem;
+  padding: 0;
+  margin-left: 0.35rem;
+  /* Transparent and 999px for the two reasons `.linky` spells out: the border is
+     2px of box the pills beside it also spend, and an outline follows
+     `border-radius`, so this is what keeps the focus ring round. */
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.controls button.mode-close:hover {
+  color: var(--highlight);
+  border-color: var(--highlight);
+}
+
+/* **The way to the original** — SourceLink.tsx § TheOriginal, first in the bar.
+   One rule for both arms, because an `<a>` to a URL and a `<button>` that
+   fetches an uploaded file are the same affordance to the reader and must not
+   look like two. Shaped on `.mode-close` above for the same reason it is shaped
+   on `.linky`: everything in this row has to line up with the pills. */
+.controls .source-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font: inherit;
+  width: 1.725rem;
+  height: 1.725rem;
+  padding: 0;
+  margin-right: 0.15rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.controls .source-link:hover {
+  color: var(--highlight);
+  border-color: var(--highlight);
+}
+
 .mode {
   font-size: 0.68rem;
   letter-spacing: 0.09em;
@@ -880,10 +942,37 @@ td.gist .title::before {
    The vertical rhythm above already does the separating. The border-right
    stays — that one divides this column from its neighbour, not paragraph from
    paragraph. */
+/* **The gutter is 2.1rem at every width, and it used to be 5.2rem.**
+
+   83px of every prose row bought 64px of monospace block id that was invisible
+   until you hovered it. It is now an icon column (BlockGutter.tsx), so the
+   width that was only ever affordable on a laptop is affordable everywhere —
+   which is what let § a narrow window stop hiding half of it. 2.1rem is this
+   file's own number, promoted rather than invented: it is what the narrow
+   window has reserved for the chat button since 2026-08-27.
+
+   Not narrower, because the width is the hit target: the glyphs are 12px and a
+   target wants more, so every slot below stretches to fill this column.
+
+   **It is still not 24px, and that is a known shortfall rather than a claim.**
+   WCAG 2.5.8 asks for 24×24 and these are 22×15 — and three 24px targets cannot
+   be stacked inside a 39px one-line paragraph row by any arrangement, so meeting
+   it means taller rows, which is a change to the article's vertical rhythm and
+   Greg's call rather than a tidy-up. See docs/plans/prose-gutter-icons.md § Open for Greg.
+   The affordance this replaced was smaller: a 12px glyph with 0.1rem of padding.
+
+   (An earlier draft of this note said the width also had to clear the pinned
+   column's shadow. It does not — only `.pin-left` is pinned, and it is on the
+   other side of the prose. GPT Sol, 2026-08-31.) */
 td.text {
-  padding: var(--block-pad) 1.4rem var(--block-pad) 5.2rem;
+  padding: var(--block-pad) 1.4rem var(--block-pad) 2.1rem;
   position: relative;
   border-bottom: 0;
+  /* One gutter slot's height. **On the cell rather than on `.blk-gutter`**,
+     because `td.text.has-marks` floors the row at three of them and a custom
+     property cannot be read from a descendant. The two must not drift: the
+     floor exists precisely so the stack cannot overhang the row. § the gutter. */
+  --blk-slot: 0.95rem;
 }
 
 /* A HEADING BELONGS TO WHAT FOLLOWS IT, so the space above it must exceed the
@@ -909,21 +998,18 @@ tbody tr:first-child td.text.kind-heading { padding-top: var(--block-pad); }
 
 tr.row-active td.text { background: var(--panel); }
 
-/* The id gutter is for debugging and for quoting a block in conversation, so it
-   is present but recessive until you're on the row. Position only — the type is
-   in the .block-ref block below. */
-.block-id {
-  position: absolute;
-  left: 1rem;
-  top: 1.1rem;
-  width: 4rem;
-}
+/* `.block-id` was here, positioning six characters of Courier in an 83px
+   gutter. The gutter is icons now and the id has moved into their `title`, so
+   the rule has gone rather than been kept "in case" — a class nothing renders
+   is a rule the next reader has to prove is dead. BlockGutter.tsx. */
 
 tr.row-active .block-ref { opacity: 0.95; }
 
 /* ---------------------------------------------------------- block ids --
-   Every block id on screen, wherever it is: the gutter beside a paragraph and
-   both ends of a gist's range. Courier at Greg's asking, and small and faint on
+   Every block id still drawn as characters: both ends of a gist's range, the
+   same range under a summary entry, and a cited id in model prose. **Not the
+   gutter beside a paragraph** — that was the fourth until 2026-08-31 and is now
+   an icon whose `title` carries the id (§ the gutter). Courier at Greg's asking, and small and faint on
    purpose — an id is machine text sitting next to prose, and it should read as
    a footnote to the thing it labels rather than as part of it.
 
@@ -1169,6 +1255,69 @@ tr.row-active .block-ref { opacity: 0.95; }
   color: var(--ink-soft);
 }
 
+/* ---- callouts, and the mark that says so -----------------------------
+   **A callout is the box an author sets apart from the argument** — a Substack
+   callout, a MkDocs admonition, an RFC's editorial aside. Stage 2 recognises it
+   before Readability deletes the element that says so (src/callouts.ts) and
+   stage 3 stores it as `kind: "callout"`; TableView writes that onto the cell
+   as `kind-callout`, which is the only reason this is a stylesheet-only rule.
+
+   **Not a second thing with a left rule.** A quotation already has one, and two
+   left-ruled treatments a few paragraphs apart read as the same treatment
+   applied inconsistently. Greg picked this one out of three sketches,
+   2026-08-31: "big faint mark in the gutter, indented text, no bar". So the
+   callout is displaced — indented, on a narrower measure, in the softer ink —
+   and the mark does the saying.
+
+   `2.4rem` of padding is the mark's gutter, and it is inside `.prose` rather
+   than on the cell: the cell's own gutter already holds the block id and the
+   door into chat (td.text above), and a mark placed there would sit on top of
+   them.
+
+   Every paragraph of a multi-paragraph callout gets its own mark. That is the
+   printer's convention for a quotation running across paragraphs — open on
+   each, close only on the last — and it is also the only thing available here,
+   since each paragraph is its own block in its own row and CSS cannot ask
+   whether the row above belongs to the same box.
+
+   A heading, a blockquote or a figure inside a callout keeps its own kind
+   (src/blocks.ts § describeBlock), so none of them lands here. */
+td.text.kind-callout .prose {
+  position: relative;
+  max-width: 58ch;
+  /* Logical, not physical: an article in Arabic or Hebrew keeps the indent and
+     the mark on the side its text starts from. `--reading-measure` and the
+     quotation's own rule are still physical, so this is a first step rather
+     than a claim that the column is direction-aware. GPT Sol, 2026-08-31. */
+  padding-inline-start: 2.4rem;
+  color: var(--ink-soft);
+}
+td.text.kind-callout .prose::before {
+  /* “, and the empty alt text after the slash is what keeps it out of the
+     accessibility tree — CSS `content` is otherwise announced, and a screen
+     reader would hear a stray quote mark before every callout paragraph. */
+  content: "\201C" / "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: -0.02em;
+  /* **The reading face, not a serif ornament.** Georgia's “ is rounder and
+     reads more like a printed pull-quote, and it was tried and rejected:
+     styles/tokens.css records that this app deliberately has no serif, so one
+     decorative glyph is not the place to reintroduce one. */
+  font-family: var(--font-reading);
+  /* Big and very faint, which is the shape Greg picked. Both numbers matter
+     together — at this size a mark any darker stops being a mark in the gutter
+     and starts being a second thing to read. */
+  font-size: 4.2rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  opacity: 0.34;
+  /* Decoration, so it stays out of a selection the reader drags across the
+     paragraph and out of what that selection copies. */
+  user-select: none;
+  pointer-events: none;
+}
+
 /* ---- content that cannot reflow -------------------------------------
    A code block or a data table in the article is as wide as its widest line,
    and neither will wrap. Until now nothing stopped either: the cell grew, the
@@ -1228,6 +1377,28 @@ tr.row-active .block-ref { opacity: 0.95; }
 /* Media, captions and rules — present, but never competing with the argument. */
 td.text.opaque { background: var(--muted); }
 td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }
+
+/* ---- a caption that arrived as a paragraph ---------------------------
+   `kind: "caption"` is a `Figure 3: …` paragraph sitting *beside* a figure
+   rather than inside it — stage 3 recognises it by the marker at the front of
+   the text (src/blocks.ts § CAPTION_MARKER) — and until 2026-08-31 nothing
+   styled it. `.prose figcaption` above covers only real `<figcaption>`
+   elements, so the same sentence was set two different ways depending on how
+   the publisher happened to mark it up. Same treatment as a figcaption's, for
+   the same reason: it belongs to the picture, not to the argument.
+
+   **After `td.text.opaque`, and that is why it is down here rather than up with
+   the other block kinds.** A caption is `gistable: false`, so it already
+   carries `.opaque`, and the two selectors have exactly the same specificity —
+   which leaves source order deciding, silently, whether a caption is set at
+   0.85rem or at the 0.95rem `.opaque` gives everything it covers. */
+td.text.kind-caption .prose {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
 
 /* --------------------------------------------------------------- outline --
    Text off: rows collapse to their natural height and the same table becomes a
@@ -1669,10 +1840,19 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    Selecting prose asks the model to explain it; the answer arrives in a
    floating dialog. See docs/project/comments.md.
 
-   Two pieces: the mark left in the prose, and the panel. There is deliberately
-   no third piece — no column, no gutter, nothing that changes the width of
-   anything — because the whole reason this is a dialog is that the granularity
-   table's layout arithmetic (layout.ts) stays untouched.  */
+   Two pieces here: the mark left in the prose, and the panel. There is
+   deliberately **no column** — nothing that changes the width of anything —
+   because the whole reason this is a dialog is that the granularity table's
+   layout arithmetic (layout.ts) stays untouched.
+
+   Since 2026-08-31 there is a third piece, and it is worth being exact about
+   why it does not break that rule: a comment also draws a `Bookmark` in the
+   prose gutter (§ the gutter, `.blk-cmt`). The gutter is a fixed 2.1rem that
+   exists whether or not anything is in it, so a comment still costs the layout
+   nothing — which is the property this paragraph was protecting, rather than
+   the absence of a gutter as such. The marker is there because the underline
+   cannot be: a comment whose quoted words were edited away resolves to nothing
+   and draws no mark at all. GPT Sol flagged this sentence going stale.  */
 
 /* The persistent artefact in the text. An underline rather than a fill: a wash
    behind the words is what `td.gist.active` and the browser's own selection
@@ -3729,8 +3909,8 @@ td.text.has-hit[data-hues="8"] {
      right. It used to be the whole of our list support: ChatPanel split an
      answer on BLANK lines and interpreted nothing else, so a bullet list — which
      the prompt permits — arrived as one paragraph and only this kept it off one
-     line reading "- one - two - three". markdown.ts now parses the list, and
-     what `pre-wrap` is left doing is honouring the single newlines a model puts
+     line reading "- one - two - three". The list is parsed now, and what
+     `pre-wrap` is left doing is honouring the single newlines a model puts
      INSIDE a paragraph, which Markdown would collapse and a reader would notice.
      Long lines still wrap. */
   white-space: pre-wrap;
@@ -3740,8 +3920,8 @@ td.text.has-hit[data-hues="8"] {
 
 /* ---- the shapes a model writes ----
    Lists, headings, quotes, rules and code in an answer. Drawn by Cited.tsx from
-   markdown.ts's blocks; see docs/plans/chat-markdown.md for what is and is
-   not interpreted.
+   an mdast tree; see docs/plans/chat-markdown.md for what is and is not
+   interpreted.
 
    `fmt-`, not the obvious markdown prefix, and that is not a preference.
    tests/doc-links.test.ts scans every source file for bare references to a
@@ -7047,10 +7227,12 @@ td.text.has-hit[data-hues="8"] {
 /* **Unavailable, not hidden, and not `:disabled` either.** At the two ends of
    the article one of these does nothing, and a button that disappeared would
    move the other one under the reader's thumb between presses. It is
-   `aria-disabled` rather than `disabled` because a disabled button cannot be
-   focused and fires no mouse events — so its hover card, which is the thing
-   that says *why* it is dead, would be unreachable by exactly the reader asking
-   the question. See DiagramPanel.tsx § the step bar. */
+   `aria-disabled` rather than `disabled` so that it keeps its place in the tab
+   order — a keyboard reader stepping to the last paragraph should not have
+   focus vanish from under them. The stronger reason was the hover card that
+   said *why* it was dead, which a `disabled` button fires no events to open;
+   that card was removed on 2026-08-31 at Greg's request. See DiagramPanel.tsx
+   § the step bar. */
 .diag-step-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
 .diag-step-at {
   font-family: var(--font-ui);
@@ -7636,63 +7818,218 @@ mark.chat[data-chat-end]::before {
   color: var(--chat-mark);
 }
 
-/* ------------------------------------------------- the paragraph's door -- */
+/* ------------------------------------------------------- § the gutter ------
+   The reader's column beside every paragraph — BlockGutter.tsx has the rule it
+   follows and the three slots it is.
 
-.block-chat {
+   **Absolutely positioned, which the chat button never was.** Until 2026-08-31
+   `.block-chat` had no `position` at all, so it was an in-flow inline-flex box
+   at the top of the cell — above the first line of prose, at the prose's own
+   left edge, 21px of height on every block in the article — while every comment
+   around it described a button sitting in the gutter under the block id. It
+   looked right because it was invisible. Measured with a real browser:
+   docs/postmortems/block-chat-was-never-in-the-gutter.md.
+
+   Fixed slots rather than a packed stack, so nothing moves when hover adds the
+   permalink above a comment marker that was already there, and the eye learns
+   where each thing lives. `align-items: center` because the three glyphs have
+   different widths and a ragged column of icons reads as a mistake. */
+.blk-gutter {
+  position: absolute;
+  left: 0.35rem;
+  top: calc(var(--block-pad) + 0.2rem);
+  width: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+  /* **The box is not a target; only the icons in it are.** Without this the
+     container is an `auto` hit-test surface the full height of the stack, so it
+     swallowed hits aimed at the icons *inside* it while they were hidden — and,
+     where a short row lets the stack hang below its own row, it took the hover
+     for that row from the row underneath. Found by Playwright refusing to click:
+     "<div class="blk-gutter"> intercepts pointer events". Nothing here would
+     have shown it, because the container has no handler of its own and swallows
+     silently.
+
+     Hovering blank gutter still reveals the icons: the pointer now falls through
+     to the `<td>`, which is inside the same `<tr>`, so `tr:hover` still matches.
+     Every child opts back in below, and the ones that are hidden deliberately do
+     not. */
+  pointer-events: none;
+}
+
+/* **A heading hangs its gutter from the bottom.** A heading row is the shortest
+   row in the article — 33px measured — and it has three pads of *empty space
+   above it*, because a heading belongs to what follows it (§ text).
+   Top-anchored, a two-slot stack ran 12px past the bottom of every heading in
+   the piece and sat in the next paragraph's gutter. Anchored to the bottom it
+   grows upward into space that is already blank.
+
+   **Except when the heading is commented**, and that exception is the whole
+   reason the rule below exists: bottom-anchoring cannot make a 46px three-slot
+   stack fit a 33px row, it only decides which end escapes — so a commented
+   heading would have grown 15px *upward* into the row above, and a commented
+   first heading into the table head. Sol's third finding, and it was a shape the
+   fixture did not have. `.has-marks` takes the exception back. */
+td.text.kind-heading .blk-gutter {
+  top: auto;
+  bottom: calc(var(--block-pad) / 2);
+}
+
+/* **A row that draws all three slots is given the height for all three.**
+
+   No interactive control may cross a row boundary — Sol's second and third
+   findings, and the reasoning that killed the earlier "the overhang is
+   harmless" answer: an overhanging control is *inside the upper row's `<tr>`*,
+   so pointing at it marks that row active while the pointer is geometrically in
+   the next one. It is genuinely inert on a desktop row whose overhanging chat
+   button is hidden — which is the only case the browser check covered — and it
+   is live wherever `.block-chat.has` matches, and live on **every** touch
+   device, where `(hover: none)` reveals the whole gutter.
+
+   So the fix is not to argue about the overhang, it is to remove it. `height`
+   on a `<td>` is a minimum, so this floors the row at the stack it has to hold
+   and leaves every taller row exactly as it was.
+
+   **Only rows that have a comment marker**, which is what keeps this from being
+   a change to the article's rhythm: two slots (30px) already fit a one-line
+   paragraph (39px), so nothing else in the piece moves. A commented one-line
+   paragraph is the rare case, and it gets the room instead of the overhang.
+
+   The heading exception goes back to top-anchoring here, because a floored
+   heading row has space *below* the heading and hanging the gutter in it would
+   put the icons a line clear of the words they belong to. */
+td.text.has-marks {
+  height: calc(var(--blk-slot) * 3 + var(--block-pad) * 2 + 0.2rem);
+}
+td.text.kind-heading.has-marks .blk-gutter {
+  top: calc(var(--block-pad) * 2);
+  bottom: auto;
+}
+
+/* One slot, and the number is load-bearing: three of them plus the cell's two
+   pads is what has to fit inside the shortest prose row in an article. At
+   0.95rem a two-item stack is 30px against a 39px one-line paragraph, and the
+   only case left that overhangs at all is a one-line paragraph the reader has
+   also commented on. Every item is this tall whether or not it is drawn, which
+   is what makes the positions fixed. */
+.blk-gutter > * {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  margin-top: 0.15rem;
-  padding: 0.1rem;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: var(--blk-slot);
+  /* **The whole width of the gutter, not the width of the glyph.** Without
+     this each target was the SVG's own 12px and the note on `td.text` claiming
+     the gutter width *was* the target was simply false. GPT Sol, 2026-08-31. */
+  width: 100%;
+  padding: 0;
   background: none;
   border: none;
   line-height: 1;
   color: var(--ink-faint);
   cursor: pointer;
-  /* Hidden, not removed. `display: none` would take it out of the tab order and
-     hand a keyboard reader nothing — and `pointer-events` has to go with the
-     opacity, or the gutter grows an invisible target that eats clicks meant for
-     the block id above it. */
+  text-decoration: none;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+/* **State is visible; an affordance waits to be asked for.** The permalink and
+   an unused chat button are hidden until the pointer is on the row; a comment
+   marker, and a chat button on a block that already has conversations, are
+   there whether or not anyone is looking, because they are facts about the
+   article rather than buttons.
+
+   `opacity`, never `display: none`: a hidden element is not focusable, so this
+   would delete the gutter outright for a keyboard reader and every check done
+   with a mouse would look fine. `pointer-events` has to travel with the
+   opacity, or an invisible target grows in the gutter and eats the clicks. */
+.blk-permalink,
+.block-chat {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s;
 }
+tr:hover .blk-permalink,
 tr:hover .block-chat,
+.blk-permalink:focus-visible,
 .block-chat:focus-visible,
 .block-chat.has {
   opacity: 1;
   pointer-events: auto;
 }
-/* **On a touch device there is no hover, so this button did not exist.**
-   Every way of reaching it was a pointer state — `tr:hover`, `:focus-visible`,
-   or the block already having a conversation — and a finger produces none of
-   them, so the door into chat beside every paragraph was shut on exactly the
-   device Greg was reading on. There is already a rule doing this job for
-   `.chat-actions` further up this file; this one never got one.
+/* Recessive on the row, full when it is the thing you are pointing at — the
+   ladder `.block-ref` used to have, kept. */
+tr:hover .blk-permalink { opacity: 0.6; }
+.blk-permalink:hover,
+.blk-permalink:focus-visible { opacity: 1; color: var(--highlight); }
 
-   Found by reading the stylesheet rather than by looking at the page, and it
-   could only have been found that way: the browser harness runs in a desktop
-   Chrome, where `(hover: none)` never matches and the button works fine.
+/* Copying failed, and the reader is told rather than left with a tick that
+   means nothing. The title says what to do instead.
 
-   Quieter than the hover-revealed state rather than fully lit: on a phone this
-   is one small glyph beside every paragraph in the article, and at full
-   strength eighty of them read as a column of decoration. */
+   `tr:hover` is in the selector because without it this loses: `tr:hover
+   .blk-permalink` above is (0,2,1) against this rule's (0,2,0), so the alert a
+   pointer failure produces would have been drawn at 0.6 — dimmed, on the one
+   row the reader is looking at, in the one state that needs to be seen. Found
+   by reading specificity rather than by looking, which is the only way it could
+   be: it is a wrong *opacity*, not a missing element. GPT Sol, 2026-08-31. */
+.blk-permalink.failed,
+tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
+
+/* **On a touch device there is no hover, so an affordance revealed by hover
+   does not exist.** This stylesheet has shipped that bug twice — once for
+   `.block-chat` and once for `.block-id` — and both times a desktop-Chrome
+   harness said everything was fine, because `(hover: none)` never matches
+   there. So the permalink is decided here rather than by omission.
+
+   Faint rather than full: on a phone this is one glyph beside every paragraph
+   in the article, and at full strength eighty of them are a column of
+   decoration. */
 @media (hover: none) {
+  .blk-permalink,
   .block-chat {
     opacity: 0.45;
     pointer-events: auto;
   }
+  .blk-permalink { opacity: 0.35; }
 }
+
+/* The reader's mark. `--highlight` is exactly what `mark.cmt` paints the
+   passage with, so the gutter and the words underline the same fact.
+
+   `pointer-events: auto` because the container above is `none` and this is the
+   one slot with no reveal rule to hand it back — it is always visible, so it was
+   the one that would have shipped un-clickable. */
+.blk-cmt { color: var(--highlight); opacity: 0.75; pointer-events: auto; }
+.blk-cmt:hover,
+.blk-cmt:focus-visible { opacity: 1; }
+.blk-n {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.blk-gutter > *:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------- the paragraph's door -- */
+/* What is left that is specific to the chat button. Its box, its reveal and its
+   touch rule are § the gutter's above, shared with the other two slots.
+
+   The touch rule up there is the one this button already had, and it is worth
+   knowing why it existed: every way of reaching this button was a pointer state
+   — `tr:hover`, `:focus-visible`, or the block already having a conversation —
+   and a finger produces none of them, so the door into chat was shut on exactly
+   the device Greg was reading on. Found by reading the stylesheet rather than by
+   looking at the page, and it could only have been found that way: the harness
+   is a desktop Chrome, where `(hover: none)` never matches. */
 
 /* A block that already has conversations says so whether or not you are
    hovering it — the only affordance a whole-block anchor gets, since it draws
    no mark in the prose. */
 .block-chat.has { color: var(--chat-mark); }
 .block-chat:hover { color: var(--highlight); }
-.block-chat:focus-visible {
-  outline: 1px solid var(--highlight);
-  outline-offset: 2px;
-}
 .block-chat-n {
   font-family: var(--font-mono);
   font-size: 0.58rem;
@@ -8072,10 +8409,12 @@ tr:hover .block-chat,
  * invisible, so the margin is worth more than the two hundred pixels of text.
  *
  * This does not make the bar right at every width; it makes it *honest* at
- * every width. Whether eleven buttons in one row is the design is Greg's
+ * every width. Whether thirteen buttons in one row is the design is Greg's
  * call — see docs/plans/ideas-mode.md § Questions. */
 @media (max-width: 1100px) {
   .dock-modes .dock-btn-label { display: none; }
+  /* Except one — see `keepLabel` in Dock.tsx for which and why. */
+  .dock-modes .dock-btn-label.always { display: inline; }
   /* Square-ish once the text is gone, so six icons read as one segmented
      control rather than as six loose glyphs. */
   .dock-modes .dock-btn { padding-inline: 0.6rem; }
@@ -8734,36 +9073,25 @@ tr:hover .block-chat,
   }
   .logo-text { display: none; }
 
-  /* **The block-id gutter, which is what Greg actually asked about.**
+  /* **The block-id gutter used to be hidden here, and now there is nothing to
+     hide.** 83px of every prose row bought a 64px monospace id — "a big waste of
+     horizontal space", 21% of a 390px screen — so this query cut it out and
+     shrank the gutter to the 2.1rem the chat button needed.
 
-     83px of every prose row, always, for a 64px debugging affordance — "a big
-     waste of horizontal space", and on a phone it is 21% of the article's width.
+     Both declarations have gone, 2026-08-31, because the desktop came down to
+     meet them: the gutter is 2.1rem at every width now (§ text), and what is in
+     it is icons rather than text, so the width this query was rationing is no
+     longer being spent anywhere.
 
-     Hidden rather than moved: an id above each paragraph would cost ~18px of
-     height on every block, and the whole point of this query is that the column
-     has become the window.
+     **A phone gains rather than loses.** The permalink is the one affordance a
+     touch reader could not get any other way — there is no right-click, no
+     "copy link address" — and this query used to be what took it away. The cost
+     is one more focusable element per block on the narrow layout, which is said
+     out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
 
-     **What is left is weaker than it first looks, and worth saying exactly.**
-     `?at=` does carry a block id, but position is stored as a *section* rather
-     than a paragraph (position.ts), so scrolling rewrites it to section starts
-     and only a deliberate jump ever puts a particular paragraph there. Both
-     ends of every gist range are still links (BlockRef.tsx), which on a phone
-     means Summary mode. So a phone reader can still reach a section's id and
-     cannot conveniently reach an arbitrary paragraph's. That is a real
-     reduction, judged worth 21% of the screen; GPT Sol was right that the first
-     version of this note overstated what survived.
-
-     Deliberately NOT hidden on a wide window. There the prose column is capped
-     at a measure anyway, so the gutter costs the reader nothing; it is only ever
-     a cost when the column is the whole screen. See § Open for Greg in the plan
-     — making it hover-only everywhere is his call, not a tidy-up. */
-  .block-id { display: none; }
-
-  /* What is left of the gutter is what the per-paragraph chat button needs, and
-     nothing more. 5.2rem → 2.1rem gives 50px of a 390px window back to the
-     prose. Trailing padding shrinks too: 1.4rem of right margin is generous
-     when the measure is 366px. */
-  td.text { padding-left: 2.1rem; padding-right: 0.9rem; }
+  /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
+     measure is 366px. The left is § text's now. */
+  td.text { padding-right: 0.9rem; }
 
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
@@ -8847,19 +9175,26 @@ tr:hover .block-chat,
      machine this rule was written to stop. Pinning `flex-grow` to `0` as well
      was incidental, and it silently outranked § a coarse pointer's attempt to
      let the buttons share the bar (this selector is (0,2,0) against that
-     rule's (0,1,0)), leaving eleven icons huddled at the left end of a phone.
+     rule's (0,1,0)), leaving thirteen icons huddled at the left end of a phone.
      Nothing may shrink; growing into space that is already there costs the
      guarantee nothing. */
   .dock > *:not(.dock-gap) { flex-shrink: 0; }
 
   /* Every dock button drops its label, not just the six modes. The modes have
      done this below 1100px since Ideas made them six (§ the modes segment); at
-     390px the other three have to follow or eleven buttons cannot share 390px.
+     390px the other three have to follow or thirteen buttons cannot share 390px.
      Same argument as there: each carries its name in a tooltip and in an
      explicit `aria-label`, so this costs a sighted reader a hover and costs a
      screen-reader user nothing. */
   .dock .dock-btn-label { display: none; }
-  /* Nine icons in 390px. 0.45rem rather than the 0.6rem the 1100px query uses,
+  /* Except one — see `keepLabel` in Dock.tsx. The row already scrolls sideways
+     at this width (§ a coarse pointer does the arithmetic), and this button is
+     leftmost, so the word costs the reader nothing they can see: what it buys is
+     that the way out of a mode is legible without hovering ten glyphs. */
+  .dock .dock-btn-label.always { display: inline; }
+  /* Thirteen icons in 390px, which no longer fit — see § a coarse pointer for
+     the arithmetic and for why the row scrolls rather than shrinking further.
+     0.45rem rather than the 0.6rem the 1100px query uses,
      and the extra 0.15 is not cosmetic — at 0.55rem the row came to 401px
      against 390 of bar, and closing an 11px gap exactly would have reopened it
      the moment the Questions count reached three digits. This leaves ~25px of
@@ -9041,14 +9376,47 @@ tr:hover .block-chat,
      at the top of the viewport. Whatever moves this has to move both, so it has
      to be set where both inherit from. Specificity (0,3,0) beats the attribute
      rule above whichever order they end up in. */
-  :root:has(.controls:focus-within) {
+  /**
+   * **And `.mode-band`, since 2026-08-31** — the bars stay while a mode is open.
+   * This is the fix for a real complaint rather than a tidy-up:
+   *
+   * > on mobile I did find that I sometimes struggled to get back to the main
+   * > text (e.g. within the Search mode when the keyboard was open)
+   * >
+   * > — Greg, 2026-08-31
+   *
+   * Measured at 390 × 740 with a real wheel event: one scroll down in Search
+   * mode took `.controls` to `y: -44` and `.dock` to `y: 740`, so **both** exits
+   * left the screen at once — the close button at the top and the dock's mode
+   * buttons at the bottom. The keyboard then covers roughly the bottom 300px
+   * anyway, because index.html deliberately does not set
+   * `interactive-widget=resizes-content` (see `.cmt-dialog` for why), so a fixed
+   * bar at the foot of the layout viewport is behind it. Between them there was
+   * no way out of the mode that did not start with scrolling back up.
+   *
+   * **And hiding the bars was buying nothing in this state.** § a narrow window
+   * makes the band cover the whole article on a phone, so the 44px this query
+   * reclaims is 44px of something already behind a panel. The reader was paying
+   * the only price the rule has — chrome that is not where they left it — for a
+   * benefit that does not exist here.
+   *
+   * **In the guard rather than as a `:not()` on the rule above**, and that is
+   * the specificity argument the sibling guard below sets out at length:
+   * `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie
+   * with these guards, decided by source order — the exact fragility GPT Sol
+   * caught here on 2026-08-28. Adding an argument to a `:has()` changes nothing,
+   * because `:has()` takes its *most specific* argument and `.controls:focus-within`
+   * is still it. This list is the list of reasons the bars must stay, and this
+   * is another one. docs/plans/plain-mode-and-the-way-out.md § 1.
+   */
+  :root:has(.controls:focus-within, .mode-band) {
     --bar-bottom: calc(var(--bar-h) + var(--safe-top));
     /* Both, or the bar a keyboard reader is standing in stays off the top of
        the screen while everything under it politely moves down to make room. */
     --bar-hide: 0px;
   }
   /* The same guard for the bottom bar, and it needs two conditions rather than
-     one. `:focus-within` is the keyboard half — a reader tabbing along eleven
+     one. `:focus-within` is the keyboard half — a reader tabbing along thirteen
      icon buttons must not have the row slide out from under the one they are
      on. `.dock-drawer` is the other: the drawer rises *out of* the bar and is
      anchored to it, so a bar that slid away while the drawer was open would
@@ -9077,13 +9445,18 @@ tr:hover .block-chat,
      screen with nothing under it. Bringing the bar back is the cheaper of the
      two fixes and the better one — a dialog is open because the reader stopped
      reading, which is exactly when the chrome should come back. */
+  /* **And `.mode-band`, 2026-08-31.** Both bars need it, for the reason the
+     guard above sets out at length: the top one carries the close button and
+     this one carries the mode switch, and a reader in a mode with a keyboard up
+     could reach neither once they had slid away. */
   :root:has(
     .dock-drawer,
     .dock:focus-within,
     .install-hint:focus-within,
     .cmt-dialog,
     .chat-dialog,
-    .annotate-dialog
+    .annotate-dialog,
+    .mode-band
   ) {
     --dock-bottom: var(--dock-space);
   }
@@ -9100,7 +9473,11 @@ tr:hover .block-chat,
      one-line strip is the only way to say that without knowing the number.
      Its `:focus-within` is in the guard above, so a reader tabbing to the
      dismiss button does not lose it mid-press. */
-  :root[data-bars="hidden"] .install-hint {
+  /* `:where()` around the guard so this keeps the specificity it had. Nothing
+     competes for this element's `transform` today, but the rule twenty lines up
+     — where a tie *would* have been decided by source order — is why the habit
+     is worth keeping in the same query. GPT Sol, 2026-08-31. */
+  :root[data-bars="hidden"]:where(:not(:has(.mode-band))) .install-hint {
     transform: translateY(calc(100% + var(--dock-space)));
   }
   .masthead { padding-top: calc(0.6rem + var(--safe-top)); padding-bottom: 0.55rem; }
@@ -9149,18 +9526,26 @@ tr:hover .block-chat,
    costs 40px** (the floor below) and each mode costs a further 1px of hairline;
    `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
    modes the row is roughly `40 × (m + 3) + m + 9`. At m=8 that is 457px, at m=9
-   it is 498, and the bar is 384. **A phone in portrait scrolls, and every new
-   mode makes it scroll by another 41px.**
+   it is 498, at m=10 it is 539, and the bar is 384. **A phone in portrait
+   scrolls, and every new mode makes it scroll by another 41px.**
 
-   No floor small enough to avoid it would be worth having: twelve buttons
-   sharing 384px is 32px each, which is smaller than they were before any of
+   **`plain` is the tenth (2026-08-31), and it is the one that had to be
+   leftmost.** A scrolling row means the buttons past the fold are found by
+   dragging a bar most readers do not know drags — so the position matters most
+   for the button somebody reaches for when they want *out* of where they are.
+   It also keeps its text label at this width (§ the modes segment), which costs
+   another ~35px of a row that already overflows and buys the one thing the
+   overflow takes away: being able to see what the exit is without hovering it.
+
+   No floor small enough to avoid it would be worth having: thirteen buttons
+   sharing 384px is 30px each, which is smaller than they were before any of
    this.
 
    Greg was asked and chose this, 2026-08-28: *"maybe also row scrolls sideways
    if it doesn't fit horizontally"*. So the floor is set at the size worth
    pressing rather than at the size that would fit, and the row scrolls — which
    § a narrow window already made it do, with the scrollbar hidden. **What this
-   query cannot claim is that a phone reader can see all eleven at once.** The
+   query cannot claim is that a phone reader can see all thirteen at once.** The
    two-row bar that would fix that properly is written up in
    docs/plans/mobile-screen-real-estate.md § Open for Greg; it is a design
    change rather than a size change, and his to make.
@@ -9223,44 +9608,25 @@ tr:hover .block-chat,
 }
 
 /* ------------------------------------------------- § the gutter reveals ----
-   **The block id beside a paragraph is shown when you are on that paragraph,
-   not always.** Greg, 2026-08-27: *"maybe we need to rethink the way we
-   currently always show the block-ids to the left of the blocks"* — and having
-   fixed the half of that which was about width (§ a narrow window hides them
-   outright), this is the half that was about noise. On a wide window the gutter
-   costs the reader nothing, because the prose is capped at a reading measure
-   anyway; what it costs is a column of grey machine text running down the side
-   of the article, permanently, next to every single paragraph.
+   **What the gutter shows when you are not on the row.** Greg, 2026-08-27:
+   *"maybe we need to rethink the way we currently always show the block-ids to
+   the left of the blocks"*. The answer then was to reveal the id on `tr:hover`;
+   the answer now is that there is no id, and the reveal is a property of what
+   kind of thing each slot holds.
 
-   So it joins the chat button that already lives in the same gutter and already
-   worked this way: **the gutter as a whole is revealed by being on the row.**
-   One affordance rather than two, and nothing new to learn.
+   That rule and its `@media (hover: none)` companion live with the rest of the
+   gutter, at § the gutter far above, rather than here — one place, next to the
+   box they modify, instead of a second section a thousand lines away that has
+   to be kept in step. What was here was six declarations on `.block-ref.block-id`,
+   a class nothing renders any more.
 
-   `.block-ref.block-id` rather than `.block-id`, and that is load-bearing: the
-   `.block-ref` block further up this file sets `opacity: 0.5` and is declared
-   AFTER `.block-id`, so a single-class selector here would lose on source order
-   while looking perfectly correct. Two classes (0,2,0) wins wherever it sits.
-
-   Opacity rather than `display: none`, for the reason the chat button gives:
-   a hidden element is not focusable, so this would vanish for a keyboard reader
-   and every check done with a mouse would look fine. */
-.block-ref.block-id { opacity: 0; }
-tr:hover .block-ref.block-id { opacity: 0.6; }
-.block-ref.block-id:hover,
-.block-ref.block-id:focus-visible { opacity: 1; }
-
-/* Nothing to be on the row *with*. Faint but present, the same call and the
-   same reasoning as `.block-chat` above — on a touch device "reveal on hover"
-   means "never", and a reader who wants to quote a paragraph still needs to be
-   able to see which one it is. On a narrow window § a narrow window takes it
-   away entirely — and it wins because it sets `display`, which none of these
-   rules touch, rather than because of source order. (It is in fact declared
-   *earlier*; the first version of this note had the cascade backwards.
-   GPT Sol, 2026-08-27.) */
-@media (hover: none) {
-  .block-ref.block-id { opacity: 0.3; }
-}
-
+   **Two sentences of it were false before they were deleted, and both were
+   false in the same way**: they described the chat button as "already living in
+   the same gutter" and working "exactly this way". It was not in the gutter at
+   all — it had no `position` — and nobody noticed for four days because it was
+   `opacity: 0`. A comment that describes a layout instead of asserting one is a
+   comment that can rot without any test going red.
+   docs/postmortems/block-chat-was-never-in-the-gutter.md.
 
 /* ------------------------------------------------------- § one axis only ----
    **A finger drag scrolls the page down, or across, and never both at once.**
