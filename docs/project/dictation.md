@@ -4,6 +4,12 @@ A microphone button beside a text box. Press it, talk, press it again, and your 
 box. It is on four boxes today — both profile boxes, the chat composer, the comment follow-up —
 and adding it to a fifth is three lines.
 
+This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
+back and either of you can cut the other off — is a separate spike, not a setting on this one:
+[live-conversation.md](../plans/live-conversation.md). It shares this doc's vocabulary machinery
+and none of its plumbing, because OpenRouter has no realtime API and the audio never reaches our
+server at all.
+
 This doc is *how it works now*. The day of debugging that got the microphone itself believable —
 the 1.1-second gap nobody could see, the level meter, the conferencing loopback that emitted exact
 digital silence — is in [reader-profile.md § The microphone](reader-profile.md#the-microphone-and-what-it-took-to-make-it-believable),
@@ -336,6 +342,7 @@ once for that origin. And the origin includes the port, which Vite moves.
 ## See also
 
 [reader-profile.md](reader-profile.md) · [comments.md](comments.md) · [glossary.md](glossary.md) ·
+[live-conversation.md](../plans/live-conversation.md) ·
 [copy.md](copy.md) · [logging.md](logging.md) ·
 [dictation-two-pass.md](../plans/dictation-two-pass.md) ·
 [dictation-vocabulary.md](../plans/dictation-vocabulary.md) ·

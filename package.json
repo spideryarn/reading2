@@ -22,6 +22,7 @@
     "blocks": "tsx src/blocks.ts",
     "dev": "vite",
     "dev:pretty": "vite | pino-pretty",
+    "live:spike": "tsx scripts/live-spike.ts",
     "build": "vite build",
     "validate-tree": "tsx src/validate-tree.ts",
     "toc:flatten": "tsx src/toc-flatten.ts",
