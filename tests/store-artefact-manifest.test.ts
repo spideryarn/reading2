@@ -71,6 +71,24 @@ const HOMES: Record<string, string> = {
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
      docs/plans/hosting-the-articles-images.md. */
   "assets.json": "article_revisions.assets",
+  /* The label run's checkpoint, and the one entry here whose home is decided
+     but **not yet wired**. `src/db/schema.ts` § checkpoints says in as many
+     words that the table is "the Postgres home of `labels-progress.json`", and
+     `src/store/checkpoints.ts` exists — but `src/labels.ts` still reads and
+     writes the flat file directly against `opts.dir` (`CHECKPOINT_FILE`, line
+     877), so nothing puts one in Postgres today.
+
+     It belongs here rather than in `NOT_YET_WRITTEN` for a reason the two
+     lists' own headers settle: that one is for artefacts with **no example on
+     disk**, and it clears itself the moment one appears — so an entry there
+     would fail on the very file that prompted it. This list is a record of
+     where a thing goes, not a claim that it has got there.
+
+     What is genuinely unanswered is who *reclaims* a finished run's checkpoint
+     once it is in Postgres: on the filesystem `scripts/checkpoints-sweep.ts`
+     sweeps the `data/` root, which is a filesystem answer that does not carry
+     over. docs/plans/delete-the-importer.md § D2 records it as open. */
+  "labels-progress.json": "checkpoints (namespace 'toc-labels') — decided, not yet wired",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
@@ -139,11 +157,12 @@ const NOT_MIGRATED: Record<string, string> = {
  * and an exemption with no expiry would reintroduce it by the back door.
  */
 const NOT_YET_WRITTEN: Record<string, string> = {
-  /* The `assets` step landed 2026-08-29 and needs the network to produce
-     anything, so no article in `data/` and no fixture in `example/` has one
-     yet. Delete this line the moment one does — the assertion below will make
-     you. docs/plans/hosting-the-articles-images.md, stage B. */
-  "assets.json": "the assets step is new and has not been run against a real article",
+  /* Empty, and that is the list working rather than the list being unused.
+     `assets.json` sat here from 2026-08-29 — "the assets step is new and has
+     not been run against a real article" — until a real run on 2026-08-30
+     produced one, and the assertion below duly failed and made somebody delete
+     the line. It has a home in `HOMES` and always did.
+     docs/plans/hosting-the-articles-images.md, stage B. */
 };
 
 describe("the artefact manifest", () => {
