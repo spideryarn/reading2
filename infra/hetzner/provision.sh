@@ -392,9 +392,9 @@ check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --
 # Git plumbing. Deliberately NOT a check that tokens are present: they are a
 # human step, and a check that stays red until somebody does it is how a report
 # stops being read. The helper refuses loudly at first use if a token is absent.
-check "git identity"             'su - '"$GJD_USERNAME"' -c "git config --global user.email" | grep -q "@"'
-check "git credential helper"    'su - '"$GJD_USERNAME"' -c "git config --global credential.https://github.com.helper" | grep -q github-owner-credential-helper'
-check "git useHttpPath on"       'su - '"$GJD_USERNAME"' -c "git config --global credential.useHttpPath" | grep -qx true'
+check "git identity"             'su - '"$USER_NAME"' -c "git config --global user.email" | grep -q "@"'
+check "git credential helper"    'su - '"$USER_NAME"' -c "git config --global credential.https://github.com.helper" | grep -q github-owner-credential-helper'
+check "git useHttpPath on"       'su - '"$USER_NAME"' -c "git config --global credential.useHttpPath" | grep -qx true'
 check "credential helper runs"   'printf "protocol=https\nhost=github.com\npath=nobody-here/x.git\n\n" | /usr/local/bin/github-owner-credential-helper.sh get; [ $? -eq 1 ]'
 check "token dir"                'test -d /etc/github-tokens && [ "$(stat -c %a /etc/github-tokens)" = "700" ]'
 check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'

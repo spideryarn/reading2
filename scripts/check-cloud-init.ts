@@ -47,6 +47,7 @@ const TEMPLATE_VARS: Record<string, string> = {
   // that the variable is declared, because Terraform errors at plan time on
   // one that is not.
   provision_b64: "IyEvYmluL2Jhc2gK",
+  helper_b64: "IyEvYmluL3NoCg==",
 };
 
 /**
