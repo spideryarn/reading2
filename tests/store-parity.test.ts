@@ -84,7 +84,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
@@ -149,33 +149,49 @@ const LEGACY_SLUG = "constitution";
  */
 
 /**
- * Postgres must not be listing the article it refused to publish.
+ * Postgres must have no published revision for the article it refused.
  *
  * The exclusion above removes a known difference, and a subtraction that is
  * never checked is how a real difference hides behind a permitted one. This is
- * the other half: the day the gate stops refusing `constitution`, or the day
- * `onTheShelf` starts listing drafts, the slug appears on the Postgres side and
- * this fails instead of being quietly filtered out.
+ * the other half, and it enforces what the block below only says in prose: *if
+ * this ever gains a stamp, retire the case.* Stamp `labels.json`, and the load
+ * publishes, and this goes red at the exclusion site rather than the exclusion
+ * quietly covering for it.
  *
- * True on a laptop and in the gate worktree alike — unlike the filesystem side,
- * which depends on whether the reader archived it.
+ * **Asserted against `articles.current_revision_id`, and deliberately NOT
+ * against the library listing, which cannot see this.** The obvious form was
+ * written first —
  *
- * Scoped to `onDisk` for the reason the comparisons themselves are: a row left
- * behind by a suite whose directory has since gone is a known gap, not a
- * finding, and letting it red here would teach the next reader to distrust
- * this. `it("has something to compare")` is what catches the article going
- * missing from disk altogether.
+ *     expect(fromPg.map((e) => e.slug)).not.toContain(LEGACY_SLUG)
+ *
+ * — and it was green for the wrong reason, which is the same wrong reason this
+ * whole exclusion exists to document. `src/store/pg.ts:1367` filters the
+ * Postgres library on `articles.archived_at` exactly as `src/api.ts` filters
+ * the filesystem one, and this laptop's database has `constitution` archived
+ * too. Staged with a matching `sourceHash` in a throwaway worktree, the article
+ * published, `loadArticle` served it, the three tests below went red — and that
+ * assertion still passed. The accident had a mirror image on the other side,
+ * and a guard reading the shelf could not have seen either. Measured on
+ * 2026-09-01 rather than reasoned; docs/reusable/silent-success.md.
+ *
+ * The revision pointer is the fact itself, so no filter is in front of it.
+ * Scoped to the owner, like every other read here, so a mis-set `DATABASE_URL`
+ * cannot answer this question about somebody else's article.
  */
-function expectPostgresOmitsTheLegacyArticle(
-  fromPg: readonly LibraryEntry[],
-  onDisk: ReadonlySet<string>,
-): void {
+async function expectPostgresRefusedTheLegacyArticle(): Promise<void> {
+  const [row] = await getDb()
+    .select({ currentRevisionId: articles.currentRevisionId })
+    .from(articles)
+    .where(and(eq(articles.slug, LEGACY_SLUG), eq(articles.ownerId, currentOwnerId())));
+
   expect(
-    fromPg.filter((e) => onDisk.has(e.slug)).map((e) => e.slug),
-    `Postgres listed ${LEGACY_SLUG}, which never published. Either the publication gate ` +
-      "stopped refusing an unstamped labels file, or the library started listing drafts. " +
-      "Both are real changes and neither should be absorbed by the exclusion below.",
-  ).not.toContain(LEGACY_SLUG);
+    row?.currentRevisionId ?? null,
+    `Postgres has a published revision for ${LEGACY_SLUG}, which the gate is supposed to ` +
+      "refuse. Either labels.json gained a sourceHash — in which case retire the case, as " +
+      "the block below says, rather than restoring the stale file — or the publication gate " +
+      "stopped checking. Both are real changes and neither should be absorbed by the " +
+      "exclusion at the comparison sites.",
+  ).toBeNull();
 }
 
 /** The article with no stage 1, and therefore no `url` and no `fetchedAt`. */
@@ -606,7 +622,7 @@ when("the filesystem and Postgres stores agree", () => {
        declaration: the filesystem lists an article it can serve, Postgres does
        not list one it refused to publish, and both are correct. Asserted on the
        Postgres side rather than left to the filter. */
-    expectPostgresOmitsTheLegacyArticle(fromPg, onDisk);
+    await expectPostgresRefusedTheLegacyArticle();
     const present = (entries: LibraryEntry[]) =>
       entries.filter((e) => onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
@@ -792,7 +808,7 @@ when("the filesystem and Postgres stores agree", () => {
     const onDisk = new Set(await completeArticles());
     /* Same exclusion, same reason, and the same positive assertion — see
        `expectPostgresOmitsTheLegacyArticle` and the note by `LEGACY_SLUG`. */
-    expectPostgresOmitsTheLegacyArticle(fromPg, onDisk);
+    await expectPostgresRefusedTheLegacyArticle();
     const mine = (entries: LibraryEntry[]) =>
       entries.filter((e) => !e.fixture && onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
