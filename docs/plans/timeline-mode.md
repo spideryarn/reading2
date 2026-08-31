@@ -104,7 +104,7 @@ worked exam paper. Every temporal expression in it, verbatim:
 | 20 | "A couple weeks ago, \[I interviewed Ryan Greenblatt\]" | about the *piece*, not the story — and Greg excluded these |
 | 21 | "the six-day sprint during which he assembled the report" | a duration with no anchor |
 | 22 | "just six months ago, this incident feels like…" | relative to publication |
-| 23 | "I continue to expect rapid advances over the next six months" | a **prediction** |
+| 23 | "I continue to expect rapid advances over the next six months" | a **prediction** — and **not the author's**: it is inside a quoted Ajeya Cotra passage. This table said otherwise; the model got it right and the table did not |
 | 24 | "I don't think this is the final warning shot we'll get" | future, with no time in it at all |
 
 **Nineteen of the twenty-four are year-less.** Row 19 is the only one that states 2026, and it does so
@@ -1019,7 +1019,7 @@ a fault in the artefact rather than an unused parameter. Twenty-two of the artic
 history and resolve correctly backwards; **two are forecasts and would resolve backwards too**,
 dating a prediction before the piece was written.
 
-### Stage 2 — the generator, in its own file
+### Stage 2 — the generator, in its own file ✅ done
 
 `src/timeline.ts`: the prompt, the call, the parsing, the occurrence validation, the counters, the
 CLI. It writes `data/<slug>/timeline.json` and touches nothing else —
@@ -1028,6 +1028,64 @@ stage's CLI already works, so it is the finished stage minus its wiring.
 
 The prompt is the spike's, which is measured rather than hoped for. Done: run for real, counters
 reported, output read by eye against the twenty-four expressions.
+
+**Landed** as `07ec27a` + `8b41921` + `7ea7360`: [`src/timeline.ts`](../../src/timeline.ts),
+[`tests/timeline.test.ts`](../../tests/timeline.test.ts), the `models.ts` records, and rows in the
+table-tests. Run twice for $0.27.
+
+**26 events, 18 dated, 0 order conflicts, 0 invented block ids, 0 unquoted, 0 unparseable phrases.**
+Twenty-two of the plan's twenty-four expressions represented. Every "by" bound survived as a bound;
+both lower bounds correct; the `[F]rom` row came out as a seven-day span. **All three of the piece's
+own dates stayed out, both runs**, against this plan's prediction that they would leak in first.
+
+**The id measurement, which settles trap #6 with a number: 26 of 27 ids survived a regeneration, and
+only 7 of 26 labels did.** Label-keyed inheritance would have orphaned nineteen `?event=` links in a
+single re-run.
+
+### `dating` is one field, not three
+
+The four outcomes are a union rather than `when` plus flags, so the impossible states cannot be
+spelled:
+
+```ts
+dating:
+  | { kind: "dated";    when: When }
+  | { kind: "words";    phrase: string }          // "another month later"
+  | { kind: "untimed" }                           // the piece gives no time at all
+  | { kind: "rejected"; reason: Exclude<WhenRefusal, "noDateInPhrase">; phrase: string | null }
+```
+
+`rejected` carries a **narrowed** reason — the one refusal that is not a rejection cannot be spelled
+there — because the panel needs a different sentence for each, and `noYearFrame` ("the piece gave a
+day and a month and there was no publication date to take the year from") is not "that date is not in
+the passage". Its `phrase` is a **required nullable rather than an optional**, so Stage 3 cannot
+forget the case exists.
+
+### `hypothetical` resolves backwards, and that was measured
+
+`predicted` → `"future"`, **`hypothetical` → `"past"`**. They share a sort partition without sharing
+a tense: the article's only hypothetical is *"at some point after July 12"*, a counterfactual about
+something that nearly happened **in the past**, and resolving it forwards dates it to 2027. Its only
+prediction is *"over the next six months"*, a relative phrase carrying no date, so the forward
+direction reaches nothing at all on this article.
+
+### Three things Stage 3 cannot learn from this fixture
+
+1. **`untimed` and `words` are different rows.** Ten of twenty-six had no date; drawing them alike
+   throws away the only thing the article actually said.
+2. **`occurrences` is almost always length 1**, so the ‹1/2› stepper in
+   [the mockup](#what-the-panel-looks-like) is a rare state, not the normal one. Do not design the row
+   around it.
+3. **`rejected` never occurs on this article** — with a publication date, nothing rejects. It is the
+   *only* dated state on a **frameless** article, which is most of the shelf. It cannot be built
+   against this fixture and needs a fabricated one.
+
+### The one real miss is a prompt gap
+
+*"Over the course of three months at OpenAI"* — the span containing every other row — was missed in
+both runs. Not the parser's fault: it has no date to place, and refusing is correct. It belongs on the
+list as a `words` row. **The prompt never says that a span containing other events is itself an
+event**, and its "topic on a line" ban probably reads as forbidding exactly that.
 
 ### Stage 3 — the panel
 
