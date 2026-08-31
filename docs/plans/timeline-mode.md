@@ -801,12 +801,18 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 
 ### Three decisions this survey turned up that the design has to make
 
-1. **Legacy or converted?** `LEGACY_UNCONVERTED_STEPS` in `src/pipeline.ts` decides whether `run()`
-   writes its own file (every stage but one) or returns `parts` for the transaction to write
-   (`sketch`, the only converted one). Getting it wrong is a compile error in one direction and a
-   silently non-transactional write in the other. **Recommendation: converted, like `sketch`** — it
-   is the direction of travel, `docs/plans/finish-the-database-move.md` is mid-flight, and adding an
-   eleventh legacy step is adding to the pile somebody else is carrying.
+1. **Legacy or converted? — settled: converted, and born that way.** Overtaken by events on
+   2026-08-31: another session is mid-flight converting **all seven** article-reading stages off
+   `dir: string`, and [`src/article-input.ts`](../../src/article-input.ts) has landed. Timeline is
+   the eighth stage of that exact shape, so it takes `article: Article` from the start and never
+   appears in `LEGACY_UNCONVERTED_STEPS` at all.
+
+   The reason is sharper than tidiness, and that file's header states it: a stage's `stamp` asked the
+   **store** for blocks/tree/meta while the stage generated from **disk**. On a laptop those are the
+   same bytes; through a job-scoped `/tmp` on a deployment they are not, and a stage that hashes one
+   article and generates from another is *"a stale artefact reporting itself current for ever, with
+   nothing about it looking wrong"*. Taking the article as an argument makes that unrepresentable
+   rather than merely unlikely.
 2. **`ARTICLE_RENDERER`: `"ids"` or `"text"`?** `ideas` and `sketch` send the ids-bearing article
    because the model must name block ids; `arc`, `tweets` and `glossary` send plain text. Timeline
    needs ids for its occurrences, so **`"ids"`** — which also means it can share a cached article
