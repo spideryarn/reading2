@@ -84,6 +84,14 @@ const SHARED = new Set([
      after somebody has talked for two minutes.
      See src/dictation-limits.ts. */
   "dictation-limits.js",
+  /* What a bug report may carry — the diagnostics blob's shape and the two
+     image formats a pasted screenshot may be. On the list for the same reason
+     `monitoring-scrub.js` is, and it is the same argument one seam over: the
+     dialog builds the blob and `POST /api/feedback` validates it, and a browser
+     copy and a server copy would be two allowlists with the looser one winning.
+     It imports nothing at all. See src/feedback-payload.ts and
+     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
+  "feedback-payload.js",
   /* What may be said about a failure when it leaves the machine. On the list
      for the same reason `messages.js` is: it imports nothing but that file and
      types, and both halves of monitoring have to agree on the rules exactly —

@@ -70,6 +70,34 @@ article text is *more* true when the message leaves the machine:
 The full build, the options reference and the source-map story are in
 [260827y-error-monitoring-sentry.md](../plans/260827y-error-monitoring-sentry.md).
 
+## A feedback report is the one thing here `beforeSend` never sees
+
+A reader pressing **Feedback** files a row in Postgres and a copy in Sentry
+([`src/feedback.ts`](../../src/feedback.ts)). That copy does **not** go through `safeEvent`, and
+this is worth knowing before you assume otherwise:
+
+`beforeSend` is routed only for an *error* event — `client.js` checks `isErrorEvent(event)`, which
+is `event.type === undefined` — and `captureFeedback` builds an event with `type: "feedback"`. So
+the allowlist that rebuilds every error event before it leaves never runs on this one. Nothing had
+to be loosened for the feature, and nothing is guarding it either.
+
+Two consequences, both deliberate:
+
+- **The reader's own words go, on purpose.** They typed them into a box that says where they go,
+  having pressed a button labelled Feedback. That is consent, and it is a different thing from a
+  leak. It is the only channel in the app with that property.
+- **Consent licenses the message, not the machinery.** So `src/feedback.ts` builds the payload
+  rather than cleaning it — and, because `prepareEvent` merges global + isolation + current scope
+  data, it captures on **two fresh scopes**. Building the parameters field by field is *not* enough:
+  measured against a hostile scope with a fake transport, extras, contexts, tags, breadcrumbs and a
+  `user` carrying `username` and `ip_address` all reached the envelope.
+  [`tests/feedback-mirror.test.ts`](../../tests/feedback-mirror.test.ts) asserts on the final
+  envelope rather than on the object handed to the SDK, because a test that captures on a clean
+  scope proves nothing.
+
+The reasoning in full, including the table of what leaked, is in
+[260831aj-feedback-button-and-bug-reports-to-sentry.md](../plans/260831aj-feedback-button-and-bug-reports-to-sentry.md).
+
 ## The two gaps, both open
 
 **Nothing alerts.** Sentry receives the event and waits for somebody to open a dashboard. The useful

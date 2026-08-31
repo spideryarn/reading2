@@ -119,7 +119,27 @@ import { isStorableColour } from "./searches.js";
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
 import { CONTENT_TYPE } from "./store/blobs.js";
-import { adminStore, commentStore, sourceStore, visibilityStore } from "./store/index.js";
+import {
+  adminStore,
+  commentStore,
+  feedbackStore,
+  sourceStore,
+  visibilityStore,
+} from "./store/index.js";
+/* **The shape of a report's two loose ends**, and it imports nothing — so the
+   dialog can build the diagnostics blob from the same declaration this file
+   validates it against. Two independent allowlists, one declaration; the
+   `dataCollection` argument in src/monitoring.ts, applied one seam over. */
+import {
+  FEEDBACK_DIAGNOSTICS_VERSION,
+  type FeedbackScreenshot,
+  parseFeedbackDiagnostics,
+  sniffScreenshot,
+} from "./feedback-payload.js";
+/* The Sentry half. It cannot throw and it cannot fail this request — read its
+   header before calling it from anywhere else, because the scope handling in it
+   is the part that is easy to get wrong and impossible to see wrong. */
+import { mirrorFeedback } from "./feedback.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -145,7 +165,7 @@ import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
-import type { Visibility } from "./store/contracts.js";
+import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
@@ -196,6 +216,8 @@ import type {
   ChatAnchor,
   ChatThread,
   Comment,
+  FeedbackEnvironment,
+  FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
   Job,
@@ -215,6 +237,15 @@ import type {
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
 import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
+/* Values, for the same reason: the two closed vocabularies a report's location
+   is checked against, and the two caps the dialog and this route must agree on.
+   src/types.ts § feedback. */
+import {
+  FEEDBACK_ENVIRONMENTS,
+  FEEDBACK_ROUTE_KINDS,
+  MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_SCREENSHOT_BYTES,
+} from "./types.js";
 /* A value, not a type — the one list the stance is validated against, shared
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REVIEW_STANCES. */
@@ -236,6 +267,24 @@ const MAX_BODY_BYTES = 64 * 1024;
  * wrapper and the slug around it.
  */
 const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
+
+/**
+ * The second one, and the same argument as the first.
+ *
+ * A bug report may carry a screenshot the reader pasted in, which is ~300 KB
+ * downscaled and 400 KB at the ceiling the database enforces — four figures past
+ * what the other forty routes need. So it is a parameter on `readBody` too, and
+ * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
+ * caller gives away the thing the limit was for.
+ *
+ * Base64 is four characters per three bytes, plus the JSON wrapper, plus three
+ * 4,000-character answers, plus the diagnostics blob — 96 KB of headroom for the
+ * lot. Every one of those is capped again *inside* the body by the validator, so
+ * this number only has to be big enough not to refuse a legitimate report before
+ * anything can say why.
+ */
+const MAX_FEEDBACK_BODY_BYTES =
+  Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 + 96 * 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -3521,6 +3570,335 @@ async function transcribeDictation(
   }
 }
 
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * The fields a feedback body may contain. **Exactly these, and refused
+ * otherwise.**
+ *
+ * An exact shape rather than an ignored surplus, for the reason
+ * `transcribeDictation` gives above: a body with a key we do not know is a
+ * client and a server that disagree about this request, and the cheap failure is
+ * now. Here it is doing a second job as well — `reporterEmail`,
+ * `requestVercelId` and `environment` are things the *server* decides, so a
+ * caller sending one is refused rather than quietly overruled, and there is no
+ * field at all in which to write a content type or a filename for the
+ * screenshot.
+ */
+const FEEDBACK_FIELDS = [
+  "id",
+  "steps",
+  "expected",
+  "actual",
+  "consented",
+  "routeKind",
+  "slug",
+  "buildCommit",
+  "diagnostics",
+  "screenshot",
+] as const;
+
+/**
+ * Canonical base64, padding rule included — the same expression
+ * `transcribeDictation` uses, and it is written out here rather than shared for
+ * the reason its own comment gives: `AB==` is the right length and the right
+ * alphabet and is still not valid, because two padding characters only follow a
+ * group of two. A decoder that accepts it produces bytes nobody encoded.
+ */
+const BASE64 = /^[A-Za-z0-9+/]*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
+
+/** `abc1234`, `unknown`, or whatever `SPIDERYARN_BUILD_COMMIT` was set to. */
+const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
+
+/**
+ * One of the three answers, trimmed — or `null` for a box the reader left empty.
+ *
+ * **No part of the answer reaches a thrown message**, and that is the rule this
+ * whole function exists to keep rather than a nicety: an `httpError` message is
+ * written to the log as `reason`, redaction in src/log.ts matches key paths and
+ * can never reach a string, and this is the one route whose body is a person's
+ * own prose. The cap is in the message because the fix depends on it; the text
+ * never is. docs/project/copy.md, and the same rule as `tidyBody` above.
+ */
+function feedbackAnswer(value: unknown, field: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw httpError(400, `${field} must be a string or null [fb-type]`);
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_FEEDBACK_ANSWER_CHARS) {
+    throw httpError(
+      400,
+      `An answer can be at most ${MAX_FEEDBACK_ANSWER_CHARS} characters. ` +
+        `Trimming it to the part that matters usually helps. [fb-long]`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * Which deployment this is, **asked of the server rather than of the browser**.
+ *
+ * The same pair `initMonitoring` builds Sentry's `environment` from, mapped onto
+ * the closed union so that a report from a preview build cannot be read as one
+ * from production. A client-supplied value would be a claim, and the whole point
+ * of the column is that it is not.
+ */
+function feedbackEnvironment(): FeedbackEnvironment {
+  const name = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development";
+  return (FEEDBACK_ENVIRONMENTS as readonly string[]).includes(name)
+    ? (name as FeedbackEnvironment)
+    : "development";
+}
+
+/**
+ * The header this request arrived under, which is the only place it can come
+ * from.
+ *
+ * `x-vercel-id` is the request id Vercel logs a function invocation under. A
+ * browser can read it off a **response** and cannot put it into a request, so a
+ * value in the body would be a fiction indistinguishable from the real thing in
+ * a report six weeks later. The ids of the requests that went *wrong* ride in
+ * the diagnostics blob, behind the tick-box; this one is about the submit.
+ */
+function requestVercelId(req: IncomingMessage): string | null {
+  const raw = req.headers["x-vercel-id"];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
+}
+
+/**
+ * **Where the reader was**, as three checked fields and never an address.
+ *
+ * This app's URLs carry `?q=` and `?find=`, which are reader-typed search text,
+ * and `/add/<a whole third-party URL>`, which may carry a token — so the raw
+ * location may not leave the browser at all, and these are the part of it that
+ * may: a name from a list we wrote, a slug that goes through the same `isSlug`
+ * every other route uses, and a build stamp in a closed character set.
+ * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § Always —
+ * where they were.
+ */
+function feedbackWhere(sent: Record<string, unknown>): {
+  routeKind: FeedbackRouteKind;
+  slug: string | null;
+  buildCommit: string | null;
+} {
+  const { routeKind, slug, buildCommit } = sent;
+  if (
+    typeof routeKind !== "string" ||
+    !(FEEDBACK_ROUTE_KINDS as readonly string[]).includes(routeKind)
+  ) {
+    /* The list, not the value. `unknown` is in it on purpose, so a page added
+       later is still reportable — a report that cannot be filed because the
+       reader was on a new page is the worst way to lose the one that mattered. */
+    throw httpError(400, "routeKind is not one of ours [fb-route]");
+  }
+  if (slug !== undefined && slug !== null && !isSlug(slug)) {
+    throw httpError(400, "slug is not a slug [fb-slug]");
+  }
+  if (
+    buildCommit !== undefined &&
+    buildCommit !== null &&
+    (typeof buildCommit !== "string" || !BUILD_COMMIT.test(buildCommit))
+  ) {
+    throw httpError(400, "buildCommit is not a build stamp [fb-build]");
+  }
+  return {
+    routeKind: routeKind as FeedbackRouteKind,
+    slug: typeof slug === "string" ? slug : null,
+    buildCommit: typeof buildCommit === "string" ? buildCommit : null,
+  };
+}
+
+/**
+ * A pasted screenshot, decoded and **identified by its own bytes**.
+ *
+ * Three refusals, in the order that costs least: the encoding, then the decoded
+ * size, then whether it is a picture at all. The last is the one worth stating —
+ * client-side downscaling is not validation, and without a check on the magic
+ * bytes this field is a 400 KB hole through which anything at all, an article
+ * included, reaches a third party as an attachment.
+ */
+function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw httpError(400, "screenshot must be base64 or null [fb-type]");
+  if (!value) return null;
+  if (!BASE64.test(value)) throw httpError(400, "screenshot is not valid base64 [fb-shot]");
+  const bytes = Buffer.from(value, "base64");
+  if (bytes.length > MAX_FEEDBACK_SCREENSHOT_BYTES) {
+    throw httpError(
+      413,
+      `That screenshot is too big. The limit is about ${
+        Math.round((MAX_FEEDBACK_SCREENSHOT_BYTES / 1024 / 1024) * 10) / 10
+      } MB. [fb-shot-big]`,
+    );
+  }
+  const sniffed = sniffScreenshot(bytes);
+  /* The message says the two formats and never what arrived. */
+  if (!sniffed) throw httpError(400, "A screenshot has to be a PNG or a JPEG. [fb-shot]");
+  return sniffed;
+}
+
+/**
+ * **A bug report, built field by field from a body nothing is spread from.**
+ *
+ * `POST /api/feedback`, and the rule at this seam is the one `safeEvent` follows
+ * one file over: *build the payload, do not clean it*. Every field below is
+ * named, checked and assigned; there is no path by which a key this function has
+ * not heard of reaches a column, a JSONB blob or Sentry.
+ *
+ * Three of the fields are **not** read off the body at all — the reporter's
+ * email comes from the gate's `VerifiedUser`, the environment from this process,
+ * and the Vercel id from this request's own headers. See each of them.
+ */
+function parseFeedback(
+  body: unknown,
+  req: IncomingMessage,
+  user: VerifiedUser,
+): { report: NewFeedback; screenshot: FeedbackScreenshot | null } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object [fb-type]");
+  }
+  const sent = body as Record<string, unknown>;
+  for (const key of Object.keys(sent)) {
+    if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
+      /* **The key, never its value.** A key is a name a client wrote in its own
+         source; a value is whatever the reader typed. */
+      throw httpError(400, `Unexpected field: ${key.slice(0, 40)} [fb-field]`);
+    }
+  }
+
+  const id = sent.id;
+  if (typeof id !== "string" || !isSpideryarnId(id)) {
+    throw httpError(400, "id must be a report id [fb-id]");
+  }
+  /* Strictly a boolean, not truthiness: `"false"` and `0` are exactly what a
+     client sends by mistake, and truthiness answers both confidently and one of
+     them backwards. The same call `patchReader` makes about `experimental`. */
+  if (typeof sent.consented !== "boolean") {
+    throw httpError(400, "consented must be true or false [fb-type]");
+  }
+  const consented = sent.consented;
+  const where = feedbackWhere(sent);
+
+  const steps = feedbackAnswer(sent.steps, "steps");
+  const expected = feedbackAnswer(sent.expected, "expected");
+  const actual = feedbackAnswer(sent.actual, "actual");
+  /* The database says the same thing (`feedback_says_something`); this is the
+     half that gets to explain itself. */
+  if (steps === null && expected === null && actual === null) {
+    throw httpError(400, "A report needs at least one of the three answers. [fb-empty]");
+  }
+
+  if (
+    sent.diagnostics !== undefined &&
+    sent.diagnostics !== null &&
+    (typeof sent.diagnostics !== "object" || Array.isArray(sent.diagnostics))
+  ) {
+    throw httpError(400, "diagnostics must be an object or null [fb-type]");
+  }
+  /* **Rebuilt from a named allowlist**, and the client's version is not trusted
+     — src/feedback-payload.ts drops every field it has not heard of and cuts
+     every path at its query string. */
+  const built = consented ? parseFeedbackDiagnostics(sent.diagnostics) : null;
+  if (!consented && sent.diagnostics !== undefined && sent.diagnostics !== null) {
+    /* Refused rather than dropped. The database refuses it too
+       (`feedback_diagnostics_consented`), and a client that collected
+       diagnostics without the tick-box is a bug worth hearing about at once. */
+    throw httpError(400, "diagnostics need the reader's consent [fb-consent]");
+  }
+
+  const screenshot = feedbackScreenshot(sent.screenshot);
+
+  return {
+    report: {
+      id,
+      /* **The gate's, never the browser's.** `serveAuthenticatedApi` holds a
+         `VerifiedUser` — the one type only `requireUser` can make — and this is
+         a snapshot of the address it verified, taken at submit time. */
+      reporterEmail: user.email,
+      steps,
+      expected,
+      actual,
+      consented,
+      ...where,
+      environment: feedbackEnvironment(),
+      requestVercelId: requestVercelId(req),
+      diagnostics: built === null ? null : { version: FEEDBACK_DIAGNOSTICS_VERSION, payload: built },
+      screenshot: screenshot === null ? null : screenshot.bytes,
+    },
+    screenshot,
+  };
+}
+
+/**
+ * File a report. **Two destinations, and only the first one is ours.**
+ *
+ * The row is written first and is authoritative — its success is what the reader
+ * is told about — and only a **newly created** row is mirrored, because feedback
+ * events are not deduped by Sentry and a retry would otherwise file the same bug
+ * twice. `mirrorFeedback` cannot throw and cannot fail this request.
+ *
+ * The three answers map to three statuses:
+ *
+ * - `created` → **201**, and the report goes to Sentry.
+ * - `duplicate` → **200**. A retry that finds its own earlier report has
+ *   succeeded; answering an error would make a client retry a submit that
+ *   already worked.
+ * - `limited` → **429** with a `Retry-After`, and a sentence saying when.
+ */
+async function fileFeedback(
+  req: IncomingMessage,
+  res: ServerResponse,
+  user: VerifiedUser,
+): Promise<void> {
+  const { report, screenshot } = parseFeedback(
+    await readBody(req, MAX_FEEDBACK_BODY_BYTES),
+    req,
+    user,
+  );
+  const answer = await feedbackStore.submit(report);
+
+  if (answer.kind === "limited") {
+    const seconds = Math.max(1, Math.ceil(answer.retryAfterMs / 1000));
+    res.setHeader("Retry-After", String(seconds));
+    /* A number a reader can act on, in minutes when it is minutes — the rule
+       docs/project/copy.md states about "please try again later". */
+    const wait =
+      seconds < 90 ? `${seconds} seconds` : `about ${Math.ceil(seconds / 60)} minutes`;
+    send(res, 429, {
+      error: `That is a lot of reports in one hour. Please try again in ${wait}. [fb-often]`,
+      retryAfterMs: answer.retryAfterMs,
+    });
+    return;
+  }
+
+  /* Lengths and ids, never text. The reader's words are in the row and, if they
+     consented, in Sentry; they are not in this log line, which they did not
+     agree to. docs/project/logging.md, and the same rule pg-feedback.ts keeps. */
+  log("http").info(
+    {
+      id: report.id,
+      kind: answer.kind,
+      chars: (report.steps?.length ?? 0) + (report.expected?.length ?? 0) + (report.actual?.length ?? 0),
+      consented: report.consented,
+      routeKind: report.routeKind,
+      slug: report.slug,
+      screenshotBytes: screenshot === null ? null : screenshot.bytes.length,
+      diagnosticsVersion: report.diagnostics?.version ?? null,
+    },
+    "feedback report accepted",
+  );
+
+  if (answer.kind === "created") {
+    await mirrorFeedback({ report: answer.report, user, screenshot });
+  }
+  send(res, answer.kind === "created" ? 201 : 200, {
+    id: answer.report.id,
+    createdAt: answer.report.createdAt,
+    status: answer.kind,
+  });
+}
+
 
 /**
  * One line per request, on the way out, at a level the status decides.
@@ -3942,6 +4320,17 @@ export async function serveAuthenticatedApi(
      resource, and a `/api/transcribe/:slug` would have made a slug mandatory
      for the profile boxes, which have none. src/transcribe.ts. */
   const transcribeRoute = path === "/api/transcribe";
+  /* **The other route with a body measured in hundreds of kilobytes**, and the
+     only one whose body is a person writing to us. No slug in the path even
+     when the report is about an article: what the reader was looking at is a
+     *field of the report* — one of several, and nullable, because a report can
+     come from the shelf or the profile page. src/feedback.ts and
+     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+
+     On `path`, not `url`, like every check added since 2026-08-27: `url` carries
+     the query string, and a check that reads it is a check a `?` can be hidden
+     behind. */
+  const feedbackRoute = path === "/api/feedback";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
   /**
    * **The sharing switch, and it is a sub-resource rather than a field.**
@@ -4131,6 +4520,13 @@ export async function serveAuthenticatedApi(
     }
     if (transcribeRoute && req.method === "POST") {
       send(res, 200, await transcribeDictation(req, res));
+      return;
+    }
+    /* `fileFeedback` answers for itself rather than returning a body, because
+       three of its four outcomes are different statuses and one of them sets a
+       header. `send` inside one function beats a status threaded back out. */
+    if (feedbackRoute && req.method === "POST") {
+      await fileFeedback(req, res, user);
       return;
     }
     if (readerRoute && req.method === "GET") {

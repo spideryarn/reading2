@@ -555,30 +555,86 @@ refuses with a sentence saying the report was not saved, and showing it belongs 
 
 The end-to-end skeleton. After this stage a `curl` files a real report.
 
-- [ ] **Write the failing route test first** and watch it go red — `tests/feedback-route.test.ts`,
+- [x] **Write the failing route test first** and watch it go red — `tests/feedback-route.test.ts`,
       copying `call()` from `tests/routes.test.ts` and `acceptAny` / `AUTHED_HEADERS` from
-      `tests/helpers/authed.ts`.
-- [ ] `POST /api/feedback` in [`src/routes.ts`](../../src/routes.ts), matched on `path` not `url`.
+      `tests/helpers/authed.ts`. 16 of its 17 were red before a line of the route existed; the
+      seventeenth — *an anonymous request gets 401* — was green from the start, because the gate in
+      `handleApi` runs before any route matches. That one is still worth having: a button hidden in
+      the client is not a gate, and the test is what says so.
+- [x] `POST /api/feedback` in [`src/routes.ts`](../../src/routes.ts), matched on `path` not `url`.
       Its own body limit, the way `MAX_AUDIO_BODY_BYTES` is its own rather than raising the shared
       64 KB for forty other routes.
-- [ ] A validator beside `createFree`. **No request text in any `httpError` message** — those are
+- [x] A validator beside `createFree`. **No request text in any `httpError` message** — those are
       written to logs as `reason`. Bracketed codes per [copy.md](../project/copy.md).
-- [ ] A client-minted idempotency id, so a double-submit or a retry cannot file twice.
-- [ ] The per-owner hourly cap from the open question above.
-- [ ] `npm test && npm run typecheck`.
+- [x] A client-minted idempotency id, so a double-submit or a retry cannot file twice.
+- [x] The per-owner hourly cap from the open question above.
+- [x] `npm test && npm run typecheck`.
+
+**What landed, 2026-08-31.** `POST /api/feedback` in `src/routes.ts` — `fileFeedback`,
+`parseFeedback`, `feedbackWhere`, `feedbackAnswer`, `feedbackScreenshot`, `feedbackEnvironment`,
+`requestVercelId`, and `MAX_FEEDBACK_BODY_BYTES` beside `MAX_AUDIO_BODY_BYTES` — plus
+[`src/feedback-payload.ts`](../../src/feedback-payload.ts) and `tests/feedback-route.test.ts`.
+
+The HTTP mapping: **201** created, **200** duplicate (a retry that finds its own earlier report has
+succeeded, and an error would make a client retry a submit that already worked), **429** limited
+with a `Retry-After` and `[fb-often]`, **413** for a body or a decoded screenshot past its cap,
+**400** for everything the validator refuses, **401** from the gate for a stranger.
+
+Four things were decided here that the plan left open:
+
+- **The environment is asked of the server, not of the browser** — the same `VERCEL_ENV ?? NODE_ENV`
+  pair `initMonitoring` builds Sentry's from. A client-supplied value would be a claim, and the whole
+  point of the column is that it is not. Same for `reporterEmail` (the gate's) and `requestVercelId`
+  (this request's own header, which a browser cannot set).
+- **The diagnostics blob got a v1 shape**, in `src/feedback-payload.ts`, so the server has a named
+  allowlist to validate against before the dialog exists to build one. It imports nothing, so the
+  dialog can share the declaration rather than keep a second, looser copy. Recent errors carry a
+  **name and no message** in v1 — the `safeDiagnosticError()` this plan asks for belongs to the log
+  buffer stage, and until it exists a name is what may travel.
+- **A screenshot is identified by its own magic bytes**, PNG or JPEG, and refused otherwise. Not
+  tidiness: without it the field is a 400 KB hole through which any bytes at all — an article
+  included — reach a third party as an attachment. The filename and content type are written from
+  that sniff, so there is no field in which a caller could put either, and an unexpected key in the
+  body is a 400 rather than something ignored.
+- **The `fb-` codes are inline in `src/routes.ts`**, not in `src/messages.ts`, following `cmt-` and
+  `mic-`: that file is about failures a model call can return, and `tests/messages.test.ts` requires
+  every `CODE_KINDS` key to belong to a message in it.
 
 ### Stage: the Sentry mirror
 
-- [ ] `src/feedback.ts` — build the Sentry payload **field by field from a typed shape**, the same
+- [x] `src/feedback.ts` — build the Sentry payload **field by field from a typed shape**, the same
       "build, do not clean" rule `safeEvent` follows, at the seam `safeEvent` provably does not
       cover. Tag it with our report id so a Sentry item and a Postgres row name each other.
-- [ ] Wrap it so it **can never throw** and never fails the request — rule 2 of
+- [x] Wrap it so it **can never throw** and never fails the request — rule 2 of
       [`src/monitoring.ts`](../../src/monitoring.ts). The row is already written; a Sentry outage
       must not turn a filed report into an error for the reader.
-- [ ] A test that asserts the built payload contains the three answers and **nothing outside the
+- [x] A test that asserts the built payload contains the three answers and **nothing outside the
       allowlist**, and one that asserts a throwing Sentry leaves the request successful.
-- [ ] Note in the doc that this event bypasses `beforeSend`, with the evidence, so the next person
-      does not assume `safeEvent` is covering it.
+- [x] Note in the doc that this event bypasses `beforeSend`, with the evidence, so the next person
+      does not assume `safeEvent` is covering it —
+      [sentry-error-monitoring.md](../project/sentry-error-monitoring.md#a-feedback-report-is-the-one-thing-here-beforesend-never-sees).
+
+**What landed, 2026-08-31.** [`src/feedback.ts`](../../src/feedback.ts) and
+`tests/feedback-mirror.test.ts`.
+
+**The table above was reproduced rather than trusted.** A naive `src/feedback.ts` — parameters built
+field by field, `captureFeedback` on the ambient scope — was written first and run against the
+hostile scope with a fake transport, and every one of the five markers reached the envelope:
+`extra.articleProse`, `contexts.provider`, `tags.leakyTag`, two `breadcrumbs`, and a `user` carrying
+`username` and `ip_address: 203.0.113.7`. Then the two clean scopes went in and all five went. That
+is the red-before-green this plan asks for, on the one assertion it exists for.
+
+Three things decided here:
+
+- **`markMirrored` is never written hopefully.** No client, no mirror, and no `mirrored_at` — so the
+  `mirrored_at is null` query keeps meaning "Sentry did not take this" rather than "Sentry was
+  switched off". That is also the ordinary case on a laptop.
+- **`report_id` and the user go on the scope; every other tag goes in `SendFeedbackParams.tags`.**
+  Those two are the fields that join the event to a row and to a person, and they are set at the one
+  seam that knows both.
+- **`server_name` and `contexts.runtime` still ride**, added by `prepareEvent` after any hook can
+  reach them. They are facts about the server rather than about the reader, and Sentry already has
+  this project's source maps. Accepted, and written into the file's header rather than found later.
 
 ### Stage: the button and the dialog
 
