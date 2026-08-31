@@ -1,7 +1,7 @@
 {
   "comments": [
     {
-      "id": "spya-fix001",
+      "id": "spya-fxa002",
       "blockId": "spya-arj7ry",
       "quote": "you only think you're thinking",
       "start": 37,
@@ -10,7 +10,7 @@
       "body": "Fixture note: a bookmark with the reader's own words and no model call."
     },
     {
-      "id": "spya-fix002",
+      "id": "spya-fxa003",
       "blockId": "spya-hg7u0a",
       "quote": "writes and write-nots",
       "start": 36,
@@ -21,7 +21,7 @@
       "model": "anthropic/claude-sonnet-5"
     },
     {
-      "id": "spya-fix003",
+      "id": "spya-fxa004",
       "blockId": "zzzz00",
       "quote": "Thanks to Jessica Livingston",
       "start": 10,

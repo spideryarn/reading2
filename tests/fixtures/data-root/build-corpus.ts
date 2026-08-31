@@ -35,6 +35,7 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { isSpideryarnId } from "../../../src/ids.js";
 import { checkTree } from "../../../src/tree-invariants.js";
 import type { Block, Tree } from "../../../src/types.js";
 
@@ -364,7 +365,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
     "comments.json": {
       comments: [
         {
-          id: "spya-fix001",
+          id: "spya-fxa002",
           blockId: "spya-arj7ry",
           quote: "you only think you're thinking",
           start: 37,
@@ -373,7 +374,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
           body: "Fixture note: a bookmark with the reader's own words and no model call.",
         },
         {
-          id: "spya-fix002",
+          id: "spya-fxa003",
           blockId: "spya-hg7u0a",
           quote: "writes and write-nots",
           start: 36,
@@ -389,7 +390,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
         {
           /* Deliberately not a `spya-` id. See the header: this is the corpus's
              only exercise of the permitted filesystem/Postgres difference. */
-          id: "spya-fix003",
+          id: "spya-fxa004",
           blockId: "zzzz00",
           quote: "Thanks to Jessica Livingston",
           start: 10,
@@ -402,21 +403,21 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
     "chat.json": {
       threads: [
         {
-          id: "spya-fix100",
+          id: "spya-fxb200",
           title: "Fixture thread: an ordinary question",
           createdAt: "2026-08-25T21:12:45.478Z",
           updatedAt: "2026-08-25T21:13:10.000Z",
           kind: "chat",
           messages: [
             {
-              id: "spya-fix101",
+              id: "spya-fxb203",
               role: "user",
               text: "Fixture question. Stands in for something a reader typed.",
               createdAt: "2026-08-25T21:12:45.478Z",
               status: "done",
             },
             {
-              id: "spya-fix102",
+              id: "spya-fxb204",
               role: "assistant",
               text: "Fixture answer, citing a real block id so the citation shape is real [spya-hg7u0a].",
               createdAt: "2026-08-25T21:13:10.000Z",
@@ -427,7 +428,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
           ],
         },
         {
-          id: "spya-fix200",
+          id: "spya-fxc300",
           title: "Fixture thread: a review",
           createdAt: "2026-08-26T09:00:00.000Z",
           updatedAt: "2026-08-26T09:01:00.000Z",
@@ -438,14 +439,14 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
           anchor: { blockId: "spya-z7zzwv" },
           messages: [
             {
-              id: "spya-fix201",
+              id: "spya-fxc303",
               role: "user",
               text: "Fixture review. Stands in for the reader saying what they took from it.",
               createdAt: "2026-08-26T09:00:00.000Z",
               status: "done",
             },
             {
-              id: "spya-fix202",
+              id: "spya-fxc304",
               role: "assistant",
               text: "Fixture response to a review, in the balanced stance.",
               createdAt: "2026-08-26T09:01:00.000Z",
@@ -460,7 +461,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
     "searches.json": {
       runs: [
         {
-          id: "spya-fix300",
+          id: "spya-fxd400",
           criterion: "fixture criterion: where the piece says writing is thinking",
           createdAt: "2026-08-25T21:29:52.529Z",
           status: "done",
@@ -478,7 +479,7 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
         {
           /* A run with no hits, so both branches of the hit list are in the
              corpus rather than only the populated one. */
-          id: "spya-fix301",
+          id: "spya-fxd405",
           criterion: "fixture criterion: something the piece does not say",
           createdAt: "2026-08-25T21:30:10.000Z",
           status: "done",
@@ -489,7 +490,12 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
     },
     "glossary-lookups.json": {
       lookups: {
-        "spya-bhdnef": {
+        /* **A real entry id from `writes/glossary.json`, not a block id.** The
+           key of a lookup is the glossary ENTRY it explains — `entryId` in
+           `glossary_lookups` (tests/helpers/seed-reader-state.ts) — and the
+           first draft of this used a block id copied from the laptop's file,
+           which named nothing in the glossary beside it. */
+        "spya-uup6nt": {
           answer: "Fixture glossary answer. Stands in for a term lookup the reader asked for.",
           citations: [],
           searches: 0,
@@ -500,6 +506,64 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
     },
   },
 };
+
+/**
+ * Every id invented above is one `isSpideryarnId` accepts.
+ *
+ * **This check exists because the first version of these files failed it, and
+ * failed it three suites away from here.** The ids were `spya-fix001`…, which
+ * look right and are not: the alphabet is `abcdefghjkmnpqrstuvwxyz023456789`
+ * (src/ids.ts) — no `i`, no `l`, no `o`, **no `1`**, because those are the
+ * characters people misread copying an id out of a URL. Postgres enforces it
+ * as `chat_threads_id_format`, so `seedChatFromFiles` threw a check-constraint
+ * violation and took the whole of tests/store-roundtrip.test.ts down with it.
+ *
+ * The README's reasoning did not cover this and should have: it says the *block*
+ * ids are real because `block_identities` has a format check. True, and the
+ * thread, message, comment, search and lookup ids are **invented**, and every one
+ * of them faces the same check. Found by another session, 2026-09-01.
+ *
+ * `blockId` is deliberately not checked here — one synthesised comment is
+ * anchored to `zzzz00` on purpose, and that is the corpus's only exercise of
+ * the permitted filesystem/Postgres difference.
+ */
+function checkSynthesisedIds(): void {
+  const bad: string[] = [];
+  const check = (what: string, id: unknown): void => {
+    if (typeof id !== "string" || !isSpideryarnId(id)) bad.push(`${what}: ${String(id)}`);
+  };
+
+  for (const [slug, files] of Object.entries(SYNTHESISED)) {
+    const comments = (files["comments.json"] as { comments?: { id?: unknown }[] } | undefined)
+      ?.comments;
+    for (const c of comments ?? []) check(`${slug}/comments.json`, c.id);
+
+    const threads = (
+      files["chat.json"] as { threads?: { id?: unknown; messages?: { id?: unknown }[] }[] }
+    )?.threads;
+    for (const t of threads ?? []) {
+      check(`${slug}/chat.json thread`, t.id);
+      for (const m of t.messages ?? []) check(`${slug}/chat.json message`, m.id);
+    }
+
+    const runs = (files["searches.json"] as { runs?: { id?: unknown }[] } | undefined)?.runs;
+    for (const r of runs ?? []) check(`${slug}/searches.json`, r.id);
+
+    const lookups = (files["glossary-lookups.json"] as { lookups?: Record<string, unknown> })
+      ?.lookups;
+    for (const blockId of Object.keys(lookups ?? {})) {
+      check(`${slug}/glossary-lookups.json key`, blockId);
+    }
+  }
+
+  if (bad.length) {
+    throw new Error(
+      "Synthesised ids that isSpideryarnId rejects — Postgres has a format check on each of " +
+        `these and will refuse the insert:\n  ${bad.join("\n  ")}\n` +
+        "  The alphabet is abcdefghjkmnpqrstuvwxyz023456789 (src/ids.ts): no i, l, o or 1.",
+    );
+  }
+}
 
 async function main(): Promise<void> {
   await rm(path.join(CORPUS, "data"), { recursive: true, force: true });
@@ -527,6 +591,8 @@ async function main(): Promise<void> {
       await writeJson(path.join(CORPUS, "data", slug, file), value);
     }
   }
+
+  checkSynthesisedIds();
 
   /* Nothing that is a reader's own words may have got in, whatever route it
      took. Checked here as well as in the README's grep, because a whitelist

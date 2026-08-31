@@ -1,7 +1,7 @@
 {
   "runs": [
     {
-      "id": "spya-fix300",
+      "id": "spya-fxd400",
       "criterion": "fixture criterion: where the piece says writing is thinking",
       "createdAt": "2026-08-25T21:29:52.529Z",
       "status": "done",
@@ -17,7 +17,7 @@
       ]
     },
     {
-      "id": "spya-fix301",
+      "id": "spya-fxd405",
       "criterion": "fixture criterion: something the piece does not say",
       "createdAt": "2026-08-25T21:30:10.000Z",
       "status": "done",

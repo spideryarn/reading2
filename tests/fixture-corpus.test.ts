@@ -29,6 +29,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { isSpideryarnId } from "../src/ids.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { checkTree } from "../src/tree-invariants.js";
 import { REVIEW_STANCES } from "../src/types.js";
@@ -239,6 +240,53 @@ describe("the committed fixture corpus", () => {
       const shelf = read<ShelfState>("writes", "shelf.json");
       expect(shelf.opens).toBeGreaterThan(0);
       expect(shelf.lastOpenedAt).toBeTruthy();
+    });
+
+    it("gives every synthesised entity an id isSpideryarnId accepts", () => {
+      /* **This went wrong, and it went wrong three suites away from the file.**
+         The first version of these ids was `spya-fix001`… — six characters,
+         `spya-` prefix, and invalid: the alphabet is
+         `abcdefghjkmnpqrstuvwxyz023456789` (src/ids.ts), with no `i`, no `l`,
+         no `o` and no `1`, because those are the characters people misread
+         copying an id out of a URL. Postgres enforces it as
+         `chat_threads_id_format` (drizzle/0002), so `seedChatFromFiles` threw a
+         check-constraint violation and took the whole of
+         tests/store-roundtrip.test.ts down at suite level. Found by another
+         session, 2026-09-01.
+
+         The README's reasoning had a hole the same shape: it said the ids in
+         the synthesised files are real because `block_identities` has a format
+         check. The *block* ids are real. The thread, message, comment, search
+         and lookup ids are invented, and every one of them faces that check too.
+
+         `blockId` is deliberately excluded — one comment is anchored to
+         `zzzz00` on purpose, and that is the corpus's only exercise of the
+         permitted filesystem/Postgres difference. */
+      const { comments } = read<{ comments: Comment[] }>("writes", "comments.json");
+      for (const c of comments) expect(isSpideryarnId(c.id), c.id).toBe(true);
+
+      const { threads } = read<{ threads: ChatThread[] }>("writes", "chat.json");
+      for (const t of threads) {
+        expect(isSpideryarnId(t.id), t.id).toBe(true);
+        for (const m of t.messages) expect(isSpideryarnId(m.id), m.id).toBe(true);
+      }
+
+      const { runs } = read<{ runs: SearchRun[] }>("writes", "searches.json");
+      for (const r of runs) expect(isSpideryarnId(r.id), r.id).toBe(true);
+
+      /* A lookup is keyed by the glossary ENTRY it explains, not by a block —
+         `entryId` in tests/helpers/seed-reader-state.ts — so it is checked
+         against `glossary.json` beside it rather than against the blocks. */
+      const { lookups } = read<{ lookups: Record<string, unknown> }>(
+        "writes",
+        "glossary-lookups.json",
+      );
+      const entries = read<{ entries: { id: string }[] }>("writes", "glossary.json").entries;
+      const entryIds = new Set(entries.map((e) => e.id));
+      for (const key of Object.keys(lookups)) {
+        expect(isSpideryarnId(key), key).toBe(true);
+        expect(entryIds.has(key), `${key} is not an entry of writes/glossary.json`).toBe(true);
+      }
     });
 
     it("anchors every other comment, thread and search hit at a real block", () => {

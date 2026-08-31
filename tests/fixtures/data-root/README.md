@@ -59,9 +59,19 @@ The honest column, the way [`example/README.md`](../../../example/README.md) doe
 |---|---|---|
 | **Real, copied whole** | Genuine pipeline output, byte-identical to what the stage wrote. Small because the article was short, not because anything was cut. | Everything under `writes`, `todo`, `noema-…` and `openai-huggingface`, and the `output/` halves for those four. |
 | **Real, sliced** | Genuine pipeline output cut at a clean semantic boundary — the article's first two top-level sections, ending at a real `<h2>`, the same technique `example/` uses. The tree is *pruned*, not rebuilt: kept nodes keep their own ids, ranges, titles and gists, and the root's range narrows to the last surviving block. `checkTree` — the same function `publishRevision` runs — is asserted over the result. | `constitution/{blocks,tree,labels}.json`, `output/constitution.{html,blocks.json}`. |
-| **Synthesised** | Hand-authored from the types. Nothing produced these bytes. The block ids, quotes and offsets inside them *are* real, because `block_identities` has a format check and `comments_identity_fk` points at it — a comment on an invented id could not exist in Postgres, and the two stores would then disagree for a reason that is about the fixture. | `writes/{chat,comments,searches,glossary-lookups,shelf}.json`. |
+| **Synthesised** | Hand-authored from the types. Nothing produced these bytes. The **block ids, glossary entry ids, quotes and offsets** inside them are real — copied from the article's own artefacts — because `block_identities` has a format check and `comments_identity_fk` points at it, so a comment on an invented id could not exist in Postgres and the two stores would then disagree for a reason that is about the fixture. The **entity ids** (thread, message, comment, search run) are invented, and face a format check of their own — see below. | `writes/{chat,comments,searches,glossary-lookups,shelf}.json`. |
 
-Three things in the synthesised files are load-bearing, and each has a test that needs it:
+**The invented ids must still be ids.** `spya-fix001` looks right and is not: the alphabet is
+`abcdefghjkmnpqrstuvwxyz023456789` ([`src/ids.ts`](../../../src/ids.ts)) — no `i`, no `l`, no `o`,
+**no `1`**, because those are the characters people misread copying an id out of a URL — and
+`drizzle/0002` enforces it as `chat_threads_id_format`. The first version of these files used
+`spya-fix…` throughout, and `seedChatFromFiles` threw a check-constraint violation that took the
+whole of `store-roundtrip` down at suite level, three files away from the cause. The stand-in prefix
+is now `fxa`/`fxb`/`fxc`/`fxd` with digits from the allowed set. Guarded twice: `build-corpus.ts`
+refuses to write an id `isSpideryarnId` rejects, and `fixture-corpus.test.ts` asserts the same over
+the committed bytes. Found by another session, 2026-09-01 — thank you.
+
+Three further things in the synthesised files are load-bearing, and each has a test that needs it:
 
 - a thread with `kind: "review"` whose assistant message carries a `stance` — without one,
   store-roundtrip's review test warns and covers nothing, and `kind`/`stance` could vanish from
@@ -89,6 +99,34 @@ Three things in the synthesised files are load-bearing, and each has a test that
   the pipeline really produces.
 - **`openai-huggingface`'s `summary.json`.** `writes` already covers that filename, which is all
   `store-artefact-manifest` needs it for.
+
+## Is every slug guarded?
+
+Yes — every one of the five is named by a `requireFixture` call in
+[`tests/fixture-corpus.test.ts`](../../fixture-corpus.test.ts), and each has at least one test there
+asserting the specific property it is kept for, not merely that it exists. That file is the
+consumption site for the corpus *as a corpus*; the suites listed in the table above are the
+consumption sites for the individual articles, and converting those onto `requireFixture` is part of
+the deferred sweep below.
+
+The deploy gate's sentinel list (`GATE_FIXTURES` in
+[`scripts/deploy-checks.ts`](../../../scripts/deploy-checks.ts)) names thirteen of these files and
+deliberately not the rest — a list that names everything becomes noise people stop reading. The
+guard for the other four slugs is `fixture-corpus.test.ts`, which fails if a slug disappears, if the
+article list changes without a matching edit, or if a property goes missing.
+
+## Two known gaps, recorded rather than fixed
+
+- **`store-artefact-manifest` goes red against a corpus-only tree.** It fails with *"the manifest
+  promises a home for artefacts nothing writes any more: raw.pdf, labels-progress.json"* — the check
+  reads "no file with this name was seen" as "nothing writes this", and the corpus has neither name.
+  On a laptop it passes only because `data/ball-lightning/raw.pdf` happens to be lying around. That
+  is the vacuous-enumerator problem the plan lists as item 4, in its other direction: adding a PDF
+  article to the corpus would paper over it, and the honest fix is in the test. Not done here.
+- **No PDF, on purpose.** The two large ones are already committed once, byte-identically, at
+  `evals/pdf/harder/source.pdf` and `evals/pdf/much-harder/source.pdf`, and `evals/pdf/easy/` is
+  what [`tests/helpers/pass0-without-canvas.ts`](../../helpers/pass0-without-canvas.ts) already
+  points at. A suite needing PDF bytes should point at those rather than gain a second copy.
 
 ## Using it
 
