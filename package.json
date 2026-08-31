@@ -54,7 +54,8 @@
     "eval:reorder": "tsx evals/reorder-quality.ts",
     "eval:review": "tsx evals/review-stances.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
-    "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts"
+    "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
+    "typecheck:committed": "tsx scripts/typecheck-committed.ts"
   },
   "keywords": [],
   "author": "",

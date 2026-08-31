@@ -79,6 +79,35 @@ const STEPS: Step[] = [
 
   // ---- advisories: real findings, deliberately not blocking --------------
   {
+    /**
+     * **Does the repository compile — as opposed to your copy of it?**
+     *
+     * `typecheck` above reads the working tree; the build reads what is in git,
+     * and they differ by exactly the files you have not committed. So a lane
+     * can be green here while `HEAD` does not compile, which has now happened
+     * three times: 2026-08-28 (16 errors across four files), `113ce17` the day
+     * after, to the person who had just written that up, and 2026-08-31, when
+     * `src/blocks.ts` sat in `HEAD` importing an untracked `src/reserved.ts`
+     * while a dozen sessions all typechecked clean.
+     *
+     * **Advisory rather than a gate, and only because of this file's own
+     * rule:** a check earns promotion on the day its findings reach zero, and
+     * `HEAD` has five errors as this lands. That rule exists so nobody learns
+     * to ignore the exit code, and it applies here even though the findings are
+     * a live breakage rather than a backlog.
+     *
+     * **So promote it.** Unlike lint and knip, this one's backlog is somebody's
+     * afternoon rather than a policy: it is three half-landed changes whose
+     * missing files are sitting untracked in somebody's tree. The day
+     * `npm run typecheck:committed` is green, `gate: false` becomes `gate: true`
+     * and this paragraph goes.
+     */
+    name: "committed",
+    gate: false,
+    argv: ["run", "--silent", "typecheck:committed"],
+    note: "HEAD does not compile — promote this to a gate the day it is green (scripts/typecheck-committed.ts)",
+  },
+  {
     name: "lint",
     gate: false,
     argv: ["run", "--silent", "lint"],

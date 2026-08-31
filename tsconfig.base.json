@@ -24,6 +24,26 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
 
+    /* Three that cost nothing today — measured on 2026-08-31, zero new errors
+       across all three projects — and each closes a way for a mistake to look
+       like intent. Turned on because they were free, not because anything had
+       gone wrong through them; the flags that were already here are the ones
+       with scars.
+
+       `noUncheckedSideEffectImports` makes `import "./thing.js"` resolve. Without
+       it a side-effect import is not checked at all, so a moved or renamed
+       module stays quietly imported and the failure arrives at runtime — which
+       on this repo means in a stage, or in the browser.
+
+       The other two turn "the compiler noticed and shrugged" into an error.
+       Unreachable code is either a mistake or a leftover; a stray label is
+       almost always a typo that parses (`foo: bar;` where an object was meant).
+       Both are the shape docs/reusable/silent-success.md is about: valid code
+       that does nothing while looking deliberate. */
+    "noUncheckedSideEffectImports": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
     /* `import type` must say so, and each file must be transpilable alone —
        which is what tsx, vite and vitest all actually do to these files. */
     "verbatimModuleSyntax": true,

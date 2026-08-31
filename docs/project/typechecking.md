@@ -1,11 +1,18 @@
 # Type-checking
 
 ```bash
-npm run typecheck   # every project, plus the checks that the checking happened
+npm run typecheck             # every project, plus the checks that the checking happened
+npm run typecheck:committed   # ...but against what is in git, which is what the build reads
 ```
 
-Run it before you commit, alongside `npm test` — see [testing.md](testing.md). It takes a few
+Run the first before you commit, alongside `npm test` — see [testing.md](testing.md). It takes a few
 seconds and needs nothing running.
+
+**Run the second before you commit anything another file depends on.** It answers a different
+question, and the difference is the subject of
+[§ three ways to report it clean while it is red](#three-ways-to-report-it-clean-while-it-is-red): the first
+reads your working tree, the build reads the repository, and they differ by exactly the files you
+have not committed.
 
 ## Why this file exists
 
@@ -116,6 +123,12 @@ the moment they land, which is the whole shadcn model. Fix the file.
   ([block-ids.md](block-ids.md)), and a lookup that quietly yields `undefined` is how a range check
   goes wrong without saying so. Where an index really is in range, say so in a comment and use `!` —
   the comment is the point, not the `!`.
+- **`noUncheckedSideEffectImports`, `allowUnreachableCode: false`, `allowUnusedLabels: false`** —
+  added 2026-08-31, and the only three left that cost nothing: measured at zero new errors across
+  all three projects. Unlike everything else in this list they have no scar behind them, which is
+  worth saying so nobody goes looking for the incident. Each closes a way for a mistake to look like
+  intent — a side-effect import of a module that has moved, code that cannot run, a stray label
+  where an object was meant. If one of them ever starts costing something, that is it working.
 - **`exactOptionalPropertyTypes`** — "absent" and "present but undefined" stop being the same thing.
   This found a live bug the day it went on: `setAt(blockId, { history: "push", limitUrlUpdates:
   undefined })` in [`src/web/App.tsx`](../../src/web/App.tsx) was meant to cancel the position
@@ -188,10 +201,24 @@ relative imports and refusing any that `git ls-files` does not know answers *can
 `113ce17` passed that and still had nine errors, because what had changed was the shape of a type
 inside an **already-tracked** file. Resolution and type-checking are different questions.
 
-> **Build the candidate, not the baseline.** `git worktree add --detach <tmp> HEAD`, symlink
-> `node_modules` in, copy over the files you are about to commit, and run the gate *there*. That is
-> literally *`HEAD` plus this commit*, which is the only one of the three possible greens you can act
-> on before pushing.
+> **Build the candidate, not the baseline.** That is literally *`HEAD` plus this commit*, which is
+> the only one of the three possible greens you can act on before pushing.
+
+```bash
+npm run typecheck:committed                      # does HEAD compile?
+npm run typecheck:committed -- src/a.ts tests/b.ts   # would HEAD + these compile?
+```
+
+That is [`scripts/typecheck-committed.ts`](../../scripts/typecheck-committed.ts): it lays `HEAD` out
+with `git archive`, symlinks `node_modules` in, copies over the files you name, and runs this repo's
+own typecheck there. It also names any file that is sitting untracked in your tree while a *committed*
+file imports it, because `Cannot find module './reserved.js'` does not say which of three quite
+different things went wrong.
+
+**It was a four-step manual recipe here until 2026-08-31, and that was not enough.** The recipe was
+right, it was written down, it had a worked example — and `HEAD` broke again the same way, because at
+midnight the four-step check is the one you skip and `npm run typecheck` is one word. It is in
+`npm run check` now, as an advisory until `HEAD` is green.
 
 Expect to iterate: on `1ace072` the first round of fixes surfaced three more errors in test files that
 also had to come along. And the inverse is worth knowing before you panic — a **red** suite in this
