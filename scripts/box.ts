@@ -1,0 +1,338 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * `box` — drive Claude Code sessions running in tmux on the Hetzner server.
+ *
+ * The design, and the reasons behind each piece, are in
+ * docs/research/remote-server-tmux-mosh.md. The short version: one tmux session
+ * per Claude session, mosh as transport with ssh as fallback, and tmux is not
+ * optional because mosh cannot reattach — a client that dies leaves a session
+ * nobody could otherwise get back into.
+ *
+ * No argument-parsing dependency, deliberately. Commander was the researched
+ * recommendation and would be the right call for a bigger surface, but adding it
+ * means editing package.json, which a peer had uncommitted work in at the time.
+ * node:util's parseArgs covers six subcommands without touching a shared file.
+ * Swapping in Commander later is contained to main().
+ */
+import { execFileSync, spawnSync } from "node:child_process";
+import { parseArgs, styleText } from "node:util";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const USER = "greg";
+
+/** tmux session names travel through shell commands across an ssh boundary, so
+ *  nothing surprising may ever reach a shell. Same slug rule as the fleet. */
+const SLUG = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+const dim = (s: string) => styleText("dim", s);
+const bold = (s: string) => styleText("bold", s);
+const red = (s: string) => styleText("red", s);
+const green = (s: string) => styleText("green", s);
+
+function die(msg: string): never {
+  console.error(red(`✗ ${msg}`));
+  process.exit(1);
+}
+
+/** Single-quote for /bin/sh. The only safe way to put arbitrary text in a
+ *  remote command line — and we still avoid doing it with prompts, which go
+ *  through a file instead. */
+function shq(s: string): string {
+  return `'${s.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * The address comes from Terraform state, never a constant: it changes on every
+ * rebuild, and a hardcoded IP would be wrong exactly when you most need it.
+ */
+function host(): string {
+  if (process.env.BOX_HOST) return process.env.BOX_HOST;
+  try {
+    const out = execFileSync("tofu", ["-chdir=" + path.join(REPO, "infra/hetzner"), "output", "-json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const ip = JSON.parse(out)?.ipv4?.value;
+    if (!ip) throw new Error("no ipv4 output");
+    return ip;
+  } catch (err) {
+    die(
+      `could not read the server address from Terraform state (${(err as Error).message}).\n` +
+        `  Run this from the repo, or set BOX_HOST=<ip> to override.`,
+    );
+  }
+}
+
+const HOST = () => `${USER}@${host()}`;
+
+/** Run a command on the box over ssh and return stdout. */
+function ssh(remote: string, opts: { check?: boolean } = {}): string {
+  const r = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST(), remote], {
+    encoding: "utf8",
+  });
+  if (opts.check !== false && r.status !== 0) {
+    die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
+  }
+  return (r.stdout || "").trim();
+}
+
+/**
+ * Is mosh actually usable right now? Networks that block UDP exist.
+ *
+ * The stty is load-bearing and cost someone an afternoon: script(1)'s fake pty
+ * is 0x0, and mosh-server aborts on a zero-width client (`assertion s_width > 0`).
+ * That failure looks exactly like a blocked firewall — two causes, one symptom.
+ */
+function moshWorks(): boolean {
+  const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${HOST()} -- true`;
+  const r = spawnSync("script", ["-q", "/dev/null", "sh", "-c", probe], {
+    encoding: "utf8",
+    timeout: 6000,
+  });
+  return r.status === 0;
+}
+
+/**
+ * Attach to a tmux session. Three details here are not stylistic:
+ *  =name  tmux target matching is a PREFIX match, so `-t fix` also matches
+ *         `fix-login`. `=` demands exact. Attaching to the wrong session looks
+ *         exactly like attaching to the right one until your work is missing.
+ *  -d     detach other clients. mosh-servers orphaned by a laptop reboot linger
+ *         as invisible attached clients holding the window at their old size.
+ *  sh -c  mosh execs the remote command directly with no shell, so a bare
+ *         `a || b` dies with "execvp: a || b: No such file or directory".
+ */
+function attachCmd(name: string, transport: "mosh" | "ssh"): string {
+  const inner = `tmux attach -d -t =${name} || exec bash -l`;
+  return transport === "mosh"
+    ? `LANG=C.UTF-8 mosh ${HOST()} -- sh -c ${shq(inner)}`
+    : `ssh -t ${HOST()} ${shq(inner)}`;
+}
+
+function attach(name: string): never {
+  const transport = moshWorks() ? "mosh" : "ssh";
+  if (transport === "ssh") console.error(dim("mosh unreachable, falling back to ssh"));
+  const r = spawnSync("sh", ["-c", attachCmd(name, transport)], { stdio: "inherit" });
+  process.exit(r.status ?? 0);
+}
+
+type Session = { name: string; created: Date; attached: boolean; windows: number };
+
+function sessions(): Session[] {
+  const out = ssh(
+    `tmux ls -F '#{session_name}|#{session_created}|#{session_attached}|#{session_windows}' 2>/dev/null || true`,
+  );
+  if (!out) return [];
+  return out.split("\n").map((line) => {
+    const [name, created, attached, windows] = line.split("|");
+    return {
+      name,
+      created: new Date(Number(created) * 1000),
+      attached: attached !== "0",
+      windows: Number(windows),
+    };
+  });
+}
+
+function age(d: Date): string {
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 60) return `${mins}m`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+  return `${Math.floor(mins / 1440)}d`;
+}
+
+// ---------------------------------------------------------------- commands
+
+function cmdLs(): void {
+  const list = sessions();
+  if (list.length === 0) {
+    console.log(dim("no sessions. `box new <name>` to start one."));
+    return;
+  }
+  const w = Math.max(4, ...list.map((s) => s.name.length));
+  console.log(bold("NAME".padEnd(w) + "  AGE   WINDOWS  ATTACHED"));
+  for (const s of list) {
+    console.log(
+      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${String(s.windows).padEnd(7)}  ${
+        s.attached ? green("yes") : dim("no")
+      }`,
+    );
+  }
+}
+
+/**
+ * Create a session and start Claude Code in it.
+ *
+ * The prompt goes through a FILE, never a command line. It is prose: it will
+ * contain quotes, backticks and newlines, and inlining it means escaping across
+ * three layers (local shell → ssh → tmux → remote shell). A file means one.
+ * Lifted from MindstoneRebel's fleet, whose comment reads "keeps quoting sane
+ * when prompts contain prose".
+ */
+function cmdNew(name: string, opts: { prompt?: string; dir?: string; attach: boolean }): void {
+  if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
+  if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'box resume ${name}'`);
+
+  const dir = opts.dir ?? `/home/${USER}`;
+  const promptPath = `/home/${USER}/box/prompts/${name}.md`;
+  const jobPath = `/home/${USER}/box/jobs/${name}.sh`;
+
+  ssh(`mkdir -p /home/${USER}/box/prompts /home/${USER}/box/jobs`);
+
+  if (opts.prompt) {
+    const tmp = path.join(mkdtempSync(path.join(tmpdir(), "box-")), `${name}.md`);
+    writeFileSync(tmp, opts.prompt, "utf8");
+    const r = spawnSync("scp", ["-q", tmp, `${HOST()}:${promptPath}`], { encoding: "utf8" });
+    if (r.status !== 0) die(`scp of the prompt failed: ${(r.stderr || "").trim()}`);
+  }
+
+  // Non-interactive ssh sources NEITHER .bashrc NOR .bash_profile, so the job
+  // gets a stock PATH with no ~/.local/bin. Append, never substitute: the bug
+  // that bit the fleet twice was `PATH=$PATH || default`, where the fallback
+  // only fires when PATH is undefined, never when it is set-but-incomplete.
+  const job = [
+    `#!/usr/bin/env bash`,
+    `export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:$PATH"`,
+    `export LANG=C.UTF-8`,
+    `cd ${shq(dir)} || cd /home/${USER}`,
+    opts.prompt ? `claude ${shq("$(cat " + promptPath + ")")}` : `claude`,
+    `echo`,
+    `echo "--- claude exited; shell follows, session stays alive ---"`,
+    `exec bash -l`,
+    ``,
+  ].join("\n");
+
+  // Written via a quoted heredoc so nothing in it is expanded on the way.
+  ssh(`cat > ${jobPath} <<'BOXJOB'\n${job}BOXJOB\nchmod +x ${jobPath}`);
+  ssh(`tmux new-session -d -s ${name} ${shq(`bash ${jobPath}`)}`);
+
+  console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
+  if (opts.attach) attach(name);
+  else console.log(dim(`  box resume ${name}`));
+}
+
+/**
+ * Everything that can be checked from here, in one command — because Claude
+ * Code's own shell cannot reach port 22, so an agent cannot run any of this
+ * itself. Run `box doctor` and paste the output.
+ */
+function cmdDoctor(): void {
+  const ip = host();
+  console.log(bold(`box ${ip}`));
+
+  const reach = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST(), "true"]);
+  if (reach.status !== 0) {
+    console.log(red("✗ ssh: cannot connect"));
+    console.log(dim("  the server may still be booting; `hcloud server list` shows its state"));
+    return;
+  }
+  console.log(green("✓ ssh"));
+
+  console.log(moshWorks() ? green("✓ mosh") : red("✗ mosh (UDP blocked, or a zero-width pty)"));
+
+  const status = ssh(`cloud-init status 2>/dev/null || echo 'status: unknown'`, { check: false });
+  console.log(`  cloud-init: ${status.replace(/^status:\s*/, "")}`);
+
+  for (const tool of ["claude", "tmux", "mosh", "node", "google-chrome"]) {
+    const found = ssh(`command -v ${tool} >/dev/null && echo yes || echo no`, { check: false });
+    console.log(found === "yes" ? green(`✓ ${tool}`) : red(`✗ ${tool}`));
+  }
+
+  const provision = ssh(`sudo grep -E '^(ok|FAIL|PROVISION)' /var/log/provision.log 2>/dev/null || true`, {
+    check: false,
+  });
+  console.log(bold("\nprovisioning:"));
+  console.log(provision ? provision : red("  no verification lines — provisioning did not finish"));
+  if (!provision) {
+    const tail = ssh(`sudo tail -5 /var/log/provision.log 2>/dev/null || echo '(no log)'`, { check: false });
+    console.log(dim("  last lines of the log:"));
+    console.log(dim(tail.split("\n").map((l) => "    " + l).join("\n")));
+  }
+
+  const list = sessions();
+  console.log(bold(`\nsessions: ${list.length}`));
+}
+
+// ---------------------------------------------------------------- main
+
+const HELP = `${bold("box")} — Claude Code sessions on the Hetzner server
+
+  box                       list sessions
+  box new <name> [-p TEXT]  start a session, optionally with a first prompt
+              [-d DIR]      working directory on the box
+              [--no-attach] create it but stay here
+  box resume <name>         reattach (mosh, falling back to ssh)
+  box kill <name>           end a session
+  box doctor                check the box and print what is wrong
+  box ssh                   a plain shell, no tmux
+  box tunnel                forward noVNC to http://localhost:6080/vnc.html
+
+The address is read from Terraform state, so it is never stale. Override with
+BOX_HOST=<ip>.`;
+
+function main(): void {
+  const [cmd, ...rest] = process.argv.slice(2);
+
+  switch (cmd) {
+    case undefined:
+    case "ls":
+    case "list":
+      return cmdLs();
+
+    case "new": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: {
+          prompt: { type: "string", short: "p" },
+          dir: { type: "string", short: "d" },
+          "no-attach": { type: "boolean", default: false },
+        },
+      });
+      const name = positionals[0];
+      if (!name) die("box new <name>");
+      return cmdNew(name, { prompt: values.prompt, dir: values.dir, attach: !values["no-attach"] });
+    }
+
+    case "resume":
+    case "attach": {
+      const name = rest[0] ?? sessions().at(-1)?.name;
+      if (!name) die("no sessions to attach to");
+      if (!SLUG.test(name)) die(`'${name}' is not a valid session name`);
+      return attach(name);
+    }
+
+    case "kill": {
+      const name = rest[0];
+      if (!name || !SLUG.test(name)) die("box kill <name>");
+      ssh(`tmux kill-session -t =${name}`);
+      console.log(green(`✓ killed '${name}'`));
+      return;
+    }
+
+    case "doctor":
+      return cmdDoctor();
+
+    case "ssh":
+      process.exit(spawnSync("ssh", ["-t", HOST()], { stdio: "inherit" }).status ?? 0);
+
+    case "tunnel":
+      console.log(dim("open http://localhost:6080/vnc.html — and run `start-vnc` on the box"));
+      process.exit(
+        spawnSync("ssh", ["-L", "6080:localhost:6080", HOST()], { stdio: "inherit" }).status ?? 0,
+      );
+
+    case "-h":
+    case "--help":
+      return console.log(HELP);
+
+    default:
+      die(`unknown command '${cmd}'\n\n${HELP}`);
+  }
+}
+
+main();
