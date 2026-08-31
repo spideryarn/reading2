@@ -214,6 +214,7 @@ describe("declaredTables", () => {
       "chat_threads",
       "checkpoints",
       "comments",
+      "feedback",
       "glossary_lookups",
       "jobs",
       "queue_state",
@@ -294,7 +295,7 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(18);
+      expect(report.declaredTables).toBe(19);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

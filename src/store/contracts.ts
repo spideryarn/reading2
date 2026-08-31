@@ -55,6 +55,9 @@ import type {
   ChatMessage,
   ChatThread,
   Comment,
+  FeedbackDiagnostics,
+  FeedbackEnvironment,
+  FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
@@ -1029,4 +1032,177 @@ export interface CostStore {
   forJob(jobId: string): Promise<LedgerRead>;
   /** How big the ledger has got, in bytes, or `null` where that is not a question. */
   size(): Promise<number | null>;
+}
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * `read`, `add`, `profile`… — **re-exported from [src/types.ts](../types.ts)**,
+ * like `Visibility` above, so a caller already importing the rest of a report's
+ * shape from this file does not have to know where the vocabulary lives. The
+ * dialog imports the same names from `types.ts` directly, because nothing under
+ * src/web/ may import this file.
+ */
+export type {
+  FeedbackDiagnostics,
+  FeedbackEnvironment,
+  FeedbackRouteKind,
+} from "../types.js";
+
+/**
+ * **What the reader filed** — everything the row is built from, and nothing
+ * else.
+ *
+ * A closed, named shape rather than a bag off the wire, because this is the one
+ * channel on which a reader's own words leave this machine on purpose and the
+ * rule at that seam is the one `safeEvent` follows: *build the payload, do not
+ * clean it*. Nothing here is spread from a request body; the route names each
+ * field.
+ *
+ * `null` rather than optional throughout, deliberately. `exactOptionalPropertyTypes`
+ * is on, so "absent" and "null" would be two spellings of the same fact, and
+ * every one of these fields is a column that is genuinely nullable.
+ */
+export interface NewFeedback {
+  /**
+   * **Client-minted, and the idempotency key.** A double-clicked Save and a
+   * retried POST carry the id the browser already has, and must file one
+   * report — see `FeedbackSubmission` below for what the second one gets back.
+   * A Spideryarn id (`spya-k3m9qt`), so the CHECK in the schema is the same one
+   * every other minted id is held to.
+   */
+  id: string;
+  /**
+   * **The gate's email, snapshotted.** Not a join onto `auth.users`, which is
+   * not ours and where an address can change: what we want months later is the
+   * address this reader had when they wrote to us. Never a value the browser
+   * supplied — src/routes.ts has a `VerifiedUser` at the seam that sets the
+   * owner.
+   */
+  reporterEmail: string;
+  /** *Steps to reproduce.* Length-capped at `MAX_FEEDBACK_ANSWER_CHARS`. */
+  steps: string | null;
+  /** *What you expected to see.* */
+  expected: string | null;
+  /** *What you saw instead.* */
+  actual: string | null;
+  /**
+   * Whether the reader ticked *Send extra diagnostics*. Recorded as its own
+   * fact rather than inferred from `diagnostics` being present: "they said yes
+   * and there was nothing to collect" and "they said no" are different, and
+   * only one of them is a bug in the collector.
+   */
+  consented: boolean;
+  routeKind: FeedbackRouteKind;
+  /** The article they were on, where there was one. Validated by the route. */
+  slug: string | null;
+  /** `__SPIDERYARN_BUILD_COMMIT__` — the string the release and the source maps went up under. */
+  buildCommit: string | null;
+  environment: FeedbackEnvironment;
+  /**
+   * `x-vercel-id` for **this submit**, so the report names a line in the Vercel
+   * log even when the reader sent no diagnostics at all. The ids of the
+   * requests that went *wrong* ride in the diagnostics blob, behind the
+   * tick-box.
+   */
+  requestVercelId: string | null;
+  /** The opt-in blob, versioned. `null` unless `consented`, which the database also enforces. */
+  diagnostics: FeedbackDiagnostics | null;
+  /** A screenshot the reader pasted in. Decoded bytes, capped by the schema. */
+  screenshot: Uint8Array | null;
+}
+
+/**
+ * **A report as it was stored** — the durable half, which is the authoritative
+ * one. The screenshot's bytes are deliberately not read back: nothing that has
+ * the row wants them, and a report list that drags 300 KB per row through
+ * memory to show a tick is the wrong default. `screenshotBytes` says whether
+ * one exists and how big it was.
+ */
+export interface FeedbackReport extends Omit<NewFeedback, "screenshot"> {
+  /** ISO. */
+  createdAt: string;
+  screenshotBytes: number | null;
+  /** ISO, and `null` until Sentry took it. The query that finds anything stranded. */
+  mirroredAt: string | null;
+  sentryEventId: string | null;
+}
+
+/**
+ * **Three answers, and they are genuinely different things** — so a union, not
+ * a row plus two booleans nobody checks.
+ *
+ * Only `created` may be mirrored to Sentry: feedback events are *not* deduped
+ * there (verified against the SDK — see the plan), so mirroring a retry would
+ * file the same report twice. Making that a type the caller must narrow is the
+ * point; `{ report, wasDuplicate }` would let the mirror forget.
+ */
+export type FeedbackSubmission =
+  /** Written. This one, and only this one, gets mirrored. */
+  | { kind: "created"; report: FeedbackReport }
+  /**
+   * This id is already filed for this reader, and **nothing was written**. The
+   * report handed back is the one that is stored, not the one just submitted —
+   * so a retry that differs in its text is reported as the retry it is rather
+   * than silently overwriting what the reader first sent.
+   */
+  | { kind: "duplicate"; report: FeedbackReport }
+  /** The per-owner hourly cap. `retryAfterMs` is until the oldest report in the window ages out. */
+  | { kind: "limited"; retryAfterMs: number };
+
+/**
+ * **Ten reports an hour, per owner.**
+ *
+ * Said plainly, and the plan says it too: this stops a loop and one account
+ * hammering. It is not a defence against account farming and does not pretend
+ * to be. It is the first authenticated write in this repo with no natural
+ * ceiling — a comment is bounded by passages, a job by articles — which is why
+ * it has one at all.
+ */
+export const FEEDBACK_HOURLY_CAP = 10;
+
+/** The window the cap counts over. */
+export const FEEDBACK_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * **A bug report, filed by a reader who is looking at the thing that went
+ * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+ *
+ * **Postgres only.** Not `guarded(...)` like the reads: there is a Postgres
+ * implementation and a filesystem *refusal*, the same asymmetry `AdminStore`
+ * and `VisibilityStore` have. A files adapter would be twenty lines written
+ * against a module that docs/plans/260831b-finish-the-database-move.md deletes
+ * this week, plus a parity obligation to keep two implementations agreeing until
+ * one of them goes.
+ *
+ * The refusal has to reach the reader as a sentence saying the report was not
+ * saved — a button that can only fail is worse than no button, because pressing
+ * it is how you find out.
+ */
+export interface FeedbackStore {
+  /**
+   * File one report. **Append-only, idempotent, and rate-limited, in one
+   * transaction.**
+   *
+   * The owner comes from `currentOwnerId()`, like every other write here; it is
+   * never an argument, so a caller cannot file a report as somebody else.
+   */
+  submit(input: NewFeedback): Promise<FeedbackSubmission>;
+  /**
+   * One report of **this reader's**, or `null`. Owner-scoped like everything
+   * else: another reader's id is simply not found, which is the same rule as
+   * `ownedSlug` and for the same reason — 404 rather than a 403 that confirms.
+   */
+  read(id: string): Promise<FeedbackReport | null>;
+  /**
+   * **Sentry took it.** Written after the mirror, never before: `mirrored_at`
+   * is a record of what happened, and the crash window between the insert and
+   * this is accepted rather than engineered away (an outbox is more machinery
+   * than an alpha feedback button is worth). `mirrored_at is null` is the query
+   * that finds anything stranded.
+   *
+   * `sentryEventId` may be `null` — the SDK does not always hand one back, and
+   * "mirrored, id unknown" is a truer row than "not mirrored".
+   */
+  markMirrored(id: string, sentryEventId: string | null): Promise<void>;
 }

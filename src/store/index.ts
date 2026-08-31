@@ -62,6 +62,7 @@ import type {
   ArticleReader,
   ChatStore,
   CommentStore,
+  FeedbackStore,
   GlossaryLookupStore,
   GlossaryStore,
   LibrarySearch,
@@ -90,6 +91,7 @@ import { pgAdminStore } from "./pg-admin.js";
 import { pgArticleReader } from "./pg.js";
 import { pgChatStore } from "./pg-chat.js";
 import { pgCommentStore } from "./pg-comments.js";
+import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgSearchStore } from "./pg-searches.js";
@@ -392,6 +394,59 @@ const visibilityOnFiles: VisibilityStore = {
 
 export const visibilityStore: VisibilityStore =
   STORE === "postgres" ? guardDbStore("visibility", pgVisibilityStore) : visibilityOnFiles;
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * **A bug report from a reader who is looking at the thing that went wrong.**
+ *
+ * Selected the way `adminStore` and `visibilityStore` are, and for the same
+ * reason: there is a Postgres implementation and a filesystem *refusal*, not two
+ * implementations and a flag. A files adapter would be twenty lines written
+ * against a module that docs/plans/260831b-finish-the-database-move.md deletes
+ * this week, plus a `tests/store-parity.test.ts` obligation to keep two
+ * implementations agreeing until one of them goes.
+ *
+ * Declined with its own sentence rather than `notMigrated`'s, which says "no
+ * Postgres implementation yet" — the opposite of what is true here. The
+ * alternative — quietly reporting success — is the failure this whole directory
+ * keeps warning about, and it would be at its worst here: a Feedback button that
+ * accepts a report and drops it teaches the one reader who tried to tell us
+ * something that telling us does nothing. docs/reusable/silent-success.md.
+ *
+ * The refusal has to reach the reader as a **sentence**, not as a spinner that
+ * stops — the rule `Masthead.tsx` already states about the rename pencil: a
+ * button that can only fail is worse than no button, because pressing it is how
+ * you find out.
+ */
+const feedbackOnFiles: FeedbackStore = {
+  submit: () => {
+    throw Object.assign(
+      new Error(
+        "Feedback needs Postgres — the filesystem store has no feedback table, so " +
+          "there is nowhere to keep a bug report. Your report was not saved. Run " +
+          "with SPIDERYARN_STORE=postgres. See " +
+          "docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.",
+      ),
+      { status: 501 },
+    );
+  },
+  read: () => {
+    throw Object.assign(
+      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
+      { status: 501 },
+    );
+  },
+  markMirrored: () => {
+    throw Object.assign(
+      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
+      { status: 501 },
+    );
+  },
+};
+
+export const feedbackStore: FeedbackStore =
+  STORE === "postgres" ? guardDbStore("feedback", pgFeedbackStore) : feedbackOnFiles;
 
 /* -------------------------------------------------------- the AI ledger -- */
 
