@@ -337,7 +337,15 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call |
 | `SPIDERYARN_CHAT_MODEL` | the chat |
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
+| `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in the review quiz |
+| `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
+
+`MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
+copy is why two rows were missing until 2026-09-01: `quiz-mark` had been added at the quiz stage and
+`referee-mirror` an hour before this line was written, and neither arrival touched the table. A
+variable that exists and is not written down here reads as a variable that does not exist, so the
+rule is the one this repo already keeps — when you add a row there, add it here in the same change.
 
 ## The database, locally
 
