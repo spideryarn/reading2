@@ -83,6 +83,18 @@ later — which is usually *fewer* moving parts, not more. Anything that adds ma
 for the plan rather than something to slip in, and the licence is for the engineering, not the
 product: features still take the simplest version first.
 
+## Bug-mode
+
+Diagnose before you plan. Send two or three subagents at it with different angles, working from
+evidence — a reproduction, the logs, the on-disk state — and not only from reading the code; agents
+reasoning from the same source reach the same wrong answer confidently.
+
+At the end, a postmortem in `docs/postmortems/`: the real cause, the commit that introduced it, the
+fix that's right for the long term, and what would have caught the whole class. **Then do what it
+says, in this run.** The prevention it recommends becomes a stage — rearchitecting so the class
+can't recur is the point of writing it down. Filed at the finish line is filed and never done, and
+the machinery is still open now.
+
 ## Along the way
 
 - **Docs.** Update them in the same stage as the change, and write a doc where one is missing.
