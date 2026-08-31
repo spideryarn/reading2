@@ -461,6 +461,50 @@ Full working: [checkpoint-reclamation.md](checkpoint-reclamation.md).
 Read `src/labels.ts` after the peer's ToC work lands — `LabelRun` has gained fields, a shortfall
 re-ask and a bounded partial accept.
 
+#### What the two NO-SHIPs changed — and the correction to `5e8f744`'s own message
+
+GPT Sol reviewed 2a+2b and 2c separately and returned **NO-SHIP on both**
+([stage2ab-review-sol.md](stage2ab-review-sol.md), [stage2c-review-sol.md](stage2c-review-sol.md)).
+Every finding was accepted; all of them are fixed **in `5e8f744` itself**.
+
+**That commit's own message is wrong about this and cannot be amended** — another session had already
+committed on top. It says the stage-2c fixes are "part-landed and complete in the next commit"; they
+landed in full. The mistake is worth keeping rather than quietly correcting, because of how it
+happened: the pathspec commit form takes the **working tree**, so once a fix is in a file there is no
+pre-fix version of it left to commit. I had a two-commit split in my head that the mechanics did not
+allow, and the agent holding the file was the only one who could see it.
+
+- **The fetch CLI recreated the very split the postmortem is about.** `main()` never called
+  `loadEnvLocal()`, so `npm run fetch` wrote to `data/_blobs/` while the server wrote to Supabase —
+  and because the CLI writes `raw.json`, the queue skipped `fetch` and `extract` dereferenced against
+  the other store. **That CLI exists because I overruled the agent that wanted it diagnostic-only.**
+  The reasoning was right about consistency and missed that this CLI, unlike the six others, makes a
+  *storage selection* that has to match the server's. `loadEnvLocal()` is now the first statement of
+  `main()`, above the argument check so the guarantee is observable from outside, and a `Store:` line
+  prints the credentials that chose — sharing its helper with `missingObjectAdvice` so the two cannot
+  disagree. **Sol's addition to the postmortem's lesson**: a reader exposes the split promptly, but
+  stable selection prevents creating it, and this CLI proved detection alone is not enough.
+- **An over-long object was offered a Retry that could not work.** `readRawBytes` passed
+  `storedBytes` as `maxBytes`, and both adapters throw a plain `Error` past the limit — so it never
+  reached the hash check, never became `RawDocumentUnavailable("corrupt")`, and arrived unclassified.
+  Now classified by asking the store how big the object actually is. Deliberately not a catch-all: a
+  Storage 503 read as corruption tells a reader to refetch an article that would have loaded on the
+  next click.
+- **The blocks seam test accepted a mismatched pair — and so does the production guard.** Sol's
+  finding was that a mutation preserving ids while changing text passed. The agent fixing it found
+  the variant Sol's own suggested replay misses: move the corruption *inside* `splitIntoBlocks` and
+  both sides of the replay are corrupted identically. **`blocksMatchTheirHtml` is that same replay**,
+  so the step would report itself **done**, permanently, holding a document and a block list that
+  describe different words — worse than the re-run loop Sol described. What closes it is re-reading
+  the stored HTML with **no baseline**, which does not share the guard's assumption.
+  Still uncovered, and said rather than left: a corruption applied consistently to both halves, and
+  any change outside a block.
+- **The metadata rule I had been repeating was the wrong rule** — see the `meta` bullet above.
+- **Two atomicity claims of mine were false.** `toc`'s three artefacts do not "land together or not
+  at all": `fsStoreSession` has no transaction and says so. And a missing object does not 404 — the
+  filesystem adapter turns `ENOENT` into `null`, so `RawDocumentUnavailable` reaches the route as a
+  500. Both comments now say the true thing.
+
 ### Stage 2.5 — refetch the corpus, **before** the flip and not after
 
 **Moved here from stage 4 on 2026-08-31, on Sol's third review.** The plan had refetching as
