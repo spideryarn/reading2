@@ -336,6 +336,33 @@ a file and read the file with your normal tools.
 
 `write` also appends to whatever is already on the input line, including half-typed human input.
 
+## Colouring a tab
+
+There is no AppleScript for this. `sdef /Applications/iTerm.app | grep -i 'tab color'` prints nothing
+on 3.6.6 — `background color` exists and is the pane fill, a different thing. The only route from
+*outside* the tab is the Python API (`LocalWriteOnlyProfile.set_tab_color`), which needs *Enable
+Python API*.
+
+From *inside* the tab it is one sequence per channel, written to stdout:
+
+```bash
+printf '\033]6;1;bg;red;brightness;167\a'
+printf '\033]6;1;bg;green;brightness;139\a'
+printf '\033]6;1;bg;blue;brightness;250\a'
+printf '\033]6;1;bg;*;default\a'        # hand it back to the profile
+```
+
+Nothing reads the colour back, so "restore" can only mean "default" — a colour somebody else set
+cannot be put back.
+
+Only write it when you are sure of the terminal: stdout a tty, `TERM_PROGRAM=iTerm.app`, and no
+`TMUX`, `STY`, `SSH_CONNECTION` or `SSH_TTY`. `TERM_PROGRAM` is an ordinary inherited variable,
+exactly like `ITERM_SESSION_ID` above, so under tmux or across ssh it names a terminal that is not in
+front of you — and an unrecognised terminal prints the sequence as text rather than eating it.
+
+To colour a tab you did not create, `write ... text` the printf into it, which is a visible command
+line in that tab, and [Pass data as argv](#pass-data-as-argv-never-by-interpolation) applies.
+
 ## Permissions
 
 Sending Apple events needs macOS Automation permission (System Settings → Privacy & Security →
