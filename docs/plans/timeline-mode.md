@@ -937,6 +937,122 @@ practice, the fix is the prompt, not a similarity threshold in code.
 
 ---
 
+---
+
+## What the review and the spike found (2026-08-31)
+
+GPT Sol reviewed this plan and returned **STOP — revise before Stage 1**
+([timeline-mode-review-sol.md](timeline-mode-review-sol.md)). In parallel a spike ran the extraction
+twice against the ingested article, for $0.37. Between them they settle most of what was guesswork
+above. **Three of Sol's checkable claims were checked rather than believed** — two held, one did not.
+
+### The phrase check does not work, and it fails in both directions
+
+This was the plan's central safety claim. It is wrong as designed, and the two proofs are
+independent.
+
+**It rejects correct dates.** The one phrase-check failure in each spike run was the same row — the
+one [§ One interval, two flags](#one-interval-two-flags) holds up as the reason `extent` exists:
+
+```
+block spya-ebtbnm:  "[F]rom July 13 through July 19, agents set their sights on…"
+
+findQuote(block, "from July 13 through July 19")   ->  null
+findQuote(block, "July 13 through July 19")        ->  { start: 7, end: 30 }
+```
+
+An **editorial capitalisation bracket** in a quoted METR excerpt. The model normalised `[F]rom` to
+`from`, which is what a person would do. `FOLD` in [`src/quote-match.ts`](../../src/quote-match.ts)
+handles curly quotes, three dashes and non-breaking spaces; nothing handles brackets, and brackets
+change the string's length so they cannot join `FOLD` as it is written. Under this plan's rule a
+correct, stated, in-the-article date is silently demoted to undated.
+
+[§ The traps](#the-traps-this-will-walk-into) item 2 named dashes and curly quotes as the hazard.
+Both are already handled. **The trap list guessed the wrong trap**, which is the argument for running
+the thing rather than reasoning about it.
+
+**It accepts wrong dates.** `findQuote` is substring matching with no token boundary:
+
+```
+findQuote("By the next morning, July 11, …", "July 1")  ->  { start: 21, end: 27 }
+findQuote("By May 12 … on May 26, they exploited it.", "May 2")  ->  matches
+```
+
+So `July 1` is "found" inside `July 11`. And **four of this article's blocks hold two distinct dates
+each** — `spya-v9detz` (May 12, May 26), `spya-g9tjds` (June 26, July 4), `spya-sjjbur` (July 10,
+July 11), `spya-ebtbnm` (July 13, July 19) — so a phrase naming the *wrong* event's date is found in
+the right block and passes. Those four are the spine of the piece.
+
+**A found phrase proves the phrase is in the paragraph. It never proved the date was right**, which
+is what the check was for.
+
+**The fix, from Sol, and it is the right one:** stop asking the model for an authoritative date at
+all. Locate the temporal phrase in the occurrence, **parse it deterministically in code**, and
+require every displayed component to come out of that parse. The model supplies evidence; the
+compiler supplies dates. That also deletes `inferred` dates, which contradicted
+[§ Nothing is dated](#nothing-is-dated-unless-the-article-dates-it) the moment they were allowed.
+
+And validation failure must not render as an ordinary undated row — three outcomes, not two: evidence
+bad → drop the event; evidence good → date it; date evidence rejected → keep the event and **say the
+date was rejected**. Otherwise "fails visibly" is only true inside a counter.
+
+### What the model actually did, twice
+
+Much better than this plan assumed. Two runs, same prompt, same article.
+
+| | Result |
+|---|---|
+| Coverage | 20/24 expressions run 1, 18/24 run 2 |
+| Excluded rows (the piece's own dates) leaking in | **0 of 2, both runs** — the plan predicted these would leak |
+| "by" bounds preserved rather than flattened | **11 of 12** |
+| Lower bounds ("after July 12") | correct, unprompted |
+| `extent` correct | **both showcase rows, both runs**; never flipped |
+| Arithmetic ban obeyed | **completely** — 9 relative structures per run, 0 computed dates |
+| Block ids real | 26/26 and 24/24, **zero invented** |
+| Phrase contained its own date | 17/17 and 18/18 — volunteered, *not* enforced |
+| Year | 2026 everywhere, correct |
+
+So the two failures this plan was most shaped against — flattened bounds and invented block ids —
+barely happened, and the arithmetic ban held perfectly. The design's caution was aimed at the wrong
+places.
+
+### `basis` is a coin toss, and that is the field to cut
+
+Same prompt, same article: run 1 marked 16 year-completed dates `"stated"`, run 2 marked 13 of them
+`"derived"`. It also puts `basis: "inferred"` on rows that carry **no date at all**, where the field
+means nothing.
+
+Sol names the cause: in "July 7" the month and day are **stated** and the year is **derived**, and
+one field per event cannot say both. Three independent routes to the same place — the plan's own
+argument, the review, and the model's behaviour.
+
+### Smaller corrections
+
+- **"July 13 through July 19" is seven calendar dates, not six.** This plan said six. The article's
+  own "six-day sprint" is a different, unanchored duration (row 21).
+- **Sol's claim that `tests/db-step-constraint.test.ts` is already red is wrong** — it passes, 4
+  tests green. A peer landed a `quotes` stage and its migration while this was being written.
+- **`publishedAt` is one line, not a scraper.** Readability already returns
+  `publishedTime: "2026-08-29T22:47:53+00:00"`; [`src/extract.ts`](../../src/extract.ts) simply does
+  not copy it into `meta`. And *saying* metadata is in the fingerprint does not put the publication
+  date there — `MetaFingerprint` carries title, byline, site and url. It has to be added explicitly.
+- **The model cannot return an event id it has not been given.** Raw output needs temporary local
+  keys — the spike used `relative.toOrder` and it worked.
+- **"a few hours" came back as `{ value: 3, unit: "hour" }`.** The 3 is invented. `approximate: true`
+  records fuzziness, not that we made the magnitude up.
+- **The honest framing**, from Sol, and it is better than the one at the top of this file: not *when
+  did all this happen*, but ***when does the piece say these things happened*** — an
+  evidence-navigation tool that is summary-shaped, earning its place by sending the reader back to
+  the prose.
+
+### The stage cut was wrong
+
+Stages 2 and 3 are parallel by file ownership, which is true and beside the point: building the panel
+against a contract the eval has not validated is the sequencing mistake
+[ideas-mode.md § Run the eval before building any of it](ideas-mode.md#run-the-eval-before-building-any-of-it)
+already corrected once. Eval first, then freeze the types, then the UI.
+
+
 ## See also
 
 - [ideas-mode.md](ideas-mode.md) — the stage this is modelled on, and the source of the
