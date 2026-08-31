@@ -35,6 +35,7 @@ import type {
   BlockId,
   Glossary,
   Ideas,
+  Quotes,
   NodeId,
   Summaries,
   Tree,
@@ -801,6 +802,44 @@ describe("the four artefacts a shared link carries", () => {
     elapsedMs: 12_000,
   };
 
+  /**
+   * **A real one, not `null`** — and it is here because a cross-family review
+   * pointed out that every Quotes assertion in this repo was passing
+   * vacuously: the store round-trip proves an absent artefact stays absent, the
+   * copy inventory deliberately omits it, the manifest exempts it, the deploy
+   * fixtures have none, and this file passed `quotes: null`. Nothing has run
+   * the stage against a real article, so every check was agreeing about
+   * nothing. GPT Sol, 2026-08-31.
+   */
+  const QUOTES: Quotes = {
+    version: "quotes/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 20_000,
+    discarded: {
+      unfound: 2,
+      otherVoice: 1,
+      wrongLength: 3,
+      overlapping: 0,
+      overCap: 0,
+      malformed: 0,
+    },
+    quotes: [
+      {
+        id: "spya-quote1",
+        blockId: "spya-k3m9qt",
+        text: "It does not survive its own first example, which is the whole trouble.",
+        start: 17,
+        reason: "The claim the rest of the piece is spent defending.",
+        importance: 0.91,
+        striking: 0.88,
+      },
+    ],
+  };
+
   const built = publicArticle({
     slug: "noema",
     title: "The mythology of conscious AI",
@@ -817,7 +856,7 @@ describe("the four artefacts a shared link carries", () => {
     glossary: GLOSSARY,
     summary: SUMMARIES,
     ideas: IDEAS,
-    quotes: null,
+    quotes: QUOTES,
     tweets: THREAD,
   });
 
@@ -825,6 +864,44 @@ describe("the four artefacts a shared link carries", () => {
   function pathsUnder(key: string): string[] {
     return keyPaths((built as unknown as Record<string, unknown>)[key]);
   }
+
+  /**
+   * **The one pipeline-shaped field this projection lets through, and the
+   * several it does not.**
+   *
+   * `discarded` crosses because it is a fact about the list on the screen —
+   * that it is shorter than what the model produced — rather than about our
+   * pipeline, and the panel says so in a sentence a visitor is entitled to read
+   * as much as an owner. `sourceHash`, `version`, `generator`, `profileHash`
+   * and the timings do not, on the rule the whole file keeps.
+   */
+  it("carries a quote's fields, its disclosure, and no provenance about us", () => {
+    expect(pathsUnder("quotes")).toEqual(
+      [
+        "discarded",
+        "discarded.malformed",
+        "discarded.otherVoice",
+        "discarded.overCap",
+        "discarded.overlapping",
+        "discarded.unfound",
+        "discarded.wrongLength",
+        "quotes",
+        "quotes[].blockId",
+        "quotes[].id",
+        "quotes[].importance",
+        "quotes[].reason",
+        "quotes[].start",
+        "quotes[].striking",
+        "quotes[].text",
+      ].sort(),
+    );
+  });
+
+  it("hands the quote's words across unchanged — they are the article's own", () => {
+    /* The one artefact whose payload IS the prose the visitor is reading, so a
+       projection that altered it would be changing the article. */
+    expect(built.quotes?.quotes[0]?.text).toBe(QUOTES.quotes[0]?.text);
+  });
 
   it("carries a glossary entry's fields and never its lookup", () => {
     expect(pathsUnder("glossary")).toEqual(
