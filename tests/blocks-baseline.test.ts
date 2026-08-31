@@ -10,7 +10,7 @@
  * for this article*. The day the pipeline's artefacts move to Postgres that read
  * fails on every run, every article silently becomes a first ingest, and every
  * comment, saved search and ToC row in the database stops naming anything.
- * Nothing throws. See docs/plans/delete-the-importer.md § Three stages carry
+ * Nothing throws. See docs/plans/260827aa-delete-the-importer.md § Three stages carry
  * identity in a file.
  *
  * ## Each of these was watched failing, and against what
@@ -62,6 +62,7 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 import type { Block, OwnerId } from "../src/types.js";
@@ -936,6 +937,8 @@ loadEnvLocal();
  */
 let reachable = false;
 let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
+/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -943,6 +946,7 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.revision_blocks') is not null as ready",
@@ -966,6 +970,7 @@ if (process.env.DATABASE_URL) {
     }
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
@@ -1008,13 +1013,16 @@ if (process.env.DATABASE_URL) {
  *
  * Not a failing test, deliberately: a missing database is a fact about a laptop
  * rather than a defect, and reddening `npm test` for everyone without a local
- * Postgres is not what a skip is for.
+ * Postgres is not what a skip is for. **Unless the run has said otherwise** —
+ * `REQUIRE_POSTGRES=1` is for a run whose whole point is to prove a machine has
+ * a working database, and there a skip is the wrong answer.
  */
 if (!reachable) {
   process.stderr.write(
     `\n  ⚠ the Postgres half of tests/blocks-baseline.test.ts is NOT RUNNING.\n` +
       `    These four assertions have not executed: ${why}\n\n`,
   );
+  failIfPostgresRequired("tests/blocks-baseline.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
 

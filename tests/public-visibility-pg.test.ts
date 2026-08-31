@@ -46,6 +46,7 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
@@ -196,6 +197,9 @@ const OWNER = currentOwnerId();
  * 42703 instead of saying what to run.
  */
 let reachable = false;
+/** What is missing and which fix it needs, for `REQUIRE_POSTGRES=1`. */
+let why = "DATABASE_URL is not set — run npm run db:start";
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -203,7 +207,8 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
-  let why = "";
+  why = "";
+  kind = "migration";
   try {
     const probe = await pool.query(
       `select exists (
@@ -217,11 +222,16 @@ if (process.env.DATABASE_URL) {
     if (!reachable) why = "spideryarn.articles.visibility is missing — run npm run db:migrate";
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
   if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
 }
+
+/* A skip is the right default and the wrong answer for a run that exists to
+   prove a machine has a database. tests/helpers/pg-ready.ts. */
+if (!reachable) failIfPostgresRequired("tests/public-visibility-pg.test.ts", why, kind);
 
 const when = reachable ? describe : describe.skip;
 

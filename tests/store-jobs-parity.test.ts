@@ -40,6 +40,7 @@ import {
 } from "../src/store/jobs-fs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
 
 loadEnvLocal();
@@ -125,6 +126,9 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
 
 /** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
 let reachable = false;
+/** What was missing, and which fix it needs, for `REQUIRE_POSTGRES=1`. */
+let why = "DATABASE_URL is not set — run npm run db:start";
+let kind: MissingKind = "no-url";
 /** Holds `RUN_LOCK` for the length of the run; released in `afterAll`. */
 let runLock: HeldRunLock | undefined;
 
@@ -134,6 +138,8 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
+  why = "spideryarn.jobs is not there — run npm run db:migrate";
   try {
     const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
     reachable = probe.rows[0]?.ready === true;
@@ -181,9 +187,15 @@ if (process.env.DATABASE_URL) {
   } catch (err) {
     if (reachable) throw err;
     reachable = false;
+    kind = "unreachable";
+    why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
 }
+
+/* This file has never said anything when it skips, so `REQUIRE_POSTGRES=1` is
+   the only way its absence is visible. tests/helpers/pg-ready.ts. */
+if (!reachable) failIfPostgresRequired("tests/store-jobs-parity.test.ts", why, kind);
 
 const LEASE = 60_000;
 /**
@@ -548,8 +560,8 @@ for (const adapter of ADAPTERS) {
        Greg asked for and it is not built yet: it must not ship before late steps
        read the published store, because a job queued behind an ingest claims on
        some other instance and opens `blocks.json` in its own empty scratch
-       directory — docs/plans/several-articles-at-once.md § The prerequisite, and
-       docs/plans/late-steps-read-the-store.md, which is another session's.
+       directory — docs/plans/260830ar-several-articles-at-once.md § The prerequisite, and
+       docs/plans/260830aq-late-steps-read-the-store.md, which is another session's.
        Written and watched red first, so that turning it on is a one-word change
        to something already known to fail for the right reason. */
     it.skip("queues a second job for one article rather than refusing it, and will not run both", async () => {

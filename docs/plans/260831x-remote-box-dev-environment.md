@@ -1,7 +1,7 @@
 # Making the remote box a real dev environment
 
-The box exists and runs Claude Code ([remote-server-for-claude-code.md](../research/remote-server-for-claude-code.md),
-[gjd-remote-cli.md](../research/gjd-remote-cli.md)). It cannot yet *do* anything with this project:
+The box exists and runs Claude Code ([260831a-remote-server-for-claude-code.md](../research/260831a-remote-server-for-claude-code.md),
+[260831d-gjd-remote-cli.md](../research/260831d-gjd-remote-cli.md)). It cannot yet *do* anything with this project:
 no repo, no GitHub credentials, no secrets, no database. This plan closes that gap.
 
 Greg's list, 2026-08-31:
@@ -15,7 +15,7 @@ Greg's list, 2026-08-31:
 > - set up Vercel, Sentry, Supabase MCPs (and authenticate)
 
 Reviewed by GPT Sol before any of it was built —
-[remote-box-dev-environment-review-sol.md](remote-box-dev-environment-review-sol.md). It returned
+[260831x-remote-box-dev-environment-review-sol.md](260831x-remote-box-dev-environment-review-sol.md). It returned
 STOP with three blockers, all of which were real, and all of which are folded in below. The shape of
 the plan changed as a result: two layers became three, a blocklist became an allowlist, and the
 final stage became two proofs instead of one.
@@ -283,6 +283,48 @@ the previous review, where an unescaped `${...}` *inside a comment* broke the pl
 `filebase64()` to inject it literally, and pass Terraform's values separately as a small generated
 config file the script reads. That gets the re-runnability without exposing the script to Terraform
 at all, and it removes a risk the current embedded version already carries.
+
+
+## What a fresh clone cannot do, discovered by trying it
+
+Stages 2 and 3 landed 2026-08-31. Two setup steps existed nowhere in writing, and both were found by
+running the suite on the box rather than by reading anything.
+
+**1. `npm run db:seed-owner`.** A freshly migrated database has no owner row, so every insert
+carrying an `owner_id` dies on a foreign key. The visible error was
+`StoreFailure: This app asked its database for something it would not do` — true, and it names
+neither the constraint nor the fix. `LOG_LEVEL=debug` gave the real answer: sqlstate 23503,
+constraint `uploads_owner_fk`. Seeding took 41 failing files down to 23.
+
+**2. Article fixtures, which git does not carry.** `data/` and `output/` are gitignored (62MB and
+11MB on the laptop, empty on a fresh clone), and about 19 test files need an article with both
+`blocks.json` and `tree.json`. Their failures mostly do not say so:
+
+```
+AssertionError: expected 0 to be greater than 0
+Error: ENOENT: no such file or directory, lstat '.../data/writes'
+Error: Failed query: insert into "spideryarn"."jobs" ...
+```
+
+Only two of the nineteen name the real problem. The `jobs` insert is the same cause two steps
+removed — it references a `draft_revision_id` for an article that is not there.
+
+This is the class the project already solved once for Postgres:
+[`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) exists so an absent database says so
+rather than failing obscurely. **Article fixtures have no equivalent**, and every fresh clone hits
+it — this box, a rebuild, the deploy gate's worktree, a new contributor. Worth fixing at the source;
+recorded rather than done, because Greg's call was to sync the fixtures and keep moving.
+
+Two failures are not fixture-related: `pdf-bundle-trace` needs a `vite build` first, and `doc-links`
+finds three broken links that exist on `origin/main` and are already fixed in the laptop's unpushed
+commits.
+
+## The box's checkout is 116 commits behind
+
+The clone is `origin/main`; the laptop is far ahead with uncommitted work besides. So "the tests pass
+on the box" is currently a claim about an old tree — the same staleness the durability table warns
+about, seen from the other side, and why bootstrap should compare the three heads rather than assume
+they agree.
 
 ## Still open
 

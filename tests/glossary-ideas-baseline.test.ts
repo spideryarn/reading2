@@ -3,7 +3,7 @@
  * path** — and the four states they have to tell apart.
  *
  * This is the sibling of tests/blocks-baseline.test.ts, for the other two of the
- * three stages docs/plans/delete-the-importer.md § *Three stages carry identity
+ * three stages docs/plans/260827aa-delete-the-importer.md § *Three stages carry identity
  * in a file* names. The glossary reads `glossary.json` to decide whether to
  * **append** to the list and to **inherit** its entry ids; `ideas` reads
  * `ideas.json` for ids alone. Landing D takes the files away, and after it both
@@ -75,6 +75,7 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import { mintId } from "../src/ids.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
@@ -360,7 +361,7 @@ describe("the previous artefact, over the filesystem store", () => {
    *
    * `generateGlossary` hands its glossary back and writes nothing — the caller
    * stores it, through the artefact store in the pipeline and to a file at the
-   * command line (docs/plans/finish-the-database-move.md § stage 2). Over the
+   * command line (docs/plans/260831b-finish-the-database-move.md § stage 2). Over the
    * filesystem store those are the same bytes in the same place, so everything
    * below that reads `glossary.json` back is still reading what a real caller
    * put there rather than a fixture this file invented for itself.
@@ -792,6 +793,8 @@ loadEnvLocal();
  */
 let reachable = false;
 let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
+/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -799,6 +802,7 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.article_revisions') is not null as ready",
@@ -822,6 +826,7 @@ if (process.env.DATABASE_URL) {
     }
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
@@ -831,6 +836,8 @@ if (!reachable) {
     `\n  ⚠ the Postgres half of tests/glossary-ideas-baseline.test.ts is NOT RUNNING.\n` +
       `    These assertions have not executed: ${why}\n\n`,
   );
+  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
+  failIfPostgresRequired("tests/glossary-ideas-baseline.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
 

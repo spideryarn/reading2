@@ -6,7 +6,7 @@
  * nonetheless in two different caches, and every ingest paid a write premium for
  * a read that the normal path never performs. Nothing threw either time.
  *
- * See docs/project/prompt-caching.md and docs/plans/prompt-caching-sol-review.md.
+ * See docs/project/prompt-caching.md and docs/plans/260826i-prompt-caching-sol-review.md.
  */
 import { describe, expect, it } from "vitest";
 import { ARTICLE_RENDERER, effortFor, STAGE_EFFORT } from "../src/models.js";
@@ -24,7 +24,7 @@ describe("the article cache group", () => {
     /* Not a preference — measured. Four calls, one identical 7,291-token cached
        block, only `effort` varying: changing it paid a full write. So a stage
        whose effort differs cannot share, however identical its article is.
-       docs/research/prompt-caching-anthropic.md. */
+       docs/research/260826b-prompt-caching-anthropic.md. */
     expect(STAGE_EFFORT.glossary).not.toBe(STAGE_EFFORT.arc);
     expect(sharesArticleCache("arc", ["glossary"])).toBe(false);
     expect(sharesArticleCache("glossary", ["arc", "tweets"])).toBe(false);
@@ -47,6 +47,23 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("arc", ["ideas"])).toBe(false);
     expect(sharesArticleCache("ideas", ["arc", "tweets"])).toBe(false);
     expect(sharesArticleCache("ideas", ["glossary"])).toBe(false);
+  });
+
+  it("puts timeline in the ids group with ideas and sketch, and in no other", () => {
+    /* **Measured rather than asserted**, which is what this file is for. The
+       claim in src/models.ts is that `timeline` shares one cached article
+       prefix with `ideas` and `sketch` — same `high` effort, same `ids`
+       renderer — and shares nothing with the four `articleText` stages.
+
+       It is worth pinning in both directions. Sharing where it should not marks
+       the article, pays the 1.25x write premium and collects no read. Not
+       sharing where it should is the opposite mistake and is invisible: three
+       stages in one job each paying for the same 4,000-word article. */
+    expect(STAGE_EFFORT.timeline).toBe(STAGE_EFFORT.ideas);
+    expect(ARTICLE_RENDERER.timeline).toBe(ARTICLE_RENDERER.ideas);
+    expect(sharesArticleCache("ideas", ["timeline"])).toBe(true);
+    expect(sharesArticleCache("timeline", ["sketch"])).toBe(true);
+    expect(sharesArticleCache("timeline", ["arc", "tweets", "glossary", "quotes"])).toBe(false);
   });
 
   it("agrees with itself about which renderer every article stage uses", () => {

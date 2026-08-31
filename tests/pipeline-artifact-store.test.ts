@@ -3,7 +3,7 @@
  * round-trip the real artefacts, and a half-written file stops reporting itself
  * finished.
  *
- * See docs/plans/postgres-storage-implementation.md § Step 11, half B.
+ * See docs/plans/260826e-postgres-storage-implementation.md § Step 11, half B.
  *
  * ## The one that started red
  *
@@ -44,6 +44,10 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_VERSION,
 } from "../src/sketch.js";
+import {
+  inputFingerprint as timelineFingerprint,
+  PROMPT_VERSION as TIMELINE_VERSION,
+} from "../src/timeline.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -178,6 +182,14 @@ const META = { slug: SLUG, title: "A title" };
 const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE, META);
 const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
+/* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
+   `datedArticleFingerprint` — the blocks, the tree and a head that carries
+   `publishedAt` — because the publication date is the frame its year-less dates
+   are read against. `META` here has no date, which is the state most of the
+   shelf is in and the one that has to work: the fingerprint hashes an absent
+   date as a legitimate input rather than as no input at all, so this matches
+   what the stage's `stamp` computes off the same file. */
+const TIMELINE_SOURCE_HASH = timelineFingerprint(BLOCKS, TREE, META);
 /**
  * What `tweets` and `glossary` stamp. The same three inputs — neither
  * exports a fingerprint function of its own, because neither
@@ -329,6 +341,26 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      **`scenes` must be non-empty**, because `ARTEFACT_SHAPE` in
      src/store/artifacts.ts refuses a picture with none — a rule that exists at
      the store boundary precisely so a fixture cannot slip past it. */
+  /* Same two reasons as `ideas` — its own fingerprint function, and a fixture
+     that hashes anything else would report the step not-done however complete
+     it is — plus one difference worth stating: **there is no `profileHash`**,
+     because this stage was never written for a profile, and an artefact
+     carrying one would be recording a field its `stamp` never compares.
+
+     `events` is deliberately EMPTY, unlike `quotes` and `sketch` below. Most
+     articles have no chronology, so an empty timeline is the expected answer for
+     them and `SHAPE.timeline` in src/store/artifacts.ts accepts it — this
+     fixture is what holds that decision to being true on both sides. */
+  await writeJson(pathFor(at, "timeline", "timeline"), {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: TIMELINE_SOURCE_HASH,
+    version: TIMELINE_VERSION,
+    events: [],
+    orderConflicts: 0,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
   await writeJson(pathFor(at, "sketch", "sketch"), {
     generator: CAPABLE_MODEL,
     slug: SLUG,
@@ -654,7 +686,7 @@ describe("the raw artefact is a manifest, and the type has to say so", () => {
     /* Said in a test because it is the thing a reader of the type would assume
        and be wrong about. `article_revisions.raw_bytes` needs the payload, and
        a manifest has only its *name* — so a Postgres adapter cannot be written
-       against this. docs/plans/transactional-stage-runner.md § B. */
+       against this. docs/plans/260827j-transactional-stage-runner.md § B. */
     const manifest: ArtifactMap["raw"] = {
       kind: "html",
       file: "raw.html",
@@ -785,7 +817,7 @@ describe("glossary currency, through the stamp rather than a function", () => {
 
   /* The two halves of the fingerprint this step gained on 2026-08-31. Both were
      green — wrongly — while the stamp hashed the blocks alone.
-     docs/plans/finish-the-database-move.md § stage 1. */
+     docs/plans/260831b-finish-the-database-move.md § stage 1. */
   it("says not-done when the sections have been re-cut", async () => {
     const recut = {
       ...TREE,
@@ -887,7 +919,7 @@ describe("a corrupt artefact does not put the article in a log line", () => {
  * The three criticals a review of this seam found on 2026-08-26, written as
  * tests before they were fixed.
  *
- * See docs/plans/postgres-storage-implementation.md
+ * See docs/plans/260826e-postgres-storage-implementation.md
  * § What the review of the *built* seam found.
  */
 describe("a step that started and did not finish must not report itself done", () => {
@@ -1058,7 +1090,7 @@ describe("blocks is only done if the HTML really carries its ids", () => {
  *
  * Harmless only while the pipeline's reads answer `null` and the stage re-runs
  * regardless. The moment they succeed an incomplete stamp lets a **stale
- * artefact skip** — docs/plans/finish-the-database-move.md § stage 1,
+ * artefact skip** — docs/plans/260831b-finish-the-database-move.md § stage 1,
  * docs/reusable/silent-success.md.
  *
  * **`assets` is in here as the control.** It reads the blocks and nothing else
@@ -1202,7 +1234,7 @@ describe("every stamped step covers everything its prompt reads", () => {
  *
  * Each case below asserts the **prompt** moves and the hash moves with it, in
  * that order, so neither half can be true on its own.
- * docs/plans/finish-the-database-move.md § stage 1.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
 describe("a fingerprint per prompt head, not one for both", () => {
   const headOf = (meta: Meta): string => articleWithIds(meta, BLOCKS).split("\n\n---\n\n")[0]!;
@@ -1274,7 +1306,7 @@ describe("a fingerprint per prompt head, not one for both", () => {
  * ids was visible through the alias. Split into two columns the alias goes and
  * the check returns `true` always: a vacuous guard over
  * docs/project/block-ids.md, arriving exactly when it is needed.
- * docs/plans/finish-the-database-move.md § stage 1.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
 describe("blocks is only done if it was built from the HTML the store holds now", () => {
   /**

@@ -3,7 +3,7 @@
  * `gjd-remote` — drive Claude Code sessions running in tmux on the Hetzner server.
  *
  * The design, and the reasons behind each piece, are in
- * docs/research/remote-server-tmux-mosh.md. The short version: one tmux session
+ * docs/research/260831c-remote-server-tmux-mosh.md. The short version: one tmux session
  * per Claude session, mosh as transport with ssh as fallback, and tmux is not
  * optional because mosh cannot reattach — a client that dies leaves a session
  * nobody could otherwise get back into.
@@ -26,9 +26,17 @@ import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-r
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
 
+/** Where checkouts live on the box, and where `clone` puts a new one. */
+const REMOTE_CODE = `/home/${USER}/code`;
+
+/** The one checkout that already exists. Written once and referenced everywhere
+ *  — it used to be a literal in two places, and the help text is exactly where
+ *  a second copy goes stale without anything noticing. */
+const REMOTE_REPO_DEFAULT = `${REMOTE_CODE}/spideryarn2`;
+
 /** Where the repo checkout lives on the box. Overridable so the push can be
  *  exercised against a scratch directory without a real checkout. */
-const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? `/home/${USER}/code/spideryarn2`;
+const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? REMOTE_REPO_DEFAULT;
 
 /** Everything gjd-remote leaves on the box lives under here. */
 const REMOTE_WORK = `/home/${USER}/gjd-remote`;
@@ -161,11 +169,28 @@ function moshProbe(): { ok: boolean; detail: string } {
  *         `a || b` dies with "execvp: a || b: No such file or directory".
  */
 function attachCmd(name: string, transport: "mosh" | "ssh"): string {
+  // Name the terminal tab after the session, and keep it named: `ls` renames a
+  // placeholder session to Claude's own title for the work, and tmux pushes the
+  // new title out to the attached client the moment that happens. Measured on
+  // tmux 3.7b: `ESC]0;<name>BEL` on attach, and one more on each rename —
+  // nothing in between, so this is not a per-frame cost.
+  //
+  //  =name:  with the COLON. `set-option -t` takes a target *pane*, and the `=`
+  //          exact-match prefix is only recognised on the session part when a
+  //          colon follows: `-t =name` fails with "no such session". Dropping
+  //          the `=` instead would be worse than an error, because a bare
+  //          target prefix-matches and would configure somebody else's session.
+  //  "#S"    quoted, or `#` starts a comment to the remote shell.
+  //
   // No `|| exec bash -l` here: a failed attach must fail. The job script keeps
   // the session alive after Claude exits, so nothing needs this as a safety net.
-  const inner = `tmux attach -d -t =${name}`;
+  const inner =
+    `tmux set -t =${name}: set-titles on && ` +
+    `tmux set -t =${name}: set-titles-string "#S" && ` +
+    `tmux attach -d -t =${name}`;
   return transport === "mosh"
-    ? `LANG=C.UTF-8 mosh ${shq(HOST())} -- sh -c ${shq(inner)}`
+    ? // Without MOSH_TITLE_NOPREFIX every tab reads "[mosh] " before the name.
+      `MOSH_TITLE_NOPREFIX=1 LANG=C.UTF-8 mosh ${shq(HOST())} -- sh -c ${shq(inner)}`
     : `ssh -t ${shq(HOST())} ${shq(inner)}`;
 }
 
@@ -293,6 +318,36 @@ function age(d: Date): string {
 
 // ---------------------------------------------------------------- commands
 
+/**
+ * Which tree a session starts in — and proof that it is actually there.
+ *
+ * Most specific first: an explicit `--dir`, else `GJD_REMOTE_REPO`, else the one
+ * checkout that already exists. The home directory used to be the default, and
+ * it is the wrong one: every session then opened with an agent guessing where to
+ * `cd`, and a guess about which tree to edit is the expensive kind. `-d ~` still
+ * gets you home when that is genuinely what you want.
+ *
+ * The existence check belongs HERE, before any session is created, and not only
+ * because a session that dies on its first line is confusing. It is the half of
+ * the guard that can say something useful — by the time the job script runs,
+ * nobody is watching. See the job script below for the other half.
+ */
+function sessionDir(given: string | undefined): string {
+  const explicit = given !== undefined;
+  const dir = remotePath(given ?? REMOTE_REPO(), explicit ? "--dir" : "GJD_REMOTE_REPO");
+  if (spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status === 0) return dir;
+  die(
+    `no such directory on the box: ${dir}\n` +
+      (explicit
+        ? `  --dir is a path on the BOX, not on this laptop.`
+        : `  that is where sessions start when you do not say. Either put it there:\n` +
+          `    gjd-remote clone spideryarn/reading2 --name spideryarn2\n` +
+          `  or say where to start:\n` +
+          `    gjd-remote new -d ~          ${dim("# the home directory")}\n` +
+          `  (or set GJD_REMOTE_REPO to a checkout that already exists)`),
+  );
+}
+
 function cmdLs(): void {
   const list = adoptTitles(sessions());
   if (list.length === 0) {
@@ -331,14 +386,11 @@ function cmdNew(
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
-  const dir = opts.dir ?? `/home/${USER}`;
-  // A newline in dir could otherwise close the remote heredoc early. The job
-  // file is scp'd rather than heredoc'd now, which removes that boundary
-  // entirely, but a dir with control characters is a mistake either way.
-  if (/[\r\n]/.test(dir)) die("--dir may not contain newlines");
-  // cd failing must not silently start Claude in the wrong tree.
-  const dirOk = spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status === 0;
-  if (!dirOk) die(`no such directory on the box: ${dir}`);
+  // Resolved, normalised and checked in one place — and said out loud, because
+  // which tree an agent is about to edit should never be something you find out
+  // afterwards.
+  const dir = sessionDir(opts.dir);
+  console.log(bold(`gjd-remote new ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // Pin the session id rather than discovering it: it is how we find this
   // conversation's transcript later, and so how we read back its title.
@@ -369,7 +421,16 @@ function cmdNew(
     `#!/usr/bin/env bash`,
     `export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:$PATH"`,
     `export LANG=C.UTF-8`,
-    `cd ${shq(dir)} || { echo "FATAL: cannot cd to ${dir}"; exec bash -l; }`,
+    // No fallback. This line used to end `|| { echo FATAL; exec bash -l; }`,
+    // which gave you a healthy-looking tmux session sitting in /home/greg with
+    // the FATAL line one keystroke from scrolling away — and Claude never
+    // started. `gjd-remote ls` showed a session; the tree was the wrong one.
+    // Reproduced 2026-08-31 by deleting the directory after the check.
+    //
+    // sessionDir() already checked, so reaching here means the directory went
+    // away in between. Exiting ends the session, which is a failure you can see;
+    // a session in the wrong tree is one you cannot.
+    `cd ${shq(dir)} || { echo "FATAL: ${dir} is gone — refusing to start Claude somewhere else"; exit 1; }`,
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
     [
@@ -421,11 +482,8 @@ function cmdShell(given: string | undefined, opts: { dir?: string | undefined; t
     attach(name, opts.transport);
   }
 
-  const dir = opts.dir ?? `/home/${USER}`;
-  if (/[\r\n]/.test(dir)) die("--dir may not contain newlines");
-  if (spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status !== 0) {
-    die(`no such directory on the box: ${dir}`);
-  }
+  const dir = sessionDir(opts.dir);
+  console.log(bold(`gjd-remote shell ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
@@ -537,6 +595,270 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   if (mode !== `600 ${USER}`) die(`written, but the mode is '${mode}' and should be '600 ${USER}'`);
 
   console.log(green(`✓ ${payload.pushed.size} keys, 0600 ${USER}, read back and verified`));
+}
+
+// ---------------------------------------------------------------- clone
+
+/**
+ * GitHub's own naming rules, narrowed: nothing here may ever surprise a shell.
+ * Owners are alphanumeric-and-hyphen; repo names also allow dot and underscore.
+ * Both must START with alphanumeric, which is what rules out `.`, `..`, and a
+ * leading hyphen that a command would read as a flag.
+ */
+const GH_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const GH_REPO = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
+/** Per-owner fine-grained PATs, one file each. See infra/hetzner/README.md. */
+const TOKEN_DIR = "/etc/github-tokens";
+
+type Repo = { owner: string; name: string; url: string };
+
+/**
+ * `owner/name` or `https://github.com/owner/name(.git)`, normalised to one thing.
+ *
+ * HTTPS is not a preference. The box has no ssh key at all; it authenticates
+ * through a git credential helper that reads the owner out of the request PATH,
+ * and a `git@github.com:` URL never reaches it. So an ssh URL is rejected here
+ * with the reason, rather than handed to git to fail obscurely three seconds later.
+ */
+function parseRepo(given: string): Repo {
+  const raw = given.trim();
+  const forms = `  owner/name\n  https://github.com/owner/name.git`;
+  if (/^(git@|ssh:\/\/)/.test(raw)) {
+    die(
+      `'${raw}' is an ssh URL, and the box has no ssh key for GitHub.\n` +
+        `  It authenticates with per-owner tokens through a credential helper that only\n` +
+        `  sees the owner when the URL is https. Use one of:\n${forms}`,
+    );
+  }
+  const m = /^(?:https:\/\/github\.com\/)?([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(raw);
+  const owner = m?.[1];
+  const name = m?.[2];
+  if (!owner || !name || !GH_OWNER.test(owner) || !GH_REPO.test(name)) {
+    die(`'${raw}' is not a repository I recognise. Two forms are accepted:\n${forms}`);
+  }
+  return { owner, name, url: `https://github.com/${owner}/${name}.git` };
+}
+
+/** `owner/name`, lower-cased, out of any GitHub remote URL — the comparable
+ *  form. GitHub owners and repo names are case-insensitive, so the comparison
+ *  has to be too, or an existing checkout goes unrecognised and gets a twin. */
+function remoteSlug(url: string): string | undefined {
+  const m = /^(?:https:\/\/(?:[^@/]*@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
+    url.trim(),
+  );
+  const owner = m?.[1];
+  const name = m?.[2];
+  return owner && name ? `${owner}/${name}`.toLowerCase() : undefined;
+}
+
+/** A path ON THE BOX, from a flag. Absolute or `~`-relative; anything else is a
+ *  path relative to whatever directory ssh happened to land in, which is not a
+ *  thing anybody means. */
+function remotePath(given: string, what: string): string {
+  const p = given.trim();
+  if (!p) die(`${what} may not be empty`);
+  if (/[\r\n\0]/.test(p)) die(`${what} may not contain newlines`);
+  const abs = p === "~" ? `/home/${USER}` : p.startsWith("~/") ? `/home/${USER}/${p.slice(2)}` : p;
+  if (!abs.startsWith("/")) die(`${what} must be absolute or ~-relative, got '${p}'`);
+  return abs.replace(/\/+$/, "") || "/";
+}
+
+type CloneFacts = {
+  get: (k: string) => string;
+  /** Every checkout directly under the base folder, with its origin URL. */
+  siblings: { dir: string; url: string }[];
+};
+
+/**
+ * Everything the decision needs, in one round trip: the destination's state,
+ * whether the owner has a token, and what else under the base folder is already
+ * a checkout of something.
+ *
+ * `rev-parse --show-toplevel` alone is not "is this a checkout" — inside a repo
+ * it happily answers for an ANCESTOR, so a plain subdirectory of one would read
+ * as a checkout of the parent. It counts only when the toplevel IS the
+ * directory we asked about.
+ */
+function cloneFacts(base: string, dest: string, tokenFile: string): CloneFacts {
+  const script = `
+    isrepo() {
+      top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)
+      real=$(cd "$1" 2>/dev/null && pwd -P || true)
+      [ -n "$top" ] && [ "$top" = "$real" ]
+    }
+    d=${shq(dest)}
+    printf 'exists=%s\\n' "$(test -e "$d" && echo yes || echo no)"
+    if isrepo "$d"; then
+      printf 'checkout=yes\\n'
+      printf 'remote=%s\\n' "$(git -C "$d" remote get-url origin 2>/dev/null || true)"
+      printf 'branch=%s\\n' "$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      printf 'subject=%s\\n' "$(git -C "$d" log -1 --pretty=%s 2>/dev/null | tr -d '\\n' || true)"
+      printf 'dotgit=%s\\n' "$(test -e "$d/.git" && echo yes || echo no)"
+    else
+      printf 'checkout=no\\n'
+    fi
+    for c in ${shq(base)}/*/; do
+      c=\${c%/}
+      if isrepo "$c"; then
+        printf 'sibling=%s|%s\\n' "$c" "$(git -C "$c" remote get-url origin 2>/dev/null || true)"
+      fi
+    done
+    printf 'token=%s\\n' "$(test -f ${shq(tokenFile)} && echo yes || echo no)"
+    printf 'tokenmode=%s\\n' "$(stat -c '%a %U' ${shq(tokenFile)} 2>/dev/null || true)"`;
+  const map = new Map<string, string>();
+  const siblings: { dir: string; url: string }[] = [];
+  for (const line of ssh(script, { check: false }).split("\n")) {
+    const at = line.indexOf("=");
+    if (at < 1) continue;
+    const key = line.slice(0, at);
+    const value = line.slice(at + 1).trim();
+    if (key === "sibling") {
+      const bar = value.lastIndexOf("|");
+      const dir = value.slice(0, bar);
+      const url = value.slice(bar + 1);
+      if (bar > 0 && url) siblings.push({ dir, url });
+      continue;
+    }
+    map.set(key, value);
+  }
+  return { get: (k) => map.get(k) ?? "", siblings };
+}
+
+/** What a checkout is, said the same way whether we found it or made it. */
+function describeCheckout(facts: CloneFacts): void {
+  console.log(`  ${dim("remote")}  ${facts.get("remote") || dim("(none)")}`);
+  console.log(`  ${dim("branch")}  ${facts.get("branch") || dim("(unknown)")}`);
+  console.log(`  ${dim("HEAD")}    ${facts.get("subject") || dim("(no commits)")}`);
+}
+
+/**
+ * Clone one of Greg's repos onto the box, over HTTPS, after saying no to the
+ * three ways this goes wrong quietly.
+ *
+ *  NO TOKEN     The credential helper refuses an unknown owner before any
+ *               network call — correctly — but git reports it as "could not
+ *               read Username for 'https://github.com'", which names neither
+ *               the owner nor the file. Checking first is the whole value this
+ *               command adds over typing `git clone`.
+ *  A SECOND COPY  `spideryarn/reading2` is checked out as `spideryarn2`, so the
+ *               obvious default name would put a second, diverging copy beside
+ *               it. Any checkout under the base folder with the same origin
+ *               counts as the answer, whatever it is called.
+ *  A REWRITTEN REMOTE  `url.insteadOf` and friends can rewrite what git records,
+ *               and an ssh remote on this box can never fetch again. So the
+ *               remote is read back and compared, not assumed.
+ *
+ * It deliberately runs nothing else — no `npm ci`, no install. A clone that
+ * quietly triggers a five-minute install is a clone you cannot use to look at
+ * something. The next steps are printed instead.
+ */
+function cmdClone(given: string | undefined, opts: { baseFolder?: string | undefined; name?: string | undefined }): void {
+  if (!given) {
+    die(`gjd-remote clone <repo> [--base-folder DIR] [--name DIR-NAME]\n  owner/name, or https://github.com/owner/name.git`);
+  }
+  const repo = parseRepo(given);
+  const base = remotePath(opts.baseFolder ?? REMOTE_CODE, "--base-folder");
+  const dirName = (opts.name ?? repo.name).trim();
+  if (!GH_REPO.test(dirName)) {
+    die(`'${dirName}' is not a usable directory name (letters, digits, . _ -; must start with a letter or digit)`);
+  }
+  const dest = `${base}/${dirName}`;
+  const tokenFile = `${TOKEN_DIR}/${repo.owner}.token`;
+
+  console.log(bold(`gjd-remote clone ${repo.owner}/${repo.name} → ${HOST()}:${dest}`));
+
+  const before = cloneFacts(base, dest, tokenFile);
+  const want = `${repo.owner}/${repo.name}`.toLowerCase();
+
+  // Already there. Success, not an error — but say WHICH repo is sitting there,
+  // because a name collision and a done job look identical from the outside.
+  if (before.get("checkout") === "yes") {
+    const found = remoteSlug(before.get("remote"));
+    console.log(green(`✓ already a checkout — nothing to do`));
+    describeCheckout(before);
+    if (found !== want) {
+      console.log(red(`  note: that is ${found ?? "an unrecognised remote"}, not ${want}`));
+      console.log(dim(`  --name or --base-folder if you meant somewhere else`));
+    }
+    return;
+  }
+
+  // Answer about the directory that was actually asked for before offering
+  // news about any other one: an occupied destination is the user's problem to
+  // decide, and burying it under an advisory reads as success.
+  if (before.get("exists") === "yes") {
+    die(`${dest} exists on the box but is not a git checkout.\n  Move it aside, or pass --name for a different directory.`);
+  }
+
+  // The same repo under another name. This is the reading2/spideryarn2 case,
+  // and cloning anyway is how you get two checkouts that drift apart.
+  const twin = before.siblings.find((s) => remoteSlug(s.url) === want);
+  if (twin) {
+    console.log(green(`✓ ${want} is already on the box`) + dim(` — under a different name`));
+    console.log(`  ${dim("at")}      ${twin.dir}`);
+    console.log(dim(`  nothing cloned. For a genuinely separate second copy, use --base-folder.`));
+    return;
+  }
+
+  // Before git, not after: git's own error names neither the owner nor the file.
+  if (before.get("token") !== "yes") {
+    die(
+      `no GitHub token on the box for owner '${repo.owner}'.\n` +
+        `  git would fail with "could not read Username for 'https://github.com'", which\n` +
+        `  says nothing about why. The credential helper needs this file:\n` +
+        `    ${tokenFile}\n` +
+        `  Issue a fine-grained PAT with resource owner '${repo.owner}', then:\n` +
+        `    ssh ${HOST()} 'umask 077; cat > ${tokenFile}'   # paste, then Ctrl-D\n` +
+        `  The full ceremony — including the org policy that makes a private repo look\n` +
+        `  like a typo — is in infra/hetzner/README.md § Giving the box GitHub access.`,
+    );
+  }
+  // Existence and mode only. Never the contents, not even a prefix of them.
+  const mode = before.get("tokenmode");
+  if (mode && mode !== `600 ${USER}`) {
+    console.log(red(`  warning: ${tokenFile} is '${mode}' and should be '600 ${USER}'`));
+  }
+
+  // stdio inherit: a clone is the one thing here slow enough that its progress
+  // is worth watching. GIT_TERMINAL_PROMPT=0 so a credential miss fails instead
+  // of hanging on a username nobody is there to type.
+  const cmd = `mkdir -p ${shq(base)} && GIT_TERMINAL_PROMPT=0 git clone ${shq(repo.url)} ${shq(dest)}`;
+  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), cmd], { stdio: "inherit" });
+  if (r.status !== 0) {
+    die(
+      `git clone failed on the box (exit ${r.status}) — git's own output is above.\n` +
+        `  "Repository not found" on a repo that exists usually means the token has no\n` +
+        `  grant for it, or is pending org approval; both read as a typo.`,
+    );
+  }
+
+  // Verify rather than trust. A clone that exited 0 into the wrong shape, or
+  // with a rewritten remote, is exactly the silent success worth catching.
+  const after = cloneFacts(base, dest, tokenFile);
+  if (after.get("checkout") !== "yes" || after.get("dotgit") !== "yes") {
+    die(`git clone said it succeeded, but ${dest} is not a checkout on the box.`);
+  }
+  const got = after.get("remote");
+  if (got !== repo.url) {
+    die(
+      `cloned, but git recorded a different remote than the one asked for.\n` +
+        `  asked for: ${repo.url}\n` +
+        `  recorded:  ${got || "(none)"}\n` +
+        `  A rewrite (url.insteadOf) would do this, and an ssh remote can never fetch\n` +
+        `  from this box — it has no GitHub ssh key.`,
+    );
+  }
+
+  console.log(green(`✓ cloned ${want}`));
+  describeCheckout(after);
+  // Nothing else is run for you — no `npm ci`, no install. Said out loud,
+  // because a clone that silently starts a five-minute install is a clone you
+  // cannot use to go and look at something.
+  const envNote = dest === REMOTE_REPO() ? "" : `   # note: writes to ${REMOTE_REPO()}, not here`;
+  console.log(dim("\nnext:"));
+  console.log(dim(`  gjd-remote push-env${envNote}`));
+  console.log(dim(`  gjd-remote shell -d ${dest}   then npm ci`));
 }
 
 /**
@@ -712,7 +1034,7 @@ function cmdDoctor(): void {
   //
   // This used to be informational, with a comment saying its two FAIL lines were
   // a false alarm. They were: `grep -q` was killing `sshd -T` with SIGPIPE and
-  // pipefail was reporting the corpse (docs/postmortems/the-match-that-still-failed.md).
+  // pipefail was reporting the corpse (docs/postmortems/260831f-the-match-that-still-failed.md).
   // But "known false alarm" is not a state a check may sit in — it is how a
   // report stops being read. The bug is fixed, so this counts again.
   const report = ssh(`sudo cat /var/log/gjd-provision-status 2>/dev/null || true`, { check: false });
@@ -764,16 +1086,19 @@ ${bold("SESSIONS")}
   ls, (no args)           list sessions, each with Claude's own title for it
   new [name]              start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt
-      -d, --dir DIR         working directory on the box
+      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
           --no-attach       create it, but stay here
   shell [name]            a persistent shell, no Claude Code
-      -d, --dir DIR         working directory on the box
+      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
   resume [name]           reattach; with no name, the most recent session
   kill <name>             end a session
 
 ${bold("THE BOX")}
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
+  clone <repo>            clone one of Greg's repos onto the box, over HTTPS
+      --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
+      --name DIR-NAME       directory name, if not the repo's own
   push-env                send .env.local to the repo checkout on the box
       --file PATH           a different .env.local — the basename must be exactly that
   ssh                     a throwaway connection — no tmux, dies with the terminal
@@ -789,6 +1114,22 @@ ${bold("WHAT push-env WILL AND WILL NOT SEND")}
   are at the top of ${dim("scripts/gjd-remote-env.ts")}.
   It reports which KEYS changed. Never a value, and never a hash of one.
 
+${bold("HOW clone AUTHENTICATES")}
+  Always HTTPS, never ssh: the box has no GitHub ssh key. It has a fine-grained
+  PAT per repository OWNER in ${dim(`${TOKEN_DIR}/<owner>.token`)}, picked by a git
+  credential helper that reads the owner out of the URL — which it can only do
+  when the URL is https. An owner with no token file is refused here, by name,
+  before git runs; git's own error for it says only "could not read Username".
+  Issuing the tokens is a ceremony in ${dim("infra/hetzner/README.md")}.
+
+${bold("WHERE A SESSION STARTS")}
+  ${dim("new")} and ${dim("shell")} begin in the repo checkout, not the home directory: an agent
+  that starts in ~ opens by guessing which tree to edit. Most specific wins —
+  ${dim("--dir")}, else ${dim("GJD_REMOTE_REPO")}, else ${dim(REMOTE_REPO_DEFAULT)} — and whichever it
+  is, it is printed. ${dim("-d ~")} for the home directory.
+  The directory must already exist on the box; there is no fallback, because the
+  fallback was a healthy-looking session in ${dim("/home/greg")} editing the wrong thing.
+
 ${bold("ANYWHERE")}
   --ssh                   skip mosh, for satellite or UDP-blocked networks
 
@@ -799,15 +1140,26 @@ ${bold("WHAT SURVIVES WHAT")}
 
 ${bold("EXAMPLES")}
   gjd-remote new -p "fix the ToC ordering bug"
-      starts a session, and names it after whatever Claude decides the work is
-  gjd-remote new -d /home/greg/spideryarn2
-      an unnamed session in a repo; it takes a name once Claude has a title
+      ${dim(`gjd-remote new s-0831-1712 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
+      ${dim("✓ started 's-0831-1712' with a prompt")}
+      already in the checkout, and named after whatever Claude decides the work is
+  gjd-remote new -d ~/code/gjdutils
+      an unnamed session in a different repo; it takes a name once Claude has a title
   gjd-remote shell
       a plain shell that is still running tomorrow
   gjd-remote resume --ssh
       back into the most recent session, without trying mosh first
+  gjd-remote clone gregdetre/gjdutils
+      ${dim(`gjd-remote clone gregdetre/gjdutils → greg@1.2.3.4:${REMOTE_CODE}/gjdutils`)}
+      ${dim("✓ cloned gregdetre/gjdutils")}
+      ${dim("  remote  https://github.com/gregdetre/gjdutils.git")}
+      ${dim("  branch  main")}
+      ${dim("  HEAD    Add a --json flag to the export script")}
+  gjd-remote clone spideryarn/reading2 --name spideryarn2
+      the repo is ${dim("reading2")} and its checkout is ${dim("spideryarn2")}. Without --name you are
+      told it is already on the box under another name, rather than given a second copy
   gjd-remote push-env
-      ${dim("gjd-remote push-env → greg@1.2.3.4:/home/greg/code/spideryarn2/.env.local")}
+      ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}/.env.local`)}
       ${dim("  + OPENROUTER_API_KEY  added")}
       ${dim("  ~ DATABASE_URL  changed")}
       ${dim("  = 10 unchanged")}
@@ -818,8 +1170,9 @@ ${bold("ENVIRONMENT")}
   GJD_REMOTE_HOST         override the address (default: read from Terraform state,
                           so it is never stale after a rebuild)
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
-  GJD_REMOTE_REPO         where the checkout lives on the box, for push-env
-                          (default: /home/greg/code/spideryarn2)
+  GJD_REMOTE_REPO         where the checkout lives on the box — where push-env
+                          writes, and where new/shell start without a --dir
+                          (default: ${REMOTE_REPO_DEFAULT})
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
@@ -897,6 +1250,18 @@ function main(): void {
       return cmdPushEnv({ file: values.file });
     }
 
+    case "clone": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: {
+          "base-folder": { type: "string" },
+          name: { type: "string" },
+        },
+      });
+      return cmdClone(positionals[0], { baseFolder: values["base-folder"], name: values.name });
+    }
+
     case "forget-key": {
       // A rebuild puts a new machine on the old address, so ssh refuses with a
       // warning about a possible attack. That warning is correct and worth
@@ -926,7 +1291,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
       const near = known.filter((k) => k.startsWith(cmd.slice(0, 2)) || cmd.startsWith(k.slice(0, 2)));
       die(
         `unknown command '${cmd}'` +
