@@ -243,6 +243,18 @@ So these are **project-scoped and opt-in**, not global.
 
 **Done when:** each is reachable and one real call to each works.
 
+**Status 2026-08-31: two of three.** All three say `✔ Connected` on the box. Real calls: Supabase's
+`tools/list` over curl (11 tools), and Vercel's `list_teams`, which returned Greg's team. **Sentry
+is reachable and authenticated but no real call has been made** — say so rather than rounding up.
+
+**And a finding that outlives the stage: a `claude -p` session cannot use these at all.** Asked to
+make one read-only call to each, it got `Claude requested permissions to use
+mcp__vercel__list_projects, but you haven't granted it yet` and could not prompt, because there is
+nobody there. It is not a misconfiguration and there is nothing to fix — but it means **the MCPs are
+available to sessions a human can answer for, and not to headless automation**. `gjd-remote new`
+starts interactive tmux sessions, so agents on the box are fine; a script that shells out to
+`claude -p` is not, and would report the tool missing rather than blocked.
+
 ### Stage 5 — two recovery proofs, not one
 
 The first draft said "rebuild the server and run doctor". That proves less than it looks: replacing
@@ -462,10 +474,31 @@ they agree.
 
 ## Still open
 
-1. The exact credential-helper mechanics — whether `credential.useHttpPath` with an owner-prefix
-   section matches a repo path, or whether a helper script is required. Being spiked.
-2. Whether to give the box its own budget-capped OpenRouter key rather than sharing the laptop's.
+1. **Stage 5, the two recovery drills.** Neither has been run, and stage 5(b) — the clean-home drill
+   — is precisely the exercise that would have found the empty `## First run`, the unwritten fixture
+   command and the `npx supabase start` that was never our idiom. It needs Greg, because any apply
+   recreates the box and kills the live sessions.
+2. **`setup-local.ts` should strip `DATABASE_URL` and `DB_MIGRATE_ALLOW_REMOTE`** from the migration
+   child's inherited environment, rather than only rewording "local by construction". Sol's second
+   review, and it belongs to whoever owns that script. Note the concrete bypass it was reasoning
+   about is now closed at `isLocalDatabaseUrl`, so this is defence in depth rather than the hole.
+3. **Nothing verifies GitHub auth actually works, and the tokens expire in 90 days.** `clone` checks
+   the token file exists and is 0600, not that it authenticates; `doctor` does not test GitHub at
+   all; `provision.sh` checks the helper is registered and refuses unknown owners, never a real
+   token. Stage 2's own "Done when" — `git push --dry-run` from inside a generated tmux job — was
+   never implemented. One `git ls-remote` per token file in `doctor` would close it, plus two lines
+   on re-issuing. The failure mode when a token expires is `Repository not found`, which the README
+   itself warns reads like a typo.
+4. **Article fixtures are still unscripted.** The rsync recipe is written down and correct, but it
+   is prose a human retypes with an `<ip>` placeholder and a hardcoded remote path that duplicates
+   what `gjd-remote` already resolves. A `push-data` beside `push-env` is the obvious shape.
+5. Whether to give the box its own budget-capped OpenRouter key rather than sharing the laptop's.
    Sol's suggestion; cheap; Greg's call, not urgent.
+
+**Closed:** the credential-helper mechanics, which were open here since the morning.
+`github-owner-credential-helper.sh` exists, routes by repository owner, refuses unknown owners with
+`quit=1` so git does not fall through to a broader helper, and all seven repos were proven
+push-authorised with 403s in both cross-owner directions.
 
 ## Not doing
 

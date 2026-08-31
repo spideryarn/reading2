@@ -526,7 +526,13 @@ done:
 ```
 
 It reads the wanted names out of `.mcp.json` rather than keeping a second list, so adding a server
-extends the check on its own. It tells a *missing login* apart from a *stale checkout* — a box that
+extends the check on its own.
+
+**These are for sessions a human can answer for, not for headless automation.** A `claude -p` run
+asked to call one of them gets `you haven't granted it yet` and cannot prompt, because nobody is
+there — it is not a misconfiguration and there is nothing to fix. `gjd-remote new` starts
+interactive tmux sessions, so agents on the box are fine. A script that shells out to `claude -p` is
+not, and it will report the tool *missing* rather than blocked, which is the confusing way round. It tells a *missing login* apart from a *stale checkout* — a box that
 has not pulled the commit adding `.mcp.json` is told to pull, not sent off to do a browser ceremony
 that cannot help. [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts),
 [`tests/gjd-remote-mcp.test.ts`](../../tests/gjd-remote-mcp.test.ts).
