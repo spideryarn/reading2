@@ -67,6 +67,24 @@ wrong, and both answers cut rather than added:
   arithmetic, no `basis`.
 - **Sorting:** *don't sort by date at all — use the model's reading.*
 
+And a third time, when Greg asked how much of the remaining complexity was avoidable and was offered
+three levers. He took one of the three, and reversed the recommendation on another:
+
+- **The artefact lives in the database, not in files.** *"We definitely want the data for this to
+  live in the database rather than files."* This is against the recommendation, which was to skip the
+  store plumbing for v1 on the grounds that no pipeline artefact survives a round trip today. Greg's
+  call, and it is the right one for anything meant to last: the file-based version would have had to
+  be done twice.
+- **The visual work is deferred.** *"It's fine to defer the fancy UI stuff till later."* The marks,
+  the legend, the accessibility pass and the panel's finer states move to
+  [§ Appendix: the visual design, deferred](#appendix-the-visual-design-deferred). **v1 writes the
+  words** — "at or before 12 May" — which is plainer, and is what the render below showed the column
+  can actually hold.
+- **Public-readable is a follow-up, and wants a general answer.** *"It would be nice to have the
+  option for this to be Public-readable, but that could be a follow-up. Ideally we'd come up with a
+  general, reusable/applicable design such that it's fairly easy for them all to be made
+  Public-readable."* → [§ Making a mode public-readable](#making-a-mode-public-readable-is-a-follow-up-and-wants-a-general-answer).
+
 The one place the answers pull against each other: the mark vocabulary Greg picked included a bar
 "drawn to its width", which needs the axis he rejected. Resolved in
 [§ The marks](#the-marks-two-brackets-and-what-sits-between-them) — the bar becomes symbolic and fixed-width,
@@ -1305,6 +1323,89 @@ against a contract the eval has not validated is the sequencing mistake
 [ideas-mode.md § Run the eval before building any of it](ideas-mode.md#run-the-eval-before-building-any-of-it)
 already corrected once. Eval first, then freeze the types, then the UI.
 
+
+## Making a mode public-readable is a follow-up, and wants a general answer
+
+Greg, 2026-08-31:
+
+> it would be nice to have the option for this to be Public-readable, but that could be a follow-up.
+> Ideally we'd come up with a general, reusable/applicable design for new features such that it's
+> fairly easy for them all to be made Public-readable.
+
+**Timeline ships owners-only.** [`src/web/visitor.ts`](../../src/web/visitor.ts) fails closed, so a
+mode nobody lists is owners-only by default — which means doing nothing is a safe answer rather than
+an omission.
+
+The general design is a **separate piece of work and should not be invented inside this plan.** What
+is worth writing down now is why it is not one edit today, because that is the shape of the thing to
+fix. Making one mode visitor-visible currently touches, at least: the `ARTEFACT` and `COSTS` tables
+and `visitorGap()` in `visitor.ts`; a `publicTimeline` mapper in `src/public/dto.ts`; a
+`PublicTimeline` type in `src/public-types.ts`; a field-by-field allowlist in
+`tests/public-dto.test.ts`; and the payload the shared page is served with.
+
+Five places, four of them hand-written tables that a new feature has to be *remembered* into. That is
+the same shape as the `revision_step_runs` CHECK constraint, which was forgotten three times before a
+test was written to catch it. So the useful question for that follow-up is not "how do we make
+Timeline public" but **"why is a mode's public face not derived from one declaration?"** — and the
+honest answer needs somebody to read `dto.ts` properly rather than reason about it from here.
+
+The one thing this plan can contribute is the observation that `dating` was designed as a
+discriminated union precisely so a consumer cannot mis-render a state, and a public DTO that drops an
+unnamed variant would reintroduce exactly that — which is the trap already written down as *the DTO
+can undo the whole feature*.
+
+---
+
+## Appendix: the visual design, deferred
+
+Greg deferred all of this on 2026-08-31 — *"it's fine to defer the fancy UI stuff till later"* — so
+none of it is in v1. It is kept rather than deleted because the reasoning cost something to arrive at
+and the data model already supports every bit of it.
+
+**v1 writes the words instead**: `at or before 12 May`, `1 May – 31 May`, `"another month later"`,
+`—`. The real render showed the column holds them, and plain text is better for a screen reader than
+glyphs that need explaining.
+
+### The marks
+
+A compositional notation rather than symbols to memorise — a bracket, the event, a bracket:
+
+```
+   │   ●   │        26 May            the article gives a date
+   ⋯   ●   │        by 12 May         at or before this, no earlier bound
+   │   ●   ⋯        after 12 Jul      at or after this, no later bound
+   ⋯   ●   ⋯        —                 no date; placed by the story alone
+   │ ▬▬▬▬▬ │        13–19 Jul         the event LASTS this long
+   │   ⊘   │        —                 the piece dates this; we could not read it
+```
+
+`│` a bound the article gives · `⋯` no bound on that side · `▬▬▬` `extent: "extended"`, fixed width
+because the list is un-scaled · `⊘` the `rejected` case, which must not look like an ordinary blank.
+
+**It got simpler once `basis` was cut.** The first draft used a filled dot for a stated date and a
+hollow one for a derived one; with the parser reading the article's own characters, every date is the
+article's and the distinction had nothing left to mark.
+
+### Accessibility, which is not the legend
+
+The reason this is a real piece of work rather than a stylesheet:
+
+- every glyph `aria-hidden`, with each row carrying a complete spoken sentence — *"at or before 12
+  May; year taken from the publication date"* — not a symbol name;
+- marks drawn as CSS or inline SVG rather than Unicode, so they do not depend on the reader's fonts;
+- both themes, and the selected and focused states, checked in a browser rather than asserted.
+
+Which is the argument that v1's plain words are not merely cheaper: **they are the accessible version,
+and the marks are the enhancement.**
+
+### The rest of the deferred list
+
+- **A "written here" divider** at the publication date, so "next six months" has a visible origin
+  ([question 1](#1-should-the-publication-date-appear-as-a-divider)).
+- **Painting the spine** with where each event is mentioned, the way search paints its hits.
+- **Following the reader** down the page ([question 2](#2-does-the-panel-follow-the-reader-down-the-page)).
+- **A time-to-scale axis.** The obvious v2, and the data model already supports it — intervals with
+  real bounds are exactly what an axis needs. Greg chose the flat list for v1.
 
 ## See also
 
