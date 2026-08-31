@@ -73,10 +73,11 @@ const WHOLE_BLOCK: ChatAnchor = { blockId: BLOCK };
  * **Named, and it used to be searched for — "the smallest article in `data/`
  * the loader will accept", which is nondeterminism wearing a search's clothes.**
  * `data/` is gitignored working state, so the winner was whatever each machine
- * happened to have: on this laptop on 2026-09-01 it was `data/todo`, a personal
- * scratch article that will never be in any committed corpus, and the same run
- * on another machine exercised a different article of a different shape. When a
- * test fails, "which article was it?" should not be a question.
+ * happened to have: on this laptop on 2026-09-01 it was `data/todo` — Paul
+ * Graham's "The Top of My Todo List", which is in the committed corpus, but
+ * which nothing here meant to test — and the same run on another machine
+ * exercised a different article of a different shape. When a test fails, "which
+ * article was it?" should not be a question.
  *
  * `writes` because it is already this repo's ground truth for a healthy
  * fixture: `scripts/deploy-checks.ts` uses `data/writes/*` as the deploy gate's
