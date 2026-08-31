@@ -22,6 +22,12 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { useLiveConversation } from "./live/useLiveConversation.js";
+import {
+  PLACEMENT_LABEL,
+  rememberPlacement,
+  rememberedPlacement,
+  type MicPlacement,
+} from "./live/mic-placement.js";
 
 const SLUG =
   new URLSearchParams(location.search).get("slug") ?? "noema-mythology-of-conscious-ai";
@@ -29,6 +35,9 @@ const SLUG =
 function Page() {
   const live = useLiveConversation(SLUG);
   const [typed, setTyped] = useState("");
+  /* `null` means "let it work it out" — which is a real third option, not an
+     absent value, so the select has three entries rather than a checkbox. */
+  const [chosen, setChosen] = useState<MicPlacement | null>(() => rememberedPlacement());
   const busy = live.phase === "connecting" || live.phase === "live";
 
   return (
@@ -50,7 +59,46 @@ function Page() {
         <button type="button" onClick={live.stop} disabled={live.phase !== "live"}>
           Hang up
         </button>
+
+        {/* **The microphone's placement, which is the reader's fact and not
+            ours.** It picks `near_field` or `far_field` noise reduction, which
+            runs before the voice-activity detector and therefore decides how
+            often a room gets treated as somebody talking.
+
+            Disabled while connected, because it is baked into the session at
+            mint time — a control that appears to work and changes nothing is
+            worse than one that is plainly unavailable. */}
+        <label className="placement">
+          <span>Mic</span>
+          <select
+            value={chosen ?? "auto"}
+            disabled={busy}
+            onChange={(e) => {
+              const v = e.target.value;
+              const next = v === "auto" ? null : (v as MicPlacement);
+              setChosen(next);
+              rememberPlacement(next);
+            }}
+          >
+            <option value="auto">Work it out</option>
+            <option value="headset">{PLACEMENT_LABEL.headset}</option>
+            <option value="laptop">{PLACEMENT_LABEL.laptop}</option>
+          </select>
+        </label>
       </div>
+
+      {/* What it actually used, and where that came from. A guess the reader
+          cannot see is a guess they cannot correct. */}
+      {live.placement && (
+        <p className="quiet">
+          Using <b>{PLACEMENT_LABEL[live.placement.placement]}</b>{" "}
+          {live.placement.from === "chosen"
+            ? "because you said so"
+            : live.placement.from === "guessed"
+              ? `guessed from "${live.placement.label}"`
+              : "as a fallback — grant the microphone once and it can read the device name"}
+        </p>
+      )}
 
       {live.error && <p className="err">{live.error}</p>}
 

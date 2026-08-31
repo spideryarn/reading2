@@ -83,21 +83,32 @@ export const LIVE_VOICE = "marin";
 export const LIVE_TRANSCRIBER = "gpt-live-transcribe";
 
 /**
- * **`near_field`, and this is the one setting here that is a guess about a
- * room rather than a measurement.**
+ * **Where the microphone is, which is the only thing noise reduction asks.**
  *
- * Noise reduction runs *before* the VAD and before the transcriber sees
- * anything, so it makes background noise less likely to be treated as a turn at
- * all — upstream of the hallucination above rather than a second fix for it.
- * `near_field` is for a headset or a phone held close; `far_field` is for a
- * laptop across a desk or a room mic.
+ * It runs *before* the VAD and before the transcriber sees anything, so it
+ * decides how often a room gets treated as somebody talking — upstream of the
+ * vocabulary hallucination above rather than a second fix for it.
  *
- * There is no right answer without knowing the reader's microphone, and we do
- * not. `near_field` is the conservative choice — it processes less — and
- * switching is one word. If phantom turns persist for somebody talking to a
- * laptop at arm's length, `far_field` is the thing to try.
+ * This used to be a constant, `near_field`, with a comment admitting it was a
+ * guess about a room we could not see. It is now the reader's, because it is
+ * genuinely their fact and not ours: the browser knows what the device is
+ * called and they know where it is. src/web/live/mic-placement.ts guesses from
+ * the device's own label and offers the choice; this end only maps the answer.
  */
-export const LIVE_NOISE_REDUCTION = "near_field";
+export type MicPlacement = "headset" | "laptop";
+
+/**
+ * The two values the API takes, and it takes no others — `wibble` comes back
+ * `400 Supported values are: 'near_field' and 'far_field'`, which is how this
+ * pair was confirmed rather than read.
+ */
+export const NOISE_REDUCTION: Record<MicPlacement, "near_field" | "far_field"> = {
+  headset: "near_field",
+  laptop: "far_field",
+};
+
+/** What a session gets when nobody has said. src/web/live/mic-placement.ts § DEFAULT_PLACEMENT. */
+export const DEFAULT_PLACEMENT: MicPlacement = "laptop";
 
 /**
  * How long the browser has to use the token it is given.
@@ -432,6 +443,8 @@ export function liveSession(opts: {
   blocks: Block[];
   profile?: string | null;
   vocabulary?: readonly string[] | null;
+  /** Where the reader's microphone is. Defaults to `DEFAULT_PLACEMENT`. */
+  placement?: MicPlacement | null;
 }): Record<string, unknown> {
   return {
     type: "realtime",
@@ -451,7 +464,7 @@ export function liveSession(opts: {
             : {}),
         },
         /* Before the VAD, so it reduces how often a room opens a turn at all. */
-        noise_reduction: { type: LIVE_NOISE_REDUCTION },
+        noise_reduction: { type: NOISE_REDUCTION[opts.placement ?? DEFAULT_PLACEMENT] },
         /* **`semantic_vad`, not `server_vad`.** The default cuts a turn on a
            fixed 500ms of silence, which is a reader thinking. This one asks
            whether the sentence sounded finished. Being interrupted mid-thought

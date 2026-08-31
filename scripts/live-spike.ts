@@ -81,6 +81,11 @@ const server = createServer((req, res) => {
       if (path === "/session" && req.method === "POST") {
         const b = await body(req);
         const slug = slugOf(b);
+        /* Checked against the union rather than passed through: this arrives
+           from a browser, and an unknown string would reach OpenAI as an
+           invalid `noise_reduction.type` and fail the whole session for a
+           preference. */
+        const placement = b.placement === "headset" || b.placement === "laptop" ? b.placement : null;
         const out = await runAsOwner(environmentOwnerId(), async () => {
           const article = await loadArticle(slug);
           /* Best-effort, exactly as dictation treats it: a live conversation
@@ -92,11 +97,14 @@ const server = createServer((req, res) => {
             meta: article.meta,
             blocks: article.blocks,
             vocabulary,
+            placement,
           });
           const token = await mintLiveToken(session);
           return { token, title: article.meta.title, blocks: article.blocks.length };
         });
-        console.log(`  session for ${slug} — ${out.blocks} blocks, ${out.title}`);
+        console.log(
+          `  session for ${slug} — ${out.blocks} blocks, ${placement ?? "default"} mic, ${out.title}`,
+        );
         return send(res, 200, { ...out.token, title: out.title });
       }
 

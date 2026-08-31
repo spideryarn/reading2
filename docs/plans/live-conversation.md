@@ -211,6 +211,42 @@ and the companion answered it.
 Reproduced twice by [`evals/live/hallucination-on-noise.mts`](../../evals/live/hallucination-on-noise.mts):
 eighteen seconds of room noise in, twenty of our own terms back.
 
+### Where the microphone is, which is the reader's fact
+
+`noise_reduction` is off by default and takes exactly two values — `near_field` for a headset,
+`far_field` for a laptop across a desk. It runs **before** the voice-activity detector, so it decides
+how often a room gets treated as somebody talking, which is upstream of the regurgitation rather than
+a second fix for it.
+
+It was a constant for one afternoon, with a comment admitting it was a guess about a room we could
+not see. Greg asked for the choice instead:
+
+> And add a UI dropdown to the Live-Conversation button to switch from Headset to Laptop mic (and/or
+> see if you can deduce this from the microphone settings)
+>
+> — Greg, 2026-08-31
+
+Both. [`mic-placement.ts`](../../src/web/live/mic-placement.ts) guesses from the device's own label —
+the same string the reader sees in their system sound settings — and the dropdown overrides it. **An
+explicit choice is never re-guessed**, which is the property with a test on it: a reader who says
+"headset" while plugged into a display must not be quietly corrected, or the control does nothing and
+nothing says why. The page also prints which it used and where that came from, because a guess the
+reader cannot see is a guess they cannot correct.
+
+Two things about this that are not obvious:
+
+- **`mic-devices.ts` refuses to guess, and that is not a contradiction.** That file decides *which
+  microphone to open*, and overriding what somebody chose in their own system settings is not ours to
+  do. This decides how to *filter what that microphone produces* — nobody chose it, and the
+  alternative to a guess is `null`, which is a choice too and measurably the wrong one in a room.
+- **The labels are blank until the permission is granted**, so the very first connection on a new
+  origin genuinely cannot know what it is listening to. Hence a default, and it is `laptop`: the two
+  failures are not symmetrical, since guessing `laptop` for a headset over-processes clean speech
+  while guessing `headset` for a laptop leaves the reported bug exactly as it was found.
+
+Verified end to end on 2026-08-31 by reading the created session back: `headset` → `near_field`,
+`laptop` → `far_field`, both echoed.
+
 ### The fix, and the two things that nearly got it wrong
 
 `gpt-live-transcribe`, with the terms in **`keywords`** instead of `prompt`, plus

@@ -51,6 +51,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
+import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
 
 /** Where the connection is. `failed` carries a sentence in `error`. */
 export type LivePhase = "idle" | "connecting" | "live" | "closing" | "failed";
@@ -94,6 +95,15 @@ export interface LiveApi {
   speaking: boolean;
   /** Every event type seen, and how many. The instrument — see the header. */
   seen: Record<string, number>;
+  /**
+   * Where the microphone was taken to be, and whether that was the reader's
+   * choice, a guess from the device name, or the fallback.
+   *
+   * Resolved at connect time and reported back so the UI can say which — a
+   * control that silently agrees with you is indistinguishable from one that
+   * does nothing. Null before the first connection.
+   */
+  placement: ResolvedPlacement | null;
   start: (opts?: { microphone?: boolean }) => void;
   stop: () => void;
   /** Put a typed turn in, as if it had been spoken. */
@@ -134,6 +144,7 @@ export function useLiveConversation(slug: string): LiveApi {
   const [hearing, setHearing] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [seen, setSeen] = useState<Record<string, number>>({});
+  const [placement, setPlacement] = useState<ResolvedPlacement | null>(null);
 
   const pc = useRef<RTCPeerConnection | null>(null);
   const dc = useRef<RTCDataChannel | null>(null);
@@ -413,10 +424,24 @@ export function useLiveConversation(slug: string): LiveApi {
              flow that touches the API key, and it is over before any audio
              device is opened — a reader who is going to be refused should find
              out before they are asked for their microphone. */
+          /* **Resolved before minting, because noise reduction is part of the
+             session being created.** It could be changed later over the data
+             channel with `session.update`, and that is the refinement if a
+             reader ever needs to switch mid-conversation — but doing it at mint
+             time means one source of the value and no window in which the
+             session disagrees with the control.
+
+             It reads `enumerateDevices`, whose labels are blank until the
+             microphone permission has been granted once for this origin. So the
+             very first connection on a new origin falls back, and every one
+             after it guesses properly. */
+          const where = await resolvePlacement();
+          setPlacement(where);
+
           const res = await fetch(`${SPIKE}/session`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ slug }),
+            body: JSON.stringify({ slug, placement: where.placement }),
           });
           const minted = (await res.json()) as { token?: string; error?: string };
           if (!res.ok || !minted.token) {
@@ -550,5 +575,18 @@ export function useLiveConversation(slug: string): LiveApi {
     [put, send],
   );
 
-  return { phase, error, lines, pointers, tools, hearing, speaking, seen, start, stop, say };
+  return {
+    phase,
+    error,
+    lines,
+    pointers,
+    tools,
+    hearing,
+    speaking,
+    seen,
+    placement,
+    start,
+    stop,
+    say,
+  };
 }
