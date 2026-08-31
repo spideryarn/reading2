@@ -1,6 +1,6 @@
 # Timeline — when things happened, and how sure the piece actually is
 
-A ninth mode in the band between the spine and the prose, beside [Ideas](ideas-mode.md). It answers
+The **eleventh** mode in the band between the spine and the prose, beside [Ideas](ideas-mode.md). It answers
 *when did all this happen, and in what order* — for a piece that tells you a story out of order, in
 half-dates, and in phrases like "two weeks later".
 
@@ -549,8 +549,9 @@ saying what to do when there is not one.
 
 ## Freshness, and the empty case
 
-**The freshness input is blocks AND tree AND metadata**, the same `articleFingerprint` quartet
-`ideas` settled on, and `meta` is load-bearing here rather than defensive: the publication date is the
+**The freshness input is blocks AND tree AND the publication date** — `datedArticleFingerprint` in
+[`src/source-hash.ts`](../../src/source-hash.ts), **not** the `articleFingerprint` the other stages
+use, and `meta` is load-bearing here rather than defensive: the publication date is the
 reference frame for nineteen of the twenty-four expressions on the test article, so a change to it
 changes almost every row. This is the first stage where the metadata's presence in the hash is
 obviously right rather than a hole being closed.
@@ -642,7 +643,7 @@ of this exact shape.
 | File | What it is |
 |---|---|
 | `src/timeline-time.ts` | the arithmetic: intervals, year inference, relative resolution, ordering. **No model call, no I/O.** |
-| `src/timeline.ts` | stage 5h — the prompt, the call, the validation, the CLI |
+| `src/timeline.ts` | the stage — the prompt, the call, the validation, the CLI |
 | `drizzle/0033_timeline.sql` | one `jsonb` column, and the `revision_step_runs_step` CHECK re-added by hand |
 | `src/web/TimelinePanel.tsx` | the panel |
 | `src/web/useTimeline.ts` | fetch + staleness + regenerate, over the shared `useStepJob` |
@@ -695,7 +696,7 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 
 | File | What to add |
 |---|---|
-| `tests/page-head.test.ts` | **a hardcoded `expect(MODES.length).toBe(9)`** → 10 |
+| `tests/page-head.test.ts` | **a hardcoded `expect(MODES.length).toBe(9)`** — already stale: `quotes` landed on 2026-08-31 and made it 10, so Timeline makes it 11 |
 | `tests/page-title.test.ts` | a hand-typed label record — fails with "was a mode added?" |
 | `tests/visitor-gaps.test.ts` | what `timeline`'s visitor gap should be |
 | `tests/store-artefact-manifest.test.ts` | `HOMES["timeline.json"]` — goes red the moment the file exists on disk |
