@@ -156,6 +156,35 @@ Two things this does **not** do, and both are known:
   box is gone at the next push. The box's admin password is deliberately not in that file at all — it
   lives in `~/.config/spideryarn/`, so it is per-machine and survives both the push and a rebuild.
 
+## tmux keeps sessions alive and does nothing else
+
+> I pretty much only want it to keep my sessions alive, and it keeps trapping keyboard shortcuts
+> that I'm used to using in weird, confusing ways.
+>
+> — Greg, 2026-08-31
+
+So `~/.tmux.conf` on the box has **no prefix and no key bindings at all** — every keystroke belongs
+to Claude Code. The file is a managed block written by
+[`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh), which is where the reasoning for
+each line lives; re-provision to change it, or edit outside the markers, which are left alone.
+
+The measurement, on the box's own tmux 3.4: type `Ctrl-B H E L L O` into `cat -v` through a real
+pty and stock tmux delivers **`ELLO`** — the prefix eats `Ctrl-B` *and* the key after it — while
+this config delivers **`^BHELLO`**.
+
+Two things worth knowing:
+
+- **`unbind -a` with no `-T` clears the prefix table only**, taking the same default as `bind-key`.
+  All four tables have to be named, and a check that only counts one of them passes on a box that
+  still binds three.
+- **With nothing bound, you detach by closing the tab** — the session survives, verified. From
+  another shell on the box, `tmux detach-client -s NAME`. `gjd-remote resume` brings you back.
+  If you want a key for it, `bind -n F12 detach-client` is one line; no TUI here sends F12.
+
+[../research/260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md)
+proposed a much larger `.tmux.conf` — mouse on, scroll bindings, a bigger history limit. That was
+written before the keys turned out to be the problem, and it is superseded here.
+
 ## Traps
 
 - **`gjd-remote` will not tell you a session exists when it cannot see the list.** A `tmux ls`

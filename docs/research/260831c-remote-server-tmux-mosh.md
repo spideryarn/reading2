@@ -229,6 +229,15 @@ Notification Center Alerts → Filter Alerts → "Send escape sequence-generated
 
 ## `~/.tmux.conf` on the box
 
+**Superseded, 2026-08-31.** The config below was never what shipped, and what shipped has since gone
+the other way: tmux on the box now has **no prefix and no key bindings at all**, because the keys
+were the problem rather than the ergonomics.
+[remote-box.md § tmux keeps sessions alive and does nothing else](../project/remote-box.md#tmux-keeps-sessions-alive-and-does-nothing-else)
+is the decision and the measurement behind it; the live file is a managed block in
+[`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh). In particular `mouse on` and the
+wheel bindings below are exactly the sort of interception that was removed. The rest of this page —
+mosh, `-CC`, the attach command, the traps — still stands.
+
 Everything above, plus the settings that make a long agent session bearable. Each line is here for a
 reason; delete the ones whose reason you don't share.
 

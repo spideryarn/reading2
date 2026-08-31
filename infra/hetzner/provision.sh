@@ -356,37 +356,99 @@ echo "=== apparmor ==="
 systemctl reload apparmor || true
 
 echo "=== tmux ==="
-# Straight from the official terminal-config page. Without allow-passthrough
-# the progress bar and desktop notifications never escape tmux; without
-# extended-keys, Shift+Enter submits instead of inserting a newline.
-# Never clobber an existing config on rebuild.
-if [ ! -f /home/"$USER_NAME"/.tmux.conf ]; then
-  cat > /home/"$USER_NAME"/.tmux.conf <<'TMUX'
+# tmux is here to keep a session alive when its client dies, and for nothing
+# else. Every key binding is removed and there is no prefix, so Ctrl-B -- and
+# every other keystroke -- reaches Claude Code untouched.
+#
+#   I pretty much only want it to keep my sessions alive, and it keeps trapping
+#   keyboard shortcuts that I'm used to using in weird, confusing ways.
+#
+#   -- Greg, 2026-08-31
+#
+# Measured on this box's own tmux 3.4, typing Ctrl-B H E L L O into `cat -v`
+# through a real pty: stock tmux delivers "ELLO", because the prefix eats
+# Ctrl-B AND the key after it, and this config delivers "^BHELLO".
+#
+# A MANAGED BLOCK, rewritten on every run, with anything outside the markers
+# left alone. The shape this replaces -- write the whole file only when it is
+# absent, then append each later setting behind its own `grep -q` -- meant a
+# line added to the `cat >` never reached a box that had ever been provisioned,
+# which is every box; and one grep per setting does not scale to nine of them.
+TMUX_CONF=/home/"$USER_NAME"/.tmux.conf
+touch "$TMUX_CONF"
+
+# Drop the previous copy of the block, and -- once, for boxes provisioned before
+# the block existed -- the four bare lines it used to write. Matched exact and
+# whole-line, so a hand-edited variant of one survives into the file above the
+# block, where whoever wrote it can see that the block below now overrides it.
+sed -i '/^# >>> managed by provision.sh/,/^# <<< managed by provision.sh/d' "$TMUX_CONF"
+# grep exits 1 when it selects nothing, which here means "the file was only ever
+# the managed block" and is fine; 2 is a real error and must not be swallowed,
+# because `mv` would then install a truncated config.
+set +e
+grep -vxF -e 'set -g allow-passthrough on' \
+          -e 'set -s extended-keys on' \
+          -e "set -as terminal-features 'xterm*:extkeys'" \
+          -e 'set -sg escape-time 10' \
+          "$TMUX_CONF" > "$TMUX_CONF.provision.$$"
+TMUX_GREP=$?
+set -e
+[ "$TMUX_GREP" -le 1 ] || { echo "could not filter $TMUX_CONF (grep exit $TMUX_GREP)" >&2; exit 1; }
+mv "$TMUX_CONF.provision.$$" "$TMUX_CONF"
+
+cat >> "$TMUX_CONF" <<'TMUX'
+# >>> managed by provision.sh -- anything between these markers is overwritten
+
+# No prefix and no bindings: every keystroke belongs to whatever runs inside.
+set -g prefix None
+set -g prefix2 None
+
+# `unbind -a` with no -T clears the PREFIX table only -- it takes the same
+# default as bind-key does -- so all four tables have to be named. Four is the
+# whole set on a stock tmux. A plugin can add its own, and `tmux list-keys` with
+# no -T is how you would find out.
+unbind -a -T prefix
+unbind -a -T root
+unbind -a -T copy-mode
+unbind -a -T copy-mode-vi
+
+# The root table is entirely mouse events, so `mouse off` is what actually stops
+# a scroll or a click reaching tmux. It is also the default; set it anyway,
+# because it is the behaviour being asked for rather than one we inherited.
+set -g mouse off
+
+# The green bar was only ever telling you the session name, and the iTerm tab
+# title already says it -- gjd-remote turns set-titles on at attach.
+set -g status off
+
+# To detach with nothing bound: close the tab, or run
+#   tmux detach-client -s NAME
+# from any other shell on the box. If you would rather have a key for it, one
+# line does it, and F12 is the safe choice because no TUI here sends it:
+#   bind -n F12 detach-client
+
+# The rest are not key bindings, and all three are still wanted.
+
+# Or Claude Code's progress bar and its desktop notifications never escape tmux.
 set -g allow-passthrough on
+
+# Or Shift+Enter submits instead of inserting a newline. `on` forwards extended
+# keys only to an app that asked for them; `always` would push them at one that
+# did not, which is how keys start arriving as gibberish.
 set -s extended-keys on
 set -as terminal-features 'xterm*:extkeys'
-TMUX
-  chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
-fi
 
-# escape-time is APPENDED separately, not folded into the block above, because
-# that block only runs when there is no config at all -- and on any box that has
-# ever been provisioned there already is one, so a line added up there would
-# never reach the machine that needs it. Same reasoning as the jq merge for
-# settings.json below: on a rebuild the volume carries the old file back.
-#
 # tmux waits escape-time milliseconds after a bare Escape to see whether more
-# bytes follow, because Alt+key arrives as ESC+key. Ubuntu 24.04 ships tmux 3.4,
-# whose default is 500ms; tmux 3.5 cut it to 10ms for exactly this reason.
-# Claude Code uses Escape constantly -- interrupt, clear the box, leave a mode --
-# so 500ms is half a second of dead air on the key you press most.
-#
-# 10 rather than 0: at 0 tmux cannot separate Alt+key from Escape-then-key at
-# all, which breaks Meta bindings. 10ms is the smallest value that still can.
-if ! grep -q '^set -sg escape-time' /home/"$USER_NAME"/.tmux.conf; then
-  printf 'set -sg escape-time 10\n' >> /home/"$USER_NAME"/.tmux.conf
-  chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
-fi
+# bytes follow, because Alt+key arrives as ESC+key. tmux 3.4 defaults to 500ms;
+# 3.5 cut it to 10ms for exactly this reason. Claude Code uses Escape constantly
+# -- interrupt, clear the box, leave a mode -- so 500ms is half a second of dead
+# air on the key you press most. 10 rather than 0: at 0 tmux cannot separate
+# Alt+key from Escape-then-key at all.
+set -sg escape-time 10
+# <<< managed by provision.sh
+TMUX
+chown "$USER_NAME":"$USER_NAME" "$TMUX_CONF"
+chmod 0644 "$TMUX_CONF"
 
 echo "=== claude settings ==="
 # One line per mouse-wheel notch, instead of the three Claude Code picks by
@@ -582,6 +644,32 @@ check "git useHttpPath on"       'su - '"$USER_NAME"' -c "git config --global cr
 check "helper refuses unknown"   'out=$(printf "protocol=https\nhost=github.com\npath=nobody-here/x.git\n\n" | /usr/local/bin/github-owner-credential-helper.sh get 2>/dev/null); case "$out" in *password=*) false;; *quit=1*) true;; *) false;; esac'
 check "token dir"                'test -d /etc/github-tokens && [ "$(stat -c %a /etc/github-tokens)" = "700" ]'
 check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'
+# Parsing is not taking effect. `start-server` above leaves no session, so that
+# server exits immediately and the NEXT `tmux` command on the socket starts a
+# fresh one with tmux's own defaults -- which is how a check on the config could
+# read back tmux's answer rather than ours. This one holds a session open while
+# it counts, and it can fail: stock tmux 3.4 on this box answers 260.
+#
+# In a file, not inline, because check() runs `eval` and the $(...) in here
+# would otherwise be substituted by the root shell before su ever saw it.
+# The path is spelled out rather than held in a variable, because
+# check-cloud-init.ts parses every check() argument on its own under `set -u`,
+# where a variable this file defines is unbound. It caught exactly that.
+cat > /tmp/provision-tmux-keys.sh <<'PROBE'
+set -u
+sock=verifykeys
+tmux -L "$sock" kill-server 2>/dev/null
+tmux -f "$HOME/.tmux.conf" -L "$sock" new-session -d 'sleep 30'
+# grep -c exits 1 on a count of zero, which is the passing case, so the count is
+# read out of the assignment rather than out of the exit status.
+n=$(tmux -L "$sock" list-keys | grep -c bind-key)
+tmux -L "$sock" kill-server 2>/dev/null
+echo "bindings: $n"
+[ "$n" = 0 ]
+PROBE
+chmod 0644 /tmp/provision-tmux-keys.sh
+check "tmux binds nothing"       'timeout 40 su - '"$USER_NAME"' -c "bash /tmp/provision-tmux-keys.sh"'
+rm -f /tmp/provision-tmux-keys.sh
 check "sshd config valid"        'sshd -t'
 check "sshd -T runs"             'sshd -T >/dev/null 2>&1'
 check "password auth off"        'sshd -T 2>/dev/null | grep -qi "^passwordauthentication no"'
