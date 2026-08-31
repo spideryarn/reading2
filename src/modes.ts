@@ -50,7 +50,7 @@ export const MODES = [
      compare". docs/plans/outline-mode.md § Where it sits, and what happens if
      it wins. */
   "outline",
-  /* The tenth, 2026-08-31: the lines worth keeping, in the author's own words.
+  /* The tenth, 2026-08-31: the lines worth keeping, in the article's own words.
      It costs this list one word like the eight before it, and it is the first
      mode whose content is *the article itself* — every other one shows the
      reader something a model wrote about the piece, where this one shows the

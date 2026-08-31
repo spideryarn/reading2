@@ -575,7 +575,7 @@ export const articleRevisions = spideryarn.table(
     ideas: jsonb("ideas").$type<Ideas>(),
 
     /**
-     * The lines worth keeping, in the author's own words — `Quotes`,
+     * The lines worth keeping, in the article's own words — `Quotes`,
      * src/types.ts, written by the `quotes` step. docs/project/quotes.md.
      *
      * The WHOLE artefact, like its neighbours, and here `sourceHash` earns its

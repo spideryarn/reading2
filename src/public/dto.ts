@@ -59,6 +59,8 @@ import type {
   Glossary,
   Idea,
   Ideas,
+  Quote,
+  Quotes,
   NodeId,
   SummaryEntry,
   Summaries,
@@ -74,6 +76,7 @@ import type {
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
+  PublicQuotes,
   PublicMeta,
   PublicMetadata,
   PublicSummaries,
@@ -348,6 +351,51 @@ function publicSummaries(summaries: Summaries): PublicSummaries {
   };
 }
 
+/**
+ * The quotes, rebuilt quote by quote.
+ *
+ * Field by field like its neighbours rather than passed through whole, for the
+ * reason this whole file exists: a projection that spreads is a projection that
+ * publishes whatever the artefact gains next. What is deliberately left behind
+ * is every pipeline fact around the list — `sourceHash`, `version`,
+ * `generator`, `profileHash`, `generatedAt`, `elapsedMs`.
+ *
+ * `start` is kept. It is an offset into a block of the article the visitor is
+ * already reading, and without it a quote that appears twice in one paragraph
+ * marks the wrong occurrence — src/quote-match.ts § `findQuote`.
+ */
+function publicQuotes(quotes: Quotes): PublicQuotes {
+  return {
+    /* Rebuilt field by field like the list itself, rather than passed through:
+       a projection that spreads is one that publishes whatever the artefact
+       gains next. See the field's note in src/public-types.ts for why this one
+       crosses at all when no other pipeline fact does. */
+    ...(quotes.discarded === undefined
+      ? {}
+      : {
+          discarded: {
+            unfound: quotes.discarded.unfound,
+            otherVoice: quotes.discarded.otherVoice,
+            wrongLength: quotes.discarded.wrongLength,
+            overlapping: quotes.discarded.overlapping,
+            overCap: quotes.discarded.overCap,
+            malformed: quotes.discarded.malformed,
+          },
+        }),
+    quotes: quotes.quotes.map(
+      (quote): Quote => ({
+        id: quote.id,
+        blockId: quote.blockId,
+        text: quote.text,
+        ...opt(quote, "start"),
+        ...opt(quote, "reason"),
+        ...opt(quote, "importance"),
+        ...opt(quote, "striking"),
+      }),
+    ),
+  };
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -412,6 +460,7 @@ export function publicArticle(row: {
   glossary: Glossary | null;
   summary: Summaries | null;
   ideas: Ideas | null;
+  quotes: Quotes | null;
   tweets: TweetThread | null;
 }): PublicArticle {
   return {
@@ -439,6 +488,7 @@ export function publicArticle(row: {
     ...(row.glossary !== null ? { glossary: publicGlossary(row.glossary) } : {}),
     ...(row.summary !== null ? { summary: publicSummaries(row.summary) } : {}),
     ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
+    ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
   };
 }
@@ -467,6 +517,7 @@ export function publicMetadata(row: {
       glossary: row.available.glossary,
       summary: row.available.summary,
       ideas: row.available.ideas,
+      quotes: row.available.quotes,
     },
   };
 }

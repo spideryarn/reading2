@@ -102,7 +102,9 @@ describe("suggestedQuotes", () => {
 
 describe("locate", () => {
   it("finds the block for itself — the model never names one", () => {
-    expect(locate(SECOND, BLOCKS)?.blockId).toBe("spya-bbbbbb");
+    const found = locate(SECOND, BLOCKS);
+    expect(found.kind).toBe("found");
+    expect(found.kind === "found" && found.at.blockId).toBe("spya-bbbbbb");
   });
 
   it("tolerates the retyping a model actually does", () => {
@@ -110,7 +112,7 @@ describe("locate", () => {
     // collapsed. All three are the same sentence.
     const article = block("spya-dddddd", "He called it a “marriage of convenience”, and meant it.");
     const typed = 'He called it a "marriage of\n  convenience", and meant it.';
-    expect(locate(typed, [article])?.blockId).toBe("spya-dddddd");
+    expect(locate(typed, [article]).kind).toBe("found");
   });
 
   /**
@@ -120,12 +122,39 @@ describe("locate", () => {
    * wrong as a server-side claim of verbatim identity.
    */
   it("refuses a word the model split in two", () => {
-    expect(locate("The mathematical marriage of convenience starts to fall a part here.", BLOCKS))
-      .toBeNull();
+    expect(
+      locate("The mathematical marriage of convenience starts to fall a part here.", BLOCKS).kind,
+    ).toBe("absent");
   });
 
-  it("answers nothing for words that are simply not there", () => {
-    expect(locate("The author argues that thinking is a kind of writing.", BLOCKS)).toBeNull();
+  it("tells absent from someone else's voice, because they are opposite facts", () => {
+    expect(locate("The author argues that thinking is a kind of writing.", BLOCKS).kind).toBe(
+      "absent",
+    );
+    const said = block("spya-mmmmmm", `Lamport wrote: “${FIRST}”`);
+    expect(locate(FIRST, [said]).kind).toBe("otherVoice");
+  });
+
+  /**
+   * **Walk past a rejected occurrence.** A sentence can appear once inside a
+   * pull-quote and again in the author's own prose; stopping at the first match
+   * lost the reader a legitimate line and blamed the model for it.
+   * GPT Sol, 2026-08-31.
+   */
+  it("keeps looking after an occurrence it will not take", () => {
+    const pulled = block("spya-nnnnnn", FIRST, "quote");
+    const prose = block("spya-oooooo", `And so: ${FIRST}`);
+    const found = locate(FIRST, [pulled, prose]);
+    expect(found.kind).toBe("found");
+    expect(found.kind === "found" && found.at.blockId).toBe("spya-oooooo");
+  });
+
+  it("keeps looking within one block, not only across blocks", () => {
+    const both = block("spya-pppppp", `He said “${FIRST}” And then, plainly: ${FIRST}`);
+    const found = locate(FIRST, [both]);
+    expect(found.kind).toBe("found");
+    // The second occurrence, which is the one not inside quotation marks.
+    expect(found.kind === "found" && found.at.span.start).toBeGreaterThan(20);
   });
 });
 
@@ -214,6 +243,47 @@ describe("place", () => {
     );
     expect(got).toHaveLength(0);
     expect(dropped.otherVoice).toBe(1);
+  });
+
+  /**
+   * **The three ways GPT Sol walked round the first version**, 2026-08-31. All
+   * three are the same mistake: comparing the single characters either side of
+   * the span trusts the model to have drawn the span where a person would.
+   */
+  it("refuses a quotation whose marks the model included in the span", () => {
+    const dropped = drops();
+    const said = block("spya-qqqqqq", `Lamport wrote: “${FIRST}”`);
+    // The model returns the marks too, so the character before the span is the
+    // colon and there is no character after it at all.
+    expect(place([{ text: `“${FIRST}”` }], [said], dropped)).toHaveLength(0);
+    expect(dropped.otherVoice).toBe(1);
+  });
+
+  it("refuses a quotation whose closing mark is one character further out", () => {
+    const dropped = drops();
+    const said = block("spya-rrrrrr", `Lamport wrote: “${FIRST}”`);
+    // The model leaves the full stop behind, so the next character is `.`.
+    const withoutStop = FIRST.slice(0, -1);
+    expect(place([{ text: withoutStop }], [said], dropped)).toHaveLength(0);
+    expect(dropped.otherVoice).toBe(1);
+  });
+
+  it("refuses British-style single quotation marks", () => {
+    const dropped = drops();
+    const said = block("spya-ssssss", `Lamport wrote: ‘${FIRST}’`);
+    expect(place([{ text: FIRST }], [said], dropped)).toHaveLength(0);
+    expect(dropped.otherVoice).toBe(1);
+  });
+
+  it("still keeps a line whose own words contain an apostrophe", () => {
+    /* The straight apostrophe is deliberately not a quotation mark here: `'…'`
+       around a sentence is ambiguous with a possessive, and dropping the
+       author's own emphasised line is worse than keeping a quoted one. */
+    const dropped = drops();
+    const mine = block("spya-tttttt", "The author's whole case rests on that one distinction.");
+    expect(place([{ text: "The author's whole case rests on that one distinction." }], [mine], dropped))
+      .toHaveLength(1);
+    expect(dropped.otherVoice).toBe(0);
   });
 
   it("keeps a line that merely contains a quoted phrase", () => {

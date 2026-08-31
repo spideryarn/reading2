@@ -900,7 +900,9 @@ export interface IdeasResponse {
    See docs/plans/quotes-mode.md.
 
    The third question the band answers, and the only one whose answer is
-   entirely in the author's own words. The glossary answers *what does this word
+   entirely in the article's own words — *the article's*, because verification can
+   prove the words are in the piece and cannot prove who wrote them
+   (src/quotes.ts § authorVoice). The glossary answers *what does this word
    mean*; the ideas answer *what do I have to hold*; this answers *which lines
    is it worth carrying out of here* — and every one of them is a sentence the
    author wrote, found in the article rather than composed. */
@@ -1888,7 +1890,7 @@ export interface Comment {
  */
 export type StepName =
   | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary"
-  /* The lines worth keeping, in the author's own words — docs/project/quotes.md.
+  /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
   | "quotes"

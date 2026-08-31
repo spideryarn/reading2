@@ -14,12 +14,17 @@
  * here* — and it is the only one of the three whose list is **the article
  * itself**. Full design in docs/plans/quotes-mode.md.
  *
- * ## Everything in the list is the author's, except two numbers
+ * ## Everything in the list is the article's, except two numbers
  *
  * That is the shape of this panel and the reason it is worth having. A row is a
  * sentence out of the piece, verified verbatim against the block it came from
  * (src/quotes.ts § the safety property), and the only things beside it are the
- * model's two scores — labelled as judgment — and a caption behind a button.
+ * model's two scores — drawn as bars, labelled as judgment — and a caption
+ * behind a button.
+ *
+ * *The article's*, not *the author's*: `authorVoice` in src/quotes.ts refuses a
+ * block quotation and a span inside quotation marks, and that is as far as
+ * block text lets anyone go. The promise matches what the check can prove.
  *
  * **The caption is behind a button because of where it fails.** Asked *why this
  * quote*, the obvious answer is a description of the page the reader is looking
@@ -46,6 +51,7 @@ import type { BlockId, Job, Quote, QuoteDrops } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import { BlockRef } from "./BlockRef.js";
+import { ScoreBars } from "./ScoreBars.js";
 import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
@@ -70,8 +76,17 @@ export type QuotesOwner = UseQuotes;
  * visitor's arm.
  */
 export type QuotesAccess =
-  | { kind: "owner"; owner: QuotesOwner; quotes: { quotes: Quote[] } | null }
-  | { kind: "visitor"; quotes: { quotes: Quote[] }; owner?: never };
+  | { kind: "owner"; owner: QuotesOwner; quotes: QuoteList | null }
+  | { kind: "visitor"; quotes: QuoteList; owner?: never };
+
+/**
+ * The list this panel draws, from either side of the owner/visitor line.
+ *
+ * `discarded` is on both, which is the point: the disclosure under the bar is a
+ * fact about the list on screen rather than about our pipeline, so a visitor
+ * gets it too. src/public-types.ts § PublicQuotes has the argument.
+ */
+type QuoteList = { quotes: Quote[]; discarded?: QuoteDrops };
 
 interface Props {
   access: QuotesAccess;
@@ -133,15 +148,63 @@ interface Props {
 export const PROMOTE_BAR = 0.7;
 
 /**
- * How far the slider moves in one step, and therefore how precise `?bar=` gets.
+ * **The positions the bar can take: nothing, then every score the list actually
+ * contains.**
  *
- * `0.05` rather than the glossary's `0.01`, because a maximum uses the whole
- * 0–1 range where a product is squeezed into the bottom half — so the reader
- * here is choosing between "quite" and "very" rather than hunting for a
- * boundary in a narrow strip. Two decimal places is still what `barParam`
- * serializes, so what you drag to is what the URL says.
+ * A discrete track rather than a continuous one, and it replaced a `0.05`-step
+ * slider after GPT Sol showed the continuous version could not keep its own
+ * promises. Three failures, all the same thing — a track whose positions are
+ * arithmetic rather than data:
+ *
+ *  1. **The right-hand end promoted a *band*, not the top.** It was the top
+ *     score rounded down to the step, so priorities of `.62`, `.61` and `.20`
+ *     gave an end of `.60` — which promotes two quotes that are not tied and
+ *     calls them the top-scored ones.
+ *  2. **`?bar=0.63` was accepted against a `step=0.05` track**, so a link could
+ *     put the thumb where it could not be dragged.
+ *  3. **Most positions changed nothing.** Between two real scores there is
+ *     nothing to promote, so most of a drag was dead travel with a number
+ *     moving over it.
+ *
+ * Every stop here divides the list somewhere no other stop does, so dragging is
+ * always doing something and both ends mean exactly what they say: the left
+ * promotes everything, the right promotes the quotes tied at the top score and
+ * nothing else.
+ *
+ * Ascending with `0` first — the bar reads as *how high*, so left is low.
+ * `barStops` is exported because the panel, the slider and `canPrioritise` all
+ * ask it, and three copies of "which positions exist" is how the count under
+ * the reader's hand comes to disagree with the groups under it.
  */
-export const BAR_STEP = 0.05;
+export function barStops(quotes: Quote[]): number[] {
+  const seen = new Set<number>([0]);
+  for (const quote of quotes) {
+    const p = priorityOf(quote);
+    if (p !== undefined) seen.add(p);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * The nearest real stop to a number that arrived from anywhere.
+ *
+ * `?bar=` is a plain number in the URL and has to stay one — a link written
+ * before an article was re-run, or typed by hand, or carried from a different
+ * article, will not land on this list's stops. Snapping means such a link opens
+ * on a division that exists rather than between two of them, and it is what
+ * closes the off-grid hole above.
+ *
+ * Nearest rather than "the largest stop at or below": a `?bar=` a whisker above
+ * the top score would otherwise fall all the way back to the second-highest,
+ * which is a bigger lie than rounding.
+ */
+export function snapToStop(stops: number[], bar: number): number {
+  let best = stops[0] ?? 0;
+  for (const stop of stops) {
+    if (Math.abs(stop - bar) < Math.abs(best - bar)) best = stop;
+  }
+  return best;
+}
 
 /**
  * `max(importance, striking)` over whichever of the two the model returned, or
@@ -182,44 +245,15 @@ export function countAbove(quotes: Quote[], bar: number): number {
  * divider is the second.
  */
 export function canPrioritise(quotes: Quote[]): boolean {
-  return quotes.length > 1 && quotes.some((q) => priorityOf(q) !== undefined);
-}
-
-/**
- * The right-hand end of the slider: the largest priority this list contains.
- *
- * Derived from the data rather than fixed at 1.00, the same call the glossary's
- * `gateMax` makes, and rounded **down** to the step so that the end promotes
- * the top-scored quotes rather than none — floating-point maxima do not
- * overshoot the way products do, but the rounding costs nothing and the failure
- * it prevents (a right-hand end that promotes nothing) is the one value that
- * end must not have.
- *
- * **What it promotes at the right end is "all the top-scored quotes", not
- * "exactly one".** That is a real difference from the glossary and it is
- * `max`'s doing: either score can produce a top value, so ties at the top are
- * common — three quotes at `0.90` sit at the end of the track together. The
- * plan claimed "exactly the costliest quote" and GPT Sol showed it false with a
- * five-quote example; the honest promise is the one in the tooltip.
- *
- * `bar` is folded in so that a `?bar=` beyond this list's range still has
- * somewhere to sit on the track rather than pinning the thumb at a number it
- * does not hold.
- */
-export function barMax(quotes: Quote[], bar: number): number {
-  let top = 0;
-  for (const quote of quotes) {
-    const p = priorityOf(quote);
-    if (p !== undefined && p > top) top = p;
-  }
-  /* **Snapped to two decimals, which is not tidiness.** `Math.floor(0.62 /
-     0.05) * 0.05` is `0.6000000000000001` — the classic binary-fraction
-     overshoot, and it matters twice here: `barParam` serializes `toFixed(2)`,
-     so the track's end would be a number the URL cannot express, and a `max`
-     a hair above a valid step is exactly the value the glossary's `gateMax`
-     rounds down to avoid. Found by the test below rather than by reading. */
-  const top_ = Math.floor(top / BAR_STEP) * BAR_STEP;
-  return Math.max(Math.round(top_ * 100) / 100, bar, BAR_STEP);
+  /* **A reachable split, not merely a score.** Having scores is not enough:
+     a list where every quote scores `0.5` has one stop above nothing and that
+     stop promotes all of them — so the order would be offered, the slider
+     drawn, and no position on it would ever divide anything. The all-zero case
+     is the same shape and is the one GPT Sol named. Asking the stops directly
+     is one question with one answer, where "are there scores" was a proxy that
+     happened to be right most of the time. */
+  if (quotes.length <= 1) return false;
+  return barStops(quotes).some((bar) => splitsOnBar(quotes, bar));
 }
 
 /**
@@ -295,9 +329,15 @@ export function discardedNote(drops: QuoteDrops | undefined): string | null {
     );
   }
   if (drops.otherVoice > 0) {
+    /* **"appeared as a quotation", not "quoted from somewhere else."** The
+       second is a claim about authorship and we cannot make it: an author
+       quoting their own earlier work lands in this counter too, and the whole
+       reason `authorVoice` refuses a blockquote is that we *cannot tell those
+       apart*. Saying what we observed rather than what we inferred is the same
+       discipline the mode's own promise follows. GPT Sol, 2026-08-31. */
     parts.push(
-      `${drops.otherVoice} ${drops.otherVoice === 1 ? "was" : "were"} dropped for being ` +
-        "quoted from somewhere else",
+      `${drops.otherVoice} ${drops.otherVoice === 1 ? "was" : "were"} dropped for ` +
+        "appearing as a quotation",
     );
   }
   return parts.length === 0 ? null : `${parts.join(", and ")}.`;
@@ -433,13 +473,19 @@ export function QuotesPanel({
   const owner = access.kind === "owner" ? access.owner : null;
   const quotes = access.quotes;
   const all = quotes?.quotes ?? [];
-  const bar = chosenBar ?? PROMOTE_BAR;
+  /* **Snapped to a stop the list actually has**, so the groups, the count and
+     the thumb can never disagree — and so a `?bar=` from a link, from a hand,
+     or from a different article opens on a division that exists. */
+  const bar = snapToStop(barStops(all), chosenBar ?? PROMOTE_BAR);
   /* `effectiveRank` and not `chosenRank`: everything below — the groups, the
      RankBar's pressed state, the numbers on each row — has to agree about what
      order the list is actually in. One call, one answer, passed down. */
   const rank = effectiveRank(all, chosenRank);
   const groups = quotes ? groupQuotes(all, rank, bar) : [];
-  const discarded = discardedNote(owner?.quotes?.discarded);
+  /* From the LIST, not from the owner hook — so the sentence appears for a
+     visitor as well, which is what makes "the reader is told" true rather than
+     true for whoever happens to own the article. */
+  const discarded = discardedNote(quotes?.discarded);
 
   /* Seeded from what the list on screen was chosen with, so the box is already
      in the state the reader last picked and nothing has to remember it between
@@ -691,8 +737,8 @@ function RankBar({
  *   anybody can read;
  * - **the count is on screen**, `5 of 14`, which is what the reader is aiming
  *   at and the only feedback that survives a drag that promotes nobody;
- * - **the track ends where the data does** (`barMax`), so no part of it is
- *   dead;
+ * - **every stop is a real division** (`barStops`), so no part of the track is
+ *   dead and both ends mean what they say;
  * - **it says when it has divided nothing** (`barNote`), which is the
  *   silent-success failure this codebase keeps catching itself in.
  *
@@ -710,6 +756,7 @@ function BarSlider({
   moved: boolean;
   onBar(bar: number | null): void;
 }) {
+  const stops = barStops(quotes);
   const promoted = countAbove(quotes, bar);
   const note = barNote(quotes, bar);
   const count = `${promoted} of ${quotes.length}`;
@@ -737,20 +784,26 @@ function BarSlider({
           </button>
         )}
       </div>
+      {/* **The track is an INDEX into `stops`, not the score itself.** A range
+          input needs a uniform step, and this list's scores are not uniformly
+          spaced — so the thumb walks the positions and the value is read out of
+          the array. That is what makes every drag change the groups, and it is
+          why `?bar=` still carries the score rather than the index: an index is
+          meaningless against a re-run list, where a score is still a score. */}
       <input
         id="quotes-bar"
         className="quotes-bar-range"
         type="range"
         min={0}
-        max={barMax(quotes, bar)}
-        step={BAR_STEP}
-        value={bar}
-        title="How high the bar is for the top group: the higher of the model's two judgments, so either reason is enough. Left promotes more, right fewer."
+        max={Math.max(stops.length - 1, 0)}
+        step={1}
+        value={Math.max(stops.indexOf(bar), 0)}
+        title="How high the bar is for the top group: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left promotes everything, right promotes only the top-scored."
         /* The thumb's position is a number nobody can hear. This is what makes
            it audible, and it is the count rather than the score because the
            count is what the reader is aiming at. */
         aria-valuetext={`${bar.toFixed(2)}, promoting ${count} quotes`}
-        onChange={(e) => onBar(Number.parseFloat(e.target.value))}
+        onChange={(e) => onBar(stops[Number.parseInt(e.target.value, 10)] ?? 0)}
       />
       {note && <p className="quotes-bar-note">{note}</p>}
     </div>
@@ -805,15 +858,20 @@ function QuoteRow({
             article (src/quotes.ts slices the block), and the rule in
             docs/project/security.md does not have an exception for that. */}
         <blockquote className="quotes-text">{quote.text}</blockquote>
-        {scores.length > 0 && (
-          <span className="quotes-scores">
-            {scores.map((score) => (
-              <span key={score.key} className={`quotes-score ${score.key}`} title={LABEL[score.key]}>
-                {SHORT[score.key]}·{Math.round(score.value * 100)}
-              </span>
-            ))}
-          </span>
-        )}
+        {/* **Drawn, not printed** — Greg, 2026-08-31: *"Prefer to use UI (e.g. a
+            little sparkline/bar rather than numbers) plus tooltip instead of
+            numbers"*. A row is meant to be skimmed, and two decimals are read
+            rather than skimmed; a length compares down a column without being
+            read at all. The numbers are in the tooltip and in the bars' own
+            `aria-label`. src/web/ScoreBars.tsx. */}
+        <ScoreBars
+          className="quotes-scores"
+          scores={scores.map((score) => ({
+            key: score.key,
+            label: LABEL[score.key],
+            value: score.value,
+          }))}
+        />
       </button>
       <div className="quotes-row-side">
         {quote.reason && (
@@ -841,12 +899,17 @@ function QuoteRow({
   );
 }
 
-/** The two scores' names, said once. */
+/**
+ * The two scores' names, said once — and short, because they now appear inside
+ * a tooltip and inside a screen reader's sentence rather than as a row of
+ * abbreviations. "The model's judgment:" was in both and is gone: the panel's
+ * heading and the order buttons already establish whose judgment these are, and
+ * repeating it twice per row is six words of tooltip spent on nothing.
+ */
 const LABEL: Record<RowScore["key"], string> = {
-  importance: "The model's judgment: how much of the argument rests on this line",
-  striking: "The model's judgment: how memorable and well put it is",
+  importance: "Importance — how much of the argument rests on this line",
+  striking: "Striking — how memorable and well put it is",
 };
-const SHORT: Record<RowScore["key"], string> = { importance: "imp", striking: "str" };
 
 /**
  * Under the list: who chose these and when, and the one verb.

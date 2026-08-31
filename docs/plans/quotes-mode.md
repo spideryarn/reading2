@@ -1,5 +1,20 @@
 # Quotes mode — the lines worth keeping
 
+> **This is the plan as written, before it was built, and two of its claims are
+> wrong.** It is kept that way on purpose — a plan rewritten to match what
+> shipped is a plan that never records having been corrected. What actually
+> happened is in [quotes-mode-review-sol.md](quotes-mode-review-sol.md) (the
+> plan-stage review) and [quotes-mode-code-review-sol.md](quotes-mode-code-review-sol.md)
+> (the code review, weighted higher), and the built behaviour is in
+> [docs/project/quotes.md](../project/quotes.md).
+>
+> The two to know before reading: this doc says the mode shows **the author's**
+> words, and verification cannot establish that — the promise is now *verbatim
+> passages from this article*; and it says the threshold's right-hand end
+> promotes exactly one quote, which is false under `max` and was false again
+> under the banded track that replaced it. The bar's positions are the scores
+> the list actually contains.
+
 Greg, 2026-08-31:
 
 > Create a "Quotes" mode that extracts the most central, helpful, interesting quotes. By default,

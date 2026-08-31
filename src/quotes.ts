@@ -15,8 +15,12 @@
  * The third question the band answers. The glossary asks *what does this word
  * mean*, the ideas ask *what do I have to hold*, and this asks *which lines is
  * it worth carrying out of here* — and it is the only one of the three whose
- * answer is **entirely the author's own prose**. Nothing this stage stores is
+ * answer is **entirely the article's own prose**. Nothing this stage stores is
  * generated text except two numbers and one caption.
+ *
+ * *The article's*, and deliberately not *the author's* — see § Whose words
+ * these are below. We can prove the words are in the piece; we cannot prove who
+ * wrote them, and the promise this stage makes is the one it can keep.
  *
  * ## The one safety property
  *
@@ -176,92 +180,190 @@ export function noneDropped(): Dropped {
   return { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 };
 }
 
-/**
- * Where in the article these words are, or nothing.
- *
- * **This is the safety property, and it is one function so that it is one
- * answer.** The model is never shown a block id and never returns one, so it
- * cannot be wrong about *where*; it can only be wrong about *what*, and that is
- * exactly what this catches. Words that are nowhere in the article are not the
- * author's words, and a quote we cannot find is dropped rather than shown.
- *
- * **Every block, in document order, first match wins.** Searching the whole
- * article rather than one block the model named is what repairs a
- * misattribution instead of dropping it — but it also means a short needle gets
- * many chances to match something nobody meant, which is what `MIN_QUOTE_CHARS`
- * is for and why that floor is checked *before* this runs.
- *
- * `findQuote` and never a string compare, because it is the rule the browser
- * will use to draw the marks. If the server's idea of "are these words in this
- * block" differed from the client's, the panel would list a quote and the
- * article would show nothing marked — the failure src/quote-match.ts exists to
- * prevent.
- */
-export function locate(
-  quote: string,
-  blocks: readonly Block[],
-): { blockId: BlockId; block: Block; span: Span } | null {
-  for (const block of blocks) {
-    if (!block.text) continue;
-    const span = findQuote(block.text, quote, undefined, "spaced");
-    if (span) return { blockId: block.id, block, span };
-  }
-  return null;
+/** Where one occurrence of a quote sits. */
+export interface Placement {
+  blockId: BlockId;
+  block: Block;
+  span: Span;
 }
 
 /**
- * Is this passage plausibly **the article author's own voice**?
+ * What the search found — **three answers, not two**, and the third is the
+ * whole reason this is a type rather than `Placement | null`.
+ *
+ * `absent` is the model paraphrasing: the words are nowhere in the article.
+ * `otherVoice` is the model copying correctly out of somebody else's mouth.
+ * Those are opposite facts about a run and they are counted separately, so
+ * collapsing them into one `null` would put a well-behaved model's honest
+ * quotation of Ginsberg into the counter that means *the prompt has drifted*.
+ */
+export type Located =
+  | { kind: "found"; at: Placement }
+  | { kind: "otherVoice" }
+  | { kind: "absent" };
+
+/** No article has this many repeats of one sentence; the cap is a runaway guard. */
+const MAX_OCCURRENCES_PER_BLOCK = 20;
+
+/**
+ * Every place these words appear, in document order, block by block.
+ *
+ * **Every place, not the first** — which is the fix for a real hole. `locate`
+ * used to take the first match and hand it straight to `authorVoice`, so a
+ * sentence that appeared once inside a pull-quote and again in the author's own
+ * prose was rejected on the first occurrence and the second was never
+ * considered. The reader lost a legitimate line and the counter blamed the
+ * model. GPT Sol, 2026-08-31.
+ *
+ * Later occurrences inside one block are found by slicing and re-searching.
+ * `span.end` comes from `Reduced.ends`, so it is always a character boundary —
+ * slicing there cannot cut a surrogate pair in half.
+ */
+export function* occurrences(quote: string, blocks: readonly Block[]): Generator<Placement> {
+  for (const block of blocks) {
+    if (!block.text) continue;
+    let from = 0;
+    for (let n = 0; n < MAX_OCCURRENCES_PER_BLOCK; n++) {
+      const span = findQuote(block.text.slice(from), quote, undefined, "spaced");
+      if (!span) break;
+      yield {
+        blockId: block.id,
+        block,
+        span: { start: from + span.start, end: from + span.end },
+      };
+      from += span.end;
+      if (from >= block.text.length) break;
+    }
+  }
+}
+
+/**
+ * Where in the article these words are — **the safety property, in one
+ * function so that it is one answer.**
+ *
+ * The model is never shown a block id and never returns one, so it cannot be
+ * wrong about *where*; it can only be wrong about *what*, and that is exactly
+ * what this catches. Words that are nowhere in the article are not the
+ * article's words, and a quote we cannot find is dropped rather than shown.
+ *
+ * **Every block, in document order, and every occurrence within a block** — the
+ * first one in the author's own voice wins. Searching the whole article rather
+ * than one block the model named is what repairs a misattribution instead of
+ * dropping it; walking past a rejected occurrence is what stops a pull-quote
+ * shadowing the same sentence in the prose.
+ *
+ * `findQuote` and never a string compare, because it is the rule the browser
+ * will use to draw the marks — and `"spaced"`, because the forgiving second
+ * pass deletes whitespace and would accept a word the model split in two.
+ */
+export function locate(quote: string, blocks: readonly Block[]): Located {
+  let sawSomething = false;
+  for (const at of occurrences(quote, blocks)) {
+    sawSomething = true;
+    if (authorVoice(at.block, at.span)) return { kind: "found", at };
+  }
+  return sawSomething ? { kind: "otherVoice" } : { kind: "absent" };
+}
+
+/**
+ * Is this passage plausibly **in the article's own voice**, rather than
+ * something it is quoting?
  *
  * The honest answer to a question we cannot fully answer, and the shape of it
  * matters more than either check inside it. `findQuote` proves the words are in
  * the article. **It says nothing about who wrote them** — and an article is full
- * of other people's sentences. GPT Sol's review, 2026-08-31, found the case
- * that makes this concrete: `data/meditations-on-moloch` carries twenty
+ * of other people's sentences. `data/meditations-on-moloch` carries twenty
  * `kind: "quote"` blocks, and the first of them is Ginsberg's *Howl*. It is
  * exactly the striking passage this stage is built to reach for, it verifies
  * perfectly, and offering it in a list headed by the essay's author would be
  * this feature's worst failure wearing its verification badge.
  *
- * Two deterministic refusals, and each is deliberately narrow:
+ * Two refusals:
  *
  *  - **a `quote` block** — a `<blockquote>`. Whoever wrote it, the piece has
  *    typographically disowned it. This loses a real thing: an author quoting
  *    their own earlier work, which the Moloch essay also does. That is an
- *    acceptable loss, because a reader looking at the list cannot tell the two
+ *    accepted loss, because a reader looking at the list cannot tell the two
  *    apart and we cannot either.
- *  - **a span wholly wrapped in quotation marks** — the inline case, where a
- *    sentence sits inside `"…"` in an ordinary paragraph. `wholly` is the whole
- *    care here: a line that merely *contains* a quoted phrase is still the
- *    author's sentence and is kept.
+ *  - **a span sitting inside quotation marks** in an ordinary paragraph.
  *
- * **What this does not catch**, and the doc says so out loud rather than
- * implying otherwise: an inline quotation with no marks, an indirect one, a
- * translated one. Block text carries no provenance, so nothing at this layer
- * can. The answer is either provenance recorded during extraction, or —
- * which is what we do — a promise that matches what the machine can prove:
- * these are **verbatim passages from this article**, not a claim about
- * authorship. docs/project/quotes.md § Whose words these are.
+ * ## The second one is deliberately independent of the model's boundaries
+ *
+ * The first version compared the single characters either side of the span, and
+ * GPT Sol walked round it three ways on 2026-08-31. All three are the same
+ * mistake — trusting the model to have drawn the span where a person would:
+ *
+ *  1. **The marks came back inside the quote.** `“…”` included, so the
+ *     character before the span was the colon and the character after was
+ *     nothing. Answered by peeling the span's own edges first, and treating a
+ *     mark found there as evidence *for* the refusal rather than against it.
+ *  2. **The closing mark was one character further out.** The model left the
+ *     full stop behind, so the character after the span was `.` and not `”`.
+ *     Answered by stepping over sentence punctuation before looking.
+ *  3. **British-style single quotation marks.** `‘…’` was excluded with the
+ *     apostrophes. Answered by including the *curly* singles, which are
+ *     typography rather than punctuation inside a word.
+ *
+ * The straight `'` stays out, and that is the one real trade left: `'…'` around
+ * a sentence is ambiguous with an apostrophe, and dropping an author's own
+ * emphasised line is worse than keeping a quoted one. A publisher who uses
+ * straight singles for direct speech gets past this.
+ *
+ * **What none of it catches:** an inline quotation with no marks at all, an
+ * indirect one, a translated one. Block text carries no provenance, so nothing
+ * at this layer can. The answer is either provenance recorded during
+ * extraction, or — which is what we do — a promise that matches what the
+ * machine can prove: these are **verbatim passages from this article**, not a
+ * claim about who wrote them. docs/project/quotes.md § Whose words these are.
  */
 export function authorVoice(block: Block, span: Span): boolean {
   /* `kind`, not `tag`. The tag is whatever the publisher wrote; `kind` is
      stage 3's own classification and is what every other consumer here reads
      (src/block-policy.ts). */
   if (block.kind === "quote") return false;
-  const before = block.text.slice(0, span.start).trimEnd();
-  const after = block.text.slice(span.end).trimStart();
-  const opener = before.at(-1) ?? "";
-  const closer = after.at(0) ?? "";
-  return !(OPENERS.has(opener) && CLOSERS.has(closer));
+
+  const text = block.text;
+  /* **Peel the span's own edges first.** A mark the model included is the
+     strongest evidence there is that this is a quotation — it is the one thing
+     the model definitely saw — so finding one here counts towards the refusal
+     rather than hiding it, which is what comparing the outside characters
+     alone did. */
+  let from = span.start;
+  let to = span.end;
+  while (from < to && OPENERS.has(text[from] ?? "")) from++;
+  while (to > from && CLOSERS.has(text[to - 1] ?? "")) to--;
+  const openerInside = from > span.start;
+  const closerInside = to < span.end;
+
+  /* Outward, skipping the whitespace that is never part of either answer. */
+  let before = from - 1;
+  while (before >= 0 && /\s/.test(text[before] ?? "")) before--;
+  const openerBefore = OPENERS.has(text[before] ?? "");
+
+  /* Outward again, but stepping over the sentence's own punctuation: a closing
+     mark sits *after* the full stop, and the model routinely leaves the stop
+     behind. */
+  let after = to;
+  while (after < text.length && SENTENCE_END.has(text[after] ?? "")) after++;
+  while (after < text.length && /\s/.test(text[after] ?? "")) after++;
+  const closerAfter = CLOSERS.has(text[after] ?? "");
+
+  return !((openerInside || openerBefore) && (closerInside || closerAfter));
 }
 
-/* The marks a publisher's typography actually uses. Straight and curly both,
-   and the two guillemet directions, because an article translated out of French
-   or German is not a rarity. Deliberately NOT the apostrophes: `'…'` around a
-   sentence is far more often emphasis or scare quotes than attribution, and
-   dropping the author's own emphasised line is a worse error than keeping a
-   quoted one. */
-const OPENERS: ReadonlySet<string> = new Set(['"', "“", "«", "„"]);
-const CLOSERS: ReadonlySet<string> = new Set(['"', "”", "»", "“"]);
+/* The marks a publisher's typography actually uses. Straight doubles, both
+   curly directions, the two guillemets, the German low opener — and the curly
+   SINGLES, which arrived after review: `‘…’` is ordinary British direct speech
+   and excluding it let every such quotation through.
+
+   Deliberately NOT the straight apostrophe. `'…'` around a sentence is
+   ambiguous with a possessive or a contraction, and dropping the author's own
+   emphasised line is a worse error than keeping a quoted one. */
+const OPENERS: ReadonlySet<string> = new Set(['"', "“", "«", "„", "‘"]);
+const CLOSERS: ReadonlySet<string> = new Set(['"', "”", "»", "“", "’"]);
+
+/** Punctuation that can sit between the quoted words and the closing mark. */
+const SENTENCE_END: ReadonlySet<string> = new Set([...".,;:!?…"]);
 
 /** A located quote, before it has an id or has been checked against its neighbours. */
 interface Placed {
@@ -308,15 +410,16 @@ export function place(raw: unknown, blocks: readonly Block[], dropped: Dropped):
       dropped.wrongLength++;
       continue;
     }
-    const at = locate(quote, blocks);
-    if (!at) {
+    const found = locate(quote, blocks);
+    if (found.kind === "absent") {
       dropped.unfound++;
       continue;
     }
-    if (!authorVoice(at.block, at.span)) {
+    if (found.kind === "otherVoice") {
       dropped.otherVoice++;
       continue;
     }
+    const at = found.at;
     /* **The article's characters, not the model's string** — the second half of
        the safety property, and the half that was missing until GPT Sol's review
        on 2026-08-31.
@@ -660,9 +763,9 @@ lines a reader would want to carry out of it.
 THE ABSOLUTE RULE
 
 Every quote must be copied from the article VERBATIM — character for character,
-the author's words and no others. Not paraphrased, not tidied, not shortened
-with an ellipsis, not stitched together from two places. If you cannot copy a
-line exactly, leave it out.
+exactly as it appears there. Not paraphrased, not tidied, not shortened with an
+ellipsis, not stitched together from two places. If you cannot copy a line
+exactly, leave it out.
 
 This is not a style preference. Everything you return is shown to the reader in
 quotation marks, attributed to the author, beside the real text. A line that is
@@ -693,8 +796,10 @@ WHAT DOES NOT
   shown on its own, so a line beginning "This is why it fails" is useless.
 - A statement of fact with nothing of the author in it. A date, a figure, a
   definition anyone would write the same way.
-- Someone ELSE's words. A line the article quotes from another writer is that
-  writer's, not this author's. Skip it, however good it is.
+- A line the piece is QUOTING rather than saying. Anything inside quotation
+  marks, and anything in an indented block quote, belongs to whoever it was
+  taken from. Skip it, however good it is — those are thrown away anyway, so
+  offering one costs you the entry and gains nothing.
 - Two overlapping versions of one line. Pick the form that stands alone best;
   one of them will be thrown away anyway.
 - Anything under 30 characters or over 400. Below that it is a phrase; above it
@@ -736,7 +841,7 @@ absent reason is a real answer.
 
 WRITING
 
-- "text": the author's words, verbatim, nothing else.
+- "text": the article's words, verbatim, nothing else.
 - "reason": one plain sentence, or absent. No Markdown.
 
 OUTPUT

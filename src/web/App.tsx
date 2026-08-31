@@ -3137,7 +3137,10 @@ function useQuotesMode({
       slot: 0,
       blockId: selected.blockId,
       text: selected.text,
-      ...(selected.start !== undefined && { start: selected.start }),
+      /* **`start` is not passed on**, and `resolveQuote` no longer takes it —
+         the stored offset is measured in `block.text` and this resolution
+         happens in the rendered text. It is still on the artefact, because it
+         is what `inDocumentOrder` sorts two quotes from one paragraph by. */
       ...(selected.reason !== undefined && { reason: selected.reason }),
     });
   }, [selected, blocks]);

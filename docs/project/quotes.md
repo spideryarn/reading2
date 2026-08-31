@@ -4,6 +4,10 @@ The sentences of a piece that are worth carrying out of it, in the band between 
 prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
 pressing one marks it in the prose and takes you there.
 
+*The article's*, and deliberately not *the author's* — see [§ Whose words these are](#whose-words-these-are).
+Verification can prove the words are in the piece. It cannot prove who wrote them, and the promise
+this mode makes is the one it can keep.
+
 Built 2026-08-31. Greg asked for it that day:
 
 > Create a "Quotes" mode that extracts the most central, helpful, interesting quotes. By default,
@@ -135,9 +139,29 @@ worst failure wearing its verification badge.
 | a span **wholly** wrapped in quotation marks | the inline case, in an ordinary paragraph |
 
 `wholly` is the care in the second one: a line that merely *contains* a quoted phrase is still the
-author's sentence and is kept. The first one costs something real — an author quoting their own
+article's own sentence and is kept. The first one costs something real — an author quoting their own
 earlier work, which the Moloch essay also does — and that is an accepted loss, because a reader
 looking at the list cannot tell the two apart and neither can we.
+
+**The second check is deliberately independent of where the model drew the span**, and it took a
+second review to get there. The first version compared the single characters either side of the span,
+which trusts the model to have drawn it where a person would; it was walked round three ways:
+
+| what the model did | why the old check passed it |
+|---|---|
+| returned the quotation marks **inside** the quote | the character before was the colon, and there was none after |
+| left the **full stop** behind | the character after was `.`, not `”` |
+| the piece used **British single marks** `‘…’` | curly singles were excluded along with the apostrophe |
+
+All three are answered by peeling the span's own edges first — a mark the model included is the
+strongest evidence there is, because it is the one thing the model definitely saw — then stepping
+over sentence punctuation before looking outward, and by including the curly singles. The straight
+`'` stays out, and that is the one trade left: `'…'` around a sentence is ambiguous with an
+apostrophe, and dropping the article's own emphasised line is worse than keeping a quoted one.
+
+**And `locate` walks past a rejected occurrence** rather than stopping at the first match. A sentence
+can appear once inside a pull-quote and again in the prose; taking the first occurrence lost the
+reader a legitimate line and blamed the model for it in the counter.
 
 **What it does not catch:** an inline quotation with no marks, an indirect one, a translated one.
 Block text carries no provenance, so nothing at this layer can. Hence the promise the mode actually
@@ -160,6 +184,16 @@ They ride on the **artefact** (`Quotes.discarded`), not only in the log, and the
 the reader has a stake in: *"2 suggestions were dropped because the words are not in the article."*
 A count in a log is invisible to the person the drop happened to. The other three are editorial rules
 of ours that the reader has no stake in, and naming them would turn a disclosure into a changelog.
+
+**`discarded` crosses to a visitor too**, which is the one pipeline-shaped field
+[public-types.ts](../../src/public-types.ts) lets through. It is not a fact about our pipeline — it is
+a fact about *the list on the screen*, that it is shorter than what was produced — and a visitor
+reading that list has the same interest in knowing as its owner. Stripping it would have made "the
+reader is told" true for half the readers and quietly false for the other half.
+
+**The sentence says "appearing as a quotation", never "quoted from somebody else."** The second is a
+claim about authorship and we cannot make it: an author quoting their own earlier work lands in that
+counter, and the whole reason `authorVoice` refuses a blockquote is that we cannot tell those apart.
 
 ## Two scores, combined with `max`
 
@@ -211,10 +245,32 @@ default, display them in order."* The glossary defaults to `prioritised`; copyin
 first version, and a cross-family review pointed out that the glossary's later override is not
 permission to override an explicit decision about a different feature.
 
-The bar (`?bar=`) is the glossary's slider with the composite changed, and it keeps all four of its
-properties: the number and the count are on screen, the track ends where the data does, it says in
-words when it has divided nothing, and it can be put back. `?bar=` has **no default of its own**, so
-"absent" keeps meaning *nobody has touched this*.
+### The bar's positions are the scores, not a grid
+
+`?bar=` keeps the glossary slider's four properties — the number and the count on screen, a note in
+words when it has divided nothing, and a reset — and it does **not** keep its continuous track. The
+stops are `barStops`: nothing, then every distinct `max(importance, striking)` the list contains.
+
+That replaced a `0.05`-stepped slider after a cross-family review showed the continuous version could
+not keep its own promises, in three separate ways that are all the same way — a track whose positions
+are arithmetic rather than data:
+
+1. **The right-hand end promoted a band, not the top.** It was the top score rounded *down* to the
+   step, so priorities of `.62`, `.61` and `.20` gave an end of `.60`, promoting two quotes that are
+   not tied and calling them the top-scored ones.
+2. **`?bar=0.63` was accepted against a `step=0.05` track**, so a link could put the thumb somewhere
+   it could not be dragged. `snapToStop` now brings any arriving number onto a real position.
+3. **Most positions changed nothing.** Between two real scores there is nothing to promote, so most
+   of a drag was dead travel with a number moving over it.
+
+Now every stop divides the list somewhere no other stop does, and both ends mean exactly what they
+say: hard left promotes everything, hard right promotes the quotes tied at the top score.
+
+`canPrioritise` asks the stops rather than asking whether scores exist, for the same reason: a list
+where every quote scores the same has one stop above nothing and that stop promotes all of them, so
+the order would be offered, the slider drawn, and no position on it would ever divide anything.
+
+`?bar=` has **no default of its own**, so "absent" keeps meaning *nobody has touched this*.
 
 **`?rank=` and `?bar=`, not `sort` and `gate`.** Those names are the glossary's and search's, both on
 `/read/<slug>` — [url-state.md](url-state.md#the-librarys-own-five) records what distinct names are

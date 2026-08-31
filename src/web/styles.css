@@ -4361,19 +4361,12 @@ td.text.has-hit[data-hues="8"] {
    under `hardest` or `most central`, two under `prioritised`, none under `first
    use`. The single letter in front of each is which score it is; the full words
    are in the cell's `title`. */
+/* The bars, where `d·72 c·85` used to be — see src/web/ScoreBars.tsx and the
+   comment at the call site. `flex-shrink: 0` for the same reason it always
+   was: the term's name gives way, the scores do not. */
 .gloss-score {
-  display: flex;
-  flex-shrink: 0; /* the name gives way, not the numbers */
-  gap: 0.3rem;
+  flex-shrink: 0;
   margin-left: auto;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-.gloss-score-key {
-  margin-right: 0.1rem;
-  opacity: 0.6;
 }
 .gloss-gloss {
   display: block;
@@ -9933,7 +9926,7 @@ table.only-prose thead { display: none; }
 }
 
 /* ---------------------------------------------------------- § quotes mode ----
-   The tenth mode: the lines worth keeping, in the author's own words —
+   The tenth mode: the lines worth keeping, in the article's own words —
    docs/project/quotes.md, docs/plans/quotes-mode.md.
 
    **The one rule that shapes all of this: the reader's eye should land on the
@@ -10164,13 +10157,10 @@ table.only-prose thead { display: none; }
 /* Under the sentence, never beside it: there is no room for both on one line
    and the number is the one that gives way. Mono so they line up with the bar's
    readout, which is the same quantity. */
+/* Under the sentence, never beside it: there is no room for both on one line.
+   Indented to the quote's own left rule, so the bars start where the words do. */
 .quotes-scores {
-  display: flex;
-  gap: 0.4rem;
-  margin: 0.3rem 0 0 0.5rem;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
+  margin: 0.35rem 0 0 0.5rem;
 }
 
 .quotes-row-side {
@@ -10213,3 +10203,57 @@ table.only-prose thead { display: none; }
   font-family: var(--font-mono);
   font-size: 0.64rem;
 }
+
+/* ------------------------------------------------------- § score bars ----
+   The model's 0–1 judgments as lengths rather than digits — Greg, 2026-08-31:
+   *"Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus
+   tooltip instead of numbers ... Same goes for Glossary etc."*
+
+   One set of rules for both panels, because they are showing the same kind of
+   thing and two looks would teach the reader it means two things. The component
+   is src/web/ScoreBars.tsx and the reasoning is there.
+
+   **The track is always the whole scale.** Nothing here normalises to the list,
+   so an article whose scores are all middling looks middling — a bar stretched
+   to make its own biggest score full-width would make every article look like
+   it had one outstanding term, and no two articles comparable. */
+.score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 2.4rem;
+  cursor: default;
+}
+/* The track. Faint enough to read as a scale rather than as a rule, and it has
+   to be visible: a fill with no track is a bar chart with no axis, and 0.2 and
+   0.9 then look like two different things rather than two points on one scale. */
+.score-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--ink-faint) 22%, transparent);
+  overflow: hidden;
+}
+.score-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink-faint);
+}
+/* The upper bar of each pair is the load-bearing one — centrality in a
+   glossary, importance in a quote — and it takes the accent, so a column of
+   rows can be read for "what the argument rests on" without the tooltip.
+   The lower bar stays neutral. Two *positions* rather than two hues doing the
+   work, because a hue difference alone is not a difference for a reader who
+   cannot see it, and the aria-label carries the rest. */
+.score-bar-fill.centrality,
+.score-bar-fill.importance {
+  background: color-mix(in oklab, var(--highlight) 70%, var(--ink-faint));
+}
+.gloss-term.on .score-bar-fill,
+.quotes-row.on .score-bar-fill {
+  background: var(--highlight);
+}
+/* Narrow, because it holds two short lines and a wide card over a list row
+   covers the rows either side of the one being pointed at. */
+.score-bars-card { max-width: 15rem; }

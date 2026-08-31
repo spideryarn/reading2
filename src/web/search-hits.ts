@@ -493,10 +493,33 @@ export function resolveIdea(
  * real words, which is the one place the two halves of src/quote-match.ts are
  * allowed to differ: this side runs both passes, because the rendered text
  * genuinely lacks whitespace `extractText` invented.
+ *
+ * **And it deliberately sends no `start`.** The stored offset is in
+ * `block.text`'s space and this search is in the rendered text's space; the two
+ * drift by every character `extractText` collapsed or inserted, so the hint
+ * would pick a repeat rather than disambiguate between them. See the parameter
+ * below.
  */
 export function resolveQuote(
   blocks: Block[],
-  quote: { id: string; slot: number; blockId: BlockId; text: string; start?: number; reason?: string },
+  /**
+   * **No `start`, deliberately** — see the note in the docstring above.
+   *
+   * The stored offset is measured in `block.text`; this function searches the
+   * *rendered* text, which is a different string of a different length. Passing
+   * it as `near` does not disambiguate, it misdirects: GPT Sol reproduced a
+   * table where `block.text` put the first occurrence at 120 while the rendered
+   * occurrences were at 60 and 126, so the hint chose the second sentence and
+   * the mark landed on the wrong one.
+   *
+   * Omitting it is not a loss here, and that is what makes this the right fix
+   * rather than a retreat: `locate` in src/quotes.ts always takes the **first**
+   * occurrence, so the first rendered occurrence is the one that was meant.
+   * Search and ideas cannot do this — their offsets come from a model naming a
+   * block — which is why the general fix is an occurrence ordinal and is not
+   * built.
+   */
+  quote: { id: string; slot: number; blockId: BlockId; text: string; reason?: string },
 ): Found[] {
   const one = resolveOne(page(blocks), {
     /* The same three-part key shape as a hit and an occurrence, with `0` for
@@ -508,7 +531,6 @@ export function resolveQuote(
     runId: quote.id,
     slot: quote.slot,
     quote: quote.text,
-    ...(quote.start !== undefined && { start: quote.start }),
     confidence: null,
     reasoning: quote.reason ?? "",
   });

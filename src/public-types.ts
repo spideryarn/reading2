@@ -59,6 +59,8 @@ import type {
   BlockKind,
   GlossaryKind,
   Idea,
+  Quote,
+  QuoteDrops,
   SummaryEntry,
   Tree,
   Tweet,
@@ -229,6 +231,7 @@ export interface PublicArtefactSet {
   glossary?: PublicGlossary;
   summary?: PublicSummaries;
   ideas?: PublicIdeas;
+  quotes?: PublicQuotes;
   tweets?: PublicTweets;
 }
 
@@ -294,6 +297,36 @@ export interface PublicIdeas {
 }
 
 /**
+ * The lines worth keeping. `Quote` carries nothing about a person.
+ *
+ * **The one artefact whose payload is the author's own prose**, which is why
+ * there is nothing to strip: a quote is `blockId`, `text`, `start`, a caption
+ * and two numbers, and every one of those is already on the page a visitor is
+ * reading. The projection exists so that the pipeline facts around it —
+ * `sourceHash`, `generator`, `version`, `profileHash` — do not travel.
+ */
+export interface PublicQuotes {
+  quotes: Quote[];
+  /**
+   * **What the stage refused to store — and it crosses, where every other
+   * pipeline fact in this file does not.**
+   *
+   * The rule this projection keeps is that facts about *our pipeline* stay
+   * behind: no `generator`, no `version`, no `sourceHash`, no timings. These
+   * counts look like one of those and are not. They are a fact about **the list
+   * on the screen** — that it is shorter than what was produced, and why — and
+   * the panel says so in a sentence. A visitor reading that list has exactly
+   * the same interest in knowing as its owner does, so stripping this would
+   * make the claim "the reader is told" true for half the readers and quietly
+   * false for the other half. GPT Sol asked the question, 2026-08-31; this is
+   * the answer.
+   *
+   * Optional because an artefact written before the field existed has none.
+   */
+  discarded?: QuoteDrops;
+}
+
+/**
  * The article as a numbered thread.
  *
  * `limit` crosses because the count on every post is against it: a thread
@@ -325,6 +358,7 @@ export interface PublicArtefacts {
   glossary: boolean;
   summary: boolean;
   ideas: boolean;
+  quotes: boolean;
 }
 
 /** What `GET /api/public/metadata/:slug` returns. */

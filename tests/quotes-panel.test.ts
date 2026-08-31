@@ -7,23 +7,23 @@
  * behaviours were justified by properties a product has and a maximum does not:
  *
  *  - a product of two 0–1 scores clusters low, a maximum clusters high — so the
- *    starting bar is 0.70 rather than 0.30, and the step is coarser;
+ *    starting bar is 0.70 rather than 0.30;
  *  - under a product a missing factor is fatal, under a maximum it is merely
  *    conservative — so `priorityOf` computes over whichever scores exist;
  *  - a product rarely ties at the top, a maximum ties often, because **either**
- *    score can produce the top value — so the right-hand end of the track
- *    promotes "the top-scored quotes" and not "exactly one". The plan claimed
- *    the glossary's promise and GPT Sol showed it false; the test below is that
- *    case.
+ *    score can produce the top value — so the right-hand end promotes every
+ *    quote tied at the top and not "exactly one". The plan claimed the
+ *    glossary's promise and GPT Sol showed it false twice: first the claim, and
+ *    then the `0.05`-banded track that could not have kept it either way. The
+ *    track is the scores themselves now — `barStops`.
  *
  * Nothing here renders. The components are covered by a person, like the rest
  * of this band — docs/project/testing.md is about pure functions.
  */
 import { describe, expect, it } from "vitest";
 import {
-  BAR_STEP,
-  barMax,
   barNote,
+  barStops,
   canPrioritise,
   countAbove,
   discardedNote,
@@ -33,6 +33,7 @@ import {
   PROMOTE_BAR,
   rankQuotes,
   rowScores,
+  snapToStop,
   splitsOnBar,
 } from "../src/web/QuotesPanel.js";
 import { noneDropped } from "../src/quotes.js";
@@ -87,38 +88,86 @@ describe("canPrioritise", () => {
     expect(canPrioritise([q("a"), q("b")])).toBe(false); // no scores at all
     expect(canPrioritise([q("a", 0.9), q("b")])).toBe(true);
   });
+
+  /**
+   * **A reachable split, not merely a score.** Having scores is not enough, and
+   * "are there scores" was a proxy that happened to be right most of the time:
+   * every quote scoring the same has one stop above nothing and that stop
+   * promotes all of them, so the order would be offered, the slider drawn, and
+   * no position on it would ever divide anything. GPT Sol, 2026-08-31.
+   */
+  it("refuses a list no position on the slider could divide", () => {
+    expect(canPrioritise([q("a", 0, 0), q("b", 0, 0)])).toBe(false);
+    expect(canPrioritise([q("a", 0.5), q("b", 0.5)])).toBe(false);
+    // ...and every stop of a list that CAN be divided is a real division.
+    const real = [q("a", 0.9), q("b", 0.4), q("c", 0.4)];
+    expect(canPrioritise(real)).toBe(true);
+    expect(barStops(real).some((b) => splitsOnBar(real, b))).toBe(true);
+  });
 });
 
-describe("barMax", () => {
-  it("ends the track at the data's own top, rounded down to the step", () => {
-    expect(barMax([q("a", 0.62, 0.1), q("b", 0.2)], 0)).toBe(0.6);
+describe("barStops", () => {
+  it("is nothing, then every score the list actually contains", () => {
+    expect(barStops([q("a", 0.62, 0.1), q("b", 0.2), q("c")])).toEqual([0, 0.2, 0.62]);
+  });
+
+  it("collapses a repeated score to one position", () => {
+    // Two stops that promote the same set are one stop, or the drag has dead
+    // travel in it and the reader cannot tell working from broken.
+    expect(barStops([q("a", 0.5), q("b", 0.5)])).toEqual([0, 0.5]);
   });
 
   /**
-   * **The correction.** Under a product, the right-hand end promotes exactly the
-   * costliest entry, because two noisy scores rarely multiply to the same value
-   * twice. Under `max` either score can produce the top value, so ties at the
-   * top are ordinary — and the honest promise is "all the top-scored quotes".
-   * GPT Sol's five-quote example, 2026-08-31.
+   * **The correction.** The old track was `0.05`-stepped and ended at the top
+   * score rounded DOWN to the step — so priorities of `.62`, `.61` and `.20`
+   * gave an end of `.60`, which promotes two quotes that are not tied and calls
+   * them the top-scored ones. GPT Sol, 2026-08-31.
    */
-  it("promotes every quote tied at the top, not one", () => {
+  it("ends where the top score is, not at the bottom of its band", () => {
+    const list = [q("a", 0.62), q("b", 0.61), q("c", 0.2)];
+    const stops = barStops(list);
+    const end = stops[stops.length - 1];
+    expect(end).toBe(0.62);
+    expect(countAbove(list, end!)).toBe(1);
+  });
+
+  it("promotes every quote genuinely tied at the top, and only those", () => {
     const list = [q("a", 0.9, 0.42), q("b", 0.9, 0.88), q("c", 0.85, 0.9), q("d", 0.7, 0.7)];
-    const end = barMax(list, 0);
-    expect(end).toBe(0.9);
-    expect(countAbove(list, end)).toBe(3);
+    const stops = barStops(list);
+    expect(countAbove(list, stops[stops.length - 1]!)).toBe(3); // a, b and c all reach 0.9
   });
 
-  it("never returns an end of zero, so the track is never a point", () => {
-    // Every quote scored 0 — a real answer, and a track from 0 to 0 is a
-    // slider that cannot be moved and reports nothing.
-    expect(barMax([q("a", 0, 0), q("b", 0, 0)], 0)).toBe(BAR_STEP);
-    expect(barMax([q("a"), q("b")], 0)).toBe(BAR_STEP);
+  it("makes the left-hand end promote everything", () => {
+    const list = [q("a", 0.9), q("b", 0.2)];
+    expect(countAbove(list, barStops(list)[0]!)).toBe(2);
   });
 
-  it("makes room for a ?bar= beyond this list's range", () => {
-    /* Otherwise a link carrying a bar higher than anything here pins the thumb
-       at a number the track does not hold, and the reader cannot drag back. */
-    expect(barMax([q("a", 0.3)], 0.85)).toBe(0.85);
+  it("has one position when nothing can be divided", () => {
+    expect(barStops([q("a", 0, 0), q("b", 0, 0)])).toEqual([0]);
+    expect(barStops([q("a"), q("b")])).toEqual([0]);
+  });
+});
+
+describe("snapToStop", () => {
+  /**
+   * A `?bar=` can arrive from a link written before the article was re-run,
+   * from a hand, or from a different article. The old continuous slider took
+   * `?bar=0.63` against a `step=0.05` track and put the thumb where it could
+   * not be dragged.
+   */
+  it("brings an off-grid link onto a division that exists", () => {
+    expect(snapToStop([0, 0.2, 0.62], 0.63)).toBe(0.62);
+    expect(snapToStop([0, 0.2, 0.62], 0.05)).toBe(0);
+  });
+
+  it("does not fall all the way back for a value just above the top", () => {
+    // "The largest stop at or below" would answer 0.2 here, which is a bigger
+    // lie than rounding up by a hundredth.
+    expect(snapToStop([0, 0.2, 0.9], 0.92)).toBe(0.9);
+  });
+
+  it("answers the only stop when there is only one", () => {
+    expect(snapToStop([0], 0.7)).toBe(0);
   });
 });
 
@@ -284,10 +333,14 @@ describe("discardedNote", () => {
     expect(discardedNote({ ...noneDropped(), unfound: 3 })).toMatch(/3 suggestions were dropped/);
   });
 
-  it("names quotation of somebody else separately, and joins the two", () => {
+  it("names an appearance-as-quotation separately, and joins the two", () => {
     const both = discardedNote({ ...noneDropped(), unfound: 2, otherVoice: 1 });
     expect(both).toMatch(/not in the article/);
-    expect(both).toMatch(/quoted from somewhere else/);
+    expect(both).toMatch(/appearing as a quotation/);
+    /* And NOT a claim about authorship: an author quoting their own earlier
+       work lands in this counter, and `authorVoice` refuses a blockquote
+       precisely because we cannot tell those apart. */
+    expect(both).not.toMatch(/somewhere else|another author|someone else/);
   });
 
   /**
@@ -311,10 +364,11 @@ describe("the constants", () => {
     expect(priorityOf(q("a", 0.7, 0.7))).toBe(0.7);
   });
 
-  it("steps coarsely enough that the whole track is usable", () => {
-    expect(BAR_STEP).toBeGreaterThanOrEqual(0.01);
-    // Two decimal places is what `barParam` serializes, so what you drag to has
-    // to be what the URL can say.
-    expect(Math.round(BAR_STEP * 100)).toBe(BAR_STEP * 100);
+  it("is a starting position the slider can always express", () => {
+    /* It is snapped to a real stop before anything reads it, so it never has to
+       be on any grid — which is the whole reason the track stopped being a grid.
+       What it must still be is inside the scale. */
+    expect(PROMOTE_BAR).toBeLessThanOrEqual(1);
+    expect(snapToStop(barStops([q("a", 0.9), q("b", 0.4)]), PROMOTE_BAR)).toBe(0.9);
   });
 });
