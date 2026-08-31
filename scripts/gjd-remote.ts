@@ -42,6 +42,13 @@ const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? REMOTE_REPO_DEFAULT;
 /** Everything gjd-remote leaves on the box lives under here. */
 const REMOTE_WORK = `/home/${USER}/gjd-remote`;
 
+/**
+ * Linux caps ONE argv string at 32 pages (128 KiB) and fails execve with E2BIG
+ * past it. 96KB leaves room for the rest of the command line, and a prompt
+ * anywhere near it is a mistake rather than a long instruction.
+ */
+const MAX_PROMPT_BYTES = 96 * 1024;
+
 /** tmux session names travel through shell commands across an ssh boundary, so
  *  nothing surprising may ever reach a shell. Same slug rule as the fleet. */
 const SLUG = /^[a-z0-9][a-z0-9-]{0,40}$/;
@@ -150,19 +157,60 @@ const HOST = () => `${USER}@${host()}`;
  */
 let masterSocket: string | undefined;
 let masterDir: string | undefined;
+/** Remembered, so a box that refuses a master is not asked six more times. */
+let masterFailed = false;
 
 function sshMasterOpts(): string[] {
   if (masterSocket) return ["-o", `ControlPath=${masterSocket}`];
+  if (masterFailed) return [];
   // mkdtemp under /tmp, not tmpdir(): see the sun_path note above.
   const dir = mkdtempSync("/tmp/gjdr-");
   const sock = path.join(dir, "s");
-  const r = spawnSync("ssh", [...SSH_OPTS, "-o", `ControlPath=${sock}`, "-M", "-N", "-f", HOST()], {
-    encoding: "utf8",
-  });
+  const r = spawnSync(
+    "ssh",
+    [
+      ...SSH_OPTS,
+      "-o",
+      `ControlPath=${sock}`,
+      // ConnectTimeout bounds the handshake and nothing after it: a network
+      // that blackholes MID-COMMAND leaves later commands waiting on a mux
+      // request with no timeout at all. These bound that to ~45s, which is a
+      // wait you can attribute rather than one that never ends.
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=3",
+      // The master's own dead-man's handle, and the only cleanup that actually
+      // works when this command is interrupted. closeSshMaster() below covers
+      // the ordinary exits; nothing in Node covers Ctrl-C, because a JS signal
+      // handler cannot run while the process is blocked inside spawnSync, which
+      // is where this command spends essentially all of its time. Measured:
+      // SIGINT to a process sitting in spawnSync ran NEITHER the signal handler
+      // NOR the "exit" handler — the process simply died, leaving `ssh -M -N -f`
+      // behind. So the master is told to give up on its own 30 seconds after
+      // its last client, and that bound holds however this process ends.
+      //
+      // ControlPersist cannot cause the reuse GPT Sol warned about, because the
+      // socket path is a fresh mkdtemp per process: no later invocation can
+      // find this master, poisoned or otherwise. It bounds an orphan's life; it
+      // does not extend a healthy one.
+      "-o",
+      "ControlPersist=30",
+      "-M",
+      "-N",
+      "-f",
+      HOST(),
+    ],
+    { encoding: "utf8" },
+  );
   // A master that would not start is not fatal — every command still works on
   // its own connection, just slowly. Failing here would turn a performance
   // optimisation into an outage.
-  if (r.status !== 0) return [];
+  if (r.status !== 0) {
+    masterFailed = true;
+    rmSync(dir, { recursive: true, force: true });
+    return [];
+  }
   masterDir = dir;
   masterSocket = sock;
   return ["-o", `ControlPath=${sock}`];
@@ -177,8 +225,18 @@ function closeSshMaster(): void {
   masterDir = undefined;
 }
 
-// Covers the ordinary exit and the `process.exit()` inside die() and attach().
-// Without it a -N master would linger with nothing to do and nobody to close it.
+// The fast path, covering the ordinary return, the `process.exit()` inside
+// die() and attach(), and an uncaught throw. spawnSync inside an exit listener
+// is fine — synchronous work is the only kind an exit listener may do.
+//
+// There is deliberately NO signal handler here. One was written, and it did not
+// work: a `process.on("SIGINT")` handler cannot run while the process is
+// blocked inside spawnSync, and that is where this command spends essentially
+// all of its time. A probe that installed both handlers and took SIGINT while
+// blocked ran neither, and died leaving the master behind. Keeping the handler
+// would have been cleanup code that looks like it runs and does not, which is
+// worse than none. ControlPersist on the master above is what actually bounds
+// this, because it does not depend on us being alive to do anything.
 process.on("exit", closeSshMaster);
 
 /**
@@ -420,13 +478,14 @@ function sessions(): Session[] {
   // make anyone look, and every other caller reads absence as permission —
   // `new` decides the name is free, `resume` picks a most-recent out of nothing.
   //
-  // What this still cannot tell apart is an idle box from a broken tmux: the
-  // remote script pipes `tmux ls` into a `while` loop, so the loop's exit
-  // status of 0 is all we ever see, whatever tmux did. An explicit sentinel
-  // line for "tmux answered, and there are no sessions" would fix that, but it
-  // belongs in buildSessionScript() in scripts/gjd-remote-tmux.ts, which is
-  // another session's file today. Requested there rather than forked here.
-  const { sessions: list, unreadable } = parseSessions(ssh(buildSessionScript()));
+  // The half that exit status cannot reach — an idle box against a broken tmux,
+  // because the remote script pipes `tmux ls` into a `while` loop whose exit
+  // status is 0 whatever tmux did — is now handled by a completion marker the
+  // script prints last, and `failure` below. Verified on the box: tmux off the
+  // PATH gives "GJDERR tmux is not on this box", while tmux present with no
+  // server still gives a clean empty list, which is the one genuine empty case.
+  const { sessions: list, unreadable, failure } = parseSessions(ssh(buildSessionScript()));
+  if (failure) die(`could not read the box's tmux sessions: ${failure}`);
   // Fail closed. A short list is indistinguishable from a correct one, and
   // every caller draws a conclusion from absence: `new` decides a name is free,
   // `resume` with no name picks the "most recent". Neither may act on a list we
@@ -672,6 +731,26 @@ function cmdNew(
   given: string | undefined,
   opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean; transport?: string | undefined },
 ): void {
+  // Checked before anything touches the network, because the failure it
+  // prevents is a green tick over a Claude that never ran. The job runs
+  // `claude "$(cat -- promptPath)"`, so the whole prompt becomes ONE argv
+  // string, and Linux caps a single argument at 32 pages — about 128 KiB —
+  // failing execve with E2BIG. That failure happens inside the job script on
+  // the box, where the fallthrough to `exec bash -l` leaves a live session with
+  // no Claude in it while the laptop prints `✓ started`. `-p -` makes an
+  // oversized prompt easy to produce by accident (`… -p - < some-file`), so it
+  // is refused here, where somebody is present to read the reason. Found by
+  // GPT Sol.
+  if (opts.prompt !== undefined) {
+    const size = Buffer.byteLength(opts.prompt, "utf8");
+    if (size > MAX_PROMPT_BYTES) {
+      die(
+        `that prompt is ${Math.round(size / 1024)}KB, and the box can only take ${MAX_PROMPT_BYTES / 1024}KB ` +
+          `on a command line.\n  Put the long part in a file in the repo and ask Claude to read it instead.`,
+      );
+    }
+  }
+
   // The name is optional. Without one we use a placeholder — derived from the
   // prompt if there is one, otherwise a timestamp — and `ls` later replaces it
   // with Claude's own title for the work once Claude has decided what that is.
@@ -690,12 +769,24 @@ function cmdNew(
   // conversation's transcript later, and so how we read back its title.
   const sessionId = randomUUID();
 
-  const promptPath = `${REMOTE_WORK}/prompts/${name}.md`;
-  const jobPath = `${REMOTE_WORK}/jobs/${name}.sh`;
+  // Keyed by the session id, not by the name, and the name is only in there so
+  // a human reading the directory can tell what is what.
+  //
+  // Name-keyed paths made two concurrent `new` runs able to write each other's
+  // files: the existence check above is a look, not a reservation, so both can
+  // find the name free. Generated job scripts differ mainly by a same-length
+  // UUID, so process A's byte count validates process B's file, renames it into
+  // place and starts it — A's tmux environment then records session id A while
+  // the job actually runs session id B, and A prints a green tick with title
+  // discovery pointed permanently at the wrong transcript. Found by GPT Sol.
+  // Seconds in the default name do not fix it; a unique path does.
+  const promptPath = `${REMOTE_WORK}/prompts/${name}-${sessionId}.md`;
+  const jobPath = `${REMOTE_WORK}/jobs/${name}-${sessionId}.sh`;
   // The note is removed before the run, never after: one left by an earlier
   // session of the same name would otherwise be read back as this one's excuse.
   ssh(`mkdir -p ${REMOTE_WORK}/prompts ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
 
+  // Size already checked at the top, before any of this touched the network.
   if (opts.prompt) writeRemote(opts.prompt, promptPath);
 
   // Non-interactive ssh sources NEITHER .bashrc NOR .bash_profile, so the job

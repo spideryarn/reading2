@@ -38,7 +38,8 @@ export type Session = {
  * the mistake is unavailable — there is no target to get wrong, and it costs
  * one tmux invocation instead of one per session.
  */
-export const SESSION_FIELDS = "#{session_id}|#{session_created}|#{session_attached}|#{session_windows}";
+export const SESSION_FIELDS =
+  "#{session_id}|#{session_created}|#{session_attached}|#{session_windows}|#{session_name}";
 
 /** Printed last, and only if everything before it worked. See buildSessionScript. */
 export const SESSION_SENTINEL = "GJDOK";
@@ -64,6 +65,13 @@ export const SESSION_SENTINEL = "GJDOK";
  * in either would shift every field after it. Encoding them means the wire
  * format has no free text in it at all, so there is no input that can make the
  * parse quietly wrong. `base64 -w0` is GNU, which the Ubuntu box has.
+ *
+ * The name is pulled off the tmux line with parameter expansion rather than a
+ * second `tmux display` call, and it is LAST in the format for that reason:
+ * `\${rest#*|}` takes everything after the numeric fields, so a name that
+ * itself contains a `|` survives whole instead of shifting the record. Going
+ * back to `display -p -t` for it would reintroduce the target-pane trap this
+ * whole module exists because of.
  */
 export function buildSessionScript(): string {
   return `
@@ -74,17 +82,20 @@ export function buildSessionScript(): string {
     esac
     printf '%s' "$rows" | while IFS= read -r row; do
       [ -n "$row" ] || continue
-      sid=\${row%%|*}
+      sid=\${row%%|*};    rest=\${row#*|}
+      created=\${rest%%|*}; rest=\${rest#*|}
+      attached=\${rest%%|*}; rest=\${rest#*|}
+      windows=\${rest%%|*}
+      name=\${rest#*|}
       id=$(tmux show-environment -t "$sid" CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-)
       prov=$(tmux show-environment -t "$sid" GJD_PROVISIONAL 2>/dev/null | cut -d= -f2-)
       case "$prov" in 0|1) ;; *) prov=1 ;; esac
-      name=$(tmux display -p -t "$sid" '#{session_name}')
       title=""
       if [ -n "$id" ]; then
         f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
         [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
       fi
-      printf '%s|%s|%s|%s\\n' "$row" "$prov" \\
+      printf '%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
         "$(printf '%s' "$name" | base64 -w0)" "$(printf '%s' "$title" | base64 -w0)"
     done
     echo ${SESSION_SENTINEL}`;
@@ -140,16 +151,19 @@ export function parseSessionLine(line: string): Session | null {
   // A tmux timestamp is seconds since the epoch and is never 0 for a live
   // session. Number("") is 0 and Number(undefined) is NaN — both must fail here
   // rather than downstream, where they become a date.
+  // Digits only, checked as a STRING before it is a number: `Number("17e9")`
+  // is a perfectly good integer and tmux has never emitted one, so accepting it
+  // means accepting something that did not come from tmux.
+  if (!/^[1-9]\d*$/.test(created)) return null;
   const stamp = Number(created);
-  if (!Number.isInteger(stamp) || stamp <= 0) return null;
 
   if (attached !== "0" && attached !== "1") return null;
   // Junk here used to become `false`, and this flag decides whether `ls` may
   // rename a session out from under whoever named it.
   if (prov !== "0" && prov !== "1") return null;
 
+  if (!/^[1-9]\d*$/.test(windows)) return null;
   const windowCount = Number(windows);
-  if (!Number.isInteger(windowCount) || windowCount <= 0) return null;
 
   const name = decode(nameB64);
   const title = decode(titleB64);
