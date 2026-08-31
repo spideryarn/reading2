@@ -96,13 +96,31 @@ function ssh(remote: string, opts: { check?: boolean } = {}): string {
  * is 0x0, and mosh-server aborts on a zero-width client (`assertion s_width > 0`).
  * That failure looks exactly like a blocked firewall — two causes, one symptom.
  */
-function moshWorks(): boolean {
+function moshProbe(): { ok: boolean; detail: string } {
   const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${shq(HOST())} -- true`;
   const r = spawnSync("script", ["-q", "/dev/null", "sh", "-c", probe], {
     encoding: "utf8",
-    timeout: 6000,
+    // 15s, not 6: a first connection has to bootstrap over ssh before mosh's own
+    // handshake even starts, and a too-short timeout reports "UDP blocked" for
+    // what was only slowness. mosh itself retries forever on a blocked network,
+    // so some timeout is required.
+    timeout: 15_000,
   });
-  return r.status === 0;
+  if (r.status === 0) return { ok: true, detail: "" };
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !/^\s*$/.test(l))
+    .slice(-4)
+    .join("  ");
+  const detail = r.signal === "SIGTERM" || r.error?.message?.includes("ETIMEDOUT")
+    ? "timed out — mosh retries forever when UDP is blocked, so this is the usual shape of a blocked network"
+    : out || `exit ${r.status}`;
+  return { ok: false, detail };
+}
+
+function moshWorks(): boolean {
+  return moshProbe().ok;
 }
 
 /**
@@ -287,7 +305,15 @@ function cmdDoctor(): void {
   if (!localMosh) {
     console.log(red("✗ mosh: not installed on THIS Mac") + dim("  (brew install mosh)"));
   } else {
-    console.log(moshWorks() ? green("✓ mosh") : red("✗ mosh: installed both ends, but the probe failed (UDP blocked?)"));
+    const probe = moshProbe();
+    if (probe.ok) {
+      console.log(green("✓ mosh"));
+    } else {
+      // Say what happened rather than offering a theory. "UDP blocked?" was a
+      // guess, and a guess in an error message gets believed.
+      console.log(red("✗ mosh: installed both ends, but the probe failed"));
+      console.log(dim(`  ${probe.detail}`));
+    }
   }
 
   const status = ssh(`cloud-init status 2>/dev/null; true`, { check: false });
