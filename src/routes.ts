@@ -15,8 +15,10 @@
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
- *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile } — purpose is null without a slug
- *   PATCH  /api/reader           { profile: string | null } → the same shape
+ *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
+ *                                 — purpose is null without a slug
+ *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
+ *                                 → { profile, experimentalSince }, both always
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
@@ -2870,6 +2872,21 @@ async function resolveProfileParts(slug: string): Promise<ProfileParts> {
 }
 
 /**
+ * What `PATCH /api/reader` answers with — everything about the reader that this
+ * route can change, whichever of it the request actually changed.
+ *
+ * Not in src/types.ts, and not shared with the client: `useProfile` and the
+ * settings hook each read the one field they are about, and a shared interface
+ * would invite a component to take a dependency on the *other* one.
+ */
+interface ReaderState {
+  /** "About you", as stored — normalised, `null` for never-written. */
+  profile: string | null;
+  /** When experimental features were switched on, ISO 8601, or `null` for off. */
+  experimentalSince: string | null;
+}
+
+/**
  * The reader's global profile — "about you", the half that is true on every
  * article.
  *
@@ -2879,9 +2896,30 @@ async function resolveProfileParts(slug: string): Promise<ProfileParts> {
  * prompt string by `renderProfile` in src/profile.ts — which is the only place
  * that knows there were two.
  *
- * `profile: null` clears it. Absent is a 400 rather than a no-op: this body has
- * exactly one field, so a request without it is a request that meant something
- * else, and answering 200 to it would report a save that did not happen.
+ * `profile: null` clears it. A body naming **neither** field is a 400 rather
+ * than a no-op: a request that changes nothing is a request that meant
+ * something else, and answering 200 to it would report a save that did not
+ * happen.
+ *
+ * **The reply carries both fields whichever one you sent**, and that is the
+ * rule this route grew on 2026-08-31 rather than an accident of it. A shape
+ * that varies with the request is the one a client reads as "the other field is
+ * unset" — the same argument the `purpose` field on the GET above makes at
+ * length. The cost is one store read for the field you did not change.
+ *
+ * **One field per request, though — both at once is a 400.** The two writes are
+ * two store operations and there is no transaction across them, so a body
+ * carrying both could save the profile, fail on the switch, and answer with an
+ * error after half of it had committed. No client sends both (the two hooks own
+ * one field each), so refusing costs nothing today and removes a half-committed
+ * state that would be found the hard way. The day one needs to, the fix is a
+ * store operation that patches both — a single queued merge on the filesystem,
+ * a single upsert in Postgres — not a second sequential write here. GPT Sol's
+ * review of the built code, 2026-08-31.
+ *
+ * `experimental` is a **boolean on the wire and a date in the store**: the
+ * client says on or off, and what comes back is when it was switched on.
+ * docs/project/experimental-features.md.
  *
  * The **cap is enforced in the store, not here**. That is deliberate: this is
  * stored, so the rule has to hold for every writer rather than for this one
@@ -2890,17 +2928,42 @@ async function resolveProfileParts(slug: string): Promise<ProfileParts> {
  * gone: docs/plans/steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
-async function patchReader(body: unknown): Promise<{ profile: string | null }> {
+async function patchReader(body: unknown): Promise<ReaderState> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw httpError(400, "Expected a JSON object");
   }
   const patch = body as Record<string, unknown>;
-  if (!("profile" in patch)) throw httpError(400, "Nothing to change: expected profile");
+  const wantsProfile = "profile" in patch;
+  const wantsExperimental = "experimental" in patch;
+  if (!wantsProfile && !wantsExperimental) {
+    throw httpError(400, "Nothing to change: expected profile or experimental");
+  }
+  // See the header: two writes, no transaction across them.
+  if (wantsProfile && wantsExperimental) {
+    throw httpError(400, "Change one at a time: profile or experimental, not both");
+  }
   const profile = patch.profile;
-  if (profile !== null && typeof profile !== "string") {
+  if (wantsProfile && profile !== null && typeof profile !== "string") {
     throw httpError(400, "profile must be a string or null");
   }
-  return { profile: await readerStore.writeProfile(profile) };
+  const experimental = patch.experimental;
+  /* Strictly a boolean. Not truthiness: `"false"` and `0` are exactly the
+     values a client sends by mistake, and truthiness answers both of them
+     confidently and one of them backwards. */
+  if (wantsExperimental && typeof experimental !== "boolean") {
+    throw httpError(400, "experimental must be true or false");
+  }
+  /* Exactly one of these is a write and the other is a read, which is what the
+     both-at-once refusal above buys: there is no order here that can leave the
+     row half-changed. */
+  return {
+    profile: wantsProfile
+      ? await readerStore.writeProfile(profile as string | null)
+      : await readerStore.readProfile(),
+    experimentalSince: wantsExperimental
+      ? await readerStore.writeExperimental(experimental as boolean)
+      : await readerStore.readExperimental(),
+  };
 }
 
 /**
@@ -3631,6 +3694,13 @@ export async function serveAuthenticatedApi(
         at && isSlug(at)
           ? await resolveProfileParts(at)
           : { profile: await readerStore.readProfile(), purpose: null, purposeFailed: false };
+      /* **On every answer, with or without a slug**, because the switch is a
+         property of the reader and this is the reader's route. It costs one
+         extra row read on a route the article pages already fetch for
+         `hasProfile`, which is the trade that keeps the client from needing a
+         second endpoint — and a second endpoint is how two answers to "is it
+         on" come to disagree. docs/project/experimental-features.md. */
+      const experimentalSince = await readerStore.readExperimental();
       /* Asked of the *rendered* pair rather than of `parts.profile`, which is
          what makes a reader who has written only "why you're reading this one"
          count — the case this whole `?slug=` exists for. */
@@ -3646,6 +3716,11 @@ export async function serveAuthenticatedApi(
         purpose: normaliseProfileText(parts.purpose),
         purposeFailed: parts.purposeFailed,
         hasProfile: renderProfile(parts) !== null,
+        /* **The date, not a boolean beside it.** The client derives "on" from
+           this being non-null. Sending both would be two spellings of one fact,
+           free to disagree — and the one that disagreed would be the one a
+           feature gate read. */
+        experimentalSince,
       });
       return;
     }

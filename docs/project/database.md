@@ -13,6 +13,11 @@ not have, so the choice is a database or no deploy. The work is
 [postgres-migration.md](../plans/postgres-migration.md); there are 27 migrations under `drizzle/` and
 the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
 
+**Before you add a column or a table, read [sql.md](sql.md)** — the shape we want the schema to have,
+in Greg's words: real columns rather than JSON, foreign keys rather than good intentions, and a
+nullable timestamp wherever a boolean would throw away when it happened. This file is the operating
+manual; that one is the taste.
+
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
 
@@ -726,3 +731,4 @@ adapter uses `getDb()` and takes no `tx`.
 - [auth.md](auth.md) — why the auth provider and the database are the same decision
 - [library.md](library.md) — the homepage, and the one file a move to Postgres goes behind
 - [block-ids.md](block-ids.md) — the spine every table keys on
+- [sql.md](sql.md) — how we use SQL: columns over JSON, keys over conventions, dates over booleans

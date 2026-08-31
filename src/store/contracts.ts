@@ -693,6 +693,10 @@ export interface GlossaryLookupStore {
  * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
  * does the normalising, capping and atomic write; the Postgres adapter is
  * `reader_profiles`, one row per `owner_id`.
+ *
+ * **It holds the reader's settings too**, since 2026-08-31 — the switch below
+ * is on the same row rather than in a store of its own, for the reason
+ * src/db/schema.ts gives beside the column.
  */
 export interface ReaderStore {
   /** `null` when the reader has not written one yet — not a fault. */
@@ -706,6 +710,27 @@ export interface ReaderStore {
    * **Refused, not truncated**, past `MAX_PROFILE_CHARS` — see src/profile.ts.
    */
   writeProfile(text: string | null): Promise<string | null>;
+
+  /**
+   * **Experimental features: when they were switched on, or `null` for off.**
+   *
+   * An ISO 8601 string rather than a `Date`, because that is what crosses the
+   * wire and what the filesystem store holds; a `Date` here would mean one
+   * adapter parsing what the other stringifies for no reader's benefit.
+   * docs/project/experimental-features.md.
+   */
+  readExperimental(): Promise<string | null>;
+
+  /**
+   * Switch experimental features on or off, and answer with what is now stored.
+   *
+   * **`true` twice does not move the date.** An already-on switch keeps the
+   * date it has, so the value answers *since when* rather than *when did the
+   * client last send true* — which is the whole reason this is a timestamp and
+   * not a boolean. `false` clears it outright, so on-off-on is honestly a new
+   * date: the first spell ended.
+   */
+  writeExperimental(on: boolean): Promise<string | null>;
 }
 
 /**

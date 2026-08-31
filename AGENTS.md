@@ -32,7 +32,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `table-of-contents.md` · `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
-  `database.md`
+  `database.md` · `sql.md` (columns over JSON, keys over good intentions)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
@@ -43,7 +43,8 @@ listed here; the names under each are files in `docs/project/`.
   `review-mode.md` (say what you took from it, and find out) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
-  `reader-profile.md` · `dictation.md` (talking into a text box) ·
+  `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
+  `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
@@ -153,9 +154,10 @@ Before you run it, read the `Target:` line rather than the success line: which d
 actually reaches is not always the one on its command line, and both mistakes print
 `✓ migrations applied` —
 [database.md § `DATABASE_URL=… npm run db:migrate` does not do what it looks like](docs/project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
-Locally the bar is lower, but still ask before you wipe or overwrite data you did not create —
-`npm run db:reset` empties the database and puts nothing back
-([supabase-local.md](docs/project/supabase-local.md)).
+Locally the bar is lower: **apply a migration yourself** once you have read it and are confident it
+is sensible — additive, reversible in practice, not destructive — and say what you ran. Still ask
+before you wipe or overwrite data you did not create; `npm run db:reset` empties the database and
+puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 
 ### Working in a tree several agents share
 

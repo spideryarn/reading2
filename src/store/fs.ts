@@ -54,7 +54,12 @@ import {
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
 import { searchLibrary } from "../library-search.js";
 import { log } from "../log.js";
-import { loadReaderProfile, saveReaderProfile } from "../profile.js";
+import {
+  loadReaderExperimental,
+  loadReaderProfile,
+  saveReaderExperimental,
+  saveReaderProfile,
+} from "../profile.js";
 import {
   beginRun,
   currentSourceHash,
@@ -411,11 +416,13 @@ export const fsGlossaryLookupStore: GlossaryLookupStore = {
 };
 
 /**
- * The reader's global profile, on `data/reader.json`. Two functions, no
- * adaptation — src/profile.ts already does the normalising, capping and
- * atomic write, so there is nothing for this file to add.
+ * The reader's global profile and settings, on `data/reader.json`. Four
+ * functions, no adaptation — src/profile.ts already does the normalising,
+ * capping and atomic write, so there is nothing for this file to add.
  */
 export const fsReaderStore: ReaderStore = {
   readProfile: loadReaderProfile,
   writeProfile: saveReaderProfile,
+  readExperimental: loadReaderExperimental,
+  writeExperimental: saveReaderExperimental,
 };

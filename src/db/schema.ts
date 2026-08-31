@@ -1949,6 +1949,11 @@ export const glossaryLookups = spideryarn.table(
  * exactly one profile per reader, so there is nothing for a second key to
  * distinguish. `src/store/pg-reader.ts` upserts on it — see
  * src/store/pg-lookups.ts for the same shape used for the same reason.
+ *
+ * **It is the reader's row rather than only their prose**, which is what makes
+ * `experimental_since` below belong here rather than in a settings table of its
+ * own: one nullable column on a row that already exists, against a table, a
+ * foreign key and a join, for one switch. Revisit at three or four settings.
  */
 export const readerProfiles = spideryarn.table("reader_profiles", {
   /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
@@ -1956,6 +1961,27 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
   /** Absent (no row) and empty are treated the same by src/profile.ts; this
       column is simply `null` for "never written". */
   profile: text("profile"),
+  /**
+   * **Experimental features: null is off, a timestamp is on since then.**
+   *
+   * A nullable `timestamptz` rather than a `boolean not null default false`, at
+   * Greg's direction and for the reason docs/project/sql.md now states
+   * generally: the same storage carries strictly more of the truth. "On" and
+   * "on since Tuesday" are one column; "on" and a second `experimental_set_at`
+   * beside it are two columns that can disagree.
+   *
+   * Nullable also means **nothing to backfill**: every existing row is already
+   * off, because off is what the absence of a date means. (A `not null default
+   * false` would not have rewritten the table either — Postgres has stored a
+   * constant default as metadata since 11 — but it would have put a value in
+   * every reader's row to mean "nobody ever asked them".)
+   *
+   * `src/store/pg-reader.ts` keeps the *first* date across a re-assertion —
+   * turning it on when it is already on must not move it, or the value answers
+   * "when did the client last send true" instead of "since when".
+   * docs/project/experimental-features.md.
+   */
+  experimentalSince: timestamp("experimental_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

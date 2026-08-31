@@ -313,10 +313,25 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/** What `data/reader.json` holds. One field today, and room for the next. */
+/** What `data/reader.json` holds — the reader's prose, and their settings. */
 interface ReaderFile {
-  /** "About you", as the reader typed it. Absent means they have not written one. */
-  profile?: string;
+  /** "About you", as the reader typed it. Absent means they have not written one.
+
+      `| undefined` spelled out because `exactOptionalPropertyTypes` is on and
+      `patchReaderFile` below *passes* `undefined` to mean "drop this key" —
+      without it, clearing a field would not typecheck. Same as
+      src/converse.ts's `at`. */
+  profile?: string | undefined;
+  /**
+   * When experimental features were switched on, ISO 8601. Absent is off.
+   *
+   * **JSON here, a real `timestamptz` column in Postgres**, and that is not an
+   * inconsistency to tidy away: this store *is* a JSON file, and the rule
+   * docs/project/sql.md states is about the database, which has types to hold
+   * us to. The two halves agree on the fact and on its spelling — null/absent
+   * is off, a date is on since then — which is the part that has to match.
+   */
+  experimentalSince?: string | undefined;
 }
 
 /**
@@ -331,14 +346,111 @@ interface ReaderFile {
  * prompt off without it, with nothing anywhere saying so.
  */
 export async function loadReaderProfile(): Promise<string | null> {
+  return normaliseProfileText((await readReaderFile()).profile);
+}
+
+/**
+ * The whole file, or `{}` when there is not one yet.
+ *
+ * Split out on 2026-08-31, when a second field arrived: every reader and every
+ * writer below has to see **all** of it, and the write in particular. See
+ * `patchReaderFile`.
+ */
+async function readReaderFile(): Promise<ReaderFile> {
   try {
-    const parsed = parseJsonFrom<ReaderFile>(await readFile(fileFor(), "utf8"), "reader.json");
-    return normaliseProfileText(parsed.profile);
+    return parseJsonFrom<ReaderFile>(await readFile(fileFor(), "utf8"), "reader.json");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
     log("store").error(errorFields(err), "reader.json unreadable");
     throw err;
   }
+}
+
+/**
+ * Change some of the file and keep the rest.
+ *
+ * **Read-modify-write, inside the queue.** The previous writer built its whole
+ * body from its one argument — `next ? { profile: next } : {}` — which was
+ * correct while there was one field and silently deletes the other now there
+ * are two: saving a profile would have switched experimental features off, and
+ * both the save and the switch would have reported success.
+ * docs/reusable/silent-success.md.
+ *
+ * The read has to be **inside** `serialised` for the same reason the write is:
+ * read-then-write outside it is two operations with a gap, and a concurrent
+ * save landing in the gap is lost. This is one process — the Postgres adapter
+ * cannot rely on that, and does not: it upserts the single column instead
+ * (src/store/pg-reader.ts).
+ *
+ * Temp file and a rename, like src/shelf.ts: `rename` is atomic within a
+ * filesystem and `writeFile` over the live path is not.
+ *
+ * A key set to `undefined` is dropped by `JSON.stringify`, so "clear this
+ * field" and "leave the file without it" are the same act, which is what the
+ * absent-means-null contract above wants.
+ *
+ * **A file that will not parse stops a write**, because `readReaderFile` throws
+ * and this does not catch it. That is a change from the old writer, which
+ * overwrote whatever was there — and it is the right way round: the one thing in
+ * this file we cannot reconstruct is prose the reader typed, so a save that
+ * cannot see the current contents refuses rather than replacing them.
+ *
+ * **The patch is a function of the current contents**, not a fixed object, so
+ * that "switch this on unless it already is" is decided *inside* the queue.
+ * Deciding it outside is a read and a write with a gap between them, and two
+ * on-presses either side of the gap would both mint a date — moving a value
+ * whose entire job is to stay put.
+ */
+async function patchReaderFile(
+  /** What to change, computed from what is there — see the note on the race. */
+  patch: (current: ReaderFile) => Partial<ReaderFile>,
+): Promise<ReaderFile> {
+  return serialised(async () => {
+    const file = fileFor();
+    const current = await readReaderFile();
+    const merged: ReaderFile = { ...current, ...patch(current) };
+    await mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+    await rename(tmp, file);
+    return merged;
+  });
+}
+
+/**
+ * When experimental features were switched on, ISO 8601, or `null` for off —
+ * the filesystem half of `ReaderStore.readExperimental`.
+ *
+ * A stored value that is not a usable date reads as **off** rather than
+ * throwing, which is the opposite of what the profile above does with a broken
+ * file, and deliberately so: the profile is prose the reader wrote and losing
+ * it silently is the hazard, while this is a switch whose safe answer is the
+ * default. `Date.parse` returns `NaN` for anything it cannot read.
+ */
+export async function loadReaderExperimental(): Promise<string | null> {
+  return usableDate((await readReaderFile()).experimentalSince);
+}
+
+/** The stored string if it is a date we could act on, `null` otherwise. */
+function usableDate(raw: unknown): string | null {
+  return typeof raw === "string" && !Number.isNaN(Date.parse(raw)) ? raw : null;
+}
+
+/**
+ * Switch experimental features on or off; answer with what is now stored.
+ *
+ * **On when already on keeps the first date.** See
+ * `ReaderStore.writeExperimental` for why — the column answers "since when",
+ * and re-asserting it must not be able to move it. Off clears it, so on-off-on
+ * is a new date and says so.
+ */
+export async function saveReaderExperimental(on: boolean): Promise<string | null> {
+  const after = await patchReaderFile((current) => ({
+    experimentalSince: on
+      ? (usableDate(current.experimentalSince) ?? new Date().toISOString())
+      : undefined,
+  }));
+  return usableDate(after.experimentalSince);
 }
 
 /**
@@ -351,8 +463,11 @@ export async function loadReaderProfile(): Promise<string | null> {
  * the same argument about the summary steer; both are gone —
  * docs/plans/steer-becomes-the-profile.md.)
  *
- * Temp file and a rename, like src/shelf.ts: `rename` is atomic within a
- * filesystem and `writeFile` over the live path is not.
+ * **It writes one field and leaves the rest of the file alone** — see
+ * `patchReaderFile`, which is where the atomic rename now lives. Until
+ * 2026-08-31 this built the whole body from its own argument, which was right
+ * with one field in the file and would delete the reader's settings now there
+ * are two.
  */
 export async function saveReaderProfile(text: string | null): Promise<string | null> {
   const next = normaliseProfileText(text);
@@ -362,13 +477,8 @@ export async function saveReaderProfile(text: string | null): Promise<string | n
       { status: 400 },
     );
   }
-  return serialised(async () => {
-    const file = fileFor();
-    await mkdir(path.dirname(file), { recursive: true });
-    const body: ReaderFile = next ? { profile: next } : {};
-    const tmp = `${file}.tmp`;
-    await writeFile(tmp, `${JSON.stringify(body, null, 2)}\n`, "utf8");
-    await rename(tmp, file);
-    return next;
-  });
+  // `undefined` rather than `null` for "cleared": the key is dropped, which is
+  // the spelling `loadReaderProfile` reads back as never-written.
+  await patchReaderFile(() => ({ profile: next ?? undefined }));
+  return next;
 }

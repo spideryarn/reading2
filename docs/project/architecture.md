@@ -146,7 +146,9 @@ edit to each of the four stage files necessary: see
 ## Storage
 
 [database.md](database.md) covers this layout as a whole, and what changes when it becomes Supabase
-Postgres.
+Postgres. [sql.md](sql.md) is the shape we want that schema to have — real columns rather than JSON,
+foreign keys rather than good intentions, and a nullable timestamp wherever a boolean would throw
+away when it happened.
 
 Filesystem, one directory per article, no database:
 
