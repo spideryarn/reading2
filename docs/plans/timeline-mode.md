@@ -319,6 +319,45 @@ What is still validated, exactly as `src/ideas.ts` does it:
 - **the phrase's location** — the parser must find the temporal expression inside the occurrence, and
   records where. A phrase we cannot locate means no date, not a guessed one.
 
+### The claim was true of `when` and false of the artefact
+
+**Found by Sol's review of the built code, 2026-08-31, and demonstrated rather than argued.** This is
+the most important correction in the file, because it is the *same* failure as the original one, one
+field along, and this plan asserted it away.
+
+The claim was: *a date the article does not contain has no route into the artefact, because the only
+route to a date is the parser.* True of `when`. **False of the artefact**, because two other fields
+reach the reader:
+
+1. **`phrase` was the model's string.** The parser has no pattern for `"06/12/19"` or `"the summer of
+   twenty nineteen"`, so it calls them *no date* — and the row then prints the phrase in the date
+   column, which is the design. A model that invented either would have had it displayed verbatim.
+   **Fixed:** `phrase` is now located with `findQuote` and **sliced out of the block**, so it is the
+   article's characters like everything else. Verified on the real run: 18 of 18 phrases are
+   byte-identical substrings of the blocks they came from, so the fix cost nothing.
+
+2. **`label` was unread prose.** `"4 July: the package manager crashes"` reached the reader with a
+   date nothing had checked. **Fixed:** labels are run through `readWhen` itself — not a second date
+   scanner, which would have been a second answer to drift from the first. `noYearFrame` is
+   explicitly innocent there, or every article without a publication date would lose good events.
+
+The lesson generalises past this feature: **"the model cannot supply a date" is a property of one
+field, and has to be re-proved for every field that reaches the reader.** Anything the panel renders
+is a route.
+
+### An empty object parsed as an empty timeline
+
+Also from that review. `{"events": {}}` — an object where an array belongs — was written as a
+perfectly good empty timeline with every counter zero.
+
+**What hid it is that the empty case is legitimate.** Most articles have no chronology, this plan
+says so at length, and a zero-event artefact is the expected answer for them. So the one shape that
+should have been an error was indistinguishable from the commonest correct outcome. The outer shape
+is now read before anything else.
+
+That is [silent-success.md](../reusable/silent-success.md) in its purest form: the check agreed with
+the code because both had been told that empty is fine.
+
 ### Three outcomes, not two
 
 The review's point, and it holds: a rejected date must not render identically to a genuine absence.
@@ -465,53 +504,48 @@ work, and the questions for Greg)*
 
 ## The prompt
 
-Full text in the implementation. The parts that are decisions rather than wording.
+**Rewritten 2026-08-31 after Stage 2 built it.** Most of the first version was dead text: it gave
+the model rules about bounds, `extent` and `basis` that
+[the parser now owns](#the-model-supplies-evidence-code-supplies-dates), and a rule the model cannot
+break is not a rule — it is a field nothing reads.
 
-**The dating rule**, which is the whole feature and goes first, before the format, before the
-examples:
+What the model is actually asked for is short: **`label`, `order`, `modality`, `phrase`,
+`occurrences`.** No date, no bounds, no extent, no basis, no offsets.
 
-> Never write a date the article does not support. Leaving an event undated is a CORRECT answer and
-> is often the right one. Every date you give must come with `phrase` — the article's own words you
-> read it out of, copied exactly — and a date whose phrase is not in the text will be thrown away.
+**The phrase rule**, which is now the only temporal instruction and is load-bearing in a way the
+bound rules were not:
 
-**The "by" rule**, because five of the twenty-four expressions on the test article are this and a
-model will flatten every one of them:
+> Copy the article's temporal words exactly, **including the word in front of the date**. "by July 4"
+> and "July 4" mean different things — the first is a bound and the second is a point — and the word
+> that tells them apart is `by`. The same goes for "after", "during", "at some point on", "from … through",
+> "not until". Start the phrase at that word.
 
-> "by July 4" does not mean July 4. It means *at or before* July 4. "after July 12" means at or
-> after. **"not until July 13" is a LOWER bound, not an upper one** — it says the thing had not
-> happened yet, so it happened at or after the 13th. These are bounds, and you must not turn a bound
-> into a point, or flip one.
+The model cannot get a *bound* wrong any more, because the parser reads the cue out of the block. It
+can still get the **phrase boundaries** wrong, and clipping the cue off the front is the one way left
+to lose a bound. That is why this rule survives when the others did not.
 
-**The extent rule** — the one judgement still asked of the model, and the spike says it is good at
-it (correct on both showcase rows in both runs, never flipped):
+**The no-dates rule**, which the spike measured as reliably obeyed — nine relative structures per
+run, zero computed dates:
 
-> Two different things make an interval wide. "From July 13 through July 19" is an event that LASTS
-> six days — `extended`. "At some point on July 12" is an event that took a moment, and we do not know
-> which moment — `instant`, with the interval one day wide. Ask yourself: was the thing still
-> happening in the middle of the interval? If yes, `extended`.
-
-**The no-dates rule**, which replaced the arithmetic ban when
-[the parser took over](#the-model-supplies-evidence-code-supplies-dates) and is now the first thing
-the prompt says:
-
-> Do not give dates at all. Give the article's own words — "By the next morning, July 11" — copied
-> from the paragraph, and stop. We read the date out of them ourselves. If the article does not put a
-> time on something, say so; an undated event is a correct answer and often the right one.
-
-The spike is why this is safe rather than hopeful: asked to withhold arithmetic, the model withheld
-it completely — nine relative structures per run, zero computed dates.
-
-**The article-is-hedging rule**, which is row 16 and is the thing no other mode notices:
-
-> When the article hedges about its own timing — "at some point", "seem to show", "we think", "roughly"
-> — that hedge is part of the answer. Widen the interval and set `basis` accordingly. Do not report
-> the author's uncertainty as your own certainty.
+> Do not give dates. Give the article's own words and stop; we read the date out of them ourselves.
+> If the piece puts no time on something, say so — an undated event is a correct answer and often the
+> right one.
 
 **The label rule**, which is [the awkward thing](#say-the-awkward-thing-first) made into an
-instruction:
+instruction, and which is now **checked in code** rather than trusted:
 
 > `label` is a handle, not a retelling — under about ten words, enough to recognise the event you
 > already read about. Never write a label a reader could substitute for the paragraph.
+
+Stage 2's review found the ban relocating exactly where the glossary's lesson predicts: `"4 July:
+the package manager crashes"` reached the reader with a date in it that nothing had checked. Labels
+are now run through `readWhen` itself — not a second date scanner, which would have been a second
+answer to drift from the first.
+
+**The exclusions**, which the spike says hold: the piece's own dates — when it was published, when
+the interview happened, when the author spent three days reading — are not events. **All three
+stayed out on both runs**, against this plan's prediction that they would leak in *"because they are
+the most clearly-dated sentences in the article"*.
 
 ### Negative examples
 
