@@ -299,6 +299,62 @@ export function readArticle(
   return { article: new Readability(dom.window.document).parse(), notes };
 }
 
+/**
+ * An ISO-8601 date, optionally with a time, optionally with a zone.
+ *
+ * Deliberately narrow. Readability's `publishedTime` comes off
+ * `<meta property="article:published_time">` or JSON-LD `datePublished`, both of
+ * which are ISO by convention — but it is whatever the page said, and a page can
+ * say `"Last updated Tuesday"`.
+ */
+const ISO_DATE =
+  /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * Readability's `publishedTime`, kept if it is a date and dropped if it is prose.
+ *
+ * **Kept in the publisher's own zone rather than converted to UTC**, which is
+ * the one decision in this function. `new Date(s).toISOString()` looks like the
+ * obvious normalisation and it moves the calendar day: a piece published at 8pm
+ * on 31 December in New York becomes 1 January, and the calendar day is exactly
+ * what this field is for — Timeline reads the year off the front of it to date
+ * every "on July 7" the article never gives a year for
+ * (docs/plans/timeline-mode.md § The reference frame). A day that shifts by
+ * zone is a year that shifts at the boundary. The only normalising done here is
+ * of spelling, never of instant: a space separator becomes `T`, and `+0000`
+ * becomes `+00:00`.
+ *
+ * **An unrecognised string is dropped, not guessed at.** `Date.parse` will
+ * happily take `"July 7, 2026"` and interpret it in the *server's* local zone,
+ * so a date we cannot read as ISO is worse than no date: the no-frame path is
+ * already the common one and is honest, where a silently wrong frame would
+ * misdate every year-less event in the piece and look like a fact.
+ *
+ * Whatever comes back is the publisher's claim, not a verified one.
+ */
+export function publicationDate(raw: Maybe): string | undefined {
+  const m = ISO_DATE.exec((raw ?? "").trim());
+  if (!m) return undefined;
+  const [, day, time, zone] = m;
+  /* A well-formed shape is not a real date — `2026-02-31` matches the pattern.
+     Round-tripping the day through Date is the cheap check, and it is done on
+     the day alone (which parses as UTC, per the ECMAScript date-only rule) so
+     that no zone arithmetic can move it. */
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || !parsed.toISOString().startsWith(`${day}T`)) {
+    return undefined;
+  }
+  if (!time) return day;
+  /* `+0000` and `+00:00` are the same offset in two of ISO 8601's spellings,
+     and two spellings of one fact is a fingerprint that changes when nothing
+     did. The extended form is what everything else here writes. */
+  const offset =
+    zone && zone !== "Z" && !zone.includes(":")
+      ? `${zone.slice(0, 3)}:${zone.slice(3)}`
+      : zone;
+  return `${day}T${time}${offset ?? ""}`;
+}
+
 export async function runExtract(opts: {
   html: string;
   url: string;
@@ -347,6 +403,11 @@ export async function runExtract(opts: {
      is where the server looks (src/api.ts) and because a piece of provenance
      left in `output/` would be scratch. Written on every run: re-extracting is
      how you refresh a page, and the fetch date should follow. */
+  /* Readability has been handing `publishedTime` back all along and this stage
+     dropped it on the floor. It is the reference frame for every year-less date
+     in the piece — the field's note in src/types.ts says why it is not
+     `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
+  const publishedAt = publicationDate(article.publishedTime);
   const meta: Meta = {
     slug,
     title: article.title ?? slug,
@@ -355,6 +416,7 @@ export async function runExtract(opts: {
     ...(article.lang ? { lang: article.lang } : {}),
     url: opts.url,
     fetchedAt: new Date().toISOString(),
+    ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
   };
   const metaFile = path.join(opts.dataDir ?? path.join("data", slug), "meta.json");
