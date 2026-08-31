@@ -31,6 +31,7 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 
 interface Props {
@@ -56,6 +57,13 @@ export class AppBoundary extends Component<Props, State> {
        the file and line. */
     void info;
     captureClientFailure(error, { boundary: "app" });
+    /* And into the ring buffer, beside the requests that led here. Sentry gets
+       the throw with its stack; the buffer gets the *run-up* — which of the last
+       two hundred calls were slow, which 500'd, which never left — and that is
+       the half a reader filing a report can give us and a stack trace cannot.
+       The name only: `error.message` is not sent for the same reason it is not
+       rendered above. See src/web/log-buffer.ts § ClientErrorLogEntry. */
+    recordLog({ kind: "client-error", source: "boundary", name: error.name });
   }
 
   override render(): ReactNode {
