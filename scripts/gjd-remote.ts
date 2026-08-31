@@ -17,6 +17,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -167,18 +168,63 @@ function attach(name: string, force?: string): never {
   process.exit(r.status ?? 0);
 }
 
-type Session = { name: string; created: Date; attached: boolean; windows: number };
+type Session = {
+  name: string;
+  created: Date;
+  attached: boolean;
+  windows: number;
+  /** Claude Code's own generated title for the conversation, once it has one. */
+  title: string;
+  /** Whether the name is a placeholder we chose, and so may be replaced. */
+  provisional: boolean;
+};
+
+/** A tmux session name: lower-case, hyphenated, and never surprising to a shell. */
+function slugify(text: string, fallback: string): string {
+  let slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (slug.length > 40) {
+    // Cut back to a whole word rather than leaving a stump: a plain slice gave
+    // "remote-server-setup-for-claude-code-agen".
+    slug = slug.slice(0, 40);
+    const lastGap = slug.lastIndexOf("-");
+    if (lastGap > 10) slug = slug.slice(0, lastGap);
+  }
+  slug = slug.replace(/-+$/, "");
+  // Non-Latin titles slug to nothing, which is a fallback, not a failure.
+  return SLUG.test(slug) ? slug : fallback;
+}
+
+/** A placeholder name, used until Claude has decided what the work is about. */
+function provisionalName(prompt?: string): string {
+  const stamp = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "").replace(/(\d{4})(\d{4})/, "$1-$2");
+  // A prompt makes a better placeholder than a timestamp, and costs nothing.
+  return prompt ? slugify(prompt.split(/\s+/).slice(0, 5).join(" "), `s-${stamp}`) : `s-${stamp}`;
+}
 
 function sessions(): Session[] {
-  const out = ssh(
-    `tmux ls -F '#{session_name}|#{session_created}|#{session_attached}|#{session_windows}' 2>/dev/null || true`,
-  );
+  // One round trip. For each tmux session: its stats, the Claude session id we
+  // pinned into the tmux environment at launch, and the LAST ai-title line from
+  // that conversation's transcript — Claude rewrites it as the work becomes
+  // clearer, so the last one is the current one.
+  const remote = `
+    for s in $(tmux ls -F '#{session_name}' 2>/dev/null); do
+      stats=$(tmux display -p -t "=$s" '#{session_created}|#{session_attached}|#{session_windows}')
+      id=$(tmux show-environment -t "=$s" CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-)
+      prov=$(tmux show-environment -t "=$s" GJD_PROVISIONAL 2>/dev/null | cut -d= -f2-)
+      title=""
+      if [ -n "$id" ]; then
+        f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
+        [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
+      fi
+      printf '%s|%s|%s|%s\\n' "$s" "$stats" "$prov" "$title"
+    done`;
+  const out = ssh(remote, { check: false });
   if (!out) return [];
   return out.split("\n").flatMap((line) => {
-    const [name, created, attached, windows] = line.split("|");
-    // A malformed line would otherwise become a session literally named
-    // "undefined", which `resume` would then fail to attach to for reasons
-    // that look nothing like the cause.
+    const [name, created, attached, windows, prov, ...rest] = line.split("|");
     if (!name) return [];
     return [
       {
@@ -186,8 +232,33 @@ function sessions(): Session[] {
         created: new Date(Number(created) * 1000),
         attached: attached !== "0",
         windows: Number(windows),
+        title: rest.join("|").trim(),
+        provisional: prov === "1",
       },
     ];
+  });
+}
+
+/**
+ * Rename any placeholder-named session to Claude's own title for the work.
+ *
+ * Only placeholders: a name you chose is yours, and having a tool quietly
+ * rename it under you would be worse than a dull name. Once renamed, the
+ * session is marked no-longer-provisional so it settles rather than drifting
+ * every time Claude sharpens its title.
+ */
+function adoptTitles(list: Session[]): Session[] {
+  const taken = new Set(list.map((s) => s.name));
+  return list.map((s) => {
+    if (!s.provisional || !s.title) return s;
+    let want = slugify(s.title, s.name);
+    if (want === s.name || !SLUG.test(want)) return s;
+    for (let n = 2; taken.has(want); n++) want = `${slugify(s.title, s.name).slice(0, 37)}-${n}`;
+    ssh(`tmux rename-session -t =${s.name} ${want} && tmux set-environment -t =${want} GJD_PROVISIONAL 0`);
+    console.error(dim(`renamed ${s.name} → ${want}`));
+    taken.delete(s.name);
+    taken.add(want);
+    return { ...s, name: want, provisional: false };
   });
 }
 
@@ -201,17 +272,17 @@ function age(d: Date): string {
 // ---------------------------------------------------------------- commands
 
 function cmdLs(): void {
-  const list = sessions();
+  const list = adoptTitles(sessions());
   if (list.length === 0) {
-    console.log(dim("no sessions. `gjd-remote new <name>` to start one."));
+    console.log(dim("no sessions. `gjd-remote new` to start one."));
     return;
   }
   const w = Math.max(4, ...list.map((s) => s.name.length));
-  console.log(bold("NAME".padEnd(w) + "  AGE   WINDOWS  ATTACHED"));
+  console.log(bold("NAME".padEnd(w) + "  AGE   ATT  TITLE"));
   for (const s of list) {
     console.log(
-      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${String(s.windows).padEnd(7)}  ${
-        s.attached ? green("yes") : dim("no")
+      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ${
+        s.title ? s.title : dim("(no title yet)")
       }`,
     );
   }
@@ -227,9 +298,14 @@ function cmdLs(): void {
  * when prompts contain prose".
  */
 function cmdNew(
-  name: string,
+  given: string | undefined,
   opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean; transport?: string | undefined },
 ): void {
+  // The name is optional. Without one we use a placeholder — derived from the
+  // prompt if there is one, otherwise a timestamp — and `ls` later replaces it
+  // with Claude's own title for the work once Claude has decided what that is.
+  const provisional = !given;
+  const name = given ?? provisionalName(opts.prompt);
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
@@ -241,6 +317,10 @@ function cmdNew(
   // cd failing must not silently start Claude in the wrong tree.
   const dirOk = spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status === 0;
   if (!dirOk) die(`no such directory on the box: ${dir}`);
+
+  // Pin the session id rather than discovering it: it is how we find this
+  // conversation's transcript later, and so how we read back its title.
+  const sessionId = randomUUID();
 
   const promptPath = `/home/${USER}/gjd-remote/prompts/${name}.md`;
   const jobPath = `/home/${USER}/gjd-remote/jobs/${name}.sh`;
@@ -272,7 +352,16 @@ function cmdNew(
     `export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:$PATH"`,
     `export LANG=C.UTF-8`,
     `cd ${shq(dir)} || { echo "FATAL: cannot cd to ${dir}"; exec bash -l; }`,
-    opts.prompt ? `claude "$(cat -- ${promptPath})"` : `claude`,
+    // --name only when Greg chose one: passing a placeholder would stop Claude
+    // generating a title of its own, which is the thing we actually want.
+    [
+      "claude",
+      `--session-id ${sessionId}`,
+      provisional ? "" : `--name ${shq(name)}`,
+      opts.prompt ? `"$(cat -- ${promptPath})"` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     `echo`,
     `echo "--- claude exited; shell follows, session stays alive ---"`,
     `exec bash -l`,
@@ -283,7 +372,13 @@ function cmdNew(
   writeFileSync(jobLocal, job, "utf8");
   scp(jobLocal, jobPath);
   ssh(`chmod +x ${jobPath}`);
-  ssh(`tmux new-session -d -s ${name} ${shq(`bash ${jobPath}`)}`);
+  // The id and the provisional flag live in the tmux session's own environment,
+  // so they survive the rename that `ls` may later perform — a mapping file
+  // keyed by name would go stale at exactly that moment.
+  ssh(
+    `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
+      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${shq(`bash ${jobPath}`)}`,
+  );
 
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
   if (opts.attach) attach(name, opts.transport);
@@ -364,7 +459,8 @@ function cmdDoctor(): void {
 const HELP = `${bold("gjd-remote")} — Claude Code sessions on the Hetzner server
 
   gjd-remote                      list sessions
-  gjd-remote new <name>           start a session, and attach to it
+  gjd-remote new [name]           start a session, and attach to it
+                                  without a name, it takes Claude's own title
        -p, --prompt TEXT          give Claude a first prompt
        -d, --dir DIR              working directory on the box
            --no-attach            create it but stay here
@@ -402,9 +498,7 @@ function main(): void {
           ssh: { type: "boolean", default: false },
         },
       });
-      const name = positionals[0];
-      if (!name) die("gjd-remote new <name>");
-      return cmdNew(name, {
+      return cmdNew(positionals[0], {
         prompt: values.prompt,
         dir: values.dir,
         attach: !values["no-attach"],
