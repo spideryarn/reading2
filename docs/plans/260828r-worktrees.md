@@ -260,8 +260,16 @@ for the simpler reason that a plain install costs 4 seconds; see point 2 above.
 
 Three more answers, which set the shape of everything below.
 
-- **The trunk** — *"dev branch as trunk, promote to main"*. Agents pull and push `dev`; `main` stays
-  the production branch that Vercel deploys. [Step 0](#step-0-the-dev-branch-and-what-it-costs).
+- **The trunk** — decided, and confirmed on 2026-08-31 after the first draft of Step 0:
+
+  > Yes, `dev` should become the default branch for working from (i.e. this is what we initiate the
+  > new worktrees from, and this is where we always push to), and only use `main` when we want to
+  > push to it to trigger a deploy (as now).
+
+  So `dev` is the GitHub default branch as well as the working trunk — which settles the
+  [base-branch catch](#the-base-branch-catch) in favour of the first option, and makes
+  `worktree.baseRef: "fresh"` correct with no setting. `main` is written only by `npm run deploy`.
+  [Step 0](#step-0-the-dev-branch-and-what-it-costs).
 - **Which machines** — *"Both. Start with whichever is easiest. I would consider slightly different
   approaches for the different operating systems, but only if absolutely necessary."* So: one
   mechanism unless something forces a fork. Nothing does, now that the CoW cache is gone.
@@ -563,14 +571,18 @@ the class this repo writes postmortems about. Three ways to close it, in order o
 1. **Do not put paid pipeline output in a worktree.** Run `fetch`/`extract`/`toc` and the rest in the
    primary, and let worktrees hold code work only. Cheapest, and it also sidesteps failure row 10
    (two worktrees paying for the same artefact).
-2. **Do not copy `data/` into worktrees at all** — leave the directory empty and let a worktree that
-   genuinely needs an article fetch it. Then there is nothing valuable to lose.
+2. **Split the fixture corpus out and commit it**, leaving the rest ignored and disposable. This is
+   the one that dissolves the problem instead of stepping around it: once the corpus is tracked,
+   every removal guard can see it, because the blind spot is specifically about *ignored* files.
+   [Open decision 0e](#open-decisions).
 3. **Take creation out of Claude Code's hands** with a `WorktreeCreate` hook, so the worktrees carry
    no cleanup marker and the native sweep leaves them alone entirely, and our guarded sweep owns
    removal. This is the expensive option and it costs `.worktreeinclude` as well.
 
-Option 1 is a policy line in `AGENTS.md` and should be the v1 answer. It also means step 2's `data/`
-copy can be dropped, which removes the only per-OS line in the whole plan.
+**1 and 2 together, and 2 is doing the real work.** An earlier draft here said "leave `data/` empty
+in worktrees", which would have made `npm test` structurally incapable of passing in every worktree —
+see the correction under step 2 of [What is left to do](#what-is-left-to-do). What must not happen is
+relying on a guard that cannot see the thing it is guarding.
 
 ### Two repo scanners walk straight into `.claude/worktrees/`
 
@@ -1033,12 +1045,49 @@ Everything the native feature does not do, and nothing it does.
    it.
 6. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
-**`data/` is deliberately not copied in.** The original plan cloned it from the primary; the second
-review showed why that is a liability rather than a convenience — a worktree holding fresh pipeline
-output reads as clean to every check both our sweep and Claude Code's own make, because ignored files
-are invisible to `git status` without `--ignored`. So worktrees start with an empty `data/`, paid
-pipeline work happens in the primary, and a worktree that genuinely needs an article fetches it. That
-also removes the only per-OS line in the plan, since there is no longer anything to copy.
+**`data/` is the unresolved one, and "just leave it empty" is wrong.** An earlier version of this
+step said worktrees should start with an empty `data/`, on the reasoning that ignored files are
+invisible to every removal guard and so are unsafe to put there. The reasoning was right and the
+conclusion was not, because **the test suite cannot run without it**, and the repo already found this
+out the expensive way. [`scripts/deploy.ts:592`](../../scripts/deploy.ts) copies both `data/` and
+`output/` into the gate worktree, and says why:
+
+> `data/` and `output/` are one filesystem artefact store split across two directories, and copying
+> only the first made the `test` gate structurally incapable of passing: 13 failures and 202
+> cascade-skips at every commit, so `--force-gate=test` became the only way anyone deployed. An
+> override that is required every time is not an override.
+
+So a worktree with an empty `data/` is a worktree where `npm test` is meaningless — which is worse
+than the problem it was avoiding. The gate names a `fixtures` check for exactly this, because "a
+missing fixture and a broken commit are opposite diagnoses that produced identical output".
+
+What the numbers say, measured 2026-08-31:
+
+```
+  data/                                    64 MB   (of which _ai-calls.test.jsonl is 25 MB)
+  output/                                  11 MB
+  the slugs the tests actually name        18 MB   data + output together
+    …minus ball-lightning/raw.pdf           7 MB   that one PDF is 11.4 MB of the 18
+  .git, for scale                         116 MB
+```
+
+Tests name `example` (104 times), `article` (76), `constitution` (33), `consciousness` (11),
+`noema-mythology-of-conscious-ai` (6), and `greatwork` and `ball-lightning` once each. Everything
+else in `data/` — the other twenty-odd slugs, `_ai-calls.test.jsonl`, `_blobs`, `_jobs`, `_uploads`
+— is churn that no test asks for. **Nothing under `data/` or `output/` is tracked today**; both are
+gitignored outright.
+
+That is the shape of the answer: the directory is simultaneously too big to commit and too necessary
+to drop, *because one directory is doing two jobs*. Greg, 2026-08-31:
+
+> I'm really hoping that we can either make `data/` completely superfluous (i.e. not needed, no big
+> deal if it's missing), or if it really is important (e.g. for evals) then commit it to the repo.
+
+Both halves are achievable, but only by separating the **fixture corpus** the tests need from the
+**artefact store** the pipeline writes. See [open decision 0e](#open-decisions). Note that this is
+worth doing regardless of worktrees and regardless of the database move: stage 4 of
+[260831b-finish-the-database-move.md](260831b-finish-the-database-move.md) deletes the filesystem
+store, and the tests will still need a corpus from somewhere when it does.
 
 ### 3. Ports, as one unit
 
@@ -1157,9 +1206,17 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    the real auth project. Recommendation: `deploymentEnabled: {"dev": false}`. Confirm that is wanted
    rather than previews-with-their-own-database, which is a bigger piece of work.
 
-0b. **Change the GitHub default branch to `dev`?** Recommended, because it makes
-   `claude --worktree` branch from the trunk with no setting at all — `worktree.baseRef` cannot name
-   a branch. The alternative is `baseRef: "head"`. Vercel's production branch stays `main` either way.
+0b. ~~**Change the GitHub default branch to `dev`?**~~ **Decided 2026-08-31: yes.** `dev` is both the
+   GitHub default and the working trunk, so `worktree.baseRef` stays `"fresh"` and needs no setting.
+   Vercel's production branch stays `main`. Remember `git remote set-head origin -a` on every clone —
+   the local `origin/HEAD` does not follow the change, and today still points at `main`.
+
+0e. **How to split the fixture corpus from the artefact store** — the live question, and the one
+   Greg raised directly. `data/`+`output/` is 75 MB, the tests name about 18 MB of it, and 11.4 MB of
+   *that* is one PDF (`data/ball-lightning/raw.pdf`). Everything else is churn. The options are
+   sized under step 2 of [What is left to do](#what-is-left-to-do). Whatever is chosen wants doing
+   before worktrees, because a worktree that cannot run the tests honestly is not much use, and
+   before the database move's stage 4, which deletes the filesystem store out from under the suite.
 
 0c. **`.claude/worktrees/` inside Dropbox.** The plan is to leave worktrees where Claude Code puts
    them and set both Dropbox xattrs plus a `.gitignore` line. The alternative is a `WorktreeCreate`
