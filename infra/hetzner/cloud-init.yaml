@@ -321,6 +321,13 @@ write_files:
       systemctl restart ssh || systemctl restart sshd
 
       echo "=== verify ==="
+      # Again, and not redundantly: /run/sshd is a systemd RuntimeDirectory, so
+      # stopping ssh.service DELETES it -- and we restarted ssh two lines ago.
+      # Without this, `sshd -T` fails, both sshd assertions below report FAIL,
+      # and they do so on a box whose config is perfectly correct. That is
+      # exactly what happened: the config was right and the check was wrong.
+      mkdir -p /run/sshd
+
       # Every one of these has a way of silently not happening.
       fail=0
       check() { if eval "$2" >/dev/null 2>&1; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
@@ -335,8 +342,9 @@ write_files:
       check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'
       check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'
       check "sshd config valid"        'sshd -t'
-      check "password auth off"        'sshd -T | grep -qi "^passwordauthentication no"'
-      check "root login off"           'sshd -T | grep -qi "^permitrootlogin no"'
+      check "sshd -T runs"             'sshd -T >/dev/null 2>&1'
+      check "password auth off"        'sshd -T 2>/dev/null | grep -qi "^passwordauthentication no"'
+      check "root login off"           'sshd -T 2>/dev/null | grep -qi "^permitrootlogin no"'
       if [ "$fail" -ne 0 ]; then
         echo "PROVISION INCOMPLETE — see above" >&2
         exit 1
