@@ -647,6 +647,46 @@ seconds when Stage 2 needs it. The plan's Stage 0 done-criterion and a green tre
 until Stage 4, which is the same shape as the deliberate red from
 [`tests/db-step-constraint.test.ts`](#the-migration-is-not-optional-and-drizzle-will-not-write-it).
 
+### Fingerprint the real `null`, not the prompt's stub
+
+A trap that has already bitten `ideas` and `sketch`, and which Timeline is **more** exposed to than
+either, because an article with no metadata is not an edge case here — it is every article ingested
+before 2026-08-31, since the publication date only arrives on re-extraction.
+
+When there is no metadata, a stage that cites block ids builds a stub — `{ title: tree.slug }` — for
+the **prompt**, because `articleWithIds` needs a head to write its `TITLE:` line. It must then
+fingerprint the **real `null`**, not the stub.
+
+Hash the stub and you write a fingerprint the `stamp` can never reproduce, because `stamp` reads the
+real article and sees `null`. Every article without metadata then reports the stage stale **for
+ever**, on every run, with nothing red anywhere and nothing to look at.
+[`src/source-hash.ts`](../../src/source-hash.ts) § `articleWithIdsFingerprint` and
+`fallbackHeadTitle`; `tests/meta-fallback-fingerprint.test.ts` pins the property.
+
+**The caution attached to it is worth more than the rule.** The session that found this applied the
+mutation — hash the stub instead of the `null` — and **nothing went red**. The two produce an
+identical hash *today*, because `articleWithIdsFingerprint` resolves `fallbackHeadTitle` itself and
+the stub carries that one field and nothing else. The rule protects the day that stops being true.
+
+So a green suite is not evidence of getting this right; the only check is reading the call and seeing
+which value was passed. That is
+[silent-success.md](../reusable/silent-success.md) with a case where **even the mutation test agrees
+with the bug** — sharper than any example currently in that doc.
+
+### `stamp` and `run` read the article through different helpers
+
+Settled by the session that owns [`src/article-input.ts`](../../src/article-input.ts), and it is a
+deliberate asymmetry rather than an inconsistency:
+
+- **`run` takes `readArticle`**, which refuses. A stage cannot proceed without an article.
+- **`stamp` takes `tryReadArticle`**, which answers `null`. `stamp` asks *what stamp would this step
+  write if it ran right now*, and an unreadable article there means **we cannot tell** — which
+  `stepIsDone` turns into "not current, so re-run". That is the safe way to be wrong. A throw is a
+  failed job.
+
+Both share a body, so the stamp and the run read the same three coordinates: blocks and tree from
+`toc`, metadata from `extract`.
+
 ### Most articles are not chronological
 
 This is the mode that will most often have nothing to say, and it must say so plainly rather than
