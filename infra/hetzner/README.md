@@ -86,6 +86,38 @@ means removing both deliberately, in their own commit. Note that `prevent_destro
 whole-module `terraform destroy` fail at plan time rather than sparing the volume — that is the
 intended behaviour, not a bug to work around.
 
+## The live box
+
+Created 2026-08-31 in the personal `greg@gregdetre.com` account, project
+[15872845](https://console.hetzner.com/projects/15872845/dashboard) ("Spideryarn"), Falkenstein.
+
+Do not hardcode the address anywhere — it changes on every rebuild, and a stale IP in a doc is
+worse than none. Ask the state:
+
+```
+tofu -chdir=infra/hetzner output ssh
+tofu -chdir=infra/hetzner output vnc_tunnel
+```
+
+The token lives in `.env.local` as `HETZNER_CLOUD_API_TOKEN` (gitignored). Terraform wants it as
+`HCLOUD_TOKEN`:
+
+```
+export HCLOUD_TOKEN=$(python3 -c "import pathlib;[print(l.split('=',1)[1].strip().strip('\"').strip(\"'\")) for l in pathlib.Path('.env.local').read_text().splitlines() if l.strip().startswith('HETZNER_CLOUD_API_TOKEN=')]")
+```
+
+## An agent cannot SSH here
+
+**Claude Code's Bash tool has no outbound port 22** — not to this box, not to github.com. It reaches
+HTTPS fine, so `tofu`, `hcloud` and `curl` all work, and the block is easy to mistake for the
+server being down. It is not: check `hcloud server list` before believing otherwise.
+
+The practical consequence is that **an agent cannot verify its own provisioning, or operate the box
+directly.** Anything needing a shell on the server has to be run by Greg (the `!` prefix in Claude
+Code puts the output back in the conversation), or triggered from the box itself. Worth designing
+around rather than rediscovering: prefer things that report over HTTPS, or that Terraform can
+assert, over things that need someone to log in and look.
+
 ## mosh does not carry the tunnel
 
 mosh deliberately carries a terminal and nothing else — no port forwarding, no agent forwarding,
