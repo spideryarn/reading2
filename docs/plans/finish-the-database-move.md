@@ -208,9 +208,154 @@ No switchover, no behaviour change a reader would notice, and nothing that can b
 
 ### Stage 2 — every stage returns its product
 
-The ten unconverted steps stop writing their own files and return `{ parts, stamp }`, using `sketch`
-as the worked example. Still `fsStoreSession`, still deployable throughout. Includes D2's checkpoint
-callers — `pdf-read.ts` first, then `labels.ts`.
+The unconverted steps stop writing their own files and return their artefacts, using `sketch` as the
+worked example. Still `fsStoreSession`, still deployable throughout.
+
+**Split into three on 2026-08-31, once the shape of each was clear.** The plan said "the ten
+unconverted steps" as though they were one job. Seven of them are the same job done seven times; the
+other three are three different problems, and one of them is not a stage-2 problem at all.
+
+- **Stage 2a — the article-reading stages.** `arc`, `tweets`, `glossary`, `ideas`, `quotes`,
+  `sketch` and `assets`. Every one reads the article and writes something about it, and every one
+  took the identical change.
+- **Stage 2b — `blocks` and `toc`.** These *cut* the article rather than read it. `blocks` produces
+  two documents that are one file on disk and two columns in Postgres; `toc` produces three
+  artefacts in a deliberate order, and holds the checkpoint callers.
+- **Stage 2c — `fetch` and `extract`, which are one problem and not two.** These *acquire* the
+  article. `fetch` produces bytes as well as a manifest, and `extract` reads those bytes back, so
+  neither can move without the other.
+
+  **The blocker here is smaller than this plan and [transactional-stage-runner.md](transactional-stage-runner.md)
+  both assumed, and the reason is worth writing down: the seam was built months ago and neither
+  document noticed.** The claim was that the bytes have no `ArtifactKind`, so converting `fetch`
+  means changing what an artefact *is*. But `writeRaw` in [`src/fetch.ts`](../../src/fetch.ts)
+  **already** calls `storeRawSource` ([`src/store/blobs.ts`](../../src/store/blobs.ts)), which puts
+  the bytes in the content-addressed `sources` bucket through a store that is already selected
+  (`blobs-fs.ts` locally, `blobs-supabase.ts` deployed); `storedSha256` and `storedBytes` are already
+  fields on `RawManifest`; and `writeRawSource` in
+  [`artifacts-pg.ts`](../../src/store/artifacts-pg.ts) already turns that manifest into the
+  `raw_sources` row and the reference columns. **The bytes already have a home that is not the
+  filesystem.** So `fetch` returns `parts: { raw: manifest }` and simply stops writing three files,
+  and `extract` fetches the bytes by content address instead of by path.
+
+  What is genuinely open is the *read* side, and it is a security question rather than a plumbing
+  one. `SourceStore.readPdf` is deliberately PDF-only, because it serves bytes to a browser and an
+  HTML source served from our own origin is stored XSS
+  ([security.md](../project/security.md)). `extract` is not a route and sets no content type, so a
+  pipeline-side read of either kind is a different question — but it must be a *different method*,
+  not a widening of that one.
+
+  Two holes, and they are the same hole seen from both ends: `readRaw` answers `null` for articles
+  fetched before `raw.json` existed, and manifests written before 2026-08-27 carry no
+  `storedSha256`, so there is no object to read by address. Greg's decision 4 makes refetching those
+  the right answer rather than writing compatibility code — but only if the state is refused loudly
+  rather than skipped.
+
+#### Stage 2a — ✅ built 2026-08-31
+
+**It does not fix anything a reader can see, and I wrote the opposite here first.** The correction is
+worth keeping, because the mistake is the one this whole document is about. Stage 2a makes every
+article-reading stage *ask the store* instead of opening a path — but [`src/jobs.ts`](../../src/jobs.ts)
+still builds its session as `fsStoreSession({ artifacts: fsArtifacts })` (line 1048, and line 57
+imports it). On a deployment that store is rooted at the job-scoped `/tmp` a single-step job never
+wrote to. So Greg's tweet button fails exactly as often as before; it now fails with *"No blocks or
+tree for nagel-bat — run the toc step first"* instead of `ENOENT … blocks.json`, which is a better
+sentence and the same outage.
+
+`tests/late-step-on-a-cold-instance.test.ts` passes because the *test* hands the step a store rooted
+at a published copy while `ctx.dir` is empty — which is the deployed shape as it will be after stage
+3, and not as it is today. That asymmetry is the fixture's whole value and also the exact way it can
+be misread: **it proves the stage is ready for a store that can see the article, not that production
+has one.** Both halves were made to go red on the mutation that puts the directory read back.
+
+So what stage 2a buys is that stage 3 becomes one line — `pgStoreSession` at `src/jobs.ts:1048` —
+rather than one line plus seven stages that would still be reading the disk behind it.
+
+**And it is now clearer than ever that the reads cannot be moved on their own.** Seven stages ask
+`session.reads` *inside* `run`, where before only `blocks` and `assets` did. Point those reads at the
+published revision while the writes stay on the filesystem and every fresh ingest fails, because a
+fresh ingest has no published revision to read. That was Sol's first NO-SHIP and stage 2a widens it.
+
+**One seam, not seven conversions.** [`src/article-input.ts`](../../src/article-input.ts) holds
+`Article { slug, blocks, tree, meta }`, `readArticle` (refuses), `tryReadArticle` (answers `null`)
+and `readArticleFromDir` (the command lines and the eval harnesses, and the one filesystem read left
+in this half of the pipeline). Each generator takes `article: Article` where it took `dir: string`.
+
+The duplication was the smaller half of the problem. **Each stage's `stamp` already asked the store
+for the same three artefacts the stage then read off the disk** — so every one of them hashed what
+the store held and generated from what the disk held. On a laptop those are the same bytes; through a
+job-scoped `/tmp` they are not, and a stage that hashes one article and generates from another is a
+stale artefact reporting itself current for ever. Both halves now go through the one function, so
+they cannot disagree.
+
+- **`meta` stays nullable and the nullability is load-bearing.** `ideas` and `sketch` build a stub
+  `{ title: tree.slug }` for the *prompt* while fingerprinting the real `null`. Hashing the stub
+  writes a fingerprint the stamp can never reproduce — every article without metadata stale for ever,
+  looking healthy. That near-miss was caught once before; `tests/stage-stamp-agreement.test.ts` is
+  now the thing that catches it, and it was made to go red on exactly that mutation.
+- **`writeAssets` is gone** rather than left exported with no callers.
+
+#### Stage 2b — `blocks` and `toc`
+
+**`blocks` — ✅ built 2026-08-31.** `runBlocks({ slug, extractedHtml, previous })` takes the document
+as a string and returns the stamped HTML and the blocks; the step reads stage 2's document through
+`BLOCKS_INPUT_HTML` and returns `parts: { blocks: blocksArtefact(run.blocks), stampedHtml: run.html }`.
+It is **synchronous** now — there is nothing left to await, and an `async` wrapper would turn both
+refusals into rejected promises a `void`-ing caller could drop.
+
+- **`blocksArtefact`, never a bare `{ blocks }`.** Every writer of that artefact goes through it, and
+  the stamp it adds is what lets a reader tell blocks cleaned by the current sanitiser policy from
+  blocks cleaned by nothing. The bare version compiles, writes, and makes every article read back as
+  *predates the sanitiser* for ever.
+- **The hole the conversion opened, and the reason it is worth writing down.** A `runBlocks` that
+  returned the **input** HTML where the stamped HTML belongs compiles cleanly, and until 2026-08-31
+  nothing in the repository caught it. `blocksMatchTheirHtml` does notice — but only at the *next*
+  skip check, and its verdict is "not current", so the step simply re-runs and writes the same wrong
+  pair again, for ever. **The Postgres artefact suite passed under that mutation**, because
+  `write(… stampedHtml: run.html)` and reading the blocks back cannot see it. Two tests at the seam
+  now catch it, and both were watched failing. That is the shape this whole migration keeps meeting:
+  the guard exists, the guard is right, and the guard is downstream of the damage.
+
+**`toc` — ✅ built 2026-08-31.** `generateToc({ blocks, slug, checkpointDir? })` returns
+`{ parts: { tree, labels, blocks }, inputHash, clearCheckpoint }`, and the step writes all three in
+one `parts` map with `stamp: { inputHash: run.inputHash }`.
+
+- **The write order is gone, and the reason written beside it was wrong.** Labels, then blocks, then
+  tree last was called crash-safety in both the code and this plan. The real mechanism was narrower:
+  `stepIsDone` reads *file exists* as *step done*, and `writeFile` truncates before it writes. One
+  `parts` map removes both halves, and the ordering now survives only in `main()`, which really does
+  write three files. The comments that asserted the old reason are rewritten rather than left.
+- **`inputHash` and nothing else in the stamp, and this was tested rather than reasoned about.**
+  `STAMP_SOURCE.toc` is `"labels"`, so whatever the step passes is compared against the labels
+  file's own stamp by `assertStampAgrees`. `run.inputHash` *is* `labels.sourceHash`, so it cannot
+  clash. A `promptVersion` beside it **throws** — `toc/2` against `labels/1` — and that throw would
+  fail every ingest. The hash comes back from the stage rather than being recomputed in the step,
+  because a second computation of "the blocks hash" is how the two sides come to disagree;
+  `generateToc` asserts at its own seam that `labels.sourceHash === hashBlocks(parts.blocks.blocks)`.
+- **`clearCheckpoint` is returned and the pipeline deliberately does not call it.** It should happen
+  once the artefacts are *stored*, which is `StoreSession.commit`, after `run` has returned. Calling
+  it inside `run` would discard the checkpoint while the write could still fail, and the next run
+  would re-buy a whole label pass. Leaving it costs a file the next run either reuses correctly or
+  ignores. The command line, which stores the artefacts itself, does call it — in the right order.
+- **The checkpoint stays on the filesystem, behind an explicit `checkpointDir`.** `CheckpointStore`
+  has no `delete`, on purpose: its header says landing D drops `runId` and `clearCheckpoint` along
+  with the one-file-per-run format, and it keys on an `articleId` this stage is not given.
+  Redirecting half of it now would silently stop the next run resuming and re-buy a paid call per
+  batch. **So D2's `labels.ts` item is not done, and is not pretended to be.**
+- **One thing the agent's report and its code disagreed about**, caught by the typechecker rather
+  than by reading: the report described `TocRun.inputHash` in detail and the field was in neither
+  the interface nor the return. `stamp: { inputHash: undefined }` records nothing, `toc` carries
+  `NO_INPUT_HASH`, and `reasonsNotToPublish` then refuses every article. A report is evidence about
+  what an agent meant, not about what is in the file.
+
+**`extractedHtml` and `stampedHtml` stay one file on the filesystem, and that is a deliberate
+non-decision.** `PATHS` in [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts) maps both to
+`at.htmlFile`, which is why `blocksMatchTheirHtml` cannot fail there however carefully it is written
+— it compares stage 3's own output against stage 3's own blocks. Splitting the two paths would make
+the guard real on a laptop, and it was considered and passed over: it would make every existing
+article read as un-extracted, break the fixtures the corpus and 76 test files are built on, and be
+deleted again at stage 4 when the filesystem store goes. The guard becomes real in Postgres, where
+the columns really are separate, and that is stage 3.
 
 **On `src/toc.ts`.** `delete-the-importer.md` describes this wrongly and dangerously: it calls it a
 three-line deletion of `clearCheckpoint()` at a stale line number. The call is at **`src/toc.ts:1285`**

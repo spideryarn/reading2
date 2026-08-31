@@ -176,7 +176,7 @@ import { EMBEDDING_MODEL } from "./embeddings.js";
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
  * (src/toc.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
- * src/summarise.ts) pass this straight to `messages.create`.
+ * src/glossary.ts) pass this straight to `messages.create`.
  *
  * They all ask for `thinking: { type: "adaptive" }`, which is the only on-mode
  * Sonnet 5 accepts, so moving down from Opus needed no other change. The
@@ -192,7 +192,7 @@ export const CAPABLE_MODEL = "claude-sonnet-5";
    On the wire, a model id is an **address**: it has to say which gateway, so it
    carries `anthropic/`. In a stored artefact's `generator` field it is a
    **name**: it says which model wrote this, and that is what every staleness
-   check compares against — `glossary.ts`, `summarise.ts` and `tweets.ts` each
+   check compares against — `glossary.ts` and `tweets.ts` each
    have a `generator !== CAPABLE_MODEL` line that marks work stale and pays to
    redo it.
 
@@ -303,7 +303,6 @@ export type Task =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summarise"
   | "ideas"
   /* The lines worth keeping, in the article's own words —
      docs/project/quotes.md. Article-reading like `glossary`, and like
@@ -403,7 +402,7 @@ export type AiJob = Task | NonTaskAiJob | EvalAiJob;
  *   gistable block, every article — so it is where the tenth-of-the-price would
  *   actually be felt. It is also the core of the product: the gist columns *are*
  *   granularity zoom. Cheapest to move, most expensive to get wrong.
- * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `summarise`, `toc`** all
+ * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `toc`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
  */
@@ -413,7 +412,6 @@ export const TASK_TIER: Record<Task, Tier> = {
   arc: "capable",
   tweets: "capable",
   glossary: "capable",
-  summarise: "capable",
   ideas: "capable",
   quotes: "capable",
   sketch: "capable",
@@ -499,7 +497,6 @@ export const TASK_WIRE: Record<Task, Wire> = {
   arc: "messages",
   tweets: "messages",
   glossary: "messages",
-  summarise: "messages",
   ideas: "messages",
   quotes: "messages",
   sketch: "messages",
@@ -566,7 +563,6 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   arc: null,
   tweets: null,
   glossary: null,
-  summarise: null,
   ideas: null,
   quotes: null,
   sketch: null,
@@ -884,7 +880,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  * `ideas` sends `articleWithIds`, because every occurrence it returns is a block
  * id and the ids therefore have to be on the page (src/article-prompt.ts says
  * why the other four deliberately omit them). So it can never share a prefix
- * with arc, tweets, glossary or summary however its effort is set — and
+ * with arc, tweets or glossary however its effort is set — and
  * `sharesArticleCache` in src/pipeline.ts reads both tables rather than the one,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
  *

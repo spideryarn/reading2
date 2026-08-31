@@ -499,20 +499,34 @@ to be told"* lesson from the R2/R3 build, applied in advance rather than afterwa
 is item **F** in [opening-an-article-before-the-toc.md](../research/opening-an-article-before-the-toc.md)
 — stage 3 promoting sentence fragments to blocks — and it is not this stage's to make.
 
-### Three files, and what survives a failed run
+### Three artefacts, and what survives a failed run
 
-Stage 4 writes `tree.json`, `blocks.json` and `labels.json`, each beside its target and renamed into
-place, the tree last. Ordering alone was not enough: `writeFile` truncates before it has anything to
-put there, and *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is
-done", so a kill mid-write left a present, truncated tree that a retry skipped.
+Stage 4 produces the tree, the blocks and the labels, and **hands all three back in one object**
+rather than writing them: `generateToc` returns `TocArtefacts`, and its caller stores them together
+in a single write ([`src/toc.ts`](../../src/toc.ts),
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § Stage 2). All three are
+required by the type, so a caller cannot store a tree and skip its labels.
 
-`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because
-atomic writes give us "whole or not there" and not "still true". A complete set of labels for an
-article that has since been re-extracted, or re-structured, looks exactly like a current one. The
-structure hash is the one that earns its place: boundaries can move without a single block changing,
-so it is taken over every node's range, parent, title and gist rather than over the outline the
-prompt shows the model, which is titles alone. **Nothing reads it yet** — the `toc` step still has no
-freshness check — so today it is evidence in the file rather than a guard.
+It used to write the three files itself, in a fixed order with the tree last. That ordering was
+about three *separate* writes: `writeFile` truncates before it has anything to put there, and
+*existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
+kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
+both halves of that, and the ordering survives only in `npm run toc`'s own `main()`, which really
+does write three files into a directory.
+
+`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
+whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
+for an article that has since been re-extracted, or re-structured, looks exactly like a current one.
+The structure hash is the one that earns its place: boundaries can move without a single block
+changing, so it is taken over every node's range, parent, title and gist rather than over the outline
+the prompt shows the model, which is titles alone. **Nothing reads the structure hash yet** — the
+`toc` step still has no freshness check — so today it is evidence in the file rather than a guard.
+
+`sourceHash` is not in that category. `STAMP_SOURCE` points stage 4's stamp at `labels.json` rather
+than at the tree, which carries no such field, so that hash is what the store compares a declared
+stamp against and what `generateToc` reports as the step's input hash. It has to be recorded: the
+publish guard compares it with the stored blocks and refuses to publish an article whose tree was
+built from something else.
 
 While the batches are running, each one's labels are appended to **`labels-progress.json`** as it
 lands. That is working state, not an artefact, which is why it is not `labels.json`: a partial

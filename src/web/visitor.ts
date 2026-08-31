@@ -22,7 +22,7 @@
  * distinguishable.
  *
  * **Since slice 1b the commonest answer is `null`.** A visitor gets the
- * glossary, the summaries, the ideas and the tweet thread, so the question this
+ * glossary, the ideas, the quotes and the tweet thread, so the question this
  * file answers is no longer *which excuse* but *is there anything in the way at
  * all* — and for three of the eight modes, on an article that has them, there
  * is not.
@@ -91,7 +91,6 @@ function artefactGap(has: keyof PublicArtefacts, available: PublicArtefacts): Vi
  */
 const NOUN: Record<keyof PublicArtefacts, string> = {
   arc: "an arc through the argument",
-  summary: "a summary",
   glossary: "a glossary",
   ideas: "a list of ideas",
   quotes: "a set of quotes",
@@ -118,7 +117,6 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
 
 /** Which of the flags each artefact mode asks about. */
 const ARTEFACT: Partial<Record<Mode, keyof PublicArtefacts>> = {
-  summary: "summary",
   glossary: "glossary",
   ideas: "ideas",
   quotes: "quotes",
@@ -145,6 +143,26 @@ const COSTS: Partial<Record<Mode, string>> = {
    * discovered later. 2026-08-28.
    */
   diagram: "Diagram",
+  /**
+   * **Timeline is owners-only in v1, stated rather than defaulted into.**
+   *
+   * The fall-through below would have made it owners-only anyway, which is
+   * exactly why it is named here: a mode that is private because nobody listed
+   * it and a mode that is private because somebody decided so are
+   * indistinguishable in the code, and the second is what this is. Greg,
+   * 2026-08-31: *"it would be nice to have the option for this to be
+   * Public-readable, but that could be a follow-up"* — and doing it properly
+   * wants a general answer for all the modes rather than a fifth hand-written
+   * table, so it is a separate piece of work.
+   *
+   * It is in `COSTS` rather than `ARTEFACT` because there is no
+   * `PublicArtefacts` flag to read: a shared payload carries no timeline at
+   * all. The sentence a visitor gets is therefore *this belongs to whoever
+   * added the article*, which is true, rather than *nobody has built one*,
+   * which we cannot know from here.
+   * docs/plans/timeline-mode.md § Making a mode public-readable.
+   */
+  timeline: "Timeline",
 };
 
 /**
@@ -172,6 +190,13 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
      payload the visitor already holds, and reaches no artefact at all: without
      arc.json it simply skips the arc rung. */
   if (mode === "outline") return null;
+
+  /* And summary, since 2026-08-31. It used to be an `ARTEFACT` mode, gated on a
+     `summary.json` a visitor's payload might not carry. The generated ladder is
+     gone (docs/plans/gist-only-summaries.md) and what the panel draws now is the
+     tree's own gists, which are in the payload the visitor already holds — so
+     there is nothing left to be missing. */
+  if (mode === "summary") return null;
 
   const costs = COSTS[mode];
   if (costs) return { kind: "owners-only", feature: costs };
@@ -205,7 +230,7 @@ export const COMMENTS_GAP: VisitorGap = { kind: "readers-own", plural: "Comments
  * a function and not a constant: a mode added next month is marked for a
  * visitor whether or not whoever adds it remembers this file. And it is derived
  * from the flags too, so an artefact this piece **has** is not marked at all —
- * since slice 1b a visitor can open the glossary, the summaries and the ideas,
+ * since slice 1b a visitor can open the glossary, the quotes and the ideas,
  * and a dimmed button over a band that works would be the worst of both. That is the same
  * rule the admin check in src/routes.ts states about itself — *"so a route
  * added later is behind this check whether or not whoever adds it remembers,

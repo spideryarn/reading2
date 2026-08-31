@@ -163,6 +163,14 @@ export const REVISION_CARRY_POLICY: Record<
   siteName: "carry",
   lang: "carry",
   excerpt: "carry",
+  /* Carries with the rest of stage 2's metadata, and `metaColumns` in
+     src/store/artifacts-pg.ts writes `?? null` so a re-extraction that finds no
+     date clears it rather than leaving this one behind. Note this is **not** the
+     `published_at` the carry-policy header warns about — that one is a
+     hypothetical column recording when *we* published a revision, and it would
+     be actively harmful carried. This is the publisher's own claim about their
+     article, which is exactly the kind of fact stage 2's other columns carry. */
+  publishedAt: "carry",
   note: "carry",
 
   // Stage 1: what was fetched, and what came back.
@@ -243,6 +251,11 @@ export const REVISION_CARRY_POLICY: Record<
      the panel says so — which is the same bargain the sketch strikes below:
      something to look at, honestly labelled, until the step re-runs. */
   quotes: "carry",
+  /* **Carries although nothing reads it.** The column is retired
+     (docs/plans/gist-only-summaries.md) and left in place with real readers'
+     summaries in it; `"drop"` here would quietly delete them on the next
+     re-extraction, which is the one outcome keeping the column was meant to
+     prevent. */
   summary: "carry",
   /* Carries like its four neighbours, and its staleness is answered the same
      way: `sourceHash` on the artefact against the blocks and tree now, computed
@@ -535,8 +548,8 @@ export interface BeginRevisionResult {
  * Start a new draft revision, as a copy of whatever is published now.
  *
  * One transaction, from the article lock to the last copied row. That is a
- * requirement rather than tidiness: `toc`, `arc`, `tweets`, `glossary` and
- * `summary` update the *published* revision in place, so a copy spread over
+ * requirement rather than tidiness: `toc`, `arc`, `tweets` and `glossary`
+ * update the *published* revision in place, so a copy spread over
  * three transactions could take the blocks from before an in-place update and
  * the columns from after it.
  *
@@ -856,7 +869,7 @@ export async function openOrBeginJobDraft(opts: {
  *
  * **`inputHash` is the step's own idea of its input, not one global hash.** The
  * plan assumed `hashBlocks` was the right stamp everywhere; it is not. `arc`,
- * `tweets`, `glossary` and `summary` all read the *tree* as well as the blocks,
+ * `tweets` and `glossary` all read the *tree* as well as the blocks,
  * and src/labels.ts already keeps a separate `structureHash` precisely because
  * section boundaries can move without a single block changing. Making each
  * step's hash the right one belongs to that step's owner; this function does not

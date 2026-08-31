@@ -28,7 +28,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { blocksArtefact, runBlocks } from "../src/blocks.js";
+import { blocksArtefact } from "../src/blocks.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
 import { loadArticle } from "../src/api.js";
@@ -51,14 +51,34 @@ const dirtyBlock = (): Block => ({
   gistable: true,
 });
 
+/**
+ * **These run the real command line, in a subprocess, and that is new.**
+ *
+ * Until 2026-08-31 `runBlocks` read a file and wrote two, so calling it from a
+ * test exercised the writing. It no longer writes anything — the step hands its
+ * return value to the artefact store, and `main()` in src/blocks.ts is the one
+ * caller left that touches a disk. So a test that calls `runBlocks` can no
+ * longer say anything at all about what lands in a `blocks.json`, which is what
+ * this whole file is about; it would pass just as well against a `main()` that
+ * had quietly dropped `blocksArtefact`.
+ *
+ * `npx tsx src/blocks.ts`, the way tests/validate-tree.test.ts runs its own
+ * command. Slower, and the only version that is about the claim.
+ */
 describe("the stamp stage 3 writes", () => {
+  const runCli = async (args: string[]) => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    return promisify(execFile)("npx", ["tsx", "src/blocks.ts", ...args]);
+  };
+
   it("puts the sanitiser version it used into blocks.json", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
     try {
       const htmlFile = path.join(dir, "a.html");
       await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
-      const { jsonFile } = await runBlocks({ htmlFile, previous: undefined });
-      const written = JSON.parse(await readFile(jsonFile, "utf8"));
+      await runCli([htmlFile]);
+      const written = JSON.parse(await readFile(path.join(dir, "a.blocks.json"), "utf8"));
 
       expect(written.sanitizer).toBe(SANITIZER_VERSION);
       // And it really did sanitise, so the stamp is a claim about this file
@@ -67,7 +87,7 @@ describe("the stamp stage 3 writes", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   it("is how an artefact from before the stamp becomes stamped", async () => {
     // The migration, and there is deliberately no other one: `npm run blocks`
@@ -80,14 +100,18 @@ describe("the stamp stage 3 writes", () => {
       await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
       await writeFile(jsonFile, JSON.stringify({ blocks: [dirtyBlock()] }));
 
-      await runBlocks({ htmlFile, jsonFile, previous: [dirtyBlock()] });
+      /* The unstamped file *is* the baseline the CLI reads, which is what makes
+         this the migration rather than a fresh ingest: the block keeps its id
+         (it is in the HTML too) and the file comes back stamped. */
+      await runCli([htmlFile, jsonFile]);
       const written = JSON.parse(await readFile(jsonFile, "utf8"));
       expect(written.sanitizer).toBe(SANITIZER_VERSION);
+      expect(written.blocks[0].id).toBe("spya-k3m9qt");
       expect(JSON.stringify(written.blocks)).not.toContain("onerror");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
 
 describe("every writer of a blocks.json stamps it", () => {
@@ -124,11 +148,31 @@ describe("every writer of a blocks.json stamps it", () => {
       f.endsWith(".ts"),
     );
 
+    /**
+     * **What counts as stamped, and why the third alternative is not a
+     * loophole.**
+     *
+     * `blocksArtefact(...)` and a literal `sanitizer:` are the two ways to
+     * build the payload at the write itself. `parts.blocks` is the third, and
+     * it arrived when stage 4 stopped writing its own files (2026-08-31): the
+     * stage returns `TocArtefacts`, whose `blocks` field is typed
+     * `ReturnType<typeof blocksArtefact>`, and `main()` writes that field out.
+     * The value provably went through `blocksArtefact` — one function away, in
+     * the same file — and a line-by-line reading of the source cannot see it.
+     *
+     * It is not a hole, because the *type* is what closes it: a bare `Block[]`
+     * will not assign to that field, and the only other way to satisfy it is an
+     * object literal carrying `sanitizer`, which this expression already
+     * catches wherever it is written. What would be a hole is a field named
+     * `parts.blocks` on something that is not `TocArtefacts` — so if a second
+     * one is ever introduced, narrow this.
+     */
+    const stamped = /blocksArtefact|sanitizer|parts\.blocks/;
     const unstamped: string[] = [];
     for (const file of files) {
       const source = readFileSync(new URL(file, root), "utf8");
       for (const line of writers(source)) {
-        if (!/blocksArtefact|sanitizer/.test(line)) unstamped.push(`src/${file}: ${line.trim()}`);
+        if (!stamped.test(line)) unstamped.push(`src/${file}: ${line.trim()}`);
       }
     }
 

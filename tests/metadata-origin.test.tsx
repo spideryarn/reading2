@@ -151,7 +151,6 @@ async function visitor(meta: Partial<Meta>) {
           arc: false,
           tweets: false,
           glossary: false,
-          summary: false,
           ideas: false,
           quotes: false,
         },

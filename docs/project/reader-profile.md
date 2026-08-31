@@ -81,7 +81,7 @@ overweight this and give a really distorted summary"*. Read clause by clause aga
 three of its five rules already had an equivalent and **two did not**: *never add, sharpen, or bend a
 claim to fit*, and *keep the piece's own proportions* — and there was nothing about proportions in
 `PROFILE_RULES` at all. Those two moved rather than going in the bin — **into
-[`src/summarise.ts`](../../src/summarise.ts)'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
+`src/summarise.ts`'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
 distinction was a correction rather than a preference. The shared string reaches *seven* prompts, and
 *"if the article does not say it, it does not go in"* is exactly backwards for two of them: `ideas`
 defines its more valuable half as what the piece *never states*, and a glossary entry's `background`

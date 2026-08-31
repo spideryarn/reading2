@@ -219,7 +219,6 @@ export function Details({ entry }: { entry: LibraryEntry }) {
     entry.has.arc && "arc",
     entry.has.tweets && "thread",
     entry.has.glossary && "glossary",
-    entry.has.summary && "summaries",
   ].filter(Boolean) as string[];
 
   const rows: [string, string][] = [

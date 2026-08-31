@@ -3,7 +3,7 @@
 Everything the reader sees in the browser. The page has **three regions**: the **spine** (where you
 are in the article), the **prose** (what you are reading), and between them a **band** belonging to
 whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
-ideas, search, diagram and chat take turns in.
+ideas, quotes, search, diagram and chat take turns in.
 
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
 of compression, down the page for position and across for detail. Read that first.
@@ -39,11 +39,14 @@ of compression, down the page for position and across for detail. Read that firs
 
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
-- **[summaries.md](summaries.md)** — the article at whichever length you ask for, the named ladder
-  wired to every level of the tree, and the panel that follows the reader down the page.
+- **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
+  moves them all at once, and the panel that follows the reader down the page.
 - **[ideas.md](ideas.md)** — the propositions the piece needs you to hold, sibling to the glossary:
   a term is a word you look up, an idea is a claim you hold. The first stage that lets the model
   name block ids.
+- **[quotes.md](quotes.md)** — the lines worth keeping: the piece's own sentences, chosen, checked
+  against it and marked where they sit. The only mode whose list is the article rather than something
+  a model wrote about it — open it for the two things verification cannot prove.
 - **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
   search painted into the spine. Long; open it for the confidence unit or the colours.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
@@ -85,6 +88,9 @@ of compression, down the page for position and across for detail. Read that firs
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
+- **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle
+  of a chat: why the audio never touches our server, the three orderings that fail silently, and the
+  one guard that is also the idempotency.
 - **[copy.md](copy.md)** — the words a reader sees when something fails, why they all live in one
   file, and the bracketed code at the end of every message.
 

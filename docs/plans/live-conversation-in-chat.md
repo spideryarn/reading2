@@ -1,11 +1,17 @@
 # Live conversation inside chat mode
 
-**Status: reviewed, rewritten, and half built, 2026-08-31.** The exchange ledger and the store's
-`appendSpoken` are in with tests; the route, the client operation and the button are not. GPT Sol reviewed the first version and
-returned **BLOCKED** — [the review](live-conversation-in-chat-review-sol.md), nine findings, three
-critical. It was right about all three, and about a comment in shipped code that was simply false.
-The design below is the one it recommended instead: **turn-boundary switching**, which is both safer
-and smaller than what I first proposed.
+**Status: built, 2026-08-31.** Every stage below is in with tests, and the feature now has a doc of
+its own — [live-conversation.md](../project/live-conversation.md), which is where the durable half
+lives. What stays here is the reasoning: what the first version got wrong, and why each rule is a
+rule. GPT Sol reviewed the first version and returned **BLOCKED** —
+[the review](live-conversation-in-chat-review-sol.md), nine findings, three critical. It was right
+about all three, and about a comment in shipped code that was simply false. The design below is the
+one it recommended instead: **turn-boundary switching**, which is both safer and smaller than what I
+first proposed.
+
+**What is deliberately still missing:** nothing caps a session and nothing meters it. Both are
+written up in [live-conversation.md § What is not built](../project/live-conversation.md#what-is-not-built)
+and in `scripts/ai-cost.ts`, which names the gap on every run.
 
 The wire is built and proven — see [live-conversation.md](live-conversation.md). This is about
 putting it in the chat panel, beside the microphone, so a reader can talk for a while and then type
@@ -72,7 +78,7 @@ are already known, and a crash between them leaves a false unfinished answer.
    └─────────────────────────────────────────────────────┘
 ```
 
-### 0. An exchange ledger, before any of this
+### 0. An exchange ledger, before any of this — **built**
 
 Keyed by OpenAI's own item and response ids, not by arrival. Order comes from the item lifecycle;
 an exchange is persisted only once its user transcription **and** its whole response/tool chain are
@@ -161,7 +167,7 @@ is how the two stores diverge.
 And the Send-switch must be **awaited**, not hoped for: an unawaited flush racing the typed POST turns
 the expected-tail guard into a 409 we inflicted on ourselves.
 
-### 2. Seeding the session with the thread
+### 2. Seeding the session with the thread — **built**
 
 The realtime session is created with `instructions` (article + rules) and then the **conversation**
 is seeded over the data channel with `conversation.item.create` per prior message, before the first
@@ -172,7 +178,7 @@ cache — and cached text input is a tenth the price of uncached.
 `recentHistory` already exists in [`src/converse.ts`](../../src/converse.ts) and caps at
 `HISTORY_TURNS`. Reuse it rather than inventing a second window.
 
-### 3. The microphone lock
+### 3. The microphone lock — **built**
 
 **This is the part most likely to be got wrong, and it is not optional.**
 [`mic-lock.ts`](../../src/web/mic-lock.ts) exists because two hooks on one page each opened a
@@ -183,7 +189,7 @@ So `useLiveConversation` must `claimMicrophone({ stop, released })` before `getU
 `releaseMicrophone` on hang-up — meaning pressing the dictation mic mid-conversation politely ends
 the live session rather than fighting it, which is also the right behaviour for a reader.
 
-### 4. Where the button goes, and what Send does
+### 4. Where the button goes, and what Send does — **built**
 
 Beside `DictationButton` in the composer. Three states: idle, connecting, live.
 
@@ -195,7 +201,7 @@ speaker.
 That is Greg's sequence exactly — "live for a bit, then type/dictate, then live again" — and it
 costs only the thing nobody asked for: talking and typing *simultaneously*.
 
-### 5. Who owns the connection
+### 5. Who owns the connection — **built**
 
 Not the keyed `ChatPanel`, which remounts on every thread switch. A stable article-level controller
 that the UI subscribes to, with each session bound immutably to `{ slug, threadId, sessionEpoch }`
@@ -204,16 +210,25 @@ unmount, `pagehide`, a hidden tab, sleep/wake, a failed ICE — each has a defin
 default on any doubt is: close, release the microphone, reload the thread, start a fresh seeded
 session. Never resume an old one.
 
-### 6. The seeding barrier
+### 6. The seeding barrier — **built**
 
 "Sent before the first response" does not prove "accepted before VAD created one". The microphone
 track stays **disabled** until the data channel is open, every seed item is acknowledged, the seed
 snapshot's tail still matches the thread, and the controller has entered `live`.
 
-## What I would get wrong without a review
+## What I would get wrong without a review — **and how each turned out**
 
-Written down because these are the decisions I am least sure of, and a plan review is cheaper than
-finding out.
+Written down before the review, because these were the decisions I was least sure of. Every one was
+answered, and the answers are in the code now:
+
+- **Per exchange, not per session.** The thread is correct if the tab dies mid-conversation, at the
+  cost of N round trips. Appends are serial, because each claims the previous one's stored answer id.
+- **`interrupted`, a new state, not `stopped`.** They are wrong in opposite directions — see § 1c.
+- **Ordering comes from item ids**, and a finished turn waits behind an unfinished one.
+  `exchanges.ts` is nothing but this.
+- **The connection is owned by `ConversationBand`**, above the keyed panel, and dies with the
+  article rather than with the conversation.
+- **Cost is still uncapped**, and that is the one thing on this list that is *not* answered.
 
 - **Whether a turn is written per exchange or per session.** Per exchange means the thread is
   correct if the tab dies mid-conversation, and means N round trips. Per session means one write

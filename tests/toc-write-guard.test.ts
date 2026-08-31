@@ -1,13 +1,24 @@
 /**
- * **`generateToc` refuses to write a tree that is not a valid tree** —
+ * **`generateToc` refuses to hand back a tree that is not a valid tree** —
  * `assertTreeSound` in src/tree-invariants.ts, wired in at src/toc.ts.
  *
  * The invariants existed long before this file. They ran in a CLI a human
  * invokes (src/validate-tree.ts) and in the publish guard, which collects
  * reasons rather than throwing (src/store/pg-revisions.ts) — and on neither of
- * the two paths that actually *write* `tree.json`. So a stage-4 regression was
+ * the two paths that actually produce a tree. So a stage-4 regression was
  * invisible in exactly the workflow most of this repo's testing goes through.
  * GPT Sol's F5, 2026-08-29.
+ *
+ * **What "written" means here changed on 2026-08-31, and the file kept its
+ * job.** The stage used to write `labels.json`, `blocks.json` and `tree.json`
+ * itself, so every test below looked in the directory afterwards. It now
+ * returns the three artefacts in one object and its caller stores them
+ * (docs/plans/finish-the-database-move.md § Stage 2), so the question "was a
+ * bad tree published?" becomes "did a bad tree come back?" — and the assertions
+ * moved from `readdir` to the returned `parts`. A throw is still the whole of
+ * what stops it: there is no half-way state in which the stage returns a tree
+ * and the caller stores only some of it, because `TocArtefacts` requires all
+ * three and `run` is not reached at all when the stage throws.
  *
  * **Why this is an integration test and not a unit test of the guard.**
  * `assertTreeSound` throwing on a bad tree is worth about one line; whether
@@ -16,14 +27,14 @@
  * present-and-in-the-right-order passes for a call whose result is discarded, a
  * call inside a branch that never runs, or a call placed after the writes it
  * was meant to prevent. The only thing that settles it is running the stage and
- * looking at the directory afterwards, which is what this does.
+ * looking at what came out of it, which is what this does.
  *
  * No network. `streamMessage` is replaced with one that answers the structure
  * call from a canned tree, and `generateLabels` with one that returns an empty
  * label run — the labels are not what is under test, and mocking them is what
  * keeps this to a single fake response instead of the whole batch protocol.
  */
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -75,6 +86,12 @@ let labelsFor: Record<string, string> = {};
  */
 let labelCalls = 0;
 
+/**
+ * What `labels.json` claims it was written from — real by default, spoiled by
+ * the one test that wants the seam to notice.
+ */
+let labelsSourceHash = "";
+
 vi.mock("../src/labels.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/labels.js")>();
   return {
@@ -90,12 +107,19 @@ vi.mock("../src/labels.js", async (importOriginal) => {
           generator: "test",
           slug: "toc-write-guard",
           structureHash: "0000000000000000",
-          blocksHash: "0000000000000000",
-          model: "test",
+          /* **The real hash of the real blocks, and it has to be.** The stage
+             takes the input hash it reports off this field and checks it
+             against `hashBlocks` of the blocks it is about to return, because
+             those are the two values `assertStampAgrees` and
+             `reasonsNotToPublish` compare on the way into the store — see
+             `TocRun.inputHash` in src/toc.ts. A stub with a made-up hash
+             therefore fails the stage, which is what the "different blocks"
+             test below deliberately does. */
+          sourceHash: labelsSourceHash,
+          structureVersion: "test",
           batches: [],
           labels: labelsFor,
-          generatedAt: "2026-08-29T00:00:00.000Z",
-          elapsedMs: 0,
+          dropped: [],
         },
         batches: 0,
         oversized: 0,
@@ -129,13 +153,17 @@ beforeAll(async () => {
   blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
   ({ generateToc } = await import("../src/toc.js"));
   const { isStructural } = await import("../src/block-policy.js");
+  const { hashBlocks } = await import("../src/source-hash.js");
+  const { blocksArtefact } = await import("../src/blocks.js");
   labelsFor = Object.fromEntries(
     blocks.filter((b) => isStructural(b)).map((b) => [b.id, `Label for ${b.id}`]),
   );
-  // The fixture ships a finished article. The stage must be the thing that
-  // writes these, or "they are absent afterwards" would prove nothing.
-  await rm(path.join(DIR, "tree.json"), { force: true });
-  await rm(path.join(DIR, "labels.json"), { force: true });
+  /* Hashed over the blocks **as the stage returns them** — `blocksArtefact` —
+     rather than over the array read off disk. They agree today, because
+     `hashBlocks` reads id, text, role and treatment and the artefact rewrites
+     only `html`; taking it from the wrong one of the two would make this stub
+     assert that agreement rather than the stage. */
+  labelsSourceHash = hashBlocks(blocksArtefact(blocks).blocks);
 });
 
 afterAll(async () => {
@@ -165,28 +193,35 @@ let generateToc!: typeof import("../src/toc.js")["generateToc"];
 
 async function run(): Promise<{ threw: Error | null; run?: TocRun }> {
   try {
-    const result = await generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR });
+    const result = await generateToc({ blocks, slug: "toc-write-guard" });
     return { threw: null, run: result };
   } catch (err) {
     return { threw: err as Error };
   }
 }
 
-const wrote = async (): Promise<string[]> => {
-  const files = await readdir(DIR);
-  return files.filter((f) => f === "tree.json" || f === "labels.json").sort();
-};
+/**
+ * **What the stage handed back, named the way the old assertions were.**
+ *
+ * The list is the artefact kinds present in `parts`, sorted, so a run that came
+ * back with a tree and no labels would read as `["tree"]` — and a run that threw
+ * reads as `[]`, which is the same sentence the directory listing used to say.
+ * The type makes the first of those unreachable; this is what makes the test say
+ * so rather than assume it.
+ */
+const produced = (r: { run?: TocRun }): string[] =>
+  r.run ? Object.keys(r.run.parts).filter((k) => r.run!.parts[k as "tree"] !== undefined).sort() : [];
 
-describe("generateToc refuses to write an invalid tree", () => {
-  /* The control, and it comes first on purpose: without it, "nothing was
-     written" is satisfied just as well by a stage that throws for some
-     unrelated reason — a bad mock, a missing directory, an env var. This proves
-     the same harness does write both files when the tree is sound. */
-  it("writes the tree when the model returns a sound one", async () => {
+describe("generateToc refuses to hand back an invalid tree", () => {
+  /* The control, and it comes first on purpose: without it, "nothing came back"
+     is satisfied just as well by a stage that throws for some unrelated reason —
+     a bad mock, a missing fixture, an env var. This proves the same harness
+     produces the whole set when the tree is sound. */
+  it("returns all three artefacts when the model returns a sound tree", async () => {
     modelTree = wholeArticle();
-    const { threw } = await run();
-    expect(threw).toBeNull();
-    expect(await wrote()).toEqual(["labels.json", "tree.json"]);
+    const result = await run();
+    expect(result.threw).toBeNull();
+    expect(produced(result)).toEqual(["blocks", "labels", "tree"]);
   });
 
   /**
@@ -207,14 +242,12 @@ describe("generateToc refuses to write an invalid tree", () => {
    * relax: the gist rule is stated in both directions precisely so a pipeline
    * bug that drops a gist cannot be read as a deliberate exception.
    */
-  it("throws and writes nothing when an internal node has no gist", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
+  it("throws and returns nothing when an internal node has no gist", async () => {
     modelTree = wholeArticle({ gist: undefined });
-    const { threw } = await run();
-    expect(threw).not.toBeNull();
-    expect(threw!.message).toContain("is not a valid tree, so it was not written");
-    expect(await wrote()).toEqual([]);
+    const result = await run();
+    expect(result.threw).not.toBeNull();
+    expect(result.threw!.message).toContain("is not a valid tree, so it was not written");
+    expect(produced(result)).toEqual([]);
   });
 
   /* The repair, proved at the stage rather than at the function — which is the
@@ -223,18 +256,13 @@ describe("generateToc refuses to write an invalid tree", () => {
      nothing; before this, four structure calls in four made the same wrong
      claim on one article and it was a guaranteed failure loop for that
      document. docs/research/opening-an-article-before-the-toc.md § 7b. */
-  it("writes the tree, minus the claim, when a node claims a heading it does not contain", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
+  it("returns the tree, minus the claim, when a node claims a heading it does not contain", async () => {
     modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
-    const { threw } = await run();
-    expect(threw).toBeNull();
-    expect(await wrote()).toEqual(["labels.json", "tree.json"]);
-    const written = JSON.parse(await readFile(path.join(DIR, "tree.json"), "utf-8")) as {
-      rootId: string;
-      nodes: Record<string, { sourceHeading?: string }>;
-    };
-    expect(written.nodes[written.rootId]!.sourceHeading).toBeUndefined();
+    const result = await run();
+    expect(result.threw).toBeNull();
+    expect(produced(result)).toEqual(["blocks", "labels", "tree"]);
+    const tree = result.run!.parts.tree;
+    expect(tree.nodes[tree.rootId]!.sourceHeading).toBeUndefined();
   });
 
   /**
@@ -253,8 +281,6 @@ describe("generateToc refuses to write an invalid tree", () => {
    * child 3. The first is mended, the second is past the bound.
    */
   it("says what it had already mended when it refuses a second slipped boundary", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     const section = (title: string, from: number, to: number) => ({
       title,
       gist: `A stretch of the piece, from ${from} to ${to}.`,
@@ -274,12 +300,12 @@ describe("generateToc refuses to write an invalid tree", () => {
         ],
       },
     };
-    const { threw } = await run();
-    expect(threw).not.toBeNull();
-    expect(threw!.message).toMatch(/mended 1 boundary/);
-    expect(threw!.message).toMatch(/moving 1 block/);
-    expect(threw!.message).toContain("MAX_REPAIRED_BOUNDARIES");
-    expect(await wrote()).toEqual([]);
+    const result = await run();
+    expect(result.threw).not.toBeNull();
+    expect(result.threw!.message).toMatch(/mended 1 boundary/);
+    expect(result.threw!.message).toMatch(/moving 1 block/);
+    expect(result.threw!.message).toContain("MAX_REPAIRED_BOUNDARIES");
+    expect(produced(result)).toEqual([]);
   });
 
   /* The thrown message is written to the log by src/jobs.ts with `errorFields`,
@@ -289,8 +315,6 @@ describe("generateToc refuses to write an invalid tree", () => {
      may ever do (docs/project/logging.md). Asserted on the message rather than
      trusted to the comment above it. */
   it("puts no article prose in what it throws", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     const heading = blocks.find((b) => b.kind === "heading");
     expect(heading).toBeDefined(); // the fixture must have one for this to test anything
     modelTree = wholeArticle({ gist: undefined });
@@ -309,8 +333,6 @@ describe("generateToc refuses to write an invalid tree", () => {
      as well by a harness where the mock is never reached at all — a broken
      import, a throw earlier in the stage. This proves the counter moves. */
   it("pays for labels when the structure is sound", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     labelCalls = 0;
     modelTree = wholeArticle();
     const { threw } = await run();
@@ -339,8 +361,6 @@ describe("generateToc refuses to write an invalid tree", () => {
    * (docs/reusable/silent-success.md). GPT Sol's review, 2026-08-30.
    */
   it("reports what it repaired all the way out to the run stats", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
     const { threw, run: stats } = await run();
     expect(threw).toBeNull();
@@ -350,8 +370,6 @@ describe("generateToc refuses to write an invalid tree", () => {
   it("reports zero on a run where the model got it right, rather than nothing", async () => {
     // The control. Absent this, the assertion above passes for a field that is
     // hard-wired to the number 1.
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     modelTree = wholeArticle();
     const { run: stats } = await run();
     expect(stats?.droppedHeadings).toBe(0);
@@ -359,13 +377,40 @@ describe("generateToc refuses to write an invalid tree", () => {
   });
 
   it("does not pay for labels when the structure call already produced an invalid tree", async () => {
-    await rm(path.join(DIR, "tree.json"), { force: true });
-    await rm(path.join(DIR, "labels.json"), { force: true });
     labelCalls = 0;
     modelTree = wholeArticle({ gist: undefined });
-    const { threw } = await run();
-    expect(threw).not.toBeNull();
+    const result = await run();
+    expect(result.threw).not.toBeNull();
     expect(labelCalls).toBe(0);
-    expect(await wrote()).toEqual([]);
+    expect(produced(result)).toEqual([]);
+  });
+
+  /**
+   * **The set has to be about one article, and the type cannot say that.**
+   *
+   * `TocArtefacts` makes "a tree and no labels" unsayable. What it cannot make
+   * unsayable is a tree returned beside a `labels.json` written from *different
+   * blocks* — which is not hypothetical bookkeeping: `TocRun.inputHash` is read
+   * off that file and is the value the store compares against the blocks it is
+   * storing (`assertStampAgrees`), and the publish guard compares the same two
+   * (`reasonsNotToPublish`). Disagreeing quietly means every article becomes
+   * unpublishable, from runs that all reported success.
+   *
+   * The label pass is mocked here, so this is the one place that state can be
+   * made at all — and it is exactly the state a future change to what
+   * `generateLabels` is handed (the body alone, say) would create for real.
+   */
+  it("throws when the labels were written against different blocks", async () => {
+    const good = labelsSourceHash;
+    labelsSourceHash = "deadbeefdeadbeef";
+    try {
+      modelTree = wholeArticle();
+      const result = await run();
+      expect(result.threw).not.toBeNull();
+      expect(result.threw!.message).toContain("different blocks");
+      expect(produced(result)).toEqual([]);
+    } finally {
+      labelsSourceHash = good;
+    }
   });
 });

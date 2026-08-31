@@ -16,7 +16,6 @@ import type {
   Idea,
   Quote,
   ReviewStance,
-  SummaryEntry,
   ThreadKind,
 } from "../types.js";
 import { Library } from "./Library.js";
@@ -34,6 +33,8 @@ import { type ArticleView, LIBRARY_HREF, navigate, useRoute } from "./router.js"
 import { Metadata } from "./Metadata.js";
 import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
+import { TimelinePanel } from "./TimelinePanel.js";
+import { useTimeline } from "./useTimeline.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
@@ -47,6 +48,7 @@ import { Masthead } from "./Masthead.js";
 import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
+import { useLiveConversation } from "./live/useLiveConversation.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { QuotesPanel } from "./QuotesPanel.js";
 import { useQuotes } from "./useQuotes.js";
@@ -56,7 +58,6 @@ import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
-import { useSummaries } from "./useSummaries.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
@@ -69,6 +70,7 @@ import {
   orderFound,
   resolveIdea,
   resolveQuote,
+  resolveTimelineEvent,
   keepAbove,
   PRIORITY_CONF,
   resolveHits,
@@ -97,12 +99,12 @@ import {
   modeParam,
   noteParam,
   panelParam,
-  rungParam,
   sortParam,
   gateParam,
   quoteParam,
   rankParam,
   barParam,
+  eventParam,
   ideaParam,
   termParam,
   findParam,
@@ -117,7 +119,6 @@ import {
   textParam,
   threadParam,
   type Mode,
-  type Rung,
   type TermSort,
 } from "./params.js";
 import {
@@ -153,7 +154,6 @@ import type {
   PublicGlossary,
   PublicQuotes,
   PublicIdeas,
-  PublicSummaries,
 } from "../public-types.js";
 import { artefactsIn, artefactsOf } from "./public-artefacts.js";
 import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
@@ -197,7 +197,6 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   arc: true,
   tweets: true,
   glossary: true,
-  summary: true,
   ideas: true,
   quotes: true,
 };
@@ -1254,7 +1253,7 @@ function Reader({
   const outlineRoot = useMemo(
     () =>
       mode === "outline"
-        ? buildSummaryTree(article.tree, article.blocks, null, geometry.leafDepth)
+        ? buildSummaryTree(article.tree, article.blocks, geometry.leafDepth)
         : null,
     [mode, article.tree, article.blocks, geometry.leafDepth],
   );
@@ -1538,6 +1537,16 @@ function Reader({
      effect ordering. Quotes has no `openKey` of its own — a quote is exactly one
      passage, so there is nothing to step between and nothing to leave open. */
   const [quoteFound, setQuoteFound] = useState<Found[]>([]);
+  /* **A fourth state, for the reason the second and third have their own**, and
+     not because Timeline needs anything ideas do not: two modes sharing one
+     `Found[]` clear each other on the way out, and which one wins is an
+     accident of whether the outgoing mode's cleanup is passive and the incoming
+     mode's push is layout. Unlike quotes, this one keeps an `openKey` — an
+     event mentioned in two paragraphs is rare (26 of 26 on the test article
+     have one) but it is real, because the article recounts the same three
+     months once per civilisation. */
+  const [timelineFound, setTimelineFound] = useState<Found[]>([]);
+  const [openTimelineKey, setOpenTimelineKey] = useState<string | null>(null);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1550,8 +1559,22 @@ function Reader({
      read it — the same "compute once, hand to both" rule the panel and the
      prose already follow. The two modes are mutually exclusive, so this is a
      pick rather than a merge. */
-  const passages = mode === "ideas" ? ideaFound : mode === "quotes" ? quoteFound : found;
-  const openPassage = mode === "ideas" ? openOccurrence : mode === "quotes" ? null : openHit;
+  const passages =
+    mode === "ideas"
+      ? ideaFound
+      : mode === "quotes"
+        ? quoteFound
+        : mode === "timeline"
+          ? timelineFound
+          : found;
+  const openPassage =
+    mode === "ideas"
+      ? openOccurrence
+      : mode === "quotes"
+        ? null
+        : mode === "timeline"
+          ? openTimelineKey
+          : openHit;
   const hitMarks = useMemo(
     () => buildHitMarks(passages, openPassage),
     [passages, openPassage],
@@ -2310,12 +2333,7 @@ function Reader({
           onJump={jumpTo}
         />
       )}
-      {owner && mode === "summary" && (
-        <SummaryBand slug={slug} article={article} onJump={jumpTo} />
-      )}
-      {!owner && mode === "summary" && artefacts?.summary && (
-        <VisitorSummaryBand article={article} summaries={artefacts.summary} onJump={jumpTo} />
-      )}
+      {mode === "summary" && <SummaryBand article={article} onJump={jumpTo} />}
       {owner && mode === "diagram" && (
         <DiagramBand slug={slug} article={article} at={at} onJump={jumpTo} />
       )}
@@ -2348,6 +2366,22 @@ function Reader({
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setQuoteFound}
+        />
+      )}
+      {/* **One branch, not the owner/visitor pair the ideas have.** Timeline is
+          owners-only in v1 (src/web/visitor.ts § COSTS), so a visitor never
+          reaches this band at all — the dock marks the button and pressing it
+          renders the boundary instead. There is deliberately no
+          `VisitorTimelineBand` waiting for a payload field that does not
+          exist. */}
+      {owner && mode === "timeline" && (
+        <TimelineBand
+          slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setTimelineFound}
+          openKey={openTimelineKey}
+          onOpenKey={setOpenTimelineKey}
         />
       )}
       {owner && mode === "search" && (
@@ -2696,6 +2730,145 @@ function useIdeasMode({
 }
 
 /**
+ * The timeline, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `IdeasBand` and `GlossaryBand` are:
+ * `useTimeline` fetches on mount, so calling it up in `Reader` would charge
+ * every reader of every article a request for a chronology almost none of them
+ * will open.
+ *
+ * **Owner-only, so there is one of these and not two.** Timeline is in
+ * `COSTS` in src/web/visitor.ts, so a visitor meets a boundary instead of a
+ * band and there is no `VisitorTimelineBand` waiting on a payload field that
+ * does not exist.
+ *
+ * ## The five effects below are a second copy of `useIdeasMode`'s, deliberately
+ *
+ * They are the same five rules — push the resolved passages up before paint,
+ * drop an `openKey` that is no longer in the list, stand on the first passage,
+ * spend the press's intention to jump once the list exists, and clear
+ * everything on the way out — and every one of them was got wrong once in the
+ * ideas panel before it was got right. Two copies of a rule is exactly what
+ * this repo does not want.
+ *
+ * They were not merged today because the merge is an edit through the middle of
+ * `useIdeasMode`, and App.tsx is being rewritten by another session while this
+ * lands; a shared hook over `{ found, openKey, onFound, onOpenKey, onJump }` is
+ * the right shape and is a follow-up worth doing on a quiet file. Until then
+ * **a fix to one of these belongs in both**, which is written here rather than
+ * left to be discovered.
+ *
+ * The one real difference is that there are no colour slots. Timeline paints no
+ * lane down the rail — deferred with the marks — so `resolveTimelineEvent`
+ * hands every occurrence slot 0 and the prose gets the ordinary wash.
+ */
+function TimelineBand({
+  slug,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  slug: string;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
+  useRenderCount("TimelineBand");
+  const timeline = useTimeline(slug);
+  const [eventId, setEventId] = useQueryState("event", eventParam);
+
+  const selected = useMemo(
+    () => timeline.timeline?.events.find((e) => e.id === eventId) ?? null,
+    [timeline.timeline, eventId],
+  );
+
+  /* Document order, so the stepper's "2 of 3" counts the way the reader moves
+     through the article rather than the order the model happened to list the
+     occurrences in. */
+  const found = useMemo(() => {
+    if (!selected) return [];
+    return orderFound(
+      resolveTimelineEvent(blocks, { id: selected.id, occurrences: selected.occurrences }),
+      "document",
+    );
+  }, [selected, blocks]);
+
+  /* `useLayoutEffect`, not `useEffect` — a passive effect leaves one paintable
+     frame in which the panel shows the new event and the prose still marks the
+     old one. */
+  useLayoutEffect(() => {
+    onFound(found);
+  }, [found, onFound]);
+
+  /* An open occurrence that is no longer in the list cannot stay open: reading
+     the timeline again mints new keys, and a re-extraction can drop one. */
+  useEffect(() => {
+    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
+  }, [found, openKey, onOpenKey]);
+
+  /* Standing on the first passage is the state a selected event is *in*, and it
+     is that state whether the reader pressed the row or opened a URL that
+     already had `?event=` in it — without this, a shared link washes the
+     passages, emphasises none of them and puts "– / 2" in the stepper. It opens
+     without moving anybody: a shared URL carries `?at=` too, and the reader's
+     own position beats ours. */
+  useEffect(() => {
+    if (openKey === null && found.length > 0) onOpenKey(found[0]!.key);
+  }, [found, openKey, onOpenKey]);
+
+  /* Pressing a row arrives at its first passage, and it has to be the first one
+     that RESOLVED — which the panel cannot decide, because until the selection
+     changes nothing has resolved that event's occurrences at all. So the press
+     records an intention and this spends it once the list exists. A ref rather
+     than state, so spending it causes no render, and cleared before the jump so
+     a later change to `found` cannot fling the reader back to the top. */
+  const wantsJump = useRef(false);
+  useEffect(() => {
+    if (!wantsJump.current || found.length === 0) return;
+    wantsJump.current = false;
+    const first = found[0]!;
+    onOpenKey(first.key);
+    onJump(first.blockId);
+  }, [found, onJump, onOpenKey]);
+
+  /* Unmount only, with no data dependencies: leaving the mode takes the marks
+     out of the prose with it, and folding this into the push above would clear
+     them on every change before setting them again. */
+  useEffect(
+    () => () => {
+      onFound([]);
+      onOpenKey(null);
+    },
+    [onFound, onOpenKey],
+  );
+
+  return (
+    <TimelinePanel
+      owner={timeline}
+      eventId={eventId}
+      onEvent={(next) => {
+        void setEventId(next);
+        /* A new event means the old occurrence is meaningless — its key names
+           an event nobody is looking at, so the stepper would read "0 / 2". */
+        onOpenKey(null);
+        /* Only on selecting, never on clearing: pressing the open event again
+           takes the marks away, and throwing the reader down the article as it
+           does would be the opposite of what that gesture means. */
+        wantsJump.current = next !== null;
+      }}
+      found={found}
+      openKey={openKey}
+      onOpenKey={onOpenKey}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
  * Chat, and the fetch that belongs to it.
  *
  * A component of its own for one reason: **`useChat` fetches on mount**, and
@@ -2754,9 +2927,47 @@ export function ConversationBand({
     discard,
     rename,
     remove,
+    speak,
     error,
   } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
+
+  /**
+   * The conversations as they are **now**, for a callback that outlives a render.
+   *
+   * `tailNow` below is read once, minutes after the session started, from
+   * inside the hook. Captured directly it would be the list as it was at
+   * connect time — which is the one value it must not be, since the whole
+   * question it answers is "has this conversation moved since then?".
+   */
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
+
+  /**
+   * **The live conversation, owned here** — above the panel, above the keyed
+   * transcript, for the life of the article.
+   *
+   * `ChatPanel` is remounted every time the reader switches conversation, and a
+   * peer connection that a remount destroys is a connection nothing owns: the
+   * microphone stays open, the events go nowhere, and the exchange in flight is
+   * never written down. docs/plans/live-conversation-in-chat.md § 5.
+   *
+   * The three things it is given are the three things a live session cannot
+   * work out for itself:
+   *
+   * - `speak`, which is `useChat`'s — so a spoken exchange goes through the
+   *   same controller as every typed turn, as an operation with an identity and
+   *   a projection, rather than a second writer beside it;
+   * - `tailNow`, so the seeding barrier can tell whether the conversation moved
+   *   while the session was connecting;
+   * - `onThreadId`, so `?thread=` follows if the server names the conversation
+   *   something other than what this tab invented.
+   */
+  const live = useLiveConversation(slug, {
+    speak,
+    tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
+    onThreadId: (id) => void setThread(id),
+  });
 
   /**
    * A counter that goes up whenever a *new* conversation is started, so the
@@ -2906,6 +3117,10 @@ export function ConversationBand({
         void setThread(id);
       }}
       onNew={startNew}
+      /* **Owned above this panel**, which is remounted on every conversation
+         switch — see the note where the hook is called. */
+      live={live}
+      onStartLive={(id) => live.start({ threadId: id })}
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
@@ -3514,82 +3729,47 @@ function SearchBand({
 }
 
 /**
- * The summaries, and the fetch that belongs to them.
+ * The summary outline, and the two bits of view state that belong to it.
  *
- * A component of its own for the reason `ConversationBand` and `GlossaryBand` above
- * are: **`useSummaries` fetches on mount**, and calling it up in `Reader` would
- * charge every reader of every article a request for a panel almost none of
- * them will open. Hooks cannot be called conditionally, so the condition has to
- * be a component boundary.
+ * A component of its own even though it fetches nothing, for the reason the
+ * `?deep=` parameter gives: it is meaningless outside summary mode, and reading
+ * it in `Reader` would put a parameter subscription on every render of the
+ * reading view for a value only this component uses.
  *
- * `?len=` and `?deep=` live here too, for the same reason — they are
- * meaningless outside summary mode, and reading them in `Reader` would put two
- * parameter subscriptions on every render of the reading view for values only
- * this component uses.
+ * **Owner and visitor get the same component, because there is nothing to
+ * own.** Until 2026-08-31 there were two bands, an owner's `useSummaries` fetch
+ * and a visitor's `PublicSummaries` from the page payload, both feeding a panel
+ * that took an `access` prop. All of that was carrying the generated length
+ * ladder; the gists come down inside the article itself, and the two arms
+ * collapse into this. docs/plans/gist-only-summaries.md.
  *
  * See docs/project/summaries.md.
  */
 function SummaryBand({
-  slug,
   article,
   onJump,
 }: {
-  slug: string;
   article: Article;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("SummaryBand");
-  const summaries = useSummaries(slug);
-  const band = useSummaryMode(article, summaries.summaries);
-  return (
-    <SummaryPanel
-      access={{ kind: "owner", owner: summaries, summaries: summaries.summaries }}
-      {...band}
-      onJump={onJump}
-    />
-  );
+  return <SummaryPanel {...useSummaryMode(article)} onJump={onJump} />;
 }
 
 /**
- * **The same panel, for somebody who does not own the article.**
+ * Everything the summary band does that is not rendering.
  *
- * No `useSummaries` and therefore no `useJobs`: the ladder came in the page's
- * own payload. See `VisitorGlossaryBand` for why this is a second band and not
- * a second panel.
+ * `?deep=` lives here for the reason it used to live in the band: it is
+ * meaningless outside summary mode, and reading it in `Reader` would put a
+ * parameter subscription on every render of the reading view for a value only
+ * this mode uses.
  */
-function VisitorSummaryBand({
-  article,
-  summaries,
-  onJump,
-}: {
-  article: Article;
-  summaries: PublicSummaries;
-  onJump(id: BlockId): void;
-}) {
-  useRenderCount("VisitorSummaryBand");
-  const band = useSummaryMode(article, summaries);
-  return <SummaryPanel access={{ kind: "visitor", summaries }} {...band} onJump={onJump} />;
-}
-
-/**
- * Everything the summary band does that is not a fetch.
- *
- * `?len=` and `?deep=` live here for the reason they used to live in the band:
- * both are meaningless outside summary mode, and reading them in `Reader` would
- * put two parameter subscriptions on every render of the reading view for
- * values only this mode uses.
- */
-function useSummaryMode(article: Article, summaries: { entries: SummaryEntry[] } | null) {
-  const [rung, setRung] = useQueryState("len", rungParam);
+function useSummaryMode(article: Article) {
   const [deep, setDeep] = useQueryState("deep", deepParam);
 
-  /* The join: the tree, plus whatever summaries exist, matched by block range
-     and never by node id — see tree.js § the summaries. Memoised on the
-     artefact rather than on the hook, whose object identity changes on every
-     poll of the job queue. */
   const root = useMemo(
-    () => buildSummaryTree(article.tree, article.blocks, summaries),
-    [article.tree, article.blocks, summaries],
+    () => buildSummaryTree(article.tree, article.blocks),
+    [article.tree, article.blocks],
   );
 
   /* Read, never written, and not a subscription: `?at=` is already tracked by
@@ -3608,25 +3788,7 @@ function useSummaryMode(article: Article, summaries: { entries: SummaryEntry[] }
     return i === -1 ? null : i;
   }, [at, article.blocks]);
 
-  /* Id to plain text, for the block ids the summaries cite: the panel needs it
-     to tell a real id from an invented one, and to put the paragraph in a
-     chip's hover card. The same map `Reader` builds for chat — built again
-     here rather than threaded down, because this mode is rendered only in its
-     own band and a prop would make every reader of every article pay for it. */
-  const blocks = useMemo(
-    () => new Map(article.blocks.map((b) => [b.id, b.text])),
-    [article.blocks],
-  );
-
-  return {
-    root,
-    blocks,
-    rung,
-    onRung: (next: Rung) => void setRung(next),
-    deep,
-    onDeep: (next: number) => void setDeep(next),
-    atRow,
-  };
+  return { root, deep, onDeep: (next: number) => void setDeep(next), atRow };
 }
 
 /**
@@ -3684,11 +3846,10 @@ function DiagramBand({
   const [axis, setAxis] = useQueryState("dx", diagramAxisParam);
   const [hue, setHue] = useQueryState("dhue", diagramHueParam);
 
-  /* No summaries joined in: this panel shows titles, gists and sizes, all of
-     which are on the tree. Passing `null` is what keeps a diagram from ever
-     being blank on an article nobody has paid for. */
+  /* Titles, gists and sizes, all of which are on the tree — which is what keeps
+     a diagram from ever being blank on an article nobody has paid for. */
   const root = useMemo(
-    () => buildSummaryTree(article.tree, article.blocks, null),
+    () => buildSummaryTree(article.tree, article.blocks),
     [article.tree, article.blocks],
   );
 

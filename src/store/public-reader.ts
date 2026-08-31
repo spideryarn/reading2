@@ -60,7 +60,7 @@ import { publicArticle, publicMetadata } from "../public/dto.js";
  * What a public reader can be asked for.
  *
  * **Two methods, because two endpoints landed.** Sol's answer 5 sketched six —
- * tweets, glossary, summaries and ideas as well — and those are slice 1b of
+ * tweets, glossary and ideas as well — and those are slice 1b of
  * docs/plans/public-read-only-access.md, along with their DTOs and their tests.
  * Declaring four methods nothing implements would be four shapes nobody has
  * checked against a real row, which is the sort of thing that gets believed.
@@ -230,11 +230,11 @@ const PUBLIC_PROJECTIONS = {
        docs/plans/hosting-the-articles-images.md#delivery. */
     assets: articleRevisions.assets,
     /**
-     * **The four artefacts slice 1b carries, off the same row.**
+     * **The artefacts slice 1b carries, off the same row.**
      *
      * They are JSONB columns on `article_revisions` — the row this query is
-     * already fetching — so a visitor gets the glossary, the summaries, the
-     * ideas and the tweet thread for no extra query and no extra round trip.
+     * already fetching — so a visitor gets the glossary, the ideas, the quotes
+     * and the tweet thread for no extra query and no extra round trip.
      * That is the whole of what Greg's "no new endpoints" decision buys, and it
      * is why there is no `PublicArtefactReader` beside this one.
      *
@@ -253,13 +253,12 @@ const PUBLIC_PROJECTIONS = {
      * There is no column-level alternative: a JSONB document is one column.
      */
     glossary: articleRevisions.glossary,
-    summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
     quotes: articleRevisions.quotes,
     tweets: articleRevisions.tweets,
   },
   /**
-   * **Five booleans and a title, and not one document.**
+   * **A handful of booleans and a title, and not one document.**
    *
    * `is not null` in SQL rather than reading the JSONB and comparing it here.
    * The metadata page asks whether a glossary exists, not how many terms are in
@@ -292,7 +291,6 @@ const PUBLIC_PROJECTIONS = {
     hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
     hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
     hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
-    hasSummary: sql<boolean>`${articleRevisions.summary} is not null`.as("has_summary"),
     hasIdeas: sql<boolean>`${articleRevisions.ideas} is not null`.as("has_ideas"),
     hasQuotes: sql<boolean>`${articleRevisions.quotes} is not null`.as("has_quotes"),
   },
@@ -491,7 +489,6 @@ export const pgPublicReader: PublicArticleReader = {
         arc: found.revision.arc,
         assets: found.revision.assets,
         glossary: found.revision.glossary,
-        summary: found.revision.summary,
         ideas: found.revision.ideas,
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
@@ -522,7 +519,6 @@ export const pgPublicReader: PublicArticleReader = {
           arc: found.revision.hasArc,
           tweets: found.revision.hasTweets,
           glossary: found.revision.hasGlossary,
-          summary: found.revision.hasSummary,
           ideas: found.revision.hasIdeas,
           quotes: found.revision.hasQuotes,
         },

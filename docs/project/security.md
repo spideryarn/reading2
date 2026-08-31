@@ -630,10 +630,15 @@ list below.
 they can check a transcription against the ink, which is the only real verification a scan can have
 ([pdf-ingestion.md](../plans/pdf-ingestion.md)). Three things make that survivable, and all three are
 load-bearing: the slug goes through `slugPart`, the same validator that closed
-[the path traversal](#the-url-is-the-second-untrusted-party); the path comes from `fsLocations`
-rather than being built at the call site; and the response sets
+[the path traversal](#the-url-is-the-second-untrusted-party); the route never resolves the document
+itself — since 2026-08-31 it asks `sourceStore.readPdf(slug)`
+([`src/store/contracts.ts`](../../src/store/contracts.ts)), and the store is the layer that knows
+whether that means a path under `data/` or an object in the `sources` bucket; and the response sets
 `X-Content-Type-Options: nosniff` with an explicit `application/pdf`, because a stranger's file
-served from our origin with a sniffable type is how a PDF becomes script. It is served `inline`
+served from our origin with a sniffable type is how a PDF becomes script. The store method is
+`readPdf` and not "read the source document" for that last reason: the content type is the boundary,
+and a method that could hand back HTML would put the `Content-Type` decision at the call site, where
+the next person adding a kind makes it by accident. It is served `inline`
 deliberately — the browser's own viewer is the point — which does mean a malicious PDF is opened by
 the browser's PDF reader **on our origin rather than the publisher's**.
 

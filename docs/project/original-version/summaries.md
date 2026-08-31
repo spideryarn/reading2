@@ -184,7 +184,7 @@ detail", and doubling it up is how a clean gesture becomes a control panel.
 
 All four borrowings above landed as **stage 5e** and a mode in the reading band —
 [../summaries.md](../summaries.md) has the feature and
-[`src/summarise.ts`](../../../src/summarise.ts) has the stage. What actually shipped, against the
+`src/summarise.ts` has the stage. What actually shipped, against the
 four numbered points:
 
 1. **Batching by parent** — one call per parent covering all its children at both rungs. Done.

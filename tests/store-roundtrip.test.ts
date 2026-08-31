@@ -8,7 +8,7 @@
  * ## Semantic equality, not byte equality, and why that is the right bar
  *
  * The files do NOT come back byte-identical, and they cannot. `tree`, `arc`,
- * `tweets`, `glossary`, `summary` and `labels` are stored as **JSONB**, and
+ * `tweets`, `glossary` and `labels` are stored as **JSONB**, and
  * JSONB does not preserve key order — it is a parsed representation, not the
  * text you handed it. So a round trip reorders keys inside objects while
  * changing nothing about what they mean.
@@ -64,7 +64,11 @@ const ARTEFACTS = [
   "arc.json",
   "tweets.json",
   "glossary.json",
-  "summary.json",
+  /* **No `summary.json`.** The `summary` artefact kind went with stage 5e on
+     2026-08-31 (docs/plans/gist-only-summaries.md): the store does not own the
+     file, so neither half of this round trip can move it. The column was kept
+     and is carried between revisions — tests/store-carry-forward.ts asserts
+     that — but it does not come back out as a file. */
   "ideas.json",
   "quotes.json",
   "sketch.json",

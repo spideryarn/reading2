@@ -834,7 +834,6 @@ describe("the fixtures the gate worktree needs before its tests mean anything", 
       "data/writes/arc.json",
       "data/writes/tweets.json",
       "data/writes/glossary.json",
-      "data/writes/summary.json",
       "data/writes/ideas.json",
       "data/constitution/labels.json",
     ]);

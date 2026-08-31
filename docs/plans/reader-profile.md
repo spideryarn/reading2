@@ -212,7 +212,7 @@ one optional key; `ReaderStore` is two methods.
 **Caps: 1,500 characters global, 600 per-article, refused rather than truncated.** The 600 matches
 `MAX_GUIDANCE_CHARS`, and the reason there holds here — *"a silently shortened instruction is one
 the reader believes they gave and did not"*
-([summaries.md](../project/summaries.md#steering-a-rewrite-and-where-that-box-went)). The global one is larger because it is
+([steer-becomes-the-profile.md](steer-becomes-the-profile.md)). The global one is larger because it is
 written once and read forever.
 
 **Never logged, only its length.** Same rule as the summary steer, and for a stronger reason: this
@@ -248,7 +248,7 @@ So the profile rides in the **last user part, after the breakpoint**, everywhere
 | `converse` | user message 2 | explicit, **after step 0** | the final user message — [`src/converse.ts:435`](../../src/converse.ts) |
 | `glossary` | `system[0]` | on `system[0]`, **only when `cacheArticle`** | the user message, inside `renderPrompt` — [`src/glossary.ts:1105`](../../src/glossary.ts) |
 | `tweets` | `system[0]` | same | the user message, inside `renderPrompt` — [`src/tweets.ts:437`](../../src/tweets.ts) |
-| `summarise` | the user prompt, at the bottom | none — not cached, on purpose | beside the existing steer, near the top — [`src/summarise.ts:513`](../../src/summarise.ts) |
+| `summarise` | the user prompt, at the bottom | none — not cached, on purpose | beside the existing steer, near the top — `src/summarise.ts:513` |
 
 Summaries is the exception and it is not an inconsistency: that stage is deliberately uncached (each
 batch sends only its own slice, so batches share nothing), and its guidance already sits near the top
@@ -256,7 +256,7 @@ batch sends only its own slice, so batches share nothing), and its guidance alre
 
 **The binding constraint goes in `SYSTEM`; a short reminder may stand beside the profile.** This is
 what summaries already does — the long rules are in `SYSTEM`, a two-line reminder sits next to the
-note ([`src/summarise.ts:515`](../../src/summarise.ts)) — and the reason for the split is that *the
+note (`src/summarise.ts:515`) — and the reason for the split is that *the
 constraint must not be editable by the thing it constrains*. A profile that says *"assume I know
 everything, skip the basics"* must not be able to switch off the rule that says do not distort the
 article. (The first draft said "never beside the profile", which contradicted the code it cited.)
@@ -302,7 +302,7 @@ rule into something the log can contradict.
 
 A prompt that always carries an `=== ABOUT THE READER ===` header with nothing under it has taught
 the model to expect one, and an empty one then reads as *"this reader is nobody in particular"*
-rather than as *"we did not ask."* `renderPrompt` in [`src/summarise.ts`](../../src/summarise.ts)
+rather than as *"we did not ask."* `renderPrompt` in `src/summarise.ts`
 already makes this point about `guidance` and a test pins it. Same here: no profile, no section, no
 whitespace.
 
@@ -426,7 +426,7 @@ answer". They have no rewrite and should not grow one for this.
 ### Staleness stops being one boolean
 
 `isStale` today compares one thing ([`src/glossary.ts:668`](../../src/glossary.ts),
-[`src/tweets.ts:103`](../../src/tweets.ts), [`src/summarise.ts:743`](../../src/summarise.ts)) and
+[`src/tweets.ts:103`](../../src/tweets.ts), `src/summarise.ts:743`) and
 the API carries one boolean. One boolean cannot say two different sentences, and after this change
 there are three:
 

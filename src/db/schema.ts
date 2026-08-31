@@ -75,7 +75,7 @@ import type {
   JobStep,
   Quotes,
   SearchHit,
-  Summaries,
+  Timeline,
   ToolRun,
   Tree,
   TweetThread,
@@ -340,8 +340,8 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`,
- * `glossary` and `summary` write their own column onto the revision that is
+ * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`
+ * and `glossary` write their own column onto the revision that is
  * already published, in one `UPDATE`. That weakens the plain reading of
  * "immutable" and it belongs here rather than arriving as a surprise to
  * whoever reads this comment and then reads the code.
@@ -374,6 +374,28 @@ export const articleRevisions = spideryarn.table(
     siteName: text("site_name"),
     lang: text("lang"),
     excerpt: text("excerpt"),
+    /**
+     * **`Meta.publishedAt` — `text`, not `timestamp`, and that is the whole
+     * decision.**
+     *
+     * The publisher's own ISO string, verbatim, in the publisher's own frame.
+     * `timestamp with time zone` is the obvious choice and it is wrong here:
+     * Postgres would normalise it to UTC, and 8pm on 31 December in New York
+     * comes back as 1 January. **The calendar day is the entire content of this
+     * field** — it is the reference frame the timeline reads a year-less "on
+     * July 7" against — so a column that can move it by one is a column that
+     * silently mis-dates a row. Same rule as src/timeline-time.ts, which never
+     * builds a `Date` for the same reason.
+     *
+     * `fetched_at` above is a real `timestamp` because it is an instant we
+     * recorded; this is a claim somebody else published. The two look alike and
+     * are not the same kind of fact — docs/plans/timeline-mode.md
+     * § There is no publication date until stage 2 is taught to keep one.
+     *
+     * Null on every revision written before 2026-08-31, and it stays null until
+     * that article is re-extracted.
+     */
+    publishedAt: text("published_at"),
     /** `Meta.note`. Real articles carry one — the noema article's meta.json does. */
     note: text("note"),
 
@@ -544,16 +566,21 @@ export const articleRevisions = spideryarn.table(
     glossary: jsonb("glossary").$type<Glossary>(),
 
     /**
-     * The article at whichever length you ask for — `Summaries`, stage 5e.
+     * **Retired 2026-08-31, and deliberately still here.**
      *
-     * The WHOLE artefact, like the three above. `missing` is exactly the
-     * provenance that must travel with it — it is what stops a half-empty
-     * artefact reading as a complete one. (`guidance` was a second such field,
-     * the reader's steer, kept so a steered summary could *say so*. It is gone
-     * with the box: docs/plans/steer-becomes-the-profile.md. Old rows may still
-     * carry one inside this JSON; nothing reads it.)
+     * It held the generated summary ladder — a `short` and a `long` for the
+     * article and each of its parts and sections, written by stage 5e. Greg cut
+     * the whole Length axis (docs/plans/gist-only-summaries.md); Summary mode
+     * now draws the one-sentence gists that were always on the tree, and
+     * nothing reads or writes this column.
+     *
+     * The column stays because dropping one is not reversible and what is in it
+     * is real readers' summaries. `REVISION_READ_POLICY` in src/store/pg.ts
+     * grants it to nobody, which is where a would-be reader trips. Typed
+     * `unknown` rather than left as `Summaries`, so that reviving it means
+     * deciding on a shape rather than inheriting a deleted one.
      */
-    summary: jsonb("summary").$type<Summaries>(),
+    summary: jsonb("summary").$type<unknown>(),
 
     /**
      * The propositions a reader has to hold — `Ideas`, stage 5f.
@@ -593,6 +620,32 @@ export const articleRevisions = spideryarn.table(
      * it or block one.
      */
     quotes: jsonb("quotes").$type<Quotes>(),
+
+    /**
+     * When the piece says things happened, in what order, and how sure it is —
+     * `Timeline`, src/types.ts, written by the `timeline` step.
+     * docs/project/timeline.md.
+     *
+     * The WHOLE artefact, like its neighbours, and here `sourceHash` is doing
+     * something none of theirs does: it covers the **publication date** as well
+     * as the blocks and the tree (`datedArticleFingerprint`, src/source-hash.ts,
+     * and this is the only stage that uses it). The date is the reference frame
+     * for nineteen of the twenty-four temporal expressions on the test article,
+     * so a publisher re-dating a post changes almost every row in this column
+     * and not one word in any other. A column holding `events` without the hash
+     * could not answer whether the dates in it were read against the date the
+     * article now claims.
+     *
+     * **No `profileHash`, unlike `ideas` and `sketch`** — and that is a decision
+     * rather than a gap. Who is reading changes what an *idea* is; it does not
+     * change when something happened.
+     *
+     * **No foreign key from an occurrence's `blockId` to `revision_blocks`**, on
+     * the same argument the glossary, the ideas, the quotes and the sketch make:
+     * a dropped paragraph should cost that event its jump rather than take a
+     * delete with it or block one.
+     */
+    timeline: jsonb("timeline").$type<Timeline>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -1308,9 +1361,13 @@ export const revisionStepRuns = spideryarn.table(
     check(
       "revision_step_runs_step",
       /**
-       * Every name in `StepName` (src/types.ts), and `'summary'` was missing —
-       * it is a step, it writes `summary.json`, and a step run recorded for it
-       * would have been rejected by this CHECK.
+       * Every name in `StepName` (src/types.ts), plus `'summary'`, which was
+       * a step until 2026-08-31 and is not one any more
+       * (docs/plans/gist-only-summaries.md). It stays in the list because
+       * removing it means re-adding a CHECK that existing `summary` step rows
+       * would violate — the constraint permits a value nothing writes, which
+       * costs nothing, and `tests/db-step-constraint.test.ts` names it as
+       * retired rather than letting the list quietly rot.
        *
        * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
        * step's OUTPUTS rather than a step of its own, so its currency rides
@@ -1324,7 +1381,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','timeline','sketch')`,
     ),
     check(
       "revision_step_runs_status",

@@ -71,7 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, SummaryEntry } from "../src/types.js";
+import type { Article } from "../src/types.js";
 import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
@@ -165,16 +165,17 @@ const PDF_META = {
   unverified: false,
 };
 
-/** The one sentence a visitor's summary band must actually put on screen. */
-const PUBLIC_SUMMARY = "What the piece is arguing, at length.";
-
-/** Matches `n0`, the tree's only node, so the ladder has a rung to draw. */
-const SUMMARY_ENTRY: SummaryEntry = {
-  range: ["spya-aaaaaa", "spya-cccccc"],
-  depth: 0,
-  short: "What the piece is arguing.",
-  long: PUBLIC_SUMMARY,
-};
+/**
+ * The one sentence a visitor's summary band must put on screen — and it is the
+ * **tree's own gist**, not an artefact.
+ *
+ * Stage 5e is gone (docs/plans/gist-only-summaries.md), so summary mode is now
+ * free for a visitor the way the table of contents is. That is worth a rendered
+ * assertion rather than a unit test: the mode used to be gated on a
+ * `summary.json` the payload might not carry, and a gate left behind would show
+ * *"Nobody has built a summary"* over a panel that has everything it needs.
+ */
+const PUBLIC_GIST = "What the piece says.";
 
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
@@ -239,8 +240,8 @@ const ARTICLE: PublicArticle = {
    * **Asymmetric on purpose, and it is the fixture that makes slice 1b
    * checkable at all.**
    *
-   * A glossary and a list of ideas are here; a summary and a tweet thread are
-   * not. So one article in one run produces both of the two answers a visitor
+   * A glossary and a list of ideas are here; a set of quotes and a tweet
+   * thread are not. So one article in one run produces both of the two answers a visitor
    * can get about an artefact — *here it is* and *nobody has built one* — and
    * "these two blurred into one" is visible. A fixture with all four, or with
    * none, cannot tell them apart. A browser pass made exactly this point on
@@ -293,14 +294,13 @@ const THREAD: PublicTweets = { limit: 280, tweets: [{ text: PUBLIC_TWEET, chars:
 const METADATA: PublicMetadata = {
   slug: SLUG,
   title: "A piece",
-  /* Two `true`s and three `false`s on purpose: a visitor pressing Glossary must
-     get a different sentence from one pressing Summary, and a fixture that
-     answered the same to every question could not tell that apart. */
+  /* Asymmetric on purpose: a visitor pressing Glossary must get a different
+     sentence from one pressing Quotes, and a fixture that answered the same to
+     every question could not tell that apart. */
   available: {
     arc: false,
     tweets: false,
     glossary: true,
-    summary: false,
     ideas: false,
     quotes: false,
   },
@@ -500,16 +500,16 @@ describe("a signed-out browser on a shared document", () => {
    * only one of the four states no human had ever seen was the one that says a
    * piece has no glossary.
    *
-   * The fixture is asymmetric on purpose — `glossary: true`, `summary: false` —
-   * so the two artefact sentences are produced by one article in one run, which
-   * is the arrangement in which "they blurred into one" is visible.
+   * The fixture is asymmetric on purpose — a glossary and no quotes — so the
+   * two artefact sentences are produced by one article in one run, which is the
+   * arrangement in which "they blurred into one" is visible.
    */
   it("tells an artefact it has from one nobody built, on screen", async () => {
-    await open("?mode=summary");
-    /* No `summary` key on the payload — nobody built one. This is the state the
+    await open("?mode=quotes");
+    /* No `quotes` key on the payload — nobody built one. This is the state the
        browser pass could not reach, because the article it drove had every
        artefact. */
-    expect(host.textContent).toContain("Nobody has built a summary for this piece yet");
+    expect(host.textContent).toContain("Nobody has built a set of quotes for this piece yet");
     expect(host.textContent).not.toContain(PUBLIC_TERM);
 
     await remount();
@@ -558,40 +558,28 @@ describe("a signed-out browser on a shared document", () => {
   /**
    * **The visitor's summary band, which nothing had ever mounted.**
    *
-   * The fixture above is asymmetric — no `summary` key — so every summary
-   * assertion in this file exercised the *missing* branch. GPT Sol found the
-   * consequence by reading the component tree, 2026-08-29: deleting the
-   * `!owner && mode === "summary"` band from App.tsx left the whole suite
-   * green, because a payload with a summary produced no gap and no band, just
-   * an empty mode. Confirmed by mutation before this was written.
-   */
-  it("draws the summary the payload carries, for a visitor", async () => {
-    served = { ...ARTICLE, summary: { entries: [SUMMARY_ENTRY], missing: 0 } };
-    /* `len=long` because the band opens on the gist rung, which draws the
-       tree's own `gist` — text that is on screen whether or not a summary was
-       ever fetched, and so cannot be evidence that one was. */
-    await open("?mode=summary&len=long");
-
-    expect(host.textContent).toContain(PUBLIC_SUMMARY);
-    expect(host.textContent).not.toContain("Nobody has built");
-    expect(outsidePublic()).toEqual([]);
-  });
-
-  /**
-   * **And the same artefact, run and empty.**
+   * GPT Sol found the consequence by reading the component tree, 2026-08-29:
+   * deleting the visitor's summary band from App.tsx left the whole suite
+   * green, because nothing ever put one on screen.
    *
-   * `hasLadder` is `entries.length > 0`, so an empty ladder disables the two
-   * longer rungs and titles them *"not written for this article yet"* — the
-   * never-built sentence, about an artefact the payload is carrying. GPT Sol,
-   * 2026-08-29. The `missing: 0` matters: with sections that came back empty
-   * the foot already says so, and this is the case where it does not.
+   * **What it asserts changed on 2026-08-31, and the change is the point.** It
+   * used to prove the band drew the *artefact* — `?len=long`, so the assertion
+   * could not be satisfied by the tree's own gist. Stage 5e is gone
+   * (docs/plans/gist-only-summaries.md) and the gist is now the whole of what
+   * this mode shows, so the thing worth proving is the opposite one: a visitor
+   * gets summary mode **for free**, on a payload carrying no summary artefact
+   * of any kind, with no *"nobody has built"* boundary in the way. A gate left
+   * behind in `visitorGap` is exactly what this reddens.
    */
-  it("does not tell a visitor a summary it is carrying was never written", async () => {
-    served = { ...ARTICLE, summary: { entries: [], missing: 0 } };
+  it("gives a visitor the summary outline, with no artefact behind it", async () => {
     await open("?mode=summary");
 
-    expect(host.innerHTML).not.toContain("not written for this article yet");
-    expect(host.textContent).toContain("A summary was built for this piece");
+    expect(host.textContent).toContain(PUBLIC_GIST);
+    expect(host.textContent).not.toContain("Nobody has built");
+    /* And the Depth control, which is the one thing the panel still offers —
+       so this cannot pass on a band that rendered its heading and nothing
+       else. */
+    expect(host.textContent).toContain("Depth");
     expect(outsidePublic()).toEqual([]);
   });
 

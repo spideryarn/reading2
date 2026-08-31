@@ -234,9 +234,11 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   arc: Waypoints,
   tweets: ListOrdered,
   glossary: BookA,
-  summary: Layers,
   ideas: Lightbulb,
   quotes: Quote,
+  /* The same clock the Dock puts on the Timeline button, so the stage row and
+     the mode button a reader has already met say the same thing. */
+  timeline: Clock,
   sketch: PenLine,
 };
 

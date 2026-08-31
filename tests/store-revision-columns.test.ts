@@ -172,7 +172,6 @@ const READS = [
   "publish",
   "tweets",
   "glossary",
-  "summaries",
   "ideas",
   "sketch",
   "arc",
@@ -197,17 +196,30 @@ describe("every projection obeys the policy", () => {
 
   it("lets the shelf ask whether an artefact exists without reading it", () => {
     /* The second half of docs/plans/library-read-latency.md, as a fact about
-       the policy rather than as a diff: the library is granted all five of
+       the policy rather than as a diff: the library is granted all four of
        these, and granted none of them by value. */
-    for (const column of ["tree", "arc", "tweets", "glossary", "summary"] as const) {
+    for (const column of ["tree", "arc", "tweets", "glossary"] as const) {
       expect({ column, use: POLICY[column].library }).toEqual({ column, use: "presence" });
     }
     /* And the read that returns each artefact still takes it by value, so
        "presence" cannot spread quietly into the reads that need the document. */
     expect(POLICY.glossary.glossary).toBe("value");
-    expect(POLICY.summary.summaries).toBe("value");
     expect(POLICY.tweets.tweets).toBe("value");
     expect(POLICY.tree.article).toBe("value");
+  });
+
+  /**
+   * **The retired column, granted to nobody.**
+   *
+   * `article_revisions.summary` outlived the stage that wrote it
+   * (docs/plans/gist-only-summaries.md): the column is kept because what is in
+   * it is real readers' summaries, and `beginDraftIn` still carries it forward.
+   * What must not come back is a *read* — the whole point of retiring it is
+   * that nothing serves, compares or regenerates those bytes, and an empty
+   * policy entry is easy to fill in by accident while adding a projection.
+   */
+  it("grants the retired summary column to no read at all", () => {
+    expect(POLICY.summary).toEqual({});
   });
 
   it("gives the shelf the cached scalars, which nothing read until 2026-08-28", () => {
@@ -296,7 +308,7 @@ describe("the query actually uses its projection", () => {
    * src/source-hash.ts § `articleFingerprint`.
    */
   it("gives the tree to every read whose staleness compares it, and no other", () => {
-    const compares = new Set(["tweets", "glossary", "summaries", "ideas", "sketch", "arc"]);
+    const compares = new Set(["tweets", "glossary", "ideas", "sketch", "arc"]);
     for (const read of READS) {
       /* `article`, `metadata` and `publish` render or validate the tree rather
          than fingerprinting it, and the library asks about it in SQL. Those
@@ -330,9 +342,9 @@ describe("the shelf's own query", () => {
   const shelfSql = (archived: boolean): string =>
     listArticlesQuery(new QueryBuilder() as never, { archived }).toSQL().sql;
 
-  it("looks at the five artefact columns and reads none of them", () => {
+  it("looks at the four artefact columns and reads none of them", () => {
     const sql = shelfSql(false);
-    for (const column of ["tree", "arc", "tweets", "glossary", "summary"] as const) {
+    for (const column of ["tree", "arc", "tweets", "glossary"] as const) {
       /* Present, and present ONLY as a null test. A bare `"tree"` in the select
          list is the 37 KB document crossing the wire to answer a boolean. */
       expect({ column, asked: sql.includes(`"${column}" is not null`) }).toEqual({

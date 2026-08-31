@@ -74,7 +74,6 @@ import {
   type MetaFingerprint,
   type MetaFingerprintWithUrl,
 } from "../source-hash.js";
-import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
   Arc,
@@ -95,8 +94,6 @@ import type {
   Meta,
   ShelfState,
   StepName,
-  Summaries,
-  SummariesFound,
   ThreadFound,
   Tree,
   TweetThread,
@@ -236,8 +233,8 @@ export function onTheShelf() {
  * one".
  *
  * What that left behind: a glossary read pulling `extracted_html` and
- * `stamped_html` — the whole article, twice — plus the tree, the labels, the
- * ideas and the summaries, in order to return a 10 KB glossary. About 508 KB of
+ * `stamped_html` — the whole article, twice — plus the tree, the labels and the
+ * ideas, in order to return a 10 KB glossary. About 508 KB of
  * it on a 360-block article, measured from the artefacts on disk that became
  * those columns. GPT Sol's review of docs/plans/glossary-read-latency.md said a
  * shared *narrow* set would still be the wrong shape, and it was right: the fix
@@ -275,7 +272,6 @@ const PRESENCE_OF = {
   hasArc: "arc",
   hasTweets: "tweets",
   hasGlossary: "glossary",
-  hasSummary: "summary",
 } as const satisfies Record<string, keyof typeof articleRevisions.$inferSelect>;
 
 /** Exported for the test that guards the policy. Not a read seam. */
@@ -288,7 +284,6 @@ type RevisionReader =
   | "tweets"
   | "glossary"
   | "quotes"
-  | "summaries"
   | "ideas"
   | "sketch"
   | "arc";
@@ -305,7 +300,7 @@ const REVISION_READ_POLICY: Record<
      them to this. */
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
-    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value",
   },
   articleId: { publish: "value" },
@@ -324,17 +319,17 @@ const REVISION_READ_POLICY: Record<
      re-fetch. */
   title: {
     article: "value", library: "value", metadata: "value", arc: "value",
-    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value",
   },
   byline: {
     article: "value", library: "value", metadata: "value", arc: "value",
-    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value",
   },
   siteName: {
     article: "value", library: "value", metadata: "value", arc: "value",
-    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value",
   },
   lang: { article: "value", library: "value" },
@@ -373,15 +368,15 @@ const REVISION_READ_POLICY: Record<
        re-sectioned article's artefact current while the filesystem store called
        it stale — see `REVISION_PROJECTIONS.sketch`.
 
-       **`tweets`, `glossary` and `summaries` joined them on 2026-08-31**, when
-       the other three fingerprints were completed to match: every one of these
-       prompts is built out of `partsOf(tree)` or `batchesOf(tree)`, so all six
-       were always reading it and only three were comparing it. The marginal
+       **`tweets` and `glossary` joined them on 2026-08-31**, when
+       the other fingerprints were completed to match: every one of these
+       prompts is built out of `partsOf(tree)`, so all of them
+       were always reading it and only some were comparing it. The marginal
        cost is small where it lands — each of these reads already pulls every
        block's id and text through `blockHashInputs` to compute the same
        fingerprint, which is the whole article. */
     arc: "value", sketch: "value",
-    tweets: "value", glossary: "value", summaries: "value",
+    tweets: "value", glossary: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -421,7 +416,13 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and **not the library**: a card shows
      four ticks and a fifth would not fit — the same call `sketch` makes below. */
   quotes: { metadata: "value", quotes: "value" },
-  summary: { metadata: "value", summaries: "value", library: "presence" },
+  /* **The one column nothing reads and nothing writes**, since 2026-08-31.
+     The generated length ladder was deleted (docs/plans/gist-only-summaries.md)
+     and the column was deliberately left where it is: dropping a column is not
+     reversible and what is in it is real readers' summaries. An empty policy is
+     what makes that visible rather than merely true — a reader added here would
+     be reviving a stage that no longer exists. */
+  summary: {},
   ideas: { metadata: "value", ideas: "value" },
   /* Its own reader and the metadata page, and **not the library**: a card shows
      four ticks and a fifth would not fit, and a scene is the widest artefact
@@ -582,7 +583,6 @@ export const REVISION_PROJECTIONS = {
     hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
     hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
     hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
-    hasSummary: sql<boolean>`${articleRevisions.summary} is not null`.as("has_summary"),
   },
   metadata: {
     id: articleRevisions.id,
@@ -605,7 +605,6 @@ export const REVISION_PROJECTIONS = {
     tweets: articleRevisions.tweets,
     glossary: articleRevisions.glossary,
     quotes: articleRevisions.quotes,
-    summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
     /* The fifth artefact that can carry a `profileHash`, and it is here for
        that alone: `personalisedSteps` must be exhaustive or the confirmation
@@ -633,7 +632,6 @@ export const REVISION_PROJECTIONS = {
   /* `FINGERPRINT_COLUMNS` and not the cited set: `quotes` sends `articleText`,
      whose head prints no `URL:` line — src/models.ts § ARTICLE_RENDERER. */
   quotes: { id: articleRevisions.id, quotes: articleRevisions.quotes, ...FINGERPRINT_COLUMNS },
-  summaries: { id: articleRevisions.id, summary: articleRevisions.summary, ...FINGERPRINT_COLUMNS },
   ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, ...CITED_FINGERPRINT_COLUMNS },
   sketch: {
     id: articleRevisions.id,
@@ -791,7 +789,7 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
 /**
  * The blocks **as a fingerprint**, for the four reads that only want `stale`.
  *
- * `loadTweets`, `loadGlossary`, `loadSummaries` and `loadIdeas` each read every
+ * `loadTweets`, `loadGlossary` and `loadIdeas` each read every
  * block row — `text`, `html` and, until 2026-08-27, the generated `fts` vector
  * too — put them through the sanitiser, and then reduce the lot to a sixteen
  * character hash and throw them away. On a 360-block article that is roughly
@@ -952,7 +950,6 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   tweets: ["article_revisions.tweets"],
   glossary: ["article_revisions.glossary"],
   quotes: ["article_revisions.quotes"],
-  summary: ["article_revisions.summary"],
   ideas: ["article_revisions.ideas"],
   sketch: ["article_revisions.sketch"],
 };
@@ -1545,7 +1542,6 @@ function personalisedSteps(revision: {
   tweets: TweetThread | null;
   glossary: Glossary | null;
   quotes: Quotes | null;
-  summary: Summaries | null;
   ideas: Ideas | null;
   sketch: Sketch | null;
 }): StepName[] {
@@ -1556,7 +1552,6 @@ function personalisedSteps(revision: {
     tweets: revision.tweets,
     glossary: revision.glossary,
     quotes: revision.quotes,
-    summary: revision.summary,
     ideas: revision.ideas,
     sketch: revision.sketch,
   };
@@ -1579,7 +1574,6 @@ export const pgArticleReader: Pick<
   | "loadTweets"
   | "loadGlossary"
   | "loadQuotes"
-  | "loadSummaries"
   | "loadIdeas"
   | "loadSketch"
   | "loadArc"
@@ -1676,7 +1670,6 @@ export const pgArticleReader: Pick<
             arc: row.revision.hasArc,
             tweets: row.revision.hasTweets,
             glossary: row.revision.hasGlossary,
-            summary: row.revision.hasSummary,
           },
         }),
       );
@@ -1714,17 +1707,17 @@ export const pgArticleReader: Pick<
    * and the publication guard cannot disagree: the recorded `input_hash` must
    * equal `hashBlocks` of this revision's blocks.
    *
-   * `tweets`, `glossary` and `summary` carry their own `sourceHash`, so they
+   * `tweets` and `glossary` carry their own `sourceHash`, so they
    * are checked against the artefact itself rather than against the step row —
    * the artefact is what a reader would actually be served.
    *
    * **The prompt-version and model half of the comparison is only done for the
    * glossary**, and that is a known, narrow divergence rather than an oversight:
-   * `src/tweets.ts` and `src/summarise.ts` keep their `PROMPT_VERSION` module
-   * private, so nothing outside them can say what stamp they *would* write.
-   * The fix is theirs and a review already named it — each stage exports an
+   * `src/tweets.ts` keeps its `PROMPT_VERSION` module
+   * private, so nothing outside it can say what stamp it *would* write.
+   * The fix is its own and a review already named it — the stage exports an
    * `expectedStamp(blocks)` factory and keeps the constant private. Until then
-   * a model change makes those two steps re-runnable on disk and still
+   * a model change makes that step re-runnable on disk and still
    * green here.
    *
    * `arc` gained one on 2026-08-29 — `arc.json` records the blocks, the tree and
@@ -1765,7 +1758,7 @@ export const pgArticleReader: Pick<
        not-current for every one of them. */
     const tree = revision.tree as Tree | null;
     /* **Two heads, because there are two prompts.** `articleText` (arc, tweets,
-       glossary, summary) prints three metadata lines; `articleWithIds` (ideas,
+       glossary) prints three metadata lines; `articleWithIds` (ideas,
        sketch) prints those three and a `URL:`, and falls back to the tree's slug
        when there is no metadata at all. src/source-hash.ts. */
     const metaFingerprint = metaFingerprintOf(revision);
@@ -1829,12 +1822,6 @@ export const pgArticleReader: Pick<
               promptVersion: QUOTES_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
-          );
-        }
-        case "summary": {
-          const summaries = revision.summary as Summaries | null;
-          return Boolean(
-            summaries && tree && !summariesStale(summaries, blocks, tree, metaFingerprint),
           );
         }
         case "ideas":
@@ -2065,28 +2052,6 @@ export const pgArticleReader: Pick<
          the article moved underneath these quotes; this means the article is
          the same and we would choose differently now. */
       outdated: quotes.version !== QUOTES_PROMPT_VERSION,
-    };
-  },
-
-  async loadSummaries(slug: string): Promise<SummariesFound> {
-    requireSlug(slug);
-    const found = await currentRevision(slug, "summaries");
-    if (!found) throw notFound(slug);
-
-    const summaries = found.revision.summary as Summaries | null;
-    if (!summaries) {
-      throw Object.assign(
-        new Error(
-          `No summaries for "${slug}" yet. Write them with \`npm run summarise -- ${slug}\`.`,
-        ),
-        { status: 404 },
-      );
-    }
-    const blocks = await blockHashInputs(found.revision.id);
-    const tree = found.revision.tree as Tree | null;
-    return {
-      summaries,
-      stale: !tree || summariesStale(summaries, blocks, tree, metaFingerprintOf(found.revision)),
     };
   },
 

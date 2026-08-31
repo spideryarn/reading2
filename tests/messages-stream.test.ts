@@ -243,12 +243,12 @@ describe("streamMessage — the recording lifecycle", () => {
        `modelFor()` what it *would* return — never what was sent. */
     const t = stubTransport(cannedStream());
     try {
-      for (const task of ["toc", "arc", "labels", "summarise", "glossary", "ideas", "tweets"] as const) {
+      for (const task of ["toc", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
         await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }).finalMessage();
       }
       const sent = t.seenRequests.map((r) => r.body.model);
       expect(sent).toEqual(sent.map((_, i) => modelFor(
-        (["toc", "arc", "labels", "summarise", "glossary", "ideas", "tweets"] as const)[i]!,
+        (["toc", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!,
       )));
       /* And specifically: the prefixed spelling, never the artefact stamp. */
       for (const m of sent) {
@@ -503,9 +503,9 @@ describe("wasRefused", () => {
 
   it("catches the shape OpenRouter's reference shows — end_turn with refusal details", () => {
     /* The one this was added for. If only `stop_reason` were checked, this
-       returns false, the stage parses a refusal sentence as JSON, and
-       summarise.ts buys a second call before salvaging the batch as merely
-       incomplete. Nothing errors and the bill goes up. */
+       returns false, and the stage parses a refusal sentence as JSON — a stage
+       that repairs before giving up then buys a second call for it. Nothing
+       errors and the bill goes up. */
     expect(wasRefused(message({ stop_reason: "end_turn", stop_details: { type: "refusal" } }))).toBe(
       true,
     );

@@ -267,7 +267,11 @@ outside the store, which is exactly why the predicate above did not catch them:
   authenticated and not authorised — it took a slug, opened `data/<slug>/raw.pdf`
   and returned it, never once asking whose article that was. It now calls
   `shelfStore.read(slug)` first, which is the same owner-filtered lookup
-  everything else uses, and it calls it *before* it touches the disk.
+  everything else uses, and it calls it *before* it goes for the bytes. It no
+  longer touches the disk at all: on 2026-08-31 the read went through
+  `sourceStore` ([`src/store/index.ts`](../../src/store/index.ts)), whose
+  Postgres side resolves the slug through `ownedSlug` as well — so the ordering
+  is belt and the query is braces.
 - **The ingest queue was completely open.** `Job` had no owner and there is one
   global map, so any signed-in stranger could list every reader's slugs, source
   URLs, uploaded filenames, guidance text and errors — and cancel, retry, advance

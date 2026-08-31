@@ -41,7 +41,7 @@ function entry(slug: string, url?: string): LibraryEntry {
     sections: 1,
     comments: 0,
     opens: 0,
-    has: { arc: false, tweets: false, glossary: false, summary: false },
+    has: { arc: false, tweets: false, glossary: false },
   };
 }
 

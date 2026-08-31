@@ -25,8 +25,7 @@
  * and orphans every comment in the database.
  */
 import { JSDOM } from "jsdom";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -670,14 +669,12 @@ describe("a no-op re-ingest of a real article", () => {
   beforeAll(async () => {
     for (const fixture of PAGES) {
       const html = await readFile(path.join(FIXTURES, fixture), "utf-8");
-      const dir = await mkdtemp(path.join(tmpdir(), "note-carry-over-"));
-      try {
-        const outFile = path.join(dir, fixture);
-        await runExtract({ html, url: `https://example.test/${fixture}`, outFile, dataDir: dir });
-        extracted.set(fixture, await readFile(outFile, "utf-8"));
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
+      const result = await runExtract({
+        html,
+        url: `https://example.test/${fixture}`,
+        slug: fixture,
+      });
+      extracted.set(fixture, result.extractedHtml);
     }
   }, SLOW);
 

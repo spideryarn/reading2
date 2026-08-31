@@ -37,7 +37,6 @@ import type {
   Ideas,
   Quotes,
   NodeId,
-  Summaries,
   Tree,
   TreeNode,
   TweetThread,
@@ -53,7 +52,6 @@ import type {
  */
 const NO_ARTEFACTS = {
   glossary: null,
-  summary: null,
   ideas: null,
   quotes: null,
   tweets: null,
@@ -666,17 +664,17 @@ describe("the public article payload", () => {
 });
 
 /**
- * **The four artefacts slice 1b carries**, each fed an input that is
+ * **The artefacts a shared link carries**, each fed an input that is
  * deliberately over-full.
  *
  * Every fixture below carries the private field as well as the public one —
- * `guidance` on the summaries, a `lookup` on a glossary entry, `profileHash` on
- * all four, the generator and the timings — so a projection that copied its
+ * a `lookup` on a glossary entry, `profileHash` on
+ * each, the generator and the timings — so a projection that copied its
  * argument, spread it, or filtered a denylist would fail here rather than pass
  * for want of anything to leak. A fixture with nothing forbidden in it proves
  * nothing at all, which is the mistake the top of this file exists to name.
  */
-describe("the four artefacts a shared link carries", () => {
+describe("the artefacts a shared link carries", () => {
   /**
    * A glossary with **a lookup on one of its entries**, which is the single
    * most private thing in any of these four.
@@ -730,37 +728,6 @@ describe("the four artefacts a shared link carries", () => {
       },
     ],
   };
-
-  /**
-   * Summaries carrying **`guidance`** — the owner's free-text steer.
-   *
-   * The steer was deleted on 2026-08-30 and `Summaries` no longer declares the
-   * field (docs/plans/steer-becomes-the-profile.md), hence the cast. It stays in
-   * this fixture because **the state is real, not invented**: every summary
-   * written before that date still has one inside its stored JSON, and the
-   * projection has to go on dropping it. Deleting the fixture would retire a
-   * guard over data that still exists.
-   */
-  const SUMMARIES = {
-    version: "summary/1",
-    generator: "some-model",
-    slug: "noema",
-    sourceHash: "abc123",
-    profileHash: "profile-of-a-person",
-    guidance: "I am reading this for the argument about measurement, skip the history.",
-    missing: 2,
-    generatedAt: "2026-08-28T10:00:00.000Z",
-    elapsedMs: 62_000,
-    entries: [
-      {
-        range: ["spya-h1aaaa", "spya-k3m9qt"],
-        depth: 0,
-        short: "A few sentences.",
-        long: "A paragraph.",
-      },
-      { range: ["spya-k3m9qt", "spya-k3m9qt"], depth: 1 },
-    ],
-  } as Summaries & { guidance: string };
 
   const IDEAS: Ideas = {
     version: "ideas/1",
@@ -854,7 +821,6 @@ describe("the four artefacts a shared link carries", () => {
     arc: null,
     assets: null,
     glossary: GLOSSARY,
-    summary: SUMMARIES,
     ideas: IDEAS,
     quotes: QUOTES,
     tweets: THREAD,
@@ -932,13 +898,6 @@ describe("the four artefacts a shared link carries", () => {
     }
   });
 
-  it("carries the summary ladder and never the owner's steer", () => {
-    expect(pathsUnder("summary")).toEqual(
-      ["entries", "entries[].depth", "entries[].long", "entries[].range", "entries[].short", "missing"].sort(),
-    );
-    expect(JSON.stringify(built.summary)).not.toContain("skip the history");
-  });
-
   it("carries the ideas and none of their provenance", () => {
     expect(pathsUnder("ideas")).toEqual(
       [
@@ -972,8 +931,6 @@ describe("the four artefacts a shared link carries", () => {
     expect(built.glossary?.entries).toHaveLength(2);
     expect(built.glossary?.entries[0]?.name).toBe("Integrated information theory");
     expect(built.glossary?.entries[0]?.blocks).toEqual(["spya-k3m9qt"]);
-    expect(built.summary?.entries[0]?.long).toBe("A paragraph.");
-    expect(built.summary?.missing).toBe(2);
     expect(built.ideas?.ideas[0]?.statement).toContain("no way to measure");
     expect(built.ideas?.ideas[0]?.occurrences[0]?.quote).toContain("first example");
     expect(built.tweets?.tweets[0]?.text).toBe("The first post.");
@@ -1008,7 +965,6 @@ describe("the four artefacts a shared link carries", () => {
       arc: null,
       assets: null,
       glossary: { ...GLOSSARY, entries: [] },
-      summary: null,
       ideas: { ...IDEAS, ideas: [] },
       quotes: null,
       tweets: null,
@@ -1017,7 +973,6 @@ describe("the four artefacts a shared link carries", () => {
     expect(empty.glossary?.entries).toEqual([]);
     expect("ideas" in empty).toBe(true);
     expect(empty.ideas?.ideas).toEqual([]);
-    expect("summary" in empty).toBe(false);
     expect("tweets" in empty).toBe(false);
   });
 
@@ -1037,7 +992,7 @@ describe("the four artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "summary", "ideas", "tweets"]) {
+    for (const key of ["glossary", "ideas", "tweets"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -1052,14 +1007,13 @@ describe("the public metadata payload", () => {
       arc: true,
       tweets: false,
       glossary: true,
-      summary: false,
       ideas: false,
       quotes: false,
     },
   });
 
   /**
-   * **Five booleans and a title.** The owner's `ArticleMetadata` carries `dir`,
+   * **A handful of booleans and a title.** The owner's `ArticleMetadata` carries `dir`,
    * the whole of `stages` — internal paths, column names, run times, byte
    * counts — plus `comments`, `profile`, `purpose` and `archivedAt`. None of it
    * is a visitor's business and most of it is about us rather than about the
@@ -1073,7 +1027,6 @@ describe("the public metadata payload", () => {
         "available.glossary",
         "available.ideas",
         "available.quotes",
-        "available.summary",
         "available.tweets",
         "slug",
         "title",
@@ -1086,7 +1039,6 @@ describe("the public metadata payload", () => {
       arc: true,
       tweets: false,
       glossary: true,
-      summary: false,
       ideas: false,
       quotes: false,
     });

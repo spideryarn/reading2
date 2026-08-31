@@ -38,6 +38,9 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
+| `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
+| `rank` | how the quote list is ordered, absent for `document` — which is the **default**, on Greg's own instruction, unlike the glossary's `sort` below | push | `?rank=prioritised` |
+| `bar` | how high the quotes' prioritised bar is — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `0.70` | **replace**, debounced | `?bar=0.55` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | how high the prioritised order's bar is — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `0.30` | **replace**, debounced | `?gate=0.45` |
 | `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
@@ -45,7 +48,6 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
 | `conf` | the bar `prioritised` hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
-| `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 | `diagram` | which of the three pictures diagram mode is drawing, absent for `force` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
@@ -55,7 +57,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo
 it, where the other two are ways of looking at one picture — a reader flicking
 between lanes and spread to compare them should not have to press Back eight
-times to leave. Same call `?len=` and `?gate=` make on either side of the same
+times to leave. Same call `?gate=` makes on either side of the same
 line.
 
 **Diagram mode's one exception, and it is deliberate**: which sections the

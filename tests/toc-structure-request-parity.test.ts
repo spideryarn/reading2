@@ -17,10 +17,7 @@
  * to "medium" (the output_config assertion fired). Both perturbations reverted.
  */
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../src/types.js";
 
 /* The capture. streamMessage is mocked to record the one body generateToc
@@ -109,22 +106,14 @@ const EXPECTED_USER = [
    40,000-token thinking headroom. Literals, not the formulae re-run. */
 const EXPECTED_MAX_TOKENS = 41_900;
 
-let dir: string;
-
-beforeAll(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), "toc-parity-"));
-  await writeFile(path.join(dir, "fixture.blocks.json"), JSON.stringify({ blocks: BLOCKS }));
-});
-
-afterAll(async () => {
-  await rm(dir, { recursive: true, force: true });
-});
+/* No temp directory: the stage takes the blocks themselves and writes nothing,
+   so the fixture is the array above and the pinned bytes are unaffected. */
 
 describe("the structure call's request", () => {
   it("sends exactly the pinned bytes and settings", async () => {
     captured.length = 0;
     await expect(
-      generateToc({ blocksPath: path.join(dir, "fixture.blocks.json"), outDir: path.join(dir, "out") }),
+      generateToc({ blocks: BLOCKS, slug: "fixture" }),
     ).rejects.toThrow(); // the mocked call fails on purpose, after capture
     expect(captured).toHaveLength(1);
 
@@ -148,7 +137,7 @@ describe("the structure call's request", () => {
   it("structureRequest is the same request - parity by construction, checked anyway", async () => {
     captured.length = 0;
     await expect(
-      generateToc({ blocksPath: path.join(dir, "fixture.blocks.json"), outDir: path.join(dir, "out") }),
+      generateToc({ blocks: BLOCKS, slug: "fixture" }),
     ).rejects.toThrow();
     const { body } = captured[0]!;
     const req = structureRequest(BLOCKS);

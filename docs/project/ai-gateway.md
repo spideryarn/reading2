@@ -9,7 +9,7 @@ directly, because OpenRouter has no realtime API to route to — its audio endpo
 and batch transcription, and there is no duplex speech-to-speech. It is not a routing preference; it
 was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a single
 `OPENROUTER_API_KEY`*") is answered at length in
-[live-conversation.md](../plans/live-conversation.md).
+[live-conversation.md](live-conversation.md).
 
 Two things about it belong here rather than there, because they are properties of *this* claim.
 **The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
@@ -23,8 +23,9 @@ mistake to avoid.** Every method on the declared-bypass `Observer` takes a respo
 process received*. Nobody here receives one — the usage exists only in the reader's browser tab — so
 metering this needs a way for a tab to report what it spent and a reason for the server to believe
 it, which is a larger question than the register answers today. That is a hole with a name rather
-than a to-do: live-conversation.md § What is missing, and it must be closed before readers see the
-feature.
+than a to-do:
+[live-conversation.md § What is not built](live-conversation.md#what-is-not-built), and it must be
+closed before readers see the feature.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
@@ -51,7 +52,7 @@ fail without saying so.
 
 Until that day there were two vendors. The seven pipeline stages — [`toc`](../../src/toc.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
-[`glossary`](../../src/glossary.ts), [`summarise`](../../src/summarise.ts),
+[`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
 to `api.anthropic.com`. Everything a reader waits on went to OpenRouter.
 
@@ -536,7 +537,7 @@ Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-ga
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
 `stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. All seven stages branch on
 `message.stop_reason === "refusal"`, and if that branch stops firing each one tries to parse a
-refusal sentence as JSON — [`summarise.ts`](../../src/summarise.ts) worst of all, treating it as a
+refusal sentence as JSON — `summarise.ts` worst of all, treating it as a
 repairable parse error, buying a second call, and then salvaging the batch as merely missing
 summaries.
 

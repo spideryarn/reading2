@@ -43,7 +43,6 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
 } from "./sketch.js";
-import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -64,7 +63,6 @@ import type {
   IdeasFound,
   QuotesFound,
   SketchFound,
-  SummariesFound,
   LibraryEntry,
   ListOptions,
   Meta,
@@ -265,9 +263,9 @@ export async function loadArticle(slug: string): Promise<Article> {
        cleans only when it disagrees — measured at 33ms and ~130MB of jsdom
        retention per article to do it unconditionally, which is a real cost on
        every page load forever to cover a case that is rare and bounded. The
-       other four reads here (loadTweets, loadGlossary, loadSummaries,
-       describeDir) take `text`, not `html`. A glossary lookup used to be a
-       fifth; since 2026-08-26 it asks for the article through this function
+       other three reads here (loadTweets, loadGlossary, describeDir) take
+       `text`, not `html`. A glossary lookup used to be a
+       fourth; since 2026-08-26 it asks for the article through this function
        instead (src/term-lookup.ts), so it is covered by this line rather than
        standing beside it.
 
@@ -683,55 +681,6 @@ export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }
   }
 }
 
-/**
- * The article's summaries, and whether they still describe the article.
- *
- * The read half of stage 5e, and the third copy of a shape that is now settled:
- * `loadTweets`, `loadGlossary` and this one answer the same question about
- * different artefacts, and the day they stop agreeing is the day one of them is
- * wrong. So the same three rules hold here — `articleDir` rather than a
- * directory of its own, `stale` computed at read time rather than stored, and
- * 404 for "nobody has asked for these yet", which is the ordinary case and what
- * the panel's button is for.
- *
- * **There is no `deleteSummaries` beside this, and the absence is deliberate.**
- * `deleteGlossary` exists because asking for that step again *appends* to the
- * list, so "start over" had no other spelling. This step replaces its artefact
- * wholesale, so running it again already means start over; a delete would be a
- * second way to say the same thing, and the only thing it would add is a way to
- * lose the summaries without getting new ones.
- */
-export async function loadSummaries(slug: string): Promise<SummariesFound> {
-  requireSlug(slug);
-
-  const dir = await articleDir(slug);
-  if (!dir) {
-    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
-  }
-  const summaries = await readSummaries(dir);
-  if (!summaries) {
-    throw Object.assign(
-      new Error(
-        `No summaries for "${slug}" yet. Write them with ` +
-          `POST /api/jobs { "slug": "${slug}", "steps": ["summary"] }.`,
-      ),
-      { status: 404 },
-    );
-  }
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  // `articleDir` already proved blocks.json is there, so the fallback is for a
-  // file that has become unreadable between the two reads. Unknown counts as
-  // stale: the honest answer, and the safe way round to be wrong.
-  /* The tree and the metadata as well: `batchesOf` and `skeletonOf` build this
-     stage's prompt out of the tree, and `articleText` writes the head. */
-  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
-  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
-  return {
-    summaries,
-    stale: !blocksFile || !tree || summariesStale(summaries, blocksFile.blocks, tree, meta ?? null),
-  };
-}
-
 /* ----------------------------------------------------------- provenance --
    What the metadata page needs and the article payload does not carry: which
    of the pipeline's stages have actually run for this article.
@@ -1051,7 +1000,6 @@ export function describeArticle(input: {
       arc: input.has?.arc ?? false,
       tweets: input.has?.tweets ?? false,
       glossary: input.has?.glossary ?? false,
-      summary: input.has?.summary ?? false,
     },
     ...(meta.byline ? { byline: meta.byline } : {}),
     ...(meta.siteName ? { siteName: meta.siteName } : {}),
@@ -1158,17 +1106,17 @@ async function describeDir(
     }
   }
 
-  /* Existence, not contents. Four `stat`s beside the three reads this function
-     already does, and deliberately not four more `readJson`s: the tooltip asks
+  /* Existence, not contents. Three `stat`s beside the three reads this function
+     already does, and deliberately not three more `readJson`s: the tooltip asks
      "has a glossary been built", not "how many terms are in it", and parsing
-     four artefacts per card per homepage load to answer a question nobody asked
+     three artefacts per card per homepage load to answer a question nobody asked
      is how a shelf gets slow without anyone deciding it should.
 
      `Promise.all`, because they are independent and this already runs once per
      article; and `exists` rather than a try/catch each, so a missing file reads
      as `false` rather than as an error to be swallowed. */
-  const [arc, tweets, glossaryFile, summary] = await Promise.all(
-    ["arc.json", "tweets.json", "glossary.json", "summary.json"].map((name) =>
+  const [arc, tweets, glossaryFile] = await Promise.all(
+    ["arc.json", "tweets.json", "glossary.json"].map((name) =>
       exists(path.join(dir, name)),
     ),
   );
@@ -1201,7 +1149,6 @@ async function describeDir(
         arc: arc ?? false,
         tweets: tweets ?? false,
         glossary: glossaryFile ?? false,
-        summary: summary ?? false,
       },
     }),
   };

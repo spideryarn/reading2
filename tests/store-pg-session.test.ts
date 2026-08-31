@@ -221,7 +221,12 @@ import { STORAGE_FAILED } from "../src/messages.js";
 import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
 import { runAsOwner } from "../src/owner.js";
 import { STEPS, contextPaths } from "../src/pipeline.js";
-import type { PipelineStep, StepContext, StepProduct } from "../src/pipeline.js";
+import type {
+  ConvertedProduct,
+  PipelineStep,
+  StepContext,
+  StepProduct,
+} from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactOutcome, ArtifactReads } from "../src/store/artifacts.js";
@@ -553,13 +558,30 @@ interface StepLog {
  * A **converted** `arc`: it writes nothing itself and returns the artefact.
  *
  * A real step name, because `StepRegistry` is keyed by `StepName` and the
- * coordinator looks the step up by the name on the job. `arc` is the one D3
- * converts first, which makes it the honest stand-in — and it declares exactly
- * one artefact, so a product missing that one artefact is a product missing
- * everything, which is what test 2 wants to say.
+ * coordinator looks the step up by the name on the job. `arc` was the first
+ * stage converted for real (2026-08-31), which makes it the honest stand-in —
+ * and it declares exactly one artefact, so a product missing that one artefact
+ * is a product missing everything, which is what test 2 wants to say.
  *
  * No `stamp` and no `isDone`, so `stepIsDone` reduces to *is the artefact there
  * and is the step not interrupted* — the two questions tests 6 and 8 are about.
+ *
+ * ## The cast, and why it is not a fixture inventing an impossible state
+ *
+ * Most callers below hand back `{ detail: "" }` with no `parts`, because what
+ * they are testing is that the coordinator **refuses** exactly that. Since
+ * `arc` came off `LEGACY_UNCONVERTED_STEPS` the type system forbids it:
+ * `PipelineStep<"arc">["run"]` returns `ConvertedProduct`, where `parts` is
+ * required. That is the compile-time half of the same rule and it is working.
+ *
+ * The runtime half still has to be tested, and it is not redundant. The
+ * transactional session asks `checkProduct` with an **empty** unconverted set,
+ * so it refuses a product with no `parts` for *every* step — including the four
+ * still on the legacy list, whose types permit `{ detail }` today. A type is
+ * also only a claim about this repository's own callers. So the fixture reaches
+ * past the compiler on purpose, in one place, with the reason written down —
+ * rather than each call site casting, or the whole test being rewritten around
+ * a still-legacy step and quietly ceasing to say anything about a converted one.
  */
 function fakeArc(
   produce: (ctx: StepContext, store: ArtifactReads) => Promise<StepProduct>,
@@ -575,7 +597,7 @@ function fakeArc(
         log.calls += 1;
         log.sawArc = await store.read(ctx.slug, "arc", "arc");
       }
-      return await produce(ctx, store);
+      return (await produce(ctx, store)) as ConvertedProduct;
     },
   };
 }

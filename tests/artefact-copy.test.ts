@@ -75,7 +75,12 @@ const OWNED = [
   "data/writes/arc.json",
   "data/writes/tweets.json",
   "data/writes/glossary.json",
-  "data/writes/summary.json",
+  /* **No `summary.json`.** The stage that wrote it and the `summary` artefact
+     kind both went on 2026-08-31 (docs/plans/gist-only-summaries.md), so the
+     store no longer owns the file — `data/writes/summary.json` is still on disk
+     and is now just a file in the directory, like `chat.json`. The Postgres
+     column that held it was kept and travels by `db:export`/`db:import`
+     instead. */
   "data/writes/ideas.json",
   /* **`quotes.json` is deliberately NOT here yet**, and the reason is this
      list's own first assertion: every row asserts the fixture HAS the file

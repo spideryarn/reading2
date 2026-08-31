@@ -566,7 +566,7 @@ OpenRouter's own Messages reference is *internally contradictory*: its example s
 `stop_details.type: "refusal"` alongside `stop_reason: "end_turn"`. If that is real rather than a
 documentation slip, then every `stop_reason === "refusal"` branch in the seven stages never fires,
 and each stage tries to parse refusal prose as JSON. Sol's table of what each one then does is worth
-reading — [summarise.ts](../../src/summarise.ts) is the worst, treating it as a repairable parse
+reading — `summarise.ts` is the worst, treating it as a repairable parse
 error, **buying a second call**, and then salvaging the batch as merely missing summaries.
 
 I could not settle this by probe: triggering a real refusal means composing a genuinely harmful

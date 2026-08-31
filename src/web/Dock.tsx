@@ -98,6 +98,7 @@ import {
   BookA,
   Lightbulb,
   ChevronUp,
+  Clock,
   Focus,
   LoaderCircle,
   Network,
@@ -312,7 +313,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: Layers,
     label: "Summary",
     blurb:
-      "The article, its parts and its sections, each at whichever length you ask for — a sentence, a few, or a page",
+      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
   },
   {
     mode: "glossary",
@@ -342,6 +343,20 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: Quote,
     label: "Quotes",
     blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
+  },
+  /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
+     and the reason it lands *here* rather than immediately after the Ideas row:
+     Quotes arrived between the two the same day, and "after Ideas" is a
+     position in the reasoning — with Glossary and Ideas, as a third "here is one
+     dimension of this piece pulled out" — rather than an array index. It is
+     further from the article's own words than either of those, and further than
+     Quotes, so it goes at the far end of that group.
+     docs/plans/timeline-mode.md § 3. */
+  {
+    mode: "timeline",
+    icon: Clock,
+    label: "Timeline",
+    blurb: "When the piece says these things happened, in order — and how sure it actually is",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

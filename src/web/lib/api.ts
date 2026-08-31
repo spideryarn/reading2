@@ -500,7 +500,10 @@ function slugOf(input: string): string {
  * shelf — Greg's ask was that *"stuff that has already been computed (e.g.
  * existing ToC, glossary, summary, ideas, chat history, etc etc)"* survive
  * losing the connection. The ToC needs no entry of its own: it arrives inside
- * the article payload.
+ * the article payload — and since 2026-08-31 so does everything summary mode
+ * draws, which is why there is no `/api/summary/` here any more
+ * (docs/plans/gist-only-summaries.md). Cached responses under that key are
+ * unreachable and expire through ordinary eviction.
  *
  * What is missing is as deliberate. `/api/jobs` describes work in flight and a
  * stale copy of it would be a lie about the present; `/api/library/search`
@@ -511,7 +514,6 @@ function slugOf(input: string): string {
 const CACHEABLE = [
   "/api/article/",
   "/api/glossary/",
-  "/api/summary/",
   "/api/ideas/",
   "/api/quotes/",
   "/api/metadata/",

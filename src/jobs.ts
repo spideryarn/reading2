@@ -59,7 +59,6 @@ import { fsJobStore } from "./store/jobs-fs.js";
 import { pgJobStore } from "./store/pg-jobs.js";
 import { mintAttempt, StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
 import { STORE } from "./store/live.js";
-import { readRaw } from "./fetch.js";
 import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { runInJob } from "./job-scope.js";
@@ -282,11 +281,19 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      effort, with a shorter answer than the glossary's because a quote is copied
      rather than composed. Never measured on its own. */
   quotes: 120_000,
-  /* MEASURED 2026-08-30: ten overlapping calls, 91.3s of wall clock — **not**
-     the 240.3s their durations sum to. Rounded up for a longer article. */
-  summary: 180_000,
-  /* GUESS, in `summary`'s family and never measured on its own. */
+  /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
+  /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
+     from `data/_ai-calls.jsonl` as `finishedAt − startedAt`: 78.7s, 95.6s,
+     124.9s, 100.8s. Each run is one call under its own `runId`, so the sum and
+     the wall clock are the same number and this table's summing trap does not
+     apply — the artefact's own `elapsedMs` agrees with the fourth to 3ms.
+     **Rounded up to twice the worst, because four samples on ONE article is one
+     article.** That article is at the dense end of what this mode will see —
+     4,000 words narrating three months three times over — but it is also the
+     only piece this has ever run on, and the answer budget is 20,000 tokens, so
+     a longer piece has room to be slower than anything measured here. */
+  timeline: 240_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s
      with the shape-claims section added to the prompt. Rounded up hard, because
@@ -1944,7 +1951,22 @@ async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean
   const other = await activeFor(candidate);
   if (other && other.upload?.id !== mine) return true;
   if (!(await articleExists(candidate))) return false;
-  const manifest = await readRaw(contextPaths(candidate).dir);
+  /* **Through the artefact seam, not `readRaw(contextPaths(...).dir)`.** The
+     value is the same file today — `PATHS.fetch.raw` is `raw.json` — but from
+     2026-08-31 the *writer* is the store rather than the stage
+     (docs/plans/finish-the-database-move.md § Stage 2c), and a reader that
+     names the path itself is a second definition of where the manifest lives.
+     Two definitions agree on the day they are written.
+
+     **This is not yet fixed for Postgres, and the gap is worth naming.** The
+     manifest read here answers *is this article this upload's own*, and under
+     Postgres the answer is not on the revision at all: `origin` is derivable
+     from the two URLs being null, and the upload id lives on `jobs.upload_id`
+     (src/db/schema.ts). So this needs the branch `articleExists` above already
+     has, over a different table, and it belongs with the store selection in
+     stage 3 rather than here. Until then it is the filesystem's answer — which
+     is what the whole pipeline still is. */
+  const manifest = await pipelineStore.read(candidate, "fetch", "raw");
   return !(manifest?.origin === "upload" && manifest.uploadId === mine);
 }
 

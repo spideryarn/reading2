@@ -362,7 +362,6 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
 | `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([tweet-thread-page.md](../plans/tweet-thread-page.md)) | `tweets.json` |
 | `npm run glossary -- <dir>` | 5d, the terms this piece uses ([glossary.md](glossary.md)). Run it again to add more | `glossary.json` |
-| `npm run summarise -- <dir>` | 5e, the article and each of its parts and sections at two more lengths ([summaries.md](summaries.md)). Several batched calls, not one; running it again replaces the file | `summary.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |

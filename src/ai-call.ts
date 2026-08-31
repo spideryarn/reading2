@@ -205,7 +205,6 @@ export type ChatJob = Exclude<
   | "tweets"
   | "glossary"
   | "quotes"
-  | "summarise"
   | "ideas"
   | "sketch"
   | "timeline"

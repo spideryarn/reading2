@@ -29,7 +29,6 @@ import {
   loadIdeas,
   loadQuotes,
   loadSketch,
-  loadSummaries,
   loadTweets,
 } from "../api.js";
 import {
@@ -88,7 +87,6 @@ export const fsArticleReader: ArticleReader = {
   loadTweets,
   loadGlossary,
   loadQuotes,
-  loadSummaries,
   loadArc,
   loadIdeas,
   loadSketch,

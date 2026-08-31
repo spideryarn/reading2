@@ -69,7 +69,6 @@ import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { mintUniqueId } from "../src/ids.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
-import { PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "../src/summarise.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import {
@@ -83,7 +82,6 @@ import type {
   Block,
   Glossary,
   StepName,
-  Summaries,
   Tree,
   TweetThread,
 } from "../src/types.js";
@@ -160,7 +158,7 @@ const HASH2 = hashBlocks(B2);
 
 /**
  * The **article** fingerprint of each publication — blocks, tree and metadata
- * head, which is what `tweets`, `glossary` and `summary` stamp
+ * head, which is what `tweets` and `glossary` stamp
  * (src/source-hash.ts § `articleFingerprint`).
  *
  * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
@@ -289,31 +287,28 @@ const tweetsFor = (hash: string): TweetThread => ({
 });
 
 /**
- * A `SummaryEntry` is a **block range and a depth**, not a node id and a rung.
+ * **The retired column, as opaque bytes.**
  *
- * This fixture said `{ nodeId, level, text }`, which is the shape the type had
- * before summaries were re-anchored onto ranges — a summary keyed by node id
- * moves sideways onto a different section the moment the tree is rebuilt, which
- * is precisely what a re-extraction does. See `SummaryEntry` in src/types.ts and
- * `assemble` in src/summarise.ts, which is what really writes these. The range
- * is B1's, because this artefact is stamped against B1 by definition.
+ * Stage 5e wrote a `Summaries` here until 2026-08-31
+ * (docs/plans/gist-only-summaries.md). The stage, the type and the reader are
+ * all gone; `article_revisions.summary` was kept, because what is in it on a
+ * real database is real readers' summaries.
+ *
+ * **So what this fixture is for changed, and it is now the more important of
+ * the two jobs it ever had.** It is no longer a shape anything parses — hence
+ * the deliberately foreign fields — it is a witness that `beginDraftIn` still
+ * copies the column forward byte for byte. Take `summary` out of
+ * `REVISION_CARRY_POLICY` (src/store/pg-revisions.ts) and the bytes strand on
+ * the old revision, which is data loss with no error and no migration to blame
+ * it on. That is the extra assertion beside the carry list below.
  */
-const summaryFor = (hash: string): Summaries => ({
-  version: SUMMARY_PROMPT_VERSION,
+const RETIRED_SUMMARY = {
+  version: "summary/4",
   generator: CAPABLE_MODEL,
   slug: SLUG,
-  sourceHash: hash,
-  entries: [
-    {
-      range: [B1[0]?.id ?? "", B1[B1.length - 1]?.id ?? ""],
-      depth: 0,
-      short: "A fixture, summarised.",
-    },
-  ],
+  entries: [{ range: [B1[0]?.id ?? "", B1[B1.length - 1]?.id ?? ""], depth: 0, short: "A fixture, summarised." }],
   missing: 0,
-  generatedAt: "2026-08-26T00:00:00.000Z",
-  elapsedMs: 1,
-});
+} as const;
 
 /* ------------------------------------------------- standing in for stage 5 -- */
 
@@ -417,7 +412,6 @@ async function writeTheFiles(): Promise<void> {
   await writeFileJson("assets.json", assetsFor(HASH1));
   await writeFileJson("glossary.json", glossaryFor(FINGERPRINT1));
   await writeFileJson("tweets.json", tweetsFor(FINGERPRINT1));
-  await writeFileJson("summary.json", summaryFor(FINGERPRINT1));
   await writeFileJson("meta.json", {
     slug: SLUG,
     title: "A fixture article",
@@ -465,7 +459,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
         assets: assetsFor(HASH1),
         tweets: tweetsFor(FINGERPRINT1),
         glossary: glossaryFor(FINGERPRINT1),
-        summary: summaryFor(FINGERPRINT1),
+        summary: RETIRED_SUMMARY,
       })
       .where(eq(articleRevisions.id, firstRevision));
 
@@ -492,11 +486,6 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     await step(firstRevision, "glossary", {
       inputHash: FINGERPRINT1,
       promptVersion: GLOSSARY_PROMPT_VERSION,
-      model: CAPABLE_MODEL,
-    });
-    await step(firstRevision, "summary", {
-      inputHash: FINGERPRINT1,
-      promptVersion: SUMMARY_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
 
@@ -540,7 +529,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        paragraphs; without the step runs the metadata page reports a stage that
        never ran while the column beside it holds a thread. */
     expect(begun.blocksCopied).toBe(3);
-    expect(begun.stepRunsCopied).toBe(9);
+    expect(begun.stepRunsCopied).toBe(8);
 
     const draft = await revisionRow(secondRevision);
     expect(draft?.status).toBe("draft");
@@ -552,6 +541,11 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     for (const column of ["tree", "arc", "assets", "tweets", "glossary", "summary"] as const) {
       expect(draft?.[column], `${column} should have been carried`).not.toBeNull();
     }
+    /* **And the retired one came through unchanged, not merely non-null.**
+       `summary` is the only column here nothing reads, so a `not.toBeNull()`
+       is the whole of what stands between it and being quietly dropped — see
+       `RETIRED_SUMMARY` above. GPT Sol's review of this plan, 2026-08-31. */
+    expect(draft?.summary).toEqual(RETIRED_SUMMARY);
 
     /* And the five that must NOT be carried. They are derivations of the blocks
        and the tree, so a copied `block_count` beside changed blocks is not a
@@ -593,16 +587,14 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
   }, 30_000);
 
   it("survives a re-extraction, stale rather than gone", async () => {
-    const [glossary, tweets, summaries] = await Promise.all([
+    const [glossary, tweets] = await Promise.all([
       pgArticleReader.loadGlossary(SLUG),
       pgArticleReader.loadTweets(SLUG),
-      pgArticleReader.loadSummaries(SLUG),
     ]);
 
     expect(glossary.glossary.entries).toHaveLength(1);
     expect(glossary.stale, "written against B1, published beside B2").toBe(true);
     expect(tweets.stale).toBe(true);
-    expect(summaries.stale).toBe(true);
     // The one thing that must not have happened: the artefact reading as
     // "nobody has found the terms for this one yet" under a green tick.
     expect(glossary.glossary.sourceHash).toBe(FINGERPRINT1);
@@ -615,7 +607,6 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        comparison is what yields "present but not current". */
     expect(runs.get("tweets")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
-    expect(runs.get("summary")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("toc")?.inputHash, "toc was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,
@@ -639,7 +630,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        article. Delete `case "assets"` from src/store/pg.ts and the `pg` half of
        this goes red while the `files` half stays green — which is exactly the
        divergence a parity test is for. */
-    for (const name of ["assets", "glossary", "tweets", "summary"] as StepName[]) {
+    for (const name of ["assets", "glossary", "tweets"] as StepName[]) {
       expect(pg[name], `Postgres should offer to regenerate ${name}`).toBe(false);
       expect(files[name], `the files should offer to regenerate ${name}`).toBe(false);
     }

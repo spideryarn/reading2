@@ -288,7 +288,7 @@ Two more worth carrying:
 - **The paid-work gating list was too short.** I named `arc` and `similar`. Arc, ideas, glossary,
   summary, labels, tweets and sketch all read the tree. **`summary` is the dangerous one**: it is
   generated against tree nodes but calls itself current on `sourceHash !== hashBlocks(blocks)`
-  ([`src/summarise.ts:786`](../../src/summarise.ts)) — blocks only. A summary bought against the
+  (`src/summarise.ts:786`) — blocks only. A summary bought against the
   preview stays falsely current **for ever**, because nothing about the tree is in its key. Verified.
   The refusal goes **server-side at the job boundary**, for every tree-consuming step; UI gating is
   bypassable.

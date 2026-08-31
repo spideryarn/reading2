@@ -49,6 +49,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { canonicalKey } from "../src/source.js";
 import { fsSourceStore } from "../src/store/artifacts-fs.js";
+import { storeRawSource } from "../src/store/blobs.js";
 import type { BlobHead, RawSourceStore } from "../src/store/blobs.js";
 import { DATA_ROOT_ENV } from "../src/store/data-root.js";
 import { createPgSourceStore, sourceReferenceQuery } from "../src/store/pg-source.js";
@@ -140,7 +141,19 @@ describe("the filesystem source store", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  /** One article's `data/<slug>/`, with whatever stage 1 would have left. */
+  /**
+   * One article's `data/<slug>/`, with whatever stage 1 would have left.
+   *
+   * **And what stage 1 leaves changed on 2026-08-31.** It used to write the
+   * document beside its manifest; it now puts it in the content-addressed
+   * `sources` bucket and the manifest names it by hash
+   * (docs/plans/finish-the-database-move.md § Stage 2c). So `bytes` goes
+   * through `storeRawSource`, exactly as the stage does, and the manifest gets
+   * the `storedSha256` that read-back is addressed by. A fixture that went on
+   * writing `raw.pdf` would be describing a state stage 1 can no longer
+   * produce — and would have gone on passing while the real route 404'd for
+   * every newly-fetched PDF.
+   */
   async function fixture(
     slug: string,
     manifest: Record<string, unknown> | null,
@@ -148,10 +161,19 @@ describe("the filesystem source store", () => {
   ): Promise<void> {
     const dir = path.join(root, "data", slug);
     await mkdir(dir, { recursive: true });
-    if (manifest) {
-      await writeFile(path.join(dir, "raw.json"), JSON.stringify(manifest), "utf8");
+    let stored: Record<string, unknown> = {};
+    if (bytes && manifest) {
+      const kind = manifest.kind === "pdf" ? "pdf" : "html";
+      const put = await storeRawSource(bytes, kind);
+      stored = { storedSha256: put.sha256, storedBytes: bytes.byteLength };
     }
-    if (bytes) await writeFile(path.join(dir, String(manifest?.file)), bytes);
+    if (manifest) {
+      await writeFile(
+        path.join(dir, "raw.json"),
+        JSON.stringify({ ...manifest, ...stored }),
+        "utf8",
+      );
+    }
   }
 
   const PDF = new TextEncoder().encode("%PDF-1.7\nnot really a pdf\n");

@@ -20,7 +20,7 @@ returns **zero hits** — nothing in this app sets a cache breakpoint anywhere, 
 | 3 | [`src/tweets.ts:393`](../../src/tweets.ts) | (thread generator) | Anthropic SDK, `MODEL` | 1 | `system` only |
 | 4 | [`src/glossary.ts:774`](../../src/glossary.ts) | (glossary generator) | Anthropic SDK, `MODEL` | 1 per top-up (usually 1) | `system` only |
 | 5 | [`src/labels.ts:481`](../../src/labels.ts) | (label generator) | Anthropic SDK, `MODEL` | N batches, 4-way parallel (`CONCURRENCY = 4`, `p-queue`) | `system` + outline |
-| 6 | [`src/summarise.ts:824`](../../src/summarise.ts) | (summary generator) | Anthropic SDK, `MODEL` | N batches, 3-way parallel (`CONCURRENCY = 3`, own `pooled` helper) | `system` only |
+| 6 | `src/summarise.ts:824` | (summary generator) | Anthropic SDK, `MODEL` | N batches, 3-way parallel (`CONCURRENCY = 3`, own `pooled` helper) | `system` only |
 | 7 | [`src/converse.ts:279`](../../src/converse.ts) (fetch at 348) | `converse` | OpenRouter fetch, `OPENROUTER_MODEL` | 1 per chat message, request path | `system` only |
 | 8 | [`src/explain.ts:163`](../../src/explain.ts) (fetch, via `fetchOrExplainWhy`, at 396) | `explain` | OpenRouter fetch, `OPENROUTER_MODEL` | 1 per selection, request path | `system` only |
 | 9 | [`src/search.ts:293`](../../src/search.ts) (fetch at 335) | `findPassages` | OpenRouter fetch, `OPENROUTER_MODEL` | 1 per search, request path | `system` only |
@@ -28,7 +28,7 @@ returns **zero hits** — nothing in this app sets a cache breakpoint anywhere, 
 All six Anthropic-SDK stages instantiate their own client — `new Anthropic()` at
 [`toc.ts:473`](../../src/toc.ts), [`arc.ts:235`](../../src/arc.ts),
 [`tweets.ts:393`](../../src/tweets.ts), [`glossary.ts:774`](../../src/glossary.ts),
-[`labels.ts:481`](../../src/labels.ts), [`summarise.ts:824`](../../src/summarise.ts). No shared
+[`labels.ts:481`](../../src/labels.ts), `summarise.ts:824`. No shared
 client factory, no shared request-building wrapper. The three OpenRouter call sites each build their
 own `fetch` to `https://openrouter.ai/api/v1/chat/completions` the same way — no shared wrapper
 there either.

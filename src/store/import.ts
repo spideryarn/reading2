@@ -101,7 +101,6 @@ import type {
   Ideas,
   Meta,
   Quotes,
-  Summaries,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -584,7 +583,6 @@ export interface ArticleFiles {
   readonly assets: Assets | undefined;
   readonly tweets: TweetThread | undefined;
   readonly glossary: Glossary | undefined;
-  readonly summaries: Summaries | undefined;
   readonly ideas: Ideas | undefined;
   readonly quotes: Quotes | undefined;
   readonly sketch: Sketch | undefined;
@@ -667,8 +665,6 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   if (!tweets) absent.push("tweets.json");
   const glossary = await readJson<Glossary>(path.join(dir, "glossary.json"));
   if (!glossary) absent.push("glossary.json");
-  const summaries = await readJson<Summaries>(path.join(dir, "summary.json"));
-  if (!summaries) absent.push("summary.json");
   const ideas = await readJson<Ideas>(path.join(dir, "ideas.json"));
   if (!ideas) absent.push("ideas.json");
   const quotes = await readJson<Quotes>(path.join(dir, "quotes.json"));
@@ -708,7 +704,7 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
 
      Skipped rather than fatal, because this is a migration tool and one
      malformed row out of eleven should not block ten good ones — the same
-     partial-salvage rule the summaries stage already follows. Skipped rather
+     partial-salvage rule the glossary stage already follows. Skipped rather
      than repaired, because there is nothing to repair it to: the anchor names
      no paragraph, so there is no right answer to guess. Counted and logged, so
      "the import lost a comment" can never be something you find out later. */
@@ -791,7 +787,6 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
     assets,
     tweets,
     glossary,
-    summaries,
     ideas,
     quotes,
     sketch,
@@ -850,7 +845,6 @@ export async function importArticleIn(
     assets,
     tweets,
     glossary,
-    summaries,
     ideas,
     quotes,
     sketch,
@@ -1113,7 +1107,11 @@ export async function importArticleIn(
     assets: assets ?? null,
     tweets: tweets ?? null,
     glossary: glossary ?? null,
-    summary: summaries ?? null,
+    /* **Never written, and `summary.json` is never read.** The column is
+       retired and left in place with whatever it already holds; writing `null`
+       over it would destroy exactly the data keeping the column was for
+       (docs/plans/gist-only-summaries.md). Omitted from this literal rather
+       than set, so the insert does not name it at all. */
     ideas: ideas ?? null,
     quotes: quotes ?? null,
     sketch: sketch ?? null,
@@ -1401,7 +1399,7 @@ export async function importArticleIn(
    * how a stale artefact gets served for ever. Writing `fingerprint` into every
    * row put six of these steps permanently in that state, because six
    * fingerprints are not `hashBlocks`: `arc`, `ideas` and `sketch` had already
-   * widened, and `tweets`, `glossary` and `summary` joined them on 2026-08-31
+   * widened, and `tweets` and `glossary` joined them on 2026-08-31
    * (src/source-hash.ts § `articleFingerprint`).
    *
    * `?? fingerprint` for the unstamped steps, and **`toc` deliberately keeps
@@ -1420,7 +1418,6 @@ export async function importArticleIn(
     { step: "arc", present: Boolean(arc), inputHash: arc?.sourceHash },
     { step: "tweets", present: Boolean(tweets), inputHash: tweets?.sourceHash },
     { step: "glossary", present: Boolean(glossary), inputHash: glossary?.sourceHash },
-    { step: "summary", present: Boolean(summaries), inputHash: summaries?.sourceHash },
     { step: "ideas", present: Boolean(ideas), inputHash: ideas?.sourceHash },
     { step: "quotes", present: Boolean(quotes), inputHash: quotes?.sourceHash },
     { step: "sketch", present: Boolean(sketch), inputHash: sketch?.sourceHash },

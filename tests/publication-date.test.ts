@@ -25,10 +25,7 @@
  */
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { publicationDate, runExtract } from "../src/extract.js";
 import {
@@ -105,23 +102,12 @@ describe("publicationDate, on the strings a page can actually contain", () => {
 });
 
 describe("what stage 2 writes", () => {
-  let dir: string;
   let dated: Meta;
   let undated: Meta;
 
   beforeAll(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "spya-published-"));
-    const one = path.join(dir, "dated");
-    const two = path.join(dir, "undated");
-    dated = (await runExtract({ html: DATED, url: SOURCE, outFile: path.join(one, "p.html"), dataDir: one }))
-      .meta;
-    undated = (
-      await runExtract({ html: UNDATED, url: SOURCE, outFile: path.join(two, "p.html"), dataDir: two })
-    ).meta;
-  });
-
-  afterAll(async () => {
-    await rm(dir, { recursive: true, force: true });
+    dated = (await runExtract({ html: DATED, url: SOURCE, slug: "dated" })).meta;
+    undated = (await runExtract({ html: UNDATED, url: SOURCE, slug: "undated" })).meta;
   });
 
   /* The positive control. If Readability stops returning the field, this fails
@@ -133,10 +119,15 @@ describe("what stage 2 writes", () => {
     expect(parsed(UNDATED)?.publishedTime ?? null).toBeNull();
   });
 
-  it("carries the date into meta.json when the page states one", async () => {
+  it("carries the date into the metadata artefact when the page states one", () => {
     expect(dated.publishedAt).toBe("2026-08-29T22:47:53+00:00");
-    const onDisk = JSON.parse(await readFile(path.join(dir, "dated", "meta.json"), "utf8")) as Meta;
-    expect(onDisk.publishedAt).toBe("2026-08-29T22:47:53+00:00");
+    /* Through a serialisation round trip as well as in memory. Stage 2 returns
+       the artefact now rather than writing it, so this is what the filesystem
+       store puts in meta.json and what the Postgres store puts in the column —
+       the same `JSON.stringify` either way, which is the step the assertion
+       below is really about. */
+    const serialised = JSON.parse(JSON.stringify(dated)) as Meta;
+    expect(serialised.publishedAt).toBe("2026-08-29T22:47:53+00:00");
   });
 
   /* The common case, and so the one that gets the strict assertion: the key is
@@ -144,9 +135,9 @@ describe("what stage 2 writes", () => {
      check, because `JSON.stringify` drops an undefined value — so the file on
      disk would look identical while every in-memory consumer that asks whether
      the key is there got the opposite answer. */
-  it("says nothing at all when the page states no date", async () => {
+  it("says nothing at all when the page states no date", () => {
     expect("publishedAt" in undated).toBe(false);
-    const raw = await readFile(path.join(dir, "undated", "meta.json"), "utf8");
+    const raw = JSON.stringify(undated);
     expect(raw).not.toContain("publishedAt");
     expect(JSON.parse(raw)).not.toHaveProperty("publishedAt");
   });

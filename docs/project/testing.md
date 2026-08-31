@@ -207,9 +207,9 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
 
 ## Rendering a component, without a testing library
 
-`tests/summarise.test.ts` renders `SummaryPanel` with **`renderToStaticMarkup` from
-`react-dom/server`**, asserting on the HTML string. It is the only test here that renders a React
-component, and the shape is worth knowing before the next one:
+`tests/job-failure.test.ts` renders `JobProgress` with **`renderToStaticMarkup` from
+`react-dom/server`**, asserting on the HTML string. It is the cheapest way to render a React
+component here, and the shape is worth knowing before the next one:
 
 - **No new dependency.** `react-dom` is already here; `@testing-library/react` is not, and adding it
   is a library decision that would need its own write-up
@@ -227,9 +227,9 @@ it should be. It renders one pass of markup, so it also cannot see anything that
 That still needs a real browser ([browser-testing.md](browser-testing.md)), and calling this a
 render test rather than a UI test is what keeps the difference visible.
 
-Worth it here because the thing being checked is a **silence**: the summary panel falls back down
-the length ladder when a rung is missing, and the mark saying so is the only difference between a
-fallback and a section the model had less to say about ([summaries.md](summaries.md)).
+Worth it here because the thing being checked is a **silence**: what a failed job says to the reader
+is a sentence nothing else in the suite reads, and a card that offered a Retry for a failure retrying
+cannot fix looks exactly like one that could.
 
 ## What an upload's tests are for
 

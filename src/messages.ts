@@ -25,7 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
-import type { EmbeddingReason, StepName } from "./types.js";
+import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -1359,7 +1359,6 @@ export const SHARING_NOT_PERSONALISED =
 export const OWNED_ARTEFACT = {
   tweets: "your tweet thread",
   glossary: "your glossary",
-  summary: "your summary",
   ideas: "your list of ideas",
   quotes: "your set of quotes",
   sketch: "your sketch diagram",
@@ -1452,3 +1451,76 @@ export function sharingInFlight(to: "private" | "public"): string {
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
+
+/* ---------------------------------------------------------------- timeline --
+   What the reader is told when the piece dates something and we could not read
+   the date, and when the piece has no chronology in it at all.
+
+   Both are sentences about a **negative result rather than a failure**, which
+   is the reason they are here beside `builtButEmpty` rather than in the panel:
+   the mistake they exist to prevent is the panel drawing them like an error, or
+   drawing two of them the same. docs/plans/timeline-mode.md § Three outcomes.  */
+
+/**
+ * **The date column, when the piece dates an event and we could not read it.**
+ *
+ * Short because of where it sits: a column about twenty characters wide, in a
+ * list where — on an article with no publication date — **every** dated row is
+ * `noYearFrame`. A full sentence repeated down twenty rows is a wall, so the
+ * column carries a label and `dateRejectedWhy` carries the explanation on the
+ * row the reader opens.
+ *
+ * Lower case, and no full stop: these are labels standing where a date would
+ * be, not sentences. "26 May" has no full stop either.
+ *
+ * A total record rather than a function with a default, so a fourth refusal is
+ * a red compile rather than a silently reused sentence.
+ */
+export const DATE_REJECTED_SHORT: Record<DateRejection, string> = {
+  noYearFrame: "dated — but which year?",
+  phraseNotInOccurrence: "dated — not in this passage",
+  unparseablePhrase: "dated — we could not read it",
+};
+
+/**
+ * **The same three facts at length**, for the row the reader has opened.
+ *
+ * The distinction that matters, and the reason these are three sentences rather
+ * than one: `noYearFrame` is a fact about **us** — the article did its job and
+ * we have nothing to resolve it against — where `phraseNotInOccurrence` is a
+ * fact about the extraction, and the reader should read those differently. It
+ * is also the majority case on this shelf, because the publication date only
+ * arrives on re-extraction.
+ */
+export const DATE_REJECTED_WHY: Record<DateRejection, string> = {
+  noYearFrame:
+    "The piece gives a day and a month here but never the year, and we have no publication date " +
+    "for it to take the year from. Re-adding the article will usually fix it.",
+  phraseNotInOccurrence:
+    "The date this event was placed by is not in the passage below, so we did not use it. The " +
+    "event and the passage are the article's; the date was not.",
+  unparseablePhrase:
+    "The piece puts a time on this in words we could not read as a date. The passage below is " +
+    "where it says so.",
+};
+
+/**
+ * **The piece has no chronology in it, and that is a real answer.**
+ *
+ * Most articles do not tell a story in time, so this is the commonest outcome
+ * of the whole mode and it must not read as a failure or offer a retry —
+ * running it again would find the same nothing and cost another model call.
+ */
+export const TIMELINE_NO_CHRONOLOGY =
+  "This piece does not tell a story in time — nothing in it is placed in a sequence.";
+
+/**
+ * **Fewer events than make a chronology.**
+ *
+ * The rows still show; what is withdrawn is the claim. An article that mentions
+ * two dates in passing, presented under a heading as *a timeline*, is the panel
+ * overclaiming — and the reader cannot tell the difference from the rows alone.
+ * The threshold and the reasoning for it are in src/web/TimelinePanel.tsx.
+ */
+export const TIMELINE_THIN =
+  "This piece is not really telling a story in time. Here is everything it puts in a sequence.";

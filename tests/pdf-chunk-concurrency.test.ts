@@ -131,7 +131,6 @@ async function runWith(reader: PdfReader, bytes: Uint8Array) {
   return runPdfExtract({
     bytes,
     url: "https://example.test/paper.pdf",
-    outFile: path.join(dir, "article.html"),
     dataDir: dir,
     slug: "paper",
     reader,
@@ -241,16 +240,14 @@ describe("PDF chunks are read concurrently", () => {
 
     const survivor = async (reader: PdfReader) => {
       const dir = await mkdtemp(path.join(tmpdir(), "spya-pdfdup-"));
-      await runPdfExtract({
+      const result = await runPdfExtract({
         bytes,
         url: "https://example.test/paper.pdf",
-        outFile: path.join(dir, "article.html"),
         dataDir: dir,
         slug: "paper",
         reader,
       });
-      const html = await readFile(path.join(dir, "article.html"), "utf-8");
-      return html;
+      return result.extractedHtml;
     };
 
     /**

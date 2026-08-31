@@ -88,7 +88,7 @@ const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
  * model said back.
  *
  * `arc` is `arc.json` read by `loadArticle` in src/api.ts; `blocks` is the
- * `blocks.json` that `generateArc` reads as a stage.
+ * `blocks.json` that `readArticleFromDir` parses for the arc command line.
  */
 const LEAK = {
   arc: "ZQARCJSONA",
@@ -168,7 +168,8 @@ beforeAll(async () => {
     const { loadThreads } = await import(${src("chat.ts")});
     const { loadRuns } = await import(${src("searches.ts")});
     const { generateArc } = await import(${src("arc.ts")});
-    const { parseJson } = await import(${src("summarise.ts")});
+    const { readArticleFromDir } = await import(${src("article-input.ts")});
+    const { parseJsonFrom, stripFence } = await import(${src("parse-json.ts")});
 
     // These four log for themselves, then rethrow.
     await step("read", () => loadArticle(${JSON.stringify(ARTICLE_SLUG)}));
@@ -176,12 +177,26 @@ beforeAll(async () => {
     await step("chat", () => loadThreads(${JSON.stringify(STORE_SLUG)}));
     await step("searches", () => loadRuns(${JSON.stringify(STORE_SLUG)}));
 
-    // A stage reading an artefact. generateArc parses blocks.json as its very
-    // first statement, so this never reaches a model or needs a key.
-    await step("arc", () => generateArc({ dir: ${JSON.stringify(STORE_DIR)} }));
+    /* A stage reading an artefact — as \`npx tsx src/arc.ts <dir>\` does it.
+       \`generateArc\` no longer opens anything itself (the pipeline hands it an
+       article the store read); the read moved to \`readArticleFromDir\`, whose
+       very first statement parses blocks.json. So this still never reaches a
+       model or needs a key, and it is still the reachable path — the CLI is now
+       the caller that meets a corrupt blocks.json. */
+    await step("arc", async () =>
+      generateArc({ article: await readArticleFromDir(${JSON.stringify(STORE_DIR)}) }),
+    );
 
-    // A stage reading a *model's* answer — the same leak from the other side.
-    await step("summary", async () => parseJson(${JSON.stringify(corrupt(LEAK.model))}));
+    /* A stage reading a *model's* answer — the same leak from the other side.
+       Called through \`stripFence\` then \`parseJsonFrom\`, which is exactly what
+       every stage's own private \`parseJson\` does (src/glossary.ts, src/arc.ts,
+       src/toc.ts, src/tweets.ts, src/quotes.ts — none of them exports it). It
+       used to go through src/summarise.ts, the one that did; that module is
+       gone (docs/plans/gist-only-summaries.md) and this is the same two calls
+       without the wrapper. */
+    await step("glossary-answer", async () =>
+      parseJsonFrom(stripFence(${JSON.stringify(corrupt(LEAK.model))}), "the glossary response"),
+    );
   })();`;
 
   const env: NodeJS.ProcessEnv = { ...process.env };

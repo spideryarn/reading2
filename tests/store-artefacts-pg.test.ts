@@ -399,7 +399,6 @@ when("reading an artefact out of Postgres", () => {
 
   it("returns null for an artefact no step has written", async () => {
     expect(await read("glossary", "glossary")).toBeNull();
-    expect(await read("summary", "summary")).toBeNull();
     expect(await read("tweets", "tweets")).toBeNull();
   });
 
@@ -1033,8 +1032,8 @@ when("whether a step has actually produced anything", () => {
        `input_hash` against the stored blocks — and it is wrong twice over. It
        is a freshness rule in the one function that must not have one, and it
        re-runs `toc`, which moves the tree's boundaries, which silently drops
-       every `arc` and `summary` entry whose block range no longer matches a
-       node. GPT Sol, 2026-08-28. */
+       every `arc` entry whose block range no longer matches a node.
+       GPT Sol, 2026-08-28. */
     await runRow("toc", "done");
     const [row] = await getDb()
       .select({ hash: revisionStepRuns.inputHash })

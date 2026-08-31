@@ -43,7 +43,7 @@ The code that changed:
 - [`src/labels.ts`](../../src/labels.ts) — `batchParts`, and a staggered fan-out
 - [`src/glossary.ts`](../../src/glossary.ts), [`src/arc.ts`](../../src/arc.ts),
   [`src/tweets.ts`](../../src/tweets.ts) — article moved into a cached `system` block
-- [`src/summarise.ts`](../../src/summarise.ts) — `repair` moved out of position zero
+- `src/summarise.ts` — `repair` moved out of position zero
 - [`src/pipeline.ts`](../../src/pipeline.ts), [`src/toc.ts`](../../src/toc.ts) — cache counts logged
 - **New** [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts),
   [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts) and

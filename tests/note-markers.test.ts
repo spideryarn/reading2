@@ -20,8 +20,6 @@
  * `internalTarget` resolves against exactly that and nothing else.
  */
 import { readFile } from "node:fs/promises";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -361,19 +359,12 @@ const SLOW = 180_000;
 
 async function pipeline(fixture: string): Promise<Block[]> {
   const html = await readFile(path.join(FIXTURES, `${fixture}.html`), "utf-8");
-  const dir = await mkdtemp(path.join(tmpdir(), "note-markers-"));
-  try {
-    const outFile = path.join(dir, `${fixture}.html`);
-    await runExtract({
-      html,
-      url: `https://example.test/${fixture}`,
-      outFile,
-      dataDir: dir,
-    });
-    return splitIntoBlocks(await readFile(outFile, "utf-8")).blocks;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+  const result = await runExtract({
+    html,
+    url: `https://example.test/${fixture}`,
+    slug: fixture,
+  });
+  return splitIntoBlocks(result.extractedHtml).blocks;
 }
 
 describe("wikipedia, which cites one note thirteen times", () => {

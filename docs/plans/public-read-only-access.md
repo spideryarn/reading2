@@ -2013,7 +2013,7 @@ almost the same words:
 |---|---|
 | [`src/glossary.ts`](../../src/glossary.ts) | `if (previous.length === 0 && fresh.length === 0) throw new Error("The model returned no terms. Nothing to write.")` |
 | [`src/ideas.ts`](../../src/ideas.ts) | `if (fresh.length === 0) throw` — with the four drop counts in the message |
-| [`src/summarise.ts`](../../src/summarise.ts) | `if (entries.length === 0) throw new Error("The model returned no usable summaries…")` |
+| `src/summarise.ts` | `if (entries.length === 0) throw new Error("The model returned no usable summaries…")` |
 | [`src/tweets.ts`](../../src/tweets.ts) | `if (texts.length === 0) throw` — *"An empty thread throws. A zero-post thread is not a degenerate success"* |
 
 > Nothing to say is not a degenerate success — it is a model call that produced nothing, and writing

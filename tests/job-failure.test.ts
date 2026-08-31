@@ -25,7 +25,7 @@ import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
 import { providerHttpFailure } from "../src/messages.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
 import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
-import { generateSummaries } from "../src/summarise.js";
+import { storeRawSource } from "../src/store/blobs.js";
 import {
   budgetFor,
   MODEL_MAX_TOKENS,
@@ -215,25 +215,6 @@ describe("the failures a retry cannot change", () => {
     expect(failureKindOf(err)).toBe("bug");
   });
 
-  it("calls a tree with nothing to summarise `bug`", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-summ-"));
-    try {
-      await writeFile(
-        path.join(dir, "blocks.json"),
-        JSON.stringify({ blocks: [{ id: "spya-aaaaaa", tag: "p", text: "hello" }] }),
-      );
-      await writeFile(
-        path.join(dir, "tree.json"),
-        JSON.stringify({ rootId: "spya-absent", nodes: {} }),
-      );
-      const err = await threw(() => generateSummaries({ dir }));
-      expect((err as Error).message).toMatch(/covers enough text/);
-      expect(failureKindOf(err)).toBe("bug");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
   /**
    * **The failure that convicted itself.** `NoBlocksProduced` (src/blocks.ts)
    * ends by telling the reader that re-running stage 3 over the same HTML will
@@ -281,9 +262,36 @@ describe("the failures a retry cannot change", () => {
     // extractor: change that sentence in src/extract.ts and this goes red.
     const dir = await mkdtemp(path.join(tmpdir(), "spya-extract-"));
     try {
-      await writeFile(path.join(dir, "raw.html"), "");
+      /* **The manifest and the object, not `raw.html`.** Since 2026-08-31 stage
+         1 leaves nothing in the article's directory: it puts the document in the
+         content-addressed `sources` bucket and returns a manifest naming it by
+         hash, and stage 2 reads the manifest from the store and the bytes by
+         address (docs/plans/finish-the-database-move.md § Stage 2c). A fixture
+         that wrote `raw.html` would now fail before Readability ever saw the
+         page — which is how this test found out, with the wrong sentence. */
+      const htmlFile = path.join(dir, "a-slug.html");
+      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
+      const page = new TextEncoder().encode("");
+      const put = await storeRawSource(page, "html");
+      await writeFile(
+        path.join(dir, "raw.json"),
+        JSON.stringify({
+          kind: "html",
+          file: "raw.html",
+          requestedUrl: "https://example.com/a-piece",
+          url: "https://example.com/a-piece",
+          contentType: "text/html",
+          encoding: "utf-8",
+          bytes: page.byteLength,
+          sha256: put.sha256,
+          storedSha256: put.sha256,
+          storedBytes: page.byteLength,
+          fetchedAt: new Date().toISOString(),
+        }),
+        "utf8",
+      );
       const err = await threw(() =>
-        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), fsArtifacts),
+        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), store),
       );
       expect((err as Error).message).toMatch(/Readability/);
       expect(failureKindOf(err)).toBe("blocked");

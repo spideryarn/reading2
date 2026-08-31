@@ -19,9 +19,10 @@
  * their exported functions, never by reimplementing what they do.
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
+import { readArticle, tryReadArticle } from "./article-input.js";
 import {
   generateArc,
   inputFingerprint as arcFingerprint,
@@ -29,15 +30,22 @@ import {
 } from "./arc.js";
 import {
   BLOCKS_INPUT_HTML,
+  blocksArtefact,
   type BlocksRun,
   NoBlocksProduced,
   previousBlocksFrom,
   runBlocks,
   splitIntoBlocks,
 } from "./blocks.js";
-import { ASSETS_VERSION, collectAssets, writeAssets } from "./collect-assets.js";
+import { ASSETS_VERSION, collectAssets } from "./collect-assets.js";
 import { runExtract } from "./extract.js";
-import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
+import {
+  fetchDocument,
+  type RawManifest,
+  RawDocumentUnavailable,
+  readRawBytes,
+  writeRaw,
+} from "./fetch.js";
 import {
   generateGlossary,
   previousGlossaryFrom,
@@ -55,6 +63,12 @@ import {
   previousQuotesFrom,
   PROMPT_VERSION as QUOTES_PROMPT_VERSION,
 } from "./quotes.js";
+import {
+  generateTimeline,
+  inputFingerprint as timelineFingerprint,
+  previousTimelineFrom,
+  PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
+} from "./timeline.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateSketch,
@@ -62,7 +76,6 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
 import { runPdfExtract } from "./pdf-read.js";
-import { generateSummaries, PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "./summarise.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
@@ -152,8 +165,16 @@ export const STEP_ORDER: StepName[] = [
      of the same job will read — so this buys the reader who asks for both at
      once and nobody else. docs/project/quotes.md. */
   "quotes",
-  "summary",
   "ideas",
+  /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
+     the two send byte-identical article bytes at the same effort and the same
+     `ids` renderer, so a job asking for BOTH pays for the article once
+     (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT). `ideas`, `timeline` and
+     `sketch` are one cache group and are contiguous for that reason.
+
+     Off `DEFAULT_INGEST_STEPS`, like the four before it: it costs a model call
+     over the whole article and it is a mode somebody goes to. */
+  "timeline",
   /* Last, and off `DEFAULT_INGEST_STEPS`: nothing reads what it writes, and it
      is the slowest single model call in the app at 121–194 seconds measured.
      docs/project/diagram.md § Sketch. */
@@ -163,14 +184,12 @@ export const STEP_ORDER: StepName[] = [
 /**
  * What "add this URL" runs: every step that makes the article readable.
  *
- * Not `tweets`, not `glossary`, and not `summary`. Each costs model calls over
- * the whole article and each is a thing you go to — a page, and two modes — so
- * each is generated when somebody asks for it, `{ steps: ["tweets"] }` or
- * `{ steps: ["glossary"] }` or `{ steps: ["summary"] }`, and never as a side
- * effect of adding an article. Greg was asked about the first two and said no
- * to both, directly (2026-08-25); `summary` follows the rule they established,
- * and it is the most expensive of the three — several batched calls rather than
- * one. See docs/project/summaries.md.
+ * Not `tweets` and not `glossary`. Each costs model calls over the whole
+ * article and each is a thing you go to — a page, and a mode — so each is
+ * generated when somebody asks for it, `{ steps: ["tweets"] }` or
+ * `{ steps: ["glossary"] }`, and never as a side effect of adding an article.
+ * Greg was asked about both and said no to both, directly (2026-08-25), and
+ * every paid step added since has followed the rule they established.
  *
  * **And not `arc`, since 2026-08-29**, which is a different argument from the
  * three above and worth keeping separate. Those are things a reader *goes to*.
@@ -273,12 +292,6 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  * so being swept into the cascade would not merely waste a model call, it would
  * lengthen the reader's glossary as a side effect of re-fetching the article.
  *
- * `summary` is here on the same two grounds as `tweets` — it reads the blocks
- * and the tree, nothing reads what it writes, and its `stamp` compares its
- * stored `sourceHash`, prompt version and model against what the store has. It
- * is also the one step where being swept in costs the most: it is not one model
- * call but one per part, so a cascade would multiply a wasted regeneration by
- * the width of the article.
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   /* **`arc` joined on 2026-08-29, the day it got a `stamp`.** The paragraph above
@@ -295,13 +308,19 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      unlike the glossary, forcing it cannot silently lengthen anything — it
      replaces rather than appends. */
   "quotes",
-  "summary",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
      buy a model call for nothing. Unlike the glossary, forcing it does not
      silently lengthen anything — `ideas` replaces rather than appends — but the
      first reason stands on its own. */
   "ideas",
+  /* The same two reasons again: it reads `blocks.json` and `tree.json` (and the
+     metadata, for the publication date), nothing reads what it writes, so the
+     positional cascade would buy a model call for nothing. Its `stamp` below
+     compares a stored `sourceHash` against what the store holds, so when the
+     article really has moved it re-runs without being forced. And like `ideas`
+     and unlike the glossary, forcing it replaces rather than appends. */
+  "timeline",
   /* The same two reasons, and a third that is about the clock rather than the
      money. `sketch` is the slowest call here — 194s measured on the
      constitution — and every step self-aborts at 400s inside an 800s
@@ -404,47 +423,37 @@ export interface StepProduct {
  * The steps that still write their own artefacts inside `run`, and so are
  * allowed to return a product with no `parts` in it.
  *
- * **All nine, today.** D3, D4 and D5 convert them a stage at a time, and each
- * conversion is a name deleted from here — which is the point of the list being
- * an explicit, greppable, tested thing rather than a default. A step removed
- * from it that still writes during `run` is refused loudly at commit; a step
- * left on it that has been converted still has its `parts` validated. Neither
- * direction can drift quietly.
+ * **Empty since 2026-08-31, and it is kept rather than deleted.**
  *
- * **A step added to the pipeline is converted by default, and this list is the
- * only way out of that.** It said the opposite for a few hours on 2026-08-29 —
- * a test held this against `STEP_ORDER`, so a new step was *forced* onto the
- * exemption to make the suite green. That is fail-open, and GPT Sol was right
- * about it: the unsafe answer must never be the one you get by doing nothing.
- * A name is added here only by somebody who has looked at the stage and knows
- * it still writes its own files.
+ * Every one of the eleven steps now returns its artefacts and writes no file of
+ * its own (docs/plans/finish-the-database-move.md § Stage 2). The exemption has
+ * no members, which means `LegacyUnconvertedStep` is `never` and `run` must
+ * return a `ConvertedProduct` for every step in the pipeline — so the mechanism
+ * has stopped being a list of exceptions and become a compile-time rule with no
+ * way round it.
  *
- * The type system says the same thing, so it is not only a runtime rule:
- * `PipelineStep<N>`'s `run` returns `ConvertedProduct` — `parts` **required** —
- * for every name outside `LegacyUnconvertedStep`. A new step returning
- * `{ detail }` alone does not compile.
+ * **Deleting it would be the wrong tidy-up.** It is what makes conversion the
+ * default rather than something a new stage has to opt into: a stage added
+ * tomorrow that writes its own file is refused at commit, by name, and the only
+ * way to make that legal is for somebody to add the name here deliberately.
+ * That direction was inverted for a few hours on 2026-08-29 — a test held this
+ * against `STEP_ORDER`, so a new step was *forced* onto the exemption to make
+ * the suite green, which is fail-open. An empty list is the strongest the rule
+ * has ever been; an absent one is no rule at all.
  *
- * The filesystem session consults this. A transactional one must not: it passes
- * an empty set, because a stage writing outside the transaction is the failure
- * the transaction exists to prevent (docs/plans/delete-the-importer.md § D1b).
+ * GPT Sol's rule, and it is the whole design: the unsafe answer must never be
+ * the one you get by doing nothing. A name is added here only by somebody who
+ * has looked at the stage and knows it still writes its own files.
+ *
+ * **The two sessions now agree, where they used to differ.** The filesystem
+ * session consults this list and a transactional one deliberately passes an
+ * empty set instead — because a stage writing outside the transaction is the
+ * failure the transaction exists to prevent
+ * (docs/plans/delete-the-importer.md § D1b). With the list empty those are the
+ * same question, and that is the point of the migration rather than a reason to
+ * merge them: the day somebody adds a name back, they diverge again on purpose.
  */
-export const LEGACY_UNCONVERTED_STEPS = [
-  "fetch",
-  "extract",
-  "blocks",
-  "toc",
-  /* New on 2026-08-29 and arriving unconverted like its nine neighbours: it
-     writes its own `assets.json` inside `run`. Converting it is the same one
-     deletion here plus a `parts` on the return that D3–D5 will make for all of
-     them; landing it on the same footing as the rest is what keeps that a
-     single uniform change rather than a special case. */
-  "assets",
-  "arc",
-  "tweets",
-  "glossary",
-  "summary",
-  "ideas",
-] as const;
+export const LEGACY_UNCONVERTED_STEPS = [] as const satisfies readonly StepName[];
 
 /** A step still on the exemption above — see `LEGACY_UNCONVERTED_STEPS`. */
 export type LegacyUnconvertedStep = (typeof LEGACY_UNCONVERTED_STEPS)[number];
@@ -513,7 +522,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    * three near-identical `…IsCurrent` functions. The store reads the recorded
    * stamp (`stampFor`); this says what it ought to be; `sameStamp` compares
    * them once, in one place, instead of the same three lines living in
-   * src/tweets.ts, src/glossary.ts and src/summarise.ts.
+   * src/tweets.ts and src/glossary.ts.
    *
    * `null` means *we cannot tell* — the blocks it would be hashed against are
    * not readable — and that answers not-current. The safe way to be wrong here
@@ -546,15 +555,15 @@ export interface PipelineStep<N extends StepName = StepName> {
    * `assertProduced` still uses `outputs`, because "did you write the file"
    * stays a separate question from "was it worth writing".
    *
-   * **`stamp` above is what replaces this, and two steps are still here** —
-   * `tweets` and `summary`.
+   * **`stamp` above is what replaces this, and one step is still here** —
+   * `tweets`.
    *
-   * The reason used to be that both kept `PROMPT_VERSION` module-private, so a
-   * `stamp` for either would have written the version out a second time in this
+   * The reason used to be that it kept `PROMPT_VERSION` module-private, so a
+   * `stamp` for it would have written the version out a second time in this
    * file: two copies of one string, free to drift, and the drift showing up as
-   * an artefact that never regenerates. **That reason has gone** — both export
-   * it now (`tweets/2`, `summary/3`), as `glossary` did when it made the move.
-   * What is left is one `stamp` line here and one deletion in each stage.
+   * an artefact that never regenerates. **That reason has gone** — it exports
+   * it now (`tweets/2`), as `glossary` did when it made the move.
+   * What is left is one `stamp` line here and one deletion in the stage.
    *
    * Worth doing before the artefacts leave the filesystem rather than after:
    * both of these `isDone` implementations read `ctx.dir`, and under Postgres
@@ -867,11 +876,11 @@ async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<str
  *
  * The three inputs every prompt in this half of the pipeline actually consumes —
  * `articleFingerprint` in src/source-hash.ts says which fields and why. Used by
- * `tweets`, `glossary` and `summary`; `arc`, `ideas` and `sketch` call their own
+ * `tweets` and `glossary`; `arc`, `ideas` and `sketch` call their own
  * stage's `inputFingerprint`, which is the same function under a name that
  * belongs to the stage.
  *
- * **Until 2026-08-31 those three stamped `inputHashFor` above**, so the
+ * **Until 2026-08-31 those stamped `inputHashFor` above**, so the
  * sections could be re-cut or the extracted title changed and all three went on
  * reporting themselves current. Nothing showed, because the pipeline's artefact
  * reads answer `null` today and the step re-runs regardless — the fault arrives
@@ -1144,7 +1153,10 @@ function requireUrl(ctx: StepContext): string {
  * can end with us having checksummed one document and extracted another.
  * Staging litter is swept later, after `SWEEP_GRACE_MS` — see src/source.ts.
  */
-async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<string> {
+async function acquireUpload(
+  ctx: StepContext,
+  upload: JobUpload,
+): Promise<{ manifest: RawManifest; detail: string }> {
   const record = await readUpload(upload.id);
   if (!record) {
     /* `ours`: the bytes may well be sitting in Storage perfectly intact, and
@@ -1201,8 +1213,6 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
      helper is supposed to prevent. GPT Sol, 2026-08-27. */
   const { sha256: storedSha256, outcome: promotion } = await storeRawSource(got, "pdf");
 
-  await mkdir(ctx.dir, { recursive: true });
-  await writeFile(path.join(ctx.dir, "raw.pdf"), got);
   const manifest: RawManifest = {
     kind: "pdf",
     file: "raw.pdf",
@@ -1235,11 +1245,6 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
     storedBytes: got.byteLength,
     fetchedAt: new Date().toISOString(),
   };
-  await writeFile(
-    path.join(ctx.dir, "raw.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  );
 
   /* Only from `claimed`. A second run of this step — Retry, or `advanceJob`
      walking the list again over a job whose `raw.json` was written and whose
@@ -1265,7 +1270,16 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
     { slug: ctx.slug, step: "fetch", origin: "upload", kb, deduped: promotion === "already-there" },
     `upload ${ctx.slug}: ${kb} KB verified`,
   );
-  return `${kb} KB`;
+  /* **The manifest goes back rather than to `ctx.dir`, exactly as the fetched
+     half's does.** The two origins have to end in the same artefact or the seam
+     stage 2 onwards depends on is not a seam
+     (docs/project/content-extraction.md). This path wrote `raw.pdf` and
+     `raw.json` itself until 2026-08-31, which meant the upload branch was still
+     the filesystem's while the fetch branch had stopped being — the one shape
+     `writeRaw` was refactored to prevent. The bytes are already in the
+     content-addressed bucket, under `storedSha256`, put there by
+     `storeRawSource` above. */
+  return { manifest, detail: `${kb} KB` };
 }
 
 /**
@@ -1331,12 +1345,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          so this half verifies them and writes the same manifest the other half
          does. See `acquireUpload`, and the label this step shows, which is not
          "Fetching the page" when there is nothing to fetch. */
-      if (ctx.upload) return { detail: await acquireUpload(ctx, ctx.upload) };
+      if (ctx.upload) {
+        const { manifest, detail } = await acquireUpload(ctx, ctx.upload);
+        return { parts: { raw: manifest }, detail };
+      }
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
       const doc = await fetchDocument(url, { signal: ctx.signal });
-      const manifest = await writeRaw(ctx.dir, doc);
+      /* **No directory.** `writeRaw` puts the bytes in the content-addressed
+         `sources` bucket and hands back the manifest that names them; where the
+         manifest itself goes is this caller's business, and for the queue that
+         is the store. `npm run fetch` still writes the two files, through
+         `writeRawFiles` in the same module. */
+      const manifest = await writeRaw(doc);
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
          history, and nothing writes one down: the enqueue line in src/jobs.ts
@@ -1348,7 +1370,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          when a page comes back suspiciously small, or when one publisher keeps
          failing. See log.ts's note on `url` not being redacted, and why. */
       plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
-      return { detail: `${kb} KB` };
+      return { parts: { raw: manifest }, detail: `${kb} KB` };
     },
   },
 
@@ -1369,23 +1391,55 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Extracting the article",
     outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
     produces: ["extractedHtml", "meta"],
-    async run(ctx) {
-      const manifest = await readRaw(ctx.dir);
+    async run(ctx, store) {
+      /* **The manifest through the store, and the bytes by content address.**
+         Stage 1 no longer leaves anything in `ctx.dir`: it puts the document in
+         the `sources` bucket and returns the manifest that names it. So this
+         reads the manifest from wherever stage 1's product was committed, and
+         `readRawBytes` fetches the object `storedSha256` points at — through
+         `blobStore()`, the same selection `writeRaw` wrote through, because
+         anything else is a split brain by construction. */
+      const manifest = await store.read(ctx.slug, "fetch", "raw");
+      if (manifest === null) {
+        throw stageFailure("ours", `No fetched document for "${ctx.slug}" — run the fetch step first.`);
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = await readRawBytes(manifest);
+      } catch (err) {
+        /* **`blocked`, not an unclassified failure, and the distinction is
+           about what the Retry button can do.** All three reasons —
+           `no-object`, `missing`, `corrupt` — mean the document behind this
+           manifest is not there or is not what it claims. Retry never re-runs a
+           step that finished, and `fetch` finished, so a retry would arrive
+           here and read the same absent object again. The fix is a re-fetch,
+           and `blocked` is how the reader is told that rather than offered a
+           button that cannot work. */
+        if (err instanceof RawDocumentUnavailable) {
+          throw stageFailure("blocked", err.message);
+        }
+        throw err;
+      }
+
       /* **Only the HTML half needs a URL**, and it needs it as a base for
          relative links rather than as a thing to fetch. A PDF does not: it
          carries no relative hrefs, and an uploaded one has no address at all.
          Asking for one up here — which this did — is what made `requireUrl` the
          first thing an upload hit, three stages after the last thing that could
          have supplied one. */
-      /* No manifest means an article fetched before `raw.json` existed. Those
-         all have a `raw.html`, so HTML is the right assumption — and a wrong
-         one would fail loudly on the read below rather than quietly. */
-      if (manifest?.kind !== "pdf") {
+      if (manifest.kind !== "pdf") {
         const url = requireUrl(ctx);
-        const html = await readFile(path.join(ctx.dir, manifest?.file ?? "raw.html"), "utf8");
+        /* `TextDecoder`, and no encoding branch: `writeRaw` stores the
+           *decoded* string for an HTML page, so these bytes are already UTF-8
+           whatever the publisher served. The manifest records the original
+           encoding so that stays visible. */
+        const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
-          return { detail: result.meta.title };
+          const result = await runExtract({ html, url, slug: ctx.slug });
+          return {
+            parts: { extractedHtml: result.extractedHtml, meta: result.meta },
+            detail: result.meta.title,
+          };
         } catch (err) {
           /* Only the one sentence. Everything else this can throw — a full
              disk, a directory that vanished — is ordinary bad luck, and hiding
@@ -1397,7 +1451,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         }
       }
 
-      const bytes = new Uint8Array(await readFile(path.join(ctx.dir, manifest.file)));
       const result = await runPdfExtract({
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
@@ -1406,7 +1459,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            has for a scan. For a fetched PDF it stays the URL's last segment,
            which is what it always was. */
         ...(manifest.filename ? { filename: manifest.filename } : {}),
-        outFile: ctx.htmlFile,
+        /* **The chunk checkpoints, and nothing else now.** It used to be where
+           the artefacts went too; those are returned. A half-read book resumes
+           from this directory rather than re-buying every chunk, which is why
+           it is still a path and still `ctx.dir` — src/pdf-read.ts. */
         dataDir: ctx.dir,
         slug: ctx.slug,
         signal: ctx.signal,
@@ -1434,7 +1490,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
       );
-      return { detail: result.meta.title };
+      return {
+        parts: { extractedHtml: result.extractedHtml, meta: result.meta },
+        detail: result.meta.title,
+      };
     },
   },
 
@@ -1490,10 +1549,26 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * has to honour it; the reasoning is on the constant.
        */
       const previous = await previousBlocksFrom(store, ctx.slug);
+      /* **Stage 2's document, named through the constant rather than spelled
+         here**, and this is the read `blocksMatchTheirHtml` above makes its
+         judgement against — the two have to be the same document or the guard
+         is comparing this run's output with a different run's input. On the
+         filesystem `extractedHtml` and `stampedHtml` resolve to one file, so
+         this reads what stage 3 itself last wrote; in Postgres they are two
+         columns and this is stage 2's. That difference is the whole reason the
+         constant exists (src/blocks.ts § `BLOCKS_INPUT_HTML`). */
+      const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
+      if (extracted === null) {
+        /* `ours`, not `blocked`: nobody refused us anything, we simply cannot
+           find the document stage 2 was supposed to leave. A Retry that re-ran
+           `extract` would fix it, which is exactly what this sentence tells the
+           reader to do. */
+        throw stageFailure("ours", `No extracted HTML for "${ctx.slug}" — run the extract step first.`);
+      }
 
       let run: BlocksRun;
       try {
-        run = await runBlocks({ htmlFile: ctx.htmlFile, previous });
+        run = runBlocks({ slug: ctx.slug, extractedHtml: extracted, previous });
       } catch (err) {
         /* **Only this one, and by type rather than by sentence.** Stage 3 read
            the HTML an earlier step wrote and Retry never re-runs a step that
@@ -1559,7 +1634,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * ignored. `previousBlocks`, `carried` and `reused` are all in the info
        * line above, so that case is one query away instead.
        */
-      return { detail: `${total} blocks, ${minted} new ids (${kept} kept)` };
+      /* **`blocksArtefact`, not a bare `{ blocks }`.** Every writer of this
+         artefact goes through it — stage 3 here, stage 4 in src/toc.ts, the
+         Postgres export — because the stamp it adds is what lets a reader tell
+         blocks cleaned by the current sanitiser policy from blocks cleaned by
+         nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
+         every article read back as *predates the sanitiser* for ever. */
+      return {
+        parts: { blocks: blocksArtefact(run.blocks), stampedHtml: run.html },
+        detail: `${total} blocks, ${minted} new ids (${kept} kept)`,
+      };
     },
   },
 
@@ -1586,16 +1670,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * hashing stage 3's blocks, and it works — `59e8e3a` had it, with tests.
      *
      * It was reverted because **`toc` re-running silently drops artefacts that
-     * are still marked current.** `arc` and `summary` are joined to the tree by
-     * exact block-**range** pair (`buildArcColumn` and the summary column in
-     * src/web/tree.ts), and an entry whose range matches no node is dropped
-     * from the reading view without a word. A rebuilt tree may legitimately
-     * choose different boundaries, so:
-     *
-     * - `arc` has no stamp at all, so it stays "done" and simply loses entries.
-     * - `summary` hashes only the blocks, so where the blocks did *not* change —
-     *   a tree we cannot date, rather than one we know is stale — it also stays
-     *   current and loses entries.
+     * are still marked current.** `arc` is joined to the tree by exact
+     * block-**range** pair (`buildArcColumn` in src/web/tree.ts), and an entry
+     * whose range matches no node is dropped from the reading view without a
+     * word. A rebuilt tree may legitimately choose different boundaries, and
+     * `arc` has no stamp at all, so it stays "done" and simply loses entries.
      *
      * The tree's own comment in src/web/tree.ts has said as much all along:
      * *"ids are positional and a re-run of `npm run toc` renumbers them"*.
@@ -1622,10 +1701,27 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * and refuses the publication when they differ — so a `toc` left carrying
      * `NO_INPUT_HASH` would make every article unpublishable.
      */
-    async run(ctx) {
+    async run(ctx, store) {
+      /* **Stage 3's copy, through the store**, which is the same artefact
+         `blocksPathFor` used to open by path — `output/<slug>.blocks.json`, not
+         the copy this step is about to write into `data/`. Reading the other
+         one would build the tree from the blocks the *last* run of this step
+         produced. */
+      const file = await store.read(ctx.slug, "blocks", "blocks");
+      if (!file?.blocks) {
+        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the blocks step first.`);
+      }
       const run = await generateToc({
-        blocksPath: blocksPathFor(ctx),
-        outDir: ctx.dir,
+        blocks: file.blocks,
+        slug: ctx.slug,
+        /* Where the **label checkpoint** lives, and nothing else. Not where the
+           artefacts go — those are returned now. It stays a directory because
+           `CheckpointStore` has no `delete` and deliberately does not: its
+           header says landing D drops `runId` and the one-file-per-run format
+           together, and it keys on an `articleId` this stage is not given.
+           Redirecting half of that now would stop the next run resuming and
+           re-buy a paid model call per batch, silently. */
+        checkpointDir: ctx.dir,
         onProgress: ctx.report,
         signal: ctx.signal,
       });
@@ -1682,7 +1778,42 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          The log line above is where an operator would look afterwards; this is
          the one moment somebody is already watching, and a paragraph with no
          nav label leaves no other mark on the article. */
+      /*
+       * **All three artefacts in one `parts`, and only `inputHash` in the stamp.**
+       *
+       * One map, so the store writes the tree, the labels and stage 4's copy of
+       * the blocks together. That is what replaces the write order this stage
+       * used to keep by hand — labels, blocks, tree last — which was never the
+       * crash-safety property its comments claimed. It held because `stepIsDone`
+       * reads *file exists* as *step done* and `writeFile` truncates before it
+       * writes. Under one map both halves of that reasoning are gone, and
+       * `src/toc.ts` now says so where it used to say the other thing.
+       *
+       * **`inputHash` and nothing else.** `STAMP_SOURCE.toc` is `"labels"`, so
+       * whatever is passed here is compared by `assertStampAgrees` against the
+       * labels file's own stamp. `run.inputHash` *is* `labels.sourceHash`, so it
+       * cannot clash; a `promptVersion` beside it would, because the labels file
+       * is `labels/1` and the tree is `toc/2`, and that throw fails every
+       * ingest. Verified against a real artefact rather than reasoned about.
+       *
+       * The hash comes back from the stage rather than being `hashBlocks(...)`
+       * here, because a second computation of "the blocks hash" is exactly how
+       * the two sides of that comparison come to disagree.
+       *
+       * **`run.clearCheckpoint` is deliberately not called**, and the omission
+       * is the safer half of a choice rather than an oversight. It throws the
+       * label run's working state away, and it should happen once the artefacts
+       * are *stored* — which is `StoreSession.commit`, after this function has
+       * returned. Calling it here would discard the checkpoint while the write
+       * could still fail, and the next run would re-buy a whole label pass.
+       * Leaving it costs a file that the next run either reuses correctly or
+       * ignores, fingerprint by fingerprint — `src/labels.ts` calls a checkpoint
+       * "harmless to forget", and `scripts/checkpoints-sweep.ts` reclaims it.
+       * The command line, which does store the artefacts itself, does call it.
+       */
       return {
+        parts: run.parts,
+        stamp: { inputHash: run.inputHash },
         detail:
           `${run.internal} sections over ${run.blocks} blocks` +
           (run.labelsDropped > 0
@@ -1732,7 +1863,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         onProgress: (done, total) => ctx.report(`${done}/${total} images`),
       });
-      await writeAssets(ctx.dir, run.assets);
       /* No URLs and no hostnames. A log of the images in somebody's article is
          a reading history one step removed, and the counts are what an operator
          wants: `deduped` going from sometimes to never is how you find out the
@@ -1758,7 +1888,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         `assets ${ctx.slug}: ${run.stored} stored, ${run.failed} failed`,
       );
       const failed = run.failed ? `, ${run.failed} left hot-linked` : "";
-      return { detail: `${run.stored} images stored${failed}` };
+      return { parts: { assets: run.assets }, detail: `${run.stored} images stored${failed}` };
     },
   },
 
@@ -1801,19 +1931,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * input and `inputFingerprint` hashes it as one.
      */
     stamp: async (ctx, store) => {
-      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
-      const tree = await store.read(ctx.slug, "toc", "tree");
-      if (!blocksFile?.blocks || !tree) return null;
-      const meta = await store.read(ctx.slug, "extract", "meta");
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
       return {
-        inputHash: arcFingerprint(blocksFile.blocks, tree, meta ?? null),
+        inputHash: arcFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: ARC_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
     },
-    async run(ctx) {
+    async run(ctx, store) {
       const run = await generateArc({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
         cacheArticle: ctx.cacheArticle,
@@ -1833,7 +1961,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `arc ${ctx.slug}: ${run.arc.entries.length} sentences over ${run.parts.length} parts`,
       );
-      return { detail: `${run.arc.entries.length} sentences, one per part` };
+      return {
+        parts: { arc: run.arc },
+        detail: `${run.arc.entries.length} sentences, one per part`,
+      };
     },
   },
 
@@ -1863,9 +1994,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!inputHash) return null;
       return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
     },
-    async run(ctx) {
+    async run(ctx, store) {
       const run = await generateTweets({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
@@ -1891,7 +2022,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `tweets ${ctx.slug}: ${run.thread.tweets.length} posts${over}`,
       );
-      return { detail: `${run.thread.tweets.length} posts${over}` };
+      return {
+        parts: { tweets: run.thread },
+        detail: `${run.thread.tweets.length} posts${over}`,
+      };
     },
   },
 
@@ -1951,7 +2085,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        */
       const previous = await previousGlossaryFrom(store, ctx.slug);
       const run = await generateGlossary({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
@@ -1983,7 +2117,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         `glossary ${ctx.slug}: ${total} terms (${run.added} new, pass ${run.glossary.passes})`,
       );
       const added = run.glossary.passes > 1 ? `, ${run.added} new` : "";
-      return { detail: `${total} ${total === 1 ? "term" : "terms"}${added}` };
+      return {
+        parts: { glossary: run.glossary },
+        detail: `${total} ${total === 1 ? "term" : "terms"}${added}`,
+      };
     },
   },
   /**
@@ -1991,7 +2128,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * words. docs/project/quotes.md, docs/plans/quotes-mode.md.
    *
    * In `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS`, for the reason `tweets`
-   * established and `glossary`, `summary`, `ideas` and `sketch` have followed:
+   * established and `glossary`, `ideas` and `sketch` have followed:
    * everything up to `arc` makes the article readable, and everything after it
    * is a thing somebody asks for.
    *
@@ -2019,16 +2156,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * still raises the banner and lets the reader decide.
      */
     stamp: async (ctx, store) => {
-      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
-      const tree = await store.read(ctx.slug, "toc", "tree");
       /* `null` is "we cannot tell", which is not the same answer as a hash that
          fails to match. Both mean not-current; only one means stale. The
          metadata is not one of those cases — `generateQuotes` tolerates a
-         missing `meta.json` and hashes "no meta" as a legitimate input. */
-      if (!blocksFile?.blocks || !tree) return null;
-      const meta = await store.read(ctx.slug, "extract", "meta");
+         missing `meta.json` and hashes "no meta" as a legitimate input, which
+         is why `tryReadArticle` answers `null` for the other two and not for
+         this one. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
       return {
-        inputHash: quotesFingerprint(blocksFile.blocks, tree, meta ?? null),
+        inputHash: quotesFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: QUOTES_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
@@ -2042,7 +2179,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          quietly when there is none. */
       const previous = await previousQuotesFrom(store, ctx.slug);
       const run = await generateQuotes({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
@@ -2085,74 +2222,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
-  summary: {
-    name: "summary",
-    label: "Writing the summaries",
-    outputs: (ctx) => [path.join(ctx.dir, "summary.json")],
-    produces: ["summary"],
-    /* Was `summariesAreCurrent(ctx.dir)` — the same three comparisons by hand,
-       against the article's directory rather than the store. D0, as `tweets`
-       above. The function is still in src/summarise.ts and now has no caller;
-       it goes in a follow-up, because that file is being edited elsewhere. */
-    stamp: async (ctx, store) => {
-      /* `articleInputHash`, not `inputHashFor`: `batchesOf` and `skeletonOf`
-         are built out of the tree, and this stage is the one where being
-         wrong costs the most — one model call per part, not one per article.
-         See that function. */
-      const inputHash = await articleInputHash(ctx, store);
-      if (!inputHash) return null;
-      return { inputHash, promptVersion: SUMMARY_PROMPT_VERSION, model: CAPABLE_MODEL };
-    },
-    async run(ctx) {
-      const run = await generateSummaries({
-        dir: ctx.dir,
-        profile: ctx.profile ?? null,
-        onProgress: ctx.report,
-        signal: ctx.signal,
-      });
-      const { missing } = run.summaries;
-      plog.info(
-        {
-          slug: ctx.slug,
-          step: "summary",
-          model: run.model,
-          inputTokens: run.inputTokens,
-          outputTokens: run.outputTokens,
-          ms: run.elapsedMs,
-          sections: run.targets,
-          batches: run.batches,
-          /* The two quality signals in this line, and the reason partial
-             salvage is safe to have at all. `missing` is how many sections came
-             out of this run with no summary; `failedBatches` is how many groups
-             gave up entirely after their one repair attempt. Both are normally
-             zero, neither is an error, and a run that quietly starts returning
-             a handful every time is the prompt or the model having moved —
-             which is exactly the failure that is invisible unless it is
-             counted. See docs/reusable/silent-success.md. */
-          missing,
-          failedBatches: run.failedBatches,
-          /* How many doors back into the article these summaries carry, and
-             how many lead nowhere. A run that starts reporting `cited: 0` is
-             the model having stopped citing — which breaks nothing visible and
-             turns a summary back into a substitute for the passage rather than
-             a way in. src/summarise.ts § countCitations. */
-          cited: run.cited,
-          unknownCited: run.unknownCited,
-          /* The profile's LENGTH, never the profile. It is what a person told
-             us about themselves, which is exactly the kind of thing
-             docs/project/logging.md keeps out of the log. A length answers "was
-             one sent at all", which is the only question the log is entitled to
-             ask. */
-          profileChars: ctx.profile?.length ?? 0,
-        },
-        `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,
-      );
-      const short = missing > 0 ? `, ${missing} missing` : "";
-      return { detail: `${run.targets - missing} of ${run.targets} sections${short}` };
-    },
-  },
   /* Stage 5f — the ideas. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
-     the reason `tweets`, `glossary` and `summary` established: everything up to
+     the reason `tweets` and `glossary` established: everything up to
      `arc` makes the article readable, everything after it is a thing somebody
      asks for.
 
@@ -2184,16 +2255,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * question, not merely an older one.
      */
     stamp: async (ctx, store) => {
-      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
-      const tree = await store.read(ctx.slug, "toc", "tree");
       /* `null` is "we cannot tell", which must not be confused with a hash that
          fails to match. Both answer not-current; only one is a stale artefact.
          The metadata is **not** one of those cases: `generateIdeas` tolerates a
-         missing `meta.json` and hashes "no meta" as a legitimate input. */
-      if (!blocksFile?.blocks || !tree) return null;
-      const meta = await store.read(ctx.slug, "extract", "meta");
+         missing `meta.json` and hashes "no meta" as a legitimate input, which
+         is why `tryReadArticle` answers `null` for the other two and not for
+         this one. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
       return {
-        inputHash: ideasFingerprint(blocksFile.blocks, tree, meta ?? null),
+        inputHash: ideasFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: IDEAS_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
@@ -2210,7 +2281,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        */
       const previous = await previousIdeasFrom(store, ctx.slug);
       const run = await generateIdeas({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
@@ -2262,19 +2333,168 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `ideas ${ctx.slug}: ${total} ideas (${assumed} to bring)`,
       );
-      return { detail: `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring` };
+      return {
+        parts: { ideas: run.ideas },
+        detail: `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring`,
+      };
+    },
+  },
+  /* Stage 5i — the timeline. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
+     the reason `tweets`, `glossary`, `quotes` and `ideas` established:
+     everything up to `arc` makes the article readable, everything after it is a
+     thing somebody asks for.
+
+     **The first step whose stamp reads the publication date**, and the only one
+     — see its `stamp` below. docs/project/timeline.md,
+     docs/plans/timeline-mode.md. */
+  timeline: {
+    name: "timeline",
+    label: "Reading the dates",
+    outputs: (ctx) => [path.join(ctx.dir, "timeline.json")],
+    produces: ["timeline"],
+    /**
+     * **Three values, and the third is one no other step hashes: the
+     * publication date.**
+     *
+     * `timelineFingerprint` is `datedArticleFingerprint` (src/source-hash.ts),
+     * not the `articleFingerprint` four of these stages use and not the
+     * `articleWithIdsFingerprint` `ideas` and `sketch` use. It is the blocks,
+     * the tree and a metadata head that carries `publishedAt`.
+     *
+     * The date is **load-bearing here rather than defensive**. It is the
+     * reference frame the parser reads a year-less "on July 7" against, and
+     * nineteen of the twenty-four temporal expressions on the test article are
+     * year-less — so a publisher re-dating a post changes almost every row of
+     * this artefact, and not one word of any other. That is exactly why it is in
+     * the hash of the stage that names it **and no other**: widening the shared
+     * `MetaFingerprint` would have marked five paid artefacts stale over bytes
+     * no model ever saw, on the first re-extraction, silently.
+     *
+     * **And no `profileHash`**, unlike `ideas` and `sketch` — a decision rather
+     * than an omission. Who is reading changes what an *idea* is; it does not
+     * change when something happened, so there is one fewer reason to
+     * regenerate. docs/plans/timeline-mode.md § Freshness.
+     */
+    stamp: async (ctx, store) => {
+      /* `tryReadArticle`, where `run` below takes `readArticle`, and the
+         asymmetry is deliberate. This asks *what stamp would this step write if
+         it ran right now*, and an unreadable article means we **cannot tell** —
+         which `stepIsDone` turns into "not current, so re-run". That is the safe
+         way to be wrong; a throw here is a failed job. `null` is not the same
+         answer as a hash that fails to match: both mean not-current, only one
+         means stale.
+
+         The metadata is deliberately not one of those cases. `generateTimeline`
+         tolerates a missing `meta.json` and hashes "no meta" as a legitimate
+         input — it is the state most of the shelf is in, because `publishedAt`
+         only arrives on re-extraction — which is why `tryReadArticle` answers
+         `null` for the blocks and the tree and not for this. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        /* **`article.meta`, `null` and all — never a stub.** `generateTimeline`
+           builds `{ title: fallbackHeadTitle(tree) }` for the *prompt* when
+           there is no metadata, and hashing that instead would write a
+           fingerprint this stamp could never reproduce: every article without
+           metadata would report stale for ever, on every run, with nothing red.
+           Both sides hash the same value because both read it from the same
+           place. src/timeline.ts § `generateTimeline`, which has the note about
+           why a green suite is not evidence of this being right. */
+        inputHash: timelineFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: TIMELINE_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      /*
+       * **The store, not a path**, for the reason `ideas` gives — and with more
+       * riding on it. The only thing the previous artefact is read for is its
+       * ids, and only when `sourceHash` matches, so a read that quietly answered
+       * `null` would keep working in every visible way while every `?event=`
+       * link a reader holds went dead. Here the ids cannot be re-derived
+       * afterwards either: 26 of 27 survived a regeneration by evidence and only
+       * 7 of 26 would have survived by label, measured. `previousTimelineFrom`
+       * refuses when there is a previous artefact it cannot read, and returns
+       * `null` quietly when there is none.
+       */
+      const previous = await previousTimelineFrom(store, ctx.slug);
+      const run = await generateTimeline({
+        article: await readArticle(ctx.slug, store),
+        previous,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const total = run.timeline.events.length;
+      const dated = run.timeline.events.filter((e) => e.dating.kind === "dated").length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "timeline",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          events: total,
+          dated,
+          /* **Whether there was a reference frame at all**, as a boolean and
+             never the date itself — the date is the publisher's, and this log
+             is not where article facts go (docs/project/logging.md). It is the
+             single most useful signal here: with no frame every year-less
+             expression is refused, so a run of 26 events and 0 dated is correct
+             on a frameless article and a broken parser on a framed one, and
+             nothing else distinguishes them. */
+          framed: run.frame !== null,
+          /* The quality signals, in the shape `ideas` established, and every one
+             of them is invisible from outside: a dropped event looks exactly
+             like a happening the model chose not to name.
+
+             `unanchored` and `datedLabel` are the two to watch. The first is
+             this stage naming a theme instead of finding a passage. The second
+             is the "never a date of your own" ban relocating from `when` into
+             the label as prose — the exact move the glossary's lesson predicts,
+             and the one a review already caught here once.
+
+             `noYearFrame` is deliberately not a fault. On a frameless article it
+             is every dated expression in the piece, which is the common case and
+             not a regression. docs/reusable/silent-success.md. */
+          unanchored: run.dropped.unanchored,
+          datedLabel: run.dropped.datedLabel,
+          unknownIds: run.dropped.unknownIds,
+          unquoted: run.dropped.unquoted,
+          unparseablePhrase: run.dropped.unparseablePhrase,
+          phraseNotInOccurrence: run.dropped.phraseNotInOccurrence,
+          noYearFrame: run.dropped.noYearFrame,
+          overCap: run.dropped.overCap,
+          malformed: run.dropped.malformed,
+          /* The only signal that the model has misread the chronology, and it
+             changes nothing on screen. A high count on a plainly linear article
+             is the stage failing; on this test article, which recounts the same
+             three months three times, it may be the stage working. */
+          orderConflicts: run.dropped.orderConflicts,
+        },
+        `timeline ${ctx.slug}: ${total} events (${dated} dated)`,
+      );
+      return {
+        parts: { timeline: run.timeline },
+        detail: `${total} ${total === 1 ? "event" : "events"}, ${dated} dated`,
+      };
     },
   },
   /**
    * **The picture a model draws of the argument** — docs/project/diagram.md
    * § Sketch, docs/plans/sketch-diagram.md.
    *
-   * The first **converted** step in this pipeline: it returns `parts` and
-   * writes no file of its own, where its nine neighbours are all still on
-   * `LEGACY_UNCONVERTED_STEPS`. That is not a flourish — a step that writes
-   * `<dir>/sketch.json` inside `run` works on a laptop and cannot work through
-   * a store that puts the artefact in a Postgres column, and `PipelineStep`'s
-   * types make the safe answer the one you get by doing nothing.
+   * **The first converted step in this pipeline, and for a while the only one.**
+   * It returns `parts` and writes no file of its own. That is not a flourish —
+   * a step that writes `<dir>/sketch.json` inside `run` works on a laptop and
+   * cannot work through a store that puts the artefact in a Postgres column,
+   * and `PipelineStep`'s types make the safe answer the one you get by doing
+   * nothing. Every other article-reading stage followed it on 2026-08-31; the
+   * four still on `LEGACY_UNCONVERTED_STEPS` are the ones that acquire and cut
+   * the article rather than read it.
    */
   sketch: {
     name: "sketch",
@@ -2293,24 +2513,23 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * article, not a differently-worded one.
      */
     stamp: async (ctx, store) => {
-      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
-      const tree = await store.read(ctx.slug, "toc", "tree");
       /* `null` is "we cannot tell", which is not the same answer as a hash that
          fails to match. Both mean not-current; only one means stale. The
          metadata is not one of those cases — `generateSketch` tolerates a
-         missing `meta.json`. */
-      if (!blocksFile?.blocks || !tree) return null;
-      const meta = await store.read(ctx.slug, "extract", "meta");
+         missing `meta.json`, which is why `tryReadArticle` answers `null` for
+         the other two and not for this one. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
       return {
-        inputHash: sketchFingerprint(blocksFile.blocks, tree, meta ?? null),
+        inputHash: sketchFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: SKETCH_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
       };
     },
-    async run(ctx) {
+    async run(ctx, store) {
       const run = await generateSketch({
-        dir: ctx.dir,
+        article: await readArticle(ctx.slug, store),
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,

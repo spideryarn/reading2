@@ -54,7 +54,7 @@ exactly backwards for two of them:
 
 A profiled ideas run could have obeyed the shared rule by returning none of the half the feature
 exists for, and nothing on screen would have looked broken. So the clauses live in
-[`src/summarise.ts`](../../src/summarise.ts)'s own `SYSTEM` — where the steer they came from lived,
+`src/summarise.ts`'s own `SYSTEM` — where the steer they came from lived,
 and the one prompt the absolute is true of — and `PROFILE_RULES` is untouched. That also shrinks the
 blast radius from seven prompts to one.
 

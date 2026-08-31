@@ -21,9 +21,6 @@ import { describe, expect, it } from "vitest";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { unhideCollapsedSections, runExtract } from "../src/extract.js";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 const doc = (html: string): Document =>
   new JSDOM(`<body>${html}</body>`, { virtualConsole: new VirtualConsole() }).window.document;
@@ -117,22 +114,15 @@ describe("stage 2 actually calls it", () => {
     `<p>${`Sentence ${n} of a genuinely long paragraph, written out at length so the extractor has something with real weight to score. `.repeat(6)}</p>`;
 
   it("recovers a collapsed section through runExtract, not just through the helper", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-unhide-"));
-    try {
-      const outFile = path.join(dir, "out.html");
-      await runExtract({
-        html:
-          `<html><head><title>A page with an accordion</title></head><body><article>` +
-          `${para(1)}${para(2)}<div aria-hidden="true">${para(3)}${para(4)}</div>${para(5)}` +
-          `</article></body></html>`,
-        url: "https://example.invalid/accordion",
-        outFile,
-        dataDir: dir,
-      });
-      expect(await readFile(outFile, "utf-8")).toContain("Sentence 3");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const result = await runExtract({
+      html:
+        `<html><head><title>A page with an accordion</title></head><body><article>` +
+        `${para(1)}${para(2)}<div aria-hidden="true">${para(3)}${para(4)}</div>${para(5)}` +
+        `</article></body></html>`,
+      url: "https://example.invalid/accordion",
+      slug: "accordion",
+    });
+    expect(result.extractedHtml).toContain("Sentence 3");
   });
 });
 

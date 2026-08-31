@@ -137,7 +137,6 @@ const WRITERS = [
   "src/labels.ts",
   "src/pdf-read.ts",
   "src/pipeline.ts",
-  "src/summarise.ts",
   "src/toc.ts",
   "src/tweets.ts",
   /* Writes `timeline.json`, and spends. Listed the day the stage landed rather

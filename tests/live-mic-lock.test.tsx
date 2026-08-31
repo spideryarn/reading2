@@ -43,6 +43,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { claimMicrophone, resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { useLiveConversation } from "../src/web/live/useLiveConversation.js";
+import type { LiveWiring } from "../src/web/live/wiring.js";
 
 /** Every track handed out, so the test can ask whether they were stopped. */
 const handedOut: { stopped: boolean }[] = [];
@@ -133,10 +134,25 @@ function stubFetch(sdpOk: boolean) {
   );
 }
 
+/** A conversation id. Nothing here writes, so it is only ever echoed back. */
+const THREAD = "spya-thra01";
+
+/**
+ * The two server calls, faked — the seam the hook takes as an argument.
+ *
+ * An empty `seed` matters: it lifts the seeding barrier immediately, so these
+ * tests are about the microphone lock and nothing else. The barrier has its own
+ * tests, where it is the subject rather than a step on the way.
+ */
+const wiring: LiveWiring = {
+  ticket: async () => ({ token: "ek_test", expiresAt: 0, model: "m", seed: [], tailId: null }),
+  runTool: async () => ({ content: "", label: "", detail: "" }),
+};
+
 function mount() {
   let api: ReturnType<typeof useLiveConversation> | null = null;
   function Probe(): ReactNode {
-    api = useLiveConversation("a-slug");
+    api = useLiveConversation("a-slug", { wiring });
     return null;
   }
   const host = document.createElement("div");
@@ -174,7 +190,7 @@ describe("live conversation and the page's one microphone", () => {
     });
 
     const h = mount();
-    act(() => h.get().start({ microphone: true }));
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
     await settle();
 
     expect(events, "the device was opened while somebody else held the lock").not.toContain(
@@ -197,7 +213,7 @@ describe("live conversation and the page's one microphone", () => {
     });
 
     const h = mount();
-    act(() => h.get().start({ microphone: false }));
+    act(() => h.get().start({ threadId: THREAD, microphone: false }));
     await settle();
 
     expect(events).not.toContain("incumbent asked to stop");
@@ -225,7 +241,7 @@ describe("live conversation and the page's one microphone", () => {
   it("closes the microphone it opened when starting FAILS", async () => {
     stubFetch(false);
     const h = mount();
-    act(() => h.get().start({ microphone: true }));
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
     await settle();
 
     expect(h.get().phase).toBe("failed");
@@ -240,7 +256,7 @@ describe("live conversation and the page's one microphone", () => {
   it("stops every track before it says the device is free", async () => {
     stubFetch(true);
     const h = mount();
-    act(() => h.get().start({ microphone: true }));
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
     await settle();
     expect(handedOut.length).toBeGreaterThan(0);
 

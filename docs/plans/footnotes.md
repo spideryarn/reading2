@@ -650,7 +650,7 @@ block to the last note. So:
   nothing and draws empty, which is exactly what the plan asks for ("show the title, never a hole").
   There is no root arc entry to lose, because `partsOf` is the root's *children*.
 - **One summary entry breaks: the whole-article one.** `targetsOf` includes `node.depth === 0`
-  ([`summarise.ts:239`](../../src/summarise.ts)), so a summary is written for the root, and
+  (`summarise.ts:239`), so a summary is written for the root, and
   `buildSummaryTree` looks it up by the root's range. After stage 4 that key misses, and the entry is
   *dropped without a word* — the article-level summary simply stops appearing, on every article
   summarised before stage 4, with `sourceHash` still current because **no block changed**.
@@ -1476,7 +1476,7 @@ supplement index that lives on it; that is the only signature that changed.
   excluding the supplement there fixes the arc's `buildArc` throw and the glossary, ideas and tweet
   skeletons in one edit. The client's numbering is a *separate* copy of the rule — it numbers the
   cells it is drawing, not the tree — and both are held by tests.
-- `targetsOf` ([`summarise.ts`](../../src/summarise.ts)) returns before descending into a supplement.
+- `targetsOf` (`summarise.ts`) returns before descending into a supplement.
   Forty endnotes sail past `MIN_BLOCKS`, and `textOf` filters by `isBodyEvidence`, so the call would
   have gone out with an empty scope and come back with a plausible paragraph about nothing.
 - `deriveLibraryScalars` excludes the node and its leaves from the part and section counts.

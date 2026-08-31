@@ -608,7 +608,6 @@ export const GATE_FIXTURES = [
   "data/writes/arc.json",
   "data/writes/tweets.json",
   "data/writes/glossary.json",
-  "data/writes/summary.json",
   "data/writes/ideas.json",
   "data/constitution/labels.json",
   "output/writes.html",

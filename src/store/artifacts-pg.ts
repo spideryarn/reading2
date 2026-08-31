@@ -162,9 +162,9 @@ type WholeColumn =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summary"
   | "ideas"
   | "quotes"
+  | "timeline"
   | "sketch";
 
 /**
@@ -234,9 +234,9 @@ export const STORAGE: {
   arc: { arc: { at: "column", column: "arc" } },
   tweets: { tweets: { at: "column", column: "tweets" } },
   glossary: { glossary: { at: "column", column: "glossary" } },
-  summary: { summary: { at: "column", column: "summary" } },
   ideas: { ideas: { at: "column", column: "ideas" } },
   quotes: { quotes: { at: "column", column: "quotes" } },
+  timeline: { timeline: { at: "column", column: "timeline" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
 };
 
@@ -298,6 +298,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     url: row.finalUrl,
     fetchedAt: row.fetchedAt?.toISOString(),
     excerpt: row.excerpt,
+    publishedAt: row.publishedAt,
     note: row.note,
     source: row.source as Meta["source"],
     method: row.extractMethod,
@@ -673,8 +674,7 @@ async function runRowFor(
  * the stored blocks. It is wrong twice. It is a freshness rule, in the one
  * function that must not have one. And it re-runs `toc` whenever stage 3 has
  * run since — which moves the tree's boundaries, which silently drops every
- * `arc` and `summary` entry whose block range no longer matches a node
- * (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
+ * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
  * reached by a different door. GPT Sol, 2026-08-28;
  * docs/plans/artifacts-pg-has-sol.md.
  *
@@ -883,6 +883,7 @@ const META_COLUMNS = [
   "siteName",
   "lang",
   "excerpt",
+  "publishedAt",
   "note",
   "source",
   "extractMethod",
@@ -904,6 +905,18 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,
     excerpt: meta.excerpt ?? null,
+    /* **The publisher's own string, verbatim** — never re-parsed, never passed
+       through `Date`, and the column is `text` for that reason
+       (src/db/schema.ts). Normalising it to UTC moves the calendar day, and the
+       calendar day is what the timeline reads a year-less date against.
+
+       `?? null` matters more here than for its neighbours: this field is absent
+       on every article extracted before 2026-08-31, and it must also be able to
+       go BACK to absent — a publisher who removes the date from a page has to
+       clear the column, not leave the old one sitting beside the new
+       extraction, or the timeline would go on filling in a year the article no
+       longer claims. */
+    publishedAt: meta.publishedAt ?? null,
     note: meta.note ?? null,
     source: meta.source ?? null,
     extractMethod: meta.method ?? null,

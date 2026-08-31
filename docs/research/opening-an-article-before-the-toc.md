@@ -824,7 +824,7 @@ headings (§ 2).
    arc fingerprints blocks + tree + metadata and ideas fingerprints blocks + tree, so "allow and
    stamp" is *already* safe for those two — but **glossary and summary currently hash only the
    blocks** ([`src/glossary.ts:699`](../../src/glossary.ts),
-   [`src/summarise.ts:790`](../../src/summarise.ts)) despite reading the tree, so they would need
+   `src/summarise.ts:790`) despite reading the tree, so they would need
    freshness work first. There is no first-class "waiting for final tree" job state today.
 3. **The section-heading-level rule.** The naive "shallowest tag occurring more than once" picks
    `h1` for `fowler-phrenology`, which has two h1s and six obvious h2 sections. Sol suggests a better

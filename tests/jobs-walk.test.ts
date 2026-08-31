@@ -58,7 +58,12 @@ import { currentJobId } from "../src/job-scope.js";
 import { advanceJobWith, LEASE_MS, STEP_BUDGET_MS, type AdvanceParts } from "../src/jobs.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import type { ArtifactKind, ArtifactMap, ArtifactStore } from "../src/store/artifacts.js";
+import type {
+  ArtifactKind,
+  ArtifactMap,
+  ArtifactParts,
+  ArtifactStore,
+} from "../src/store/artifacts.js";
 import { fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { fsStoreSession } from "../src/store/session.js";
@@ -132,9 +137,18 @@ interface Ran {
 }
 
 /**
- * A step that writes its own artefacts inside `run` and returns a bare detail,
- * which is what all ten real steps still do (`LEGACY_UNCONVERTED_STEPS`) — so
- * the filesystem session accepts it by the same rule it accepts them.
+ * A **converted** step: it writes nothing itself and returns everything it
+ * declares, which is what all but `fetch` and `extract` now do
+ * (`LEGACY_UNCONVERTED_STEPS`). The session's commit is what puts the artefacts
+ * in the store, so `assertProduced` reads back what this returned.
+ *
+ * **It wrote them inside `run` and returned a bare detail until 2026-08-31**,
+ * which was the honest fixture while every real step did that. It stopped being
+ * honest the moment they were converted, and it stopped *compiling as a
+ * fixture* the moment `checkProduct` was asked with no exemption for those
+ * names — which is the guard working, not the fixture breaking.
+ *
+ * A step that returns nothing at all is a different case with its own tests.
  *
  * `body` is where a case puts what it wants to happen *while a step is running*:
  * throw, look at the job row, press Stop from somewhere else.
@@ -154,10 +168,14 @@ function fakeStep(
     async run(): Promise<StepProduct> {
       ran.names.push(name);
       await body();
-      /* Everything it declares, so `assertProduced` reads it back. A step that
-         wrote nothing is a different case with its own tests. */
-      for (const kind of STEPS[name].produces) artifacts.put(slug, name, kind, { made: name });
-      return { detail: `${name} ran` };
+      /* Everything it declares, so `checkProduct` accepts it and
+         `assertProduced` reads it back. `artifacts` is still a parameter
+         because the cases that want an artefact already present — a step that
+         should skip — put it there with `put` before the walk starts. */
+      const parts = Object.fromEntries(
+        STEPS[name].produces.map((kind) => [kind, { made: name }]),
+      ) as ArtifactParts;
+      return { parts, detail: `${name} ran` };
     },
   } as PipelineStep;
 }

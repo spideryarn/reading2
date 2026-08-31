@@ -38,6 +38,7 @@ import {
   STEPS,
   stepIsDone,
 } from "../src/pipeline.js";
+import type { RawManifest } from "../src/fetch.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import {
@@ -718,9 +719,9 @@ describe("the work key", () => {
      panel with something stamped from the profile the reader just declined.
      GPT Sol's review of the built code, 2026-08-30. */
   it("counts two different profiles as two different pieces of work", () => {
-    const physicist = workKeyFor(["summary"], new Set(), "a physicist");
-    const historian = workKeyFor(["summary"], new Set(), "a historian");
-    const none = workKeyFor(["summary"], new Set());
+    const physicist = workKeyFor(["glossary"], new Set(), "a physicist");
+    const historian = workKeyFor(["glossary"], new Set(), "a historian");
+    const none = workKeyFor(["glossary"], new Set());
     expect(physicist).not.toBe(historian);
     expect(physicist).not.toBe(none);
     expect(historian).not.toBe(none);
@@ -913,7 +914,7 @@ describe("running a job", () => {
     const held = await enqueue({ slug, steps: ["fetch"] });
     let late: Awaited<ReturnType<typeof enqueue>> | undefined;
     try {
-      late = await enqueue({ slug, steps: ["summary"] });
+      late = await enqueue({ slug, steps: ["glossary"] });
       /* A second job, not the first one handed back: different work, so this is
          not the de-duplication path. */
       expect(late.id).not.toBe(held.id);
@@ -1074,8 +1075,19 @@ async function fixtureWithRawJson(slug: string): Promise<void> {
   // `{ file }` with a non-empty string is what the store's `raw` decoder asks
   // of it — src/store/artifacts-fs.ts § DECODERS. Nothing reads the file it
   // names, because `extract` never gets that far without a URL.
-  await writeFile(path.join(dir, "raw.json"), JSON.stringify({ file: "raw.html" }), "utf8");
+  await writeFile(path.join(dir, "raw.json"), JSON.stringify(RAW_MANIFEST), "utf8");
 }
+
+/**
+ * The same manifest as a value, for the stubs that have to **return** it.
+ *
+ * `fetch` came off `LEGACY_UNCONVERTED_STEPS` on 2026-08-31, so a stub that
+ * writes the artefact itself and returns a bare `{ detail }` is refused by
+ * `checkProduct` before anything is written — which is the guard doing its job,
+ * and is how these two cases found out. A stub of a converted step returns what
+ * the real one returns.
+ */
+const RAW_MANIFEST = { file: "raw.html" } as unknown as RawManifest;
 
 /**
  * Put a settled job back into the state a stopped server leaves behind.
@@ -1169,7 +1181,7 @@ describe("advancing a job one step at a time", () => {
        happily having written nothing is caught, and should be. */
     const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
       await fixtureWithRawJson(slug);
-      return { detail: "stubbed" };
+      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
     });
     await pause(job, 0);
 
@@ -1231,7 +1243,7 @@ describe("advancing a job one step at a time", () => {
       await new Promise((r) => setTimeout(r, 30));
       running--;
       await fixtureWithRawJson(slug);
-      return { detail: "stubbed" };
+      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
     });
     await pause(job, 0);
 

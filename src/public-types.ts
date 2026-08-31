@@ -61,7 +61,6 @@ import type {
   Idea,
   Quote,
   QuoteDrops,
-  SummaryEntry,
   Tree,
   Tweet,
 } from "./types.js";
@@ -203,11 +202,11 @@ export interface PublicArticle extends PublicArtefactSet {
  * ## What is not here, and it is the most important paragraph in this file
  *
  * **No `stale`, no `outdated`.** Both are computed by `isStale` in
- * `src/glossary.ts`, `src/summarise.ts`, `src/tweets.ts` and `src/ideas.ts` —
+ * `src/glossary.ts`, `src/tweets.ts` and `src/ideas.ts` —
  * the writer modules, which tests/public-imports.test.ts forbids the public
  * graph from reaching because they pull in the model machinery. Carrying them
- * would mean extracting four freshness functions into import-free leaves across
- * four writer modules. And a visitor could not act on either: both mean *the
+ * would mean extracting three freshness functions into import-free leaves across
+ * three writer modules. And a visitor could not act on either: both mean *the
  * owner might want to regenerate this*, and the owner is the only person who
  * can.
  *
@@ -229,7 +228,6 @@ export interface PublicArticle extends PublicArtefactSet {
  */
 export interface PublicArtefactSet {
   glossary?: PublicGlossary;
-  summary?: PublicSummaries;
   ideas?: PublicIdeas;
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
@@ -272,23 +270,6 @@ export interface PublicGlossaryEntry {
 /** The list, and nothing about when or how it was written. */
 export interface PublicGlossary {
   entries: PublicGlossaryEntry[];
-}
-
-/**
- * The summary ladder.
- *
- * `SummaryEntry` is carried whole — `range`, `depth`, `short?`, `long?` is all
- * there is of it — and rebuilt field by field on the way out anyway, so a field
- * added to it next month is absent from a public response until somebody adds a
- * line to the projection.
- *
- * **`missing` crosses.** It is the reader's only sign that an apparently
- * complete summary is partial: some nodes' batches came back unusable and were
- * written without text. Withholding it would make a gap look like a whole.
- */
-export interface PublicSummaries {
-  entries: SummaryEntry[];
-  missing: number;
 }
 
 /** The propositions the piece assumes or introduces. `Idea` carries nothing about a person. */
@@ -345,8 +326,8 @@ export interface PublicTweets {
  * The owner's metadata page answers a different question: which pipeline stage
  * ran, when, into which column, over how many bytes, and whether we would write
  * it again today. None of that is a visitor's business and most of it is
- * internal paths and timings. This is the replacement Sol asked for: five
- * booleans.
+ * internal paths and timings. This is the replacement Sol asked for: a handful
+ * of booleans.
  *
  * A visitor pressing **Glossary** on an article with none gets *"nobody has
  * built a glossary for this piece yet"* — a real screen rather than a gap, and
@@ -356,7 +337,6 @@ export interface PublicArtefacts {
   arc: boolean;
   tweets: boolean;
   glossary: boolean;
-  summary: boolean;
   ideas: boolean;
   quotes: boolean;
 }

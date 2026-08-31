@@ -59,7 +59,6 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     /* Conditional spreads, because absent is the answer that means *never
        built* — see the note above on `in` rather than truthiness. */
     ...(article.glossary === undefined ? {} : { glossary: article.glossary }),
-    ...(article.summary === undefined ? {} : { summary: article.summary }),
     ...(article.ideas === undefined ? {} : { ideas: article.ideas }),
     ...(article.quotes === undefined ? {} : { quotes: article.quotes }),
     ...(article.tweets === undefined ? {} : { tweets: article.tweets }),
@@ -67,7 +66,7 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
 }
 
 /**
- * The five booleans, from the payload the page is already rendering.
+ * The booleans, from the payload the page is already rendering.
  *
  * `arc` is read off the article rather than out of the artefact set, because it
  * has ridden along inside the article payload since slice 1a — it is the L0
@@ -78,7 +77,6 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     arc: article.arc !== undefined,
     tweets: article.tweets !== undefined,
     glossary: article.glossary !== undefined,
-    summary: article.summary !== undefined,
     ideas: article.ideas !== undefined,
     quotes: article.quotes !== undefined,
   };

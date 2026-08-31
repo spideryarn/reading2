@@ -40,7 +40,6 @@ const NOTHING_BUILT: PublicArtefacts = {
   arc: false,
   tweets: false,
   glossary: false,
-  summary: false,
   ideas: false,
   quotes: false,
 };

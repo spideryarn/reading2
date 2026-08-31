@@ -16,7 +16,6 @@ import { describe, expect, it } from "vitest";
 import { partsOf, buildArc } from "../src/arc.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
-import { targetsOf } from "../src/summarise.js";
 import {
   appendSupplement,
   isSupplementNode,
@@ -25,7 +24,7 @@ import {
   supplementNodes,
 } from "../src/supplement.js";
 import { checkTree } from "../src/tree-invariants.js";
-import type { Block, NodeId, Summaries, SummaryEntry, Tree, TreeNode } from "../src/types.js";
+import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 import { itemsFromCells, currentIndex } from "../src/web/context.js";
 import { navPlan, stepTarget } from "../src/web/keynav.js";
 import { activeSectionIndex, buildSections, sectionDepth } from "../src/web/position.js";
@@ -386,99 +385,44 @@ describe("the six invariants", () => {
   });
 });
 
-/* --------------------------------------- the failure invisible everywhere -- */
+/* ------------------------------------------- the apparatus in the panel -- */
 
-describe("the whole-article summary", () => {
+describe("the summary panel's tree", () => {
   /**
-   * **The required deliverable of this stage.** Both joins key on a pair of
-   * block ids, and appending a supplement changes exactly one range: the
-   * root's. Keyed by range, the article-level summary's entry then misses and
-   * `buildSummaryTree` drops it *without a word* — on every article summarised
-   * before this stage, with `sourceHash` still current because no block
-   * changed. docs/plans/footnotes.md § The invisible stage-4 failure.
+   * **What is left of this block after 2026-08-31.**
+   *
+   * It used to be about the whole-article *summary* — a `short` and a `long`
+   * written by stage 5e and joined onto the tree by block range — and the
+   * failure it was written for was that appending a supplement moves exactly
+   * one range, the root's, so the article-level entry missed and was dropped
+   * without a word (docs/plans/footnotes.md § The invisible stage-4 failure).
+   * That join is gone with the ladder (docs/plans/gist-only-summaries.md), and
+   * with it the whole class of bug: there is nothing to match, because the gist
+   * is on the node.
+   *
+   * What survives is the promise the apparatus makes, and it is the half that
+   * was never about the join: the notes are **one row, titled, with no summary
+   * of any kind**, and `buildSummaryTree` must not descend into them. Six
+   * phantom rows saying "No summary for this section" is what this stops.
    */
-  const writtenBefore: SummaryEntry[] = [
-    { range: [...bodyTree.nodes[bodyTree.rootId]!.range], depth: 0, short: "The whole piece." },
-    ...partsOf(bodyTree).map((p) => ({
-      range: [...p.range] as [string, string],
-      depth: 1,
-      short: `About ${p.title}.`,
-    })),
-  ];
-
-  /* A whole `Summaries`, assigned to a variable rather than passed as a literal.
-     `buildSummaryTree` reads nothing but `entries`, and another session is in the
-     middle of narrowing its parameter to exactly that — through a variable this
-     satisfies the wide signature and the narrow one both, where a literal is
-     rejected by whichever is not current. The same trick, and the same reason, as
-     tests/block-roles.test.ts, on the public DTO. */
-  const written = (entries: SummaryEntry[]): Summaries => ({
-    version: "test",
-    generator: "test",
-    slug: "supplement",
-    sourceHash: "0000000000000000",
-    entries,
-    missing: 0,
-    generatedAt: "2026-08-28T00:00:00.000Z",
-    elapsedMs: 0,
-  });
-
-  it("survives the supplement being appended", () => {
-    const before = buildSummaryTree(bodyTree, bodyBlocks, written(writtenBefore));
-    expect(before!.short).toBe("The whole piece.");
-
-    const after = buildSummaryTree(tree, blocks, written(writtenBefore));
-    expect(after!.short).toBe("The whole piece.");
-    // The parts keep theirs by range, which is the join that must not change.
-    const parts = after!.children.filter((c) => !isSupplementNode(c.node));
-    expect(parts.map((c) => c.short)).toEqual(before!.children.map((c) => c.short));
-    // And the apparatus is in the panel, titled, with no rung of any kind —
-    // present in the structure, absent from the argument.
-    const notes = after!.children.find((c) => isSupplementNode(c.node))!;
-    expect(notes.node.title).toBe("Notes");
-    expect([notes.gist, notes.short, notes.long]).toEqual([undefined, undefined, undefined]);
-  });
-
-  it("would be lost if the root were still matched by range", () => {
-    /* The control: without this, "the summary is still there" is a sentence
-       about a test that could never have failed. The root's range genuinely
-       moved, so a range join genuinely misses. */
-    const rootKey = `${tree.nodes[tree.rootId]!.range[0]}|${tree.nodes[tree.rootId]!.range[1]}`;
-    const oldKey = `${writtenBefore[0]!.range[0]}|${writtenBefore[0]!.range[1]}`;
-    expect(rootKey).not.toBe(oldKey);
-  });
-
-  it("still drops a root summary when an ordinary body paragraph is appended", () => {
-    /* **The guarantee the new match nearly gave away.** Keyed on range, an
-       entry written against a different shape of the article missed and was
-       dropped. Keyed on `depth === 0` and the start id alone, it comes back:
-       appending an ordinary paragraph moves the root's end for a reason that
-       has nothing to do with the apparatus, the start is unchanged, and a stale
-       whole-article summary is shown as current. GPT Sol's review of stage 4.
-
-       So the stored end must be the root's own end, or the last body block —
-       the one shift a supplement causes. Anything else is a body edit. */
-    const grown = structuredClone(bodyTree);
-    const extraId = "spya-zzzzzz";
-    const grownBlocks = [...bodyBlocks, { ...bodyBlocks[bodyBlocks.length - 1]!, id: extraId }];
-    grown.nodes[grown.rootId]!.range = [grown.nodes[grown.rootId]!.range[0], extraId];
-
-    const built = buildSummaryTree(grown, grownBlocks, written(writtenBefore));
+  it("draws the apparatus as one row, with no gist and no children", () => {
+    const built = buildSummaryTree(tree, blocks);
     expect(built).not.toBeNull();
-    /* Dropped, not re-attached. The control below proves the entry is otherwise
-       a perfectly good match — same depth, same start — so this is the end
-       check doing the work and not some unrelated miss. */
-    expect(built!.short).toBeUndefined();
-    expect(writtenBefore[0]!.depth).toBe(0);
-    expect(writtenBefore[0]!.range[0]).toBe(grown.nodes[grown.rootId]!.range[0]);
+    const notes = built!.children.find((c) => isSupplementNode(c.node));
+    expect(notes).toBeDefined();
+    expect(notes!.node.title).toBe("Notes");
+    /* No gist — a supplement node never has one, which is the whole promise
+       (src/supplement.ts) — and no children, whatever the tree says. */
+    expect(notes!.gist).toBeUndefined();
+    expect(notes!.children).toEqual([]);
+    // And it is not counted into the argument's numbering.
+    expect(notes!.number).toBe("");
   });
 
-  it("is never written for the apparatus", () => {
-    const targets = targetsOf(tree, blocks);
-    expect(targets.some((n) => isSupplementNode(n))).toBe(false);
-    // Nor for anything under it — a note leaf is not a summary target either.
-    const under = supplementIndex(tree);
-    expect(targets.some((n) => under.has(n.id))).toBe(false);
+  it("keeps the body parts numbered as if the apparatus were not there", () => {
+    const built = buildSummaryTree(tree, blocks)!;
+    const body = built.children.filter((c) => !isSupplementNode(c.node));
+    expect(body.map((c) => c.number)).toEqual(body.map((_, i) => String(i + 1)));
   });
 });
 
@@ -679,7 +623,7 @@ describe("a reader standing mid-Notes", () => {
      GPT Sol, second review, 2026-08-29. */
   it("does not descend into the apparatus, or number it, in summary mode", () => {
     const article = withNotes(6, "footnote", true);
-    const summary = buildSummaryTree(article.tree, article.blocks, null, 3)!;
+    const summary = buildSummaryTree(article.tree, article.blocks, 3)!;
     const notes = summary.children.find((c) => c.node.title === "Notes")!;
     expect(notes).toBeDefined();
     expect(notes.supplement).toBe(true);

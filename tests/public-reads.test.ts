@@ -132,8 +132,8 @@ describe("the public revision read", () => {
    * finding 3 on slice 1a, one slice later, and it is why this assertion is on
    * the same `articleQuery` object the predicate case above reads.
    */
-  it("asks for the four artefacts on the row it already filtered", () => {
-    for (const column of ["glossary", "summary", "ideas", "tweets"]) {
+  it("asks for the artefacts on the row it already filtered", () => {
+    for (const column of ["glossary", "ideas", "quotes", "tweets"]) {
       expect(article, column).toContain(`"${column}"`);
     }
     /* **And the image manifest, on this same statement.** It is the half of
@@ -158,8 +158,8 @@ describe("the public revision read", () => {
    * the JSONB document across the wire to compare it with null. That mistake
    * was two days of docs/plans/library-read-latency.md on the owner's shelf.
    */
-  it("asks the metadata question as five is-not-nulls rather than five documents", () => {
-    for (const column of ["tree", "arc", "tweets", "glossary", "summary", "ideas"]) {
+  it("asks the metadata question as is-not-nulls rather than documents", () => {
+    for (const column of ["tree", "arc", "tweets", "glossary", "ideas"]) {
       expect(metadata, column).toMatch(new RegExp(`"${column}" is not null`));
     }
     /* And the documents themselves are not selected — the `is not null` above is

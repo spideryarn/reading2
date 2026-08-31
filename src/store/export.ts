@@ -449,7 +449,13 @@ export async function exportArticle(
   if (revision.assets) await put("assets.json", revision.assets);
   if (revision.tweets) await put("tweets.json", revision.tweets);
   if (revision.glossary) await put("glossary.json", revision.glossary);
-  if (revision.summary) await put("summary.json", revision.summary);
+  /* **No `summary.json`.** The `summary` artefact kind went with stage 5e on
+     2026-08-31 (docs/plans/gist-only-summaries.md), so the column is not this
+     store's to move any more — `copyArtefacts` cannot carry it in and this
+     cannot carry it out. The bytes are not lost: the column was deliberately
+     kept, `REVISION_CARRY_POLICY` still copies it into every new revision
+     (src/store/pg-revisions.ts), and a database backup is what backs a database
+     up. What would be dishonest is writing a file no importer can put back. */
   if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.quotes) await put("quotes.json", revision.quotes);
   if (revision.sketch) await put("sketch.json", revision.sketch);

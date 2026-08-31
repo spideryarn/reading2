@@ -556,126 +556,6 @@ export interface GlossaryResponse {
   profileChanged: boolean;
 }
 
-/* -------------------------------------------------------------- summaries --
-   The article, and each of its parts and sections, at more than one length —
-   `data/<slug>/summary.json`, and a **mode** in the band between the spine and
-   the prose. Stage 5e. See docs/project/summaries.md.
-
-   The shape is the original version's, taken deliberately: a **named length
-   ladder** rather than a token count, generated for every rung in one call
-   rather than one call per rung. What is not theirs is where the ladder is
-   wired. They generated nine granularities of the whole document and showed one
-   hardcoded rung in one tooltip; here every level of the tree carries the
-   ladder, which is the gap their own docs record
-   (docs/project/original-version/summaries.md). */
-
-/* ------------------------------------------------------ the rungs, and why --
-   The ladder above the gist is `short` and `long`, and they are two fields on
-   `SummaryEntry` below rather than one field holding a rung name — which is why
-   there is no `SummaryRung` type here. There was one until 2026-08-26; it was
-   declared, never referenced, and survived because an unused *exported* type
-   looks exactly like one some other module uses. Its reasoning is worth more
-   than the declaration was, so it stays here:
-
-   `gist` is deliberately not a rung: it is one sentence, it lives on the tree
-   node (stage 4), and nothing about it is this stage's to write. The panel
-   offers it as the shortest rung by reading the tree, so the ladder the reader
-   sees has three steps while only two are generated.
-
-   **Named, not numbered, and the steps are not even.** One sentence, then a few
-   sentences, then a paragraph or more. That unevenness is a finding rather than
-   a shrug — theirs ran 10, 15, 25, 30, 50, 100, 200, 400, 800 tokens, fine at
-   the bottom and geometric at the top, because the difference between a phrase
-   and a sentence changes what a line can *do* while the difference between two
-   long summaries is just more of the same. */
-
-/**
- * One node's summaries, anchored the way the arc is: **by block range, never by
- * node id.**
- *
- * Node ids are positional, so a re-run of `npm run toc` renumbers them and
- * every summary would silently move one node sideways — a plausible paragraph
- * against the wrong section, which is a lie the reader has no way to detect.
- * A range that no longer matches a node is dropped instead. Same rule, and the
- * same reasoning, as `ArcEntry` above.
- */
-export interface SummaryEntry {
-  /** Inclusive, contiguous — resolved through the blocks index, never by string compare. */
-  range: [BlockId, BlockId];
-  /** The depth of the node this was written for. Kept for the panel's indentation. */
-  depth: number;
-  /** A few sentences. Absent when the batch that should have carried it came back malformed. */
-  short?: string;
-  /** A paragraph for a section, more for a part, about a page for the whole piece. */
-  long?: string;
-}
-
-/**
- * The article's summaries. Stage 5e, `data/<slug>/summary.json`.
- *
- * Generated on demand rather than as part of every ingest — `summary` is in
- * `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS` (src/pipeline.ts), for the
- * same reason `tweets` and `glossary` are not.
- */
-export interface Summaries {
-  version: string;
-  generator: string;
-  slug: string;
-  /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
-  sourceHash: string;
-  /**
-   * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
-   *
-   * A hash rather than a `usedProfile: true`, because a boolean cannot tell
-   * "written for the profile you have now" from "written for the profile you
-   * had last week" — and from every surface in this app those two look
-   * identical. `hashProfile` in src/profile.ts; `profileIsStale` is the
-   * comparison, in one place, so the three states cannot be re-derived
-   * differently by three panels.
-   */
-  profileHash?: string | null;
-  /** Document order, coarse before fine — the order the panel renders them in. */
-  entries: SummaryEntry[];
-  /**
-   * Nodes whose batch came back unusable and were written without text.
-   *
-   * **Counted rather than hidden, because their version discarded eight good
-   * summaries when the ninth was malformed.** Salvaging partials is the fix;
-   * the number is what stops a half-empty artefact reading as a complete one.
-   */
-  missing: number;
-  generatedAt: string;
-  /** Timed from outside the SDK, whose own timing fields came back empty over there. */
-  elapsedMs: number;
-}
-
-/**
- * What `GET /api/summary/:slug` returns.
- *
- * `stale` for the same reason `GlossaryResponse` carries one, and computed the
- * same way at read time: a flag stored at generation time is right until the
- * moment it matters.
- */
-export interface SummariesResponse {
-  summaries: Summaries;
-  stale: boolean;
-  /**
-   * The reader's profile has changed since these were written — see the same
-   * field on `GlossaryResponse` for what it does and does not mean.
-   */
-  profileChanged: boolean;
-}
-
-
 /**
  * What a **store** can say about an artefact: everything in the response except
  * the one question that is not about the article.
@@ -690,8 +570,6 @@ export interface SummariesResponse {
 export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
 /** As `ThreadFound`, for the glossary. */
 export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
-/** As `ThreadFound`, for the summaries. */
-export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;
@@ -835,8 +713,8 @@ export interface Ideas {
    * Fingerprint of what this was written from — **blocks *and* tree**, unlike
    * every artefact before it.
    *
-   * `StepStamp` in src/store/artifacts.ts predicted this: *"`arc`, `tweets`,
-   * `glossary` and `summary` all read the tree as well as the blocks, and
+   * `StepStamp` in src/store/artifacts.ts predicted this: *"`arc`, `tweets` and
+   * `glossary` all read the tree as well as the blocks, and
    * src/labels.ts already keeps a separate `structureHash` precisely because
    * section boundaries can move without a single block changing."* Ideas reads
    * the skeleton to judge what is load-bearing, so a re-sectioned article is a
@@ -1413,7 +1291,7 @@ export interface LibraryEntry {
    * parsing it, and Postgres knows a column is not null without fetching it.
    * A count would mean reading the artefact for every card on every load.
    */
-  has: { arc: boolean; tweets: boolean; glossary: boolean; summary: boolean };
+  has: { arc: boolean; tweets: boolean; glossary: boolean };
 }
 
 /**
@@ -1630,8 +1508,8 @@ export interface ArticleSharing extends VisibilityState {
    * general — which turns a sentence nobody reads into a specific fact about the
    * thing being shared.
    *
-   * Non-null `profileHash` is what decides it, and only five artefacts can carry
-   * one: `tweets`, `glossary`, `summary`, `ideas` and `sketch`. The tree and the arc
+   * Non-null `profileHash` is what decides it, and only four artefacts can carry
+   * one: `tweets`, `glossary`, `ideas` and `sketch`. The tree and the arc
    * deliberately do not vary by profile — a reader-specific tree is one that
    * shifts under a reader who edits their box (reader-profile.md) — and
    * `fetch`, `extract` and `blocks` have no model call to personalise.
@@ -1643,7 +1521,7 @@ export interface ArticleSharing extends VisibilityState {
    * stored document — no document, no hash — but it is written down here because
    * that is the kind of property a refactor drops silently.
    *
-   * **Names, not sentences.** `["glossary", "summary"]`, and the client turns
+   * **Names, not sentences.** `["glossary", "ideas"]`, and the client turns
    * them into prose: docs/project/copy.md puts every reader-facing sentence in
    * `src/messages.ts`, and one built on the server would be the first in this
    * app written outside it.
@@ -1781,6 +1659,40 @@ export interface Citation {
  * has to be kept in step with this file, and the first tool added without
  * touching it would render as a blank row. See docs/project/chat-tools.md.
  */
+/**
+ * **How far the reader's microphone is from their mouth**, and the one fact
+ * OpenAI's realtime noise reduction wants.
+ *
+ * Here, in the types both halves share, rather than in either half — because
+ * both halves need it and they are on opposite sides of a wire. `src/live.ts`
+ * maps it onto `near_field` / `far_field`; `src/web/live/mic-placement.ts`
+ * guesses it from the device's own label and offers the reader the choice; and
+ * the route between them validates the string against `MIC_PLACEMENTS` rather
+ * than casting it.
+ *
+ * It was declared twice, once at each end, for about a day. Two copies of a
+ * two-member union do not drift *visibly*: a third member added at one end
+ * type-checks at that end, crosses the wire, and is read by the other end as a
+ * value its own `Record` has no key for — `undefined`, spread into the request
+ * as a missing field, which OpenAI accepts by ignoring. The whole feature would
+ * then be silently off. `src/live.ts` cannot be imported by the browser (it
+ * holds the OpenAI key path and pulls in `converse.ts`), so this file is the
+ * only place the two can meet.
+ */
+export type MicPlacement = "headset" | "laptop";
+
+/**
+ * The same two, as a value, so a route can check a string off the wire against
+ * the type rather than trusting it. `satisfies` ties the list to the union: add
+ * a member to one and the compiler asks for the other.
+ */
+export const MIC_PLACEMENTS = ["headset", "laptop"] as const satisfies readonly MicPlacement[];
+
+/** Is this string one of ours? The gate every wire-read placement goes through. */
+export function isMicPlacement(x: unknown): x is MicPlacement {
+  return typeof x === "string" && (MIC_PLACEMENTS as readonly string[]).includes(x);
+}
+
 export interface ToolRun {
   /** The function name the model asked for. */
   name: string;
@@ -1881,12 +1793,12 @@ export interface Comment {
 /**
  * One stage of the pipeline. Ordered by `STEP_ORDER` in src/pipeline.ts.
  *
- * `tweets`, `glossary` and `summary` are in that order but **not** in
+ * `tweets` and `glossary` are in that order but **not** in
  * `DEFAULT_INGEST_STEPS` — they are steps you can ask for by name, not ones a
  * plain "add this URL" runs. Each costs model calls over the whole article and
  * each belongs to a page or a mode you have to go to. See
- * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely,
- * docs/project/glossary.md and docs/project/summaries.md.
+ * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely and
+ * docs/project/glossary.md.
  */
 export type StepName =
   | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary"
@@ -1894,7 +1806,12 @@ export type StepName =
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
   | "quotes"
-  | "summary" | "ideas"
+  | "ideas"
+  /* When the things the piece narrates happened, and how sure it is —
+     docs/project/timeline.md. Beside `ideas` because the two send byte-identical
+     article bytes at the same effort and share one cached prefix, the same
+     reason `quotes` sits beside `glossary`. */
+  | "timeline"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Last in the list and last in `STEP_ORDER`: nothing reads what it writes. */
   | "sketch";
@@ -2042,8 +1959,8 @@ export interface Job {
    * `guidance` steer used to ride here for the same reasons; it is gone —
    * docs/plans/steer-becomes-the-profile.md.)
    *
-   * And a third that is its own: **it is frozen here.** A summary run is
-   * several batches at once; reading the profile inside each step would let a
+   * And a third that is its own: **it is frozen here.** A step can be several
+   * batched calls at once; reading the profile inside each one would let a
    * reader who edits their box mid-run get one artefact written from two
    * profiles. src/jobs.ts § sameWork keeps two differently-profiled requests
    * two different jobs.
@@ -2407,7 +2324,7 @@ export interface SearchRun {
   /**
    * Fingerprint of the blocks this run was answered against — `hashBlocks`,
    * src/source-hash.ts. The same field, the same function and the same word for
-   * it as `TweetThread`, `Glossary` and `Summaries` carry.
+   * it as `TweetThread` and `Glossary` carry.
    *
    * It is what lets the panel say the run is out of date. Without it a saved
    * search survives a re-extraction still presenting itself as an answer about
@@ -2446,3 +2363,177 @@ export interface SearchRun {
    */
   colour?: number;
 }
+
+/* --------------------------------------------------------------- timeline --
+   When the piece says these things happened — `data/<slug>/timeline.json`, and
+   a **mode** in the band after the ideas. See docs/plans/timeline-mode.md.
+
+   ## Why these are here and not in src/timeline.ts, where they were written
+
+   Because the client cannot reach that file. `tests/client-imports.test.ts`
+   lets `src/web/` import exactly the pure leaves in its `SHARED` list, and
+   `src/timeline.ts` is a stage with a CLI and a model call in it. So the panel
+   physically cannot see `TimelineEvent` unless the shape both sides speak lives
+   in a module that imports nothing — which is what this file is, and which is
+   the outcome that test's own header records from the last time somebody hit
+   this (`EmbeddingReason` moved here rather than the rule being relaxed).
+
+   Stage 3 added them here while src/timeline.ts and src/timeline-time.ts still
+   carried their own copies, because it needed them a stage early and could not
+   edit a file another session was holding. **Stage 4 deleted those copies**, so
+   this is the one declaration; both of those files now import from here and
+   re-export, so a caller of the stage still only has to know about the stage.
+
+   `WhenDirection` is deliberately NOT here. It is an input to the parser — which
+   way a year-less date resolves off the publication day — rather than anything
+   in the artefact or on the wire, so it stays in src/timeline-time.ts with the
+   function that reads it.  */
+
+/**
+ * What kind of thing this is: something the piece narrates, something it
+ * forecasts, or something it entertains and says did not happen.
+ *
+ * Predictions and hypotheticals sort after everything that happened. They share
+ * that partition **without sharing a tense** — the test article's only
+ * hypothetical is a counterfactual about the past, so `WhenDirection` in
+ * src/timeline-time.ts resolves it backwards and the prediction forwards.
+ */
+export type TimelineModality = "happened" | "predicted" | "hypothetical";
+
+/**
+ * Why no date came back. Three of these are rejections the panel has a sentence
+ * for; `noDateInPhrase` is deliberately not one — the article simply did not
+ * date the event, which is a correct answer and the second commonest one.
+ */
+export type WhenRefusal =
+  | "noDateInPhrase"
+  | "unparseablePhrase"
+  | "phraseNotInOccurrence"
+  | "noYearFrame";
+
+/**
+ * The refusals that are a **rejection** — we could not read a date the piece
+ * plainly gives. Named so `src/messages.ts` can key an exhaustive record on it:
+ * each one is a different sentence, and `noYearFrame` in particular says
+ * something about *us* rather than about the article.
+ */
+export type DateRejection = Exclude<WhenRefusal, "noDateInPhrase">;
+
+/**
+ * When something happened, as an interval the article's own words support.
+ *
+ * Both ends independently nullable, which is what carries a bound rather than a
+ * point: "by 4 July" is `{ earliest: null, latest: "2026-07-04" }`. Five of the
+ * test article's twenty-four expressions are that shape.
+ *
+ * **ISO strings end to end, never `Date` objects** — a timezone moves a
+ * calendar day, and the calendar day is the whole content here.
+ */
+export interface When {
+  /** Earliest this could have been. null = unbounded below ("by 4 July"). */
+  earliest: string | null;
+  /** Latest this could have been. null = unbounded above ("after that"). */
+  latest: string | null;
+  /** Does the event FILL this interval, or sit somewhere inside it? */
+  extent: "instant" | "extended";
+  /** The article's own words, sliced out of the block — not the model's copy. */
+  phrase: string;
+  /** Where in the block `phrase` sits, so the reader can go and check. */
+  at: { blockId: BlockId; start: number; end: number };
+  /** True when the parser supplied the year from the publication date. */
+  yearFilled: boolean;
+}
+
+/**
+ * **Which of the four things happened to this event's date.**
+ *
+ * A union rather than `when: When | null` plus flags, so the panel switches on
+ * one field and the impossible combinations cannot be spelled. The middle two
+ * are the pair most easily collapsed and must not be: a piece that said
+ * "another month later" has dated the event as far as it ever will, and drawing
+ * a blank there loses the only thing it told us.
+ */
+export type Dating =
+  /** The parser read a date out of the article's own characters. */
+  | { kind: "dated"; when: When }
+  /** The article's temporal words, carrying no date we can read out of them. */
+  | { kind: "words"; phrase: string }
+  /** The article puts no time on this at all. A correct answer, and a common one. */
+  | { kind: "untimed" }
+  /**
+   * The piece dates this and we could not read the date. `phrase` is a required
+   * nullable rather than an optional, so a caller cannot forget the case where
+   * we could not even locate the words.
+   */
+  | { kind: "rejected"; reason: DateRejection; phrase: string | null };
+
+/** Where in the article this event is mentioned. The same shape `ideas` uses. */
+export interface TimelineOccurrence {
+  blockId: BlockId;
+  /** The article's own characters, sliced at the offsets `findQuote` located. */
+  quote: string;
+  /** A disambiguator between repeats, never the anchor. */
+  start: number;
+}
+
+/** An event id. A string like any other id here; named so a signature can say so. */
+export type TimelineEventId = string;
+
+export interface TimelineEvent {
+  /** `mintId`, so it is a block id by construction and `?event=` validates for free. */
+  id: TimelineEventId;
+  /** A handle, not a retelling. Under about ten words. */
+  label: string;
+  /** What the article said about when, and what we could make of it. */
+  dating: Dating;
+  /**
+   * The model's reading of the sequence, and **the sort key** — the dates move
+   * nothing. `null` when the model did not number the event, which sorts last
+   * within its partition rather than first.
+   */
+  order: number | null;
+  modality: TimelineModality;
+  occurrences: TimelineOccurrence[];
+}
+
+/** The artefact. `data/<slug>/timeline.json`. */
+export interface Timeline {
+  version: string;
+  generator: string;
+  slug: string;
+  /** Blocks, tree **and the publication date** — `datedArticleFingerprint`. */
+  sourceHash: string;
+  /** In the order they are to be shown. **Never re-sorted by a reader.** */
+  events: TimelineEvent[];
+  /**
+   * Pairs where the article's own dates prove an order and the model put them
+   * the other way round. Changes nothing on screen and is not shown to a
+   * reader; it is the only signal we get that the model misread the chronology.
+   */
+  orderConflicts: number;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/**
+ * `GET /api/timeline/:slug`. Two staleness facts and no third: the reader
+ * profile is **not** in this stage's stamp, because who is reading does not
+ * change when something happened. docs/plans/timeline-mode.md § Freshness.
+ */
+export interface TimelineResponse {
+  timeline: Timeline;
+  /** The article moved underneath this — blocks, sections **or** its date. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/**
+ * As `ThreadFound`, for the timeline — and here it is the *same* type, because
+ * there is no `profileChanged` for a store adapter to leave out.
+ *
+ * Named rather than skipped so the two adapters agree with their neighbours by
+ * shape, and so that the day somebody decides the profile belongs in this stage
+ * after all, the `Omit` goes in one place instead of being searched for.
+ */
+export type TimelineFound = TimelineResponse;

@@ -121,7 +121,7 @@ learned it in both.
 ### What is deliberately *not* in the title
 
 The middle band's own state — which term is selected, which saved search is open, which rung of the
-length ladder, how deep the summary goes. All of it is in the URL (url-state.md) and none of it is in
+how deep the summary goes. All of it is in the URL (url-state.md) and none of it is in
 the title.
 
 The line is: **the title says which page and which mode; it does not narrate what you are doing

@@ -49,7 +49,7 @@ const entry = (over: Partial<LibraryEntry> & { slug: string }): LibraryEntry => 
   sections: 4,
   comments: 0,
   opens: 0,
-  has: { arc: false, tweets: false, glossary: false, summary: false },
+  has: { arc: false, tweets: false, glossary: false },
   ...over,
 });
 

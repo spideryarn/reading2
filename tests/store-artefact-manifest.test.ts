@@ -92,7 +92,6 @@ const HOMES: Record<string, string> = {
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
-  "summary.json": "article_revisions.summary",
   "ideas.json": "article_revisions.ideas",
   "quotes.json": "article_revisions.quotes",
   "sketch.json": "article_revisions.sketch",
@@ -126,6 +125,16 @@ const HOMES: Record<string, string> = {
  */
 const NOT_MIGRATED: Record<string, string> = {
   ".DS_Store": "macOS. Not ours.",
+  /* **Retired rather than unmigrated**, and the distinction is this list's
+     whole point. Stage 5e wrote the generated summary ladder here until
+     2026-08-31; the stage, the artefact kind and every reader of it are deleted
+     (docs/plans/gist-only-summaries.md). `article_revisions.summary` was kept
+     on purpose — what is in it on a real database is real readers' summaries,
+     and `REVISION_CARRY_POLICY` still copies it into each new revision — but
+     nothing moves the *file* in either direction any more, which is what this
+     list is about. The files left in `data/` are simply files in a directory
+     now, like `chat.json`. */
+  "summary.json": "retired with stage 5e; the column is kept, the file is not moved",
   /* **This entry said the opposite until 2026-08-31, and it was stale.** It read
      "a decision not to migrate it, not an omission" — a cache, one file per page
      range, keyed on the PDF's bytes + the prompt version + the reader, holding

@@ -334,7 +334,7 @@ describe("the router, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
   const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
-  const real = buildSummaryTree(tree, blocks, null);
+  const real = buildSummaryTree(tree, blocks);
 
   it("hands back nothing at all for a picture whose data has not arrived", () => {
     /* **The behaviour that replaced the fallback**, and the whole point of the

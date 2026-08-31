@@ -127,28 +127,7 @@ const deeps: number[] = [];
    records what the panel asks for rather than moving it. */
 const panel = (deep: number, withApparatus = false) =>
   createElement(SummaryPanel, {
-    access: {
-      kind: "owner",
-      summaries: null,
-      owner: {
-        status: "none",
-        summaries: null,
-        stale: false,
-        profiled: false,
-        profileChanged: false,
-        hasProfile: false,
-        slug: "test-summary-expand",
-        error: null,
-        job: null,
-        failed: null,
-        write: async () => {},
-        cancel: () => {},
-      },
-    },
     root: tree(withApparatus),
-    blocks: new Map(),
-    rung: "gist",
-    onRung: () => {},
     deep,
     onDeep: (d: number) => deeps.push(d),
     atRow: null,
@@ -284,28 +263,74 @@ describe("opening one part past the depth cut-off", () => {
 });
 
 /**
- * The root has no title row, so it has no twist — and an override written there
- * could never be taken off again. The `article` button would stop meaning "the
- * whole article, and nothing under it" for the rest of the session, with nothing
- * on screen to put it back. GPT Sol's review, 2026-08-27.
+ * **The root's badge is a control too**, since 2026-08-31.
  *
- * Which is also why that is the right answer and not a gap: what the badge is
- * *for* is picking one node out of several without moving the cut-off for the
- * rest, and at the root there are no others.
+ * Greg: *"in Article sub-mode, I can't click on `+N parts` to expand"*. He is
+ * right, and the old answer — the badge is a fact on the root, pointing at the
+ * Depth buttons — was answering a different objection. That objection was real:
+ * the root draws no title row, so it has no twist, and an override written
+ * there could never be taken off again (GPT Sol, 2026-08-27).
+ *
+ * The fix is to give the root the thing it was missing rather than to take the
+ * press away. Opening the root's parts puts a `−N parts` badge in the same
+ * place, and that is the twist the root never had.
+ *
+ * **What must not happen is the root landing in `closed`.** A collapse
+ * anywhere else writes the node into that set, and on the root that would
+ * survive the Depth buttons: press `parts` afterwards and the outline would be
+ * empty, with the control that says `parts` apparently doing nothing. So the
+ * root's collapse clears the override and touches nothing else, which is the
+ * last case below.
  */
-describe("the root badge stays a fact", () => {
-  it("cannot be pressed into a state nothing can undo", () => {
-    // Re-render at `article`, since `deep` belongs to the panel's caller.
+describe("the root badge opens the parts, and closes them again", () => {
+  /* Re-render at `article`, since `deep` belongs to the panel's caller. This
+     is the state Greg was in: the parts are all below the cut-off and the
+     badge is the only thing on screen that names them. */
+  const atArticle = () =>
     act(() => {
       root.render(panel(0));
     });
+  const rootBadge = () => {
     const badge = host.querySelector<HTMLButtonElement>("li.summ-entry > .summ-more");
-    expect(badge?.textContent).toBe("+2 parts");
-    expect(badge?.disabled).toBe(true);
-    click(badge!);
-    // Still nothing but the article, and the Depth control was not moved.
+    if (!badge) throw new Error("no badge on the root");
+    return badge;
+  };
+
+  it("opens the parts without moving Depth", () => {
+    atArticle();
     expect(titles()).toEqual([]);
+    expect(rootBadge().textContent).toBe("+2 parts");
+    expect(rootBadge().disabled).toBe(false);
+    click(rootBadge());
+    expect(titles()).toEqual(["1First part", "2Second part"]);
+    // The Depth control still says `article`, and was not moved on the
+    // reader's behalf — the same promise the per-part badge makes.
     expect(deeps).toEqual([]);
+  });
+
+  it("turns into the twist the root never had", () => {
+    atArticle();
+    click(rootBadge());
+    expect(rootBadge().textContent).toBe("\u22122 parts");
+    expect(rootBadge().getAttribute("aria-label")).toBe("Close the 2 parts of The whole thing");
+    click(rootBadge());
+    expect(titles()).toEqual([]);
+    expect(rootBadge().textContent).toBe("+2 parts");
+    expect(deeps).toEqual([]);
+  });
+
+  it("leaves `parts` still meaning parts after a collapse", () => {
+    /* The one state a shared `closed` set would break. Open the parts at
+       `article`, shut them again, then raise Depth: the parts must come back,
+       because the reader never said anything about this node that outlives the
+       cut-off. */
+    atArticle();
+    click(rootBadge());
+    click(rootBadge());
+    act(() => {
+      root.render(panel(1));
+    });
+    expect(titles()).toEqual(["1First part", "2Second part"]);
   });
 });
 
@@ -402,128 +427,5 @@ describe("the apparatus in summary mode", () => {
     expect(first!.querySelector(".summ-number")?.textContent).toBe("1");
     expect(rowFor("Second part")!.querySelector(".summ-number")?.textContent).toBe("2");
     expect(rowFor("First part")!.className).not.toContain("supplement");
-  });
-});
-
-/**
- * **The profile tick has to reach `write`, from the button the reader presses.**
- *
- * `tests/step-job-force.test.tsx` calls `useSummaries.write` directly, so it
- * proves the hook forwards the flag and nothing about whether the panel passes
- * it. That gap is not hypothetical: `SummaryPanel` called
- * `owner.write(true, guidance)` with no third argument until 2026-08-30, so
- * unticking "Use your profile" and pressing "Write them again" wrote a profiled
- * artefact anyway, stamped with a `profileHash` the reader had just declined.
- * A hook-level test was green throughout. GPT Sol named this as the weakest of
- * the new tests, and it was right.
- *
- * So this one goes through the rendered panel: untick the real checkbox, press
- * the real button, and read what `write` was actually called with.
- * docs/plans/steer-becomes-the-profile.md.
- */
-describe("the write button and the profile tick", () => {
-  /** Every `write(force, useProfile)` the panel made. */
-  const calls: [boolean | undefined, boolean | undefined][] = [];
-
-  /* A ladder with something in it, which is what `hasLadder` tests and what
-     decides whether the panel draws "Write the summaries" or "Write them
-     again". The second is the branch the shipped bug was in, so a fixture that
-     can only reach the first is a fixture that cannot see it. */
-  const LADDER = {
-    entries: [{ range: ["spya-aaaaaa", "spya-aaaaab"] as [string, string], depth: 0, long: "x" }],
-    missing: 0,
-  };
-
-  const owned = (status: "none" | "ready") =>
-    createElement(SummaryPanel, {
-      access: {
-        kind: "owner",
-        summaries: status === "ready" ? LADDER : null,
-        owner: {
-          status,
-          summaries: null,
-          stale: false,
-          profiled: false,
-          profileChanged: false,
-          /* True, or `UseProfile` renders no checkbox at all and the test
-             below would pass by having nothing to untick. */
-          hasProfile: true,
-          slug: "test-summary-expand",
-          error: null,
-          job: null,
-          failed: null,
-          write: async (force?: boolean, useProfile?: boolean) => {
-            calls.push([force, useProfile]);
-          },
-          cancel: () => {},
-        },
-      },
-      root: tree(false),
-      blocks: new Map(),
-      rung: "gist",
-      onRung: () => {},
-      deep: 1,
-      onDeep: () => {},
-      atRow: null,
-      onJump: () => {},
-    });
-
-  beforeEach(() => {
-    calls.length = 0;
-  });
-
-  it("passes the tick as the reader left it", () => {
-    act(() => root.render(owned("none")));
-    const box = host.querySelector<HTMLInputElement>(".prof-use input");
-    expect(box, "no profile checkbox to untick").toBeTruthy();
-    expect(box?.checked).toBe(true);
-
-    // Untick it, the way a reader does.
-    act(() => {
-      box?.click();
-    });
-    const run = [...host.querySelectorAll("button")].find((b) =>
-      (b.textContent ?? "").includes("Write the summaries"),
-    );
-    expect(run, "no write button").toBeTruthy();
-    act(() => {
-      run?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(calls).toEqual([[false, false]]);
-  });
-
-  /**
-   * **And the same through "Write them again", which is where the bug was.**
-   *
-   * `owner.write(true, guidance)` in that branch never passed a third argument,
-   * so `useProfile` defaulted to true. The empty-state test above would have
-   * stayed green through all of it — a different call site, a different branch.
-   */
-  it("passes the tick through the rewrite button too", () => {
-    act(() => root.render(owned("ready")));
-    const box = host.querySelector<HTMLInputElement>(".prof-use input");
-    expect(box, "no profile checkbox in the ready state").toBeTruthy();
-    act(() => {
-      box?.click();
-    });
-    const again = [...host.querySelectorAll("button")].find((b) =>
-      (b.textContent ?? "").includes("Write them again"),
-    );
-    expect(again, "no rewrite button").toBeTruthy();
-    act(() => {
-      again?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    // Forced, because the step believes the artefact is current — and unprofiled,
-    // because that is what the reader just asked for.
-    expect(calls).toEqual([[true, false]]);
-  });
-
-  /* And no steer box in either branch that used to draw one. */
-  it("draws no steer box, in the empty state or the ready one", () => {
-    for (const status of ["none", "ready"] as const) {
-      act(() => root.render(owned(status)));
-      expect(host.innerHTML, status).not.toContain("summ-steer");
-      expect(host.textContent, status).not.toContain("Steer these summaries");
-    }
   });
 });

@@ -202,7 +202,6 @@ export const articleMetadata = reader.articleMetadata.bind(reader);
 export const loadTweets = reader.loadTweets.bind(reader);
 export const loadGlossary = reader.loadGlossary.bind(reader);
 export const loadQuotes = reader.loadQuotes.bind(reader);
-export const loadSummaries = reader.loadSummaries.bind(reader);
 export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadArc = reader.loadArc.bind(reader);

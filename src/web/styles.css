@@ -3983,10 +3983,11 @@ td.text.has-hit[data-hues="8"] {
    Without this the box wraps to `send · talk · stance`, which strands send at
    the far left of a full-width row with the stance at the far right. */
 .review .chat-talk { order: 1; }
-.review .chat-stance { order: 2; }
-.review .chat-send { order: 3; }
-.review .prof-row { order: 4; }
-.review .prof-listening { order: 5; }
+.review .chat-live { order: 2; }
+.review .chat-stance { order: 3; }
+.review .chat-send { order: 4; }
+.review .prof-row { order: 5; }
+.review .prof-listening { order: 6; }
 
 .chat-talk {
   display: inline-flex;
@@ -4002,6 +4003,90 @@ td.text.has-hit[data-hues="8"] {
    is genuinely open — the same signal, said twice, for a control whose whole
    job is to be unambiguous about whether it is hearing you. */
 .chat-talk:has(.prof-mic.on) .chat-talk-label { color: var(--highlight-ink); }
+
+/* **Live conversation, beside the dictation microphone.** Two different things
+   in one row: one turns speech into text in the box, the other holds a
+   conversation. They share the button size and the lit/opening vocabulary of
+   `.prof-mic`, because they compete for the same device and a reader who has
+   learned one has learned the other. src/web/live/LiveButton.tsx. */
+.chat-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.chat-live-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-live-btn:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+.chat-live-btn:disabled { opacity: 0.4; cursor: default; }
+/* Connecting, or hanging up. Outlined rather than filled, for the reason
+   `.prof-mic.opening` is: filled is a claim to be hearing you, and in this
+   second it would be false — the microphone track is deliberately disabled
+   until the session has been told the conversation so far. */
+.chat-live-btn.opening {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+.chat-live-btn.on {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  /* `--page`, which is what `.prof-mic.on` uses — the microphone beside this
+     one, lit the same way. It said `--paper` for about an hour, which is a
+     token this app does not have: an undefined custom property with no fallback
+     makes the whole declaration invalid, so the glyph would have *inherited*
+     its colour and gone near-invisible on the orange. Nothing errors.
+     tests/css-tokens.test.ts is the only thing that would ever have said so. */
+  color: var(--page);
+}
+.chat-live-label {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+/* The label follows the button, so "Listening…" carries the same signal the
+   colour does — said twice, for the one control in this app worth being
+   unambiguous about. */
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-ink); }
+.chat-live-mic select {
+  padding: 0.1rem 0.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+.chat-live-mic select:disabled { opacity: 0.5; }
+
+/* **What a spoken answer pointed at**, in place of the citations it cannot
+   make: it is forbidden to say a block id aloud and uses `show_passage`
+   instead. Quiet, under the answer, one row per pointer.
+   src/web/ChatPanel.tsx § passages. */
+.chat-pointed {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+.chat-pointed li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+.chat-pointed-why { color: var(--ink-faint); }
 
 .chat-stance {
   display: inline-flex;
@@ -5967,25 +6052,10 @@ td.text.has-hit[data-hues="8"] {
 .summ-range:hover { opacity: 1; }
 .summ-list > .summ-entry > .summ-body > .summ-range { margin-left: 0; }
 
-/* Which rung this actually is, when it is not the one that was asked for. The
-   whole point is that it is visible: a silent fallback is what makes a
-   partly-written artefact read as a complete one. */
-.summ-rung-tag {
-  margin-right: 0.4rem;
-  padding: 0.02rem 0.28rem;
-  border: 1px dashed var(--rule-strong);
-  border-radius: 4px;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.65rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 
-/* "+4 sections". A control when the reader closed them, a fact when the depth
-   cut-off hid them — the disabled state is the difference, and pressing it in
-   that state would silently overrule the Depth buttons. */
+/* "+4 sections", and "−2 parts" on the root once its parts are open. A control
+   on every row since 2026-08-31, the root included — it writes one node into
+   `opened` rather than moving the Depth buttons. SummaryPanel.tsx. */
 .summ-more {
   margin: 0.3rem 0 0 1.25rem;
   padding: 0.1rem 0.4rem;
@@ -6000,45 +6070,14 @@ td.text.has-hit[data-hues="8"] {
 }
 .summ-more:hover { color: var(--ink); border-color: var(--highlight); }
 
-/* ---- the offer at the bottom, and the things that go wrong ---- */
-.summ-foot {
-  flex: none;
-  padding: 0.55rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-.summ-hint {
-  margin: 0 0 0.45rem;
-  color: var(--ink-faint);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
 .summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
-.summ-error {
-  margin: 0.4rem 0 0;
-  color: var(--highlight-ink);
-  font-size: 0.78rem;
-}
 
-.summ-stale {
-  flex: none;
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--highlight-wash);
-}
-.summ-stale p {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0 0 0.4rem;
-  color: var(--highlight-ink);
-  font-size: 0.78rem;
-}
-
-/* The summary panel's run button, its running row and its spinner used to be
-   here — .summ-btn, .summ-running, .summ-detail-live, .summ-spin. They went on
-   2026-08-26 with the third copy of the component that used them: the glossary,
-   the summaries and the thread now share src/web/JobProgress.tsx, drawn with
-   shadcn's Button. See docs/project/web-client.md § Tailwind and shadcn. */
+/* **Summary mode spends nothing, so it has no foot.** `.summ-foot`,
+   `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
+   2026-08-31 with the generated length ladder: there is no job to report, no
+   artefact to be stale, and no shorter rung to fall back to
+   (docs/plans/gist-only-summaries.md). Its run button had gone earlier, on
+   2026-08-26, into the shared src/web/JobProgress.tsx. */
 
 
 /* ------------------------------------ chat: suggestions and cited blocks --
@@ -10257,3 +10296,194 @@ table.only-prose thead { display: none; }
 /* Narrow, because it holds two short lines and a wide card over a list row
    covers the rows either side of the one being pointed at. */
 .score-bars-card { max-width: 15rem; }
+
+/* ------------------------------------------------------- § timeline mode ----
+   The eleventh mode. `.timeline` is `.gloss` with a class beside it, like
+   `.ideas` next door, so the band shell, the head, the run button, the stale
+   banner and the two provenance rules all come from § glossary mode unchanged.
+   What is here is only what an event has and an idea does not: a date column
+   that has four quite different things to say, and a row that stacks rather
+   than sitting on one line.
+
+   **There are no marks and no legend**, deliberately — Greg deferred the drawn
+   notation on 2026-08-31 and v1 writes the words instead. So there is nothing
+   here that draws a bracket, a bar or a ⊘, and adding one is a change to the
+   design rather than to this file.
+   docs/plans/timeline-mode.md § Appendix: the visual design, deferred. */
+
+/* Same three properties as `.ideas-scroll`, `.gloss-list`, `.chat-scroll` and
+   `.summ-scroll`, and for the reason the ideas panel had to learn the hard way:
+   `.mode-band` is a fixed column between the controls bar and the dock, so
+   without a scrolling child the panel's own content decides its height — which
+   a fixed element cannot honour — and everything past the dock is unreachable.
+   Twenty-six events is well past it on any laptop window, and it looks
+   perfectly fine on a tall one. */
+.tl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+/* The two sentences above the list — the year the piece is in, and how few
+   events there are. Both are said once here rather than on every row. */
+.tl-frame,
+.tl-thin {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.tl-thin { border-bottom: 1px solid var(--rule); }
+
+.tl-group { margin: 0; padding: 0.5rem 0 0; }
+/* Heavier than the rule between two events, because the break between what the
+   piece says happened and what it merely expects is a change of tense rather
+   than a change of row — the whole reason the divider exists is to stop a
+   reader's eye running from a date into a forecast. */
+.tl-group + .tl-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.tl-group > h3 {
+  /* Sticky, so *which half am I looking at* survives scrolling — see the note
+     on `.ideas-group > h3`, and docs/reusable/css-sticky-containing-block.md
+     for the case where a sticky heading silently does nothing. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tl-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.tl-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.tl-list { margin: 0; padding: 0; list-style: none; }
+.tl-item { border-top: 1px solid var(--rule); }
+.tl-item:first-child { border-top: none; }
+
+/* **Stacked, not two columns**, and that is a measurement rather than a taste:
+   the band is 288px at `MODE_MIN` (layout.ts), and "at or before 12 May" beside
+   a ten-word label in that width leaves both of them about nine characters a
+   line. The date leads because a chronology is what the reader scans down. */
+.tl-row {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The date column, and the four things it can say. They are four different
+   kinds of statement, so they are four different treatments — one class with
+   the text carrying the difference would set *"dated — but which year?"* in the
+   same face as *"26 May"*, which reads as a very odd date rather than as a note
+   about one. */
+.tl-when {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+/* A fact the article stated. The only one of the four in the full ink. */
+.tl-when-dated { color: var(--ink); font-weight: 600; }
+/* The article's own words, already in quotation marks in the markup. Italic
+   because it is a quotation and not our sentence. */
+.tl-when-words { color: var(--ink-soft); font-style: italic; }
+/* No time at all. Faint, because there is nothing here to read — and it must
+   not be mistaken for the row below it, which is us failing rather than the
+   article saying nothing. */
+.tl-when-none { color: var(--ink-faint); }
+/* **We could not read a date the piece plainly gives.** The one state that is
+   about us, and the one that must not look like an ordinary blank: the review's
+   whole point was that a rejected date rendering identically to a genuine
+   absence makes "fails visibly" true only inside a counter. A dotted underline
+   rather than a colour alone, so it is still distinguishable without colour. */
+.tl-when-rejected {
+  color: var(--ink-faint);
+  font-style: italic;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--rule-strong);
+}
+
+/* A handle, not a retelling — three to ten words, wrapping. Wrapping rather
+   than truncating for the reason `.ideas-name` gives: the half a truncation
+   keeps is the wrong half. */
+.tl-label {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.tl-row:hover .tl-label { color: var(--highlight-ink); }
+.tl-item.open > .tl-row .tl-label { color: var(--highlight-ink); font-weight: 600; }
+
+.tl-detail { padding: 0 0 0.6rem; }
+.tl-where { margin-top: 0.55rem; }
+/* The stepper on the label line rather than under it — the label is short and
+   the row is otherwise empty to the right. Almost always invisible: 26 of the
+   26 events on the test article have exactly one occurrence. */
+.tl-where > .gloss-part-label { display: flex; align-items: center; gap: 0.3rem; }
+
+.tl-occurrences { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.tl-occurrences > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.tl-occurrences > li > button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  border-left: 2px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.tl-occurrences > li > button:hover { border-left-color: var(--highlight); }
+/* The one the reader last landed on, so the panel and the wash in the prose
+   agree about where they are. */
+.tl-occurrences > li.open > button {
+  border-left-color: var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 8%, transparent);
+}
+.tl-quote {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* Pinned under the scroller rather than at the end of it, like `.ideas-again`:
+   the control that spends a model call must not be something you have to
+   scroll twenty-six events to reach. */
+.tl-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}

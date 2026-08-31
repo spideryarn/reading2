@@ -62,8 +62,6 @@ import type {
   Quote,
   Quotes,
   NodeId,
-  SummaryEntry,
-  Summaries,
   Tree,
   TreeNode,
   Tweet,
@@ -79,7 +77,6 @@ import type {
   PublicQuotes,
   PublicMeta,
   PublicMetadata,
-  PublicSummaries,
   PublicTweets,
 } from "../public-types.js";
 import { publicSourceUrl } from "../urls.js";
@@ -321,37 +318,6 @@ function publicGlossary(glossary: Glossary): PublicGlossary {
 }
 
 /**
- * The summaries — **and `guidance` is not among the fields.**
- *
- * That is the owner's free-text steer: what *they* asked these summaries to
- * lean towards. Sol's payload table put it in bold and the plan repeats it,
- * because it is the one field here that is a sentence somebody wrote about
- * themselves rather than about the article.
- *
- * The honest limit, stated where somebody might otherwise think this closed it:
- * the summary *text* is derived from the steer, so dropping the field stops
- * direct disclosure and cannot make the prose neutral. That is Greg's settled
- * stage-1 position — publish the artefact the owner has — and it is
- * docs/plans/public-read-only-access.md § The leak that no projection fixes.
- *
- * `missing` crosses: it is the reader's only sign that an apparently complete
- * ladder is partial.
- */
-function publicSummaries(summaries: Summaries): PublicSummaries {
-  return {
-    entries: summaries.entries.map(
-      (entry): SummaryEntry => ({
-        range: [entry.range[0], entry.range[1]],
-        depth: entry.depth,
-        ...opt(entry, "short"),
-        ...opt(entry, "long"),
-      }),
-    ),
-    missing: summaries.missing,
-  };
-}
-
-/**
  * The quotes, rebuilt quote by quote.
  *
  * Field by field like its neighbours rather than passed through whole, for the
@@ -458,7 +424,6 @@ export function publicArticle(row: {
   arc: Arc | null;
   assets: Assets | null;
   glossary: Glossary | null;
-  summary: Summaries | null;
   ideas: Ideas | null;
   quotes: Quotes | null;
   tweets: TweetThread | null;
@@ -486,7 +451,6 @@ export function publicArticle(row: {
        reports it as never built. The distinction this payload rests on is
        present-versus-absent, and the test is written to say so. */
     ...(row.glossary !== null ? { glossary: publicGlossary(row.glossary) } : {}),
-    ...(row.summary !== null ? { summary: publicSummaries(row.summary) } : {}),
     ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
@@ -496,7 +460,7 @@ export function publicArticle(row: {
 /**
  * `GET /api/public/metadata/:slug`, assembled.
  *
- * Five booleans and a title. The owner's metadata page answers *which stage
+ * A handful of booleans and a title. The owner's metadata page answers *which stage
  * ran, when, into which column, over how many bytes, and would we write it
  * again today*; none of that is a visitor's business, and `stages` in
  * particular is internal paths and column names. Sol asked for this shape by
@@ -515,7 +479,6 @@ export function publicMetadata(row: {
       arc: row.available.arc,
       tweets: row.available.tweets,
       glossary: row.available.glossary,
-      summary: row.available.summary,
       ideas: row.available.ideas,
       quotes: row.available.quotes,
     },

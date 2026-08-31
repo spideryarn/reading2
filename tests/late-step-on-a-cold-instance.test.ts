@@ -38,6 +38,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { partsOf } from "../src/arc.js";
 import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
@@ -127,47 +128,77 @@ describe("a single-step job on an instance that never ingested the article", () 
   });
 
   /**
-   * **The next two are pinned to the defect, not to the fix.**
+   * **These two were pinned to the defect until 2026-08-31, and now they are
+   * pinned to the fix.**
    *
-   * They read `.rejects.toThrow(/ENOENT.*blocks\.json/)`, which is the bug, and
-   * they are green because the bug is present. When stage 3 of
-   * docs/plans/finish-the-database-move.md lands, **flip them back to the
-   * `.resolves` form in this comment** — the assertion is written out below each
-   * one so the change is a swap rather than a rewrite.
+   * They read `.rejects.toThrow(/ENOENT.*blocks\.json/)` for one day — the bug
+   * itself, asserted, so that a known-red gate did not train several agents
+   * sharing this tree to read past `npm test`. Stage 2a of
+   * docs/plans/finish-the-database-move.md changed what the stage reads: every
+   * article-reading stage now takes an `Article` read from the store
+   * (src/article-input.ts) rather than opening `blocks.json` off `ctx.dir`.
    *
-   * Why not simply leave them red, which is what they were until 2026-08-31.
-   * `npm test` is this project's declared gate (docs/project/code-quality-overview.md)
-   * and several agents share this tree. A gate that is known to be red is a gate
-   * everybody learns to read past, and the next real breakage arrives into a
-   * suite nobody trusts — which is docs/reusable/silent-success.md wearing the
-   * opposite costume. Greg's first instinct was to leave them red and he was
-   * right that the fault must stay visible; this keeps it visible without
-   * spending the gate.
+   * **What these prove, and — more important — what they do not.** The store
+   * here is rooted at a published copy while `ctx.dir` is an empty temporary
+   * directory. So a stage that still read the directory cannot pass by luck,
+   * and a stage that reads the store cannot fail by luck. That asymmetry is the
+   * entire fixture, and `coldContext()` must never be given a directory with an
+   * article in it.
    *
-   * **Why the exact error rather than `it.fails`.** `it.fails` passes on *any*
-   * throw, so it would go on being green if this stopped being an ENOENT on
-   * `blocks.json` and became something else entirely — a stubbed model failing,
-   * a renamed artefact, a permissions error. The regex names the one failure
-   * this file is about, so the test still reddens when the defect changes shape
-   * as well as when it disappears. ⟨Sol⟩, 2026-08-31.
+   * **But production does not yet hand the step a store like this one.**
+   * src/jobs.ts still builds `fsStoreSession({ artifacts: fsArtifacts })`, and
+   * on a deployment that store is rooted at the same job-scoped `/tmp` the
+   * directory is. So the production failure of 2026-08-30 is still there; it
+   * now arrives as *"No blocks or tree … run the toc step first"* rather than
+   * as an `ENOENT` from three layers down. **These tests are the stage being
+   * ready for a store that can see the article, not evidence that one exists.**
+   * The line that makes it exist is the `pgStoreSession` swap in stage 3, and
+   * this file is what will say it worked.
+   *
+   * The two stages here are the two that failed in production. The other five
+   * — `glossary`, `ideas`, `quotes`, `sketch` and `assets` — took the identical
+   * change; tests/pipeline-artifact-store.test.ts is what holds all of them to
+   * the artefacts they declare.
    */
-  it("tweets cannot reach the article, and fails on the blocks it cannot see", async () => {
+  it("tweets reads the article from the store, not from its empty directory", async () => {
     answers.push(JSON.stringify({ tweets: ["A post about the article.", "And a second one."] }));
-    /* When fixed:
-         await expect(STEPS.tweets.run(coldContext(), store)).resolves.toMatchObject({
-           detail: expect.stringContaining("posts"),
-         }); */
-    await expect(STEPS.tweets.run(coldContext(), store)).rejects.toThrow(/ENOENT.*blocks\.json/);
+    await expect(STEPS.tweets.run(coldContext(), store)).resolves.toMatchObject({
+      detail: expect.stringContaining("posts"),
+      parts: { tweets: expect.objectContaining({ tweets: expect.any(Array) }) },
+    });
   });
 
-  it("arc cannot reach the article, and fails on the blocks it cannot see", async () => {
-    answers.push(
-      JSON.stringify({
-        entries: [{ partId: "part-1", sentence: "The piece opens by asking what it is like." }],
-      }),
-    );
-    /* When fixed:
-         await expect(STEPS.arc.run(coldContext(), store)).resolves.toBeTruthy(); */
-    await expect(STEPS.arc.run(coldContext(), store)).rejects.toThrow(/ENOENT.*blocks\.json/);
+  it("arc reads the article from the store, not from its empty directory", async () => {
+    /* **One sentence per part, counted from the tree the store holds**, because
+       `buildArc` refuses a length mismatch rather than zipping as far as it can
+       — every sentence after a missing one would land against the wrong part
+       and still read plausibly. Hard-coding a count here would make this test
+       fail the day the fixture's tree changed, for a reason that has nothing to
+       do with what it is about. */
+    const tree = await store.read(SLUG, "toc", "tree");
+    if (!tree) throw new Error("the fixture has no tree");
+    const sentences = partsOf(tree).map((_, i) => `Part ${i + 1} says something.`);
+    answers.push(JSON.stringify({ arc: sentences }));
+    await expect(STEPS.arc.run(coldContext(), store)).resolves.toMatchObject({
+      parts: { arc: expect.objectContaining({ entries: expect.any(Array) }) },
+    });
+  });
+
+  /**
+   * **The negative control, and without it the two above prove much less.**
+   *
+   * Both of them pass whenever the stage can reach the article *somehow*. This
+   * one asserts the other half: with the store empty as well, the stage fails —
+   * so the two above are reading the store rather than finding the article by
+   * some route this fixture did not intend. It also pins the failure to a
+   * refusal with a sentence in it rather than the `ENOENT` that used to arrive
+   * from three layers down.
+   */
+  it("and refuses in its own words when the store has no article either", async () => {
+    const empty = createFsArtifactStore((slug) => ({
+      dir: path.join(scratch, "data", slug),
+      htmlFile: path.join(scratch, "output", `${slug}.html`),
+    })) as ArtifactReads;
+    await expect(STEPS.arc.run(coldContext(), empty)).rejects.toThrow(/run the toc step first/);
   });
 });

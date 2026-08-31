@@ -33,6 +33,7 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { readRawBytes } from "../fetch.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -153,14 +154,14 @@ export const PATHS: {
   glossary: {
     glossary: (at) => path.join(at.dir, "glossary.json"),
   },
-  summary: {
-    summary: (at) => path.join(at.dir, "summary.json"),
-  },
   ideas: {
     ideas: (at) => path.join(at.dir, "ideas.json"),
   },
   quotes: {
     quotes: (at) => path.join(at.dir, "quotes.json"),
+  },
+  timeline: {
+    timeline: (at) => path.join(at.dir, "timeline.json"),
   },
   sketch: {
     sketch: (at) => path.join(at.dir, "sketch.json"),
@@ -265,7 +266,12 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      few KB — but the same ceiling as its neighbours, because the cap is a
      guard against a corrupt or hostile file rather than a size estimate. */
   quotes: { maxBytes: 32 * MiB, decode: json("quotes") },
-  summary: { maxBytes: 32 * MiB, decode: json("summary") },
+  /* Forty events at most (`MAX_EVENTS` in src/timeline.ts), each a short label,
+     an interval and up to six quoted passages — the real one on the test
+     article is 40KB. The same ceiling as its neighbours all the same, because
+     the cap is a guard against a corrupt or hostile file rather than a size
+     estimate. */
+  timeline: { maxBytes: 32 * MiB, decode: json("timeline") },
 };
 
 /** The path for one `(step, kind)`, or a clear error rather than `undefined`. */
@@ -671,11 +677,22 @@ export const fsSourceStore: SourceStore = {
     /* Absent, unreadable, or a web page — all three are "no PDF here", and the
        route says one sentence for all three. */
     if (manifest?.kind !== "pdf") return null;
-    /* **ENOENT here is a throw, not a `null`.** The manifest is stage 1 saying
-       the bytes are beside it; an assertion that turns out false is a fault
-       somebody should see, not an article that never had a scan. routes.ts
-       still answers 404 on `err.code === "ENOENT"`, which is what this route
-       did before and is the behaviour worth keeping identical. */
-    return new Uint8Array(await readFile(path.join(fsLocations(slug).dir, manifest.file)));
+    /* **By content address, not `path.join(dir, manifest.file)`.** Since
+       2026-08-31 stage 1 leaves nothing on disk: it puts the document in the
+       content-addressed `sources` bucket and returns the manifest that names
+       it (docs/plans/finish-the-database-move.md § Stage 2c). So a PDF fetched
+       after that has no `raw.pdf` beside its manifest and the old read
+       404'd — a route quietly failing for new articles while going on working
+       for the ones a developer already had, which is the worst way for it to
+       break.
+
+       **A refusal here is a throw, not a `null`.** The manifest is stage 1
+       saying the object exists; an assertion that turns out false is a fault
+       somebody should see, not an article that never had a scan.
+       `RawDocumentUnavailable` carries the reason and the key. routes.ts
+       answers 404 on `err.code === "ENOENT"`, which the filesystem blob store
+       still raises for a missing object, so the route's behaviour is
+       unchanged. */
+    return await readRawBytes(manifest);
   },
 };

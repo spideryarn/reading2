@@ -334,6 +334,26 @@ export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * Which timeline event is open, and therefore which passages are marked in the
+ * prose.
+ *
+ * An event's id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it for free — and a mangled link degrades to the
+ * list with nothing selected, like the three above.
+ *
+ * **The id survives a re-run, which is what makes this link worth having.** It
+ * is inherited on the cited block set plus the date rather than on the label —
+ * measured, because the labels paraphrase on every regeneration: 26 of 27 ids
+ * survived a re-run where only 7 of 26 labels did, so a label-keyed link would
+ * have died nineteen times over. src/timeline.ts § `evidenceKey`.
+ *
+ * `replace`, exactly like `?term=`, `?idea=` and `?quote=` beside it: stepping
+ * between events while you read is browsing rather than navigating, and `mode`
+ * already put one entry on the stack for the trip into the mode.
+ */
+export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
  * How the quote list is ordered.
  *
  * **`document` is the default, and that is Greg's own instruction rather than
@@ -761,9 +781,10 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   Two controls, and they are the two axes of the same thing: how much summary
-   you want. `len` says how long each entry is, `deep` says how many entries
-   there are. See docs/project/summaries.md and SummaryPanel.tsx.
+   One control now: `deep`, how far down the tree the panel goes. There was a
+   second, `len`, which chose between three generated lengths — it went on
+   2026-08-31 along with the stage that wrote the two paid ones
+   (docs/plans/gist-only-summaries.md). What is left is free and on the tree.
 
    **What is NOT in the URL, and why.** The panel also lets you open and close
    individual sections — including opening one part's sections *past* the depth
@@ -778,33 +799,6 @@ export const confParam = createParser<number>({
    it would open a set of sections that are no longer the ones you opened. What
    *is* stable is the depth, so the depth is what a link carries. Their point
    still stands and this is the honest version of it. */
-
-/**
- * Which rung of the ladder every entry in the summary panel is shown at.
- *
- * Named rather than numbered, all the way down to the URL, because that is the
- * whole finding this feature is built on: *"sentence or two" is a thing a
- * writer can aim at and a reader can recognise; "level 4" is not*
- * (docs/project/original-version/summaries.md). `?len=long` says what it will
- * show you; `?len=2` would not.
- *
- * `gist` is the default and never appears in a URL. It is the rung that costs
- * nothing — one sentence per node, already on the tree — so an article with no
- * `summary.json` at all still has a usable panel, and the two generated rungs
- * are an upgrade rather than a precondition.
- *
- * `push`, like `cols` and `text`: changing how much summary you are reading is
- * a deliberate act on the view, and Back should undo it.
- */
-export const RUNGS = ["gist", "short", "long"] as const;
-export type Rung = (typeof RUNGS)[number];
-
-export const rungParam = createParser<Rung>({
-  parse: (v) => (RUNGS.includes(v as Rung) ? (v as Rung) : null),
-  serialize: (v) => v,
-})
-  .withDefault("gist")
-  .withOptions({ history: "push" });
 
 /**
  * Which picture the Diagram mode is drawing.
@@ -825,7 +819,7 @@ export const rungParam = createParser<Rung>({
  * Trail have nothing at all without the projection, and now say so with a
  * spinner rather than borrowing another picture.
  *
- * `push`, like `?rung=` and `?cols=`. Switching picture is a deliberate act on
+ * `push`, like `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *
@@ -898,10 +892,9 @@ export const diagramHueParam = createParser<ScatterHue>({
  * cut-off, which is the one control that view had and the one thing it proved:
  * *one control, whole-document granularity* is usable.
  *
- * 1 is the parts, 2 is the sections. It stops at 2 because that is where the
- * summaries stop being written (src/summarise.ts § MAX_DEPTH) and because below
- * it a node is a single paragraph, which the reader should be reading rather
- * than being told about.
+ * 1 is the parts, 2 is the sections. It stops at 2 because below it a node is a
+ * single paragraph, which the reader should be reading rather than being told
+ * about.
  *
  * Note that this and a node's own open/closed state are **different ways to be
  * hidden**, and they compose rather than sharing a variable — their version got

@@ -343,7 +343,6 @@ when("the filesystem and Postgres stores agree", () => {
     for (const [name, read] of [
       ["tweets", (r: typeof fsArticleReader) => r.loadTweets(slug)],
       ["glossary", (r: typeof fsArticleReader) => r.loadGlossary(slug)],
-      ["summaries", (r: typeof fsArticleReader) => r.loadSummaries(slug)],
       ["ideas", (r: typeof fsArticleReader) => r.loadIdeas(slug)],
     ] as const) {
       it(`agrees about ${name}, present or absent`, async () => {

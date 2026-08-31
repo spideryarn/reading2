@@ -78,7 +78,7 @@ function article(): { root: SummaryNode; blocks: Block[] } {
       n3: mk("n3", 1, "n1", [], 2, 3),
     },
   } as unknown as Tree;
-  const root = buildSummaryTree(tree, blocks, null);
+  const root = buildSummaryTree(tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
   return { root, blocks };
 }
@@ -99,7 +99,7 @@ function rootOnlyArticle(): { root: SummaryNode; blocks: Block[] } {
       },
     },
   } as unknown as Tree;
-  const summary = buildSummaryTree(tree, blocks, null);
+  const summary = buildSummaryTree(tree, blocks);
   if (!summary) throw new Error("fixture tree is unusable");
   return { root: summary, blocks };
 }
@@ -132,7 +132,7 @@ function longArticle(): { root: SummaryNode; blocks: Block[] } {
       ...Object.fromEntries(blocks.map((_, i) => [`n${i + 2}`, mk(i)])),
     },
   } as unknown as Tree;
-  const summary = buildSummaryTree(tree, blocks, null);
+  const summary = buildSummaryTree(tree, blocks);
   if (!summary) throw new Error("fixture tree is unusable");
   return { root: summary, blocks };
 }

@@ -541,16 +541,14 @@ describe("the stage as it actually runs", () => {
     expect(cut[1]).toEqual([4, 5, 6]);
 
     const dir = await mkdtemp(path.join(tmpdir(), "spya-seam-"));
-    const outFile = path.join(dir, "article.html");
-    await runPdfExtract({
+    const result = await runPdfExtract({
       bytes,
-      outFile,
       dataDir: dir,
       slug: "seam",
       reader: seamReader(),
     });
 
-    const html = await readFile(outFile, "utf-8");
+    const html = result.extractedHtml;
     expect(html).toContain("The captain passed the dispatcher and went into the rear cabin.");
     expect(html).not.toContain("dis patcher");
   });

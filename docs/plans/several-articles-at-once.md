@@ -237,7 +237,7 @@ builds `fsStoreSession({ artifacts: pipelineStore })` and only *wraps* it with p
 files live in a scratch directory scoped to *this job's id*
 ([`src/store/data-root.ts`](../../src/store/data-root.ts)). A `summary` job queued behind an ingest
 therefore claims on some instance, opens `blocks.json` in its own empty directory, and dies before it
-generates anything. Verified: [`src/summarise.ts`](../../src/summarise.ts) opens the file directly.
+generates anything. Verified: `src/summarise.ts` opens the file directly.
 
 **The plan's own 202 test would have passed while the feature failed** — which is precisely the shape
 of [silent-success.md](../reusable/silent-success.md), arriving in the test list rather than in the
@@ -364,7 +364,7 @@ do**, and local is the filesystem store and the default.
 - the asset fetch gate in [`src/collect-assets.ts`](../../src/collect-assets.ts) is process-wide, so
   N `assets` steps share its permits while each believes it has its own budget;
 - the label fan-out in [`src/labels.ts`](../../src/labels.ts) and the summary fan-out in
-  [`src/summarise.ts`](../../src/summarise.ts) each become N times as many concurrent model calls,
+  `src/summarise.ts` each become N times as many concurrent model calls,
   with **no spend cap anywhere in the repo**;
 - `STEP_BUDGET_MS` entries are wall-clock worst cases measured uncontended, and the pre-flight check
   that asks whether the next step fits will say yes on evidence gathered when nothing else was

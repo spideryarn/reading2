@@ -140,7 +140,6 @@ export function PublicMetadataPage({
               src/web/public-artefacts.ts. */}
           <ul className="tw:m-0 tw:list-none tw:p-0 tw:text-sm tw:text-ink-faint">
             <Artefact name="An arc through the argument" has={available.arc} />
-            <Artefact name="A summary" has={available.summary} />
             <Artefact name="A glossary" has={available.glossary} />
             <Artefact name="A list of ideas" has={available.ideas} />
             <Artefact name="A tweet thread" has={available.tweets} />

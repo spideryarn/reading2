@@ -35,8 +35,19 @@ const transcriptionFailed = (id: string) => ({
   item_id: id,
 });
 const responseCreated = (id: string) => ({ type: "response.created", response: { id } });
-const spoke = (transcript: string) => ({
+/**
+ * The model's transcript, **carrying the response it belongs to** — as the real
+ * event does.
+ *
+ * The `response_id` was missing from this helper for a day, and its absence was
+ * not a tidiness problem: it made a causal implementation untestable and let
+ * the "attribute everything to the newest turn" bug pass every test in this
+ * file. GPT Sol, reviewing the built code, 2026-08-31.
+ */
+const spoke = (transcript: string, response = "r1", item = `${response}-a`) => ({
   type: "response.output_audio_transcript.done",
+  response_id: response,
+  item_id: item,
   transcript,
 });
 /** A response that finished having asked for nothing more. */
@@ -75,17 +86,23 @@ describe("assembling one ordinary turn", () => {
   });
 
   it("does not end the exchange on a response that asked for a tool", () => {
-    /* The failure this prevents: storing "let me look that up" as the answer
-       and throwing away the reply that actually answers the question. */
+    /* Two failures this prevents, and the second was introduced by fixing the
+       first. Storing "let me look that up" as the answer and throwing away the
+       reply that answers the question is the obvious one. The other is the
+       mirror of it: the second response's `done` frame carries only *its own*
+       transcript, so a single string assigned from it loses the first half —
+       which the reader heard out loud and would find missing from their own
+       transcript. Both runs are kept, in the order they were spoken, joined
+       with a space. */
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), transcribed("u1", "Does he say qualia?")]);
     feed(l, [responseCreated("r1"), spoke("Let me check.")]);
     expect(feed(l, [responseWantsTool("r1")])).toEqual([]);
 
-    l.tool({ name: "search_article_words", label: "searched", detail: "nothing found" });
-    const out = feed(l, [responseCreated("r2"), spoke("No, he never uses it."), responseDone("r2")]);
+    l.tool("c1", { name: "search_article_words", label: "searched", detail: "nothing found" });
+    const out = feed(l, [responseCreated("r2"), spoke("No, he never uses it.", "r2"), responseDone("r2")]);
     expect(out).toHaveLength(1);
-    expect(out[0]?.answer).toBe("No, he never uses it.");
+    expect(out[0]?.answer).toBe("Let me check. No, he never uses it.");
     expect(out[0]?.tools).toHaveLength(1);
   });
 });
@@ -105,7 +122,7 @@ describe("the orderings that corrupt a transcript", () => {
       ...feed(l, [userItem("u1"), responseCreated("r1"), spoke("The first answer."), responseDone("r1")]),
       ...feed(l, [userItem("u2"), responseCreated("r2")]),
       ...feed(l, [transcribed("u2", "The second question.")]),
-      ...feed(l, [spoke("The second answer."), responseDone("r2")]),
+      ...feed(l, [spoke("The second answer.", "r2"), responseDone("r2")]),
     ];
     /* Turn 2 is complete and turn 1 is not. Nothing may be emitted yet — the
        store appends, so emitting turn 2 now puts the conversation permanently
@@ -117,10 +134,83 @@ describe("the orderings that corrupt a transcript", () => {
     expect(out.map((e) => e.answer)).toEqual(["The first answer.", "The second answer."]);
   });
 
+  /**
+   * **The sequence the whole file exists for, delivered in the order it happens
+   * in.**
+   *
+   * The test above it was written with R1's transcript arriving *before* U2 is
+   * created — the one order in which "attribute everything to the newest turn"
+   * happens to be right. GPT Sol found that on review: the implementation had
+   * exactly that bug, and every test here agreed with it.
+   *
+   * Here the reader interrupts *first*, so `current` has already moved to U2 by
+   * the time R1's own words arrive. Attributed by `current`, R1's answer lands
+   * on U2 — and U1 is stored with a question and no answer while U2 gets an
+   * answer to something nobody asked. No error, nothing in a console.
+   */
+  it("attributes an answer to the turn it ANSWERS, not the one being spoken now", () => {
+    const l = new ExchangeLedger();
+    /* U1 is asked and R1 begins. */
+    feed(l, [userItem("u1"), responseCreated("r1")]);
+    /* The reader talks over it. U2 is created — `current` moves here. */
+    feed(l, [userItem("u2")]);
+    /* And only now does R1's own transcript arrive. */
+    feed(l, [spoke("The first answer.", "r1"), responseDone("r1")]);
+    /* U2 is answered by a response of its own. */
+    feed(l, [responseCreated("r2"), spoke("The second answer.", "r2"), responseDone("r2")]);
+
+    /* Gathered across feeds: turn 1 completes the moment its transcription
+       lands, and turn 2 a moment later. */
+    const out = [
+      ...feed(l, [transcribed("u1", "The first question.")]),
+      ...feed(l, [transcribed("u2", "The second question.")]),
+    ];
+
+    expect(out.map((e) => [e.question, e.answer])).toEqual([
+      ["The first question.", "The first answer."],
+      ["The second question.", "The second answer."],
+    ]);
+  });
+
+  it("files a tool receipt against the turn that asked for it", () => {
+    /* Same defect, same shape. The browser runs the tool, and a slow one
+       finishes after the reader has taken another turn — so a receipt filed by
+       "the newest turn" is a claim the reader never saw made, attached to a
+       question it has nothing to do with. */
+    const l = new ExchangeLedger();
+    feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
+    feed(l, [
+      {
+        type: "response.function_call_arguments.done",
+        response_id: "r1",
+        call_id: "call-1",
+        name: "search_article_words",
+        arguments: "{}",
+      },
+      responseWantsTool("r1"),
+    ]);
+    /* The reader interrupts before the tool comes back, so `current` moves. */
+    feed(l, [userItem("u2"), transcribed("u2", "Q2")]);
+    /* And only now does the browser answer the call. */
+    l.tool("call-1", { name: "search_article_words", label: "searched", detail: "9 passages" });
+    l.passage("call-1", { blockIds: ["spya-aaa222"], why: "the rainstorm" });
+
+    /* `drain` rather than a completed pair, because what is being asserted is
+       *which turn holds the receipt* — and making both turns complete would
+       need a continuation response, whose own attribution is a separate
+       question this test has no business also answering. */
+    const out = l.drain();
+    expect(out.map((e) => e.question)).toEqual(["Q1", "Q2"]);
+    expect(out.map((e) => e.tools.length), "the receipt was filed on the wrong turn").toEqual([
+      1, 0,
+    ]);
+    expect(out.map((e) => e.passages.length)).toEqual([1, 0]);
+  });
+
   it("attaches a late transcription to its own turn, not the newest one", () => {
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), responseCreated("r1"), spoke("A1"), responseDone("r1")]);
-    feed(l, [userItem("u2"), responseCreated("r2"), spoke("A2"), responseDone("r2")]);
+    feed(l, [userItem("u2"), responseCreated("r2"), spoke("A2", "r2"), responseDone("r2")]);
     /* Both answers are in; the transcriptions arrive backwards. Keying on
        `item_id` is the whole defence. */
     feed(l, [transcribed("u2", "Q2")]);
@@ -137,7 +227,7 @@ describe("the orderings that corrupt a transcript", () => {
        transcript into a lost conversation. */
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), responseCreated("r1"), spoke("A1"), responseDone("r1")]);
-    feed(l, [userItem("u2"), responseCreated("r2"), spoke("A2"), responseDone("r2")]);
+    feed(l, [userItem("u2"), responseCreated("r2"), spoke("A2", "r2"), responseDone("r2")]);
     feed(l, [transcribed("u2", "Q2")]);
     const out = feed(l, [transcriptionFailed("u1")]);
     expect(out).toHaveLength(2);
@@ -222,12 +312,58 @@ describe("passages", () => {
   it("belong to the turn they were pointed at during", () => {
     const l = new ExchangeLedger();
     feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
-    l.passage({ blockIds: ["spya-aaa111"], why: "the rainstorm" });
+    l.passage("c1", { blockIds: ["spya-aaa111"], why: "the rainstorm" });
     const first = feed(l, [spoke("A1"), responseDone("r1")]);
     expect(first[0]?.passages).toEqual([{ blockIds: ["spya-aaa111"], why: "the rainstorm" }]);
 
     feed(l, [userItem("u2"), transcribed("u2", "Q2"), responseCreated("r2")]);
-    const second = feed(l, [spoke("A2"), responseDone("r2")]);
+    const second = feed(l, [spoke("A2", "r2"), responseDone("r2")]);
     expect(second[0]?.passages, "a pointer leaked into the next turn").toEqual([]);
+  });
+});
+
+describe("what belongs to the exchange on screen", () => {
+  it("names every item it was drawn from, so the live copy can come off", () => {
+    /* The panel shows a turn arriving and then the *stored* rows arrive
+       underneath it. Without this the reader watches their own question
+       duplicate itself the moment it is saved. */
+    const l = new ExchangeLedger();
+    feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
+    const out = feed(l, [
+      { type: "response.output_audio_transcript.delta", item_id: "i1", delta: "A" },
+      { type: "response.output_audio_transcript.done", item_id: "i1", transcript: "A1" },
+      responseDone("r1"),
+    ]);
+    expect(out[0]?.itemIds).toEqual(["u1", "i1"]);
+  });
+
+  it("names BOTH answer items when a tool split the answer in two", () => {
+    /* The case the caller could not work out for itself. A tool-using answer
+       spans two responses and two assistant items, and "the ones since the last
+       emit" is exactly the arrival-order reasoning this file exists to avoid. */
+    const l = new ExchangeLedger();
+    feed(l, [userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1")]);
+    feed(l, [
+      { type: "response.output_audio_transcript.delta", item_id: "i1", delta: "Let me look" },
+      responseWantsTool("r1"),
+    ]);
+    const out = feed(l, [
+      responseCreated("r2"),
+      { type: "response.output_audio_transcript.done", item_id: "i2", transcript: "Found it." },
+      responseDone("r2"),
+    ]);
+    expect(out[0]?.itemIds).toEqual(["u1", "i1", "i2"]);
+  });
+
+  it("counts what is still unfinished, so a hang-up need not always wait", () => {
+    /* The grace window before the channel closes reads this. A reader who stops
+       after a finished answer waits for nothing; one who stops mid-sentence
+       gets a moment for the transcription of it to land. */
+    const l = new ExchangeLedger();
+    expect(l.pending()).toBe(0);
+    feed(l, [userItem("u1"), responseCreated("r1"), spoke("A1"), responseDone("r1")]);
+    expect(l.pending(), "waiting on the question's transcription").toBe(1);
+    feed(l, [transcribed("u1", "Q1")]);
+    expect(l.pending()).toBe(0);
   });
 });

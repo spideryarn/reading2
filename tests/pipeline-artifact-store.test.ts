@@ -20,11 +20,10 @@
  * and `blocks` had no such function, and were.
  *
  * Written in the past tense since D0, because the accident of protection has
- * gone and the protection has not: `threadIsCurrent` and `summariesAreCurrent`
- * were replaced by stamps, and `stepIsDone` asks `has()` *before* it computes
- * one. So every step is now covered by the same parsing check rather than three
- * of them being covered by a function that happened to parse on its way to
- * asking something else.
+ * gone and the protection has not: `threadIsCurrent` was replaced by a stamp,
+ * and `stepIsDone` asks `has()` *before* it computes one. So every step is now
+ * covered by the same parsing check rather than a couple of them being covered
+ * by a function that happened to parse on its way to asking something else.
  */
 import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -46,7 +45,6 @@ import {
   PROMPT_VERSION as SKETCH_VERSION,
 } from "../src/sketch.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
-import { PROMPT_VERSION as SUMMARY_VERSION } from "../src/summarise.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
@@ -171,7 +169,7 @@ const META = { slug: SLUG, title: "A title" };
 
 /**
  * Blocks, tree **and** metadata — `articleFingerprint` in src/source-hash.ts,
- * which is what all six article-reading stages stamp since 2026-08-31.
+ * which is what every article-reading stage stamps since 2026-08-31.
  *
  * Computed through each stage's **own** exported function rather than once
  * through the shared one. They agree today; a fixture that assumed they always
@@ -181,8 +179,8 @@ const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE, META);
 const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /**
- * What `tweets`, `glossary` and `summary` stamp. The same three inputs — none
- * of the three exports a fingerprint function of its own, because none of them
+ * What `tweets` and `glossary` stamp. The same three inputs — neither
+ * exports a fingerprint function of its own, because neither
  * computed one until the shared definition existed.
  */
 const PROSE_SOURCE_HASH = articleFingerprint(BLOCKS, TREE, META);
@@ -209,12 +207,12 @@ function ctxAt(at: ArtifactLocations): StepContext {
  * net worked exactly once, on 2026-08-26, when all three versions moved in one
  * afternoon and five tests went red for a reason that had nothing to do with
  * what they test. A net that catches the drift is worse than not having the
- * drift: `tweets.ts` and `summarise.ts` now export their version the way
- * `glossary.ts` already did.
+ * drift: `tweets.ts` now exports its version the way `glossary.ts` already
+ * did.
  */
 async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
-  /* `PROSE_SOURCE_HASH`, not `SOURCE_HASH`: the three artefacts built from this
-     are `tweets`, `glossary` and `summary`, whose prompts read the tree and the
+  /* `PROSE_SOURCE_HASH`, not `SOURCE_HASH`: the artefacts built from this
+     are `tweets` and `glossary`, whose prompts read the tree and the
      metadata head as well as the blocks. `SOURCE_HASH` — the blocks alone — is
      still what `assets` and `labels` carry, because those two really are
      written from the blocks and nothing else. */
@@ -283,14 +281,6 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     version: GLOSSARY_VERSION,
     entries: [],
     passes: 1,
-    generatedAt: new Date().toISOString(),
-    elapsedMs: 1,
-  });
-  await writeJson(pathFor(at, "summary", "summary"), {
-    ...stamped,
-    version: SUMMARY_VERSION,
-    entries: [],
-    missing: 0,
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
@@ -387,7 +377,6 @@ describe("a half-written artefact must not report its step finished", () => {
     { step: "arc", kind: "arc" },
     { step: "tweets", kind: "tweets" },
     { step: "glossary", kind: "glossary" },
-    { step: "summary", kind: "summary" },
   ];
 
   for (const { step, kind } of cases) {
@@ -537,7 +526,6 @@ describe("the file store round-trips every kind", () => {
     { step: "arc", kind: "arc", from: "writes", file: "data/writes/arc.json" },
     { step: "tweets", kind: "tweets", from: "writes", file: "data/writes/tweets.json" },
     { step: "glossary", kind: "glossary", from: "writes", file: "data/writes/glossary.json" },
-    { step: "summary", kind: "summary", from: "writes", file: "data/writes/summary.json" },
   ];
 
   /**
@@ -1060,7 +1048,7 @@ describe("blocks is only done if the HTML really carries its ids", () => {
  * A step's stamp has to cover **every** input its prompt reads, not just the
  * blocks.
  *
- * `tweets`, `glossary` and `summary` all read `tree.json` and `meta.json` as
+ * `tweets` and `glossary` both read `tree.json` and `meta.json` as
  * well as `blocks.json` and put both into the prompt — the tree as the
  * skeleton, the metadata as the `TITLE:`/`BY:`/`PUBLISHED IN:` head that
  * `articleText` writes (src/article-prompt.ts). `ideas` and `sketch` covered
@@ -1091,15 +1079,15 @@ describe("every stamped step covers everything its prompt reads", () => {
   });
 
   /** Every step whose prompt reads the article's prose, its shape and its head. */
-  const PROSE_STEPS: StepName[] = ["arc", "tweets", "glossary", "summary", "ideas", "sketch"];
+  const PROSE_STEPS: StepName[] = ["arc", "tweets", "glossary", "ideas", "sketch"];
 
   /**
-   * All six not-done, as one object.
+   * All of them not-done, as one object.
    *
    * **Compared whole rather than asserted in a loop**, because a loop stops at
-   * the first failure and the first failure is not the finding — "which of the
-   * six noticed" is. Run against the fingerprints as they stood on 2026-08-30,
-   * a loop reported `tweets` and said nothing about the other four.
+   * the first failure and the first failure is not the finding — "which of them
+   * noticed" is. Run against the fingerprints as they stood on 2026-08-30,
+   * a loop reported `tweets` and said nothing about the rest.
    */
   const ALL_STALE = Object.fromEntries(PROSE_STEPS.map((s) => [s, false]));
 
@@ -1163,7 +1151,7 @@ describe("every stamped step covers everything its prompt reads", () => {
    * `meta.json` would report that stage stale for ever while looking healthy.
    *
    * What this can hold is the checking side: with no metadata in the store, the
-   * six stamps must equal `articleFingerprint(blocks, tree, null)` — which is
+   * stamps must equal `articleFingerprint(blocks, tree, null)` — which is
    * what the fixture writes here. It cannot reach inside `generateIdeas`, so
    * the writing half is held by the comment on `onDiskMeta` in src/ideas.ts and
    * src/sketch.ts.
@@ -1171,9 +1159,10 @@ describe("every stamped step covers everything its prompt reads", () => {
   it("treats an article with no metadata as its own input, not as unknowable", async () => {
     await writeWholeArticle(at);
     await rm(pathFor(at, "extract", "meta"), { force: true });
-    /* **Per head, not one value for all six.** `ideas` and `sketch` synthesise
-       `TITLE: <tree.slug>` rather than omitting the head, so "no metadata" is a
-       different input for them than for the four that simply drop it — which is
+    /* **Per head, not one value for all of them.** `ideas` and `sketch`
+       synthesise `TITLE: <tree.slug>` rather than omitting the head, so "no
+       metadata" is a different input for them than for the ones that simply
+       drop it — which is
        the whole of why there are two fingerprint functions. A single value here
        would have hidden that. */
     const noMeta = articleFingerprint(BLOCKS, TREE, null);
@@ -1183,7 +1172,6 @@ describe("every stamped step covers everything its prompt reads", () => {
       ["arc", "arc", noMeta],
       ["tweets", "tweets", noMeta],
       ["glossary", "glossary", noMeta],
-      ["summary", "summary", noMeta],
       ["ideas", "ideas", noMetaWithIds],
       ["sketch", "sketch", noMetaWithIds],
     ] as [StepName, ArtifactKind, string][]) {
@@ -1200,13 +1188,13 @@ describe("every stamped step covers everything its prompt reads", () => {
 /**
  * **There are two prompt heads in this pipeline, and a fingerprint per head.**
  *
- * `articleText` (arc, tweets, glossary, summary) prints `TITLE:`, `BY:` and
+ * `articleText` (arc, tweets, glossary) prints `TITLE:`, `BY:` and
  * `PUBLISHED IN:`. `articleWithIds` (ideas, sketch) prints those three **and a
  * fourth `URL:` line** — and when there is no `meta.json` at all those two
  * stages do not skip the head, they synthesise `TITLE: <tree.slug>` so the
  * model still has one (src/ideas.ts, src/sketch.ts).
  *
- * One fingerprint for all six missed both of those, so the URL could be
+ * One fingerprint for all of them missed both of those, so the URL could be
  * rewritten by a redirect, or the article re-slugged with no metadata, and the
  * prompt changed while the hash did not. GPT Sol's probe over `tree.slug`
  * returned `{"hashEqual":true,"promptEqual":false}` — the artefact skipping

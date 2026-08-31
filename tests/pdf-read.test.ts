@@ -324,7 +324,6 @@ describe("the whole stage, with the model stubbed out", () => {
     return runPdfExtract({
       bytes,
       url: "https://example.test/paper.pdf",
-      outFile: path.join(dir, "article.html"),
       dataDir: dir,
       slug: "paper",
       reader: honestReader(pass, sabotage),
@@ -344,12 +343,11 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(result.meta.unverified).toBeUndefined();
     expect(result.meta.recall).toBeGreaterThan(0.9);
     expect(result.meta.pagesChecked).toBe(8);
-    expect(await readFile(result.outFile, "utf-8")).toContain("<article>");
-    /* The PDF itself has to be beside the article whatever route made it, or
-       the reader's "view the original" link 404s. src/pdf-read.ts. */
-    const manifest = JSON.parse(await readFile(path.join(path.dirname(result.outFile), "raw.json"), "utf-8"));
-    expect(manifest.kind).toBe("pdf");
-    expect(manifest.sha256).toBe(result.meta.rawSha256);
+    /* Returned, not written. The stage stopped writing `outFile` on 2026-08-31
+       and hands the page back as `extractedHtml` — the same artefact
+       `runExtract` returns for a web page, which is what lets stage 3 onwards
+       stay ignorant of which extractor ran. */
+    expect(result.extractedHtml).toContain("<article>");
   }, 30_000);
 
   it("asks a failing chunk exactly once more, and no more", async () => {

@@ -64,7 +64,6 @@ import type {
   ReviewStance,
   SearchRun,
   ShelfState,
-  SummariesFound,
   ArcFound,
   IdeasFound,
   SketchFound,
@@ -115,8 +114,6 @@ export interface ArticleReader {
    */
   loadQuotes(slug: string): Promise<QuotesFound>;
 
-  /** The summaries at every rung, plus staleness. */
-  loadSummaries(slug: string): Promise<SummariesFound>;
 
   /**
    * The ideas, plus staleness. Computed at read time like the three above —

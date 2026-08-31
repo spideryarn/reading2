@@ -52,7 +52,7 @@ four of the five were in the tree **before** the broken one was written:
 |---|---|---|
 | [`src/tweets.ts`](../../src/tweets.ts) `readJson` | `try { JSON.parse(await readFile(…)) } catch { return null }` | `12081b0`, 2026-08-25 17:41 |
 | [`src/glossary.ts`](../../src/glossary.ts) `readJson` | same shape | `bf5a91e`, 2026-08-25 19:41 |
-| [`src/summarise.ts`](../../src/summarise.ts) `readJson` | same shape | `4f0b781`, 2026-08-26 00:39 |
+| `src/summarise.ts` `readJson` | same shape | `4f0b781`, 2026-08-26 00:39 |
 | [`src/labels.ts`](../../src/labels.ts) `readJsonIfPresent` | same shape, `undefined` | `3385866`, 2026-08-26 10:26 |
 | **`src/pdf-read.ts`** | **`readFile(…).catch(() => null)`, then parse outside it** | **`f68a601`, 2026-08-26 18:11** |
 | [`src/ideas.ts`](../../src/ideas.ts) `readJson` | the tolerant shape again | `97c9ad5`, 2026-08-27 00:09 |
