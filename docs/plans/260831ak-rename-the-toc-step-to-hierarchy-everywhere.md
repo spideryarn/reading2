@@ -1,12 +1,40 @@
 # Rename the `toc` step to `hierarchy`, everywhere
 
-**Status, 2026-08-31: all three stages are built. Stage C is written but its migration has NOT been
-applied to any database — Greg applies `drizzle/0041_rename_toc_step_to_hierarchy.sql` himself. See
-§ *What stage C built, and the two decisions it had to make*.**
+**Status, 2026-09-01 (small hours): DONE locally. All three stages are built, committed, and
+`drizzle/0041` is applied to the local database.** Production is untouched and the rollout is
+undecided — see § *What is left*. Commits: `569458f` (A+B), `265356b` (C).
+
+**The first run of the migration proved nothing, and that is worth reading before trusting it.** The
+local corpus had been reset to zero before it applied, so every `UPDATE` matched no rows and both
+CHECKs re-added against an empty set — the same false negative as `db:migrate`'s tick. The evidence
+that it works is separate and deliberate: § *Verification*.
+
 [GPT Sol's review](260831ak-rename-the-toc-step-to-hierarchy-everywhere-review-sol.md) found that the
-migration as written *"would currently break queued or running jobs, silently fail to migrate their
-JSON, and silently skip two locally interrupted filesystem hierarchy runs."* See § *What the review
-changed*.
+migration as first planned *"would currently break queued or running jobs, silently fail to migrate
+their JSON, and silently skip two locally interrupted filesystem hierarchy runs."* All ten findings
+were addressed; see § *What the review changed*.
+
+## What is left
+
+1. **The production rollout, which is Greg's call and is not a rename.** Migrations run before code
+   ships ([`scripts/deploy.ts`](../../scripts/deploy.ts):869,898), so there is a window where old
+   workers meet the new constraint. Either a maintenance window or expand/migrate/contract across two
+   deploys. **The identical problem exists for [260831b](260831b-finish-the-database-move.md)'s stage
+   4 (`raw_bytes`), and Greg has already ruled two deploys for that one** — so the precedent exists
+   and probably just needs applying here.
+2. **`0041`'s drain guard makes the window mandatory rather than remembered.** It aborts if any
+   queued or running job still holds a `toc` step, because `jobs.work_key` cannot be recomputed in
+   SQL and a stale one lets a re-submitted URL become two articles.
+3. Nothing else. The code, the docs, the filesystem and the local database are consistent.
+
+## A correction to `265356b`'s commit message
+
+It says `drizzle/0042`/`0043` belong to the session that owns the migration path. **They do not** —
+they are `referee_criteria` and its owner FK, from
+[260831an](260831an-referee-mode-for-peer-reviewers.md), a fourth session. That session generated no
+migration tonight and had said it would announce first. The commit is otherwise accurate; recorded
+here because the message cannot be edited and the next person reconstructing who applied what would
+believe it.
 
 ## The job
 
@@ -406,6 +434,31 @@ expand/contract decision from Greg, and its own review. **Nothing in the databas
 - **Nine live sessions.** The rename must be one fast atomic commit, not a series.
 - An in-flight job holding `steps: ["toc"]` at the moment of the rename fails its CHECK. Acceptable in
   alpha; worth draining first if anything is running.
+
+## How the commit's file set was chosen, which is the transferable part
+
+**Simulate the commit and typecheck it, rather than reasoning about it.**
+
+```
+git archive HEAD | tar -x -C /tmp/sim      # a clean checkout of HEAD
+<copy the exact set you intend to commit>  # overlay it
+ln -s "$PWD/node_modules" /tmp/sim/node_modules
+cd /tmp/sim && npx tsc --noEmit -p tsconfig.json   # and src/web, and tests
+```
+
+The first attempt at this commit pulled in four other sessions' unfinished features and left
+`src/web/App.tsx` worse than HEAD. Nothing in the working tree said so — every tree on this machine
+holds the missing halves, so `npm test` and `npm run typecheck` both pass while the repository does
+not build. **The simulation is the only check that answers the question a fresh clone asks**, it takes
+about forty seconds, and it turned the file set from a judgment into a measurement.
+
+It caught three forced dependencies in this commit that no `grep` for the renamed string could have:
+`src/db/schema.ts` imports `src/referee-criteria.ts`; `src/routes.ts` imports the feedback modules;
+`src/web/*` imports `log-buffer.ts`. **The unit of a commit is the change, not the file** — and the
+piece you are missing usually contains none of the thing you are searching for.
+
+The database agent's version of the same rule, which is a habit rather than a measurement and worth
+having as well: *before committing anything, ask what a fresh checkout of just this would do.*
 
 ## Verification
 
