@@ -1045,12 +1045,20 @@ Everything the native feature does not do, and nothing it does.
    it.
 6. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
-**`data/` is the unresolved one, and "just leave it empty" is wrong.** An earlier version of this
-step said worktrees should start with an empty `data/`, on the reasoning that ignored files are
-invisible to every removal guard and so are unsafe to put there. The reasoning was right and the
-conclusion was not, because **the test suite cannot run without it**, and the repo already found this
-out the expensive way. [`scripts/deploy.ts:592`](../../scripts/deploy.ts) copies both `data/` and
-`output/` into the gate worktree, and says why:
+**`data/` has its own plan now: [260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md).**
+Greg's answer on 2026-09-01 was to tidy it once and for all — scratch gitignored and disposable, test
+fixtures committed in their own place, eval resources drawing on them rather than duplicating. That
+work is in progress and **it is a prerequisite for worktrees**, not a side quest: a worktree that
+cannot run the suite honestly is not much use, and a committed corpus is what removes the 75 MB
+per-worktree copy this section was worrying about. Read that plan for the design; what follows is why
+this step cannot simply skip `data/`.
+
+**"Just leave it empty" is wrong.** An earlier version of this step said worktrees should start with
+an empty `data/`, on the reasoning that ignored files are invisible to every removal guard and so are
+unsafe to put there. The reasoning was right and the conclusion was not, because **the test suite
+cannot run without it**, and the repo already found this out the expensive way.
+[`scripts/deploy.ts:592`](../../scripts/deploy.ts) copies both `data/` and `output/` into the gate
+worktree, and says why:
 
 > `data/` and `output/` are one filesystem artefact store split across two directories, and copying
 > only the first made the `test` gate structurally incapable of passing: 13 failures and 202
@@ -1211,12 +1219,15 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    Vercel's production branch stays `main`. Remember `git remote set-head origin -a` on every clone —
    the local `origin/HEAD` does not follow the change, and today still points at `main`.
 
-0e. **How to split the fixture corpus from the artefact store** — the live question, and the one
-   Greg raised directly. `data/`+`output/` is 75 MB, the tests name about 18 MB of it, and 11.4 MB of
-   *that* is one PDF (`data/ball-lightning/raw.pdf`). Everything else is churn. The options are
-   sized under step 2 of [What is left to do](#what-is-left-to-do). Whatever is chosen wants doing
-   before worktrees, because a worktree that cannot run the tests honestly is not much use, and
-   before the database move's stage 4, which deletes the filesystem store out from under the suite.
+0e. ~~**How to split the fixture corpus from the artefact store**~~ — **decided 2026-09-01 and being
+   built**: see [260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md). Scratch
+   stays gitignored; a small corpus is committed under `tests/fixtures/data-root/`; the deploy gate
+   materialises from tracked files rather than from Greg's laptop. Two numbers from that work belong
+   here, because both correct this document. **A clean checkout costs 50 test failures, not 13** —
+   the 13 recorded in `deploy.ts` was measured with `data/` present and only `output/` missing, and a
+   later experiment of mine reproduced 13 only because it was split-brain. And **the corpus is ~4–5 MB
+   of text**, not the 75 MB a worktree would have copied, because the two large PDFs are already
+   committed under `evals/pdf/` and most of `data/` is churn no test names.
 
 0c. **`.claude/worktrees/` inside Dropbox.** The plan is to leave worktrees where Claude Code puts
    them and set both Dropbox xattrs plus a `.gitignore` line. The alternative is a `WorktreeCreate`
