@@ -12,15 +12,21 @@
  * drizzle-kit generates real timestamps and so never breaks this. It gets
  * broken by hand: `0035_timeline`'s entry was written with a round
  * `when` of 1788200000000, which put it after `0036_drop_summary_column`'s real
- * 1788175229610 and cost four migrations on this laptop and a repair on
- * production. That one pair is grandfathered below, because both are pushed and
- * re-stamping a published migration makes it re-run where it already ran.
+ * 1788175229610 and stranded four migrations on this laptop. Whether it did the
+ * same to production is an inference from the timestamps and nothing more —
+ * that database has never been looked at, there are no credentials in the tree,
+ * and the postmortem says so. This comment used to claim it "cost a repair on
+ * production", which was a claim nobody had checked, in a file whose whole
+ * subject is claims nobody had checked. That one pair is grandfathered below,
+ * because both are pushed and re-stamping a published migration makes it re-run
+ * where it already ran.
  *
  * scripts/migration-ledger.ts is the runtime half of this;
  * docs/project/database.md § A watermark is not a ledger is the story.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -73,12 +79,88 @@ describe("drizzle/meta/_journal.json", () => {
   });
 
   it("has no duplicate tags, no duplicate stamps and no broken indices", () => {
-    expect(journalProblems(journal, hashMigrationFiles(FOLDER, journal))).toEqual([]);
+    expect(journalProblems(journal, hashMigrationFiles(FOLDER))).toEqual([]);
   });
 
   it("has a .sql file for every entry", () => {
     const missing = journal.filter((e) => !existsSync(path.join(FOLDER, `${e.tag}.sql`)));
     expect(missing.map((e) => e.tag)).toEqual([]);
+  });
+
+  /* The other direction, and the one that actually happened. See below. */
+  it("has a journal entry for every .sql file", () => {
+    const named = new Set(journal.map((e) => e.tag));
+    const stray = [...hashMigrationFiles(FOLDER).keys()].filter((tag) => !named.has(tag));
+    expect(stray).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * **A `.sql` in the folder that the journal does not name.**
+ *
+ * On 2026-08-31 two sessions in this one tree ran `drizzle-kit generate`
+ * minutes apart without pulling. Both produced an `0032`:
+ * `0032_experimental_features.sql` and `0032_jobs_concurrency_cap.sql` were
+ * both on disk, the journal named one of them, and the other never ran and
+ * nothing said so — the file was simply invisible to every check there was.
+ * `journalProblems` had four rules and all four looked journal-side.
+ *
+ * Predicted as failure row 8 of docs/plans/260828r-worktrees.md for two
+ * worktrees; it happened between two sessions in a single tree, which makes it
+ * likelier than the prediction, not less.
+ *
+ * A fixture folder rather than the real `drizzle/`, because the assertion above
+ * is that the real one is clean — and a test that has to dirty the thing it
+ * guards is a test that can leave it dirty.
+ */
+describe("a .sql file the journal has never heard of", () => {
+  /** A throwaway drizzle folder: a journal, and whatever files are asked for. */
+  const folderWith = (entries: JournalEntry[], files: string[]): string => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "spya-journal-"));
+    mkdirSync(path.join(dir, "meta"));
+    writeFileSync(path.join(dir, "meta", "_journal.json"), JSON.stringify({ entries }));
+    for (const f of files) writeFileSync(path.join(dir, `${f}.sql`), `-- ${f}\n`);
+    return dir;
+  };
+
+  const entries: JournalEntry[] = [
+    { idx: 0, tag: "0000_first", when: 100 },
+    { idx: 1, tag: "0001_second", when: 200 },
+  ];
+
+  it("passes when the folder and the journal agree", () => {
+    const dir = folderWith(entries, ["0000_first", "0001_second"]);
+    expect(journalProblems(readJournal(dir), hashMigrationFiles(dir))).toEqual([]);
+  });
+
+  it("names the orphan, and says it will never run", () => {
+    const dir = folderWith(entries, ["0000_first", "0001_second", "0001_the_other_session"]);
+    const problems = journalProblems(readJournal(dir), hashMigrationFiles(dir));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("0001_the_other_session.sql is in the migrations folder");
+    expect(problems[0]).toContain("drizzle will never run it");
+  });
+
+  /* The shape of the real accident: two files claiming one index, one of them
+     named. The named one is fine and the other is the whole problem. */
+  it("catches the two-sessions-one-index collision", () => {
+    const dir = folderWith(
+      [{ idx: 0, tag: "0032_jobs_concurrency_cap", when: 100 }],
+      ["0032_jobs_concurrency_cap", "0032_experimental_features"],
+    );
+    const problems = journalProblems(readJournal(dir), hashMigrationFiles(dir));
+    expect(problems.join("\n")).toContain("0032_experimental_features.sql");
+    expect(problems.join("\n")).not.toContain("0032_jobs_concurrency_cap.sql is in");
+  });
+
+  /* Both directions at once, so that fixing one cannot mask the other. */
+  it("reports a missing file and a stray file in the same breath", () => {
+    const dir = folderWith(entries, ["0000_first", "0009_stray"]);
+    const problems = journalProblems(readJournal(dir), hashMigrationFiles(dir)).join("\n");
+    expect(problems).toContain("0001_second is in the journal but its .sql file could not be read");
+    expect(problems).toContain("0009_stray.sql is in the migrations folder");
   });
 });
 

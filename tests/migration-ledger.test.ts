@@ -272,7 +272,7 @@ const BROKEN_LAPTOP_APPLIED = new Set([
 describe("the state this laptop was actually in, 2026-08-31", () => {
   const folder = path.resolve(import.meta.dirname, "../drizzle");
   const realJournal = readJournal(folder);
-  const realHashes = hashMigrationFiles(folder, realJournal);
+  const realHashes = hashMigrationFiles(folder);
 
   const brokenLedger: LedgerRow[] = [
     ...realJournal

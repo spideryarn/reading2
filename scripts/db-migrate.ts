@@ -159,13 +159,31 @@ async function readLedger(client: PoolClient): Promise<LedgerRow[]> {
   return r.rows;
 }
 
-/** Say what is wrong, then leave without touching anything. */
-function refuse(headline: string, problems: readonly string[]): never {
+/**
+ * Say what is wrong, then leave.
+ *
+ * **Two situations, and they must not share a sentence.** The preflight runs
+ * before any DDL and nothing has happened yet; the postflight runs after
+ * `migrate()` has *committed*, so telling the reader "nothing has changed"
+ * there would be a lie about the one thing they need to know. One message did
+ * both jobs until GPT Sol pointed at it, 2026-08-31 — and the wrong half of it
+ * is the reassuring half, which is the direction that costs.
+ */
+function refuse(
+  headline: string,
+  problems: readonly string[],
+  aftermath: "nothing-ran" | "migrate-already-committed",
+): never {
   console.error(`\n✗ ${headline}`);
   for (const p of problems) console.error(`  • ${p}`);
   console.error(
-    "\nNo migration has been applied and nothing has changed.\n" +
-      "  docs/project/database.md § A watermark is not a ledger.",
+    aftermath === "nothing-ran"
+      ? "\nNo migration has been applied and nothing has changed.\n" +
+          "  docs/project/database.md § A watermark is not a ledger."
+      : "\n⚠ This is AFTER the event. migrate() has already committed whatever it ran,\n" +
+          "  so the database has changed and this exit does not undo it. Read the ledger\n" +
+          "  before running anything else: npx tsx scripts/db-repair-migration-ledger.ts\n" +
+          "  docs/project/database.md § A watermark is not a ledger.",
   );
   process.exit(1);
 }
@@ -174,17 +192,18 @@ let lock: PoolClient | null = null;
 try {
   const folder = path.resolve(import.meta.dirname, "../drizzle");
   const journal = readJournal(folder);
-  const hashes = hashMigrationFiles(folder, journal);
+  const hashes = hashMigrationFiles(folder);
 
   lock = await pool.connect();
   const got = await lock.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [
     MIGRATION_LOCK_KEY,
   ]);
   if (!got.rows[0]?.ok) {
-    refuse("another process is migrating this database", [
-      `advisory lock ${MIGRATION_LOCK_KEY} is already held`,
-      "wait for it to finish and run this again",
-    ]);
+    refuse(
+      "another process is migrating this database",
+      [`advisory lock ${MIGRATION_LOCK_KEY} is already held`, "wait for it to finish and run this again"],
+      "nothing-ran",
+    );
   }
 
   /**
@@ -204,7 +223,11 @@ try {
   const before = await readLedger(lock);
   const state = reconcileLedger(journal, hashes, before, { allowHistoricalExtras: isLocal });
   if (state.problems.length > 0) {
-    refuse("the journal and this database's migration ledger do not reconcile", state.problems);
+    refuse(
+      "the journal and this database's migration ledger do not reconcile",
+      state.problems,
+      "nothing-ran",
+    );
   }
   if (state.unknown.length > 0) {
     console.warn(
@@ -240,7 +263,11 @@ try {
   const after = await readLedger(lock);
   const missed = postflightProblems(journal, hashes, after);
   if (missed.length > 0) {
-    refuse("migrate() returned, but the ledger does not account for every migration", missed);
+    refuse(
+      "migrate() returned, but the ledger does not account for every migration",
+      missed,
+      "migrate-already-committed",
+    );
   }
 
   console.log("✓ migrations applied");

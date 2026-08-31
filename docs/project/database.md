@@ -427,8 +427,19 @@ The preflight refuses — exit non-zero, no DDL, and no `✓` — unless all of:
    watermark, inverted stamps and all. A database through `0035` is broken, because `0036` never
    can;
 4. every applied row's hash matches the file on disk;
-5. the journal itself has no duplicate tags, no duplicate stamps, no broken indices and a `.sql`
-   file for every entry.
+5. the journal itself has no duplicate tags, no duplicate stamps, no broken indices, a `.sql`
+   file for every entry — **and an entry for every `.sql` file**.
+
+The last half of 5 is the direction that was missing until 2026-08-31, and it is the one that
+happened. Two sessions in this tree ran `drizzle-kit generate` minutes apart without pulling; both
+produced an `0032`, the journal named one of them, and `0032_experimental_features.sql` sat in the
+folder never running while nothing said so. A file the journal does not name is either a migration
+that will never run or debris, and only a person can tell which, so it is fatal. It is checked in
+`journalProblems`, which needs no database, so
+[tests/migration-journal.test.ts](../../tests/migration-journal.test.ts) catches it in CI on every
+branch rather than on whoever migrates next. Predicted as failure row 8 of
+[260828r-worktrees.md](../plans/260828r-worktrees.md), for two worktrees; it happened between two
+sessions in one tree.
 
 **Rows the journal has never heard of** get a policy rather than a rule, because a laptop
 legitimately carries them and production never should. Remote: refuse. Laptop with anything still

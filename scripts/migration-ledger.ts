@@ -29,7 +29,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 /** One row of `drizzle/meta/_journal.json`. */
@@ -269,11 +269,30 @@ export function reconcileLedger(
 }
 
 /**
- * The journal on its own: no duplicates, no holes, and a file for every entry.
+ * The journal and the folder against each other: no duplicates, no holes, a
+ * file for every entry — **and an entry for every file**.
  *
  * Condition 5. Each of these makes every other judgement here meaningless
  * rather than merely wrong — two entries stamped the same millisecond cannot
  * both be matched to a ledger row, and a `when` is the only handle drizzle has.
+ *
+ * **The last one is the direction that was missing, and it is the one that
+ * happened.** On 2026-08-31 two sessions in this tree generated a migration
+ * minutes apart without pulling: `0032_experimental_features.sql` and
+ * `0032_jobs_concurrency_cap.sql` both sat in `drizzle/`, the journal named one
+ * of them, and the other never ran and nothing said so. Two files claiming one
+ * index is the loud version of it; a single `.sql` the journal has never heard
+ * of is the quiet one, and there is no harmless reading of either — a file in
+ * that folder is a migration that will never run, or it is debris, and only a
+ * person can tell which. So it is fatal rather than a warning, and it lives
+ * here rather than in the preflight because it needs no database: it is a fact
+ * about the repository, so `tests/migration-journal.test.ts` catches it in CI
+ * on every branch rather than on whoever migrates next.
+ * docs/plans/260828r-worktrees.md, failure row 8.
+ *
+ * `hashes` is every `.sql` file in the folder, keyed by tag — see
+ * {@link hashMigrationFiles}. Both directions are read off that one map, which
+ * is why it must be the folder's contents and not the journal's.
  */
 export function journalProblems(
   journal: readonly JournalEntry[],
@@ -292,6 +311,17 @@ export function journalProblems(
   }
   for (const [when, tags] of byWhen) {
     if (tags.length > 1) problems.push(`${tags.join(" and ")} are both stamped ${when}`);
+  }
+  for (const tag of [...hashes.keys()].sort()) {
+    if (!byTag.has(tag)) {
+      problems.push(
+        `${tag}.sql is in the migrations folder and the journal does not name it — ` +
+          "drizzle will never run it, and until now nothing would have said so. Either " +
+          "the journal entry was lost (two sessions generating the same index number is " +
+          "how), or the file is debris; work out which and either restore the entry or " +
+          "delete the file",
+      );
+    }
   }
 
   return problems;
@@ -459,6 +489,150 @@ export function ledgerDivergence(
 }
 
 /* ------------------------------------------------------------------ */
+/* Ledger rows belonging to no migration in this journal               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A ledger row whose `.sql` file no longer exists, that we can nevertheless
+ * name — and whose effects a migration still in the journal has taken over.
+ */
+export interface KnownOrphan {
+  /** Its `created_at`, which is the journal `when` it was applied under. */
+  when: number;
+  /** sha256 of the deleted `.sql`. A stamp is a clock reading; this says which SQL wrote the row. */
+  hash: string;
+  tag: string;
+  /** How to read the file again. It is deleted from the tree, not from history. */
+  wasIn: string;
+  /** The journal entry whose postcondition covers this one's. */
+  subsumedBy: string;
+  /** What it did, in one clause, for the line that gets printed before it is deleted. */
+  effect: string;
+}
+
+/**
+ * **The only ledger rows `--forget-orphans` may ever delete**, named exactly,
+ * with the hash that says which SQL wrote them.
+ *
+ * The first version deleted *every* row the journal did not account for, gated
+ * only on "every journal timestamp now exists". GPT Sol's review of the built
+ * code is blunt about why that is the wrong gate: another branch's migration can
+ * carry a stamp this journal has never seen, and deleting its row destroys the
+ * one piece of evidence that would explain the refusal it then causes. A row is
+ * history because you can say what it was, not because nothing is pending.
+ *
+ * These two are the pre-renumbering local migrations of 2026-08-31. Their files
+ * were deleted when they were regenerated as `0037`, and they are recoverable —
+ * the hashes below were computed from them with `sha256sum`, which is byte for
+ * byte what drizzle stores (verified against three rows already in this
+ * laptop's ledger), not transcribed from anywhere.
+ *
+ * `0037` is the union of those two files and nothing besides: its own header
+ * says so, and its three statements are their two, one for one. So its
+ * postcondition subsumes theirs — which is what `subsumedBy` claims and what
+ * {@link planToForget} insists on having *proved* before it deletes anything.
+ */
+export const KNOWN_ORPHANS: readonly KnownOrphan[] = [
+  {
+    when: 1788191337811,
+    hash: "f2882eb655db0258e12d2273c5aeba74a8e22bd6c1b4345d05e05acd334a3561",
+    tag: "0032_experimental_features",
+    wasIn: "git show 9a5ef58:drizzle/0032_experimental_features.sql",
+    subsumedBy: "0037_experimental_features_and_callout_blocks",
+    effect: "reader_profiles.experimental_since",
+  },
+  {
+    when: 1788194935325,
+    hash: "ef55623b79f2411c952fbbe6928a95cafb8093bcbc6689d713b2c254ca95cb3f",
+    tag: "0033_callout_blocks",
+    wasIn: "git show 9a5ef58:drizzle/0033_callout_blocks.sql",
+    subsumedBy: "0037_experimental_features_and_callout_blocks",
+    effect: "revision_blocks_kind, widened to include 'callout'",
+  },
+];
+
+/**
+ * Which orphan ledger rows may be deleted, and what to print either way.
+ *
+ * Three conditions, all required:
+ *
+ * 1. **Every orphan is on the allowlist, by stamp AND hash.** If anything else
+ *    is in there, nothing is deleted — including the rows that *are* known,
+ *    because a ledger with a row nobody can account for is one to read, not to
+ *    tidy.
+ * 2. **The migration that subsumes them is being recorded in this same run**,
+ *    with every one of its catalogue effects proved. That is what makes the old
+ *    rows redundant rather than merely old.
+ * 3. **Nothing is left pending afterwards.** An unaccounted-for row is only
+ *    safely historical once every current entry is applied — Sol's § 4 policy,
+ *    and the reason `db-migrate.ts`'s preflight refuses while both are true.
+ *
+ * The provenance is printed either way: a row that is *not* deleted still has to
+ * be explainable by whoever reads the refusal.
+ */
+export function planToForget(
+  extras: readonly { hash: string; created_at: number | string }[],
+  stillPending: readonly { tag: string }[],
+  recordingNow: readonly string[],
+): { forget: KnownOrphan[]; say: string } {
+  if (extras.length === 0) return { forget: [], say: "   None." };
+
+  const matched = extras.map((r) => ({
+    row: r,
+    known:
+      KNOWN_ORPHANS.find((k) => k.when === Number(r.created_at) && k.hash === r.hash) ?? null,
+  }));
+  const strangers = matched.filter((m) => !m.known);
+  if (strangers.length) {
+    return {
+      forget: [],
+      say:
+        `   Not forgetting anything. ${strangers.length} of ${extras.length} orphan row(s) are not on\n` +
+        "   the allowlist in scripts/migration-ledger.ts:\n" +
+        strangers
+          .map((m) => `     created_at ${m.row.created_at} hash ${String(m.row.hash).slice(0, 12)}…`)
+          .join("\n") +
+        "\n   A row nobody can account for may be another branch's migration overlapping what\n" +
+        "   is about to run. Work out what it did before deleting the only record of it.",
+    };
+  }
+
+  const known = matched.map((m) => m.known!);
+  const subsumers = [...new Set(known.map((k) => k.subsumedBy))];
+  const unproved = subsumers.filter((tag) => !recordingNow.includes(tag));
+  if (unproved.length) {
+    return {
+      forget: [],
+      say:
+        `   Not forgetting the ${extras.length} orphan row(s): their effects are claimed by\n` +
+        `   ${unproved.join(", ")}, which this run is not recording and so has not proved.\n` +
+        "   Run the repair that records it first; then these are redundant rather than merely old.",
+    };
+  }
+
+  if (stillPending.length) {
+    return {
+      forget: [],
+      say:
+        `   Not forgetting the ${extras.length} orphan row(s): ${stillPending.length} journal ` +
+        "entr(ies) would still be\n" +
+        `   unapplied afterwards (${stillPending.map((e) => e.tag).join(", ")}).\n` +
+        "   An unaccounted-for row is only safely historical once nothing is pending.",
+    };
+  }
+
+  return {
+    forget: known,
+    say:
+      `   ${known.length} row(s), each matched by stamp AND hash to a migration renumbered into\n` +
+      `   ${subsumers.join(", ")}, whose effects this run proves, nothing left pending:\n` +
+      known
+        .map((k) => `     ${k.when} ${k.hash.slice(0, 12)}… ${k.tag} — ${k.effect}\n       ${k.wasIn}`)
+        .join("\n"),
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Reading the folder                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -471,22 +645,30 @@ export function readJournal(folder: string): JournalEntry[] {
 /**
  * tag → sha256 of the whole `.sql` file, computed exactly as drizzle computes
  * it: `createHash("sha256").update(<the file as a string>)`, no normalisation
- * (`node_modules/drizzle-orm/migrator.cjs`). A tag whose file is unreadable is
- * left out of the map rather than throwing, so the caller can report every
- * missing file at once instead of the first.
+ * (`node_modules/drizzle-orm/migrator.cjs`).
+ *
+ * **Every `.sql` in the folder, not every entry in the journal**, and the
+ * difference is the point. Hashing the journal's list can only ever answer *is
+ * a file missing*; hashing the folder's answers *is a file unaccounted for* as
+ * well, which is the failure that actually happened here — `journalProblems`
+ * says what it was. A tag in the journal with no file is simply absent from the
+ * map rather than throwing, so the caller can report every problem at once
+ * instead of the first.
  */
-export function hashMigrationFiles(
-  folder: string,
-  journal: readonly JournalEntry[],
-): Map<string, string> {
+export function hashMigrationFiles(folder: string): Map<string, string> {
   const hashes = new Map<string, string>();
-  for (const e of journal) {
-    try {
-      const sql = readFileSync(path.join(folder, `${e.tag}.sql`)).toString();
-      hashes.set(e.tag, createHash("sha256").update(sql).digest("hex"));
-    } catch {
-      /* Left out on purpose — journalProblems() names it. */
-    }
+  let names: string[];
+  try {
+    names = readdirSync(folder);
+  } catch {
+    /* No folder is "no migrations on disk". Every journal entry then reports
+       its own missing file, which says the same thing more usefully. */
+    return hashes;
+  }
+  for (const name of names) {
+    if (!name.endsWith(".sql")) continue;
+    const sql = readFileSync(path.join(folder, name)).toString();
+    hashes.set(name.slice(0, -".sql".length), createHash("sha256").update(sql).digest("hex"));
   }
   return hashes;
 }

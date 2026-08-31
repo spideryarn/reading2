@@ -2,7 +2,7 @@
  * Is this database's corpus in a state the store flip can survive?
  *
  *     npx tsx scripts/db-corpus-readiness.ts
- *     npx tsx scripts/db-corpus-readiness.ts --seed-a-bad-row   # prove check 1 can fail
+ *     npx tsx scripts/db-corpus-readiness.ts --seed-a-bad-row   # prove both checks can fail
  *
  * Stage 2.5 of docs/plans/260831b-finish-the-database-move.md says what "ready"
  * means and why, and its own words are the reason this is a script rather than
@@ -46,6 +46,14 @@
  * `readRawDocument()` — rather than a second interpretation of them.
  * GPT Sol, 2026-08-31, code review § 2.
  *
+ * **Both checks have a negative control**, and `--seed-a-bad-row` fails unless
+ * each one names the exact fault planted for it. It used to be decided by a
+ * shared counter, so check 1 could miss its seed entirely and the control would
+ * still report success on the strength of check 2 having failed for an
+ * unrelated reason. Check 2 had no control at all; it has one now — a
+ * `raw_sources` row whose object is not in the bucket, which is the shape of
+ * docs/postmortems/260831e-a-write-path-with-no-reader.md. Sol's § 4.
+ *
  * **An empty corpus is a failure, not a pass.** Both checks are vacuously green
  * over no rows, and no rows is precisely what a botched refetch leaves behind,
  * so zero articles — or zero revisions, or zero source references — is reported
@@ -60,7 +68,7 @@ import { postgresBlobStore } from "../src/store/blobs.js";
 import { Client } from "pg";
 
 import { readRawDocument } from "../src/store/raw-document.js";
-import { controlVerdict, readinessFailures } from "./corpus-verdict.js";
+import { controlVerdict, readinessFailures, type Seeds } from "./corpus-verdict.js";
 import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 
@@ -96,7 +104,9 @@ async function main() {
     )
   ).rows[0]!;
 
-  let seeded: string | null = null;
+  /** The sha nothing is stored under. Content-addressed, so this key cannot exist. */
+  const DANGLING_SHA = "de1e7ed".padEnd(64, "0");
+  let seeds: Seeds = { orphanedRevision: null, danglingSha: null };
   if (SEED_BAD) {
     if (!isLocalDatabaseUrl(url!)) {
       console.error("--seed-a-bad-row writes. Refusing against a database that is not local.");
@@ -118,24 +128,54 @@ async function main() {
         where id = (select id from spideryarn.article_revisions limit 1)
       returning id`,
     );
-    seeded = row.rows[0]?.id ?? null;
+    /* **And a control for check 2**, which used to have none. The bytes cannot
+       be deleted out of the bucket and put back by a rollback — but the row half
+       of a reference can be repointed at a sha nothing is stored under, which is
+       the same dangling reference, undone on the way out.
+
+       Two statements because `article_revisions.raw_source_sha256` has a foreign
+       key into `raw_sources`: the reference cannot dangle at the *row* level, so
+       the seed has to make a legitimate-looking `raw_sources` row whose object
+       is simply not in the bucket. That is the real failure this check is for —
+       docs/postmortems/260831e-a-write-path-with-no-reader.md is a corpus of
+       exactly that shape. */
+    await client.query(
+      `insert into spideryarn.raw_sources (sha256, kind, bytes, content_type, verified_at)
+       select $1, r.raw_source_kind, 1, 'text/html', now()
+         from spideryarn.article_revisions r
+        where r.raw_source_sha256 is not null limit 1`,
+      [DANGLING_SHA],
+    );
+    const dangling = await client.query<{ id: string }>(
+      `update spideryarn.article_revisions
+          set raw_source_sha256 = $1
+        where id = (select id from spideryarn.article_revisions
+                     where raw_source_sha256 is not null and raw_source_sha256 <> $1 limit 1)
+      returning id`,
+      [DANGLING_SHA],
+    );
+    seeds = {
+      orphanedRevision: row.rows[0]?.id ?? null,
+      danglingSha: dangling.rows[0] ? DANGLING_SHA : null,
+    };
     /* **Nothing to seed is a failed control, not a quiet fall-through into the
        ordinary report.** It used to leave `seeded` null and carry on to print
        `✓ ready` and exit 0, which is the most misleading possible answer to
        "show me this check failing". Sol's § 4. */
-    if (!seeded) {
+    if (!seeds.orphanedRevision || !seeds.danglingSha) {
+      const v = controlVerdict(seeds, [], []);
       await client.query("rollback");
-      console.error(controlVerdict(null, []).say);
+      console.error(v.say);
       await client.end();
       process.exit(1);
     }
     console.log(
-      `Seeded a bad row inside a transaction: revision ${seeded}.\n` +
-        "**Check 1 only.** This seed makes a revision look importer-written; it does\n" +
-        "not corrupt a source reference, so check 2 stays green and is NOT proved by\n" +
-        "this flag. Check 2's control would mean deleting an object out of the bucket,\n" +
-        "which a rollback cannot undo — so it is honestly unproven rather than\n" +
-        "quietly assumed. The transaction is rolled back before exit.\n",
+      `Seeded, inside a transaction that is rolled back before exit:\n` +
+        `  check 1 — revision ${seeds.orphanedRevision} now looks importer-written;\n` +
+        `  check 2 — one revision's source reference now points at ${seeds.danglingSha}.\n` +
+        "What is still NOT proved: that check 2 would notice the *wrong bytes* under a\n" +
+        "right key. The re-hash in readRawDocument is what would catch that, and no\n" +
+        "rollback-able seed can produce it, so it is unproven rather than assumed.\n",
     );
   }
 
@@ -165,7 +205,7 @@ async function main() {
      It throws when the credentials are missing or name a different project, and
      that refusal is the answer, not an error to work around. */
   const blobs = postgresBlobStore("this database's article rows are in Postgres");
-  const unreadable: string[] = [];
+  const unreadable: { sha: string; why: string }[] = [];
   for (const r of refs.rows) {
     try {
       /* The reader itself: a bounded `get` and a re-hash of the bytes
@@ -181,13 +221,15 @@ async function main() {
         },
         blobs,
       );
-      if (!doc) unreadable.push(`${r.slug}  -> ${r.sha} (${r.kind}): the reader returned nothing`);
+      if (!doc) {
+        unreadable.push({ sha: r.sha, why: `${r.slug}  -> ${r.sha} (${r.kind}): the reader returned nothing` });
+      }
     } catch (err) {
-      unreadable.push(`${r.slug}  -> ${(err as Error).message}`);
+      unreadable.push({ sha: r.sha, why: `${r.slug}  -> ${(err as Error).message}` });
     }
   }
   console.log(`\n2. Source references — ${refs.rowCount} read back, ${unreadable.length} unreadable`);
-  for (const m of unreadable) console.log(`     ${m}`);
+  for (const m of unreadable) console.log(`     ${m.why}`);
   if (unreadable.length) {
     console.log("     ^ the row asserts an object the reading path cannot get. Re-add these.");
   }
@@ -205,15 +247,19 @@ async function main() {
     );
   }
 
-  if (seeded) {
+  if (SEED_BAD) {
     /* **Tied to the seeded id, not to the failure count.** With `bad` deciding
        it, an unrelated real failure in check 2 made the control "pass" without
        check 1 ever having seen the seed — a negative control that can succeed
        without detecting anything is worse than none, because it is quoted as
        evidence. Sol's § 4. */
-    const control = controlVerdict(seeded, orphaned.rows.map((r) => r.id));
+    const control = controlVerdict(
+      seeds,
+      orphaned.rows.map((r) => r.id),
+      unreadable.map((u) => u.sha),
+    );
     await client.query("rollback");
-    console.log(`\nRolled back. Revision ${seeded} is as it was.`);
+    console.log("\nRolled back. Both seeded rows are as they were.");
     console.log(control.say);
     if (failures.length) {
       console.log(`(The run also reported: ${failures.join("; ")}.)`);
