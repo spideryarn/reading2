@@ -88,12 +88,14 @@ the line.** There is nothing above it, which matters — see the gotchas.
 ## Why this rather than the cheaper hardware
 
 Netcup's RS 4000 G12 is better hardware for the money — 12 *dedicated* EPYC cores, 32GB DDR5 ECC,
-1TB NVMe, €39.92/mo inc VAT on a 12-month term. It was the recommendation until two constraints
-landed.
+1TB NVMe. It was the recommendation until two constraints landed.
 
-Monthly-only billing removed most of its price advantage: that figure needs a year's commitment,
-and monthly is ~16% more. Then "AI-first flexibility" decided it outright. Hetzner has, and Netcup
-does not:
+Monthly-only billing took most of its price advantage away. The headline €39.92/mo needs a year's
+commitment; the no-commitment price is **€48.32/mo**, against CX53's €35.39. Netcup charges UK
+customers 20% VAT too, so the two are directly comparable. (All Netcup figures confirmed from their
+live configurator, 2026-08-31, and quoted VAT-inclusive — unlike Hetzner's, which are net.)
+
+Then "AI-first flexibility" decided it outright. Hetzner has, and Netcup does not:
 
 - **`hcloud`**, a complete CLI — create, destroy, resize, snapshot, firewall, volumes, rescue mode.
 - **An official, HashiCorp-verified Terraform provider.** The box becomes a file.
@@ -106,6 +108,12 @@ unofficial Terraform providers split across both API generations.
 
 The unlisted fifth reason, which matters more than it should: **models know `hcloud`.** It is
 everywhere in training data. An agent gets Hetzner commands right first time and fumbles Netcup's.
+
+Two points in Netcup's favour, recorded so the next agent does not have to rediscover them: its
+VPS line *does* offer hourly metering on the no-commitment term (€37.60/mo equivalent for VPS 4000
+G12, plus a one-off €5.04 setup fee), so hourly billing is not unique to Hetzner. And it supports a
+genuine **live in-place upgrade** within a hardware generation, data preserved across a restart —
+but the upgrade restarts the minimum contract term, which is the catch for anyone on monthly.
 
 ## What was ruled out, and why
 
@@ -176,6 +184,7 @@ Carried forward honestly rather than guessed:
 - Storage Box (BX) current pricing, and live auction stock — both JS-only pages; the auction
   tracker 403s to automated fetches.
 - Whether `AX41-1-LTD` is the same silicon as the `AX41` product page.
-- Netcup's exact one-month price, and whether a UK private customer pays German 19%, UK 20%, or
-  nothing. Only matters if the decision is revisited.
+- Netcup's ongoing notice period once past the minimum term. The 14-day statutory withdrawal
+  right and the 30-day money-back guarantee are confirmed; "31 days, then monthly" appears only on
+  forums.
 - Whether Hetzner Cloud and Robot ID checks are one process or two.
