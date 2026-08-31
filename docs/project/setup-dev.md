@@ -9,8 +9,17 @@ Everything here is one process and one terminal, deliberately —
 
 ```bash
 npm install
+npm run setup          # Docker up, migrations applied, accounts seeded — see below
 npm run dev            # Vite + the /api/article/:slug middleware, http://localhost:5273
 ```
+
+**`npm run setup` is the whole of the database side of a fresh checkout**, and the one command to
+remember when building a box: it runs `db:start`, `db:migrate` and `db:seed-owner` in order and
+stops at the first failure saying what to do
+([`scripts/setup-local.ts`](../../scripts/setup-local.ts),
+[supabase-local.md](supabase-local.md)). The last of those creates the account you sign in as and
+generates its password — `npm run db:admin-password` prints it — so there is no Google step and
+nothing to click on a dashboard.
 
 That opens the **library** at `/` — every article you have run through the pipeline, plus the
 committed `example/` fixture so a fresh clone has something to read ([library.md](library.md)).

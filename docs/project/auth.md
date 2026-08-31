@@ -57,6 +57,22 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts) | whose shelf a sign-in lands on — run before and after the first Google sign-in |
 | [`scripts/check-google-redirect.sh`](../../scripts/check-google-redirect.sh) | does Google accept a given redirect URI for our client. Checks a known-bad one every time |
 | [`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) | the live site refuses an anonymous request |
+| [`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts) | who `npm run db:seed-owner` creates **locally**, and the fence that keeps it off anything else |
+
+## Locally, signing in needs no Google at all
+
+`npm run db:seed-owner` creates `greg@gregdetre.com` at the id `src/admin.ts` recognises, with a
+password generated for that machine, so the email form on the landing page is the whole of it — no
+OAuth, no dashboard, and no browser on a machine you cannot reach. That last part is why it exists:
+a fresh Hetzner box had no way in that did not go through the noVNC tunnel.
+`npm run db:admin-password` prints the credentials.
+[supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach)
+is the detail, and [260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md) is the reasoning.
+
+**Production is untouched by any of it.** The seed refuses to run against anything but this repo's
+own local stack, and checks that against `supabase status` rather than against `SUPABASE_URL` —
+because everything else in the run reads that same variable, so a forwarded port would have every
+step agreeing with every other one.
 
 ## The four things worth knowing before you touch any of it
 

@@ -28,6 +28,12 @@ import { createHash } from "node:crypto";
  *    the production one. Nothing on the box needs it; stage 4's Supabase MCP
  *    is pointed at the local stack and gets --read-only.
  *
+ * And one that is not here to be added by symmetry: **the local administrator's
+ * password**. It is generated per machine into `~/.config/spideryarn/`
+ * (scripts/seed-accounts.ts) rather than kept in `.env.local`, so there is
+ * nothing for this file to carry — and pushing it would undo the one thing that
+ * design buys, which is that one leaked credential is one machine.
+ *
  * The box is shared by many autonomous agents running as one user with
  * passwordless sudo, so "on the box" means "reachable by all of them".
  */
@@ -44,6 +50,13 @@ export const ALLOWLIST: readonly string[] = [
   "VITE_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID",
   "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET",
+  /* Who owns rows written OUTSIDE a request — the CLI, the pipeline, db:import.
+     Here so that a fresh box lands them on the shelf Greg sees when he signs in,
+     rather than on the seeded row-owner nobody signs in as. Without it the box's
+     library is empty however much has been ingested, and a line typed on the box
+     would be destroyed by the next push, because this file REBUILDS .env.local
+     rather than merging into it. src/owner.ts, and Greg's call 2026-08-31. */
+  "SPIDERYARN_OWNER_ID",
 ];
 
 /** Only this name, ever. See assertPushableName. */

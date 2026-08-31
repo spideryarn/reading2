@@ -20,8 +20,10 @@ serves the client *and* the API as Vite middleware — and one Vercel project fe
 | `npm run dev:pretty` | the same, through `pino-pretty`, for a human |
 | `npm test` · `npm run typecheck` · `npm run lint` | when you finish a change, not just before you commit |
 | `npm run build` | production bundle into `dist/` |
+| `npm run setup` | **a fresh checkout, in one command** — Docker up, migrations, accounts seeded. A new box wants this |
 | `npm run db:start` · `db:status` · `db:stop` · `db:reset` | the local Supabase stack in Docker. Engine first: `open -a OrbStack` |
 | `npm run db:migrate` · `db:generate` | apply `drizzle/`; regenerate after a schema edit. **Migrate after every reset** |
+| `npm run db:seed-owner` · `db:admin-password` | the two `auth.users` rows, and the sign-in this machine was given |
 | `npm run cost` | what the model calls have cost — this UTC month by default; `-- --month 2026-07`, `-- --all`, `-- --reconcile` |
 
 Secrets are one gitignored `.env.local`, and **it beats what your shell exported** — so

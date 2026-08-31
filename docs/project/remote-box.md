@@ -116,6 +116,38 @@ allocated per session, and caching success goes stale exactly when the network c
 probe with `--ssh` on a network you already know is bad. Removing the second bootstrap is a real
 product decision, not an optimisation, and it is still open.
 
+## Getting the app running on a new box
+
+`gjd-remote clone` deliberately runs nothing, so a fresh checkout is code and no database. Three
+commands from there, and the middle one is the whole of it:
+
+```
+gjd-remote push-env                 # from the laptop: .env.local, allowlisted keys only
+gjd-remote shell -d ~/code/spideryarn2
+npm ci && npm run setup             # on the box
+```
+
+`npm run setup` starts Docker's Supabase, applies the migrations and seeds the accounts, stopping at
+the first failure with what to do — [`scripts/setup-local.ts`](../../scripts/setup-local.ts). It is
+the same command on a laptop, on purpose: a setup path only the box uses is one only the box can
+break.
+
+**Then sign in.** `npm run db:admin-password` prints the email and the password this box generated
+for itself; there is no Google step, which matters here because a browser on the box means the noVNC
+tunnel and Google Cloud Console blocks agents twice over.
+[supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach)
+is the detail, [260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md) the reasoning.
+
+Two things this does **not** do, and both are known:
+
+- **Article fixtures are not in git.** `data/` and `output/` are gitignored, and about nineteen test
+  files want an article that a fresh clone does not have —
+  [260831x](../plans/260831x-remote-box-dev-environment.md) found it and it is still open.
+- **`push-env` rebuilds `.env.local` rather than merging.** Anything you want on the box has to be on
+  the allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts); a line typed on the
+  box is gone at the next push. The box's admin password is deliberately not in that file at all — it
+  lives in `~/.config/spideryarn/`, so it is per-machine and survives both the push and a rebuild.
+
 ## Traps
 
 - **`gjd-remote` will not tell you a session exists when it cannot see the list.** A `tmux ls`

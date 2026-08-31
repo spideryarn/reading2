@@ -86,6 +86,15 @@ resource "hcloud_firewall" "box" {
 
   # No inbound rule for the web server or noVNC on purpose. Both are reached
   # over an SSH tunnel, so neither needs a hole in the firewall.
+  #
+  # And nothing for the Supabase stack either, which matters more than it looks.
+  # It binds 0.0.0.0 rather than localhost, its service-role key is a fixed
+  # string identical on every local install on earth, and since 2026-08-31 the
+  # administrator account on it has a password that is also in git
+  # (scripts/seed-accounts.ts). So an inbound rule for 54361 would not be
+  # "exposing a dev database" — it would be publishing a login and a key that
+  # bypasses every policy. docs/project/supabase-local.md says the same thing
+  # from the other end.
 }
 
 resource "hcloud_server" "box" {

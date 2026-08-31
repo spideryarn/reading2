@@ -13,14 +13,23 @@ at while the schema is being worked out. What goes *in* the database is
 ## Running it
 
 ```bash
+npm run setup          # all three of the steps below, in order, on a fresh checkout
 npm run db:start       # supabase start — first run pulls ~2 GB of images
 npm run db:status      # the URLs and keys again
 npm run db:stop        # containers down; the data is kept and restored on next start
 npm run db:reset       # wipes the database and replays NOTHING — read below first
 npm run db:migrate     # apply drizzle/ — this is what creates the `spideryarn` schema
 npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
-npm run db:seed-owner  # the one auth.users row every owner_id points at — required, see below
+npm run db:seed-owner  # the two auth.users rows: the row-owner, and the account you sign in as
+npm run db:admin-password   # the email and password to sign in with, on this machine
 ```
+
+**`npm run setup` is the one to reach for on a fresh checkout** — a box, a rebuild, a new clone. It
+runs `db:start`, `db:migrate` and `db:seed-owner` in that order and stops at the first failure with
+what to do about it ([`scripts/setup-local.ts`](../../scripts/setup-local.ts)). Every step is still
+its own command, so nothing here has to be done through it. It exists because the order is real and
+was written down in three separate docs, and a box got built without two of the steps
+([260831x](../plans/260831x-remote-box-dev-environment.md)).
 
 **After any reset, run `npm run db:migrate`.** Our migrations are Drizzle's, in `drizzle/`, and the
 Supabase CLI cannot see them — so a reset leaves the `spideryarn` schema absent and
@@ -37,6 +46,71 @@ through` names neither the constraint nor the fix. `LOG_LEVEL=debug` gives the r
 sqlstate `23503`, a foreign key such as `uploads_owner_fk` with no owner row. Found this way
 2026-08-31, setting up the remote box: seeding took the suite from 41 failing files to 23.
 [database.md § next: Supabase Postgres](database.md#next-supabase-postgres) has the command.
+
+### Signing in, with no Google and no browser you cannot reach
+
+`db:seed-owner` writes **two** rows, and they are two different people:
+
+| | | |
+|---|---|---|
+| `dev@spideryarn.local` | `DEV_OWNER_ID` | what rows written *outside* a request belong to — the CLI, the pipeline, `db:import`. [`src/owner.ts`](../../src/owner.ts) |
+| `greg@gregdetre.com` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
+
+The second has a password, so signing in is the email form on the landing page — no Google, nothing
+to click on a dashboard, and no browser on a machine you cannot reach. **That is what makes a fresh
+Hetzner box usable**, where the alternative was the noVNC tunnel
+([260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md)).
+
+```
+npm run db:admin-password
+```
+
+**The password is generated per machine**, on the first seed, into
+`~/.config/spideryarn/local-admin-password` at `0600`. So there is no password in this repo to look
+up, the laptop's and the box's are different, and the command above is how you read one. The seed
+also prints it once, on the run that creates it.
+
+Not in `.env.local`, deliberately: `gjd-remote push-env` *rebuilds* that file, so a value written on
+the box would be destroyed by the next push and a value pushed from the laptop would give both
+machines one credential.
+[`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts) carries the rest of the reasoning,
+including the constant-in-git version this replaced and why Greg chose against it.
+
+Four things worth knowing before you rely on it:
+
+- **The id is the point, not the address.** `/api/admin/*` gates on a uuid, so signing up by hand
+  through the same form gets the right email on a random id and is then refused by the page it was
+  meant to open — with the client quietly drawing the shelf instead
+  ([260828f](../postmortems/260828f-admin-id-was-the-local-one.md)). Seeding is what puts the account
+  at the id `src/admin.ts` already names. If an account already holds that address on another id,
+  the seed **refuses and says which of the two things to do**; it does not pick.
+- **Re-running it does not sign you out.** It signs in first and writes only when the password is
+  actually wrong, because GoTrue's admin password update revokes every session for that user —
+  measured, and this is a command you are told to run after every reset.
+- **`npm run db:reset` does not change the password**, because the file is not in the database.
+  Deleting the file does: the next seed makes a new one and sets it, and every open session for that
+  account ends.
+- **It refuses to run against anything but this repo's own stack**, and checks that against
+  `supabase status` rather than against `SUPABASE_URL` — everything else in the run reads that
+  variable, so a forwarded port would have every step agreeing with every other one.
+
+### One shelf, not two
+
+By default the two accounts above mean the library you see when you sign in is **empty**, however
+much the CLI has ingested: those rows belong to `DEV_OWNER_ID`. Setting
+
+```
+SPIDERYARN_OWNER_ID=<the admin id from src/admin.ts>
+```
+
+in `.env.local` puts CLI, pipeline and `db:import` work on the shelf you actually look at. It is on
+`gjd-remote push-env`'s allowlist ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)),
+so a box gets it from the laptop and a fresh box is right from its first ingest — a line typed on
+the box alone would be destroyed by the next push, because that file is rebuilt rather than merged.
+
+It does **not** move rows that already exist. On a database that has been used without it, older
+articles stay on the other shelf and — since `articles.slug` is globally unique — can block
+re-ingesting the same URL. Greg's call, 2026-08-31.
 
 Docker has to be running first. On Greg's laptop the `docker` context points at **OrbStack**, so
 `open -a OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the
@@ -80,6 +154,11 @@ machine is the *only* thing stopping anyone who can reach these ports from havin
 the remote box that is the Hetzner firewall's SSH-and-mosh-only inbound rule
 ([infra/hetzner/README.md](../../infra/hetzner/README.md)) — worth knowing before anyone edits a
 firewall rule there.
+
+Since 2026-08-31 that list has one more entry: the seeded administrator's password, which is also a
+constant in git (§ [Signing in](#signing-in-with-no-google-and-no-browser-you-cannot-reach)). It
+changes nothing about where the boundary is — anyone reaching this port already holds a service-role
+key that outranks any account — but an inbound rule for 54361 now publishes a *login* as well.
 
 ## The ports, and the Postgres version
 

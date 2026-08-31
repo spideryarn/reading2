@@ -220,7 +220,7 @@ to be asked for. [260827aa-delete-the-importer.md § D1](../plans/260827aa-delet
 [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ```bash
-npm run db:seed-owner   # the one auth.users row every owner_id points at
+npm run db:seed-owner   # the auth.users rows: the row-owner, and the account you sign in as
 npm run db:import       # data/<slug>/ → Postgres, idempotent
 npm run db:export -- --out /tmp/rollback   # and back out again
 ```

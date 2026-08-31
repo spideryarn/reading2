@@ -42,6 +42,8 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:seed-owner": "tsx scripts/db-seed-owner.ts",
+    "db:admin-password": "tsx scripts/db-admin-password.ts",
+    "setup": "tsx scripts/setup-local.ts",
     "db:import": "tsx scripts/db-import.ts",
     "db:export": "tsx scripts/db-export.ts",
     "db:start": "supabase start",
