@@ -14,11 +14,11 @@
  * node:util's parseArgs covers six subcommands without touching a shared file.
  * Swapping in Commander later is contained to main().
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { type StdioOptions, execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
 import { existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
@@ -30,6 +30,15 @@ import {
   parseSessions,
 } from "./gjd-remote-tmux.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
+import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
+import {
+  REMOTE_TAB_COLOUR,
+  TAB_COLOUR_ENV,
+  type Wanted,
+  canColourTab,
+  colourSequence,
+  wantedColour,
+} from "./gjd-remote-tab.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
@@ -410,6 +419,62 @@ function chooseTransport(force?: string): "mosh" | "ssh" {
   return probe.ok ? "mosh" : "ssh";
 }
 
+/**
+ * The colour to paint the tab with, or "off". Dies on a value that is neither.
+ *
+ * main() calls this before anything else so a typo in GJD_REMOTE_TAB_COLOUR is
+ * refused while nothing has happened yet. It used to be checked inside
+ * markTabRemote, which for `new-claude` meant the tmux session was already
+ * created on the box before a cosmetic setting aborted the command.
+ */
+function requireTabColour(): Exclude<Wanted, { kind: "bad" }> {
+  const want = wantedColour(process.env);
+  if (want.kind === "bad") die(`${TAB_COLOUR_ENV}='${want.value}' is not 'off' or a #rrggbb colour`);
+  return want;
+}
+
+/**
+ * Run the thing that takes this terminal over to the box, with the tab painted
+ * violet for as long as it holds it, and exit the way it exited.
+ *
+ * Paint and un-paint are one function on purpose. The reset hands the tab back
+ * to its profile default, so a reset we had not earned would wipe a colour
+ * somebody else set; nothing outside iTerm's Python API can read the current
+ * colour to put it back properly. Tying the undo to having painted makes the
+ * unearned reset unwritable.
+ *
+ * Everything that could `die()` — resolving the host out of Terraform state,
+ * probing mosh — must have happened before the call, or a failure leaves the
+ * tab violet with nothing running in it.
+ */
+function runOnTheBox(file: string, args: string[], stdio: StdioOptions): never {
+  const want = requireTabColour();
+  const paint = want.kind === "colour" && canColourTab(process.env, Boolean(process.stdout.isTTY));
+  if (paint) process.stdout.write(colourSequence(want.rgb));
+
+  // An EMPTY SIGINT handler, and it is load-bearing. Node cannot run a JS
+  // handler while spawnSync has the loop blocked, but installing one changes
+  // the signal's disposition from "terminate" to "caught", so the Ctrl-C that
+  // kills the child no longer kills us — and the un-paint below gets to run.
+  // Without it, `tunnel`, whose documented way out is Ctrl-C, left the tab
+  // violet every single time. Reproduced on Node 26: with no listener, nothing
+  // after spawnSync executes and the process exits on signal 2.
+  //
+  // SIGINT only. Ctrl-C goes to the whole foreground process group, so the
+  // child gets it too and spawnSync returns; a caught SIGTERM or SIGHUP would
+  // arrive at us alone and leave us waiting on a child nobody told to stop.
+  const swallowInterrupt = () => {};
+  process.on("SIGINT", swallowInterrupt);
+  const r = spawnSync(file, args, { stdio });
+  process.off("SIGINT", swallowInterrupt);
+
+  if (paint) process.stdout.write(colourSequence("default"));
+  // The shell convention for "died on a signal", because `process.exit(null ?? 0)`
+  // would report a Ctrl-C'd tunnel to the calling shell as a success.
+  if (r.signal) return process.exit(128 + (constants.signals[r.signal] ?? 0));
+  return process.exit(r.status ?? 0);
+}
+
 function attach(name: string, force?: string): never {
   const keyboard = interactiveStdin();
   if (keyboard === null) {
@@ -425,8 +490,11 @@ function attach(name: string, force?: string): never {
   // connection nobody is watching on a link that drops.
   closeSshMaster();
   const transport = chooseTransport(force);
-  const r = spawnSync("sh", ["-c", attachCmd(name, transport)], { stdio: [keyboard, "inherit", "inherit"] });
-  process.exit(r.status ?? 0);
+  // Built before the handover, not inside the spawn arguments: attachCmd calls
+  // HOST(), which reads Terraform state and can die, and a die after the paint
+  // is a violet tab with nothing in it.
+  const command = attachCmd(name, transport);
+  return runOnTheBox("sh", ["-c", command], [keyboard, "inherit", "inherit"]);
 }
 
 /** A tmux session name: lower-case, hyphenated, and never surprising to a shell. */
@@ -736,7 +804,14 @@ function interactiveStdin(): number | "inherit" | null {
  */
 function cmdNewClaude(
   given: string | undefined,
-  opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean; transport?: string | undefined },
+  opts: {
+    prompt?: string | undefined;
+    dir?: string | undefined;
+    attach: boolean;
+    transport?: string | undefined;
+    /** `--wait 2h`: already parsed, because a bad duration must not reach the box. */
+    wait?: { seconds: number; label: string } | undefined;
+  },
 ): void {
   // Checked before anything touches the network, because the failure it
   // prevents is a green tick over a Claude that never ran. The job runs
@@ -821,6 +896,14 @@ function cmdNewClaude(
     // wrong-tree failure again, wearing different clothes.
     `command -v claude >/dev/null 2>&1 || ` +
       failTo(name, "FATAL: claude is not on this job's PATH — refusing to leave a session with no Claude in it"),
+    // AFTER both guards, and that ordering is the whole design of `--wait`.
+    // Sleeping first would mean a box with a missing directory or a stock PATH
+    // says nothing for two hours and then kills the session — at the one moment
+    // nobody is watching. Both guards are one round trip and both fail loudly,
+    // so they run while the person who typed the command is still reading the
+    // output. Proved by reading the generated job back off the box, not by
+    // trusting this comment: see docs/project/remote-box.md.
+    opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
     [
@@ -848,6 +931,33 @@ function cmdNewClaude(
   );
 
   confirmStarted(name);
+
+  // A waiting session has NOT started Claude, and saying it has would be the
+  // green tick this file keeps having to earn back. What confirmStarted proves
+  // either way is that the tmux session survived a second — which for a wait is
+  // the whole of what has happened so far.
+  if (opts.wait) {
+    // The zone is named because the two clocks are not in the same one: the
+    // box is Europe/London and the laptop is wherever Greg is, which on
+    // 2026-09-01 was two hours ahead. Both are right and both print their own
+    // zone — a bare "00:03" here beside the pane's "22:03 BST" reads as a
+    // broken clock. The sleep itself is a DURATION, so neither zone can affect
+    // it; only these two sentences.
+    const at = new Date(Date.now() + opts.wait.seconds * 1000);
+    const clock = at.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZoneName: "short",
+    });
+    console.log(green(`✓ created '${name}'`) + dim(` — Claude starts in ${opts.wait.label}, about ${clock}`));
+    // Not attaching, on purpose: there is nothing to watch but a sleep, and a
+    // tab held open for two hours is a tab you stop trusting. Said out loud
+    // rather than done quietly, because --wait did not ask for this.
+    console.log(dim(`  nothing runs until then — gjd-remote resume ${name}, or gjd-remote kill ${name}`));
+    return;
+  }
+
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
   if (opts.attach) attach(name, opts.transport);
   else console.log(dim(`  gjd-remote resume ${name}`));
@@ -1598,6 +1708,7 @@ ${bold("SESSIONS")}
   new-claude [name]       start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
+          --wait DURATION   create it now, start Claude later ${dim("— 45s, 15m, 2h, 1d")}
           --no-attach       create it, but stay here
   new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
@@ -1612,7 +1723,9 @@ ${bold("THE BOX")}
       --name DIR-NAME       directory name, if not the repo's own
   push-env                send .env.local to the repo checkout on the box
       --file PATH           a different .env.local — the basename must be exactly that
-  ssh                     a throwaway connection — no tmux, dies with the terminal
+  ssh [command]           a throwaway connection — no tmux, dies with the terminal
+                          with a command, runs it and prints what it said
+                          ${dim("gjd-remote ssh 'free -g; uptime'")}
   tunnel                  forward noVNC to http://localhost:6080/vnc.html
   forget-key              after a rebuild: accept the machine's new host key
 
@@ -1641,6 +1754,20 @@ ${bold("WHERE A SESSION STARTS")}
   The directory must already exist on the box; there is no fallback, because the
   fallback was a healthy-looking session in ${dim("/home/greg")} editing the wrong thing.
 
+${bold("STARTING LATER")}
+  ${dim("--wait 2h")} makes the session NOW and starts Claude in two hours. The units are
+  ${dim("s m h d")}, and one is required — ${dim("--wait 2")} is refused rather than guessed at,
+  because seconds and hours are both fair readings and they are 3600x apart.
+  Use it to spread work out when several sessions at once would be too much
+  RAM, or too much of the usage allowance, in one go.
+  The waiting happens ON THE BOX, in the session's own pane, so closing the
+  laptop makes no difference to it. It does not attach — there is nothing to
+  watch but a sleep — and ${dim("gjd-remote kill")} calls it off.
+  ${bold("The directory and PATH are checked before the wait, not after")}, so a job that
+  could never have worked says so now rather than in two hours' time.
+  ${bold("A waiting session does not survive the box rebooting")} — nothing does, and
+  there is no replay.
+
 ${bold("ANYWHERE")}
   --ssh                   skip mosh, for satellite or UDP-blocked networks
 
@@ -1660,8 +1787,15 @@ ${bold("EXAMPLES")}
       EOF
   gjd-remote new-claude -d ~/code/gjdutils
       an unnamed session in a different repo; it takes a name once Claude has a title
+  gjd-remote new-claude --wait 2h -p - <<'EOF'
+      the same session, created now and starting in two hours
+      EOF
+      ${dim("✓ created 's-260901-004512' — Claude starts in 2h, about 02:45 your time")}
+      ${dim("  nothing runs until then — gjd-remote resume s-260901-004512, or gjd-remote kill …")}
   gjd-remote new-shell
       a plain shell that is still running tomorrow
+  gjd-remote ssh 'free -g; tmux ls'
+      one command on the box and its output here — no tmux session, nothing left behind
   gjd-remote resume --ssh
       back into the most recent session, without trying mosh first
   gjd-remote clone gregdetre/gjdutils
@@ -1688,6 +1822,14 @@ ${bold("ENVIRONMENT")}
   GJD_REMOTE_REPO         where the checkout lives on the box — where push-env
                           writes, and where new-claude/new-shell start without a --dir
                           (default: ${REMOTE_REPO_DEFAULT})
+  GJD_REMOTE_TAB_COLOUR   ${dim("off")}, or a ${dim("#rrggbb")} (default: ${REMOTE_TAB_COLOUR})
+
+${bold("WHICH TABS ARE ON THE BOX")}
+  Anything that hands this terminal to the box — ${dim("new-claude")}, ${dim("new-shell")}, ${dim("resume")}, ${dim("ssh")},
+  ${dim("tunnel")} — paints the iTerm tab violet while it holds it, and hands the colour
+  back to your profile when it lets go. It is skipped, silently, anywhere the
+  sequence might be printed instead of obeyed: not a terminal, not iTerm, or
+  inside tmux or screen.
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
@@ -1695,6 +1837,11 @@ choose is never changed for you.`;
 
 function main(): void {
   const [cmd, ...rest] = process.argv.slice(2);
+
+  // Before anything, so a mistyped colour is refused while nothing has happened
+  // rather than after a tmux session exists on the box. The result is thrown
+  // away; only the refusal matters here.
+  requireTabColour();
 
   switch (cmd) {
     case undefined:
@@ -1709,13 +1856,24 @@ function main(): void {
         options: {
           prompt: { type: "string", short: "p" },
           dir: { type: "string", short: "d" },
+          wait: { type: "string" },
           "no-attach": { type: "boolean", default: false },
           ssh: { type: "boolean", default: false },
         },
       });
+      // Parsed here, before anything touches the network: a duration typed
+      // wrong should cost a sentence, not a session on the box that has to be
+      // killed.
+      let wait: { seconds: number; label: string } | undefined;
+      if (values.wait !== undefined) {
+        const d = parseDuration(values.wait);
+        if (!d.ok) die(d.why);
+        wait = { seconds: d.seconds, label: d.label };
+      }
       return cmdNewClaude(positionals[0], {
         prompt: resolvePrompt(values.prompt),
         dir: values.dir,
+        wait,
         attach: !values["no-attach"],
         transport: values.ssh ? "ssh" : undefined,
       });
@@ -1791,10 +1949,28 @@ function main(): void {
       return;
     }
 
-    case "ssh":
-      process.exit(spawnSync("ssh", ["-t", ...SSH_OPTS_INTERACTIVE, HOST()], { stdio: "inherit" }).status ?? 0);
+    case "ssh": {
+      // Coloured for the same reason as an attach: while this runs, the tab is
+      // a shell on the box and looks exactly like a shell on the laptop.
+      //
+      // `rest` goes through UNPARSED. Every other command runs parseArgs first,
+      // and here that would be wrong twice over: `gjd-remote ssh 'ls -la'` has
+      // no options of ours in it, and a command's own flags are not ours to
+      // read. So everything after `ssh` is the command, and `gjd-remote ssh`
+      // with nothing after it is still a shell.
+      //
+      // Until 2026-09-01 the arguments were dropped on the floor: `gjd-remote
+      // ssh 'free -g'` opened a login shell, printed the MOTD and exited 0.
+      let invocation;
+      try {
+        invocation = sshInvocation({ host: HOST(), sshOpts: SSH_OPTS_INTERACTIVE, words: rest });
+      } catch (err) {
+        die((err as Error).message);
+      }
+      return runOnTheBox("ssh", invocation.args, "inherit");
+    }
 
-    case "tunnel":
+    case "tunnel": {
       console.log(dim("open http://localhost:6080/vnc.html — and run `start-vnc` on the box"));
       console.log(dim("ctrl-c closes the tunnel"));
       // ExitOnForwardFailure is the whole command. Without it, a local 6080
@@ -1806,13 +1982,13 @@ function main(): void {
       // -N because there is nothing to run at the far end. The login shell was
       // only ever a side effect of not saying so, and it made the failure above
       // survivable in the first place.
-      process.exit(
-        spawnSync(
-          "ssh",
-          ["-o", "ExitOnForwardFailure=yes", "-N", "-L", "6080:localhost:6080", ...SSH_OPTS_INTERACTIVE, HOST()],
-          { stdio: "inherit" },
-        ).status ?? 0,
+      const target = HOST();
+      return runOnTheBox(
+        "ssh",
+        ["-o", "ExitOnForwardFailure=yes", "-N", "-L", "6080:localhost:6080", ...SSH_OPTS_INTERACTIVE, target],
+        "inherit",
       );
+    }
 
     case "-h":
     case "--help":

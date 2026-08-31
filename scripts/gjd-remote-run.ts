@@ -1,0 +1,152 @@
+/**
+ * Turning what you typed into what runs on the box — the pure half of
+ * `new-claude --wait` and `ssh <command>`.
+ *
+ * Separated from scripts/gjd-remote.ts so it can be tested without a network,
+ * the same way scripts/gjd-remote-env.ts and scripts/gjd-remote-tmux.ts are.
+ * That file calls main() at import time, so nothing in it can be unit-tested at
+ * all; anything worth a test has to live out here.
+ */
+
+/**
+ * How long `--wait` may be. A month is far longer than the box's uptime — it
+ * reboots, and nothing replays a job that was sleeping when it did — so a
+ * bigger number is a typo rather than a plan, and it is refused where somebody
+ * is present to read why.
+ */
+export const MAX_WAIT_SECONDS = 30 * 24 * 60 * 60;
+
+const UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 } as const;
+
+/** `2h`, `90m`, `45s`, `1d`, `1.5h`. Lower-cased and trimmed before matching. */
+const DURATION = /^(\d+(?:\.\d+)?)([smhd])$/;
+
+/**
+ * The label as it is allowed to reach the box.
+ *
+ * `waitPreamble` interpolates it into single quotes in a shell script, so this
+ * is the only thing standing between a duration and shell injection. It is
+ * deliberately stricter than DURATION rather than "the same regex": this one
+ * has to hold even if the parse is changed or bypassed, so it is checked again
+ * at the point of use.
+ */
+const SAFE_LABEL = /^[0-9.]{1,12}[smhd]$/;
+
+export type Duration =
+  | { ok: true; seconds: number; label: string }
+  | { ok: false; why: string };
+
+/**
+ * `--wait 2h` → 7200 seconds.
+ *
+ * A UNIT IS REQUIRED. `--wait 2` is refused rather than guessed: seconds and
+ * hours are both entirely reasonable readings of it, they are three orders of
+ * magnitude apart, and the wrong one is only discovered by the session either
+ * starting immediately or not starting all day.
+ *
+ * Fractions are allowed but must land on a whole second — `1.5h` is 5400 and
+ * fine, `0.5s` is refused rather than silently rounded, because a wait that
+ * says one thing and does another is the exact shape of bug this repo keeps
+ * finding.
+ */
+export function parseDuration(raw: string): Duration {
+  const text = raw.trim().toLowerCase();
+  if (text === "") return { ok: false, why: "--wait needs a duration, like 30s, 15m, 2h or 1d" };
+
+  const m = DURATION.exec(text);
+  if (!m) {
+    // The bare number is the mistake worth naming, because it is the one
+    // somebody will actually make.
+    const bare = /^\d+(?:\.\d+)?$/.test(text);
+    return {
+      ok: false,
+      why: bare
+        ? `--wait ${text} has no unit — say ${text}s, ${text}m, ${text}h or ${text}d`
+        : `'${raw}' is not a duration — say 30s, 15m, 2h or 1d`,
+    };
+  }
+
+  const [, amount, unit] = m as unknown as [string, string, keyof typeof UNIT_SECONDS];
+  const seconds = Number(amount) * UNIT_SECONDS[unit];
+
+  if (!Number.isInteger(seconds)) {
+    return { ok: false, why: `--wait ${text} is not a whole number of seconds` };
+  }
+  if (seconds < 1) return { ok: false, why: `--wait ${text} is not long enough to be worth waiting for` };
+  if (seconds > MAX_WAIT_SECONDS) {
+    return { ok: false, why: `--wait ${text} is longer than a month, and the box reboots long before that` };
+  }
+  return { ok: true, seconds, label: text };
+}
+
+/**
+ * The lines the job script runs before it starts Claude.
+ *
+ * THIS GOES AFTER THE GUARDS, NOT BEFORE THEM. The job checks that it can enter
+ * the directory and that `claude` is on its PATH; if the sleep came first, a
+ * box with a broken PATH would say nothing for two hours and then end the
+ * session, at the one moment nobody is watching. Both guards are cheap and both
+ * fail loudly, so they run while the person who typed the command is still
+ * looking at the output.
+ *
+ * The deadline is computed ON THE BOX, at the moment the wait starts, because
+ * that is the clock the sleep is actually measured against. `date -d` is GNU
+ * and the box is Ubuntu, but the fallback is there anyway: a `$(...)` that
+ * fails would otherwise print `at ` with nothing after it, which reads as a
+ * missing time rather than an unavailable one.
+ *
+ * The label is re-validated here rather than trusted. It is the only caller
+ * input that reaches this string, and it lands inside single quotes in a shell
+ * script — so a label containing a quote would be shell syntax, in a file
+ * nobody reads before it runs.
+ */
+export function waitPreamble(seconds: number, label: string): string {
+  if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_WAIT_SECONDS) {
+    throw new Error(`waitPreamble: ${seconds} is not a number of seconds this can wait for`);
+  }
+  if (!SAFE_LABEL.test(label)) {
+    throw new Error(`waitPreamble: '${label}' is not a duration label`);
+  }
+  return [
+    `at=$(date -d "+${seconds} seconds" '+%a %d %b %H:%M %Z' 2>/dev/null) || at=''`,
+    `printf 'gjd-remote: waiting ${label} before starting Claude%s\\n' "\${at:+ — until $at}"`,
+    `printf 'gjd-remote: nothing has run yet; gjd-remote kill to call it off\\n'`,
+    `sleep ${seconds}`,
+    `printf 'gjd-remote: the wait is over; starting Claude\\n'`,
+  ].join("\n");
+}
+
+/**
+ * The argv for `gjd-remote ssh`, with or without a command to run.
+ *
+ * `gjd-remote ssh 'free -g'` used to drop the command on the floor: the case
+ * ignored its positionals, opened a login shell, printed the MOTD and exited 0.
+ * Asking a box a question and being handed a welcome banner instead is a silent
+ * success of the plainest kind — the exit code says the command ran, and it
+ * never existed.
+ *
+ * The `-t` follows ssh's own rule rather than ours: a pty for an interactive
+ * shell, none for a command, so `gjd-remote ssh 'tmux ls' | grep …` behaves
+ * like every other pipe. A command that needs a terminal wants `gjd-remote ssh`
+ * and typing it, or `resume`.
+ *
+ * Words are joined with single spaces, again like ssh, which hands the whole
+ * lot to the remote shell as one string. That means quoting is the remote
+ * shell's business and `gjd-remote ssh ls -la` cannot work here anyway —
+ * parseArgs takes `-la` for an option of ours long before this is called — so
+ * the documented form is one quoted argument.
+ */
+export function sshInvocation(opts: {
+  host: string;
+  sshOpts: string[];
+  words: string[];
+}): { args: string[]; interactive: boolean } {
+  const command = opts.words.join(" ").trim();
+  if (opts.words.length > 0 && command === "") {
+    throw new Error("there is no command in that — `gjd-remote ssh` on its own opens a shell");
+  }
+  if (command === "") {
+    return { args: ["-t", ...opts.sshOpts, opts.host], interactive: true };
+  }
+  return { args: [...opts.sshOpts, opts.host, command], interactive: false };
+}
