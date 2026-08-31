@@ -44,8 +44,9 @@
  *
  * v1 assigns only `"footnote"`. The other four exist in the union, in the CHECK
  * constraint and here — so the tests below drive all five through the
- * filesystem artefact store, the import validator and the public DTO by hand,
- * because the corpus cannot.
+ * filesystem artefact store, `checkNoteFields` (src/block-fields.ts) and the
+ * public DTO by hand, because the corpus cannot. That validator lived in
+ * `src/store/import.ts` until the importer was deleted on 2026-09-01.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -53,12 +54,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { checkNoteFields } from "../src/block-fields.js";
 import { blocksArtefact, splitIntoBlocks } from "../src/blocks.js";
 import { runExtract } from "../src/extract.js";
 import { NOTE_ID_PATTERN } from "../src/notes.js";
 import { publicArticle } from "../src/public/dto.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
-import { checkNoteFields } from "../src/store/import.js";
 import type { Block, Tree } from "../src/types.js";
 
 const FIXTURES = path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures");

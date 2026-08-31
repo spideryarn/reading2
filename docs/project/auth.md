@@ -319,7 +319,11 @@ Two more things came out of the same review and are fixed:
   derived from the slug, so importing a slug another owner holds resolved to
   *their* row, updated it, deleted their comments, chat, searches and lookups by
   `articleId`, and reinserted them under the importer's owner — every write
-  reporting success. It now reads the owner first and refuses by name.
+  reporting success. It was fixed to read the owner first and refuse by name, and
+  **the importer itself was deleted on 2026-09-01**
+  ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3), so
+  this route is gone rather than guarded. Kept here because the *shape* recurs: anything that
+  resolves an article id from a slug without reading the owner does this.
 
 ### The one deliberate exception
 
@@ -347,7 +351,8 @@ and which two are courtesies.
 - **Child rows are trusted to match their article.** Comments, chat threads, searches and lookups are
   filtered by `articleId` alone — the owner column on them is written, never read — so the isolation
   rests on the invariant that a child's owner equals its article's owner. Nothing in the database
-  enforces it; the importer was the one thing that could break it, and it now refuses to.
+  enforces it. The importer was the one thing that could break it, and it was deleted on 2026-09-01 —
+  so nothing writes a child row under an owner other than the request's.
 - **`/api/health` runs before the gate**, outside a request, so `currentOwnerId()` falls back to the
   environment owner and an unauthenticated caller learns that owner's article count. No content
   leaks. Sol rated it low and so do I, but it is a real thing the endpoint says.

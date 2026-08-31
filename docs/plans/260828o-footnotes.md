@@ -575,7 +575,7 @@ filesystem `undefined` must normalise identically. `structureHash` needs the sam
 
 And the fingerprint has **three narrow queries** that select only `id` and `text`
 ([`pg.ts:636`](../../src/store/pg.ts), [`pg-searches.ts:139`](../../src/store/pg-searches.ts),
-[`import.ts:453`](../../src/store/import.ts)). Miss one and a second import compares a full new hash
+`import.ts:453`). Miss one and a second import compares a full new hash
 against an old two-column hash and creates a revision every time, forever.
 
 **The thing most likely to be found late, and it is not the hash.** A perfect fingerprint does not
@@ -962,7 +962,7 @@ evidence instead of a vacuous pass. So the rule stage 3 rests on is that its inp
 `canonicaliseNotes`; `runExtract` is the only production caller, and that is now the thing to keep
 true.
 
-**An import is rejected, not repaired.** `checkNoteFields` ([`import.ts`](../../src/store/import.ts))
+**An import is rejected, not repaired.** `checkNoteFields` ([`src/block-fields.ts`](../../src/block-fields.ts) — it lived in `src/store/import.ts` until the importer was deleted on 2026-09-01)
 throws on an unrecognised `role` or `treatment` rather than dropping it, because a block that
 arrives claiming to be apparatus and is stored as body is silently reclassified as *argument* —
 the exact failure the feature exists to prevent. The CHECK constraint is the backstop, not the guard.

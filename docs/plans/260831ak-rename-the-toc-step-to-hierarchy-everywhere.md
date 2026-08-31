@@ -266,7 +266,7 @@ exact literals are *not* compiler-caught: the publication guard
 ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts):1171 — miss it and **every migrated
 revision becomes unpublishable**), freshness (`case "toc"` and `byStep.get("toc")`,
 [`src/store/pg.ts`](../../src/store/pg.ts):1978), and import
-([`src/store/import.ts`](../../src/store/import.ts):1453, a 23514 against the narrowed CHECK).
+(`src/store/import.ts`:1453, a 23514 against the narrowed CHECK).
 
 **7. The migration must be a drizzle artefact, not a loose `.sql`.** `db:migrate` reads only what
 `_journal.json` names, so a standalone file is invisible — the precise "nothing applied" failure this

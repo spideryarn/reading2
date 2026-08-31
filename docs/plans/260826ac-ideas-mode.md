@@ -504,7 +504,7 @@ pipeline artefact has a checklist:
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `loadIdeas` on `ArticleReader`, beside `loadGlossary` and `loadSummaries` |
 | [`src/db/schema.ts`](../../src/db/schema.ts) | a whole-artefact JSONB column on `article_revisions`, and `"ideas"` in the `revision_step_runs` CHECK constraint |
 | `src/store/pg-*.ts` | the Postgres reader |
-| [`src/store/import.ts`](../../src/store/import.ts), [`export.ts`](../../src/store/export.ts) | both directions, plus `ARTEFACTS` in `tests/store-roundtrip.test.ts` |
+| `src/store/import.ts`, [`export.ts`](../../src/store/export.ts) | both directions, plus `ARTEFACTS` in `tests/store-roundtrip.test.ts` |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | `HOMES`, with the destination written down |
 
 **That last one is not a chore, it is the thing that will tell you this list exists.** It asks the

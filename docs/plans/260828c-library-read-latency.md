@@ -80,7 +80,7 @@ took it apart. There are two production paths to a published revision and they b
   finished article.
 - The importer **updates a published revision in place** when the text has not changed — same
   revision id, `on conflict do update` over `tree` and all five scalars, then the blocks deleted and
-  reinserted ([`src/store/import.ts:440`](../../src/store/import.ts) onwards). That is its stated
+  reinserted (`src/store/import.ts:440` onwards). That is its stated
   licence: it is a migration tool and the files win.
 
 So `root_gist` cannot describe a tree that is no longer there, and `word_count` cannot describe
@@ -345,7 +345,7 @@ refuses a revision with either problem (`reasonsNotToPublish`,
 [`src/store/pg-revisions.ts:1038`](../../src/store/pg-revisions.ts)) — but the **importer does not
 go through it**. It requires `blocks.json` and `tree.json` to exist and parse, and then guards the
 block insert with `if (blocks.length)`
-([`src/store/import.ts:567`](../../src/store/import.ts)) — so a `blocks.json` holding an empty array
+(`src/store/import.ts:567`) — so a `blocks.json` holding an empty array
 imports as a published revision with no blocks and `block_count = 0`, and the pointer moves to it.
 The skip is reachable, it is reachable through the tool this repo is currently migrating with, and
 the new spelling has to behave exactly as the old one did.

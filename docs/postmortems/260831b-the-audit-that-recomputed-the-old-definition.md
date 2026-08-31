@@ -22,7 +22,7 @@ every block arrived `undefined`, every block read as body, and the audit recompu
 the definition `wordCount` had *before* 2026-08-28. 16,855 is the total, 12,646 is the body, and the
 1.33× gap is gwern's 41 endnote and bibliography blocks.
 
-Both writers — [`src/store/import.ts`](../../src/store/import.ts) and `publishRevision` in
+Both writers — `src/store/import.ts` and `publishRevision` in
 [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts) — call `deriveLibraryScalars` on
 blocks that carry `treatment`, and agree with each other and with `blocks.json` on disk. **Nothing in
 `src/` computes 16,855.** Only the test did.

@@ -564,7 +564,7 @@ revision whose fetch is recorded as having failed.
 
 Checked rather than assumed, because the rule is only worth having if the data supports it:
 
-- [`src/store/import.ts`](../../src/store/import.ts) records a `fetch` step run **only when the raw
+- `src/store/import.ts` records a `fetch` step run **only when the raw
   file was actually there** — `{ step: "fetch", present: Boolean(rawBytes) }` — and *withdraws* the
   row for any step that was not. So a legacy article with no source has no `fetch` run and publishes
   with a null reference, correctly.

@@ -297,7 +297,7 @@ locally, where we connect as `postgres`.
 3. `src/embed.ts` — chunking, the validated OpenRouter client, batching, atomic publication.
 4. The `embed` stage. ⟨Sol⟩ Which also means: `StepName` in [types.ts](../../src/types.ts), the
    `revision_step_runs` CHECK in [schema.ts](../../src/db/schema.ts), importer step inference in
-   [import.ts](../../src/store/import.ts), and `FORCE_ONLY_WHEN_NAMED` in
+   import.ts, and `FORCE_ONLY_WHEN_NAMED` in
    [pipeline.ts](../../src/pipeline.ts) — none of which the first draft's order of work mentioned.
 5. Artefact manifest, importer, exporter, round-trip — or the round-trip test goes red, as it did
    for the shelf work.

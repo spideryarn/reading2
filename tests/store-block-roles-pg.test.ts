@@ -16,7 +16,7 @@
  * absent — and "absent went in, absent came out" is satisfied by a store that
  * throws the fields away. `tests/block-roles.test.ts` has a synthetic
  * role-bearing article for exactly this reason, and it drives the **filesystem**
- * store, the import validator and the public DTO. This is the fourth consumer,
+ * store, `checkNoteFields` (src/block-fields.ts) and the public DTO. This is the fourth consumer,
  * and it is the one that needs a database.
  *
  * ## So the fixture is classified before it is loaded

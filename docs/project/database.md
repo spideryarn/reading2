@@ -236,8 +236,7 @@ to be asked for. [260827aa-delete-the-importer.md § D1](../plans/260827aa-delet
 
 ```bash
 npm run db:seed-owner   # the auth.users rows: the row-owner, and the account you sign in as
-npm run db:import       # data/<slug>/ → Postgres, idempotent
-npm run db:export -- --out /tmp/rollback   # and back out again
+npm run db:export -- --out /tmp/rollback   # Postgres → data/<slug>/, the rollback
 ```
 
 **`db:export` needs the bucket as well as the database.** A revision row holds a *reference* to its
@@ -260,7 +259,7 @@ checked in two. [silent-success.md](../reusable/silent-success.md) ·
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |
 | [`src/store/index.ts`](../../src/store/index.ts) | which store is in use. **No fallback lives here**, by design |
 | [`src/store/pg.ts`](../../src/store/pg.ts) · [`pg-comments.ts`](../../src/store/pg-comments.ts) | the Postgres reader and comment store |
-| [`src/store/import.ts`](../../src/store/import.ts) · [`export.ts`](../../src/store/export.ts) | the importer, and the exporter that is the rollback |
+| [`src/store/export.ts`](../../src/store/export.ts) | the exporter that is the rollback. **There is no importer** — `npm run db:import` and `src/store/import.ts` were deleted on 2026-09-01, because a re-import writes `raw_bytes` and leaves the source reference alone, describing two different acquisitions in one row. [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 |
 | [`src/owner.ts`](../../src/owner.ts) | who owns a row — the request-scoped owner, and the environment's when there is no request |
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
@@ -614,7 +613,7 @@ process.env.DATABASE_URL = process.env.REMOTE_DATABASE_URL!;   // then override 
 await import("../scripts/db-migrate.ts");
 ```
 
-The same trap catches `npm run db:import` and anything else pointed at the remote from this
+The same trap catches `npm run db:export` and anything else pointed at the remote from this
 directory. It is [silent-success.md](../reusable/silent-success.md) exactly: the check you would
 naturally run — "did it say it worked?" — shares its assumption with the code.
 
@@ -761,6 +760,42 @@ test written before the signature grew four parameters. The reader was right; th
 spellings are one fact and must produce identical bytes. Strict `!== null` where the distinction
 between built and not-built is the thing being transmitted — and then make callers spell `null` out,
 because the type system will not.
+
+## `restrict` and `no action` are the same rule at two different moments
+
+They look interchangeable — both mean *you may not delete a row something else points at* — and
+[sql.md](sql.md#referential-integrity-on-purpose-and-by-name) is right that `on delete` is a decision
+rather than a default. The decision has a third option, and picking the wrong one of the two obvious
+ones breaks something that has nothing to do with the constraint.
+
+**`restrict` is checked row by row as a delete happens. `no action` is checked at the end of the
+statement.** That is the whole difference, and it decides what happens when *two tables that both
+cascade from `articles`* also point at each other.
+
+`referee_criteria` and `comments` are exactly that pair — the referee's own mark on a passage is a
+comment carrying a `criterion_id`
+([260831an](../plans/260831an-referee-mode-for-peer-reviewers.md), `drizzle/0042`). Three choices:
+
+- **`cascade`** would delete the referee's own sentences about the paper when a criterion is deleted.
+  Their words are theirs and are not derived from anything. Wrong on its face.
+- **`restrict`** says the right thing and says it too early. Deleting the **article** cascades into
+  both tables in an order Postgres does not promise, so it can fire while the comment rows are still
+  there and refuse a delete that is entirely legitimate — a bug that would appear as "this article
+  cannot be deleted", months later, only for articles with referee marks on them.
+- **`no action`** is the same rule at end of statement. Deleting a criterion on its own still fails,
+  loudly, with rows to point at; deleting the article succeeds, because by then neither row exists.
+
+**Verified against the local database rather than reasoned about**, and pinned by two tests in
+[`tests/db-referee-criteria.test.ts`](../../tests/db-referee-criteria.test.ts) that do the delete both
+ways round — the pair is the only thing saying `no action` was chosen rather than left there by
+drizzle-kit's default. The house already had one instance of this shape and did not say why:
+`revision_blocks_identity_fk` is "no cascade, and no `restrict` either".
+
+The same table pair is worth reading for a second reason: `referee_criteria` is `search_runs` with a
+kind, two poles and a scale, and [`src/db/schema.ts`](../../src/db/schema.ts) states beside it why it
+could not be `search_runs` with a column added. The short version is a unit: `SearchHit.confidence`
+is a 0–100 match strength whose validator clamps negatives to zero, so a signed valence sent through
+it arrives as `0` and every negative judgement is gone with nothing to see.
 
 ## Two traps recorded elsewhere, repeated here because they are expensive
 

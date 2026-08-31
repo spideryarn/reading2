@@ -14,7 +14,7 @@
 He is right about where this ends up and wrong about one word. `db:import` is not *legacy* — it is
 the **only** way an article's content reaches Postgres today. [`src/jobs.ts:49`](../../src/jobs.ts)
 hardwires `fsArtifacts` and runs every stage through it, and the only content-bearing `insert` into
-`article_revisions` outside [`src/store/import.ts:559`](../../src/store/import.ts) is `beginDraftIn`,
+`article_revisions` outside `src/store/import.ts:559` is `beginDraftIn`,
 which copies from a previous row or mints an empty draft. So the importer cannot be deleted; it has
 to be **replaced**, and the replacement is [260827j-transactional-stage-runner.md](260827j-transactional-stage-runner.md)
 landings B–D, which we need anyway.
@@ -531,7 +531,7 @@ arriving."* **The first half is not true once the publication gate is on**, and 
 would least have liked to discover during the demolition.
 
 Every revision the importer wrote has a `fetch` step row with `status = 'done'`
-([`src/store/import.ts:800-837`](../../src/store/import.ts)) and a null `raw_source_sha256`, because
+(`src/store/import.ts:800-837`) and a null `raw_source_sha256`, because
 the importer does not write the new reference. And `beginDraftIn` copies the step-run rows **row for
 row, status included** ([`src/store/pg-revisions.ts:593-611`](../../src/store/pg-revisions.ts)) while
 carrying the null source pair. So the moment the gate is on, *any* later job on an existing article
@@ -2755,7 +2755,7 @@ keeps its draft pointer, and the retry builds a different draft. So `StoreSessio
 artefact is rejected.
 
 **One hazard outside the runner entirely.** The importer bypasses the job constraints and can replace
-`current_revision_id` during a model call ([`src/store/import.ts:586`, `:1014`](../../src/store/import.ts)),
+`current_revision_id` during a model call (`src/store/import.ts:586`, `:1014`),
 and publication does not check that the current revision is still the one the draft was copied from —
 so a job can overwrite a concurrent import, and `--prune` can delete the article and draft underneath
 one. While the importer exists, **import and prune refuse any slug with an active job.** The planned
@@ -3012,7 +3012,7 @@ Unchanged, and last.
 
 Once D can publish, **leaving `db:import` runnable is actively unsafe rather than merely redundant.**
 Re-import an article that D has already published and, if the block text is unchanged, the importer
-updates the current revision in place ([`src/store/import.ts:453-468`, `509-561`](../../src/store/import.ts)).
+updates the current revision in place (`src/store/import.ts:453-468`, `509-561`).
 `revisionValues` rewrites `raw_bytes`, `raw_content_type`, `raw_encoding`, `raw_sha256` and both URLs
 — and **omits** `rawSourceSha256` and `rawSourceKind`. The reference survives while everything around
 it is replaced from files. The both-or-neither CHECK and the composite FK stay green throughout,

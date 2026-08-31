@@ -549,12 +549,15 @@ the document stays on the server. So does the tree, which is 37 KB on one articl
 count two kinds of node.
 
 The safety of reading columns instead of artefacts rests on one invariant, and it is **not** that a
-published revision is immutable — the importer updates one in place when the text has not changed.
+published revision is immutable — a revision can be updated in place when the text has not changed.
 It is that every writer sets the five columns in the same transaction as the blocks and tree they
 describe. If a third writer ever touches `tree` or `revision_blocks` without recomputing them, the
-shelf starts printing last week's numbers with nothing to say so;
-[`tests/store-import-convergence.test.ts`](../../tests/store-import-convergence.test.ts) pins the
-importer's half of it. The whole thing is written up in
+shelf starts printing last week's numbers with nothing to say so. The importer used to be the second
+writer and `tests/store-import-convergence.test.ts` pinned its half; both went on 2026-09-01
+([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3), so
+the pipeline is now the only writer and `deriveLibraryScalars`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) is the one place that sets them. The
+whole thing is written up in
 [260828c-library-read-latency.md](../plans/260828c-library-read-latency.md).
 
 ### The title fallback exists in four places, and that is on purpose

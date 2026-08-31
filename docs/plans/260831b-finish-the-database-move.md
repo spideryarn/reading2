@@ -707,7 +707,7 @@ Sol's § 5.
 tidying-up after the switchover. It is a prerequisite, and the reason is concrete:
 
 The importer writes `extractedHtml: null` while setting `stampedHtml`
-([`src/store/import.ts`](../../src/store/import.ts)), and draft creation carries both columns
+(`src/store/import.ts`), and draft creation carries both columns
 forward. Every article in the corpus arrived that way. So after the flip, a `blocks`-only job over an
 imported article copies `extractedHtml = null`, fails the new guard, and **has no
 `BLOCKS_INPUT_HTML` for the converted stage 3 to run from at all**. Not a degraded result — no input.
