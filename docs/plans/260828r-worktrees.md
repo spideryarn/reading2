@@ -296,32 +296,70 @@ around it already treats `origin/main` as "what is live" rather than as "the bra
 | 1334 | push the gated sha to `main` | unchanged — this *is* the promotion |
 
 `grep` finds no other `main` or `origin/main` in `scripts/deploy.ts`, and none at all in
-`scripts/deploy-checks.ts`. So the deploy half of Step 0 is a one-line change plus its test.
+`scripts/deploy-checks.ts`. What that file *does* use is Vercel's own `target === "production"`
+concept ([`deploy-checks.ts:278`](../../scripts/deploy-checks.ts), and the `&target=production` query
+at [`deploy.ts:903`](../../scripts/deploy.ts)), which follows whatever the dashboard has set as the
+production branch rather than any branch string. So nothing there changes under any design.
+
+**Two ways to do it, and the second one is a trap in this repo.**
+
+- **Accept `dev` at line 323** and let the script keep pushing the gated sha into `main`. The primary
+  never leaves `dev`. One line, plus a test that watches it refuse from the wrong branch.
+- **Change nothing in `deploy.ts`,** and instead fast-forward local `main` to `dev` before running
+  it. Tempting — it preserves "this script is the only thing that touches `main`" exactly as written
+  — but it requires **checking out `main` in the primary**, and switching branches in the shared
+  primary is one of the things `AGENTS.md` forbids, because a dozen agents have uncommitted work in
+  that tree. It becomes reasonable only once everyone is in a worktree and the primary is Greg's
+  alone.
+
+Take the first now and reconsider the second later. Either way the invariant that matters is
+unchanged: **the only thing that writes to `main` is a gated deploy.**
 
 **Git auto-deploy on `main` must therefore stay ON.** Option (b) from Greg's list — disabling
 push-to-deploy — would break the pipeline, because `waitForDeployment` is waiting for the build that
 the push causes. That is a good reason to prefer the dev-branch option beyond the ones Greg gave.
 
-### The risk to check before enabling anything
+### What a preview deploy of `dev` would and would not reach
 
-**A preview deployment of `dev` may hold production credentials.** Vercel scopes environment
-variables to Production / Preview / Development, and a variable set for "All Environments" is handed
-to preview builds too. This project's production environment includes `SUPABASE_URL`,
-`SUPABASE_ANON_KEY`, `SPIDERYARN_STORE`, `OPENROUTER_API_KEY` and `ANTHROPIC_API_KEY`. If those are
-scoped to all environments, then every agent push to `dev` builds a deployment that can reach **the
-one production database** and spend money on model calls — many times a day, from code nobody has
-reviewed. Against a repo whose first rule is that real data belongs to the reader, that is the
-sharpest edge in this whole plan.
+A first draft of this section warned that preview deployments might carry production database
+credentials. **That was checked with `vercel env ls` and it is not true**, which is worth recording
+because the fear was reasonable and the answer is better than feared:
 
-It was not possible to read the per-environment scoping from here; the dashboard or
-`vercel env ls` will say. **Until it has been read, disable preview deploys for `dev`** — which is
-also the cheaper default:
+```
+  in production, absent from preview:   DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+                                        SENTRY_DSN / _AUTH_TOKEN / _ORG / _PROJECT
+  in both:                              SUPABASE_URL, SUPABASE_ANON_KEY,
+                                        VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
+                                        SPIDERYARN_OWNER_ID, SPIDERYARN_STORE,
+                                        ANTHROPIC_API_KEY, OPENROUTER_API_KEY
+```
+
+**The production database is out of reach.** `DATABASE_URL` is production-only and
+[`src/db/client.ts`](../../src/db/client.ts) throws rather than falling back, so a preview fails
+cleanly at the store — which is what [deployment.md](../project/deployment.md) already says is the
+intended behaviour. The service-role key is production-only too.
+
+Two things do survive, both smaller:
+
+- **The model-provider keys are on preview.** `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` would sit
+  in a build produced from commits nobody has reviewed. Most paths that would spend them need the
+  store and so fail first, and preview URLs are behind Vercel's deployment protection. It is not an
+  emergency; it is a reason not to build previews you do not want.
+- **Preview shares the real Supabase Auth project**, so a preview signs people in against the same
+  `auth.users` as production. Sign-in works and every read after it 503s.
+
+So the recommendation stands but the reason changes from safety to waste: with ten agents pushing
+many times a day, every push would queue a full build — on one concurrent build slot — that is
+guaranteed to fail at the store the moment anyone opens it.
 
 ```json
 "git": { "deploymentEnabled": { "dev": false } }
 ```
 
-in [`vercel.json`](../../vercel.json). That key is per-branch, so it does not touch `main`.
+in [`vercel.json`](../../vercel.json). The key is per-branch and a branch not named in it defaults to
+`true`, so this silences `dev` and leaves `main`'s production auto-deploy — which the pipeline
+depends on — untouched. A one-off preview is still available by hand with `vercel deploy`, which
+`deploymentEnabled` does not affect.
 
 ### The base-branch catch
 
@@ -346,9 +384,10 @@ production branch and GitHub's default branch are separate settings.
 
 1. Create `dev` from `main`, push it, and make it the GitHub default branch.
 2. `deploy.ts:323` accepts `dev`. A test that watches it refuse from the wrong branch.
-3. `vercel.json`: `git.deploymentEnabled.dev = false` until the env-var scoping has been read.
-4. Read the env-var scoping and record the answer in
-   [deployment.md](../project/deployment.md); decide then whether previews on `dev` are wanted.
+3. `vercel.json`: `git.deploymentEnabled.dev = false`.
+4. Record the preview/production env-var split in [deployment.md](../project/deployment.md) — it was
+   read on 2026-08-31 and is written up above, but it lives in a plan, which is the wrong place for
+   a standing fact.
 5. `AGENTS.md` and [version-control.md](../project/version-control.md): agents commit and **push** to
    `dev`; `main` is written only by `npm run deploy`.
 
@@ -978,10 +1017,12 @@ and the two should be decided together rather than growing two answers.
 
 Everything here needs Greg. The first four are new on 2026-08-31 and the first two block Step 0.
 
-0a. **Preview deploys on `dev`, and what environment variables they would carry.** The one with teeth:
-   if this project's Supabase and model-provider keys are scoped to all environments rather than to
-   production, every agent push to `dev` builds something that can reach the production database and
-   spend money. Read the scoping, then decide. Default until then: previews off.
+0a. **Preview deploys on `dev`** — checked and **no longer the scary one**. `DATABASE_URL` and the
+   service-role key are production-only, so a preview cannot reach the production database; it fails
+   at the store. What remains is waste (a build per push, on one concurrent slot, that is guaranteed
+   to 503) plus two small things: the model-provider keys are present on preview, and preview shares
+   the real auth project. Recommendation: `deploymentEnabled: {"dev": false}`. Confirm that is wanted
+   rather than previews-with-their-own-database, which is a bigger piece of work.
 
 0b. **Change the GitHub default branch to `dev`?** Recommended, because it makes
    `claude --worktree` branch from the trunk with no setting at all — `worktree.baseRef` cannot name
