@@ -37,7 +37,9 @@ listed here; the names under each are files in `docs/project/`.
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
   `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
-  `ideas.md` (the propositions the piece assumes) · `search.md` · `diagram.md` ·
+  `ideas.md` (the propositions the piece assumes) ·
+  `quotes.md` (the lines worth keeping) ·
+  `search.md` · `diagram.md` ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
   `review-mode.md` (say what you took from it, and find out) ·
@@ -73,7 +75,7 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 ### The other folders
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
-  the reasoning and the evidence survive.
+  the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
 - **`docs/postmortems/`** — one file per bug worth understanding: the real root cause, the commit
   that introduced it, the fix that's right for the long term, and what would have caught the class.
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
@@ -249,6 +251,18 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
   its own; easy just means quick to write. Reuse the machinery that's already here rather than adding
   a second way to do the same thing, and when two designs work, take the one with fewer parts
   touching each other.
+- **Simplest version first.** Take the simpler product decision, get a v1 working end to end, and
+  add the complexity or the optimisation later, once something shows it is needed. When a choice
+  would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan
+  and in chat — so Greg decides it rather than inherits it.
+  [vision.md § Simpler first](docs/project/vision.md#simpler-first).
+- **Let the types catch it.** Make a wrong state something the compiler refuses, not something a
+  test finds later: a discriminated union rather than a bag of optionals, a `never` check where a
+  `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`
+  are on for exactly this —
+  [typechecking.md § The flags, and why](docs/project/typechecking.md#the-flags-and-why). Run
+  `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
+  ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash — two stages of seven do; copy *their* choice
   of hash input rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
