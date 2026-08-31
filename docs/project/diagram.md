@@ -1096,6 +1096,22 @@ words. `.diag-head h2` now declares `min-width: 0`, `overflow: hidden`,
 minimum is its longest word, so it never shrinks far enough for
 `text-overflow` to do anything, and the other three read as present and working.
 
+**Then measured, at last** (2026-08-31, `preview-diag-note.html`, 96 widths from
+180px to 560px in 4px steps). The icon costs no height at any of them, in either
+row: `.diag-head` is 40.91px shown or hidden, at 288px and at 400px alike, and
+`.diag-opts` is 53.77px at 288 and 29.78px at 400 either way — the difference
+between those two being the chip groups wrapping on their own, which is what
+tells you the icon has genuinely left that row. The heading stays on one line at
+every width, and `scrollWidth === clientWidth` throughout, so the ellipsis never
+engages: at the narrowest band it wants 57.77px and has 217.4px. The icon takes
+24.99px of *width* from it and no height, and cannot raise the row because its
+box is 16.19px against the h2's 22.32px line box. That last part is why the
+arrangement is robust rather than lucky.
+
+Worth stating which of the four this is: **the first whose claim survives a
+sweep**, rather than holding at the widths somebody happened to look at. That is
+the whole difference the thread was about.
+
 Three routes to the same extra line, then, found one at a time by three
 different people looking at the same claim. The claim is now a property of the
 markup rather than a measurement that happened to hold, which is the difference
