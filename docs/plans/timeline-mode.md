@@ -880,7 +880,7 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 
 | File | What to add |
 |---|---|
-| `tests/page-head.test.ts` | **a hardcoded `expect(MODES.length).toBe(9)`** — already stale: `quotes` landed on 2026-08-31 and made it 10, so Timeline makes it 11 |
+| `tests/page-head.test.ts` | **a hardcoded `expect(MODES.length)`**, currently `10` and correct — `quotes` is in. Timeline makes it 11. Its message, *"a mode was added or removed; check this still covers them"*, is an instruction: make the loop cover Timeline, not just the number agree |
 | `tests/page-title.test.ts` | a hand-typed label record — fails with "was a mode added?" |
 | `tests/visitor-gaps.test.ts` | what `timeline`'s visitor gap should be |
 | `tests/store-artefact-manifest.test.ts` | `HOMES["timeline.json"]` — goes red the moment the file exists on disk |
@@ -890,6 +890,23 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 | `tests/public-imports.test.ts` | `src/timeline.ts` into `WRITERS` — ⚠️ a *missing* row is a silent gap, not a red test |
 | `tests/paid-cli-ledger.test.ts` | a row proving the CLI calls `loadEnvLocal()` before it spends money |
 | `tests/db-step-constraint.test.ts` | nothing — it goes red on its own, which is the point |
+
+### The client cannot name a step the server has not declared
+
+Found by Stage 3, and it is a hole in **this plan's parallelism**, not in either implementer's work.
+
+`useStepJob(slug, step: StepName, …)` and `JobProgress`'s `step` prop are both typed on `StepName`,
+so `useTimeline` cannot name its own step until that union grows a member — and growing it reddens
+five exhaustive `Record`s that all live in the server stage's files. So "the panel and the plumbing
+touch disjoint files" was **wrong by one word**.
+
+The fix is ordering rather than design: the server stage lands `"timeline"` in `StepName` plus the
+`Record` entries the compiler demands, gets the tree back to typecheck-green, and hands off. It is
+its first hour's work regardless.
+
+Worth generalising, because the next mode will hit it too: **a mode that runs a job is coupled to the
+server through `StepName` even when it shares no file with it.** A mode that does not run a job —
+`outline`, say — is not.
 
 ### Three decisions this survey turned up that the design has to make
 
