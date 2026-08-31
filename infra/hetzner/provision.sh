@@ -244,6 +244,24 @@ if [ "$SUPA_V" != "$SUPABASE_VERSION" ]; then
 fi
 echo "supabase $SUPA_V"
 
+echo "=== git ==="
+# Identity, so commits from the box are attributed like commits from the laptop.
+run 30 "git identity" su - "$GJD_USERNAME" -c '
+  git config --global user.name  "Greg Detre"
+  git config --global user.email "greg@gregdetre.com"
+  git config --global init.defaultBranch main
+'
+# Credential routing. useHttpPath is what makes git send the repo path to the
+# helper at all -- without it the helper gets only the hostname, cannot tell
+# which owner is being asked for, and correctly refuses rather than guessing.
+run 30 "git credential helper" su - "$GJD_USERNAME" -c '
+  git config --global credential.useHttpPath true
+  git config --global credential."https://github.com".helper /usr/local/bin/github-owner-credential-helper.sh
+'
+# The token directory, owned by the agent user so rotating a token needs no sudo.
+# Empty is the correct state after provisioning: the tokens are a human step.
+install -d -m 0700 -o "$GJD_USERNAME" -g "$GJD_USERNAME" /etc/github-tokens
+
 echo "=== apparmor ==="
 systemctl reload apparmor || true
 
@@ -371,6 +389,14 @@ check "docker daemon runs"       'timeout 30 docker info'
 # The image was pulled above, so this needs no network.
 check "docker run as $USER_NAME" 'timeout 120 su - '"$USER_NAME"' -c "docker run --rm hello-world" | grep -q "Hello from Docker"'
 check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --version" | grep -qx "'"$SUPABASE_VERSION"'"'
+# Git plumbing. Deliberately NOT a check that tokens are present: they are a
+# human step, and a check that stays red until somebody does it is how a report
+# stops being read. The helper refuses loudly at first use if a token is absent.
+check "git identity"             'su - '"$GJD_USERNAME"' -c "git config --global user.email" | grep -q "@"'
+check "git credential helper"    'su - '"$GJD_USERNAME"' -c "git config --global credential.https://github.com.helper" | grep -q github-owner-credential-helper'
+check "git useHttpPath on"       'su - '"$GJD_USERNAME"' -c "git config --global credential.useHttpPath" | grep -qx true'
+check "credential helper runs"   'printf "protocol=https\nhost=github.com\npath=nobody-here/x.git\n\n" | /usr/local/bin/github-owner-credential-helper.sh get; [ $? -eq 1 ]'
+check "token dir"                'test -d /etc/github-tokens && [ "$(stat -c %a /etc/github-tokens)" = "700" ]'
 check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'
 check "sshd config valid"        'sshd -t'
 check "sshd -T runs"             'sshd -T >/dev/null 2>&1'

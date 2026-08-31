@@ -125,6 +125,15 @@ write_files:
   # in a *comment* was interpreted by Terraform; that whole class is gone now --
   # and this very comment had to be reworded for the same reason, which tells you
   # how easy the mistake is to make.
+  # Same literal-injection trick as provision.sh below: base64 via filebase64(),
+  # so Terraform never parses the shell. The tokens it reads are NOT here and
+  # never will be -- they are pasted by hand into /etc/github-tokens/, which is
+  # the one step of this box's setup that a human has to do.
+  - path: /usr/local/bin/github-owner-credential-helper.sh
+    permissions: "0755"
+    encoding: b64
+    content: ${helper_b64}
+
   - path: /usr/local/sbin/provision.sh
     permissions: "0700"
     encoding: b64

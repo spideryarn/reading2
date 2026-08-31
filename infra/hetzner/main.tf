@@ -110,6 +110,7 @@ resource "hcloud_server" "box" {
     # in it cannot break a plan. Base64 also sidesteps every YAML indentation and
     # special-character question at the same time.
     provision_b64 = filebase64("${path.module}/provision.sh")
+    helper_b64    = filebase64("${path.module}/github-owner-credential-helper.sh")
   })
 
   public_net {
