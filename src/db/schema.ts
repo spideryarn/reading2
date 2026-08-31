@@ -65,6 +65,10 @@ import {
 
 import { ID_PATTERN } from "../ids.js";
 import type { Assets } from "../assets.js";
+/* Referee mode's stored result shape. It lives in src/referee-criteria.ts
+   rather than src/types.ts because the validator that guarantees it is in the
+   same file, and the two are one decision — see that file's header. */
+import type { RefereeResult } from "../referee-criteria.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { LabelsFile } from "../labels.js";
 import type {
@@ -341,7 +345,7 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`
+ * Only `fetch`, `extract` and `blocks` mint a revision. `hierarchy`, `arc`, `tweets`
  * and `glossary` write their own column onto the revision that is
  * already published, in one `UPDATE`. That weakens the plain reading of
  * "immutable" and it belongs here rather than arriving as a surprise to
@@ -354,9 +358,9 @@ export const articleVisibilityChanges = spideryarn.table(
  * difference — a single-column `UPDATE` is already atomic.
  *
  * **The limit of that licence, which a review found and which the code
- * enforces:** `toc` is not one of the five. It owns `tree` *and* `labels`, and
- * a job that runs `toc` then `arc` would otherwise show every reader the new
- * tree beside the old arc for the length of a model call. So `toc` mints a
+ * enforces:** `hierarchy` is not one of the five. It owns `tree` *and* `labels`, and
+ * a job that runs `hierarchy` then `arc` would otherwise show every reader the new
+ * tree beside the old arc for the length of a model call. So `hierarchy` mints a
  * revision like the structural steps do, and only genuinely independent
  * on-demand artefacts update in place.
  */
@@ -478,7 +482,7 @@ export const articleRevisions = spideryarn.table(
      *
      * **That rule is intent, not a guard. Nothing enforces it today**, and this
      * comment said `publishRevision` did until 2026-08-27, which was simply
-     * untrue: that function checks blocks, the tree, `checkTree` and the `toc`
+     * untrue: that function checks blocks, the tree, `checkTree` and the `hierarchy`
      * run, and has never looked at these two columns. Nothing writes them yet
      * either, so the claim was vacuous rather than merely wrong — there is no
      * revision it could have been false about.
@@ -691,8 +695,8 @@ export const articleRevisions = spideryarn.table(
      * **Not a `nav_label` column on `revision_blocks`, even though the key
      * would fit.** That would give stage 4b write access to stage 3's rows, and
      * a re-run of labels would mutate rows that are otherwise immutable once
-     * the revision is published. `labels.json` is one of the `toc` step's
-     * OUTPUTS (src/pipeline.ts), so its currency rides with the `toc` row in
+     * the revision is published. `labels.json` is one of the `hierarchy` step's
+     * OUTPUTS (src/pipeline.ts), so its currency rides with the `hierarchy` row in
      * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
      * own. Checked against the code, not assumed — an earlier draft of this
      * work had it as a step and would have added a CHECK value for it.
@@ -930,6 +934,174 @@ export const revisionBlocks = spideryarn.table(
   ],
 );
 
+/* ----------------------------------------------------- referee criteria -- */
+
+/**
+ * **One criterion a peer reviewer is judging a paper against, and what came
+ * back when it was run over the piece.**
+ *
+ * Reader state, article-scoped, `(article_id, id)` — the same shape as
+ * comments, chat threads and searches, for the same reasons.
+ *
+ * **It sits here, above `comments`, because `comments` references it.** The
+ * natural home is beside `search_runs`, which it is modelled on almost column
+ * for column; a table's definition has to precede anything whose foreign key
+ * names it, and the referee's own mark lives on a comment. See
+ * `comments.criterion_id` below for why the mark is a comment rather than a
+ * table of its own.
+ *
+ * ## It is not `search_runs` with a column added
+ *
+ * The plan for this said `search_runs` "has the right shape already". GPT Sol's
+ * review, finding 6, showed it does not: no criterion kind, no poles, no
+ * citations, no scale — and, the one that would have broken first,
+ * `SearchHit.confidence` is a 0–100 *match strength* whose validator clamps
+ * negatives to zero (`validateHits`, src/search.ts). A signed valence pushed
+ * through that field does not arrive wrong, it arrives as `0`, and every
+ * negative judgement the referee asked for is gone with nothing to see.
+ *
+ * So there are two numbers in this feature and they are never one field.
+ * `results` carries the model's `confidence` (0–100) and, on a `diverging`
+ * criterion, its `valence` (−100…+100); `comments.valence` carries the
+ * *referee's own* placement. All three are separate on purpose, and
+ * src/referee-criteria.ts is where the rules are written down and tested.
+ *
+ * **`results` stays JSONB**, for the reason `search_runs.hits` gives in full: it
+ * is one model call's wholesale output, generated together, replaced together,
+ * never edited one at a time, and the only key splitting it would buy is one
+ * onto `block_identities` that we specifically do not want. The poles and the
+ * scale are *columns*, because docs/project/sql.md says the default is a column
+ * and a blob has to argue for itself — and a pole is a short string the database
+ * can constrain.
+ */
+export const refereeCriteria = spideryarn.table(
+  "referee_criteria",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * **What sort of question this is** — `single`, `diverging` or `literature`.
+     *
+     * A discriminator rather than a flag, because the three differ in what a
+     * *result* carries: `diverging` adds a signed valence, `literature` adds
+     * citations and a search count. `REFEREE_CRITERION_KINDS` in
+     * src/referee-criteria.ts is the same list, and the check below is what
+     * makes it true for every writer rather than only for the ones that went
+     * through that TypeScript.
+     */
+    kind: text("kind").notNull(),
+    /** What the reader typed, in their own words. **Never logged** — it is prose. */
+    criterion: text("criterion").notNull(),
+    /**
+     * **What the two ends of a `diverging` criterion mean, in the referee's own
+     * words.** `pole_against` is −100 and prints as "counts against";
+     * `pole_favour` is +100 and prints as "counts for".
+     *
+     * Null on the other two kinds, and the check below makes that both-or-
+     * neither: a diverging criterion with one pole has a signed number pointing
+     * at nothing, and the panel could not print the direction in words — which
+     * docs/project/colour-scales.md requires, because colour may never be the
+     * only carrier of a good/bad judgement.
+     */
+    poleAgainst: text("pole_against"),
+    poleFavour: text("pole_favour"),
+    /**
+     * **Which diverging ramp this criterion is drawn with**, `rg` or `br`, and
+     * **`rg` — red ↔ green — is the default on purpose.**
+     *
+     * docs/project/colour-scales.md calls `--div-*` (blue ↔ red) "the one to
+     * use", because red–green confusion is what colour blindness overwhelmingly
+     * is. The same page permits `--div-rg-*` under one stated condition: *use it
+     * where the reader already knows which end is which from something other
+     * than the colour — a printed number, a label, a position.* Referee mode
+     * meets that condition by construction — every row prints the rank, the
+     * signed number, the direction in words, and the referee's own mark beside
+     * the model's — and Greg asked for red ↔ green three times.
+     *
+     * **If the panel ever stops printing the direction in words, this default
+     * stops being permitted.** That is the condition, and it is written here as
+     * well as on `DivergingScale` (src/referee-criteria.ts) so that a change to
+     * one has somewhere to find the other.
+     *
+     * The check is deliberately narrow rather than open, unlike
+     * `search_runs.colour`: this is a name for a stylesheet block that either
+     * exists or does not, and an unrecognised one would draw nothing at all.
+     */
+    scale: text("scale"),
+    /** Written before the model is called, so a crash leaves a visible unfinished run. */
+    status: text("status").notNull(),
+    /**
+     * The passages this criterion turned up — a `RefereeResult[]`, discriminated
+     * by `kind`, validated by `validateResults` in src/referee-criteria.ts. Every
+     * one is anchored by `blockId` + `quote` (+ `start` as a disambiguator only),
+     * which is the contract in docs/project/block-ids.md.
+     */
+    results: jsonb("results").$type<RefereeResult[]>().notNull().default([]),
+    model: text("model"),
+    error: text("error"),
+    createdAt: createdAt(),
+    /**
+     * **The article this run was answered against** — `hashBlocks`,
+     * src/source-hash.ts. Same field, same function and same word for it as
+     * `search_runs`, the glossary and the summaries carry, and null counts as
+     * stale for the same reason: not knowing is not the same as knowing it is
+     * fine.
+     */
+    sourceHash: text("source_hash"),
+    /**
+     * **Which attempt is in flight, so a second server cannot kill it.** The
+     * full argument is on `search_runs.attempt_id` and is not repeated; the
+     * short version is that an in-process `Set` of running work is wrong the
+     * moment two processes share a database, which on Vercel is the ordinary
+     * shape rather than an edge case.
+     */
+    attemptId: text("attempt_id"),
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+    /**
+     * **The palette slot the reader picked** — null means "whichever one the
+     * hash gives it". The same column, the same loose bound and the same
+     * reasoning as `search_runs.colour`: the database does not know what colour
+     * a slot is, so a value past the end of the palette is ignored by
+     * `assignSlots` and the row falls back to its automatic hue.
+     *
+     * This is the *categorical* colour that says **which criterion** a mark in
+     * the prose came from. It is not `scale`, which says which way a valence
+     * runs. Sol's finding 7 is that those two must not be the same channel.
+     */
+    colour: integer("colour"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("referee_criteria_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("referee_criteria_kind", sql`${t.kind} in ('single','diverging','literature')`),
+    check("referee_criteria_status", sql`${t.status} in ('pending','done','error')`),
+    check(
+      "referee_criteria_colour",
+      sql`${t.colour} is null or (${t.colour} >= 0 and ${t.colour} < 64)`,
+    ),
+    /* Poles and scale are exactly the diverging kind's, and all three arrive or
+       none of them does. Half a diverging criterion is one that cannot be drawn
+       and cannot be described in words, and it would reach the panel looking
+       fine. */
+    check(
+      "referee_criteria_diverging_shape",
+      sql`(${t.kind} = 'diverging') = (${t.poleAgainst} is not null and ${t.poleFavour} is not null and ${t.scale} is not null)`,
+    ),
+    check("referee_criteria_scale", sql`${t.scale} is null or ${t.scale} in ('rg','br')`),
+    /* An attempt is both columns or neither — see `search_runs_attempt_both`.
+       Half of one is a run that either cannot be swept (no age) or cannot be
+       finished (no id), and both fail by leaving `pending` on screen for ever. */
+    check(
+      "referee_criteria_attempt_both",
+      sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
+    ),
+  ],
+);
+
 /* ------------------------------------------------------------- comments -- */
 
 /**
@@ -984,6 +1156,41 @@ export const comments = spideryarn.table(
     attemptId: uuid("attempt_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     createdAt: createdAt(),
+
+    /**
+     * **Which referee criterion this note is answering** — null on an ordinary
+     * reading note, which is every comment written before 2026-08-31.
+     *
+     * Added for Referee mode (docs/plans/260831an-referee-mode-for-peer-reviewers.md).
+     * The referee's own mark **is a comment**: their words, anchored to a
+     * passage, in a table that already has the anchoring discipline, the
+     * gutter, the API and the export. A second store would mean two places to
+     * write about one passage, and Mirror would have to read both.
+     *
+     * It also answers, better than a boolean would, the question of how to tell
+     * a review comment from a reading note: **a comment with a criterion is a
+     * review comment, one without is a reading note.** The distinction falls
+     * out of the data rather than being a separate switch nothing keeps in step.
+     */
+    criterionId: text("criterion_id"),
+
+    /**
+     * **The referee's own placement of this passage on that criterion's scale**,
+     * −100…+100, or null if they wrote prose and did not score it.
+     *
+     * **This is not the model's valence and must never be reconciled with it.**
+     * The model's lives on a `DivergingResult` in `referee_criteria.results`;
+     * this one is the person's. The whole value is in the gap between them —
+     * a passage the referee put at +70 and the model at −40 is a disagreement
+     * about the paper, and it is the row worth opening. Averaging them, or
+     * letting a write of one touch the other, deletes exactly that. See
+     * `valenceGap` in src/referee-criteria.ts.
+     *
+     * Signed, and the check below says so, because the failure this whole
+     * feature was designed around is a signed number travelling through a
+     * field that clamps negatives to zero (`validateHits`, src/search.ts).
+     */
+    valence: integer("valence"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -1012,6 +1219,56 @@ export const comments = spideryarn.table(
       name: "comments_identity_fk",
       columns: [t.articleId, t.blockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }),
+    /**
+     * A placement needs something to be a placement *on*. A `valence` with no
+     * `criterion_id` is a number against nothing, and the one thing it could
+     * plausibly be taken for later — "how the reader feels about this passage in
+     * general" — is a feature nobody has asked for and would be a second meaning
+     * for one column.
+     *
+     * The other direction is allowed: a criterion with no valence is a referee
+     * who wrote a sentence about the criterion and did not score it, which is
+     * the ordinary case.
+     */
+    check(
+      "comments_valence_needs_criterion",
+      sql`${t.valence} is null or ${t.criterionId} is not null`,
+    ),
+    check(
+      "comments_valence_range",
+      sql`${t.valence} is null or (${t.valence} >= -100 and ${t.valence} <= 100)`,
+    ),
+    check(
+      "comments_criterion_id_format",
+      sql`${t.criterionId} is null or ${t.criterionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    /**
+     * **`no action`, not `cascade` and not `restrict`** — and the difference
+     * between the last two is the whole reason this comment exists.
+     *
+     * `cascade` is wrong on its face: deleting a criterion would delete the
+     * referee's own sentences about the paper, which are theirs and are not
+     * derived from anything.
+     *
+     * `restrict` says the right thing — you cannot delete a criterion people
+     * have written against — but says it too early. It is checked row by row as
+     * a delete cascades, so deleting the *article* (which cascades into both
+     * this table and `referee_criteria`, in an order Postgres does not promise)
+     * could hit this constraint while the comment rows are still there and
+     * refuse a delete that is entirely legitimate.
+     *
+     * `no action` is the same rule checked at the end of the statement instead.
+     * Deleting a criterion on its own still fails, loudly, with rows to point
+     * at; deleting the article succeeds, because by then neither row exists.
+     * Verified against the local database rather than reasoned about, and the
+     * check is in tests/db-schema.test.ts. It is the same choice
+     * `revision_blocks_identity_fk` above makes, for a related reason.
+     */
+    foreignKey({
+      name: "comments_criterion_fk",
+      columns: [t.articleId, t.criterionId],
+      foreignColumns: [refereeCriteria.articleId, refereeCriteria.id],
     }),
   ],
 );
@@ -1398,9 +1655,9 @@ export const revisionStepRuns = spideryarn.table(
        * the `summary` step runs before it narrows the constraint. It does, in
        * that order.
        *
-       * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
+       * `labels` is deliberately NOT here. `labels.json` is one of the `hierarchy`
        * step's OUTPUTS rather than a step of its own, so its currency rides
-       * with the `toc` row. Verified against src/pipeline.ts rather than
+       * with the `hierarchy` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
       /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
@@ -1410,7 +1667,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
     ),
     check(
       "revision_step_runs_status",
@@ -1558,7 +1815,7 @@ export const aiCalls = spideryarn.table(
      * column summed across both without this is a number with no meaning.
      */
     wire: text("wire").notNull(),
-    /** Which job made the call: `toc`, `chat`, `embeddings`, … */
+    /** Which job made the call: `hierarchy`, `chat`, `embeddings`, … */
     purpose: text("purpose").notNull(),
     requestedModel: text("requested_model").notNull(),
     /** Which model answered, when the response said. Not always the one asked for. */
@@ -2465,7 +2722,7 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
-    check("checkpoints_namespace", sql`${t.namespace} in ('toc-labels','pdf-chunk')`),
+    check("checkpoints_namespace", sql`${t.namespace} in ('hierarchy-labels','pdf-chunk')`),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
      * filesystem adapter turns this string into a **file name**. A key the

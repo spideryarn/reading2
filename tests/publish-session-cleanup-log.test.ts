@@ -125,7 +125,7 @@ else process.env.LOG_LEVEL = HOISTED.previousLevel;
 function driverError(sentinel: string): Error {
   const err = new Error(
     `Failed query: update spideryarn.jobs set status = $1, steps = $2, title = $3 ` +
-      `params: done,[{"name":"toc","detail":"${sentinel}"}],${sentinel}`,
+      `params: done,[{"name":"hierarchy","detail":"${sentinel}"}],${sentinel}`,
   );
   err.name = "DrizzleQueryError";
   return err;

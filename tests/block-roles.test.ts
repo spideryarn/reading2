@@ -369,9 +369,9 @@ describe("all five roles", () => {
 
       const store = createFsArtifactStore(() => at);
       const artefact = blocksArtefact(SYNTHETIC);
-      await store.write("roles", "toc", { blocks: artefact }, {});
+      await store.write("roles", "hierarchy", { blocks: artefact }, {});
 
-      const read = await store.read("roles", "toc", "blocks");
+      const read = await store.read("roles", "hierarchy", "blocks");
       expect(read).toEqual(artefact);
       // Named rather than left to `toEqual`, because a store that dropped all
       // three would still match an expectation built from the same objects if

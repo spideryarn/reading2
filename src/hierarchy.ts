@@ -1201,14 +1201,14 @@ export interface HierarchyRun {
    * **The hash the caller must record for this step**, read off `labels.json`
    * rather than computed beside it.
    *
-   * `toc` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
+   * `hierarchy` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
    * at length, and it is not an oversight. Recording *no input hash* is a
-   * different thing: `reasonsNotToPublish` compares `toc`'s `input_hash`
+   * different thing: `reasonsNotToPublish` compares `hierarchy`'s `input_hash`
    * against the stored blocks and refuses the publication when they differ, so
    * a run left carrying `NO_INPUT_HASH` makes the article unpublishable
    * (src/store/pg-revisions.ts, src/store/artifacts-pg.ts § `writeArtefacts`).
    *
-   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.toc` is
+   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.hierarchy` is
    * `"labels"`: whatever the caller passes as `inputHash` is compared against
    * that same field by `assertStampAgrees` on the way into either store, and a
    * second computation of "the blocks hash" is how the two come to disagree.
@@ -1458,7 +1458,7 @@ export async function generateHierarchy(opts: {
      `anthropicCallFailed` never sees them. See docs/project/logging.md. */
   let message: Anthropic.Message;
   try {
-    const call = streamMessage("toc", {
+    const call = streamMessage("hierarchy", {
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort },

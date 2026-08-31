@@ -87,7 +87,7 @@ const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
  * old way on purpose.
  */
 const LEAK = {
-  toc: "ZQTOCAAAAA",
+  hierarchy: "ZQTOCAAAAA",
   arc: "ZQARCBBBBB",
   tweets: "ZQTWEETSCC",
   glossary: "ZQGLOSSDDD",
@@ -103,7 +103,7 @@ const LEAK = {
  * one stage added after this harness was written was the one stage never checked
  * for the leak the harness exists to catch. GPT Sol pointed it out twice.
  */
-const STAGES = ["toc", "arc", "tweets", "glossary", "ideas", "labels"] as const;
+const STAGES = ["hierarchy", "arc", "tweets", "glossary", "ideas", "labels"] as const;
 
 /**
  * One line per stage, plus the control. Counted rather than guessed, so that a
@@ -233,7 +233,7 @@ beforeAll(async () => {
       }
     };
 
-    await step("toc", () => generateHierarchy({ blocks, slug: "stop-details" }));
+    await step("hierarchy", () => generateHierarchy({ blocks, slug: "stop-details" }));
     await step("arc", () => generateArc({ article }));
     await step("tweets", () => generateTweets({ article }));
     await step("glossary", () => generateGlossary({ article, previous: null }));

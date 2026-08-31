@@ -73,7 +73,7 @@
  *    decision two paragraphs up, and the reversal is narrower than it looks:
  *    what was wrong about mtimes was the *verdict* drawn from them, never the
  *    number. Nothing compares two of these. The staleness question is exactly
- *    as unanswered as it was, and a person reading "toc ran 3 days ago, arc ran
+ *    as unanswered as it was, and a person reading "hierarchy ran 3 days ago, arc ran
  *    in March" can draw the conclusion this page still refuses to draw for them.
  *  - **Where a PDF came from** — `CameFrom`, below. Their Document Information
  *    had a "file type" row and ours never took it, because until 2026-08-26
@@ -230,7 +230,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   fetch: Download,
   extract: FileText,
   blocks: Blocks,
-  toc: ListTree,
+  hierarchy: ListTree,
   assets: Image,
   arc: Waypoints,
   tweets: ListOrdered,
@@ -695,7 +695,7 @@ export function Metadata({
                     key={stage.step}
                     stage={stage}
                     generator={
-                      stage.step === "toc"
+                      stage.step === "hierarchy"
                         ? `${tree.generator} · ${tree.version}`
                         : stage.step === "arc" && arc
                           ? `${arc.generator} · ${arc.version}`

@@ -18,6 +18,8 @@ reading-view mode gave that name up on 2026-08-29 and the step deliberately kept
 concept wearing two names across the UI, the code and the database; Greg reversed that half so all
 three say the same word —
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md).
+The rows moved in [`drizzle/0041_rename_toc_step_to_hierarchy.sql`](../../drizzle/0041_rename_toc_step_to_hierarchy.sql)
+and the filesystem store's copies in [`scripts/migrate-fs-toc-to-hierarchy.ts`](../../scripts/migrate-fs-toc-to-hierarchy.ts).
 "Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
 rather than the step.
 

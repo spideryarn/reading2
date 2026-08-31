@@ -14,7 +14,7 @@
  * happen to have can pass by luck, so this builds its own article: publishes
  * blocks B1 with all three on-demand artefacts stamped against them, then
  * **re-extracts** to B2 — one paragraph reworded, one dropped, every surviving
- * id kept — and re-runs `toc` beside it, which is what `cascadeForce` already
+ * id kept — and re-runs `hierarchy` beside it, which is what `cascadeForce` already
  * does and what the publication guard requires.
  *
  * ## Four one-line ways to make it red, from the plan
@@ -163,7 +163,7 @@ const HASH2 = hashBlocks(B2);
  *
  * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
  * two answer different questions and two steps still ask the narrow one:
- * `toc.input_hash` is compared against the stored blocks by
+ * `hierarchy.input_hash` is compared against the stored blocks by
  * `reasonsNotToPublish`, and `assets` really is built from the blocks alone.
  * Declared below `treeFor` — see the note there.
  */
@@ -441,7 +441,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     for (const name of ["fetch", "extract", "blocks"] as StepName[]) {
       await step(firstRevision, name);
     }
-    await step(firstRevision, "toc", { inputHash: HASH1 });
+    await step(firstRevision, "hierarchy", { inputHash: HASH1 });
     /* **A `done` run row for `assets` as well as the column**, and it is the
        row that makes the staleness assertion below mean anything: `done` on the
        metadata page is `run.status === "done" && isCurrent(step)`, so without a
@@ -536,7 +536,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
       .set({ tree: treeFor(B2), arc: arcFor(B2), stampedHtml: B2.map((b) => b.html).join("\n") })
       .where(eq(articleRevisions.id, secondRevision));
     await step(secondRevision, "blocks");
-    await step(secondRevision, "toc", { inputHash: HASH2 });
+    await step(secondRevision, "hierarchy", { inputHash: HASH2 });
     await step(secondRevision, "arc", { inputHash: HASH2 });
 
     const published = await publishRevision({ slug: SLUG, revisionId: secondRevision });
@@ -577,7 +577,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        comparison is what yields "present but not current". */
     expect(runs.get("tweets")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
-    expect(runs.get("toc")?.inputHash, "toc was re-run against B2").toBe(HASH2);
+    expect(runs.get("hierarchy")?.inputHash, "hierarchy was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,
     );
@@ -606,8 +606,8 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     }
     /* The step that WAS re-run, so this is not a test that everything is
        false — which is the shape this assertion could rot into. */
-    expect(pg.toc).toBe(true);
-    expect(files.toc).toBe(true);
+    expect(pg.hierarchy).toBe(true);
+    expect(files.hierarchy).toBe(true);
   }, 30_000);
 
   it("keeps the identity of a paragraph the re-extraction dropped", async () => {

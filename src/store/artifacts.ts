@@ -33,7 +33,7 @@
  * The obvious shape — `Record<ArtifactKind, path>` — cannot reproduce what the
  * pipeline writes today, and it took a review to notice. `blocks` has **two**
  * destinations: `output/<slug>.blocks.json`, written by the `blocks` step, and
- * `data/<slug>/blocks.json`, written by `toc` so the tree and the blocks it was
+ * `data/<slug>/blocks.json`, written by `hierarchy` so the tree and the blocks it was
  * built from sit together. Keyed by kind alone, one of those disappears and
  * four stages lose the file they read. So every lookup in the adapter takes a
  * step *and* a kind. The same applies to the HTML, which `extract` writes and
@@ -641,7 +641,7 @@ export interface StepStamp {
  * question that can be asked of them is presence — which is why the truncation
  * hazard was invisible for them and why `has` had to start parsing.
  *
- * `toc` reads its stamp off **`labels.json`, not `tree.json`**, and that is
+ * `hierarchy` reads its stamp off **`labels.json`, not `tree.json`**, and that is
  * worth stating because it looks backwards. The tree is the headline artefact,
  * but it carries only `version` and `generator`; `labels.json` is the one that
  * records `sourceHash` — the blocks it was written against — and
@@ -649,7 +649,7 @@ export interface StepStamp {
  * "is this still about the current article".
  */
 export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
-  toc: "labels",
+  hierarchy: "labels",
   assets: "assets",
   arc: "arc",
   tweets: "tweets",
@@ -870,7 +870,7 @@ export interface ArtifactStore {
    *
    * **Why the store needs this at all**, since it looks like the queue's job:
    * per-file atomic renames are not atomicity across a step. `extract` writes
-   * the HTML *and* `meta.json`; `toc` writes three files. A rerun that replaces
+   * the HTML *and* `meta.json`; `hierarchy` writes three files. A rerun that replaces
    * one of them with a perfectly valid new one and then dies leaves every path
    * present, parsing, and describing two different generations — and `has`
    * cannot tell, because each artefact is individually fine. A review found

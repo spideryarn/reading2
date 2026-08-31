@@ -152,7 +152,7 @@ async function attempt(
   keys: readonly string[],
   stopAfter = Number.POSITIVE_INFINITY,
 ): Promise<Batch[]> {
-  const have = await store.read<Batch>(slug, "toc-labels", keys);
+  const have = await store.read<Batch>(slug, "hierarchy-labels", keys);
   const out: Batch[] = [];
   for (const key of keys) {
     const hit = have.get(key);
@@ -162,7 +162,7 @@ async function attempt(
     }
     if (out.length >= stopAfter) throw new Error("the attempt died here");
     const bought = buyLabels(key);
-    await store.write(slug, "toc-labels", key, bought);
+    await store.write(slug, "hierarchy-labels", key, bought);
     out.push(bought);
   }
   return out;
@@ -230,8 +230,8 @@ describe("the checkpoint store, on the filesystem", () => {
 
   it("keeps many entries under one namespace", async () => {
     const { store, slug } = await workspace();
-    for (const key of KEYS) await store().write(slug, "toc-labels", key, { fingerprint: key });
-    const back = await store().read<Batch>(slug, "toc-labels", KEYS);
+    for (const key of KEYS) await store().write(slug, "hierarchy-labels", key, { fingerprint: key });
+    const back = await store().read<Batch>(slug, "hierarchy-labels", KEYS);
     /* One row per `(namespace)` — the "last entry wins" table the plan warns
        about — passes every single-key assertion and fails this one. */
     expect([...back.keys()].sort()).toEqual([...KEYS].sort());
@@ -240,9 +240,9 @@ describe("the checkpoint store, on the filesystem", () => {
   it("two namespaces do not see each other's keys", async () => {
     const { store, slug } = await workspace();
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { from: "labels" });
+    await store().write(slug, "hierarchy-labels", key, { from: "labels" });
     await store().write(slug, "pdf-chunk", key, { from: "chunks" });
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { from: "labels" }]]),
     );
     expect(await store().read(slug, "pdf-chunk", [key])).toEqual(
@@ -254,20 +254,20 @@ describe("the checkpoint store, on the filesystem", () => {
     const one = await workspace("test-article-one");
     const two = await workspace("test-article-two");
     const key = KEYS[0] as string;
-    await one.store().write(one.slug, "toc-labels", key, { from: "one" });
-    expect(await two.store().read(two.slug, "toc-labels", [key])).toEqual(new Map());
+    await one.store().write(one.slug, "hierarchy-labels", key, { from: "one" });
+    expect(await two.store().read(two.slug, "hierarchy-labels", [key])).toEqual(new Map());
   });
 
   it("the last write wins", async () => {
     const { store, slug } = await workspace();
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { answer: "first" });
-    await store().write(slug, "toc-labels", key, { answer: "second" });
+    await store().write(slug, "hierarchy-labels", key, { answer: "first" });
+    await store().write(slug, "hierarchy-labels", key, { answer: "second" });
     /* `write` is only ever called after a failed read, so the newer value is
        always the better-informed one. Keeping the first threw away exactly the
        answers that were bought because the stored one was useless — see the
        healing test below, which is what that bug actually looked like. */
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "second" }]]),
     );
   });
@@ -295,7 +295,7 @@ describe("the checkpoint store, on the filesystem", () => {
   it("heals a broken entry after exactly one repurchase", async () => {
     const { dir, store, slug } = await workspace("test-heal");
     const key = KEYS[0] as string;
-    const at = path.join(dir, "checkpoints", "toc-labels");
+    const at = path.join(dir, "checkpoints", "hierarchy-labels");
     await mkdir(at, { recursive: true });
     await writeFile(path.join(at, `${key}.json`), '{"fingerprint": "half', "utf-8");
 
@@ -321,17 +321,17 @@ describe("the checkpoint store, on the filesystem", () => {
        parses as nothing, reads back as a miss, and (before the fix above) could
        never be replaced. Postgres refused the same value, so the two stores
        disagreed about a legal write. GPT Sol, 2026-08-29. */
-    await expect(store().write(slug, "toc-labels", key, undefined)).rejects.toThrow(
+    await expect(store().write(slug, "hierarchy-labels", key, undefined)).rejects.toThrow(
       /must serialise to JSON/,
     );
-    await expect(store().write(slug, "toc-labels", key, () => 1)).rejects.toThrow(
+    await expect(store().write(slug, "hierarchy-labels", key, () => 1)).rejects.toThrow(
       /must serialise to JSON/,
     );
     /* And nothing was created on the way to the refusal — not the entry, not a
        temp file, not even the directory. The first version of this serialised
        after `mkdir`, so a refused write still left a directory behind; the
        refusal belongs before any I/O, like the slug assertion. */
-    const at = path.join(dir, "checkpoints", "toc-labels");
+    const at = path.join(dir, "checkpoints", "hierarchy-labels");
     await expect(readdir(at)).rejects.toThrow(/ENOENT/);
   });
 
@@ -342,8 +342,8 @@ describe("the checkpoint store, on the filesystem", () => {
        unreadable entry, and the blanket catch this replaces turned every errno
        into "no checkpoint" — an unreadable disk reporting itself as a first run
        and the caller paying for a whole book to find out. */
-    await mkdir(path.join(dir, "checkpoints", "toc-labels", `${key}.json`), { recursive: true });
-    await expect(store().read(slug, "toc-labels", [key])).rejects.toThrow(/EISDIR/);
+    await mkdir(path.join(dir, "checkpoints", "hierarchy-labels", `${key}.json`), { recursive: true });
+    await expect(store().read(slug, "hierarchy-labels", [key])).rejects.toThrow(/EISDIR/);
   });
 
   it("lets a real fault through the sweep instead of reporting nothing to do", async () => {
@@ -375,21 +375,21 @@ describe("the checkpoint store, on the filesystem", () => {
   it("a half-written entry is a miss, not a throw", async () => {
     const { dir, store, slug } = await workspace();
     const key = KEYS[0] as string;
-    const at = path.join(dir, "checkpoints", "toc-labels");
+    const at = path.join(dir, "checkpoints", "hierarchy-labels");
     await mkdir(at, { recursive: true });
     /* Exactly what the postmortem found on disk: a process killed part-way
        through `writeFile`. Before the fix this threw a SyntaxError out of the
        whole extract step, on every later attempt, for ever —
        docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md. */
     await writeFile(path.join(at, `${key}.json`), '{"records": [{"page": 1', "utf-8");
-    await expect(store().read(slug, "toc-labels", [key])).resolves.toEqual(new Map());
+    await expect(store().read(slug, "hierarchy-labels", [key])).resolves.toEqual(new Map());
   });
 
   it("refuses a key that would escape the directory", async () => {
     const { store, slug } = await workspace();
     for (const bad of ["../../etc/passwd", "..", "a/b", "a.json", ""]) {
-      await expect(store().read(slug, "toc-labels", [bad])).rejects.toThrow(/usable checkpoint key/);
-      await expect(store().write(slug, "toc-labels", bad, {})).rejects.toThrow(
+      await expect(store().read(slug, "hierarchy-labels", [bad])).rejects.toThrow(/usable checkpoint key/);
+      await expect(store().write(slug, "hierarchy-labels", bad, {})).rejects.toThrow(
         /usable checkpoint key/,
       );
     }
@@ -400,7 +400,7 @@ describe("the checkpoint store, on the filesystem", () => {
     /* macOS filesystems are case-insensitive, so `AB` and `ab` would be one
        file and two rows — one store working and the other quietly not. A
        refusal both stores share is the only way the two cannot diverge. */
-    await expect(store().write(slug, "toc-labels", "ABCD1234", {})).rejects.toThrow(
+    await expect(store().write(slug, "hierarchy-labels", "ABCD1234", {})).rejects.toThrow(
       /usable checkpoint key/,
     );
     expect(CHECKPOINT_KEY_RE.test("abcd1234")).toBe(true);
@@ -410,10 +410,10 @@ describe("the checkpoint store, on the filesystem", () => {
   it("refuses a slug that is not the one it was built for", async () => {
     const { dir, slug } = await workspace();
     const store = createFsCheckpointStore({ slug, articleId: FAKE_ARTICLE_ID }, dir);
-    await expect(store.read("some-other-article", "toc-labels", KEYS)).rejects.toThrow(
+    await expect(store.read("some-other-article", "hierarchy-labels", KEYS)).rejects.toThrow(
       /bound to "test-article"/,
     );
-    await expect(store.write("some-other-article", "toc-labels", KEYS[0] as string, {})).rejects.toThrow(
+    await expect(store.write("some-other-article", "hierarchy-labels", KEYS[0] as string, {})).rejects.toThrow(
       /bound to "test-article"/,
     );
     /* And nothing was written on the way to the refusal. */
@@ -426,7 +426,7 @@ describe("the checkpoint store, on the filesystem", () => {
       // @ts-expect-error — the point of the test is the runtime refusal.
       store().write(slug, "made-up", KEYS[0] as string, {}),
     ).rejects.toThrow(/not a checkpoint namespace/);
-    expect(CHECKPOINT_NAMESPACES).toEqual(["toc-labels", "pdf-chunk"]);
+    expect(CHECKPOINT_NAMESPACES).toEqual(["hierarchy-labels", "pdf-chunk"]);
   });
 
   /**
@@ -444,7 +444,7 @@ describe("the checkpoint store, on the filesystem", () => {
    */
   it("returns an empty map for an empty key list", async () => {
     const { store, slug } = await workspace();
-    expect(await store().read(slug, "toc-labels", [])).toEqual(new Map());
+    expect(await store().read(slug, "hierarchy-labels", [])).toEqual(new Map());
   });
 
   /* ------------------------------------------------------------- the sweep -- */
@@ -453,15 +453,15 @@ describe("the checkpoint store, on the filesystem", () => {
     const { dir, store, slug } = await workspace("test-sweep-dry");
     const root = path.dirname(dir);
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { answer: "old" });
-    await age(path.join(dir, "checkpoints", "toc-labels", `${key}.json`), 200);
+    await store().write(slug, "hierarchy-labels", key, { answer: "old" });
+    await age(path.join(dir, "checkpoints", "hierarchy-labels", `${key}.json`), 200);
 
     const report = await sweepFsCheckpoints(root, checkpointCutoff(CHECKPOINT_RETENTION_DAYS));
     expect(report.swept).toBe(1);
     expect(report.bytes).toBeGreaterThan(0);
     /* Still there. A sweep that deletes on its first run is one whose cutoff
        nobody has ever seen the effect of. */
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "old" }]]),
     );
   });
@@ -470,29 +470,29 @@ describe("the checkpoint store, on the filesystem", () => {
     const { dir, store, slug } = await workspace("test-sweep-real");
     const root = path.dirname(dir);
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { answer: "old" });
-    await age(path.join(dir, "checkpoints", "toc-labels", `${key}.json`), 200);
+    await store().write(slug, "hierarchy-labels", key, { answer: "old" });
+    await age(path.join(dir, "checkpoints", "hierarchy-labels", `${key}.json`), 200);
 
     const report = await sweepFsCheckpoints(root, checkpointCutoff(CHECKPOINT_RETENTION_DAYS), {
       dryRun: false,
     });
     expect(report.swept).toBe(1);
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(new Map());
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(new Map());
   });
 
   it("a sweep keeps an old entry that was used today", async () => {
     const { dir, store, slug } = await workspace("test-sweep-hot");
     const root = path.dirname(dir);
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { answer: "hot" });
-    const file = path.join(dir, "checkpoints", "toc-labels", `${key}.json`);
+    await store().write(slug, "hierarchy-labels", key, { answer: "hot" });
+    const file = path.join(dir, "checkpoints", "hierarchy-labels", `${key}.json`);
     await age(file, 200);
 
     /* **The whole reason `last_used_at` exists.** This entry was written two
        hundred days ago and read a moment ago. Sweeping on when it was created
        deletes exactly the entries that were earning their keep, and the bill is
        the only place it shows up. */
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "hot" }]]),
     );
 
@@ -500,7 +500,7 @@ describe("the checkpoint store, on the filesystem", () => {
       dryRun: false,
     });
     expect(report.swept).toBe(0);
-    expect(await store().read(slug, "toc-labels", [key])).toEqual(
+    expect(await store().read(slug, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "hot" }]]),
     );
   });
@@ -509,8 +509,8 @@ describe("the checkpoint store, on the filesystem", () => {
     const { dir, store, slug } = await workspace("test-sweep-neighbours");
     const root = path.dirname(dir);
     const key = KEYS[0] as string;
-    await store().write(slug, "toc-labels", key, { answer: "old" });
-    await age(path.join(dir, "checkpoints", "toc-labels", `${key}.json`), 200);
+    await store().write(slug, "hierarchy-labels", key, { answer: "old" });
+    await age(path.join(dir, "checkpoints", "hierarchy-labels", `${key}.json`), 200);
     /* The artefacts the sweep sits next to, aged past the cutoff too. A sweep
        that walked the article directory rather than `checkpoints/` would take
        the article with it, and would report the same number either way. */
@@ -747,17 +747,17 @@ when("the checkpoint store, in Postgres", () => {
 
   it("two articles do not see each other's entries, in Postgres", async () => {
     const key = KEYS[0] as string;
-    await store().write(SLUG, "toc-labels", key, { from: "one" });
-    expect(await store(otherArticleId, OTHER_SLUG).read(OTHER_SLUG, "toc-labels", [key])).toEqual(
+    await store().write(SLUG, "hierarchy-labels", key, { from: "one" });
+    expect(await store(otherArticleId, OTHER_SLUG).read(OTHER_SLUG, "hierarchy-labels", [key])).toEqual(
       new Map(),
     );
   });
 
   it("two namespaces do not see each other's keys, in Postgres", async () => {
     const key = KEYS[1] as string;
-    await store().write(SLUG, "toc-labels", key, { from: "labels" });
+    await store().write(SLUG, "hierarchy-labels", key, { from: "labels" });
     await store().write(SLUG, "pdf-chunk", key, { from: "chunks" });
-    expect(await store().read(SLUG, "toc-labels", [key])).toEqual(
+    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { from: "labels" }]]),
     );
     expect(await store().read(SLUG, "pdf-chunk", [key])).toEqual(
@@ -767,9 +767,9 @@ when("the checkpoint store, in Postgres", () => {
 
   it("the last write wins, in Postgres", async () => {
     const key = KEYS[2] as string;
-    await store().write(SLUG, "toc-labels", key, { answer: "first" });
-    await store().write(SLUG, "toc-labels", key, { answer: "second" });
-    expect(await store().read(SLUG, "toc-labels", [key])).toEqual(
+    await store().write(SLUG, "hierarchy-labels", key, { answer: "first" });
+    await store().write(SLUG, "hierarchy-labels", key, { answer: "second" });
+    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "second" }]]),
     );
   });
@@ -792,17 +792,17 @@ when("the checkpoint store, in Postgres", () => {
   it("heals an unusable row after exactly one repurchase, in Postgres", async () => {
     const key = "0011223344556677";
     /* Valid JSON, valid jsonb, and not something a caller can use. */
-    await store().write(SLUG, "toc-labels", key, { wrong: "shape" });
+    await store().write(SLUG, "hierarchy-labels", key, { wrong: "shape" });
 
     let bought = 0;
     async function validatingAttempt(): Promise<void> {
-      const have = await store().read<Batch>(SLUG, "toc-labels", [key]);
+      const have = await store().read<Batch>(SLUG, "hierarchy-labels", [key]);
       const hit = have.get(key);
       /* The caller's own gate, not the store's — the store never looks at a
          value's shape, deliberately. */
       if (hit && typeof hit.fingerprint === "string") return;
       bought += 1;
-      await store().write(SLUG, "toc-labels", key, buyLabels(key));
+      await store().write(SLUG, "hierarchy-labels", key, buyLabels(key));
     }
 
     await validatingAttempt();
@@ -829,8 +829,8 @@ when("the checkpoint store, in Postgres", () => {
    */
   it("asks the database nothing for an empty key list", async () => {
     const bogus = mod.pg.createPgCheckpointStore({ slug: SLUG, articleId: "not-a-uuid" });
-    expect(await bogus.read(SLUG, "toc-labels", [])).toEqual(new Map());
-    await expect(bogus.read(SLUG, "toc-labels", [KEYS[0] as string])).rejects.toThrow();
+    expect(await bogus.read(SLUG, "hierarchy-labels", [])).toEqual(new Map());
+    await expect(bogus.read(SLUG, "hierarchy-labels", [KEYS[0] as string])).rejects.toThrow();
   });
 
   it("refuses a value that will not serialise, in Postgres too", async () => {
@@ -838,7 +838,7 @@ when("the checkpoint store, in Postgres", () => {
        means the two stores cannot disagree about what is writable, which they
        did before — Postgres refused `undefined` and the filesystem wrote the
        word. */
-    await expect(store().write(SLUG, "toc-labels", "aabb00112233ffee", undefined)).rejects.toThrow(
+    await expect(store().write(SLUG, "hierarchy-labels", "aabb00112233ffee", undefined)).rejects.toThrow(
       /must serialise to JSON/,
     );
   });
@@ -846,7 +846,7 @@ when("the checkpoint store, in Postgres", () => {
   it("a hit stamps last_used_at", async () => {
     const { schema } = mod;
     const key = "aabbccddeeff0011";
-    await store().write(SLUG, "toc-labels", key, { answer: "x" });
+    await store().write(SLUG, "hierarchy-labels", key, { answer: "x" });
     /* Backdated by hand, because the test cannot wait ninety days and the point
        is the *difference* between created and last used. */
     const long = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
@@ -857,7 +857,7 @@ when("the checkpoint store, in Postgres", () => {
         and(eq(schema.checkpoints.articleId, articleId), eq(schema.checkpoints.key, key)),
       );
 
-    expect(await store().read(SLUG, "toc-labels", [key])).toEqual(new Map([[key, { answer: "x" }]]));
+    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(new Map([[key, { answer: "x" }]]));
 
     const [row] = await db
       .select()
@@ -894,7 +894,7 @@ when("the checkpoint store, in Postgres", () => {
       return "IT WAS ACCEPTED";
     }
     expect(
-      await refusal({ articleId, namespace: "toc-labels", key: "../../etc/passwd", value: {} }),
+      await refusal({ articleId, namespace: "hierarchy-labels", key: "../../etc/passwd", value: {} }),
     ).toBe("checkpoints_key_format");
     expect(await refusal({ articleId, namespace: "made-up", key: "abc123", value: {} })).toBe(
       "checkpoints_namespace",
@@ -902,7 +902,7 @@ when("the checkpoint store, in Postgres", () => {
     /* The control: the same insert with nothing wrong with it is accepted, so a
        table that refused everything could not pass this test. */
     expect(
-      await refusal({ articleId, namespace: "toc-labels", key: "abc123", value: {} }),
+      await refusal({ articleId, namespace: "hierarchy-labels", key: "abc123", value: {} }),
     ).toBe("IT WAS ACCEPTED");
   });
 
@@ -928,12 +928,12 @@ when("the checkpoint store, in Postgres", () => {
           .values({ articleId, status: "draft" })
           .returning();
         /* Inside the failing attempt, exactly where a stage writes one. */
-        await store().write(SLUG, "toc-labels", key, { answer: "paid for" });
+        await store().write(SLUG, "hierarchy-labels", key, { answer: "paid for" });
         throw new RollBack("the attempt failed");
       }),
     ).rejects.toThrow(RollBack);
 
-    expect(await store().read(SLUG, "toc-labels", [key])).toEqual(
+    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
       new Map([[key, { answer: "paid for" }]]),
     );
   });
@@ -944,14 +944,14 @@ when("the checkpoint store, in Postgres", () => {
     const cold = "44ee55ff66007711";
     const long = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
     for (const key of [hot, cold]) {
-      await store().write(SLUG, "toc-labels", key, { answer: key });
+      await store().write(SLUG, "hierarchy-labels", key, { answer: key });
       await db
         .update(schema.checkpoints)
         .set({ createdAt: long, lastUsedAt: long })
         .where(and(eq(schema.checkpoints.articleId, articleId), eq(schema.checkpoints.key, key)));
     }
     /* One of them gets used. */
-    await store().read(SLUG, "toc-labels", [hot]);
+    await store().read(SLUG, "hierarchy-labels", [hot]);
 
     const before = checkpointCutoff(CHECKPOINT_RETENTION_DAYS);
     const dry = await mod.pg.sweepPgCheckpoints(before);

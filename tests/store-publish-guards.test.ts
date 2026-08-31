@@ -3,12 +3,12 @@
  *
  * The publication guard is the last thing standing between a failed pipeline
  * run and a reader seeing it as the article. It checks that the draft has
- * blocks, that it has a tree, that `checkTree` is happy, and that the `toc` step
+ * blocks, that it has a tree, that `checkTree` is happy, and that the `hierarchy` step
  * ran against *these* blocks rather than some earlier generation.
  *
  * **It never looked at whether that run succeeded.** `revision_step_runs.status`
  * is one of `running`, `done` or `error`, and the guard read the row, compared
- * `input_hash`, and stopped (src/store/pg-revisions.ts). So a `toc` that errored
+ * `input_hash`, and stopped (src/store/pg-revisions.ts). So a `hierarchy` that errored
  * — or one still going — published, as long as the hash beside it matched.
  *
  * Found by GPT Sol while reviewing docs/plans/260827aa-delete-the-importer.md, which
@@ -19,7 +19,7 @@
  * ## How to watch these go red
  *
  * Delete the `hierarchyRun.status !== "done"` branch from `publishRevision` and
- * *"refuses a tree whose toc run errored"* and *"…is still running"* both fail.
+ * *"refuses a tree whose hierarchy run errored"* and *"…is still running"* both fail.
  * Both were watched failing that way before the branch existed.
  *
  * The happy-path case is here for a reason rather than for symmetry: a guard
@@ -146,7 +146,7 @@ async function writeBlocks(articleId: string, revisionId: string): Promise<void>
 }
 
 /**
- * The `toc` run this draft will be judged on.
+ * The `hierarchy` run this draft will be judged on.
  *
  * `inputHash` is **always** the hash of the blocks that are really there, so the
  * only thing varying between these tests is `status`. Vary two things and a
@@ -155,7 +155,7 @@ async function writeBlocks(articleId: string, revisionId: string): Promise<void>
 const hierarchyRun = (revisionId: string, status: "running" | "done" | "error") =>
   recordStepRun({
     revisionId,
-    stepName: "toc",
+    stepName: "hierarchy",
     inputHash: HASH,
     implementationVersion: PIPELINE_RUN,
     status,
@@ -165,7 +165,7 @@ const hierarchyRun = (revisionId: string, status: "running" | "done" | "error") 
 
 /**
  * A draft that is complete in every way except the one under test: blocks, a
- * tree over exactly those blocks, and a `toc` run whose hash matches.
+ * tree over exactly those blocks, and a `hierarchy` run whose hash matches.
  */
 async function draftReadyToPublish(): Promise<string> {
   const { articleId, revisionId } = await beginRevision({ slug: SLUG });
@@ -200,14 +200,14 @@ when("the publication guard", () => {
     await closeDb();
   });
 
-  it("refuses a tree whose toc run errored, however well its hash matches", async () => {
+  it("refuses a tree whose hierarchy run errored, however well its hash matches", async () => {
     const revisionId = await draftReadyToPublish();
     await hierarchyRun(revisionId, "error");
 
     await expect(publishRevision({ slug: SLUG, revisionId })).rejects.toThrow(PublishRefused);
   });
 
-  it("refuses a tree whose toc run is still running", async () => {
+  it("refuses a tree whose hierarchy run is still running", async () => {
     const revisionId = await draftReadyToPublish();
     await hierarchyRun(revisionId, "running");
 
@@ -220,7 +220,7 @@ when("the publication guard", () => {
 
     /* The message matters more than usual here. The nearest existing reason
        string blames the hash — "the tree was built from different blocks" —
-       and that would send somebody re-running `toc` to fix a `toc` that ran and
+       and that would send somebody re-running `hierarchy` to fix a `hierarchy` that ran and
        failed. */
     const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
     expect(refusal).toBeInstanceOf(PublishRefused);
@@ -228,7 +228,7 @@ when("the publication guard", () => {
     expect((refusal as PublishRefused).message).not.toContain("different blocks");
   });
 
-  it("still publishes a draft whose toc run finished", async () => {
+  it("still publishes a draft whose hierarchy run finished", async () => {
     const revisionId = await draftReadyToPublish();
     await hierarchyRun(revisionId, "done");
 

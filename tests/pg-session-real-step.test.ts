@@ -70,7 +70,7 @@
  *
  * **2. `commit` never finishes the step** — `await artifacts.finishStep(...)`
  * deleted: `AssertionError: expected 'running' to be 'done'`. The revision still
- * published, because the publication gate reads the `toc` run row and no other.
+ * published, because the publication gate reads the `hierarchy` run row and no other.
  *
  * ## Contention
  *
@@ -311,7 +311,7 @@ async function publishStaleArticle(slug: string): Promise<Fixture> {
   for (const name of ["fetch", "extract", "blocks"] as StepName[]) {
     await stepRun(begun.revisionId, name);
   }
-  await stepRun(begun.revisionId, "toc", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
 
   await publishRevision({ slug, revisionId: begun.revisionId });
 

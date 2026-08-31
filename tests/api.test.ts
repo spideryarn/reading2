@@ -144,7 +144,7 @@ describe("articleMetadata", () => {
 
   it("names the real files each stage writes, not a prettier version of them", async () => {
     const m = await articleMetadata("example");
-    const hierarchy = m.stages.find((s) => s.step === "toc");
+    const hierarchy = m.stages.find((s) => s.step === "hierarchy");
     // All three: stage 4 writes the tree, the nav labels its second model pass
     // produced, AND copies the blocks beside them, so a caller checking only
     // the first would call a half-finished run done. src/hierarchy.ts writes the tree
@@ -173,7 +173,7 @@ describe("articleMetadata", () => {
     // The fixture was hand-authored: nobody ever fetched a page for it, and
     // nothing ever wrote its HTML into output/.
     expect(m.stages.find((s) => s.step === "fetch")?.done).toBe(false);
-    expect(m.stages.find((s) => s.step === "toc")?.done).toBe(true);
+    expect(m.stages.find((s) => s.step === "hierarchy")?.done).toBe(true);
   });
 
   it("needs ALL of a stage's outputs before calling it done", async () => {
@@ -204,7 +204,7 @@ describe("articleMetadata", () => {
     // checks the shape and the honesty of the absence, and there is still no
     // staleness comparison anywhere for it to check.
     const m = await articleMetadata("example");
-    const hierarchy = m.stages.find((s) => s.step === "toc");
+    const hierarchy = m.stages.find((s) => s.step === "hierarchy");
     // The fixture's tree.json is committed, so this is whenever the repo was
     // checked out — which is exactly why the tooltip says "when, never what
     // from". A parseable ISO string is all that can be asserted about it.

@@ -959,7 +959,7 @@ describe("the wall-clock budget", () => {
    * that had nothing to do with this step, and the bound is derived from
    * `LEASE_MS`, so it silently loosened from permitting 340s to permitting
    * **666s** — while the arithmetic that actually constrains this constant
-   * leaves it **399.6s** (740s deadline, less `toc` at 320.4s, less the cheap
+   * leaves it **399.6s** (740s deadline, less `hierarchy` at 320.4s, less the cheap
    * steps). It would have gone green on a budget 266s too large, and it was
    * still passing when it was found.
    *

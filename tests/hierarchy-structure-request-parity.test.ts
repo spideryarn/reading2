@@ -118,7 +118,7 @@ describe("the structure call's request", () => {
     expect(captured).toHaveLength(1);
 
     const { task, body } = captured[0]!;
-    expect(task).toBe("toc");
+    expect(task).toBe("hierarchy");
     expect(body.system).toBe(EXPECTED_SYSTEM);
     expect(body.messages).toEqual([{ role: "user", content: EXPECTED_USER }]);
     expect(body.thinking).toEqual({ type: "adaptive" });

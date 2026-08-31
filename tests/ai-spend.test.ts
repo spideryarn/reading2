@@ -34,7 +34,7 @@ import {
 /** A plausible finished call. Override whatever the test is about. */
 function call(over: Partial<SpendRecord> = {}): SpendRecord {
   return {
-    job: "toc",
+    job: "hierarchy",
     answeredBy: "anthropic/claude-sonnet-5",
     upstreamCostNanos: 21_523_500,
     model: "anthropic/claude-sonnet-5",
@@ -68,13 +68,13 @@ beforeEach(() => resetUnscopedCalls());
 describe("collectSpend", () => {
   it("collects calls made anywhere inside it, including after an await", async () => {
     const { result, report } = await collectSpend(async () => {
-      recordSpend(call({ job: "toc" }));
+      recordSpend(call({ job: "hierarchy" }));
       await Promise.resolve();
       recordSpend(call({ job: "labels" }));
       return "the answer";
     });
     expect(result).toBe("the answer");
-    expect(report.calls.map((c) => c.job)).toEqual(["toc", "labels"]);
+    expect(report.calls.map((c) => c.job)).toEqual(["hierarchy", "labels"]);
   });
 
   it("gives each piece of work its own box, so two runs cannot bill each other", async () => {
@@ -189,7 +189,7 @@ describe("a call that was started and never recorded", () => {
 
   it("is not counted as pending once it has been recorded", async () => {
     const { report } = await collectSpend(async () => {
-      const id = beginSpend("toc", "m");
+      const id = beginSpend("hierarchy", "m");
       recordSpend(call(), id);
     });
     expect(report.pending).toEqual([]);
@@ -360,7 +360,7 @@ let sinkGate: (row: AiCallRow) => Promise<void> = async () => undefined;
 async function rowsFrom(
   options: Parameters<typeof collectSpend>[1] = {},
   body: () => void = () => {
-    const id = beginSpend("toc", "anthropic/claude-sonnet-5");
+    const id = beginSpend("hierarchy", "anthropic/claude-sonnet-5");
     recordSpend(call(), id);
   },
 ): Promise<AiCallRow[]> {
@@ -409,15 +409,15 @@ describe("the sink", () => {
         ownerId: "00000000-0000-4000-8000-00000000ac02",
         articleSlug: "some-article",
         jobId: "job-7",
-        stepName: "toc",
+        stepName: "hierarchy",
       },
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.scopeKind).toBe("job_step");
     expect(rows[0]?.articleSlug).toBe("some-article");
     expect(rows[0]?.jobId).toBe("job-7");
-    expect(rows[0]?.stepName).toBe("toc");
-    expect(rows[0]?.job).toBe("toc");
+    expect(rows[0]?.stepName).toBe("hierarchy");
+    expect(rows[0]?.job).toBe("hierarchy");
     expect(rows[0]?.creditsUsedNanos).toBe(21_523_500);
     /* Named `credits`, not `cost`. The rename is the decision — see
        docs/plans/260827q-ai-cost-tracking.md Q5 — and a test that only checked the
@@ -433,7 +433,7 @@ describe("the sink", () => {
     let pendingId: string | undefined;
     await collectSpend(
       async () => {
-        const id = beginSpend("toc", "anthropic/claude-sonnet-5");
+        const id = beginSpend("hierarchy", "anthropic/claude-sonnet-5");
         pendingId = currentSpend()?.pending[0]?.rowId;
         recordSpend(call(), id);
       },
@@ -456,7 +456,7 @@ describe("the sink", () => {
     let settled = false;
     await collectSpend(
       async () => {
-        const id = beginSpend("toc", "m");
+        const id = beginSpend("hierarchy", "m");
         recordSpend(call(), id);
       },
       {
@@ -473,7 +473,7 @@ describe("the sink", () => {
   it("does not let a failing sink fail the work — a metrics write is not the feature", async () => {
     const { result } = await collectSpend(
       async () => {
-        const id = beginSpend("toc", "m");
+        const id = beginSpend("hierarchy", "m");
         recordSpend(call(), id);
         return "the answer";
       },
@@ -504,7 +504,7 @@ describe("the sink", () => {
     let finishing: Promise<void> | undefined;
     await collectSpend(
       async () => {
-        const id = beginSpend("toc", "m");
+        const id = beginSpend("hierarchy", "m");
         finishing = gate.then(() => {
           recordSpend(call(), id);
         });
@@ -616,7 +616,7 @@ describe("closing the box", () => {
         });
         /* This one's sink blocks, so `collectSpend` is inside its drain when the
            second call finishes. `fn` itself returns straight away. */
-        recordSpend(call(), beginSpend("toc", "m"));
+        recordSpend(call(), beginSpend("hierarchy", "m"));
       },
       {
         attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
@@ -632,7 +632,7 @@ describe("closing the box", () => {
 
     /* One row, and the second call accounted for rather than lost. */
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.job).toBe("toc");
+    expect(rows[0]?.job).toBe("hierarchy");
     expect(lateCalls()).toBeGreaterThanOrEqual(1);
   });
 });
@@ -696,7 +696,7 @@ describe("a run id", () => {
     const rows: AiCallRow[] = [];
     const { report } = await collectSpend(
       async () => {
-        recordSpend(call(), beginSpend("toc", "m"));
+        recordSpend(call(), beginSpend("hierarchy", "m"));
         recordSpend(call({ job: "arc" }), beginSpend("arc", "m"));
       },
       {

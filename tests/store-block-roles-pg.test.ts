@@ -184,8 +184,8 @@ async function makeClassifiedFixture(): Promise<{
  *    `isStructural` refuses, and `writes` labels all eighteen of its gistable
  *    blocks. Classifying three of them without unlabelling their leaves
  *    describes an article that stage 4 would never produce.
- * 2. `reasonsNotToPublish` compares `toc`'s recorded `input_hash` against
- *    `hashBlocks` of the blocks being published, and `toc`'s stamp comes from
+ * 2. `reasonsNotToPublish` compares `hierarchy`'s recorded `input_hash` against
+ *    `hashBlocks` of the blocks being published, and `hierarchy`'s stamp comes from
  *    `labels.json`'s `sourceHash` (`STAMP_SOURCE` in src/store/artifacts.ts).
  *    Changing a block without restamping says the tree was built from a
  *    different article, which it was.
@@ -246,7 +246,7 @@ when("a classified article through Postgres", () => {
     /* A genuine first write. Without this the whole suite could be reading
        columns carried forward from a revision some earlier run published. */
     expect(loaded.basedOn).toBeNull();
-    expect(loaded.copied).toContain("toc");
+    expect(loaded.copied).toContain("hierarchy");
 
     /* **The columns, read directly**, before any projection gets a chance to
        reconstruct them. The mutation this file exists for is in the *write*, so

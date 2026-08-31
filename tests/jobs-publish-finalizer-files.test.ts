@@ -166,7 +166,7 @@ const FAKE_STEPS = {
     blocks: { blocks: BLOCKS },
     stampedHtml: `<html><body>${BLOCKS.map((b) => b.html).join("")}</body></html>`,
   }),
-  toc: writingStep("toc", { tree: TREE, labels: LABELS, blocks: { blocks: BLOCKS } }),
+  hierarchy: writingStep("hierarchy", { tree: TREE, labels: LABELS, blocks: { blocks: BLOCKS } }),
 };
 
 const MADE: string[] = [];
@@ -224,7 +224,7 @@ describe("a job under the filesystem store", () => {
   });
 
   it("runs on the plain filesystem session, with no publishing wrapper round it", async () => {
-    const job = await queueJob(["blocks", "toc"]);
+    const job = await queueJob(["blocks", "hierarchy"]);
     const session = await claimSession(job, "not-a-real-attempt");
     /* `guardDbStore` marks what it wrapped, and the publishing session is the
        only thing in this path that is wrapped. Structural, and it is here as the
@@ -234,7 +234,7 @@ describe("a job under the filesystem store", () => {
   });
 
   it("ends done having published nothing and touched no database", async () => {
-    const job = await queueJob(["blocks", "toc"]);
+    const job = await queueJob(["blocks", "hierarchy"]);
 
     const advanced = await runAsOwner(DEV_OWNER_ID, () =>
       advanceJobWith(job.id, {
@@ -253,6 +253,6 @@ describe("a job under the filesystem store", () => {
 
     /* And the artefacts stayed where the stages put them, which is the other
        half of "behaviour is exactly what it is today". */
-    expect(await fsArtifacts.has(SLUG, "toc", ["tree", "labels", "blocks"])).toBe(true);
+    expect(await fsArtifacts.has(SLUG, "hierarchy", ["tree", "labels", "blocks"])).toBe(true);
   }, 30_000);
 });

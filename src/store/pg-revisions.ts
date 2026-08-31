@@ -553,7 +553,7 @@ export interface BeginRevisionResult {
  * Start a new draft revision, as a copy of whatever is published now.
  *
  * One transaction, from the article lock to the last copied row. That is a
- * requirement rather than tidiness: `toc`, `arc`, `tweets` and `glossary`
+ * requirement rather than tidiness: `hierarchy`, `arc`, `tweets` and `glossary`
  * update the *published* revision in place, so a copy spread over
  * three transactions could take the blocks from before an in-place update and
  * the columns from after it.
@@ -1179,19 +1179,19 @@ async function reasonsNotToPublish(
   const runs = await tx
     .select()
     .from(revisionStepRuns)
-    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")));
+    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")));
   const hierarchyRun = runs[0];
   const blocksHash = hashBlocks(blocks);
 
   if (!hierarchyRun) {
     reasons.push(
-      "there is no record of the toc step running, so nothing can say the tree describes these blocks",
+      "there is no record of the hierarchy step running, so nothing can say the tree describes these blocks",
     );
   } else if (hierarchyRun.status !== "done") {
     /* **Before the hash, and instead of it.** `revision_step_runs.status` is
        `running`, `done` or `error`, and this branch did not exist until
        2026-08-27: the guard read the row, compared `input_hash` and stopped, so
-       a `toc` that ran and *failed* published as long as the hash beside it
+       a `hierarchy` that ran and *failed* published as long as the hash beside it
        matched — and `recordStepRun`, which is what the importer and every CLI
        run use, does record a real hash at the moment it says `running`.
 
@@ -1204,14 +1204,14 @@ async function reasonsNotToPublish(
 
        `else if` rather than a second reason, because the hash cannot be trusted
        to mean anything here and "the tree was built from different blocks —
-       re-run toc" would send somebody to re-run the thing that has just told us
+       re-run hierarchy" would send somebody to re-run the thing that has just told us
        it failed. */
     reasons.push(
-      `the toc step ${hierarchyRun.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
+      `the hierarchy step ${hierarchyRun.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
     );
   } else if (hierarchyRun.inputHash !== blocksHash) {
     reasons.push(
-      `the tree was built from different blocks (toc ran against ${hierarchyRun.inputHash}, these blocks are ${blocksHash}) — re-run toc`,
+      `the tree was built from different blocks (hierarchy ran against ${hierarchyRun.inputHash}, these blocks are ${blocksHash}) — re-run hierarchy`,
     );
   }
 
@@ -1255,16 +1255,16 @@ export interface PublishRevisionResult {
  *    exact coverage, order, child partitioning. Editorial advice from that same
  *    check is deliberately ignored: refusing to publish an article because a
  *    nav label is five words would train everyone to route around this.
- * 3. **A tree built from different blocks.** The `toc` step-run row's
+ * 3. **A tree built from different blocks.** The `hierarchy` step-run row's
  *    `input_hash` must equal `hashBlocks` of this draft's blocks. Without it, a
  *    text-only re-extraction that keeps every id publishes the old gists and nav
  *    labels **with no stale banner anywhere** — the tree is structurally
- *    perfect and describes an article nobody can read any more. A missing `toc`
+ *    perfect and describes an article nobody can read any more. A missing `hierarchy`
  *    row is refused too, because "I cannot tell" is not "it is fine".
  *
  * **The third is a behaviour change and it is worth saying out loud:** a job of
  * `{ steps: ["blocks"] }` alone now fails where today it succeeds and quietly
- * diverges. The fix for anyone who hits it is to run `toc` as well, which
+ * diverges. The fix for anyone who hits it is to run `hierarchy` as well, which
  * `DEFAULT_INGEST_STEPS` and `cascadeForce` already do.
  *
  * This is the wrapper: one transaction of its own around `publishRevisionIn`,

@@ -138,7 +138,7 @@ Exactly one string per part, in order.`;
 export function partsOf(tree: Tree): TreeNode[] {
   const root = tree.nodes[tree.rootId];
   /* `bug`, so the job card does not offer a Retry that cannot work. The tree
-     comes off disk from a `toc` step that already finished, and Retry skips
+     comes off disk from a `hierarchy` step that already finished, and Retry skips
      every step that finished — so a second attempt reads the identical
      tree.json and fails in the same line. A tree that names a root it does not
      contain is stage 4 having written something malformed, which is a defect
@@ -217,11 +217,11 @@ export function buildArc(
  * fields the prompt actually carries.**
  *
  * The arc had no input fingerprint at all until 2026-08-29. Its freshness was its
- * *position* — it sat in `DEFAULT_INGEST_STEPS` behind `toc`, so `cascadeForce`
+ * *position* — it sat in `DEFAULT_INGEST_STEPS` behind `hierarchy`, so `cascadeForce`
  * swept it whenever an earlier step was forced (src/pipeline.ts §
  * `FORCE_ONLY_WHEN_NAMED`, which says so and adds "give it a freshness check of its
  * own and it belongs here too"). That was never quite true: `cascadeForce` only
- * names steps already in the job, so a forced `steps: ["toc"]` has never reached
+ * names steps already in the job, so a forced `steps: ["hierarchy"]` has never reached
  * `arc`, and the resulting stale arc loses entries **in silence** — the join in
  * `buildArcColumn` is by exact block range, and an entry matching no node is simply
  * not drawn.

@@ -887,7 +887,7 @@ async function articleDir(slug: string): Promise<string | null> {
  * it looks — **what was wrong was the verdict, not the number**. Nothing here
  * compares two timestamps, and nothing infers anything from one; the page shows
  * when a stage last wrote, says so as a plain fact, and leaves the staleness
- * question exactly as unanswered as it was. A person reading "toc ran 3 days
+ * question exactly as unanswered as it was. A person reading "hierarchy ran 3 days
  * ago, arc ran in March" can draw their own conclusion, which is the thing this
  * page is for and the thing a red banner takes away from them.
  *

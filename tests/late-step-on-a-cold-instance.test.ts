@@ -13,7 +13,7 @@
  * (src/store/data-root.ts) — scoped to **one job**, deliberately, so that a
  * failed job's half-built artefacts cannot be served as the next job's. A job
  * created as `{ slug, steps: ["tweets"] }` has exactly one step in it, so
- * `fetch`, `extract`, `blocks` and `toc` never run and never write. The
+ * `fetch`, `extract`, `blocks` and `hierarchy` never run and never write. The
  * article's blocks are in Postgres, where the ingest that made them published
  * them. The scratch directory is empty and always will be.
  *
@@ -123,7 +123,7 @@ describe("a single-step job on an instance that never ingested the article", () 
   it("the store holds the blocks the step needs", async () => {
     /* If this ever fails the rest of the file proves nothing — it would be
        testing an absent article rather than an unreachable one. */
-    const file = await store.read(SLUG, "toc", "blocks");
+    const file = await store.read(SLUG, "hierarchy", "blocks");
     expect(file?.blocks.length).toBeGreaterThan(0);
   });
 
@@ -149,7 +149,7 @@ describe("a single-step job on an instance that never ingested the article", () 
    * src/jobs.ts still builds `fsStoreSession({ artifacts: fsArtifacts })`, and
    * on a deployment that store is rooted at the same job-scoped `/tmp` the
    * directory is. So the production failure of 2026-08-30 is still there; it
-   * now arrives as *"No blocks or tree … run the toc step first"* rather than
+   * now arrives as *"No blocks or tree … run the hierarchy step first"* rather than
    * as an `ENOENT` from three layers down. **These tests are the stage being
    * ready for a store that can see the article, not evidence that one exists.**
    * The line that makes it exist is the `pgStoreSession` swap in stage 3, and
@@ -175,7 +175,7 @@ describe("a single-step job on an instance that never ingested the article", () 
        and still read plausibly. Hard-coding a count here would make this test
        fail the day the fixture's tree changed, for a reason that has nothing to
        do with what it is about. */
-    const tree = await store.read(SLUG, "toc", "tree");
+    const tree = await store.read(SLUG, "hierarchy", "tree");
     if (!tree) throw new Error("the fixture has no tree");
     const sentences = partsOf(tree).map((_, i) => `Part ${i + 1} says something.`);
     answers.push(JSON.stringify({ arc: sentences }));
@@ -199,6 +199,6 @@ describe("a single-step job on an instance that never ingested the article", () 
       dir: path.join(scratch, "data", slug),
       htmlFile: path.join(scratch, "output", `${slug}.html`),
     })) as ArtifactReads;
-    await expect(STEPS.arc.run(coldContext(), empty)).rejects.toThrow(/run the toc step first/);
+    await expect(STEPS.arc.run(coldContext(), empty)).rejects.toThrow(/run the hierarchy step first/);
   });
 });

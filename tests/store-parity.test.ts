@@ -400,7 +400,7 @@ when("the filesystem and Postgres stores agree", () => {
      *
      * `data/constitution/labels.json` was written before stage 4 recorded the
      * `sourceHash` of the blocks it labelled. `publishRevision` requires the
-     * `toc` step's `input_hash` to equal `hashBlocks` of the revision's blocks
+     * `hierarchy` step's `input_hash` to equal `hashBlocks` of the revision's blocks
      * (`reasonsNotToPublish`, src/store/pg-revisions.ts), and an unstamped
      * labels file gives it nothing to compare — so it refuses, which is the
      * right answer to a table of contents that might describe different text.
@@ -426,7 +426,7 @@ when("the filesystem and Postgres stores agree", () => {
 
       // The copy worked: this is not "nothing happened".
       expect(result.basedOn).toBeNull();
-      expect(result.copied).toContain("toc");
+      expect(result.copied).toContain("hierarchy");
       // And then the gate said no, for the one reason it should have.
       expect(result.published).toBe(false);
       expect(result.refusedBecause.join(" | ")).toMatch(/toc ran against unstamped/);

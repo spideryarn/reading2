@@ -214,7 +214,7 @@ when("re-importing an article whose blocks have not changed", () => {
     const after = await steps();
     expect(after).not.toContain("arc");
     // Not vacuous: the steps whose artefacts are still there must survive.
-    expect(after).toEqual(expect.arrayContaining(["blocks", "toc", "extract", "fetch"]));
+    expect(after).toEqual(expect.arrayContaining(["blocks", "hierarchy", "extract", "fetch"]));
     // And the column itself is cleared, not just the step row.
     expect((await revisionRow())?.revision.arc).toBeNull();
   }, 30_000);
@@ -360,14 +360,14 @@ when("re-importing an article whose blocks have not changed", () => {
       "second-hash-after-the-tree-was-recut",
     ]);
 
-    /* And `toc` keeps the blocks hash, which is the one row that must:
+    /* And `hierarchy` keeps the blocks hash, which is the one row that must:
        `reasonsNotToPublish` compares that column against the stored blocks and
        refuses the publication when they differ. */
     const hierarchy = await db
       .select({ hash: revisionStepRuns.inputHash })
       .from(revisionStepRuns)
       .where(
-        and(eq(revisionStepRuns.revisionId, revision!.id), eq(revisionStepRuns.stepName, "toc")),
+        and(eq(revisionStepRuns.revisionId, revision!.id), eq(revisionStepRuns.stepName, "hierarchy")),
       );
     expect(hierarchy[0]?.hash).not.toBe("second-hash-after-the-tree-was-recut");
 

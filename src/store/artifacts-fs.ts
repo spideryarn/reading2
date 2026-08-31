@@ -95,12 +95,12 @@ export function fsLocations(slug: string): ArtifactLocations {
  * Every path this project writes a pipeline artefact to. **The one place.**
  *
  * Keyed by step and then by kind, because two kinds share a path and one kind
- * has two paths — see the header. Read it as: *when `toc` produces `blocks`, it
+ * has two paths — see the header. Read it as: *when `hierarchy` produces `blocks`, it
  * goes here*.
  *
- * `blocks` appearing under both `blocks` and `toc` is not a mistake and must
+ * `blocks` appearing under both `blocks` and `hierarchy` is not a mistake and must
  * not be tidied away. Stage 3's copy is the one stage 3 checks, so that a
- * `{ steps: ["blocks"] }` job can skip itself without `toc` having run; stage
+ * `{ steps: ["blocks"] }` job can skip itself without `hierarchy` having run; stage
  * 4's copy is the one the later stages read, so that the tree and the blocks it
  * was built from are guaranteed to be a pair. Removing either breaks something
  * that is currently right.
@@ -134,7 +134,7 @@ export const PATHS: {
     blocks: (at) => at.htmlFile.replace(/\.html$/, ".blocks.json"),
     stampedHtml: (at) => at.htmlFile,
   },
-  toc: {
+  hierarchy: {
     tree: (at) => path.join(at.dir, "tree.json"),
     labels: (at) => path.join(at.dir, "labels.json"),
     blocks: (at) => path.join(at.dir, "blocks.json"),
@@ -542,7 +542,7 @@ export function createFsArtifactStore(
      * The one thing this must not do is guess. GPT Sol, 2026-08-28.
      */
     async hasEarlierBlocks(slug) {
-      const outcome = await readOutcome(locate(slug), slug, "toc", "blocks");
+      const outcome = await readOutcome(locate(slug), slug, "hierarchy", "blocks");
       if (outcome.state === "absent") return false;
       if (outcome.state === "unusable") return true;
       const blocks = (outcome.value as ArtifactMap["blocks"]).blocks;

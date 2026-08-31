@@ -112,7 +112,7 @@ when("exporting an article whose bytes are in the bucket", () => {
     }
     /* Two files in `output/`, not one. `stampedHtml` is `output/<slug>.html`
        and stage 3's `blocks` is `output/<slug>.blocks.json` — a different file
-       from `data/<slug>/blocks.json`, which belongs to `toc`. Copy only the
+       from `data/<slug>/blocks.json`, which belongs to `hierarchy`. Copy only the
        first and `copyArtefacts` refuses the whole article, correctly, for
        having some but not all of the `blocks` step's products. */
     await cp(path.join(ROOT, "output", `${FROM}.html`), path.join(ROOT, "output", `${SLUG}.html`));

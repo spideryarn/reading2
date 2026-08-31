@@ -36,9 +36,9 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     ownerId: "00000000-0000-4000-8000-00000000ac01",
     articleSlug: "a-slug",
     jobId: "job-7",
-    stepName: "toc",
+    stepName: "hierarchy",
     wire: "messages",
-    job: "toc",
+    job: "hierarchy",
     requestedModel: "anthropic/claude-sonnet-5",
     answeredModel: "anthropic/claude-sonnet-5",
     upstream: "Anthropic",
@@ -346,7 +346,7 @@ describe("the filesystem ledger", () => {
     await store.record(a);
     await store.record(b);
     const found = await store.forJob("job-parted");
-    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "toc"]);
+    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "hierarchy"]);
     /* Carried through rather than dropped: a damaged line belonging to this job
        would otherwise make a short job total look confident. The lines the three
        tests above appended are still in this file, which is what makes this

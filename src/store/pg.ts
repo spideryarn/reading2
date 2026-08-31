@@ -1064,7 +1064,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   fetch: ["article_revisions.raw_bytes"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
-  toc: ["article_revisions.tree", "article_revisions.labels"],
+  hierarchy: ["article_revisions.tree", "article_revisions.labels"],
   /* The manifest is the column; the bytes it names are objects in the `sources`
      bucket, which is not a table and so is not listed here. */
   assets: ["article_revisions.assets"],
@@ -1903,7 +1903,7 @@ export const pgArticleReader: Pick<
    *
    * ## What "current" means per step, and the one half that is still missing
    *
-   * `toc` is checked the way `publishRevision` checks it, so the metadata page
+   * `hierarchy` is checked the way `publishRevision` checks it, so the metadata page
    * and the publication guard cannot disagree: the recorded `input_hash` must
    * equal `hashBlocks` of this revision's blocks.
    *
@@ -1975,11 +1975,11 @@ export const pgArticleReader: Pick<
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
-        case "toc": {
+        case "hierarchy": {
           if (!revision.tree || !blocksHash) return false;
-          return byStep.get("toc")?.inputHash === blocksHash;
+          return byStep.get("hierarchy")?.inputHash === blocksHash;
         }
-        /* The same two questions as `toc`, and the same answer — but asked of
+        /* The same two questions as `hierarchy`, and the same answer — but asked of
            the artefact rather than of the step row, because the manifest
            carries its own `sourceHash` and its own version. That second half
            matters: the step re-runs when what it *decides* changes (which URLs

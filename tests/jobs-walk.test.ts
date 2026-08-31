@@ -375,7 +375,7 @@ describe("one claim walks the whole job", () => {
     /**
      * **The deliberate handoff, and the only one left.** The self-abort bounds
      * the whole claim rather than each step, so a walk that has spent most of
-     * its deadline must not start a `toc`: it would be killed four fifths of the
+     * its deadline must not start a `hierarchy`: it would be killed four fifths of the
      * way through the one step nobody can afford to repeat, and the job would
      * end `error` with a live lease. Handed back, the job is `queued`, intact,
      * and the next request continues.
@@ -386,12 +386,12 @@ describe("one claim walks the whole job", () => {
      * budget check that runs before it.
      */
     vi.useFakeTimers({ toFake: ["Date"] });
-    const names: StepName[] = ["fetch", "toc"];
+    const names: StepName[] = ["fetch", "hierarchy"];
     const { ran, job, parts } = await fixture("test-walk-budget", names, {
       fetch: () => {
-        /* Long enough that `toc`'s budget no longer fits inside what is left of
+        /* Long enough that `hierarchy`'s budget no longer fits inside what is left of
            the claim, and short enough that the claim itself has not lapsed. */
-        vi.setSystemTime(new Date(Date.now() + LEASE_MS - STEP_BUDGET_MS.toc));
+        vi.setSystemTime(new Date(Date.now() + LEASE_MS - STEP_BUDGET_MS.hierarchy));
       },
     });
 
@@ -410,7 +410,7 @@ describe("one claim walks the whole job", () => {
     const second = await advanceJobWith(job.id, parts);
     expect(second?.done).toBe(true);
     expect(second?.job.status).toBe("done");
-    expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "toc"]);
+    expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "hierarchy"]);
   });
 
   it("puts the job id in scope for the steps it runs", async () => {

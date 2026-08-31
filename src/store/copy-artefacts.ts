@@ -73,7 +73,7 @@ async function stampOrEmpty(store: ArtifactStore, slug: string, step: StepName):
  *
  * **Steps in pipeline order, and a step with nothing is skipped rather than
  * written empty.** Order matters because the destination may derive one
- * artefact's validity from another's — `blocks` before `toc`, above all — and
+ * artefact's validity from another's — `blocks` before `hierarchy`, above all — and
  * writing an empty part set would record a step as having run when it has not.
  *
  * Returns the steps it actually copied, so a caller can assert on the set. A

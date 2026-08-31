@@ -1439,10 +1439,10 @@ export async function importArticleIn(
    * widened, and `tweets` and `glossary` joined them on 2026-08-31
    * (src/source-hash.ts § `articleFingerprint`).
    *
-   * `?? fingerprint` for the unstamped steps, and **`toc` deliberately keeps
+   * `?? fingerprint` for the unstamped steps, and **`hierarchy` deliberately keeps
    * it**: `reasonsNotToPublish` (src/store/pg-revisions.ts) compares
-   * `toc.input_hash` against the stored blocks and refuses the publication when
-   * they differ, so a `toc` row carrying anything else makes the article
+   * `hierarchy.input_hash` against the stored blocks and refuses the publication when
+   * they differ, so a `hierarchy` row carrying anything else makes the article
    * unpublishable. `labels.json` records a `structureHash` beside its
    * `sourceHash`; the blocks half is the one that column means.
    */
@@ -1450,7 +1450,7 @@ export async function importArticleIn(
     { step: "fetch", present: Boolean(rawBytes) },
     { step: "extract", present: Boolean(meta) },
     { step: "blocks", present: blocks.length > 0 },
-    { step: "toc", present: Boolean(tree) },
+    { step: "hierarchy", present: Boolean(tree) },
     { step: "assets", present: Boolean(assets), inputHash: assets?.sourceHash },
     { step: "arc", present: Boolean(arc), inputHash: arc?.sourceHash },
     { step: "tweets", present: Boolean(tweets), inputHash: tweets?.sourceHash },

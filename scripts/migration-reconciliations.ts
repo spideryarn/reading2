@@ -172,12 +172,14 @@ const COLUMN_TEXT_NULLABLE = "text NULL default=(none) identity=- generated=- co
  *
  * **This is live right now.** `569458f` renamed the `toc` step to `hierarchy`
  * across the repo, code and docs. GPT Sol stopped that rename at the door of
- * this table and of `drizzle/*.sql`, and was right to. The step-name *string*
- * `"toc"` is deliberately unchanged everywhere it reaches the database —
- * `StepName`, the `revision_step_runs` CHECK, every `store.read` — so the code
- * and the database still agree. If that string is ever changed, it changes by a
- * new migration with a new row, and these literals stay exactly as they are:
- * they describe the past, and the past does not get renamed.
+ * this table and of `drizzle/*.sql`, and was right to.
+ *
+ * The step-name *string* then moved too, on 2026-08-31, in
+ * `drizzle/0041_rename_toc_step_to_hierarchy.sql` — a new migration with a new
+ * row, which is the only way it was ever allowed to move. **These literals did
+ * not move with it and never will.** They are `0036`'s postcondition; they
+ * describe the past, and the past does not get renamed. A `sed` over this file
+ * would make a repaired ledger claim a state `0036` never produced.
  *
  * The same rule covers `drizzle/*.sql` and the snapshots in `drizzle/meta/`.
  * A migration file is a record of what ran; editing one changes its hash and

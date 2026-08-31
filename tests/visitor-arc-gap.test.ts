@@ -19,7 +19,7 @@
  * non-blocking arc job after ingest — which would have closed the hole for
  * visitors and for the back catalogue — and chose the smaller change, having
  * been shown that deferring the arc saves about 4% of ingest wall time
- * (`toc` 228s, `arc` 10s, measured). GPT Sol's condition for that option was
+ * (`hierarchy` 228s, `arc` 10s, measured). GPT Sol's condition for that option was
  * that the regression be accepted *and tested*, which is what this is.
  *
  * If a later change gives visitors an arc, these tests should fail and be
@@ -49,7 +49,7 @@ describe("adding an article no longer writes an arc", () => {
     expect(DEFAULT_INGEST_STEPS).not.toContain("arc");
     // And the steps that make it *readable* are all still there — this is a
     // latency change, not a change to what an article is.
-    expect(DEFAULT_INGEST_STEPS).toContain("toc");
+    expect(DEFAULT_INGEST_STEPS).toContain("hierarchy");
     expect(DEFAULT_INGEST_STEPS).toContain("blocks");
   });
 

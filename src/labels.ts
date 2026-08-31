@@ -400,7 +400,7 @@ export interface LabelsFile {
    * at the tree, precisely because the tree carries no such field — so
    * `stampFor` returns this hash and `assertStampAgrees` refuses a write whose
    * declared `inputHash` contradicts it. That refusal is what checks the
-   * pipeline's own bookkeeping: the `toc` step records `hashBlocks` of the
+   * pipeline's own bookkeeping: the `hierarchy` step records `hashBlocks` of the
    * blocks it handed to stage 4, `reasonsNotToPublish` compares that recorded
    * hash against the stored blocks, and a step that recorded a hash of some
    * *other* array would make the article unpublishable with nothing to say why
@@ -408,7 +408,7 @@ export interface LabelsFile {
    * store in one write, the two are compared before either lands.
    *
    * `structureHash` and `structureVersion` are the ones nothing reads yet, and
-   * that is the honest state of it: the `toc` step has no freshness check of its
+   * that is the honest state of it: the `hierarchy` step has no freshness check of its
    * own, so the pipeline still decides it is done by whether its artefacts are
    * there. Recording them is what makes writing that check a small job rather
    * than a re-run of every article; until it is written, they are evidence
@@ -2560,7 +2560,7 @@ async function main(): Promise<void> {
      and is not JSON — and existence is what src/pipeline.ts reads as "this step
      is done". This command rewrites the tree of an article somebody may already
      be reading, which makes it the worse of the two places to get this wrong.
-     Both of those are command lines writing separate files. The `toc` *stage* no
+     Both of those are command lines writing separate files. The `hierarchy` *stage* no
      longer writes anything: it returns its three artefacts and its caller stores
      them in one go, where a half-written set is not a state that exists. */
   await writeAtomic(path.join(dir, "labels.json"), run.file);

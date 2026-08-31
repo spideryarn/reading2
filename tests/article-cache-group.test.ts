@@ -78,7 +78,7 @@ describe("the article cache group", () => {
   });
 
   it("treats a stage that does not read the article as sharing nothing", () => {
-    for (const step of ["fetch", "extract", "blocks", "toc", "summary"] as StepName[]) {
+    for (const step of ["fetch", "extract", "blocks", "hierarchy", "summary"] as StepName[]) {
       expect(sharesArticleCache(step, ["arc", "tweets", "glossary", "ideas"])).toBe(false);
       expect(sharesArticleCache("arc", [step])).toBe(false);
     }

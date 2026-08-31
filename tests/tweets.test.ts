@@ -355,13 +355,13 @@ describe("tweets freshness, through the step's stamp", () => {
     else if (thread) await writeJson(file, threadFor(BLOCKS, thread));
     else await rm(file, { force: true });
 
-    const blocksFile = pathFor(where, "toc", "blocks");
+    const blocksFile = pathFor(where, "hierarchy", "blocks");
     if (blocks) await writeJson(blocksFile, { blocks });
     else await rm(blocksFile, { force: true });
 
     /* The other two thirds of what the stamp compares. Written every time, so
        that "no blocks" stays the only thing a case removes. */
-    await writeJson(pathFor(where, "toc", "tree"), over.tree ?? STAMP_TREE);
+    await writeJson(pathFor(where, "hierarchy", "tree"), over.tree ?? STAMP_TREE);
     await writeJson(pathFor(where, "extract", "meta"), over.meta ?? STAMP_META);
 
     return stepIsDone(STEPS.tweets, ctxAt(elsewhere), store);
@@ -419,7 +419,7 @@ describe("tweets freshness, through the step's stamp", () => {
 
   it("says not-done when the thread carries no stamp at all", async () => {
     await writeJson(pathFor(where, "tweets", "tweets"), { tweets: [], limit: 280 });
-    await writeJson(pathFor(where, "toc", "blocks"), { blocks: BLOCKS });
+    await writeJson(pathFor(where, "hierarchy", "blocks"), { blocks: BLOCKS });
     expect(await stepIsDone(STEPS.tweets, ctxAt(elsewhere), store)).toBe(false);
   });
 
@@ -437,7 +437,7 @@ describe("tweets freshness, through the step's stamp", () => {
     // What the store holds is stale: written against BLOCKS, and the blocks it
     // holds have moved on.
     await writeJson(pathFor(inTheStore, "tweets", "tweets"), threadFor(BLOCKS, {}));
-    await writeJson(pathFor(inTheStore, "toc", "blocks"), { blocks: moved });
+    await writeJson(pathFor(inTheStore, "hierarchy", "blocks"), { blocks: moved });
     // `ctx.dir` holds a perfectly current pair, and is the wrong place to look.
     await writeJson(path.join(onTheSide.dir, "tweets.json"), threadFor(moved, {}));
     await writeJson(path.join(onTheSide.dir, "blocks.json"), { blocks: moved });

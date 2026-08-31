@@ -309,7 +309,7 @@ export interface AiCallRow {
    * number with no meaning, and this is what stops somebody summing it.
    */
   wire: Wire;
-  /** Which job made the call — `toc`, `chat`, `embeddings`, … */
+  /** Which job made the call — `hierarchy`, `chat`, `embeddings`, … */
   job: AiJob;
   requestedModel: string;
   answeredModel: string | null;

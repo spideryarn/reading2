@@ -146,6 +146,16 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* The same policy as `explain` and for the same two reasons. The upstream is
+     pinned so that a reader working through a batch of questions keeps hitting
+     the cached article rather than paying for it once per answer; and
+     `require_parameters` is what stops a fallback serving the request having
+     silently dropped `cache_control`, which is a full-price answer that looks
+     exactly like a cheap one. */
+  "quiz-mark": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   dictation: {
     path: "/v1/chat/completions",
     provider: { zdr: true, require_parameters: true },
@@ -199,7 +209,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
  */
 export type ChatJob = Exclude<
   AiJob,
-  | "toc"
+  | "hierarchy"
   | "labels"
   | "arc"
   | "tweets"
@@ -208,6 +218,9 @@ export type ChatJob = Exclude<
   | "ideas"
   | "sketch"
   | "timeline"
+  /* Generation only. `quiz-mark` is a separate `Task` and stays IN — it is a
+     request-path call on chat/completions and needs a route below. */
+  | "quiz"
 >;
 
 /**

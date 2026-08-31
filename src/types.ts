@@ -1846,7 +1846,7 @@ export interface Comment {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary"
+  | "fetch" | "extract" | "blocks" | "hierarchy" | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
@@ -2582,6 +2582,137 @@ export interface TimelineResponse {
  * after all, the `Omit` goes in one place instead of being searched for.
  */
 export type TimelineFound = TimelineResponse;
+
+/* ------------------------------------------------------------------- quiz --
+   The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
+   second sub-mode of Review. See docs/plans/260831al-review-quiz-sub-mode.md.
+
+   ## Why these are here and not in src/quiz.ts, where the stage lives
+
+   The same reason `Timeline` is, one section up: `tests/client-imports.test.ts`
+   lets `src/web/` import only the pure leaves in its `SHARED` list, and
+   `src/quiz.ts` is a stage with a CLI and a model call in it. A panel that
+   cannot see `QuizQuestion` cannot be written, so the shape both sides speak
+   lives in this file, which imports nothing, and src/quiz.ts re-exports it so a
+   caller of the stage still only has to know about the stage.
+
+   `QuizDropped` is here for the same reason and one more: it is a field ON the
+   artefact rather than a return value beside it (unlike `ideas`' and
+   `timeline`'s, which are handed back to the CLI and thrown away). A dropped
+   question is invisible from outside — it looks exactly like a question the
+   model chose not to set — and the metadata page is where somebody would go to
+   find out, so the counts have to survive the write.  */
+
+/**
+ * **How the answer is reached** — a judgement about the question, not a guess
+ * at how a stranger will do.
+ *
+ * That distinction is the whole reason this is a three-valued band rather than
+ * the 1–5 `ease` score the first draft asked for. A spike on a real article
+ * (docs/plans/260831al-review-quiz-sub-mode.md § Quotas) measured what a model
+ * actually does with an open 1–5 scale: `ease` never left 2–4 across 24
+ * questions. A scale whose ends are never used is not a scale, and the sort it
+ * feeds is then arbitrary for most of the list.
+ *
+ * | band | the answer is… |
+ * |---|---|
+ * | `easy` | stated in one passage, and the reader is recalling it |
+ * | `medium` | a distinction or a connection the article draws between two statements |
+ * | `hard` | a move the argument makes across several passages, which the reader has to reconstruct |
+ */
+export type QuizBand = "easy" | "medium" | "hard";
+
+/**
+ * **Where the reference answer lives — checked, never trusted.**
+ *
+ * A block id on its own proves only that a paragraph exists; it says nothing
+ * about whether the answer is in it. So the model names a quote as well, every
+ * quote is relocated with `findQuote`, and what is stored is **the article's
+ * own characters** sliced at the offsets it found — never the model's typing.
+ * GPT Sol's finding 2 on the plan.
+ */
+export interface QuizEvidence {
+  blockId: BlockId;
+  /** The article's own characters, sliced at the offsets `findQuote` located. */
+  quote: string;
+  /** A disambiguator between repeats, never the anchor. As `IdeaOccurrence`. */
+  start: number;
+}
+
+/** A question id. Minted per batch; nothing outside the batch names one. */
+export type QuizQuestionId = string;
+
+export interface QuizQuestion {
+  /** `mintUniqueId`, so it is a block id by construction. Minted per batch. */
+  id: QuizQuestionId;
+  /** One question mark, one thing asked. */
+  question: string;
+  /**
+   * Two or three sentences of model prose, written **before** any reader's
+   * attempt was seen.
+   *
+   * **A fallible draft, not an answer key**, and the naming is deliberate all
+   * the way to the button that reveals it (*"Show a reference answer"*, not
+   * *"the"*). The marking prompt is told outright that the article outranks
+   * this, and `evals/quiz.ts` poisons one on purpose to check that it does.
+   */
+  referenceAnswer: string;
+  /** Non-empty, or the question is dropped. */
+  evidence: QuizEvidence[];
+  band: QuizBand;
+  /** 1 (peripheral) – 5 (central). The sort key within a band. */
+  value: number;
+}
+
+/**
+ * What was thrown away, and why. **Every one of these is invisible from
+ * outside** — a dropped question looks exactly like one the model chose not to
+ * set — which is the whole reason they are counted, stored and logged.
+ *
+ * Counts only. Never the question, never the reference answer, never the quote.
+ */
+export interface QuizDropped {
+  /** A `blockId` that is not in blocks.json. The model invented it. */
+  unknownIds: number;
+  /** A `quote` that `findQuote` could not locate in the block the model named. */
+  unquoted: number;
+  /** Evidence past `MAX_EVIDENCE` on one question. */
+  truncated: number;
+  /** Questions past `MAX_QUESTIONS`, discarded whole. */
+  overCap: number;
+  /** Questions missing a field, or with an unusable band or value. Dropped. */
+  malformed: number;
+  /** Questions asking the same thing as one already kept. Dropped. */
+  duplicate: number;
+  /** Questions that lost **every** piece of evidence and were dropped whole. */
+  unanchored: number;
+}
+
+/** The artefact. `data/<slug>/quiz.json`. */
+export interface Quiz {
+  version: string;
+  generator: string;
+  slug: string;
+  /**
+   * **Minted per generation, and every mark binds to it.**
+   *
+   * Between a reader seeing a question and pressing Answer, a forced
+   * regeneration can replace the reference answer and the evidence while the
+   * question id stays whatever it stays. Without this the server would mark one
+   * batch's answer against another's reference with nothing visibly wrong.
+   * Stage 2 turns a mismatch into a 409; the field exists from the start so
+   * there is nothing to migrate. GPT Sol's finding 5.
+   */
+  batchId: string;
+  /** Blocks, tree and metadata — `articleWithIdsFingerprint`. */
+  sourceHash: string;
+  /** **Already sorted** — bands, then value, then document order. Never re-sorted. */
+  questions: QuizQuestion[];
+  /** What validation threw away. See `QuizDropped`. */
+  dropped: QuizDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
 
 /* ------------------------------------------------------------- feedback -- */
 
