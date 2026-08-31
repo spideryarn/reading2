@@ -16,6 +16,26 @@ the server's own disk.
 
 ## First run
 
+## Before every apply
+
+```
+npx tsx scripts/check-cloud-init.ts
+```
+
+Seconds, no dependencies, no VM. Every bug that has cost us a rebuild was findable here: an
+unescaped `${...}` that Terraform errors on at plan time, a pipe inside a `runcmd` string whose exit
+status is `tee`'s rather than the script's, a `check` whose nested quoting made it unrunnable so it
+passed by never running, and plain bash syntax errors.
+
+It is mutation-tested — break the file any of those five ways and it goes red — and it fails rather
+than passes if its own parser stops finding things, because a preflight that quietly checks zero
+things is worse than none.
+
+Not covered: anything that needs the machine to actually boot. The next step up, if this stops being
+enough, is `multipass launch --cloud-init` locally before touching Hetzner.
+
+## The account and project
+
 **Use the personal account, and a project of its own inside it.**
 
 This machine also holds credentials for an unrelated Hetzner account — the `droid-vm` context,
