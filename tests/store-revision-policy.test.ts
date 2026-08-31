@@ -89,7 +89,13 @@ describe("the carry-forward policy", () => {
        that have gone — and not carrying it is the quiet failure: an article
        goes back to hot-linking every image after a run that had nothing to do
        with its figures. docs/plans/hosting-the-articles-images.md. */
-    for (const column of ["tree", "labels", "arc", "assets", "glossary", "tweets", "summary"]) {
+    /* `summary` was in this list until 2026-08-31 and `quotes` replaced it:
+       stage 5e and the column it wrote were deleted together, so there is
+       nothing left to carry (docs/plans/gist-only-summaries.md, drizzle/0036).
+       A name swapped in rather than one simply removed, because what this
+       assertion is worth is the *count* of artefacts nobody remembered — and a
+       list that only ever shrinks stops being that. */
+    for (const column of ["tree", "labels", "arc", "assets", "glossary", "tweets", "quotes"]) {
       expect(REVISION_CARRY_POLICY[column as never], column).toBe("carry");
     }
   });
