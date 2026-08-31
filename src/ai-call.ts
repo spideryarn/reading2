@@ -187,10 +187,28 @@ export function pathFor(job: ChatJob): OpenRouterPath {
   return routeFor(job).path;
 }
 
-/** The jobs that come down this wire — everything that is not a pipeline stage. */
+/**
+ * The jobs that come down this wire — everything that is not a pipeline stage.
+ *
+ * **Hand-written, and it is the one list a new pipeline stage has to be added
+ * to by hand.** `TASK_WIRE` in src/models.ts already knows which tasks speak
+ * `"messages"`, but it is a value and this is a type, so nothing derives one
+ * from the other. Leave a stage out and `AI_JOB_ROUTE` below demands a route
+ * for a job that will never post to OpenRouter — which is at least a compile
+ * error, and is how `timeline` was added on 2026-08-31.
+ */
 export type ChatJob = Exclude<
   AiJob,
-  "toc" | "labels" | "arc" | "tweets" | "glossary" | "quotes" | "summarise" | "ideas" | "sketch"
+  | "toc"
+  | "labels"
+  | "arc"
+  | "tweets"
+  | "glossary"
+  | "quotes"
+  | "summarise"
+  | "ideas"
+  | "sketch"
+  | "timeline"
 >;
 
 /**

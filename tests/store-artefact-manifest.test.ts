@@ -96,6 +96,14 @@ const HOMES: Record<string, string> = {
   "ideas.json": "article_revisions.ideas",
   "quotes.json": "article_revisions.quotes",
   "sketch.json": "article_revisions.sketch",
+  /* The column does not exist yet — Stage 4 of docs/plans/timeline-mode.md adds
+     it, with the `revision_step_runs_step` CHECK that drizzle will not write.
+     The entry is here rather than in `NOT_YET_WRITTEN` because that list is for
+     an artefact with **no example on disk**, and this one has one: the stage was
+     run for real against `data/openai-huggingface` on 2026-08-31. This list is a
+     record of where a thing goes, not a claim that it has got there — the same
+     state `labels-progress.json` is in. */
+  "timeline.json": "article_revisions.timeline — decided, column not yet written",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",

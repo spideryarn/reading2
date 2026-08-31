@@ -305,7 +305,7 @@ export type Task =
   | "glossary"
   | "summarise"
   | "ideas"
-  /* The lines worth keeping, in the author's own words —
+  /* The lines worth keeping, in the article's own words —
      docs/project/quotes.md. Article-reading like `glossary`, and like
      `glossary` it never names a block id: the model returns the words and
      `locate` in src/quotes.ts finds the block, so it renders with
@@ -316,6 +316,12 @@ export type Task =
      ids, so it renders with `articleWithIds` and shares no cached prefix with
      arc, tweets or glossary. */
   | "sketch"
+  /* When the piece says things happened, and how sure it is —
+     docs/plans/timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
+     names block ids, so it renders with `articleWithIds` and shares its cached
+     prefix rather than arc's. It is the one stage that never asks the model for
+     a date: src/timeline.ts § the header. */
+  | "timeline"
   | "explain"
   | "chat"
   | "search";
@@ -411,6 +417,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   ideas: "capable",
   quotes: "capable",
   sketch: "capable",
+  timeline: "capable",
   explain: "capable",
   chat: "capable",
   search: "capable",
@@ -496,6 +503,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   ideas: "messages",
   quotes: "messages",
   sketch: "messages",
+  timeline: "messages",
   explain: "chat",
   chat: "chat",
   search: "chat",
@@ -562,6 +570,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   ideas: null,
   quotes: null,
   sketch: null,
+  timeline: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
@@ -748,7 +757,14 @@ for (const task of PIPELINE_TASKS) {
 export type Effort = "low" | "medium" | "high";
 
 /** The stages that read the whole article and could share one cached copy of it. */
-export type ArticleStage = "arc" | "tweets" | "glossary" | "quotes" | "ideas" | "sketch";
+export type ArticleStage =
+  | "arc"
+  | "tweets"
+  | "glossary"
+  | "quotes"
+  | "ideas"
+  | "sketch"
+  | "timeline";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -841,6 +857,19 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      constraint: moving either stage's effort breaks it silently. GPT Sol,
      2026-08-30. */
   sketch: "high",
+  /* `high`, and it is the third member of that group rather than a fourth
+     cache: same effort, same `ids` renderer, so `timeline` shares a cached
+     article with `ideas` and `sketch`.
+
+     The judgment it is being paid for is the sequence — putting a piece that
+     recounts the same three months three times, once per participant, back into
+     one order. That is multi-step inference over the whole article at once, and
+     it is the ONLY ordering the mode has: Greg's call is that the dates label
+     the rows and never sort them (docs/plans/timeline-mode.md § Ordering), so
+     an `order` the model got wrong is a timeline that is wrong, with nothing
+     downstream to correct it. Untested, like every effort choice that has not
+     been through evals/results/effort-vs-quality.md. */
+  timeline: "high",
 };
 
 /**
@@ -877,6 +906,14 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      to, so the ids have to be on the page — the same reason `ideas` is `ids`,
      and the same consequence: no shared prefix with the four above. */
   sketch: "ids",
+  /* Every occurrence names a block id, exactly as `ideas` does — and the
+     publication date, which is the one thing this stage needs that the others
+     do not, goes in the *user* prompt rather than into the head
+     `articleWithIds` writes. That is deliberate: a date in the head would be
+     different bytes for the same article and would cost this stage the share
+     with `ideas` and `sketch` on every article, to save nothing.
+     src/timeline.ts § `renderPrompt`. */
+  timeline: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

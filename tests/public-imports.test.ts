@@ -140,6 +140,11 @@ const WRITERS = [
   "src/summarise.ts",
   "src/toc.ts",
   "src/tweets.ts",
+  /* Writes `timeline.json`, and spends. Listed the day the stage landed rather
+     than the day it was wired, because a *missing* row here is a silent gap:
+     nothing goes red when a writer is left out, so the guard simply stops
+     covering it. docs/plans/timeline-mode.md. */
+  "src/timeline.ts",
   "src/jobs.ts",
 ];
 
