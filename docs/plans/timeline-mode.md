@@ -891,6 +891,48 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 | `tests/paid-cli-ledger.test.ts` | a row proving the CLI calls `loadEnvLocal()` before it spends money |
 | `tests/db-step-constraint.test.ts` | nothing — it goes red on its own, which is the point |
 
+### Adding a step name to the CHECK is free; removing one is not
+
+Found by the session that dropped `summary`, and it is the answer to a question this plan never
+thought to ask — *what would it cost to take `timeline` back out?*
+
+`revision_step_runs_step` lists every `StepName`, and the migration pattern is DROP then ADD. Adding
+a value is free. **Removing one is not**: Postgres validates a re-added CHECK against the rows
+already in the table, so any step-run rows carrying the removed name must be deleted **before** the
+`ADD CONSTRAINT`, not after.
+
+The part that makes it a trap rather than a detail: **it only fails on a database with history.** A
+fresh local container has no `summary` step runs, so the wrong order passes locally and fails on
+production. A delayed fuse and a false negative in one, which is the shape
+[silent-success.md](../reusable/silent-success.md) keeps describing.
+
+### A committed schema and an unapplied migration fail three layers from the cause
+
+`drizzle/0035_timeline.sql` was written and `src/db/schema.ts` was swept into HEAD by a third
+session's broad-pathspec commit — so the schema declared `article_revisions.timeline` while the local
+database had no such column. Every `beginDraftIn` failed and three suites went red **for every session
+in the tree**.
+
+What it looks like from outside is the problem:
+
+```
+sqlstate 42703  routine: checkInsertTargets
+  → "This app asked its database for something it would not do … [db-failed]"
+```
+
+Nothing in that sentence names a column, so it reads as a *store* bug. The session that hit it spent
+minutes convinced it was their own in-flight work.
+
+Normally safe, because whoever holds the declaration and the DDL applies them together. **A broad
+pathspec is what splits them** — the second time in one afternoon that a commit not naming its files
+moved somebody else's file into a change that was not about it, which is the whole reason
+[version-control.md](../project/version-control.md) insists on naming every path.
+
+Applied locally with Greg's authorisation on 2026-08-31, `Target:` line read rather than the success
+line, and verified by the three suites it unblocked coming back **390 passing** — rather than by
+asking `information_schema`, which is privilege-filtered and would have said the column exists
+without saying an insert works.
+
 ### A duplicate `export type` reads as a regression everywhere else
 
 Cost another session most of an afternoon's confidence before they read the error rather than the
