@@ -906,6 +906,29 @@ fresh local container has no `summary` step runs, so the wrong order passes loca
 production. A delayed fuse and a false negative in one, which is the shape
 [silent-success.md](../reusable/silent-success.md) keeps describing.
 
+### The doc-links gate cannot warn you on the way in
+
+Spotted by `spideryarn2-6f` while this work was being landed, and it generalises well beyond
+Timeline.
+
+`tests/doc-links.test.ts` reads the **filesystem**, not git. So with `docs/project/timeline.md`
+untracked and `docs/project/reading-view-overview.md` already linking to it, the gate is **green** —
+the file is right there on disk. It only goes red *after* a commit puts the link into HEAD without
+the file, on somebody else's fresh checkout.
+
+**The gate can only tell you once somebody has already done it.** It is a good regression test and a
+useless pre-flight check, and the difference matters because it is easy to read a green run as
+permission to commit.
+
+The concrete rule: **a new doc must be `git add`ed in the same command as the file that links to
+it.** A pathspec cannot name an untracked file, so the recipe in
+[version-control.md](../project/version-control.md) — `git add -- <new files> && git commit -F <msg>
+-- <all your files>` — is not two habits but one, and this is the case that shows why.
+
+Same family as the [committed schema with an unapplied migration](#a-committed-schema-and-an-unapplied-migration-fail-three-layers-from-the-cause)
+below: a declaration and the thing it declares landing in separate commits, green on the machine
+where both exist, broken everywhere else.
+
 ### A committed schema and an unapplied migration fail three layers from the cause
 
 `drizzle/0035_timeline.sql` was written and `src/db/schema.ts` was swept into HEAD by a third
