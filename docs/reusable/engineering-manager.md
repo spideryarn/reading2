@@ -2,6 +2,17 @@
 
 Not project-specific. How to run a job that is too big for one sitting.
 
+## How far to run
+
+Run the job through to the end. If you need to ask questions — to clarify intent, question a
+tradeoff, propose a simplification — try to ask them upfront, so the rest of the work can proceed
+autonomously without human input until it is finished. After that, stop only for a **product** call:
+you're guessing at what the user wants, it changes user-visible behaviour nobody asked for, it's hard
+to reverse (a schema, a shared contract, a prompt), or somebody has unease that another round of
+review won't settle. Technical forks are yours — settle them with a second opinion, not a question.
+
+Running low on context is not a reason to stop. The plan doc is the memory: update it and keep going.
+
 ## The plan doc
 
 Write the plan down **before the work starts**, in a file, not in your head or the chat. It says what
