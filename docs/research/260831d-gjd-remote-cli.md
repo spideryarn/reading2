@@ -111,3 +111,40 @@ Three things considered and rejected:
 - **Asking a fast model for a slug up front**, before launching. Deterministic and available at
   launch time, but costs an extra paid call per session to name something the session is about to
   name for free.
+
+## How the iTerm tab gets that name too
+
+Same title, one layer out. [`attachCmd`](../../scripts/gjd-remote.ts) turns tmux's `set-titles` on
+for the session it is about to attach to, with `set-titles-string "#S"`, so the tab is named after
+the tmux session — and so, once `ls` has adopted it, after Claude's own title for the work. Setting
+it at attach time rather than in the box's `~/.tmux.conf` means old sessions get it too, and a
+rebuilt box needs no memory: the behaviour travels with the tool.
+
+Measured against the box on both transports rather than assumed:
+
+- **The title arrives about five seconds in**, not instantly — ssh handshake, then tmux's first
+  pass round its client loop. [260831c](260831c-remote-server-tmux-mosh.md#one-iterm-tab-per-session)'s
+  warning that titles "only settle after tmux attaches" is real, and its tab-per-session opener
+  should still expect that race.
+- **A rename pushes a new title straight away**, so the tab renames itself the moment
+  `gjd-remote ls` adopts Claude's title. Nothing to poll and nothing to re-run.
+- **Only on change.** tmux compares the expanded string with the last one it sent, so `#S` costs two
+  escape sequences for a whole session, not one per redraw.
+- **mosh puts `[mosh] ` in front of the title** unless `MOSH_TITLE_NOPREFIX` is set for the local
+  `mosh` client. Seen both ways: `[mosh] gjdtest-mosh`, then `gjdtest-mosh`.
+- **`set -t =name:` needs the colon.** `set-option`'s `-t` is a target *pane*, and the `=`
+  exact-match prefix is only honoured on the session part when a colon follows it: `-t =name` fails
+  outright with "no such session". Dropping the `=` would be worse than an error — bare targets
+  prefix-match, so it would quietly configure whichever session matched first.
+
+One measurement for the pane-title idea rejected above: on a live box session with Claude running,
+`#{pane_title}` was **empty**. Claude does set a terminal title on the laptop — this tab reads
+`◐ <title>` while it works — but nothing of the sort reached tmux on the box. So `#T` is not a
+source for the tab name, and `#S` is.
+
+On the Mac there is nothing to switch on. iTerm's *Terminal may set tab/window title* — the profile
+key `Allow Title Setting` — is unset in Greg's profile, so it takes iTerm's own default, which
+allows it: Claude Code already names the tab it is running in through exactly this mechanism. Its
+neighbour *Terminal may report window title* (`Allow Title Reporting`) is a different setting and
+worth leaving off — reporting the title back was the CVE-2024-38396 injection route, and setting one
+does not need it.
