@@ -24,6 +24,11 @@ terraform {
 # Terraform with:  export HCLOUD_TOKEN=$(hcloud context active --token)
 provider "hcloud" {}
 
+# Every server the token can see. Used only by the guard below, which is the
+# one thing standing between a mistyped context and building inside somebody
+# else's Hetzner project.
+data "hcloud_servers" "existing" {}
+
 resource "hcloud_ssh_key" "me" {
   name       = "${var.name}-key"
   public_key = file(pathexpand(var.ssh_public_key_path))
@@ -104,6 +109,26 @@ resource "hcloud_server" "box" {
   public_net {
     ipv4_enabled = true
     ipv6_enabled = true
+  }
+
+  # A Hetzner API token is scoped to ONE project, and that scope is the blast
+  # radius. Greg's machine also holds a token for an unrelated client account
+  # (the "droid-vm" context), and the two differ by one word in an env var.
+  #
+  # So: refuse to build in a project that already contains servers we did not
+  # create. A project of our own is empty, which passes. Another project is not,
+  # which fails at PLAN time, before anything exists and before anything of
+  # theirs is at risk. A precondition is used rather than a `check` block on
+  # purpose — checks only warn, and a warning is not a guard.
+  #
+  # If this box ever legitimately shares a project, delete this block on purpose.
+  lifecycle {
+    precondition {
+      condition = length([
+        for s in data.hcloud_servers.existing.servers : s.name if s.name != var.name
+      ]) == 0
+      error_message = "Refusing to apply: this Hetzner project already contains servers that are not '${var.name}' (${join(", ", [for s in data.hcloud_servers.existing.servers : s.name if s.name != var.name])}). The likeliest cause is that HCLOUD_TOKEN belongs to another account or project - run `hcloud context active` and check it says what you expect."
+    }
   }
 }
 

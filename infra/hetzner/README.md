@@ -16,10 +16,26 @@ the server's own disk.
 
 ## First run
 
-**Use a project of its own.** Hetzner API tokens are scoped to one project, and that scope is the
-blast radius: a token from another project would let a mistake here reach that project's servers.
-In the console, create a project for this box, then **Security -> API tokens -> Generate** with
-Read & Write, and give the CLI its own context:
+**Use the personal account, and a project of its own inside it.**
+
+This machine also holds credentials for an unrelated Hetzner account — the `droid-vm` context,
+belonging to client work in `gdconsult_work/mindstone`. That is a **separate login**, and nothing
+here should ever touch it. Two things keep them apart, and it is worth knowing which does what:
+
+- **The account** is the real boundary. Sign in to console.hetzner.com as **greg@gregdetre.com**,
+  not the client login. Different account, different billing, different everything.
+- **The project** is the token's blast radius. A Hetzner API token is scoped to exactly one project
+  and can see nothing outside it, so a project of its own means even a badly wrong command here can
+  only reach this box.
+
+The weak point is neither of those: it is that both accounts' tokens live in the same `cli.toml` on
+one laptop, and they differ by one word in an env var. Hence the guard in `main.tf` — Terraform
+refuses to build in a project that already contains servers it did not create, and fails at plan
+time rather than after. A project of our own is empty and passes; the client's project is not and
+fails.
+
+So: log in as greg@gregdetre.com, create a project for this box, then
+**Security -> API tokens -> Generate** with Read & Write, and give the CLI its own context:
 
 ```
 hcloud context create spideryarn     # prompts for the token; does not echo it
