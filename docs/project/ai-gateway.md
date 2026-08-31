@@ -16,9 +16,15 @@ Two things about it belong here rather than there, because they are properties o
 and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
 And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
 a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
-`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead. That is a
-hole with a name, not a to-do — live-conversation.md § What is missing, and it must be closed before
-readers see the feature.
+`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead.
+
+**Widening those two unions is not the fix, though, and reading this paragraph as if it were is the
+mistake to avoid.** Every method on the declared-bypass `Observer` takes a response body *this
+process received*. Nobody here receives one — the usage exists only in the reader's browser tab — so
+metering this needs a way for a tab to report what it spent and a reason for the server to believe
+it, which is a larger question than the register answers today. That is a hole with a name rather
+than a to-do: live-conversation.md § What is missing, and it must be closed before readers see the
+feature.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
