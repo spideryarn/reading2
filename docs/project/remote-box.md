@@ -32,6 +32,9 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
   deliberately off it. Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+- [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts) — which MCP servers the box should
+  be holding, and whether it is. Split out to be testable without a network:
+  [`tests/gjd-remote-mcp.test.ts`](../../tests/gjd-remote-mcp.test.ts).
 - [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list.
   Split out so it can be tested without a network:
   [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
@@ -44,6 +47,10 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) — the committed proof
   the browser stack works. `gjd-remote doctor` copies it up and runs it every time, so it is never a
   stale copy.
+- [`.mcp.json`](../../.mcp.json) — the `supabase`, `vercel` and `sentry` MCP servers, at project
+  scope so they arrive with the clone rather than with provisioning. The two OAuth logins, the deny
+  list that stops an agent buying things, and why Supabase needs no credential are in
+  [infra/hetzner/README.md § MCP servers](../../infra/hetzner/README.md#mcp-servers).
 
 **Doing things on it**
 

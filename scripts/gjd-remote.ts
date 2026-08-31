@@ -23,6 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
 import { type Session, buildSessionScript, parseSessions } from "./gjd-remote-tmux.js";
+import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
@@ -1391,7 +1392,7 @@ function cmdDoctor(): void {
   // Every name here must be recorded exactly once before the run ends. The
   // count is derived from this list rather than written down, so adding a check
   // cannot leave the two out of step.
-  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "browser", "provisioning"];
+  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "browser", "mcp", "provisioning"];
   const seen = new Map<string, "ok" | "fail" | "skip">();
   const record = (name: string, state: "ok" | "fail" | "skip") => {
     if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
@@ -1462,6 +1463,32 @@ function cmdDoctor(): void {
 
   const smoke = runBrowserSmoke();
   check("browser", smoke.ok, smoke.detail);
+
+  // The MCP servers this repo declares, checked against what the box holds.
+  //
+  // Two of the three need an OAuth login only a human with a browser can do,
+  // once per box. Nothing about a box that has not had it done looks wrong:
+  // sessions start, the suite passes, and an agent simply never has the tool.
+  // The failure is an absence, so it needs a check rather than a reader.
+  //
+  // The wanted list is read from OUR .mcp.json, not written down again here, so
+  // adding a server extends this check without anyone remembering to.
+  const declared = declaredServers(
+    existsSync(path.join(REPO, ".mcp.json")) ? readFileSync(path.join(REPO, ".mcp.json"), "utf8") : "",
+  );
+  if (!declared.ok) {
+    check("mcp", false, declared.why);
+  } else {
+    // `|| true` and check:false: `claude mcp list` exits non-zero when any
+    // server is unhealthy, including servers of Greg's that are none of our
+    // business. Its OUTPUT is the answer; its exit code is not.
+    const listing = ssh(
+      `cd ${shq(REMOTE_REPO())} && timeout 120 claude mcp list 2>&1 || true`,
+      { check: false },
+    );
+    const verdict = mcpVerdict(listing, declared.names);
+    check("mcp", verdict.ok, verdict.why);
+  }
 
   // cloud-init's own status is genuinely informational: it reports the FIRST
   // boot and never changes afterwards, so on a box that has been re-provisioned
