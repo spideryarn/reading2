@@ -326,10 +326,13 @@ export function articleWaitTitle(
  * open tabs apart. What follows it says which view — except in the one case
  * where it says nothing at all:
  *
- * **The default mode is left out.** `toc` is where a reader spends most of
- * their time, so a "Hierarchy" in nearly every tab distinguishes nearly
- * nothing, while costing every tab eleven characters at the end of a string
- * that is already being cut. Front-loading is not just about order; it is about
+ * **The default mode is left out** — whichever it is, which is why the code
+ * compares against `DEFAULT_MODE` rather than naming one (src/modes.ts). The
+ * default is where a reader spends most of their time, so its label in nearly
+ * every tab distinguishes nearly nothing, while costing every tab the characters
+ * at the end of a string that is already being cut. This paragraph used to say
+ * `toc`, and then meant the mode now called Hierarchy; the default has since
+ * moved to `plain` (2026-08-31) and the argument did not change. Front-loading is not just about order; it is about
  * only saying what is *different* about this tab. The URL leaves the default
  * mode out for a related reason (params.ts § modeParam), so the two agree, and
  * a reader who learns the rule in one place has learned it in both.

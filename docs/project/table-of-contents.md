@@ -1,6 +1,6 @@
 # Table of contents
 
-Pipeline stage 4. Builds the nested structure that the ToC sidebar and the
+Pipeline stage 4. Builds the nested structure that the Hierarchy sidebar and the
 [granularity zoom](granularity-zoom.md) view both render. Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
