@@ -31,7 +31,7 @@ import { runTool } from "../src/chat-tools.js";
 import { loadEnvLocal } from "../src/env.js";
 import { liveSession, mintLiveToken } from "../src/live.js";
 import { environmentOwnerId, runAsOwner } from "../src/owner.js";
-import { vocabularyFor } from "../src/vocabulary-sources.js";
+import { vocabularyTermsFor } from "../src/vocabulary-sources.js";
 
 loadEnvLocal();
 
@@ -84,10 +84,10 @@ const server = createServer((req, res) => {
         const out = await runAsOwner(environmentOwnerId(), async () => {
           const article = await loadArticle(slug);
           /* Best-effort, exactly as dictation treats it: a live conversation
-             that starts without the article's jargon in the transcriber's
-             prompt is slightly worse, and one that refuses to start because a
-             glossary row was slow is useless. */
-          const vocabulary = await vocabularyFor({ kind: "article", slug }).catch(() => "");
+             that starts without the article's jargon in its `keywords` is
+             slightly worse, and one that refuses to start because a glossary
+             row was slow is useless. */
+          const vocabulary = await vocabularyTermsFor({ kind: "article", slug }).catch(() => []);
           const session = liveSession({
             meta: article.meta,
             blocks: article.blocks,

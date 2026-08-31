@@ -361,6 +361,28 @@ export function phrases(text: string): string[] {
  * unit test into a focused one is not a warning worth living with.
  */
 export function pack(parts: readonly (readonly string[])[], maxChars: number): string {
+  return packTerms(parts, maxChars).join(", ");
+}
+
+/**
+ * **The same list, before it is joined** — because two callers want two shapes
+ * of the same answer, and only one of them wants a string.
+ *
+ * Dictation sends the vocabulary as OpenAI's `prompt`, which is one line of
+ * comma-separated terms, so `pack` joins for it. Live conversation sends it as
+ * **`keywords`**, which is an array, and joining only to split again would lose
+ * exactly the information the split has to guess at: a term containing a comma
+ * would come back as two.
+ *
+ * The budget is still measured in characters including the `, ` that a join
+ * would add. That is deliberate — the cap exists to bound what the model is
+ * asked to hold, and the two callers should be asking for the same amount of
+ * it, not the same number of terms.
+ */
+export function packTerms(
+  parts: readonly (readonly string[])[],
+  maxChars: number,
+): string[] {
   const seen = new Set<string>();
   const kept: string[] = [];
   let size = 0;
@@ -385,10 +407,10 @@ export function pack(parts: readonly (readonly string[])[], maxChars: number): s
          — no: break out of everything. A budget spent on the tail of a long
          source is a budget the next source never sees, and the next source is
          only ever lower priority. Stopping is what "best first" means. */
-      if (size + term.length + 2 > maxChars) return kept.join(", ");
+      if (size + term.length + 2 > maxChars) return kept;
       kept.push(term);
       size += term.length + 2;
     }
   }
-  return kept.join(", ");
+  return kept;
 }

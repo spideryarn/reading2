@@ -50,7 +50,7 @@
  */
 import { currentOwnerId } from "./owner.js";
 import { loadArticle, loadGlossary, readerStore, shelfStore } from "./store/index.js";
-import { SITE_TERMS, pack, phrases, properNouns, proseOf } from "./vocabulary.js";
+import { SITE_TERMS, packTerms, phrases, properNouns, proseOf } from "./vocabulary.js";
 import { isSlug } from "./ingest.js";
 
 /**
@@ -386,9 +386,25 @@ export const RECIPES: Record<Where["kind"], readonly SourceName[]> = {
  * slow.
  */
 export async function vocabularyFor(where: Where): Promise<string> {
+  return (await vocabularyTermsFor(where)).join(", ");
+}
+
+/**
+ * The same words, as the list they were before anything joined them.
+ *
+ * Live conversation needs the array: OpenAI's realtime transcription takes a
+ * jargon list as `keywords`, and **that field is not merely a nicer shape, it
+ * is the fix for a real bug.** With the list in `prompt` instead,
+ * `gpt-4o-transcribe` reads the whole vocabulary back as a transcript whenever
+ * it is handed non-speech — measured on 2026-08-31, and the thing Greg noticed
+ * in the first real conversation. `keywords` is documented as a hint that must
+ * only appear if it was actually said, and on noise it invents nothing.
+ * evals/live/hallucination-on-noise.mts, docs/plans/live-conversation.md.
+ */
+export async function vocabularyTermsFor(where: Where): Promise<string[]> {
   const wanted = RECIPES[where.kind];
   const lists = await Promise.all(wanted.map((name) => within(SOURCES[name](where))));
-  return pack([...lists], MAX_VOCABULARY);
+  return packTerms([...lists], MAX_VOCABULARY);
 }
 
 /**

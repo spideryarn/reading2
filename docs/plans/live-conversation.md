@@ -193,6 +193,65 @@ witness** and it is the one worth keeping — before the fix it recorded `search
 screen looks right is agreeing with the code; the server counting the requests it actually received
 is not.
 
+## The vocabulary was the hallucination
+
+Greg, after the first real conversation:
+
+> I noticed that it did the hallucination thing where it thought I'd said all the vocabulary when
+> there was a period of silence/background noise.
+>
+> — Greg, 2026-08-31
+
+**It was ours, not the model's.** The spike primed the transcriber by putting the article's jargon
+list in `transcription.prompt`, which is what dictation does and what made dictation work. Handed
+non-speech, `gpt-4o-transcribe` reads that prompt back as the transcript — so a pause with a fan
+running arrived as *"the reader just said Spideryarn, granularity zoom, gist column, block id…"*,
+and the companion answered it.
+
+Reproduced twice by [`evals/live/hallucination-on-noise.mts`](../../evals/live/hallucination-on-noise.mts):
+eighteen seconds of room noise in, twenty of our own terms back.
+
+### The fix, and the two things that nearly got it wrong
+
+`gpt-live-transcribe`, with the terms in **`keywords`** instead of `prompt`, plus
+`noise_reduction`. On the same noise it invents nothing; on speech it recovers all four test terms
+including `spya-k3m9qt` spelled exactly.
+
+**First near-miss: the obvious fix was a regression.** Simply moving to `gpt-live-transcribe` and
+keeping the list in `prompt` stops the regurgitation and drops jargon recovery from 4/4 to 2/4 —
+`Spideryarn` becomes *"spidery yarn"* and the block id becomes *"Spia K three M nine Q T"*, which
+is the exact failure the dictation vocabulary work existed to fix. That model ignores `prompt`. Had
+the noise eval been the only one run, this would have shipped as a fix and quietly undone
+[dictation-vocabulary.md](dictation-vocabulary.md).
+
+**Second near-miss: `keywords` looks like it does nothing.** It is accepted with a `200` and does
+**not** appear in `session.created`, while `prompt` and `languages` in the same object do. Every
+instinct here says that is a field being ignored — it is precisely what OpenRouter's transcription
+endpoint does, which cost this app a whole route. It is not being ignored. Only saying the words out
+loud could establish that, and
+[`evals/live/jargon-recovery.mts`](../../evals/live/jargon-recovery.mts) is what did:
+
+| transcriber | vocabulary sent as | jargon recovered |
+|---|---|---|
+| `gpt-4o-transcribe` | `prompt` | **4/4** — and regurgitates on noise |
+| `gpt-live-transcribe` | nothing | 2/4 |
+| `gpt-live-transcribe` | `prompt` | 2/4 — the field is ignored |
+| `gpt-live-transcribe` | **`keywords`** | **4/4**, and invents nothing on noise |
+
+So this is the rare case where **the behaviour is trustworthy and the introspection is not**, which
+is the opposite of the lesson this repo usually draws. The echo was a false negative.
+
+`gpt-4o-transcribe` was in any case deprecated on 2026-08-26 — five days before the spike — with
+shutdown on 2027-02-26, so the model had to move regardless.
+
+### What the evals could not have told us on their own
+
+Both evals commit the audio buffer **by hand**, with `turn_detection: null`. The first version used
+`server_vad` and returned zero speech-starts in all four arms, which reads as *"nothing was
+invented"* and actually meant the question was never asked. A VAD that declines to open a turn on
+noise is a null instrument that fails in the direction of good news. Both now count commits and say
+loudly when an arm measured nothing.
+
 ## What is missing
 
 Each of these is a hole rather than a to-do, and none of them may be skipped before readers see this.

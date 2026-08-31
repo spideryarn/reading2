@@ -174,6 +174,10 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Live conversation mode's session builder — the one file allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is also why it is not yet metered.",
   "scripts/live-spike.ts":
     "The spike's local-only server. Names the credential to warn when it is missing; the call itself goes through src/live.ts.",
+  "evals/live/hallucination-on-noise.mts":
+    "Measures whether the input transcriber invents words on non-speech — the eval that reproduced Greg's vocabulary-regurgitation bug. Same OpenAI-realtime exception as src/live.ts, and it cannot go through declaredFetch for the same reason: no Declaration for a realtime call can be typed yet. Audio input only, a few cents a run.",
+  "evals/live/jargon-recovery.mts":
+    "The other half: whether `keywords` is honoured, which cannot be established by reading the session back — it is accepted and not echoed. Speaks a sentence and checks the terms come back spelled right. Same exception, same reason.",
   "src/web/live/useLiveConversation.ts":
     "The browser half. It posts an SDP offer to api.openai.com with an EPHEMERAL token our server minted — the API key is not in this bundle and cannot be. Caught because the matcher is hostname-based, which is right: this is the file to look at if that ever stops being true.",
 };

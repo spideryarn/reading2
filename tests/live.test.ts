@@ -27,6 +27,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   LIVE_MODEL,
+  LIVE_TRANSCRIBER,
   SHOW_PASSAGE_TOOL,
   liveInstructions,
   liveSession,
@@ -109,19 +110,69 @@ describe("what the model is told", () => {
 });
 
 describe("the session", () => {
-  it("primes the transcriber with the vocabulary", () => {
-    const s = liveSession({ meta, blocks, vocabulary: "Spideryarn, spya-k3m9qt" });
-    const input = (s.audio as { input: Record<string, Record<string, unknown>> }).input;
-    expect(input.transcription?.prompt).toBe("Spideryarn, spya-k3m9qt");
+  const inputOf = (s: Record<string, unknown>) =>
+    (s.audio as { input: Record<string, Record<string, unknown>> }).input;
+
+  /**
+   * **The vocabulary goes in `keywords`, and NEVER in `prompt`.**
+   *
+   * The most important assertion in this file, and the only one that is about a
+   * bug that actually reached a reader. With the term list in `prompt`, the
+   * transcriber reads the whole list back as a transcript whenever it is handed
+   * non-speech — so a pause with a fan running became "the reader just said
+   * Spideryarn, granularity zoom, gist column, block id, …" and the companion
+   * answered it. Measured twice in evals/live/hallucination-on-noise.mts.
+   *
+   * Nothing about a session object can show that going wrong again, which is
+   * why this test asserts the *absence* of `prompt` as hard as the presence of
+   * `keywords`.
+   */
+  it("sends the vocabulary as keywords, never as a prompt", () => {
+    const s = liveSession({ meta, blocks, vocabulary: ["Spideryarn", "spya-k3m9qt"] });
+    expect(inputOf(s).transcription?.keywords).toEqual(["Spideryarn", "spya-k3m9qt"]);
+    expect(
+      inputOf(s).transcription,
+      "a term list in `prompt` is read back as a transcript on silence",
+    ).not.toHaveProperty("prompt");
   });
 
-  it("omits the prompt entirely rather than sending an empty one", () => {
-    const s = liveSession({ meta, blocks, vocabulary: "" });
-    const input = (s.audio as { input: Record<string, Record<string, unknown>> }).input;
-    expect(input.transcription).not.toHaveProperty("prompt");
-    /* Transcription itself stays on. Without it the app never learns what the
-       reader said, so there is nothing to show and nothing to store. */
-    expect(input.transcription?.model).toBe("gpt-4o-transcribe");
+  it("omits keywords entirely rather than sending an empty list", () => {
+    /* All three ways of having nothing to say, spelled out rather than looped
+       over a mixed array — `exactOptionalPropertyTypes` makes "absent" and
+       "explicitly undefined" different types, and the loop hid that. */
+    for (const s of [
+      liveSession({ meta, blocks, vocabulary: [] }),
+      liveSession({ meta, blocks, vocabulary: null }),
+      liveSession({ meta, blocks }),
+    ]) {
+      expect(inputOf(s).transcription).not.toHaveProperty("keywords");
+      /* Transcription itself stays on. Without it the app never learns what the
+         reader said, so there is nothing to show and nothing to store. */
+      expect(inputOf(s).transcription?.model).toBe(LIVE_TRANSCRIBER);
+    }
+  });
+
+  /**
+   * The deprecated family is the one that regurgitates, and it is also being
+   * switched off — `gpt-4o-transcribe`, `gpt-4o-mini-transcribe` and
+   * `whisper-1` were deprecated 2026-08-26, shutdown 2027-02-26. Naming them
+   * here means going back to one is a red test rather than a quiet regression.
+   */
+  it("is not on one of the deprecated transcribers", () => {
+    const s = liveSession({ meta, blocks, vocabulary: ["Spideryarn"] });
+    expect(["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"]).not.toContain(
+      inputOf(s).transcription?.model,
+    );
+  });
+
+  it("turns noise reduction on, which is off by default", () => {
+    /* Upstream of everything else: it filters before the VAD, so a room is
+       less likely to open a turn at all. The API takes exactly two values and
+       refuses anything else, so this pins one of them rather than a shape. */
+    const s = liveSession({ meta, blocks });
+    expect(["near_field", "far_field"]).toContain(
+      (inputOf(s).noise_reduction as { type?: string } | undefined)?.type,
+    );
   });
 
   it("asks for semantic turn detection, not the fixed-silence default", () => {

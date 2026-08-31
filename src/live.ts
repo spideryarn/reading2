@@ -59,6 +59,45 @@ export const LIVE_MODEL = "gpt-realtime-2.1";
 export const LIVE_VOICE = "marin";
 
 /**
+ * **The transcriber, and it is not the one dictation uses.**
+ *
+ * Dictation's second pass runs a chat model over a finished recording. This is
+ * the live input path, and it changed on 2026-08-31 because the first real
+ * conversation produced a bug Greg spotted straight away:
+ *
+ * > I noticed that it did the hallucination thing where it thought I'd said all
+ * > the vocabulary when there was a period of silence/background noise.
+ *
+ * That was ours. `gpt-4o-transcribe` handed non-speech **reads the `prompt`
+ * back as the transcript**, and the prompt was our 900-character jargon list.
+ * Reproduced twice in `evals/live/hallucination-on-noise.mts`: 18 seconds of
+ * room noise, and back came `"spideryarn, granularity zoom, gist column, block
+ * id, …"` — twenty of our own terms, as a thing the reader had supposedly said.
+ *
+ * `gpt-live-transcribe` invents nothing on the same audio. It is also the
+ * current model: `gpt-4o-transcribe`, `gpt-4o-mini-transcribe` and `whisper-1`
+ * were all deprecated on 2026-08-26 and shut down on 2027-02-26.
+ */
+export const LIVE_TRANSCRIBER = "gpt-live-transcribe";
+
+/**
+ * **`near_field`, and this is the one setting here that is a guess about a
+ * room rather than a measurement.**
+ *
+ * Noise reduction runs *before* the VAD and before the transcriber sees
+ * anything, so it makes background noise less likely to be treated as a turn at
+ * all — upstream of the hallucination above rather than a second fix for it.
+ * `near_field` is for a headset or a phone held close; `far_field` is for a
+ * laptop across a desk or a room mic.
+ *
+ * There is no right answer without knowing the reader's microphone, and we do
+ * not. `near_field` is the conservative choice — it processes less — and
+ * switching is one word. If phantom turns persist for somebody talking to a
+ * laptop at arm's length, `far_field` is the thing to try.
+ */
+export const LIVE_NOISE_REDUCTION = "near_field";
+
+/**
  * How long the browser has to use the token it is given.
  *
  * It admits the browser to **one** connection; it is not a session length, and
@@ -278,19 +317,30 @@ export interface LiveToken {
  * what it may call, what vocabulary the transcriber is primed with — is a pure
  * function that a test can read without a network.
  *
- * `vocabulary` is the same string dictation builds (src/vocabulary-sources.ts),
- * and handing it over was free: realtime's input transcription takes OpenAI's
- * `prompt` parameter and — unlike OpenRouter's transcription endpoint, which
- * accepts it and ignores it — **honours it**. Verified on 2026-08-31 by reading
- * it back off the created session, and the echo is worth trusting here because
- * the same endpoint rejects `wibble_not_a_real_field` with a 400 rather than
- * shrugging. docs/project/dictation.md § It transcribes twice.
+ * **`vocabulary` is a term LIST, and which field it goes in is the whole
+ * story.** Same words dictation builds (`vocabularyTermsFor`), but sent as
+ * `keywords` rather than as `prompt`, and that is not tidiness — see
+ * `LIVE_TRANSCRIBER` above for the bug the `prompt` field caused.
+ *
+ * **`keywords` cannot be verified by reading the session back.** It is accepted
+ * with a 200 and does not appear in `session.created`, while `prompt` and
+ * `languages` in the same object do. Every instinct in this repo says that is
+ * the shape of a field being ignored — it is exactly what OpenRouter's
+ * transcription endpoint does (docs/project/dictation.md).
+ *
+ * It is not being ignored, and only saying the words out loud could establish
+ * that. `evals/live/jargon-recovery.mts` speaks a sentence containing
+ * `spya-k3m9qt` and four other terms: with `keywords` it comes back **4/4,
+ * block id spelled exactly**; with the same list in `prompt` on the same model,
+ * 2/4 and *"Spia K three M nine Q T"*. So the absence from the echo is a false
+ * negative, and this is the rare case where the behaviour is trustworthy and
+ * the introspection is not.
  */
 export function liveSession(opts: {
   meta: Meta;
   blocks: Block[];
   profile?: string | null;
-  vocabulary?: string | null;
+  vocabulary?: readonly string[] | null;
 }): Record<string, unknown> {
   return {
     type: "realtime",
@@ -304,9 +354,13 @@ export function liveSession(opts: {
            the app never learns what was said, so there is nothing to put in the
            thread and nothing on screen but the model's half. */
         transcription: {
-          model: "gpt-4o-transcribe",
-          ...(opts.vocabulary ? { prompt: opts.vocabulary } : {}),
+          model: LIVE_TRANSCRIBER,
+          ...(opts.vocabulary && opts.vocabulary.length > 0
+            ? { keywords: [...opts.vocabulary] }
+            : {}),
         },
+        /* Before the VAD, so it reduces how often a room opens a turn at all. */
+        noise_reduction: { type: LIVE_NOISE_REDUCTION },
         /* **`semantic_vad`, not `server_vad`.** The default cuts a turn on a
            fixed 500ms of silence, which is a reader thinking. This one asks
            whether the sentence sounded finished. Being interrupted mid-thought
