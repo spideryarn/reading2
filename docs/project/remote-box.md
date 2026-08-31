@@ -81,7 +81,7 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 because a heredoc needs no escaping at all:
 
 ```
-gjd-remote new -p - <<'EOF'
+gjd-remote new-claude -p - <<'EOF'
 anything at all — "quotes", `backticks`, $VARS, newlines
 EOF
 ```
@@ -105,7 +105,7 @@ value.
 | | |
 |---|---|
 | `gjd-remote ls` | ~2s — one connection |
-| `gjd-remote new --no-attach` | ~7s — one handshake, then five cheap commands |
+| `gjd-remote new-claude --no-attach` | ~7s — one handshake, then five cheap commands |
 | attaching | **~13s on top**, and see below |
 
 Every subcommand opens **one** ssh master and runs everything down it. The master is scoped to the
@@ -131,7 +131,7 @@ commands from there, and the middle one is the whole of it:
 
 ```
 gjd-remote push-env                 # from the laptop: .env.local, allowlisted keys only
-gjd-remote shell -d ~/code/spideryarn2
+gjd-remote new-shell -d ~/code/spideryarn2
 npm ci && npm run setup             # on the box
 ```
 
@@ -180,6 +180,12 @@ Two things worth knowing:
 - **With nothing bound, you detach by closing the tab** — the session survives, verified. From
   another shell on the box, `tmux detach-client -s NAME`. `gjd-remote resume` brings you back.
   If you want a key for it, `bind -n F12 detach-client` is one line; no TUI here sends F12.
+- **The file being right and the keyboard being right are two facts.** A tmux server reads its
+  config once, at start, and the box's server outlives provisioning by weeks — so provisioning
+  rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
+  ends are now covered: provisioning reloads a running server (skipping it, loudly, if any pane is
+  in copy-mode, because unbinding out from under one strands it), and `gjd-remote doctor` counts
+  both numbers every run as **`tmux keys`**.
 
 [../research/260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md)
 proposed a much larger `.tmux.conf` — mouse on, scroll bindings, a bigger history limit. That was

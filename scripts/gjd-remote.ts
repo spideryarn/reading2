@@ -22,7 +22,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
-import { type Session, buildSessionScript, parseSessions } from "./gjd-remote-tmux.js";
+import {
+  type Session,
+  bindingsVerdict,
+  buildBindingsScript,
+  buildSessionScript,
+  parseSessions,
+} from "./gjd-remote-tmux.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -100,7 +106,7 @@ let cachedHost: string | undefined;
 
 function host(): string {
   // Memoised for the process. HOST() is called on every ssh, scp and mosh, and
-  // `new` makes six of those — six `tofu output` subprocesses to answer a
+  // `new-claude` makes six of those — six `tofu output` subprocesses to answer a
   // question whose answer cannot change while we run. It also means an address
   // that stays consistent across one command even if somebody rebuilds the box
   // underneath us, which is the behaviour you want when half the work is done.
@@ -134,7 +140,7 @@ const HOST = () => `${USER}@${host()}`;
  * The handshake is the whole cost. Measured against the box on 2026-08-31 at a
  * healthy 78ms round trip: a fresh `ssh … true` takes ~2.0s, of which the
  * command itself is free — the rest is roughly fifteen network round trips of
- * key exchange and authentication. `gjd-remote new` opened SIX fresh
+ * key exchange and authentication. `gjd-remote new-claude` opened SIX fresh
  * connections and so paid it six times, 12.3s before Claude started. On a bad
  * link (RTT swung from 74ms to 660ms inside one minute) it was 8-10s each.
  *
@@ -262,7 +268,7 @@ function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): str
  * `scp` was the obvious choice and is the slow one: measured over an ALREADY
  * SHARED connection on 2026-08-31, an scp of a 3-byte file took 3.87s against
  * ~1.0s for a plain command, because the sftp subsystem does its own handshake
- * on top. `new -p` did two of them.
+ * on top. `new-claude -p` did two of them.
  *
  * The content goes down the command's stdin instead, so there is no local temp
  * file, no second protocol, and no quoting — the bytes never touch a command
@@ -445,7 +451,7 @@ function slugify(text: string, fallback: string): string {
  *  file names, and the same clock as the person reading the name. It was UTC,
  *  which under BST named a session an hour ago.
  *
- *  Seconds are in it because two `new` runs a few seconds apart minted the same
+ *  Seconds are in it because two `new-claude` runs a few seconds apart minted the same
  *  name and tmux refused the second one: "duplicate session: s-0831-1615". */
 function timestampName(prefix: string): string {
   const now = new Date();
@@ -477,7 +483,7 @@ function sessions(): Session[] {
   // unreachable gave empty stdout, an empty list, and `gjd-remote ls` printing
   // "no sessions." and exiting 0. "No sessions" is the answer least likely to
   // make anyone look, and every other caller reads absence as permission —
-  // `new` decides the name is free, `resume` picks a most-recent out of nothing.
+  // `new-claude` decides the name is free, `resume` picks a most-recent out of nothing.
   //
   // The half that exit status cannot reach — an idle box against a broken tmux,
   // because the remote script pipes `tmux ls` into a `while` loop whose exit
@@ -488,7 +494,7 @@ function sessions(): Session[] {
   const { sessions: list, unreadable, failure } = parseSessions(ssh(buildSessionScript()));
   if (failure) die(`could not read the box's tmux sessions: ${failure}`);
   // Fail closed. A short list is indistinguishable from a correct one, and
-  // every caller draws a conclusion from absence: `new` decides a name is free,
+  // every caller draws a conclusion from absence: `new-claude` decides a name is free,
   // `resume` with no name picks the "most recent". Neither may act on a list we
   // know is incomplete.
   if (unreadable.length > 0) {
@@ -566,7 +572,7 @@ function sessionDir(given: string | undefined): string {
         : `  that is where sessions start when you do not say. Either put it there:\n` +
           `    gjd-remote clone spideryarn/reading2 --name spideryarn2\n` +
           `  or say where to start:\n` +
-          `    gjd-remote new -d ~          ${dim("# the home directory")}\n` +
+          `    gjd-remote new-claude -d ~   ${dim("# the home directory")}\n` +
           `  (or set GJD_REMOTE_REPO to a checkout that already exists)`),
   );
 }
@@ -598,8 +604,8 @@ function failTo(name: string, msg: string): string {
  * `tmux new-session -c DIR` is not this guard. tmux does NOT fail closed when
  * it cannot enter `-c`: it falls back to the user's home, then to `/`, and
  * exits 0 either way. So `-c` alone buys a healthy-looking session in
- * /home/greg — the same wrong-tree failure `new` was fixed for, reproduced for
- * `shell` on the box on 2026-08-31 with a `chmod 000` directory, which `test -d`
+ * /home/greg — the same wrong-tree failure `new-claude` was fixed for, reproduced
+ * for `new-shell` on the box on 2026-08-31 with a `chmod 000` directory, which `test -d`
  * passes and `cd` refuses.
  *
  * sessionDir() has already asked the box whether it can enter this directory,
@@ -634,7 +640,7 @@ function confirmStarted(name: string): void {
 function cmdLs(): void {
   const list = adoptTitles(sessions());
   if (list.length === 0) {
-    console.log(dim("no sessions. `gjd-remote new` to start one."));
+    console.log(dim("no sessions. `gjd-remote new-claude` to start one."));
     return;
   }
   const w = Math.max(4, ...list.map((s) => s.name.length));
@@ -656,7 +662,7 @@ function cmdLs(): void {
  * and a prompt about shell commands is exactly the kind that contains all three.
  * A heredoc hands the text over with no quoting at all:
  *
- *     gjd-remote new -p - <<'EOF'
+ *     gjd-remote new-claude -p - <<'EOF'
  *     anything at all, "quoted" or `backticked`
  *     EOF
  *
@@ -671,7 +677,7 @@ function resolvePrompt(prompt: string | undefined): string | undefined {
   if (process.stdin.isTTY) {
     die(
       "-p - reads the prompt from stdin, but stdin is a terminal.\n" +
-        "  Pipe it in, or use a heredoc: gjd-remote new -p - <<'EOF' … EOF",
+        "  Pipe it in, or use a heredoc: gjd-remote new-claude -p - <<'EOF' … EOF",
     );
   }
   const text = readFileSync(0, "utf8");
@@ -728,7 +734,7 @@ function interactiveStdin(): number | "inherit" | null {
  * Lifted from MindstoneRebel's fleet, whose comment reads "keeps quoting sane
  * when prompts contain prose".
  */
-function cmdNew(
+function cmdNewClaude(
   given: string | undefined,
   opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean; transport?: string | undefined },
 ): void {
@@ -764,7 +770,7 @@ function cmdNew(
   // which tree an agent is about to edit should never be something you find out
   // afterwards.
   const dir = sessionDir(opts.dir);
-  console.log(bold(`gjd-remote new ${name}`) + dim(` → ${HOST()}:${dir}`));
+  console.log(bold(`gjd-remote new-claude ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // Pin the session id rather than discovering it: it is how we find this
   // conversation's transcript later, and so how we read back its title.
@@ -773,7 +779,7 @@ function cmdNew(
   // Keyed by the session id, not by the name, and the name is only in there so
   // a human reading the directory can tell what is what.
   //
-  // Name-keyed paths made two concurrent `new` runs able to write each other's
+  // Name-keyed paths made two concurrent `new-claude` runs able to write each other's
   // files: the existence check above is a look, not a reservation, so both can
   // find the name free. Generated job scripts differ mainly by a same-length
   // UUID, so process A's byte count validates process B's file, renames it into
@@ -855,7 +861,7 @@ function cmdNew(
  * gets you back into it. `ssh` is a throwaway connection that dies with the
  * terminal, which is what you want for a quick look and never for real work.
  */
-function cmdShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
+function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
   const name = given ?? timestampName("sh");
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
 
@@ -866,12 +872,12 @@ function cmdShell(given: string | undefined, opts: { dir?: string | undefined; t
   }
 
   const dir = sessionDir(opts.dir);
-  console.log(bold(`gjd-remote shell ${name}`) + dim(` → ${HOST()}:${dir}`));
+  console.log(bold(`gjd-remote new-shell ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // `-c ${dir}` is NOT the guard, and used to be all there was: tmux falls back
   // to the home directory when it cannot enter `-c` and still exits 0, so this
   // command reported a green ✓ over a shell sitting in /home/greg. The explicit
-  // `cd || exit 1` is the same one `new` runs, for the same reason.
+  // `cd || exit 1` is the same one `new-claude` runs, for the same reason.
   //
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
@@ -1287,7 +1293,7 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
   const envNote = dest === REMOTE_REPO() ? "" : `   # note: writes to ${REMOTE_REPO()}, not here`;
   console.log(dim("\nnext:"));
   console.log(dim(`  gjd-remote push-env${envNote}`));
-  console.log(dim(`  gjd-remote shell -d ${dest}   then npm ci`));
+  console.log(dim(`  gjd-remote new-shell -d ${dest}   then npm ci`));
 }
 
 /**
@@ -1392,7 +1398,7 @@ function cmdDoctor(): void {
   // Every name here must be recorded exactly once before the run ends. The
   // count is derived from this list rather than written down, so adding a check
   // cannot leave the two out of step.
-  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "browser", "mcp", "provisioning"];
+  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "mcp", "provisioning"];
   const seen = new Map<string, "ok" | "fail" | "skip">();
   const record = (name: string, state: "ok" | "fail" | "skip") => {
     if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
@@ -1460,6 +1466,23 @@ function cmdDoctor(): void {
     const verdict = toolVerdict(tool, probes.get(tool.name));
     check(tool.name, verdict.ok, verdict.why);
   }
+
+  // tmux on this box binds NOTHING -- no prefix, no keys -- so every keystroke
+  // reaches Claude Code. That is a rule rather than a preference:
+  // docs/project/remote-box.md, "tmux keeps sessions alive and does nothing else".
+  //
+  // Checked here, live, rather than left to the provisioning report, because the
+  // two facts come apart. provision.sh rewrites ~/.tmux.conf, but a tmux server
+  // reads its config once at start and the box's server outlives provisioning by
+  // weeks -- so the file can be right while the keyboard is still wrong, with
+  // every other check green. doctor runs daily and provisioning almost never,
+  // which is the other half of why it belongs here.
+  //
+  // Named "tmux keys", not "tmux": TOOLS already probes tmux's VERSION under
+  // that name, and doctor's own record() refuses a duplicate rather than
+  // letting the second result overwrite the first. It caught this.
+  const keys = bindingsVerdict(ssh(buildBindingsScript(), { check: false }));
+  check("tmux keys", keys.ok, keys.why);
 
   const smoke = runBrowserSmoke();
   check("browser", smoke.ok, smoke.detail);
@@ -1572,11 +1595,11 @@ const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that ne
 
 ${bold("SESSIONS")}
   ls, (no args)           list sessions, each with Claude's own title for it
-  new [name]              start Claude Code and attach
+  new-claude [name]       start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
           --no-attach       create it, but stay here
-  shell [name]            a persistent shell, no Claude Code
+  new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
   resume [name]           reattach; with no name, the most recent session
   kill <name>             end a session
@@ -1611,7 +1634,7 @@ ${bold("HOW clone AUTHENTICATES")}
   Issuing the tokens is a ceremony in ${dim("infra/hetzner/README.md")}.
 
 ${bold("WHERE A SESSION STARTS")}
-  ${dim("new")} and ${dim("shell")} begin in the repo checkout, not the home directory: an agent
+  ${dim("new-claude")} and ${dim("new-shell")} begin in the repo checkout, not the home directory: an agent
   that starts in ~ opens by guessing which tree to edit. Most specific wins —
   ${dim("--dir")}, else ${dim("GJD_REMOTE_REPO")}, else ${dim(REMOTE_REPO_DEFAULT)} — and whichever it
   is, it is printed. ${dim("-d ~")} for the home directory.
@@ -1627,17 +1650,17 @@ ${bold("WHAT SURVIVES WHAT")}
   the server reboots                   nothing does; ${dim("claude --resume")} by hand
 
 ${bold("EXAMPLES")}
-  gjd-remote new -p "fix the ToC ordering bug"
-      ${dim(`gjd-remote new s-260831-171205 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
+  gjd-remote new-claude -p "fix the ToC ordering bug"
+      ${dim(`gjd-remote new-claude s-260831-171205 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
       ${dim("✓ started 's-260831-171205' with a prompt")}
       already in the checkout, and named after whatever Claude decides the work is
-  gjd-remote new -p - <<'EOF'
+  gjd-remote new-claude -p - <<'EOF'
       the prompt comes from stdin, so nothing needs escaping — quotes, backticks,
       dollar signs and newlines all arrive as typed
       EOF
-  gjd-remote new -d ~/code/gjdutils
+  gjd-remote new-claude -d ~/code/gjdutils
       an unnamed session in a different repo; it takes a name once Claude has a title
-  gjd-remote shell
+  gjd-remote new-shell
       a plain shell that is still running tomorrow
   gjd-remote resume --ssh
       back into the most recent session, without trying mosh first
@@ -1663,7 +1686,7 @@ ${bold("ENVIRONMENT")}
                           so it is never stale after a rebuild)
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
   GJD_REMOTE_REPO         where the checkout lives on the box — where push-env
-                          writes, and where new/shell start without a --dir
+                          writes, and where new-claude/new-shell start without a --dir
                           (default: ${REMOTE_REPO_DEFAULT})
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
@@ -1679,7 +1702,7 @@ function main(): void {
     case "list":
       return cmdLs();
 
-    case "new": {
+    case "new-claude": {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
@@ -1690,7 +1713,7 @@ function main(): void {
           ssh: { type: "boolean", default: false },
         },
       });
-      return cmdNew(positionals[0], {
+      return cmdNewClaude(positionals[0], {
         prompt: resolvePrompt(values.prompt),
         dir: values.dir,
         attach: !values["no-attach"],
@@ -1722,13 +1745,13 @@ function main(): void {
       return;
     }
 
-    case "shell": {
+    case "new-shell": {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
         options: { dir: { type: "string", short: "d" }, ssh: { type: "boolean", default: false } },
       });
-      return cmdShell(positionals[0], {
+      return cmdNewShell(positionals[0], {
         dir: values.dir,
         transport: values.ssh ? "ssh" : undefined,
       });
@@ -1797,8 +1820,19 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
-      const near = known.filter((k) => k.startsWith(cmd.slice(0, 2)) || cmd.startsWith(k.slice(0, 2)));
+      const known = ["ls", "new-claude", "new-shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      // The containment clause is not decoration: `new` and `shell` were the
+      // names of these two commands until 2026-08-31 and there are no aliases,
+      // so the typo path is the whole migration. Two-char prefixes get `new`
+      // to both new-* commands but leave `shell` with no suggestion at all,
+      // because nothing in the list STARTS with it. Length-guarded, since
+      // every string contains "".
+      const near = known.filter(
+        (k) =>
+          k.startsWith(cmd.slice(0, 2)) ||
+          cmd.startsWith(k.slice(0, 2)) ||
+          (cmd.length >= 3 && k.includes(cmd)),
+      );
       die(
         `unknown command '${cmd}'` +
           (near.length ? `\n  did you mean: ${near.join(", ")}?` : "") +
