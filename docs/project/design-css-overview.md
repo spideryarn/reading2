@@ -173,6 +173,10 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
   a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
   as `td.text.kind-heading` in [`styles.css`](../../src/web/styles.css).
 
+`TableView` writes `kind-<the splitter's kind>` onto every cell, so that hook now carries two more:
+`kind-callout`, an indent and a big faint quote mark ([callout-blocks.md](../plans/callout-blocks.md)),
+and `kind-caption`, which had never been styled at all.
+
 ### Weight, and the variable axis
 
 `--reading-weight` is **450, not 400**. Light text on a dark ground optically thins; the previous
@@ -389,8 +393,13 @@ Everything above is the shelf, where a narrow window breaks *rows*. On the readi
 the **columns**, and the fix is not CSS at all — it is arithmetic in
 [`src/web/layout.ts`](../../src/web/layout.ts), which stops offering gist columns once one will not
 fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
-file are only what is left over after that: the block-id gutter, the wordmark, the two bars that
-were silently clipping their own controls, and the mode band going full-screen.
+file are only what is left over after that: the wordmark, the two bars that were silently clipping
+their own controls, and the mode band going full-screen. **The block-id gutter used to be the fourth
+of those and is not any more**: since 2026-08-31 the prose gutter is 2.1rem of icons at every width,
+so there is nothing left for a narrow window to ration
+([prose-gutter-icons.md](../plans/prose-gutter-icons.md)). That is the shape to aim for — a
+breakpoint disappears when the wide layout stops being extravagant, not when the narrow one gets
+another rule.
 
 Three things worth carrying to whatever is built next:
 

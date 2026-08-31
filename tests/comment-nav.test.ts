@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../src/types.js";
-import { orderComments, positionOf, stepComment } from "../src/web/comment-nav.js";
+import { commentsByBlock, orderComments, positionOf, stepComment } from "../src/web/comment-nav.js";
 
 /** Document order is the array order, exactly as in blocks.json. */
 const blocks = [
@@ -123,5 +123,40 @@ describe("positionOf", () => {
 
   it("is 0 when nothing is open", () => {
     expect(positionOf(ordered, null)).toBe(0);
+  });
+});
+
+describe("commentsByBlock", () => {
+  it("groups by block, in reading order inside each one", () => {
+    // The gutter marker opens the FIRST comment on the block, so "first" has to
+    // be the same on every render. Offsets decide it, not the array order.
+    const later = comment("spya-000001", "spya-bbbbbb", 40);
+    const earlier = comment("spya-000002", "spya-bbbbbb", 5);
+    const grouped = commentsByBlock([later, earlier], blocks);
+    expect(grouped.get("spya-bbbbbb")?.map((c) => c.id)).toEqual([
+      "spya-000002",
+      "spya-000001",
+    ]);
+  });
+
+  it("keeps a comment whose quote is gone, because the block id is what it is keyed on", () => {
+    // The orphan: the article was re-extracted and these words are no longer in
+    // the paragraph, so `resolveMark` draws nothing in the prose. It is still
+    // the reader's mark, and the gutter is now the only place it shows.
+    const orphan = comment("spya-000003", "spya-cccccc", 999);
+    expect(commentsByBlock([orphan], blocks).get("spya-cccccc")).toHaveLength(1);
+  });
+
+  it("leaves a block with no comments absent rather than holding an empty list", () => {
+    const grouped = commentsByBlock([comment("spya-000004", "spya-aaaaaa", 0)], blocks);
+    expect(grouped.get("spya-bbbbbb")).toBeUndefined();
+    expect(grouped.size).toBe(1);
+  });
+
+  it("keeps a comment on a block that is gone entirely", () => {
+    // `orderComments` sorts an unresolvable block to the end rather than
+    // dropping it; the grouping must not quietly re-introduce the drop.
+    const lost = comment("spya-000005", "spya-nowhere", 0);
+    expect(commentsByBlock([lost], blocks).get("spya-nowhere")).toHaveLength(1);
   });
 });

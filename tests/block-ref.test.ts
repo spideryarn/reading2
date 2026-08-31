@@ -8,7 +8,7 @@
  * the reader was looking at. See docs/project/block-ids.md#showing-an-id.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { blockHref, shortBlockId } from "../src/web/BlockRef.js";
+import { blockHref, blockPermalink, shortBlockId } from "../src/web/BlockRef.js";
 
 describe("shortBlockId", () => {
   it("drops the prefix every id on screen shares", () => {
@@ -56,5 +56,30 @@ describe("blockHref", () => {
   it("carries the full id, prefix and all — the short form is only for the eye", () => {
     atLocation("/read/example", "");
     expect(blockHref("spya-k3m9qt")).toContain("spya-k3m9qt");
+  });
+});
+
+describe("blockPermalink", () => {
+  it("puts an origin on the front, because a path is not a link you can send", () => {
+    atLocation("/read/example", "?cols=0,1");
+    Object.defineProperty(globalThis.location, "origin", {
+      value: "https://spideryarn.example",
+      configurable: true,
+    });
+    expect(blockPermalink("spya-k3m9qt")).toBe(
+      "https://spideryarn.example/read/example?cols=0%2C1&at=spya-k3m9qt",
+    );
+  });
+
+  it("carries the whole view, so the link shows what the sender was looking at", () => {
+    atLocation("/read/example", "?mode=glossary&text=0");
+    Object.defineProperty(globalThis.location, "origin", {
+      value: "https://spideryarn.example",
+      configurable: true,
+    });
+    const params = new URL(blockPermalink("spya-k3m9qt")).searchParams;
+    expect(params.get("mode")).toBe("glossary");
+    expect(params.get("text")).toBe("0");
+    expect(params.get("at")).toBe("spya-k3m9qt");
   });
 });

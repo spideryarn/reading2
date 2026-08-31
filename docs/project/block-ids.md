@@ -381,11 +381,17 @@ discover this by accident.
 
 ## Showing an id
 
-Ids are on screen in five places: the gutter beside every paragraph; both ends of the block range
-under a gist, in a table cell and in a column panel; and — since 2026-08-26 — the same range under
-each entry of the summary panel, plus the ids the model cites inside a chat answer or a summary. All
-of them draw [`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that
-come out of model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+Ids are on screen in four places: both ends of the block range under a gist, in a table cell and in
+a column panel; the same range under each entry of the summary panel; and the ids the model cites
+inside a chat answer or a summary. All of them draw
+[`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that come out of
+model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+
+**The fifth place was the gutter beside every paragraph, and since 2026-08-31 it is not text.** The
+id there is now a permalink icon, with the id itself in the `title` and in the `aria-label` — so
+beside the prose the id is a thing you copy rather than a thing you read
+([prose-gutter-icons.md](../plans/prose-gutter-icons.md)). Everything below about *what a shown id
+is* still holds; what changed is that one of the five stopped showing characters.
 
 A cited id is drawn as a **chip with a hover card carrying the paragraph itself**, which is the one
 thing that makes a model's claim checkable without leaving the sentence you are reading — see
@@ -418,9 +424,19 @@ Two things this costs, both deliberate:
   `BlockRef` stops the click from bubbling. Without that, clicking the far end of a range would
   quietly take you to the near end — the click would work, and go to the wrong place.
 
-The type is small, faint and Courier (`--font-id` in
+**The gutter's permalink splits that plain left-click by how it was made**
+([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)): a pointer click copies the absolute URL, and
+keyboard activation jumps. It is still an `<a href>`, and it has to be — the element announces itself
+as a link, so pressing Enter on it must do what a link does, and every modified click still belongs
+to the browser. It jumps through App's `onJump` rather than by navigation, because **this app
+intercepts no anchor clicks globally**: an unprevented one would reload the reading view to arrive at
+the paragraph already on screen.
+
+Where an id is still drawn as characters, the type is small, faint and Courier (`--font-id` in
 [`styles/tokens.css`](../../styles/tokens.css)), at Greg's asking: an id is machine text sitting
-beside prose and should read as a footnote to the block, not as part of it.
+beside prose and should read as a footnote to the block, not as part of it. That was also the
+argument for taking it out of the gutter — beside a paragraph, a footnote to the block is still a
+column of machine text running the length of the article.
 
 ## If this ever changes
 

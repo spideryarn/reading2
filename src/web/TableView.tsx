@@ -14,7 +14,7 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
@@ -41,8 +41,9 @@ import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
 import { useColumnContext } from "./useColumnContext.js";
-import { BlockRange, BlockRef } from "./BlockRef.js";
-import { MessageSquare } from "lucide-react";
+import { BlockRange } from "./BlockRef.js";
+import { BlockGutter } from "./BlockGutter.js";
+import { commentsByBlock } from "./comment-nav.js";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
 import { Lightbox } from "./Lightbox.js";
@@ -54,6 +55,15 @@ import {
   zoomTargetOf,
   type ZoomedFigure,
 } from "./zoomable.js";
+
+/**
+ * How long the live region stays empty between two announcements.
+ *
+ * Long enough for a screen reader to observe the clear as its own mutation,
+ * short enough that a copy still feels acknowledged. It is a gap, not a delay
+ * the reader waits on — the tick has already appeared.
+ */
+const ANNOUNCE_GAP_MS = 60;
 
 interface Props {
   article: Article;
@@ -348,6 +358,53 @@ export function TableView({
      conversation into the same pass would have multiplied a cost that was
      already the expensive half of this memo. */
   const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
+
+  /**
+   * Every comment grouped onto its block, for the gutter's marker.
+   *
+   * **A separate memo from `marksByBlock`, and the dependency list is the whole
+   * reason.** That one takes `openComment` and `openChat`, so it is rebuilt —
+   * along with an article's worth of anchor resolution — every time the reader
+   * opens or closes a dialog. This is rebuilt only when the comments themselves
+   * change, which is when the reader writes or deletes one. Same split, and the
+   * same argument, as `termMarksByBlock` below.
+   *
+   * It also asks a different question. `marksByBlock` asks *where in the prose
+   * do these words sit*, which has no answer once the article has been
+   * re-extracted past them; this asks *which block is this comment on*, which
+   * always has one. See comment-nav.ts § commentsByBlock.
+   */
+  const cmtsByBlock = useMemo(() => commentsByBlock(comments, blocks), [comments, blocks]);
+
+  /**
+   * One live region for the whole table, written through a ref.
+   *
+   * Through a ref rather than through state because state here re-renders the
+   * table — this file is largely comments about that cost — and a copy
+   * confirmation has no business re-annotating an article's worth of prose.
+   *
+   * `role="status"` carries an implicit `aria-live="polite"`, and
+   * `aria-atomic` makes each message be read whole rather than diffed.
+   *
+   * The message carries the short id, so two different blocks read differently.
+   * The same block twice is handled by the clear-then-write below. Latest result
+   * wins; queueing announcements would be a mechanism for a case nobody has.
+   */
+  const liveRef = useRef<HTMLSpanElement>(null);
+  const announce = useCallback((said: string) => {
+    const region = liveRef.current;
+    if (!region) return;
+    /* **Cleared first, and the message put back in a later task.** Writing the
+       same string twice is not a DOM mutation, so copying the same block twice
+       announced once and then went silent — the reader presses it again because
+       they are not sure it worked, and gets nothing, which is the reading of
+       "it did not work". Clearing makes each message a change the assistive
+       technology can see. GPT Sol found it, 2026-08-31. */
+    region.textContent = "";
+    setTimeout(() => {
+      if (liveRef.current) liveRef.current.textContent = said;
+    }, ANNOUNCE_GAP_MS);
+  }, []);
 
   const marksByBlock = useMemo(() => {
     const byBlock = new Map<BlockId, Mark[]>();
@@ -822,9 +879,13 @@ export function TableView({
                 // below so a heading groups with the section it introduces
                 // (styles.css § td.text.kind-heading). Emitted for every kind
                 // so the next rule that needs one does not have to change JSX.
+                /* `has-marks` says this row draws all three gutter slots, and
+                   the stylesheet floors its height so none of them can hang
+                   below the row and take a click meant for the next one.
+                   § the gutter in styles.css has the reasoning. */
                 className={`text pin-right kind-${block.kind} ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }`}
+                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the
@@ -875,39 +936,19 @@ export function TableView({
                     : undefined
                 }
               >
-                <BlockRef className="block-id" id={block.id} onJump={onJump} />
-                {/* A door into chat beside every paragraph — Greg, 2026-08-26:
-                    "a Chat button next to each paragraph … perhaps underneath
-                    the block-id". Anchored to the block rather than to a
-                    selection, which is the other half of what an anchor can be.
-
-                    Hidden until the row is hovered, and never `display: none`:
-                    that would take it out of the tab order and hand a keyboard
-                    reader nothing. `pointer-events` goes with the opacity in
-                    styles.css, or the gutter grows an invisible target that
-                    eats clicks meant for the id above it. */}
-                <button
-                  type="button"
-                  className={`block-chat${chatCounts.get(block.id) ? " has" : ""}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChatAbout(block.id);
-                  }}
-                  title={
-                    chatCounts.get(block.id)
-                      ? `Chat about this paragraph (${chatCounts.get(block.id)} already)`
-                      : "Chat about this paragraph"
-                  }
-                  aria-label="Chat about this paragraph"
-                >
-                  <MessageSquare size={12} aria-hidden="true" />
-                  {/* Every conversation anchored to this block, selections
-                      included — counting only the whole-block ones would make
-                      the number disagree with the marks sitting beside it. */}
-                  {!!chatCounts.get(block.id) && (
-                    <span className="block-chat-n">{chatCounts.get(block.id)}</span>
-                  )}
-                </button>
+                {/* The reader's own column: the address of this paragraph, the
+                    marks they have made on it, and the door into chat that has
+                    always been here. BlockGutter.tsx has the rule it follows and
+                    the three slots it is. */}
+                <BlockGutter
+                  id={block.id}
+                  comments={cmtsByBlock.get(block.id)}
+                  chatCount={chatCounts.get(block.id) ?? 0}
+                  onOpenComment={onOpenComment}
+                  onChatAbout={onChatAbout}
+                  onJump={onJump}
+                  announce={announce}
+                />
                 <div
                   className="prose"
                   /* Looked up, not computed — see `proseHtml` above. A block
@@ -942,6 +983,10 @@ export function TableView({
         `showModal()` has to be called on an element that is already in the
         document, and a `<dialog>` that is not open occupies no space and paints
         nothing. */}
+    {/* Where `announce` writes. Empty until a reader copies a permalink, and
+        `.sr-only` rather than hidden, because a hidden live region announces
+        nothing. */}
+    <span ref={liveRef} className="sr-only" role="status" aria-atomic="true" />
     <Lightbox
       figure={zoomed}
       onClose={() => setZoomed(null)}

@@ -68,3 +68,37 @@ export function positionOf<T extends { id: string }>(
 ): number {
   return ordered.findIndex((c) => c.id === currentId) + 1;
 }
+
+/**
+ * Every comment on each block, in reading order — what the prose gutter marks.
+ *
+ * > [!WARNING]
+ * > Grouped by **`comment.blockId` alone**, never by whether the comment's
+ * > quote still resolves against the prose. That is the whole point of the
+ * > gutter marker: `resolveMark` returns null when the article was re-extracted
+ * > and the quoted words are gone, so an orphaned comment draws no inline mark
+ * > and would otherwise be invisible in the article. The block id is the
+ * > permanent spine and never drifts (docs/project/block-ids.md), so a marker
+ * > keyed on it survives what the underline cannot.
+ *
+ * Reading order inside a block, because the marker opens the *first* comment
+ * and "first" has to mean the same thing on every render. `orderComments` is
+ * the one place that ordering lives; this only groups what it returns, so the
+ * two can never disagree.
+ *
+ * Blocks with no comments are absent rather than present-and-empty, so a caller
+ * asks `get(id)?.length` and gets `undefined` for "none" rather than a lie
+ * about an empty list it now has to keep.
+ */
+export function commentsByBlock(
+  comments: Comment[],
+  blocks: { id: BlockId }[],
+): Map<BlockId, Comment[]> {
+  const byBlock = new Map<BlockId, Comment[]>();
+  for (const c of orderComments(comments, blocks)) {
+    const list = byBlock.get(c.blockId);
+    if (list) list.push(c);
+    else byBlock.set(c.blockId, [c]);
+  }
+  return byBlock;
+}
