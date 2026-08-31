@@ -891,6 +891,37 @@ survey, not by running anything, so treat the list as a checklist rather than a 
 | `tests/paid-cli-ledger.test.ts` | a row proving the CLI calls `loadEnvLocal()` before it spends money |
 | `tests/db-step-constraint.test.ts` | nothing — it goes red on its own, which is the point |
 
+### A duplicate `export type` reads as a regression everywhere else
+
+Cost another session most of an afternoon's confidence before they read the error rather than the
+count, and it was ours: two implementers working in parallel both had reason to put
+`TimelineModality` into `src/types.ts`, and it ended up declared twice.
+
+**A duplicate `export type` does not fail like a type error.** It stops **transform**, so every suite
+that transitively imports `types.ts` reports as a *load* failure — 27 files at once — and the run
+reads as a broad regression somewhere else entirely. The session that found it nearly attributed it
+to their own in-flight work.
+
+The tell: the failures are **files rather than assertions**. A real regression reddens tests; this
+reddens whole files that never ran. In a tree with six sessions in it, that is a failure mode that
+will burn somebody else's afternoon, so it is worth recognising on sight.
+
+The lesson for parallel work: **the shared type file is the one place two implementers will collide
+even when their file sets are disjoint**, which is the same coupling as
+[§ The client cannot name a step](#the-client-cannot-name-a-step-the-server-has-not-declared), one
+door along. One owner per type, named in the brief.
+
+### The compiler now enforces "born converted"
+
+`LEGACY_UNCONVERTED_STEPS` went **empty** on 2026-08-31 — all eleven steps return their artefacts and
+write no file of their own. `LegacyUnconvertedStep` therefore resolves to `never`, and
+`PipelineStep<N>["run"]` requires a `ConvertedProduct` for every step with no way round it.
+
+So [the decision to be born converted](#three-decisions-this-survey-turned-up-that-the-design-has-to-make)
+is no longer something an implementer has to remember: Timeline **cannot compile** unless it returns
+`parts`. A decision that was resting on a brief is now resting on the type system, which is where
+`AGENTS.md` says to put them.
+
 ### The client cannot name a step the server has not declared
 
 Found by Stage 3, and it is a hole in **this plan's parallelism**, not in either implementer's work.
