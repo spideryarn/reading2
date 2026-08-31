@@ -14,7 +14,11 @@ The other two places to look are in [debugging.md](debugging.md).
 
 ## How to look at it
 
-There is no Sentry MCP, so this one is a browser tab rather than a tool call. `SENTRY_ORG` and
+**There is a Sentry MCP**, at `https://mcp.sentry.dev/mcp`, and this repo registers it in
+[`.mcp.json`](../../.mcp.json) — so this is a tool call once you have run `claude mcp login sentry`
+in a browser, and a browser tab until you have. This doc said the opposite until 2026-08-31, which
+is the mistake in its own opening paragraph made a second time: the Sentry MCP had shipped and
+`claude mcp add --help` was already using it as its worked example. `SENTRY_ORG` and
 `SENTRY_PROJECT` are set on the Vercel project (`npx vercel env ls production` lists them; the values
 are encrypted, so read them from the Sentry UI or ask Greg).
 

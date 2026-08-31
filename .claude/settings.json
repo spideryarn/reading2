@@ -11,5 +11,17 @@
         ]
       }
     ]
+  },
+  "enabledMcpjsonServers": [
+    "supabase",
+    "vercel",
+    "sentry"
+  ],
+  "permissions": {
+    "deny": [
+      "mcp__vercel__buy_pro",
+      "mcp__vercel__buy_domain",
+      "mcp__vercel__buy_credits"
+    ]
   }
 }

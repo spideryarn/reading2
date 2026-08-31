@@ -288,6 +288,45 @@ credentials must be told to run against a scratch config with fake tokens, and I
 Note this token is the *laptop's*, and unrelated to the box's — see stage 2, where the box gets its
 own tokens and never runs `gh auth login`.
 
+**2026-08-31, stage 4 landed, and it needed no provisioning code at all.** The three service MCPs
+are in a committed [`.mcp.json`](../../.mcp.json) at project scope, so a new box gets them from
+`gjd-remote clone` rather than from `provision.sh`. That is fewer moving parts than the plan
+assumed: nothing to add to the provisioning script, nothing that can drift between a box built
+today and one built next year, and the browser MCPs stay where they are because they genuinely are
+per-machine.
+
+Measured rather than assumed, all on 2026-08-31:
+
+- The local Supabase MCP serves **11 tools** (`tools/list` over curl, `serverInfo` `supabase`
+  0.10.0): `search_docs`, `list_tables`, `list_extensions`, `list_migrations`, `apply_migration`,
+  `execute_sql`, `query_logs`, `get_advisors`, `get_project_url`, `get_publishable_keys`,
+  `generate_typescript_types`. Two of them write, and it is loopback-only, so it cannot reach
+  production — which is the thing that lets the `push-env` allowlist keep leaving
+  `SUPABASE_ACCESS_TOKEN` behind.
+- `https://mcp.vercel.com` → HTTP 401 `invalid_token`. `https://mcp.sentry.dev/mcp` → HTTP 401.
+  OAuth is the only way into either; there is no static-token path.
+- **`sentry-error-monitoring.md` was wrong** and has been corrected. It said "There is no Sentry
+  MCP" — in a doc whose own opening lesson is *check before concluding we do not have this*.
+- A project-scope server otherwise leaves every session at `⏸ Pending approval`. Seen on the box,
+  fixed with `enabledMcpjsonServers` in `.claude/settings.json`, and confirmed absent on the laptop
+  afterwards.
+
+**The deny syntax is not what it looks like.** The whole-server form is **`mcp__vercel`**, with no
+trailing `__*`, from the 2.1.251 binary's own help string: *"Use 'mcp__<server>' to deny one
+server's tools ('mcp__<server>__<tool>' for one tool), or 'mcp__*' to deny every MCP server's
+tools."* I had guessed `mcp__vercel__*` when briefing the spike, and it would have silently denied
+nothing. Vercel's `buy_pro`, `buy_domain` and `buy_credits` are now denied in
+`.claude/settings.json`, and the proof is that they vanished from this session's own toolset the
+moment the file was written. `gjd-remote` passes no `--dangerously-skip-permissions`, so the deny
+list genuinely binds on the box.
+
+**A rebuild does not force re-authentication.** `~/.claude/.credentials.json` and `~/.claude.json`
+are under `/home`, `findmnt /home` reports `/dev/sdb`, and that is the volume. So the two
+`claude mcp login` runs are a once-per-*box* ceremony, not a once-per-`apply` one.
+
+**Still manual, and unavoidably so:** `claude mcp login vercel` and `claude mcp login sentry`, in a
+browser, by Greg. Nothing else in stage 4 needs a human.
+
 ## The `provision.sh` refactor — approved, with a correction
 
 Extract it from the cloud-init heredoc into `infra/hetzner/provision.sh`, so it is shellcheck-able
