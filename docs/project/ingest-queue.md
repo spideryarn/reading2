@@ -807,10 +807,10 @@ marked, which really is worth another go. It is not because a wasted click is ch
 retry costs minutes of pipeline and another billed model call, which is a good deal worse than the
 same mistake on a chat message.
 
-**What makes a failure permanent is Retry's own shape.** `forceForRetry` forces from the first step
-that did not finish, so **a retry never re-runs a step that succeeded**. A stage that failed while
-reading an artefact an earlier step wrote will read that identical artefact again. That is what
-separates the two lists:
+**What makes a failure permanent is Retry's own shape.** For an ordinary job `forceForRetry` forces
+nothing, so **a retry never re-runs a step that succeeded**. A stage that failed while reading an
+artefact an earlier step wrote will read that identical artefact again. That is what separates the
+two lists:
 
 | Cannot come out differently | Might |
 |---|---|
@@ -824,6 +824,15 @@ separates the two lists:
 Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
 draw, and the whole reason those checks are loud is that the model does occasionally get it right on
 the second attempt.
+
+**A *refresh* is the exception, and since 2026-08-31 it re-runs from the top.** A forced job's steps
+finish into a **draft**, and a failure throws that draft away — so "this step already succeeded" is a
+statement about a revision the retry cannot see, and honouring it published the old article under a
+row of green ticks. `forceForRetry` now re-forces everything the original request forced (Greg's
+decision 8; [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md)
+§ *The fourth fault*). The cost is deliberate: a refresh that dies late re-fetches, re-extracts and
+pays for a PDF transcription a second time. So the left-hand column above is about an ordinary
+retry — a refresh really does go back to the publisher.
 
 **Truncation is the one entry that is not certain, and it is worth being exact about why.**
 `TooLongForOnePass` is arithmetic: the same block count gives the same estimate for ever. Running

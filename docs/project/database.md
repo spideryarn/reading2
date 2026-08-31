@@ -207,6 +207,16 @@ publishes it, in one transaction with the job's own finish
 Before that the ingest produced files on disk and an empty draft revision that `publishRevision`
 refused, and the reader's shelf stayed empty.
 
+**A draft may only replace the revision it was copied from.** `beginDraftIn` copies whatever is
+published when the draft opens, and the job then runs for minutes; if something else publishes in
+between, moving the pointer to that draft buries work nobody meant to lose, and every check involved
+reports success. So the publication compares the base it recorded when the draft opened with the
+revision it is about to replace, and refuses — `refuseIfBaseMoved` in
+[`src/store/pg-session.ts`](../../src/store/pg-session.ts), whose `DraftBase` says how exact each
+answer is and why a reopened draft's is weaker. It is exact for the draft a claim minted, which is
+the case that matters once the pipeline commits through Postgres
+([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3).
+
 That is a carry-across, not the end state: an ingest still needs a writable disk for the length of
 the job, so the host question is unchanged and only the *publication* has moved. The plan for the
 other half — stages that return their products instead of writing files — is
