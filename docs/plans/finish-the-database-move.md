@@ -1,7 +1,16 @@
 # Finish the move from files to the database
 
-**Status:** plan, unbuilt. Reviewed twice by GPT Sol; **NO-SHIP both times**, and restaged after the
-second — [finish-the-database-move-review-sol.md](finish-the-database-move-review-sol.md).
+**Status, 2026-08-31: stages 1 and 2 are built, reviewed and committed. Stage 2.5 is next and
+nothing has been done on it.** Six GPT Sol reviews so far, all NO-SHIP, all accepted.
+
+| | what | commits |
+|---|---|---|
+| Stage 1 | every input comes from the store; the fingerprints and the blocks guard repaired | `6e3ee67` |
+| Stage 2 | every stage returns its product; `LEGACY_UNCONVERTED_STEPS` is empty | `5e8f744`, `5cf7827` |
+| **Stage 2.5** | **refetch the corpus — not started** | |
+| Stage 3 | the flip, and the four things that must precede it | |
+| Stage 4 | delete the filesystem store | |
+| Stage 5 | drop `raw_bytes`, its own deploy | |
 
 The **execution plan** for the remaining work in [delete-the-importer.md](delete-the-importer.md).
 That document is the authority on *why*; this one is the staging.
@@ -12,6 +21,53 @@ That document is the authority on *why*; this one is the staging.
 
 Parked that morning, restarted the same evening, because the parking was not safe — § *Trigger 5*
 there.
+
+## If you are picking this up
+
+Read this section, then § *Why now*, then the stage you are on. Everything else is history you can
+reach for when a decision looks arbitrary.
+
+**What you are walking into.** The pipeline writes its artefacts through a store seam rather than to
+paths, and every one of the eleven stages returns its product instead of writing files. What has
+*not* happened is the switch: [`src/jobs.ts`](../../src/jobs.ts) § `claimSession` still builds
+`fsStoreSession({ artifacts: pipelineStore, jobs: store })`, and `pipelineStore` is `fsArtifacts`,
+imported directly at line 57. So on a deployment the pipeline still reads and writes a job-scoped
+`/tmp` that a single-step job never wrote to, and all three faults in § *Why now* are live in
+production exactly as they were on 2026-08-30.
+
+**The single most useful thing to understand before touching anything.** Every stage of this plan
+before the flip exists to make the flip *one line*. If you find yourself needing to change a stage's
+code to make Postgres work, something earlier was left undone — go and find it rather than adding a
+branch.
+
+**Where to start reading the code**, in this order:
+
+1. [`src/pipeline.ts`](../../src/pipeline.ts) § `LEGACY_UNCONVERTED_STEPS` — empty, and the comment
+   says why it is kept. Then `STEPS`, which is the whole pipeline in one object.
+2. [`src/article-input.ts`](../../src/article-input.ts) — the seam the seven article-reading stages
+   share, and the shortest statement of what this migration is about.
+3. [`src/store/session.ts`](../../src/store/session.ts) § `checkProduct` and `fsStoreSession`, then
+   [`src/store/pg-session.ts`](../../src/store/pg-session.ts) § `openPgStoreSession`. The second is
+   what replaces the first, and it has **never run in production**.
+4. [`src/jobs.ts`](../../src/jobs.ts) § `claimSession` — the line stage 3 changes.
+
+**How to check the tree is healthy before you blame yourself.** `npm test` and `npm run typecheck`
+both read the **working tree**, and several sessions share it. A failure naming a file you have not
+touched is somebody's half-landed change nine times out of ten; `git diff HEAD -- <file>` tells you
+whose. And a full run under load produces timeouts that look like failures: a 380-file run at load
+average 38 reported 65 failures, and the same twelve files passed 142/142 as a subset an hour later.
+**Re-run the subset before believing a red.**
+
+**Things that have cost time here and will again:**
+
+- **A green suite is not evidence a guard works.** Most of this plan's findings are checks that
+  agreed with the bug. Apply the mutation the check exists to catch and watch it go red, every time.
+  [silent-success.md](../reusable/silent-success.md), and § *What is proven and what is not* below.
+- **`typecheck` cannot see HEAD.** A declaration and the thing it declares can land in separate
+  commits and stay green for everyone whose tree holds both halves. It happened three times on
+  2026-08-31.
+- **Ask Greg before anything that writes to a database**, every time, including a migration that
+  looks routine. Local is a lower bar but still ask before wiping.
 
 ## Why now
 
@@ -138,24 +194,32 @@ altogether and a test says they stay gone.
   referenced with its object really present in the bucket, one legacy), and all three were made to
   go red on the mutation they guard before being taken green.
 
-**Upload collision handling reads outside job scope** — `slugIsSpokenFor` reads `raw.json` through
-`contextPaths` during enqueue, before `runInJob`, where `dataRoot()` deliberately throws on a
-deployment.
+**~~Upload collision handling reads outside job scope~~** — ⚠️ **half fixed.** `slugIsSpokenFor` read
+`raw.json` through `contextPaths` during enqueue, before `runInJob`, where `dataRoot()` deliberately
+throws on a deployment. It now goes through the artefact seam, so it will move with the store — but
+the Postgres branch is stage 3 item 2 and until then this is still the filesystem's answer. Note it
+only fires on a *name collision*, which is why nobody has hit it: `articleExists` returns first for
+a slug nobody holds.
 
-**`toc` and forced `extract` are still path-based** — `toc` opens `blocksPathFor(ctx)`, `extract`
-reads the scratch raw manifest. Both were missing from my first stage 1; Sol caught it.
+**~~`toc` and forced `extract` are still path-based~~** — ✅ built in stage 2.
 
 **The checkpoint store has no callers** — `src/store/checkpoints.ts` says so itself. The real
-checkpoints bypass it, and `scripts/checkpoints-sweep.ts` sweeps `data/` directly.
+checkpoints bypass it, and `scripts/checkpoints-sweep.ts` sweeps `data/` directly. **Still true**,
+and deliberately so: see stage 2b on why redirecting half of `clearCheckpoint` would silently re-buy
+a paid model call per batch.
 
-**`sketch` is already converted** — `STEP_ORDER` has eleven steps and `sketch` is the one absent from
-`LEGACY_UNCONVERTED_STEPS`. The worked example for the rest.
+**~~`sketch` is already converted~~** — it was the worked example, and now every stage has followed
+it. `LEGACY_UNCONVERTED_STEPS` is empty.
 
 **The deploy scripts depend on the layout** — `scripts/deploy.ts` copies `data/` and `output/` into
 the deploy-test worktree; `deploy-checks.ts` gates on sentinel files beneath them.
 
 **The corpus** — ~33 fixtures in `data/`, and 76 of 320 test files reference `example/`, `data/` or
-`output/` (grepped by path, so an upper bound).
+`output/` (grepped by path, so an upper bound). **Re-measured 2026-08-31**: 30 directories under
+`data/` excluding `_`-prefixed, 18 with a `raw.json`, 2 with raw bytes and no manifest
+(`constitution`, `noema-mythology-of-conscious-ai`), 10 with neither, and 0 missing `storedSha256`.
+Of the 18, **nine name an object in `data/_blobs/` and nine name one in the Supabase container's
+bucket** — disjoint, and the reason stage 2.5 exists in its present form.
 
 ## The stages
 
@@ -201,10 +265,15 @@ No switchover, no behaviour change a reader would notice, and nothing that can b
   against one real article. Both halves red-then-green;
   [block-ids.md § The freshness guard](../project/block-ids.md) has the cost and the idempotence
   measurement it rests on. GPT Sol NO-SHIP, 2026-08-31.
-- **Convert every path-based input**: the six late stages, `blocks`, **and `toc` and forced
-  `extract`**. *(Stage 1b, not built.)*
+- **Convert every path-based input**: the six late stages, `blocks`, `toc` and forced `extract`.
+  ✅ **Absorbed into stage 2 and built there**, because converting a stage's input and its output
+  turned out to be one edit per module rather than two passes over the same ten files.
 - Fix `sendSource` — ✅ **Built 2026-08-31 (stage 1b)**, see § *What the inventory found* above.
-- Fix the upload-collision read and `deleteGlossary`. *(Not built.)*
+- Fix the upload-collision read — ✅ **half built.** It now reads the manifest through the artefact
+  seam rather than `readRaw(contextPaths(...).dir)`, so it moves with the store; the **Postgres
+  branch does not exist** and is stage 3 item 2, where Sol calls it a hard prerequisite.
+- Fix `deleteGlossary`, whose Postgres side is a 501. *(Not built. Small, and nothing depends on
+  it — it is the last of the three store methods this plan once wrongly claimed were all missing.)*
 
 ### Stage 2 — every stage returns its product
 
@@ -531,9 +600,46 @@ that loud: `extract` now dereferences the manifest, so about half the corpus ref
 until it is refetched. Same answer, same reason — decision 4 — and it is now the *first* thing a
 developer hits rather than something discovered at the flip.
 
-**Done:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, and every
-manifest's object is readable through `readRawBytes` — both proved by a query and a dereference
-rather than by re-running the importer.
+#### How to actually do it — nothing here exists yet
+
+**There is no bulk refetch script.** `ls scripts/` has `db-import.ts`, `db-export.ts` and
+`backfill-raw-manifests.ts`, and none of them refetches. So the first task of this stage is to
+decide between two shapes, and they are not equivalent:
+
+1. **Enqueue a forced `DEFAULT_INGEST_STEPS` job per article** through the ordinary queue. This is
+   what a reader clicking *refresh* does, so it exercises the real path and its failures are the
+   ones a reader would see. It also costs a `toc` model call per article, which is the expensive
+   part of an ingest — measure it before running it over thirty articles.
+2. **A script that runs `fetch` and `extract` only**, leaving the later stages' artefacts alone. Far
+   cheaper, and it is all that stage 2.5 actually needs: the two holes are a missing
+   `extractedHtml` and an unreachable source object, and both are stage 1–2 artefacts. But it is a
+   second way to drive the pipeline, and this repo has spent the day removing those.
+
+**Recommendation: option 2, written as a thin caller of the existing steps rather than a new
+pipeline** — and delete it at stage 4 with the rest of the filesystem-era tooling. Put the reasoning
+in the script's header so the next person does not have to re-derive it.
+
+**Two things to establish before refetching anything**, because they decide how much has to be
+refetched:
+
+```
+# 1. Which revisions have stamped HTML and no extracted HTML — the importer's signature.
+#    Expect: every article the importer ever wrote.
+select slug from spideryarn.article_revisions r
+  join spideryarn.articles a on a.id = r.article_id
+ where r.stamped_html is not null and r.extracted_html is null;
+
+# 2. Which manifests name an object this process cannot see.
+#    The probes are in docs/postmortems/a-write-path-with-no-reader.md, verbatim; 9 of 18 locally.
+```
+
+**Ask Greg before running anything that writes**, including against the local database. Decision 4
+makes the *data* expendable; it does not make a write unattended.
+
+**Done means:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, and
+every manifest's object is readable through `readRawBytes` — both proved **by running the queries and
+the dereference**, not by having re-run a script that reported success. A refetch that silently
+skipped an article looks exactly like one that refetched it.
 
 ### Stage 3 — the flip
 
@@ -547,52 +653,139 @@ separate.
 exists so that this line is the only one that has to change; everything before it was making that
 true.
 
-- **Exercise the real coordinator through `openPgStoreSession`** — the unexercised path.
-- **Add exact-base verification**: reads bound to revision R1 must not be overlaid onto a draft
-  copied from R2. `beginDraftIn` copies whichever revision is current when the lazy draft opens, and
-  `publishAndFinish` checks article identity but *not* the base revision. This is the half of Sol's
-  first review still unabsorbed.
-- Tests for handback, a warm instance, retry, and all-skipped.
-- **Delete or hard-disable the importer in this stage**, not later: once the pipeline publishes
-  through `pgStoreSession`, a re-import writes `rawBytes` and friends while leaving the reference
-  columns untouched, and the active-job guard no longer covers a finished job. *"Data is expendable"*
-  does not make a revision whose metadata and referenced object describe different acquisitions
-  correct.
-- **Give `slugIsSpokenFor` its Postgres branch — this is a hard prerequisite, not a tidy-up.** It
-  reads the `fetch` manifest to answer *is this article this upload's own*, and under Postgres that
-  answer is not on the revision: `origin` is derivable from the two URLs being null, and the upload
-  id is on `jobs.upload_id`. Without it, **retrying an existing upload treats its own slug as
-  occupied and creates `slug-2`**, re-running from the top and paying for the transcription again.
-  Deferring it out of stage 2 was right; carrying it past the flip is not. GPT Sol, 2026-08-31.
-- **Fix retry after a failed forced refresh, which currently loses the work it completed.** Sol found
-  this and it is a **fourth fault**, not a refinement of the three above:
-  1. Published revision R1 exists.
-  2. A forced job writes new `fetch`, `extract` and `blocks` into a draft, then fails at `toc`.
-  3. The failed draft is discarded (`src/store/pg-session.ts`).
-  4. Retry forces only from the first *unfinished* step (`src/jobs.ts` § `forceForRetry`).
-  5. Its new draft copies **R1**, so the earlier steps skip as current and `toc` runs over the old
-     article. **The retry reports success and the refresh is silently gone.**
+#### The line itself, exactly
 
-  Two ways out and they are not equivalent: re-force from the earliest *originally* forced step, or
-  retain the failed draft rather than discarding it. The first is cheaper and throws away paid work;
-  the second keeps it and needs a rule for when a failed draft is finally dropped. Decide it before
-  the flip, because the flip is what makes step 3 real — on the filesystem there is no draft to
-  discard.
-- Then flip.
+[`src/jobs.ts`](../../src/jobs.ts) § `claimSession` currently reads:
 
-**Done:** a real ingest, a real single-step job and a real retry, end to end against Postgres, on a
-deployed instance. Faults 1–3 each red-then-green.
+```ts
+export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
+  const inner = fsStoreSession({ artifacts: pipelineStore, jobs: store });
+  if (STORE !== "postgres") return inner;
+  return publishingSession(inner, { job: { id: job.id, attemptId: attempt }, slug: job.slug, from: pipelineStore });
+}
+```
+
+Under `postgres` it must become `openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId:
+attempt } })` ([`src/store/pg-session.ts`](../../src/store/pg-session.ts)), which opens or reopens
+the claim's draft and returns a session whose `commit` is one transaction. **`publishingSession`
+goes with it** — it exists because `fsStoreSession` publishes nothing, and `pgStoreSession` settles
+and publishes inside its own transaction. Read `publish-session.ts`'s header before deleting it;
+there is a `done` ending that reaches the store through `settleJob` as well as through `commit`, and
+whatever replaces it has to cover both.
+
+The filesystem branch stays for now — it is what every laptop runs until stage 4.
+
+#### Do these in this order, and none of them is optional
+
+**1. Prove the coordinator runs at all.** `openPgStoreSession` → `pgStoreSession` → `commit` is the
+**direct product-commit path, and it has never executed in production**. `copyArtefacts` →
+`pgArtifactsIn.write` is reachable today and is *not* the same path. Drive one real step through it
+against the local database before changing anything else, so that every later failure is about the
+thing you just changed.
+
+**2. `slugIsSpokenFor`'s Postgres branch** — [`src/jobs.ts`](../../src/jobs.ts), the read is marked
+in the code with a comment naming this stage. It asks *is this article this upload's own* by reading
+the `fetch` manifest; under Postgres the answer is not on the revision. `origin` is derivable from
+the two URLs being null, and the upload id is on `jobs.upload_id`
+([`src/db/schema.ts`](../../src/db/schema.ts) says so at the column). Without it, **retrying an
+existing upload finds its own slug occupied, takes `slug-2`, and pays for the transcription again.**
+`articleExists` in `src/pipeline.ts` is the branch to copy the shape of. Test:
+`tests/pipeline-slug-claim-files.test.ts` has the filesystem half and the mutation that reddens it —
+write the Postgres twin beside it rather than widening that file.
+
+**3. Retry after a failed forced refresh** — the fourth fault, below. Decide it before you flip,
+because flipping is what makes it real.
+
+**4. Exact-base verification.** Reads bound to revision R1 must not be overlaid onto a draft copied
+from R2. `beginDraftIn` copies whichever revision is current when the lazy draft opens;
+`publishAndFinish` checks article identity but **not** the base revision. This is the half of Sol's
+*first* review still unabsorbed, and it has been carried forward through five reviews without being
+built — treat that as evidence it is easy to skip rather than evidence it is unimportant.
+
+**5. Delete or hard-disable the importer**, in this stage and not later. Once the pipeline publishes
+through `pgStoreSession`, a re-import writes `rawBytes` and friends while leaving the reference
+columns untouched, and the active-job guard no longer covers a finished job. *"Data is expendable"*
+does not make a revision whose metadata and referenced object describe different acquisitions
+correct. `db:import` has **no non-test callers** — checked 2026-08-31 — so this breaks nothing.
+
+**6. Then flip**, and only then.
+
+#### The fourth fault, which item 3 above is about
+
+**A failed forced refresh loses the work it completed, and reports success.** Sol found this on
+2026-08-31; it is a fault in its own right rather than a refinement of the three at the top.
+
+1. Published revision R1 exists.
+2. A forced job writes new `fetch`, `extract` and `blocks` into a draft, then fails at `toc`.
+3. The failed draft is discarded ([`src/store/pg-session.ts`](../../src/store/pg-session.ts)).
+4. Retry forces only from the first *unfinished* step
+   ([`src/jobs.ts`](../../src/jobs.ts) § `forceForRetry`).
+5. Its new draft copies **R1**, so the earlier steps skip as current and `toc` runs over the old
+   article. **The retry reports success and the refresh is silently gone.**
+
+Two ways out and they are not equivalent. **Re-force from the earliest *originally* forced step** is
+cheaper and throws away paid work — a book's PDF transcription, in the worst case. **Retain the
+failed draft** keeps that work and needs a rule for when a draft is finally dropped, which nothing
+currently has. Decide it before the flip, because the flip is what makes step 3 real: on the
+filesystem there is no draft to discard, so this cannot be reproduced today.
+
+**Write the failing test first.** It is four steps of fixture and it will not be obvious afterwards
+that it was ever wrong — a retry that reports success is exactly the shape that gets re-broken.
+
+#### Done means
+
+- A real ingest, a real single-step job (`{ steps: ["tweets"] }` on a published article) and a real
+  retry, end to end against Postgres, **on a deployed instance** — the laptop cannot show this,
+  because `dataRoot()` on a laptop is the repository root and every path accidentally works.
+- **Faults 1–4 each red-then-green.** Fault 1 has a test already
+  (`tests/late-step-on-a-cold-instance.test.ts`) whose docstring says exactly what it does and does
+  not prove; the others need writing.
+- Tests for handback, a warm instance, retry, and all-skipped — the four job-lifecycle shapes that
+  behave differently once a draft exists.
 
 ### Stage 4 — delete the files
 
-Remove the filesystem runtime adapters and `revisionLifecycle`; move local dev and fixtures to
-Postgres; refetch the corpus rather than migrating it; rewrite the deploy scripts and `deploy-checks`
-off the `data/`/`output/` layout; narrow and fix the affected tests.
+Deletion, and it is the largest stage by file count and the least dangerous by consequence: every
+mistake here is a compile error rather than a wrong artefact.
 
-**Remove every application reference to `raw_bytes` — but keep the column.**
+**What comes out**, and the list is longer than it looks because the filesystem is load-bearing in
+places nobody thinks of as storage:
 
-**Docs in this stage:** [architecture.md § Storage](../project/architecture.md) still describes the
-filesystem as the storage model.
+- The filesystem runtime adapters — `artifacts-fs.ts`, `jobs-fs.ts`, `checkpoints-fs.ts`,
+  `ai-calls-fs.ts`, `uploads-fs.ts`, `blobs-fs.ts` and the `fs*` halves of every `guarded(...)` pair
+  in [`src/store/index.ts`](../../src/store/index.ts). Each one goes with its branch, not before it.
+- **`revisionLifecycle`** ([`src/store/revisions.ts`](../../src/store/revisions.ts)) — a dead seam no
+  production module imports; the only reference is a guard test.
+- **`readArticleFromDir`** in [`src/article-input.ts`](../../src/article-input.ts), and with it the
+  last filesystem read in the article half of the pipeline. This is the payoff for having put it in
+  one place: a function to delete rather than seven `readFile`s to hunt.
+- **`dataRoot()`** and [`src/store/data-root.ts`](../../src/store/data-root.ts) entirely, once
+  nothing resolves a path. Check `contextPaths` and `StepContext.dir`/`htmlFile` with it — several
+  stages still take a `dir` for checkpoints alone, and those are the D2 landing rather than this one.
+- The stage-2.5 refetch script, whichever shape it took.
+- `RawManifest.file`, which is now a restatement of `kind`. `SHAPE.raw`
+  ([`src/store/artifacts.ts`](../../src/store/artifacts.ts)) validates it, so it should come to
+  validate the live reference fields instead — Sol, 2026-08-31, *"not a stage-2c blocker"*.
+
+**What has to move rather than go:**
+
+- **Local dev and the fixtures.** `example/` and `data/` are what every test and every laptop reads.
+  76 of 320 test files referenced `example/`, `data/` or `output/` when last counted — an upper
+  bound, grepped by path. Expect this to be most of the work.
+- **The deploy scripts.** [`scripts/deploy.ts`](../../scripts/deploy.ts) copies `data/` and
+  `output/` into the deploy-test worktree, and `deploy-checks.ts` gates on sentinel files beneath
+  them. Both need rewriting off that layout, and there is a known trap:
+  [the deploy test gate cannot pass](../project/deployment.md) because the gate worktree has no
+  gitignored `output/`, so ~12 tests fail structurally and forcing became routine. **Fixing that is
+  part of this stage**, because after it there is no `output/` to be missing.
+
+**Remove every application reference to `raw_bytes` — but keep the column.** That separation is
+stage 5's whole reason; see below.
+
+**Docs in this stage:** [architecture.md](../project/architecture.md) still shows the filesystem
+layout in its diagram and its stage table, and § *Storage* still describes it as the storage model.
+That file is one of the seven entry points, so editing it goes one approved change at a time with
+the before and after shown — [edit-important-docs.md](../reusable/edit-important-docs.md).
 
 ### Stage 5 — drop `raw_bytes`
 
@@ -604,9 +797,69 @@ code and drop together and a rollback restores code naming a column that is gone
 touch this: it protects *executable compatibility*, not data. **Sol's correction to my claim that
 decision 4 collapsed the demolition.**
 
+**And the ordering is forced by the deploy script rather than by taste.**
+[`scripts/deploy.ts`](../../scripts/deploy.ts) applies migrations **before** it pushes the code, so a
+single `npm run deploy` carrying both would drop the column while the old code still selects it.
+Another session hit exactly this on 2026-08-31 dropping `article_revisions.summary` and split it into
+two runs; ours is the same shape. Greg's call, not something to run past him.
+
+**One more asymmetry to carry into any migration here**, learned the same day: adding a name to the
+`revision_step_runs_step` CHECK is free, **removing one is not**, because Postgres validates a
+re-added CHECK against the rows already in the table. So a DELETE of the affected rows must precede
+the ADD CONSTRAINT — and it passes on a fresh local container with no history and fails on
+production, which is a delayed fuse and a false negative in one.
+
+## What is proven, and what is only plausible
+
+Written down because six reviews of this work have each found a check that agreed with the bug, and
+the difference between *tested* and *watched failing* is the only thing that has reliably told them
+apart. If you extend this list, say which kind each new line is.
+
+**Proven — a mutation was applied and the named test went red:**
+
+- Every article-reading stage's embedded `sourceHash` equals the `inputHash` its `stamp` computes,
+  in both metadata states (`tests/stage-stamp-agreement.test.ts`, seven stages, plus a negative
+  control that catches all seven hashing a constant).
+- Stage 3 returning the *input* HTML where the stamped HTML belongs, and a corruption placed one
+  function deeper inside `splitIntoBlocks` where the replay and `blocksMatchTheirHtml` agree with
+  the bug (`tests/blocks-baseline.test.ts`, `tests/acquire-extract-blocks-end-to-end.test.ts`).
+- Ids carried across a re-extraction with the baseline dropped
+  (`tests/acquire-extract-blocks-end-to-end.test.ts`).
+- The fetch CLI's store selection diverging from the server's, and the call moved below the argv
+  check (`tests/stage2c-raw-bytes.test.ts`, child process).
+- An over-long object classified as corrupt rather than reaching the reader unclassified, and a
+  transient store failure *not* classified as corruption.
+- An upload's own slug on retry (`tests/pipeline-slug-claim-files.test.ts`).
+
+**Not proven, and each is a place to be careful:**
+
+- **The direct `pgStoreSession` commit path has never executed** in production or in a real ingest.
+  Stage 3 item 1 is about this and nothing else.
+- **A pair corrupted consistently in both halves**, and any change outside a block (the `<title>`,
+  say), are invisible to every guard here *and* to `blocksMatchTheirHtml`. Stated rather than fixed.
+- **A store that lies in `head` as well as in `get`** makes an over-long body surface as an ordinary
+  error with a Retry offered. Rethrowing when `head` cannot explain the failure is the right answer
+  — an unreachable store is a fault, not a corrupt document — so it is left, with a comment.
+- **Nothing has been run on a deployed instance.** Every claim in this plan about deployment
+  behaviour is derived from `dataRoot()` and the job scoping, not observed. On a laptop `dataRoot()`
+  is the repository root, so every path accidentally works and the faults are invisible.
+- **`tests/doc-links.test.ts` reads the filesystem, not git**, so an untracked doc under a tracked
+  link satisfies it and the breakage appears only after somebody commits. It cannot see that class
+  until it has already happened.
+
 ## Risks
 
 - **The direct `pgStoreSession` commit path has never executed.** Stage 3 opens by proving it.
 - **One production database, no staging** — but expendable data, so a bad migration costs a refetch.
+  The exception is *executable* compatibility, which decision 4 does not cover: see stage 5.
 - **Stage 3 is the only stage that changes what a reader sees.** Everything before it is preparation
-  and everything after is removal.
+  and everything after is removal. It is also the only stage where being wrong is expensive, because
+  it is the only one that can publish a revision nobody meant.
+- **The corpus is currently unusable for stage 2c's path.** About half the local articles refuse
+  `extract` until stage 2.5 refetches them — loudly, by design, but it will be the first thing you
+  hit and it is not a bug you introduced.
+- **Several sessions share this working tree**, and three times on 2026-08-31 a change landed in two
+  commits with the halves separated. Before you write a commit message, read
+  `git diff HEAD -- <paths>` rather than your own plan
+  ([version-control.md](../project/version-control.md) § *A pathspec cannot commit a version of the
+  file that no longer exists*).
