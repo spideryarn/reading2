@@ -189,7 +189,8 @@ because each one is a mistake this page already records:
 ### The gate needs both halves of the artefact store
 
 The test suite is **not hermetic**, and the worktree is empty of everything
-gitignored, so the gate copies `data/` **and `output/`** in and links `.env.local`.
+gitignored, so the gate materialises `data/` **and `output/`** in it and links
+`.env.local`.
 
 For its first day it copied only `data/`. `output/` is the other half of the same
 filesystem artefact store ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)),
@@ -204,14 +205,69 @@ committed `docs/project/web-client.md` linking to an **untracked** test file.
 Invisible in the working tree, which has the file. Exactly the class the worktree
 exists to catch.
 
-There is now a named `fixtures` gate that says which directory or sentinel file
-is missing, because a missing fixture and a broken commit are opposite diagnoses
-that used to produce identical output. **This remains an interim repair**: the
-gate still means *"does this commit work against this laptop's declared test
-environment?"*, not *"can a fresh clone reproduce this?"* — and one consequence
-is that `doc-links` will accept a link into gitignored `output/`, which nobody
-else can follow. The debt is a small committed fixture corpus under
-`tests/fixtures/`, noted in [260827v-deploy-pipeline.md](../plans/260827v-deploy-pipeline.md).
+There is a named `fixtures` gate that says which sentinel file is missing,
+because a missing fixture and a broken commit are opposite diagnoses that used to
+produce identical output.
+
+It names a **floor, not the whole corpus**, and should not be widened to name
+everything — a list that long stops being read. The gate asks *is the worktree
+viable at all*; whether a particular suite's fixture is present is asserted by
+`requireFixture` at that suite's own consumption site, where the failure can name
+the slug and say who wanted it.
+
+#### Where those two halves come from, and why it changed
+
+They used to be copied out of **the laptop's own** `data/` and `output/`, which
+are gitignored. So the gate really asked *did whoever is deploying happen to have
+run the pipeline here* — a question about a person, not about a commit — and it
+could not pass in a fresh clone, on the remote box, or in a worktree.
+
+They now come from the tracked corpus at `tests/fixtures/data-root/`, copied out
+of **the gate's own worktree** rather than out of this tree, so a commit that
+deleted a fixture cannot pass on the strength of the laptop still having one. The
+sentinel list is `GATE_FIXTURES` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts), and the plan is
+[260901b-committed-fixture-corpus.md](../plans/260901b-committed-fixture-corpus.md).
+The interim coupling to the old filesystem-store layout is deliberately visible
+in that path: underneath it sit a `data/` and an `output/` shaped exactly as the
+store expects, so the gate can materialise both by copying. Still copied rather
+than symlinked, because the tests create and delete directories underneath — a
+link would point that at the committed fixtures.
+
+#### What a fresh clone actually costs: 50, not 13
+
+Two smaller numbers were in circulation and **both described something other than
+a fresh clone**. The distinction is the whole point, because it is what made them
+misleading:
+
+| | |
+|---|---|
+| **13** failures, 202 cascade-skips | `data/` copied, **only `output/` missing** — one half of the store, not both. This is the figure quoted above and in `deploy.ts`. |
+| **13** failures (a second time) | An experiment through `SPIDERYARN_DATA_ROOT`, which redirects the store *adapters* but not the many tests that compute `const ROOT = path.resolve(import.meta.dirname, "..")` themselves. So the run was **split-brain**: adapters saw an empty corpus while direct readers went on reading the full laptop `data/`. That the two 13s agreed was taken as corroboration and was not — [260901b](../plans/260901b-committed-fixture-corpus.md) has the post-mortem. |
+| **50** failures | **Both halves absent**, measured 2026-09-01 by `npm run deploy -- --dry-run` in the gate's own clean worktree. This is the real fresh-clone state, and it supersedes both figures above. |
+
+Fifty is therefore the number the corpus has to move, and re-running the dry-run
+after a change to the corpus is a real measurement of whether it is complete
+rather than merely present. That the earlier two agreed with each other, while
+neither described the situation everyone thought it did, is
+[silent-success.md](../reusable/silent-success.md) in one paragraph.
+
+Two honesty limits remain, and they are limits rather than bugs:
+
+- **`.env.local` is still linked from the laptop.** It is the only personal state
+  the gate now depends on.
+- **A bare `npm test` in an unprepared checkout is still not hermetic.** Only the
+  gate materialises the corpus; the ~76 test files that compute their own
+  `ROOT/data` path are deliberately left until stage 4 of the store migration
+  gives them a durable target, rather than migrated twice.
+
+One consequence of the old arrangement outlived it: `doc-links` will accept a
+link into gitignored `output/`, which nobody else can follow.
+
+This is also what closes the "article fixtures are not in git, so a fresh clone
+cannot run the suite" entry under Known in
+[remote-box.md](remote-box.md) — for the gate. The bare-`npm test` half of
+that entry stays open until the sweep above happens.
 
 ### Reading the logs is a poll, not a question
 
