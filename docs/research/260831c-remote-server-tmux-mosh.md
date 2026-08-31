@@ -74,7 +74,11 @@ anything you hit. Ubuntu 24.04 packages exactly 1.4.0, so `apt` loses you nothin
 which is what [`infra/hetzner/cloud-init.yaml`](../../infra/hetzner/cloud-init.yaml) installs.
 
 What it gives: roaming across IP changes, surviving suspend, no idle timeout, and predictive local
-echo so typing stays responsive. What it costs, in the order these will bite you:
+echo so typing stays responsive. When typing nonetheless feels slow, measure before tuning —
+[260831b-gjd-remote-typing-latency.md](260831b-gjd-remote-typing-latency.md) found the box
+responsible for 0.12% of it, and `uptime`, `top` and PSI all pointed the wrong way.
+
+What it costs, in the order these will bite you:
 
 - **No scrollback of its own.** It only syncs the visible screen. tmux supplies scrollback; this is
   the documented workaround, not a workaround we invented.
