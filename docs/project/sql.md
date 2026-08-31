@@ -114,6 +114,20 @@ look like two. Worse, that function's own comment says it must hash exactly what
 the key breaks an invariant a test is actively holding together. **A JSONB column with something
 downstream keyed off it is two things to migrate, and the second one has no constraint to catch you.**
 
+**This is not a hypothetical — here are both predicates against the same table at the same instant**
+(local, 2026-08-31):
+
+```
+WRONG   steps @> '["toc"]'            ->  0
+RIGHT   steps @> '[{"name":"toc"}]'   ->  3
+stored shape:  [{"name":"toc","label":"Building the hierarchy","status":"pending"}]
+```
+
+Three rows the migration had to move, and the obvious predicate finds none of them while raising no
+error at all. Note also what the stored shape gives away: an element carries a **`label` and a
+`status`** as well as a name, so anything that rewrites elements wholesale rather than with
+`jsonb_set` throws away a running job's state.
+
 **Before you trust any of it: run the `SELECT` half first and count the rows.** A data migration that
 matched nothing looks exactly like one that worked —
 [silent-success.md](../reusable/silent-success.md), and
