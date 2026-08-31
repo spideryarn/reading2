@@ -199,7 +199,18 @@ Each of these is a hole rather than a to-do, and none of them may be skipped bef
 
 - **Nothing is metered.** No row is written, so `npm run cost` cannot see this spend. The two ways
   out are OpenAI's usage API after the fact, or forwarding the `response.done` events the browser
-  already receives, which carry token counts. Doing it properly also means widening
+  already receives, which carry token counts.
+
+  **Do not assume this is a fourth `Observer` method.** `Observer` in
+  [`evals/declared-spend.ts`](../../evals/declared-spend.ts) has one method per *(account, wire)*
+  pair — which is the right shape, and spideryarn2-df's split of it on 2026-08-31 is what shows
+  that account and wire are separate questions rather than one. But every existing method is handed
+  a response body **this process received**. Here the usage is seen only by the browser, so the
+  missing piece is not a method signature, it is a way for a tab to report spend that our server
+  must then believe. That is a different and larger question than the ones the register answers
+  today, and pretending otherwise is how it gets built wrong.
+
+  Doing it properly also means widening
   `ProviderAccount` (`"openrouter" | "anthropic"`) and `Wire`
   (`"messages" | "chat" | "embeddings"`) in [`src/models.ts`](../../src/models.ts), which is why
   these three files are in
