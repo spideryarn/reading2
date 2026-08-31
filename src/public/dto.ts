@@ -184,6 +184,20 @@ function publicBlock(block: Block | PublicBlock): PublicBlock {
     ...opt(block, "role"),
     ...opt(block, "treatment"),
     ...opt(block, "noteId"),
+    /* **The authored box crosses, for the same reason `treatment` does**: a
+       visitor following a shared link reads the same article, and a callout set
+       as ordinary prose is the piece rendered wrong rather than rendered
+       privately.
+       **Rebuilt field by field, not copied by reference.** The first version
+       spread `opt(block, "context")`, which is this file's own rule broken in
+       the one place it is easiest to break it: a nested object passes whatever
+       it happens to carry, so a third field added to `BlockContext` next month —
+       or a caller constructing one with something extra on it — crosses without
+       anybody naming it. Nothing of the owner's is reachable today; the point is
+       that "today" is not the guarantee this file offers. GPT Sol, 2026-08-31. */
+    ...(block.context === undefined
+      ? {}
+      : { context: { id: block.context.id, type: block.context.type } }),
   };
 }
 

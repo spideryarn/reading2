@@ -406,6 +406,38 @@ describe("all five roles", () => {
   });
 
   /**
+   * **The other axis, at the same seam.** A `context` says a block is inside a
+   * box the author drew (`Block.context`, src/types.ts). An import is somebody
+   * else's JSON, and the two CHECK constraints on the columns can see neither
+   * the id's *shape* nor which block a violation came from — so the validator
+   * checks both, the same way it checks `noteId`.
+   * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+   */
+  it("refuses a context stage 2 could not have minted", () => {
+    const ok = [{ ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "callout" as const } }];
+    expect(() => checkNoteFields("roles", ok)).not.toThrow();
+
+    const badType = [
+      { ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "sidebar" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", badType)).toThrow(/unrecognised context type "sidebar"/);
+
+    /* The shape that matters: an id the page wrote rather than one we minted.
+       `<div class="callout" data-spya-callout="…">` is scrubbed at stage 2, and
+       this is the belt — an export edited by hand, or a store that grew a
+       second writer. */
+    const forged = [
+      { ...SYNTHETIC[1]!, context: { id: "javascript:alert(1)", type: "callout" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", forged)).toThrow(/context id .* could not have minted/);
+
+    const notAString = [
+      { ...SYNTHETIC[1]!, context: { id: 7, type: "callout" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", notAString)).toThrow(/context id/);
+  });
+
+  /**
    * **Each field being legal is not the same as the block being coherent.**
    *
    * GPT Sol's review of stage 3: the validator checked the three fields in

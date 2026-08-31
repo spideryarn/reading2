@@ -1260,7 +1260,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    callout, a MkDocs admonition, an RFC's editorial aside. Stage 2 recognises it
    before Readability deletes the element that says so (src/callouts.ts) and
    stage 3 stores it as `kind: "callout"`; TableView writes that onto the cell
-   as `kind-callout`, which is the only reason this is a stylesheet-only rule.
+   as `ctx-callout`, which is the only reason this is a stylesheet-only rule.
 
    **Not a second thing with a left rule.** A quotation already has one, and two
    left-ruled treatments a few paragraphs apart read as the same treatment
@@ -1282,6 +1282,14 @@ tr.row-active .block-ref { opacity: 0.95; }
 
    A heading, a blockquote or a figure inside a callout keeps its own kind
    (src/blocks.ts § describeBlock), so none of them lands here. */
+/* **Two selectors, one treatment.** `ctx-callout` is the current spelling — an
+   authored *context* a run of blocks belongs to (Block.context, src/types.ts) —
+   and `kind-callout` is what revisions extracted during a few hours of
+   2026-08-31 carry instead, when this was a block *kind*. Both are read rather
+   than one being migrated, because re-extracting every article to change how a
+   paragraph is set would be a strange price for a stylesheet.
+   docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+td.text.ctx-callout .prose,
 td.text.kind-callout .prose {
   position: relative;
   max-width: 58ch;
@@ -1292,6 +1300,15 @@ td.text.kind-callout .prose {
   padding-inline-start: 2.4rem;
   color: var(--ink-soft);
 }
+/* **The mark is for prose and nothing else.** The indent and the softer ink
+   above are right for everything in the box; a big quote mark is not. A heading
+   is not somebody speaking — that is the case the old spelling could not express
+   at all, since a heading in a callout has to keep `kind: "heading"` — and
+   neither is a `<blockquote>`, which has its own italic-and-rule treatment and
+   was getting both at once, nor a code block, a figure or a caption.
+   `:not(.kind-heading)` said the first of those and meant all five. GPT Sol,
+   2026-08-31. */
+td.text.ctx-callout.kind-text .prose::before,
 td.text.kind-callout .prose::before {
   /* “, and the empty alt text after the slash is what keeps it out of the
      accessibility tree — CSS `content` is otherwise announced, and a screen
@@ -5349,9 +5366,15 @@ td.text.has-hit[data-hues="8"] {
 .dock-modes .dock-btn.on { box-shadow: none; }
 
 /* The focus ring goes on the segment, inset, so it is not clipped by the
-   frame's `overflow: hidden`. This matters more here than on a normal button:
-   the group is a single tab stop, so the ring is the only thing telling a
-   keyboard user which of the three the arrow keys will move from. */
+   frame's `overflow: hidden`.
+
+   It used to matter for a second reason that no longer holds, and the
+   correction is worth keeping: the group was ONE tab stop with arrow keys
+   inside it, so the ring was the only thing saying which button an arrow would
+   move from. The arrows went on 2026-08-31 — on this page they belong to the
+   article (Dock.tsx § the mode switch) — and every button is its own tab stop
+   now, so the ring is doing the ordinary job of a focus ring. Still inset,
+   still for the `overflow: hidden`. */
 .dock-modes .dock-btn:focus-visible {
   outline: 2px solid var(--highlight);
   outline-offset: -2px;

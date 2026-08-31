@@ -599,7 +599,7 @@ export function TableView({
           {showText && (
             /* The prose column is the finest granularity there is, so the
                arrows mean the same thing over it as over the leaf column: one
-               paragraph at a time. Leaves are 1:1 with blocks (src/toc.ts). */
+               paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
             <th
               data-nav-depth={geometry.leafDepth}
               className={`pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
@@ -875,15 +875,26 @@ export function TableView({
               <td
                 data-nav-depth={geometry.leafDepth}
                 // `kind-*` carries the splitter's classification through to CSS —
-                // today only `kind-heading`, which gets more space above than
-                // below so a heading groups with the section it introduces
-                // (styles.css § td.text.kind-heading). Emitted for every kind
-                // so the next rule that needs one does not have to change JSX.
+                // `kind-heading`, which gets more space above than below so a
+                // heading groups with the section it introduces, and
+                // `kind-caption`. Emitted for every kind so the next rule that
+                // needs one does not have to change JSX.
+                /* `ctx-*` is the other axis: the authored box a run of blocks
+                   sits *inside* (`Block.context`, src/types.ts), rather than
+                   what any one of them is. A heading in a callout is
+                   `kind-heading ctx-callout` and gets both treatments, which is
+                   the case `kind: "callout"` could not express — see
+                   docs/plans/260831af-carrying-markup-facts-past-readability.md.
+                   `kind-callout` is still emitted for revisions extracted in the
+                   few hours that kind existed, and the stylesheet answers to
+                   both. */
                 /* `has-marks` says this row draws all three gutter slots, and
                    the stylesheet floors its height so none of them can hang
                    below the row and take a click meant for the next one.
                    § the gutter in styles.css has the reasoning. */
-                className={`text pin-right kind-${block.kind} ${!block.gistable ? "opaque" : ""}${
+                className={`text pin-right kind-${block.kind}${
+                  block.context ? ` ctx-${block.context.type}` : ""
+                } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
                 }${cmtsByBlock.has(block.id) ? " has-marks" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,

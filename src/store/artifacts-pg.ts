@@ -461,6 +461,8 @@ async function readBlocks(
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
+      contextId: revisionBlocks.contextId,
+      contextType: revisionBlocks.contextType,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -481,6 +483,9 @@ async function readBlocks(
       ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
       ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
       ...(row.noteId === null ? {} : { noteId: row.noteId }),
+      ...(row.contextId === null || row.contextType === null
+        ? {}
+        : { context: { id: row.contextId, type: row.contextType as "callout" } }),
     })),
   };
 }
@@ -1149,6 +1154,8 @@ async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): 
         role: b.role ?? null,
         treatment: b.treatment ?? null,
         noteId: b.noteId ?? null,
+        contextId: b.context?.id ?? null,
+        contextType: b.context?.type ?? null,
       })),
     );
   }

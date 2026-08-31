@@ -70,6 +70,7 @@ import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
   Citation,
+  FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
   JobStep,
@@ -810,6 +811,27 @@ export const revisionBlocks = spideryarn.table(
      * decide, and `NOTE_ID_PATTERN` is where stage 3 enforces it.
      */
     noteId: text("note_id"),
+    /**
+     * **The authored box this block sits inside** — `Block.context` in
+     * src/types.ts, recognised at stage 2 before Readability deletes the markup
+     * that says so.
+     *
+     * Two columns rather than a membership table, and the reason is that
+     * nothing can produce the case a table would buy: stage 2 collapses a
+     * callout inside a callout into one, so a block has at most one context by
+     * construction. This is also the path `role`, `treatment` and `note_id`
+     * already cut, and a second way to say "this block belongs to an authored
+     * group" is exactly what the work that added these was avoiding. When a
+     * second context type has to co-exist with the first, this becomes
+     * `revision_block_contexts` — with a real case to design against.
+     * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+     *
+     * **Not an address.** Comments, URLs and the tree address block ids, which
+     * are permanent (docs/project/block-ids.md). This is revision-local, and it
+     * is stable across re-runs only so a diff shows real changes.
+     */
+    contextId: text("context_id"),
+    contextType: text("context_type"),
 
     /**
      * The block's prose, as Postgres's full-text type — the home page's search box.
@@ -852,7 +874,7 @@ export const revisionBlocks = spideryarn.table(
      * the failure is loud and total: the statement is refused and the whole
      * revision rolls back. It does not leave half an article. `npm run deploy`
      * migrates before it pushes code, which is the right order.
-     * docs/plans/callout-blocks.md.
+     * docs/plans/260831ae-callouts-the-box-the-author-drew.md.
      */
     check(
       "revision_blocks_kind",
@@ -864,6 +886,19 @@ export const revisionBlocks = spideryarn.table(
      * by null anyway (`null in (…)` is null, not false, and a CHECK passes on
      * null), so writing the null arm out is documentation rather than logic.
      */
+    /**
+     * The context columns agree with each other, and the type is closed.
+     *
+     * Both-or-neither is the constraint worth having: a `context_id` with no
+     * type is a group nothing can draw, and a type with no id is a claim with
+     * no members. Postgres enforces it for every writer, including the
+     * backfill somebody runs at midnight.
+     */
+    check(
+      "revision_blocks_context",
+      sql`(${t.contextId} is null) = (${t.contextType} is null)`,
+    ),
+    check("revision_blocks_context_type", sql`${t.contextType} is null or ${t.contextType} in ('callout')`),
     check(
       "revision_blocks_role",
       sql`${t.role} is null or ${t.role} in ('footnote','reference','acknowledgment','credit','appendix')`,
@@ -2104,6 +2139,254 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
   experimentalSince: timestamp("experimental_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* -------------------------------------------------------------- feedback -- */
+
+/**
+ * **A bug report, filed by the reader who is looking at the thing that went
+ * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+ *
+ * Sentry hears about a *throw*. It does not hear about a summary that is subtly
+ * wrong, a column that will not scroll, or a job that reports success and
+ * produces nothing — and docs/reusable/silent-success.md says that last class is
+ * most of what goes wrong here. The reader is the only instrument that detects
+ * those, and this table is the wire from that instrument.
+ *
+ * ## The row is the authoritative report, which is why it holds everything
+ *
+ * A copy also goes to Sentry, and Sentry is the *second* destination: the row is
+ * written first, and its success is what the reader is told about. So the row has
+ * to be the whole report rather than a stub beside it — which is why
+ * `diagnostics` and `screenshot` are stored here as well, and why an earlier
+ * draft that left screenshot storage undecided was refused in review. If part of
+ * a report exists only in Sentry, "the durable row is the report" is false for
+ * that part.
+ *
+ * `mirrored_at` records that Sentry took it. The crash window between the insert
+ * and the mirror is real, small, and accepted rather than engineered away; an
+ * outbox is more machinery than an alpha feedback button is worth, and
+ * `mirrored_at is null` is the query that finds anything stranded.
+ *
+ * ## Three answers, three columns
+ *
+ * *Steps to reproduce*, *what you expected*, *what you saw* are three `text`
+ * columns and not one blob, so "how many reports mention scrolling" is a query
+ * rather than a regex over prose — docs/project/sql.md. All three are nullable
+ * (a reader may leave one blank) and all three are non-empty when present, the
+ * same rule and the same reason as `comments_body_nonempty`: empty and absent
+ * must not be two spellings of one fact.
+ *
+ * ## What is deliberately NOT here
+ *
+ * **The URL.** Not `location.href`, not the query string, not the `/add/`
+ * target. This app's addresses carry `?q=` and `?find=`, which are reader-typed
+ * search text, and `/add/<a whole third-party URL>`, which may carry a token —
+ * and `httpContext` and `urlQueryParams` are already off in both halves of
+ * monitoring so that a URL does not leave. `route_kind` and `slug` are the part
+ * of the location that may, and they are a closed vocabulary and a validated
+ * slug rather than a string that was in the address bar.
+ *
+ * **Article prose.** The diagnostics blob carries block *ids*, never block text
+ * — docs/project/block-ids.md is why an id is enough, and src/monitoring-scrub.ts
+ * is why the text may not go. Greg's own question contains the argument:
+ * *"presumably we already have it in our database"*.
+ *
+ * ## No foreign key on `slug`
+ *
+ * `articles.slug` is unique, so one is possible, and it is wrong. A report is a
+ * historical fact about a moment; deleting the article must not delete the
+ * report of the bug, and must not fail because a report exists. The slug is
+ * recorded as what the reader was looking at, and it is looked up by hand
+ * afterwards.
+ */
+export const feedback = spideryarn.table(
+  "feedback",
+  {
+    /**
+     * **Client-minted, and the idempotency key**, exactly as `comments.id` is:
+     * a double-clicked Save and a retried POST carry the id the browser already
+     * has, so the second one finds the first and files nothing.
+     */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in a custom migration, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * **A snapshot of the gate's email, not a join.** `auth.users` is not ours
+     * and an address can change; what we want months later is the address this
+     * reader had when they wrote to us. Never a value the browser supplied.
+     */
+    reporterEmail: text("reporter_email").notNull(),
+    /** *Steps to reproduce.* */
+    steps: text("steps"),
+    /** *What you expected to see.* */
+    expected: text("expected"),
+    /** *What you saw instead.* */
+    actual: text("actual"),
+    /**
+     * Whether the reader ticked *Send extra diagnostics*, recorded as its own
+     * fact rather than inferred from `diagnostics` being present: "they said yes
+     * and there was nothing to collect" and "they said no" are different
+     * answers, and only one of them is a bug in the collector.
+     */
+    consented: boolean("consented").notNull(),
+    routeKind: text("route_kind").notNull(),
+    /** The article they were on, where there was one. No FK — see the header. */
+    slug: text("slug"),
+    /** `__SPIDERYARN_BUILD_COMMIT__`, so a report names a deploy and its source maps. */
+    buildCommit: text("build_commit"),
+    environment: text("environment").notNull(),
+    /**
+     * `x-vercel-id` for the submit itself — Greg's *"anything else that will
+     * help us correlate it with our Vercel logs"*, and the only thing in this
+     * repo that ties a browser to a line in one.
+     */
+    requestVercelId: text("request_vercel_id"),
+    /**
+     * The opt-in diagnostics, as **one opaque blob**.
+     *
+     * The JSONB exception docs/project/sql.md allows, and here is the sentence
+     * it demands: this is a versioned artefact that only means anything as a
+     * whole, its shape will change, and **no part of it is queried** — the
+     * fields worth pivoting on (the route, the slug, the build, the Vercel id)
+     * are columns beside it, precisely so that nothing ever needs to index into
+     * this. `article_revisions.summary` is the precedent.
+     */
+    diagnostics: jsonb("diagnostics").$type<FeedbackDiagnosticsPayload>(),
+    /**
+     * Which shape `diagnostics` has. A column rather than a key inside the blob,
+     * so an old report can be found without reading every blob — and so there is
+     * one copy of the number rather than two that can disagree.
+     */
+    diagnosticsVersion: integer("diagnostics_version"),
+    /**
+     * A screenshot the reader pasted in — already downscaled, and capped here in
+     * **decoded** bytes because client-side downscaling is not validation.
+     *
+     * `bytea` and not a bucket reference: it is small, it is bounded, and a
+     * reference would give the report a second place to be incomplete.
+     * 400,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
+     * here for the same reason the answer cap is. The filename and content type
+     * are never stored — the route writes a constant pair, so a client-supplied
+     * MIME type or filename can never be forwarded.
+     */
+    screenshot: bytea("screenshot"),
+    /** Null until Sentry took it. See the header on the crash window. */
+    mirroredAt: timestamp("mirrored_at", { withTimezone: true }),
+    sentryEventId: text("sentry_event_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /**
+     * **The composite key IS the idempotency key**, the same shape
+     * `comments` uses for the same reason: the id is minted by a browser, so it
+     * is unique within the thing it was minted for and not globally. One
+     * constraint doing both jobs rather than a surrogate key plus a unique
+     * index that nothing else ever uses.
+     */
+    primaryKey({ columns: [t.ownerId, t.id] }),
+    /** The same CHECK every other minted id is held to — `mintId()`, one regex. */
+    check("feedback_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /**
+     * **The two closed vocabularies, written out by hand** — like
+     * `comments_status` and `checkpoints_namespace` above, and unlike the
+     * temptation.
+     *
+     * `FEEDBACK_ROUTE_KINDS` and `FEEDBACK_ENVIRONMENTS` in src/types.ts are the
+     * same lists, and building these constraints *from* those arrays was tried
+     * and reverted: it would make this file import src/types.ts at **runtime**,
+     * and src/store/public-slug.ts imports this one — so the public read path's
+     * import graph would grow a node, which tests/public-imports.test.ts calls a
+     * regression whatever the node is.
+     *
+     * So the lists are in two places, and the drift is caught **behaviourally**
+     * instead: tests/feedback-store.test.ts files a report under every value of
+     * each union and watches the database take it. A value added to a union and
+     * not to the CHECK below goes red there, at the insert, which is where it
+     * would have hurt.
+     */
+    check(
+      "feedback_route_kind",
+      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
+    ),
+    check(
+      "feedback_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /**
+     * Non-empty when present, and **capped**, on all three answers.
+     *
+     * The cap is the one that matters: it is what stops one paste of an entire
+     * article becoming an attachment on its way to Sentry. In the database as
+     * well as in the route, because a rule enforced in TypeScript holds only for
+     * the callers that went through that TypeScript.
+     *
+     * **4,000 is `MAX_FEEDBACK_ANSWER_CHARS`** in src/types.ts, which is where
+     * the dialog's `maxlength` and the route's refusal read it from. Written out
+     * here rather than imported for the reason the vocabularies above are — and
+     * pinned to that constant behaviourally by tests/feedback-store.test.ts,
+     * which writes exactly the cap and exactly one character more.
+     */
+    check(
+      "feedback_steps_shape",
+      sql`${t.steps} is null or (length(btrim(${t.steps})) > 0 and length(${t.steps}) <= 4000)`,
+    ),
+    check(
+      "feedback_expected_shape",
+      sql`${t.expected} is null or (length(btrim(${t.expected})) > 0 and length(${t.expected}) <= 4000)`,
+    ),
+    check(
+      "feedback_actual_shape",
+      sql`${t.actual} is null or (length(btrim(${t.actual})) > 0 and length(${t.actual}) <= 4000)`,
+    ),
+    /**
+     * **A report with nothing in it is not a report.** The dialog refuses one
+     * too; this is the half that holds for every other writer.
+     */
+    check(
+      "feedback_says_something",
+      sql`${t.steps} is not null or ${t.expected} is not null or ${t.actual} is not null`,
+    ),
+    check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
+    /**
+     * **Diagnostics cannot exist without consent.** The tick-box is the whole
+     * argument for this feature being an exception to
+     * src/monitoring-scrub.ts's rule, so it is a constraint rather than an
+     * intention: a row that carries diagnostics the reader did not agree to is
+     * a state this database does not have.
+     *
+     * The screenshot is deliberately not covered. Pasting a picture into the
+     * box *is* the consent for that picture, and it is a separate act from the
+     * tick-box — gating it on `consented` would refuse a report a reader
+     * knowingly assembled.
+     */
+    check("feedback_diagnostics_consented", sql`${t.consented} or ${t.diagnostics} is null`),
+    /** The blob and its version arrive together or not at all. */
+    check(
+      "feedback_diagnostics_version",
+      sql`(${t.diagnostics} is null) = (${t.diagnosticsVersion} is null)`,
+    ),
+    check(
+      "feedback_screenshot_size",
+      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 400000`,
+    ),
+    /**
+     * An event id without a time it was mirrored would be a row that says Sentry
+     * both did and did not take this. `markMirrored` writes both in one
+     * statement; this is what makes that the only possibility.
+     */
+    check(
+      "feedback_mirrored_pair",
+      sql`${t.sentryEventId} is null or ${t.mirroredAt} is not null`,
+    ),
+    /**
+     * **The rate cap's only query**, and the reason it can be a `count` rather
+     * than a scan: ten reports an hour, per owner, counted over
+     * `(owner_id, created_at)` inside the transaction that is about to insert.
+     * src/store/pg-feedback.ts.
+     */
+    index("feedback_owner_created_idx").on(t.ownerId, t.createdAt),
+  ],
+);
 
 /* ----------------------------------------------------------- checkpoints -- */
 

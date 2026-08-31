@@ -1,5 +1,6 @@
 /**
- * **`role`, `treatment` and `noteId` through the real Postgres write path.**
+ * **`role`, `treatment`, `noteId` and `context` through the real Postgres write
+ * path.**
  *
  * ## The mutation that survived 293 tests
  *
@@ -51,6 +52,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, jobs, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { NOTE_ID_PATTERN } from "../src/notes.js";
+import { CONTEXT_ID_PATTERN } from "../src/reserved.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { Block } from "../src/types.js";
@@ -92,13 +94,31 @@ const NOTE_ID = "spya-note-00ab12cd34";
 const NOTE_ROWS = [16, 17, 18];
 
 /**
+ * One callout's context id, in the shape `mintContextId` produces — see
+ * `CONTEXT_ID_PATTERN` in src/reserved.ts.
+ *
+ * **The same argument as the three fields above, one axis over.** `writeBlocks`
+ * could be changed to write `contextId: null` unconditionally and every suite
+ * that round-trips today's corpus would stay green, because no article in
+ * `data/` or `example/` has a context. So the fixture grows one.
+ */
+const CONTEXT_ID = "c-00ab12cd34";
+
+/** Which blocks are inside the callout. Two of them, so the *group* is asserted. */
+const CONTEXT_ROWS = [4, 5];
+
+/**
  * Copy `data/writes` to `SLUG` and classify three of its blocks as one note.
  *
  * Returns the ids, so the assertions name blocks rather than positions — an
  * assertion by index would still pass if the rows came back in another order,
  * which is a different bug this file is not about but must not be blind to.
  */
-async function makeClassifiedFixture(): Promise<{ note: string[]; body: string[] }> {
+async function makeClassifiedFixture(): Promise<{
+  note: string[];
+  body: string[];
+  inContext: string[];
+}> {
   const dir = path.join(ROOT, "data", SLUG);
   await rm(dir, { recursive: true, force: true });
   await cp(path.join(ROOT, "data", FROM), dir, { recursive: true });
@@ -116,12 +136,17 @@ async function makeClassifiedFixture(): Promise<{ note: string[]; body: string[]
 
   const note: string[] = [];
   const body: string[] = [];
+  const inContext: string[] = [];
   const classify = (blocks: Block[]): Block[] =>
-    blocks.map((b, i) =>
-      NOTE_ROWS.includes(i)
-        ? { ...b, role: "footnote" as const, treatment: "supplement" as const, noteId: NOTE_ID }
-        : b,
-    );
+    blocks.map((b, i) => {
+      if (NOTE_ROWS.includes(i)) {
+        return { ...b, role: "footnote" as const, treatment: "supplement" as const, noteId: NOTE_ID };
+      }
+      if (CONTEXT_ROWS.includes(i)) {
+        return { ...b, context: { id: CONTEXT_ID, type: "callout" as const } };
+      }
+      return b;
+    });
 
   // Stage 4's copy, and stage 3's. See the header for why both.
   let classified: Block[] = [];
@@ -136,13 +161,17 @@ async function makeClassifiedFixture(): Promise<{ note: string[]; body: string[]
     const blocks = classify(parsed.blocks);
     if (note.length === 0) {
       classified = blocks;
-      for (const [i, b] of blocks.entries()) (NOTE_ROWS.includes(i) ? note : body).push(b.id);
+      for (const [i, b] of blocks.entries()) {
+        if (NOTE_ROWS.includes(i)) note.push(b.id);
+        else body.push(b.id);
+        if (CONTEXT_ROWS.includes(i)) inContext.push(b.id);
+      }
     }
     await writeFile(at, JSON.stringify({ ...parsed, blocks }));
   }
 
   await makeTreeAndLabelsAgree(dir, classified, new Set(note));
-  return { note, body };
+  return { note, body, inContext };
 }
 
 /**
@@ -266,6 +295,42 @@ when("a classified article through Postgres", () => {
 
     // And the body is untouched — the same control as above, one layer up.
     expect(blocks.filter((b) => b.role !== undefined)).toHaveLength(NOTE_ROWS.length);
+  }, 60_000);
+
+  it("carries a block's context into the columns and back out as one group", async () => {
+    /* Two columns rather than a table, so both have to survive and **agree** —
+       the CHECK refuses one without the other, and a store that wrote the id and
+       dropped the type would fail at the insert rather than here. What this adds
+       is that they come back *as a context*, and as the same one for both
+       blocks: the group identity is the thing a multi-paragraph callout has and
+       a per-block flag does not.
+       docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+    const rows = await getDb()
+      .select({
+        id: revisionBlocks.blockId,
+        contextId: revisionBlocks.contextId,
+        contextType: revisionBlocks.contextType,
+      })
+      .from(revisionBlocks)
+      .where(eq(revisionBlocks.revisionId, (await loadArticleIntoPg(SLUG)).revisionId));
+
+    const inContext = rows.filter((r) => r.contextId !== null);
+    expect(inContext).toHaveLength(CONTEXT_ROWS.length);
+    expect(new Set(inContext.map((r) => r.contextId))).toEqual(new Set([CONTEXT_ID]));
+    expect(inContext.every((r) => r.contextType === "callout")).toBe(true);
+    /* The control: every other block has neither column, which is what a store
+       writing the field unconditionally would also satisfy — so it is asserted
+       beside the positive case rather than instead of it. */
+    expect(rows.filter((r) => r.contextType !== null)).toHaveLength(CONTEXT_ROWS.length);
+
+    const blocks = (await pgArticleReader.loadArticle(SLUG)).blocks;
+    const read = blocks.filter((b) => b.context !== undefined);
+    expect(read).toHaveLength(CONTEXT_ROWS.length);
+    expect(new Set(read.map((b) => b.context?.id))).toEqual(new Set([CONTEXT_ID]));
+    expect(read.every((b) => b.context?.type === "callout")).toBe(true);
+    expect(CONTEXT_ID_PATTERN.test(CONTEXT_ID)).toBe(true);
+    // And a context does not make a block apparatus — the two axes are separate.
+    expect(read.every((b) => b.treatment === undefined)).toBe(true);
   }, 60_000);
 
   it("gives the same fingerprint as the file it was loaded from", async () => {

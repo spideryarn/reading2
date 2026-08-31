@@ -23,11 +23,9 @@ import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
    them. See noteFieldsFor. */
 import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
-/* Stage 2's other stamp, from the file that writes it. See describeBlock. */
-import { CALLOUT_ATTR } from "./callouts.js";
 /* The namespace and the one template-aware scrub, shared with stage 2 — see
    src/reserved.ts, which is the only file allowed to name one of these. */
-import { CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
+import { CONTEXT_ATTRS, CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
 import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
@@ -196,13 +194,7 @@ function describeBlock(
   el: Element,
   text: string,
   proseText: string[],
-): {
-  kind: BlockKind;
-  level: number | undefined;
-  gistable: boolean;
-  note: string | undefined;
-  context: BlockContext | undefined;
-} {
+): { kind: BlockKind; level: number | undefined; gistable: boolean; note: string | undefined } {
   let { kind, level } = classify(el);
   let gistable = true;
   let note: string | undefined;
@@ -226,12 +218,27 @@ function describeBlock(
     note = "boilerplate label";
   }
 
-  const context = contextFor(el);
+  /* **A context changes no policy, and that is a rule rather than an
+     oversight.** For half a day this line read `context !== undefined ||`, so a
+     callout repeating body text was demoted to `gistable: false` — which reads
+     as tidy and quietly wires presentation into the argument machinery.
 
+     The consequence was concrete, and GPT Sol traced it: `gistable` is not in
+     `hashBlocks` (src/source-hash.ts), so a publisher removing a callout
+     wrapper flipped a block from `false` back to `true` with the article's
+     fingerprint unchanged — same tag, same text, same id — and the hierarchy
+     step, which has no currency stamp of its own, skipped. The paragraph came
+     back into the argument with no navigation label and nothing said so.
+
+     The fix is not a bigger fingerprint. It is that a box drawn round a
+     paragraph is how it is *set*, and the five policy questions stay with
+     `gistable` and `treatment` (src/block-policy.ts), exactly as
+     docs/plans/260831af-carrying-markup-facts-past-readability.md says. A real
+     pull-quote is a `<blockquote>` or lives in a `<figure>`, and both were
+     already covered before callouts existed. */
   // Pull-quotes repeat a sentence that is already in the prose. Giving them
-  // gists would put the same claim in the ToC twice. A callout repeating the
-  // paragraph above it is a pull-quote whatever its class said.
-  if (gistable && (kind === "quote" || context !== undefined || el.closest("figure"))) {
+  // gists would put the same claim in the ToC twice.
+  if (gistable && (kind === "quote" || el.closest("figure"))) {
     const probe = normalize(text).slice(0, 60);
     if (probe.length >= 30 && proseText.some((p) => p.includes(probe))) {
       gistable = false;
@@ -239,7 +246,7 @@ function describeBlock(
     }
   }
 
-  return { kind, level, gistable, note, context };
+  return { kind, level, gistable, note };
 }
 
 /**
@@ -265,9 +272,16 @@ function describeBlock(
  * the only thing standing between those and a page that wrote its own.
  */
 function contextFor(el: Element): BlockContext | undefined {
-  const id = el.closest(`[${CALLOUT_ATTR}]`)?.getAttribute(CALLOUT_ATTR);
-  if (!id || !CONTEXT_ID_PATTERN.test(id)) return undefined;
-  return { id, type: "callout" };
+  /* **The registry, not a second hard-coded `"callout"`.** `CONTEXT_ATTRS` maps
+     each transport attribute to the context type it means, and until the typed
+     sidecar exists that map *is* the type system for this — so a reader that
+     spells the type again is the drift the map was added to prevent. GPT Sol
+     noticed the map was exported and unused, 2026-08-31. */
+  for (const { attr, type } of CONTEXT_ATTRS) {
+    const id = el.closest(`[${attr}]`)?.getAttribute(attr);
+    if (id && CONTEXT_ID_PATTERN.test(id)) return { id, type };
+  }
+  return undefined;
 }
 
 /** What `noteFieldsFor` can add to a block. All three absent for body prose. */
@@ -1036,17 +1050,14 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
 
   /* Prose text, for spotting pull-quotes that merely repeat it.
 
-     **A callout's own paragraphs are excluded, and leaving them in made every
-     callout a pull-quote.** A callout is a `<p>` outside any figure or
-     blockquote, so it was in this list — and the check then found its first
-     sixty characters in the prose, in itself. Nine of nine on the article this
-     feature was built for: `gistable: false`, no ToC row, no gist, for text
-     that appears exactly once in the piece. The rule wants "does this repeat
-     something *else*", and the selector is how it says so. */
+     **Callouts are back in this list**, which is where they were before they
+     were recognised at all: they are ordinary paragraphs as far as this rule is
+     concerned, and the rule no longer asks about them (see `describeBlock`).
+     While it did, they had to be excluded here or every callout matched itself
+     — nine of nine on the article the feature was built for. Both halves are
+     gone; a context changes no policy. */
   const proseText = elements
-    .filter(
-      (el) => el.tagName === "P" && !el.closest(`figure, blockquote, [${CALLOUT_ATTR}]`),
-    )
+    .filter((el) => el.tagName === "P" && !el.closest("figure, blockquote"))
     .map((el) => normalize(el.textContent ?? ""));
 
   let reused = 0;
@@ -1057,6 +1068,27 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
      once — whether a folded bucket is ambiguous cannot be answered until every
      claimant is known — so every candidate has to exist before any id is handed
      out. See carryOverIds. */
+  /* **The contexts are read here, and the transport is taken off the document
+     immediately afterwards.**
+
+     Stage 2's callout stamp is on the container and on everything inside it, so
+     without this it is serialised into every block's html and reaches the
+     reader — the same fact twice, in `block.context` and in the markup, with
+     nothing keeping them in step. The note stamps *do* cross on purpose, because
+     the browser reads them (src/web/notes-view.ts); nothing reads this one.
+     GPT Sol, 2026-08-31.
+
+     Before the ids are settled rather than after, so the html `exactKey` matches
+     on for a text-less block — an image, a rule — is the same string whether or
+     not the block was in a box. */
+  const contextOf = new Map<Element, BlockContext | undefined>(
+    elements.map((el) => [el, contextFor(el)]),
+  );
+  scrubReserved(
+    doc,
+    CONTEXT_ATTRS.map((c) => c.attr),
+  );
+
   const found = elements.map((el) => {
     const content = ownContent(el);
     return { el, content, text: extractText(content) };
@@ -1129,7 +1161,8 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
        half of that we knew about. */
     const content = ownContent(el);
 
-    const { kind, level, gistable, note, context } = describeBlock(el, text, proseText);
+    const { kind, level, gistable, note } = describeBlock(el, text, proseText);
+    const context = contextOf.get(el);
     return {
       id,
       tag: el.tagName.toLowerCase(),

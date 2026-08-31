@@ -55,6 +55,7 @@
 import type { Assets } from "./assets.js";
 import type {
   Arc,
+  BlockContext,
   BlockId,
   BlockKind,
   GlossaryKind,
@@ -135,6 +136,12 @@ export interface PublicBlock {
   role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
   treatment?: "supplement";
   noteId?: string;
+  /**
+   * The authored box this block is inside — `Block.context` in types.ts. It
+   * crosses for the same reason the note fields do: it is a fact about the
+   * article, and the reading view sets a callout differently because of it.
+   */
+  context?: BlockContext;
 }
 
 /**

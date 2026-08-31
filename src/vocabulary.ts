@@ -245,6 +245,12 @@ export function properNouns(text: string, limit = 40): string[] {
  * quietly cost the reader those words in dictation, on exactly the articles
  * where they matter most. Found by GPT Sol's review, which went looking for the
  * `kind` consumers the plan claimed did not exist.
+ *
+ * That kind was replaced by `Block.context` the same afternoon, so a callout
+ * extracted since is `kind: "text"` and arrives here without help. The clause
+ * **stays for the revisions stored in between**, which have the kind in
+ * Postgres and would otherwise lose those names again on a re-read.
+ * docs/plans/260831af-carrying-markup-facts-past-readability.md.
  */
 export function proseOf(blocks: readonly { kind?: string; text?: string }[]): string {
   return blocks

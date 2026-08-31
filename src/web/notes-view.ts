@@ -59,12 +59,20 @@
 import type { BlockId } from "../types.js";
 import { internalTarget } from "./internal-links.js";
 
+/* **The three names come from src/reserved.ts, which is where stage 2 writes
+   them.** They used to be spelled again here, and this file is the one place
+   that spelling could drift without either side going red: stage 2 mints the
+   attribute, the stored html carries it across a database, and this reads it
+   back months later. That module has no imports precisely so the browser can
+   have it. docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+import { RESERVED_ATTRS } from "../reserved.js";
+
 /** On a marker in the prose. The value is the id of the note it points at. */
-export const NOTE_REF_ATTR = "data-spya-note-ref";
+export const NOTE_REF_ATTR = RESERVED_ATTRS.noteRef;
 /** On a back-link inside a note. The value is the note it belongs to. */
-export const NOTE_BACK_ATTR = "data-spya-note-back";
+export const NOTE_BACK_ATTR = RESERVED_ATTRS.noteBack;
 /** On the note's own element, written by stage 2 and still in the stored html. */
-const NOTE_ATTR = "data-spya-note";
+const NOTE_ATTR = RESERVED_ATTRS.note;
 /** Marks the back-link that leads to the passage the reader arrived from. */
 export const CAME_FROM_ATTR = "data-came-from";
 
@@ -120,7 +128,7 @@ function isNoteBlock(block: NoteBlock): boolean {
 /** Every `data-spya-note-ref` in a piece of stored html, in order. */
 function markersIn(html: string): string[] {
   if (!html.includes(NOTE_REF_ATTR)) return [];
-  return [...html.matchAll(/data-spya-note-ref="([^"]*)"/g)].map((m) => m[1] ?? "");
+  return [...html.matchAll(new RegExp(`${NOTE_REF_ATTR}="([^"]*)"`, "g"))].map((m) => m[1] ?? "");
 }
 
 /**

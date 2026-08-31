@@ -153,6 +153,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { RESERVED_ATTRS, scrubReserved as sharedScrub } from "./reserved.js";
 
 /**
  * On the note's own element. The value is the noteId.
@@ -161,7 +162,7 @@ import { createHash } from "node:crypto";
  * a second spelling of the string in the reading file is how a stamp and its
  * reader drift apart without either side going red.
  */
-export const NOTE_ATTR = "data-spya-note";
+export const NOTE_ATTR = RESERVED_ATTRS.note;
 /**
  * On a marker in the prose. The value is the noteId it points at.
  *
@@ -169,11 +170,11 @@ export const NOTE_ATTR = "data-spya-note";
  * the marker out of a block's carry-over key so that renumbering a note does
  * not cost the paragraph citing it its id (`withoutNoteControls`, src/blocks.ts).
  */
-export const REF_ATTR = "data-spya-note-ref";
+export const REF_ATTR = RESERVED_ATTRS.noteRef;
 /** On a back-link inside a note. The value is the noteId it belongs to. */
-export const BACK_ATTR = "data-spya-note-back";
+export const BACK_ATTR = RESERVED_ATTRS.noteBack;
 /** On the one container all notes end up in. Read back by stage 3 — see NOTE_ATTR. */
-export const CONTAINER_ATTR = "data-spya-notes";
+export const CONTAINER_ATTR = RESERVED_ATTRS.notesContainer;
 
 /**
  * The shape `mintNoteId` produces, and the only shape stage 3 will carry into a
@@ -191,9 +192,14 @@ export const NOTE_ID_PATTERN = /^spya-note-[0-9a-f]{10}(?:-[0-9]+)?$/;
  * Ours, and therefore forgeable. Scrubbed off the input before anything is
  * written, so that after this pass every one of them in the document was
  * written by us.
+ *
+ * The four names and the scrub itself live in src/reserved.ts, which is the one
+ * file allowed to name a `data-spya-*` attribute — three families had grown
+ * three copies of the same template-aware walk, and the risk was never the
+ * copies that exist but the fourth, written by somebody who had read none of
+ * them. docs/plans/260831af-carrying-markup-facts-past-readability.md.
  */
 const RESERVED = [NOTE_ATTR, REF_ATTR, BACK_ATTR, CONTAINER_ATTR];
-const RESERVED_SELECTOR = RESERVED.map((a) => `[${a}]`).join(", ");
 
 /** The four publishers we recognise, and nothing else. */
 export type NoteShape = "gwern" | "wikipedia" | "substack" | "tufte";
@@ -363,12 +369,7 @@ interface Candidate {
  * a query walks straight past them while `outerHTML` serialises them in full.
  */
 function scrubReserved(root: ParentNode): void {
-  for (const el of Array.from(root.querySelectorAll(RESERVED_SELECTOR))) {
-    for (const attr of RESERVED) el.removeAttribute(attr);
-  }
-  for (const t of Array.from(root.querySelectorAll("template"))) {
-    scrubReserved((t as HTMLTemplateElement).content);
-  }
+  sharedScrub(root, RESERVED);
 }
 
 /**

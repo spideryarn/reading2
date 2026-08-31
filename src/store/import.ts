@@ -85,6 +85,7 @@ import {
 } from "../db/schema.js";
 import { isSpideryarnId } from "../ids.js";
 import { NOTE_ID_PATTERN } from "../notes.js";
+import { CONTEXT_ID_PATTERN } from "../reserved.js";
 import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -409,6 +410,38 @@ export function checkNoteFields(slug: string, blocks: Block[]): void {
           `minted (${NOTE_ID_PATTERN.source})`,
       );
     }
+
+    checkContext(slug, where, b);
+  }
+}
+
+/**
+ * **The context, checked the same way and for the same reason as the three note
+ * fields.**
+ *
+ * An import is somebody else's JSON. The CHECK constraint refuses a bad `type`
+ * and a half-set pair, but it does so inside a transaction with no block id in
+ * the message, and it cannot see the id's *shape* at all. Stage 2 mints these
+ * (src/reserved.ts), so a value that could not have come from there is a value
+ * from a page.
+ *
+ * Its own function rather than four more branches inside `checkNoteFields`,
+ * which the complexity rule was right to complain about: that one is about the
+ * note axis and its cross-field rules, and this is a different axis that happens
+ * to be validated at the same seam.
+ */
+function checkContext(slug: string, where: string, b: Block): void {
+  if (b.context === undefined) return;
+  if (b.context.type !== "callout") {
+    throw new Error(
+      `${slug}: ${where} has an unrecognised context type ${JSON.stringify(b.context.type)}`,
+    );
+  }
+  if (typeof b.context.id !== "string" || !CONTEXT_ID_PATTERN.test(b.context.id)) {
+    throw new Error(
+      `${slug}: ${where} has a context id ${JSON.stringify(b.context.id)} that stage 2 could ` +
+        `not have minted (${CONTEXT_ID_PATTERN.source})`,
+    );
   }
 }
 
@@ -1161,6 +1194,8 @@ export async function importArticleIn(
         role: b.role ?? null,
         treatment: b.treatment ?? null,
         noteId: b.noteId ?? null,
+        contextId: b.context?.id ?? null,
+        contextType: b.context?.type ?? null,
       })),
     );
   }

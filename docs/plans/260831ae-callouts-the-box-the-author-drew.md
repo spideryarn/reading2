@@ -156,7 +156,7 @@ treatments, told apart at a glance, and the quotation keeps the only left rule i
 
 ## What the review changed
 
-[GPT Sol's review of the built code](callout-blocks-review-sol.md), 2026-08-31, found one
+[GPT Sol's review of the built code](260831ae-callouts-the-box-the-author-drew-code-review-sol.md), 2026-08-31, found one
 high-severity silent failure and four smaller ones. All six are fixed, and each fix was watched going
 red against the code as it stood.
 
@@ -219,14 +219,14 @@ its stored `raw.html` again. Ids survive that (see above), so it is safe — but
 against production, and the migration has to land first.
 
 Footnote and supplement blocks are left alone: `treatment: "supplement"` is the in-flight footnotes
-work ([footnotes.md](footnotes.md)) and styling it belongs with that.
+work ([260828o-footnotes.md](260828o-footnotes.md)) and styling it belongs with that.
 
 ## The shape this is the second instance of
 
 Greg, seeing the sentence that documents the stamp: *"I wonder if there's a long-term-better/cleaner
 way to do this?"* The answer is in
-[stage2-stamps-design-sol.md](stage2-stamps-design-sol.md) (the question is
-[stage2-stamps-design-prompt.md](stage2-stamps-design-prompt.md)), and nothing here has been rewritten
+[260831af-carrying-markup-facts-past-readability-design-sol.md](260831af-carrying-markup-facts-past-readability-design-sol.md) (the question is
+[260831af-carrying-markup-facts-past-readability-design-prompt.md](260831af-carrying-markup-facts-past-readability-design-prompt.md)), and nothing here has been rewritten
 off the back of it. Two things from it are worth having in front of you before the *third* feature
 needs to carry evidence past Readability:
 

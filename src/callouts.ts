@@ -18,7 +18,7 @@
  * indistinguishable from body prose. `keepClasses: false` does the same to every
  * class-based shape. By stage 3 there is nothing left to recognise, which is the
  * same reason `canonicaliseNotes` sits here — see src/notes.ts, and
- * docs/plans/callout-blocks.md.
+ * docs/plans/260831ae-callouts-the-box-the-author-drew.md.
  *
  * ## What it does, and what it deliberately does not
  *
@@ -40,8 +40,9 @@
  * Same rule as src/notes.ts, and for the same reason: reading is not the danger,
  * carrying is. Every copy of our attribute the document arrived with is removed
  * first — `<template>` contents included, since a DOM query does not enter a
- * template's fragment — and the only value we ever write is the empty string.
- * There is no id to mint here and so nothing of the page's own can ride along.
+ * template's fragment — and the only value we ever write is an id we minted.
+ * Both the attribute name and the scrub belong to src/reserved.ts now, which is
+ * the one place allowed to name a `data-spya-*` attribute.
  *
  * ## Recognised shapes, and nothing else
  *
@@ -53,14 +54,16 @@
  * `<blockquote>`, so it is a quote today and is set as one.
  */
 
+import { RESERVED_ATTRS, mintContextId, scrubReserved } from "./reserved.js";
+
 /**
  * Ours, and therefore forgeable — scrubbed off the input before we write ours.
  *
- * Exported because stage 3 reads it back (`describeBlock`, src/blocks.ts) and a
- * second spelling of the string is how the writer and the reader drift apart
- * without either side going red.
+ * Re-exported rather than spelled again: the name lives in src/reserved.ts with
+ * every other attribute we write into somebody else's document, and stage 3
+ * reads it back through the same constant (`describeBlock`, src/blocks.ts).
  */
-export const CALLOUT_ATTR = "data-spya-callout";
+export const CALLOUT_ATTR = RESERVED_ATTRS.callout;
 
 /**
  * Where a callout container starts.
@@ -94,23 +97,45 @@ const CONTAINER_SELECTOR = [
 ].join(", ");
 
 /**
- * Everything inside a container that stage 3 might emit as a block, so the
- * stamp is on the element that survives rather than on the one that does not.
+ * **Every element inside the container**, rather than a list of the ones stage 3
+ * emits.
  *
- * Kept in step with `LEAF_BLOCKS` in src/blocks.ts by hand, and it does not have
- * to be exhaustive: an element this list misses is stamped anyway if the
- * container itself survives Readability, and a stamp on something that never
- * becomes a block is inert.
+ * The list was `p, li, h1…h6, pre, blockquote, figure, table, div`, kept in step
+ * with `LEAF_BLOCKS` by hand — and it missed `ul`, `ol`, `dl`, `section`, `hr`,
+ * `img` and every custom wrapper, any of which can be the element Readability
+ * decides to keep. A stamp on something that never becomes a block is inert and
+ * costs an attribute; a missing one costs the feature, silently. So: all of
+ * them. GPT Sol, 2026-08-31.
+ *
+ * The attribute does not reach the reader either way — stage 3 takes it off
+ * before a block's html is serialised (`scrubStamps` in src/blocks.ts).
  */
-const INSIDE_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, figure, table, div";
+const INSIDE_SELECTOR = "*";
 
 /**
- * The same list as a membership test, for `wrapLooseRuns` — which has to ask it
- * of a node rather than run a query.
+ * **Phrasing content**, which is what may be gathered into a paragraph — the
+ * list Readability keeps for the same question, and it is not the same list as
+ * the one above.
+ *
+ * Conflating the two was a real defect and not a tidiness point: `INSIDE_TAGS`
+ * (the leaves stage 3 emits) does not contain `<ul>`, so a callout of
+ * `text <ul><li>…</li></ul> <span>text</span>` had its *list* swept into a
+ * synthetic `<p>` — invalid markup, which the next reparse unpicks into
+ * different blocks with different tags, which costs the trailing one its id.
+ * Readability's scoring changed too. GPT Sol reproduced it, 2026-08-31.
+ *
+ * So the rule is the standard one: a text node or a phrasing element may join a
+ * run, and **anything else ends it**, whether or not stage 3 would emit it.
+ * Unknown elements end a run as well — a custom element is more likely to be a
+ * wrapper than a word.
  */
-const INSIDE_TAGS = new Set(
-  INSIDE_SELECTOR.split(",").map((t) => t.trim().toUpperCase()),
-);
+const PHRASING = new Set([
+  "A", "ABBR", "AREA", "AUDIO", "B", "BDI", "BDO", "BR", "BUTTON", "CANVAS", "CITE", "CODE",
+  "DATA", "DATALIST", "DEL", "DFN", "EM", "EMBED", "I", "IFRAME", "IMG", "INPUT", "INS", "KBD",
+  "LABEL", "MAP", "MARK", "MATH", "METER", "NOSCRIPT", "OBJECT", "OUTPUT", "PICTURE", "PROGRESS",
+  "Q", "RUBY", "S", "SAMP", "SCRIPT", "SELECT", "SLOT", "SMALL", "SPAN", "STRONG", "SUB", "SUP",
+  "SVG", "TEMPLATE", "TEXTAREA", "TIME", "U", "VAR", "VIDEO", "WBR",
+]);
 
 /**
  * Wrap loose words sitting directly inside a callout in a `<p>`, so there is an
@@ -154,9 +179,12 @@ function wrapLooseRuns(container: Element): Element[] {
   };
 
   for (const node of Array.from(container.childNodes)) {
-    const isBlock = node.nodeType === 1 && INSIDE_TAGS.has((node as Element).tagName);
-    if (isBlock) flush();
-    else run.push(node);
+    /* Text joins a run; an element joins it only if it is phrasing. Everything
+       else — a list, a rule, a section, a `<div>`, a custom element — ends the
+       run where it stands. */
+    const joins = node.nodeType === 3 || (node.nodeType === 1 && PHRASING.has((node as Element).tagName));
+    if (joins) run.push(node);
+    else flush();
   }
   flush();
   return wrapped;
@@ -170,7 +198,7 @@ function wrapLooseRuns(container: Element): Element[] {
 type CalloutShape = "callout" | "admonition" | "pullquote" | "aside";
 
 export interface CalloutStats {
-  /** Containers recognised. Not the number of blocks, which is usually larger. */
+  /** Containers recognised — one context each. Not the number of blocks, which is usually larger. */
   containers: number;
   /** Elements stamped, containers included. An upper bound on the callout blocks stage 3 will emit. */
   stamped: number;
@@ -237,6 +265,26 @@ function isNavigation(el: Element): boolean {
 }
 
 /**
+ * Whitespace-collapsed **visible** text, which is what a context id is hashed
+ * from and what link density is measured over.
+ *
+ * `textContent` includes the source of every `<script>`, `<style>` and
+ * `<template>` inside the element, and both callers are wrong to see it. For the
+ * id it makes the hash depend on a script's *nonce* — a fresh id on every fetch
+ * of the same page, which is the opposite of the stability the id exists for.
+ * For the link-density guard it hid an ad-and-nav sidebar behind 1,200
+ * characters of `googletag` configuration. Both measured; GPT Sol found the
+ * first, cornell.html the second.
+ */
+function textOf(el: Element): string {
+  const clone = el.cloneNode(true) as Element;
+  for (const junk of Array.from(clone.querySelectorAll("script, style, noscript, template"))) {
+    junk.remove();
+  }
+  return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
  * How much of an element's text is inside a link.
  *
  * Readability's own measure, re-implemented here rather than imported because
@@ -258,7 +306,7 @@ function linkDensity(el: Element): number {
   for (const junk of Array.from(clone.querySelectorAll("script, style, noscript, template"))) {
     junk.remove();
   }
-  const text = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+  const text = textOf(el);
   if (text.length === 0) return 0;
   const linked = Array.from(clone.querySelectorAll("a"))
     .map((a) => {
@@ -275,21 +323,6 @@ function linkDensity(el: Element): number {
 }
 
 /**
- * Take every copy of our attribute off, **including the ones
- * `querySelectorAll` cannot see** — a `<template>`'s children live in a separate
- * fragment that a query walks straight past while `outerHTML` serialises them in
- * full. src/blocks.ts § `scrubStamps` is where that was found the hard way.
- */
-function scrubReserved(root: ParentNode): void {
-  for (const el of Array.from(root.querySelectorAll(`[${CALLOUT_ATTR}]`))) {
-    el.removeAttribute(CALLOUT_ATTR);
-  }
-  for (const t of Array.from(root.querySelectorAll("template"))) {
-    scrubReserved((t as HTMLTemplateElement).content);
-  }
-}
-
-/**
  * Mark every callout in the document. Returns what it found, for the CLI's
  * report — nothing downstream branches on the stats.
  */
@@ -299,10 +332,13 @@ export function canonicaliseCallouts(doc: Document): CalloutStats {
      put a stamp on that a body-rooted scrub would walk past. src/blocks.ts §
      `stampAuthorAnchors` clears them by hand for exactly that reason, because
      it queries the body. */
-  scrubReserved(doc);
+  scrubReserved(doc, [CALLOUT_ATTR]);
 
   const stats = EMPTY_STATS();
   if (!doc.body) return stats;
+  /* Two callouts holding the same words get two ids rather than being silently
+     merged into one context. */
+  const taken = new Set<string>();
 
   for (const container of Array.from(doc.body.querySelectorAll(CONTAINER_SELECTOR))) {
     /* A callout inside a callout is one callout. Checked before the guards so
@@ -320,13 +356,19 @@ export function canonicaliseCallouts(doc: Document): CalloutStats {
 
     stats.containers += 1;
     stats.shapes[shape] += 1;
-    container.setAttribute(CALLOUT_ATTR, "");
+    /* **The value is the context id every block of this callout will share** —
+       the identity a three-paragraph callout used to lack, since each paragraph
+       is its own block. Hashed from the container's own text, so a re-run
+       produces the same id and a diff of blocks.json shows what actually
+       changed (src/reserved.ts § mintContextId). */
+    const contextId = mintContextId(`callout:${textOf(container)}`, taken);
+    container.setAttribute(CALLOUT_ATTR, contextId);
     stats.stamped += 1;
     /* Before the query below, so the paragraphs it creates are stamped by it
        rather than needing a second pass. */
     wrapLooseRuns(container);
     for (const inside of Array.from(container.querySelectorAll(INSIDE_SELECTOR))) {
-      inside.setAttribute(CALLOUT_ATTR, "");
+      inside.setAttribute(CALLOUT_ATTR, contextId);
       stats.stamped += 1;
     }
   }
