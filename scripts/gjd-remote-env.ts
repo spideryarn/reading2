@@ -79,32 +79,71 @@ export function assertPushableName(basename: string): string | undefined {
  * invents entries that were never in the file.
  */
 export function parseEnv(text: string): Map<string, string> {
-  const out = new Map<string, string>();
+  return scanEnv(text).values;
+}
+
+export type EnvScan = {
+  values: Map<string, string>;
+  /**
+   * Every way this file could quietly LOSE an allowed key, one line each.
+   *
+   * Not a style report. The allowlist means a malformed file cannot send
+   * anything it should not — that half was checked and holds — but it can
+   * still send FEWER keys than it looks like it is sending, and the push then
+   * replaces the box's file with the short version and prints a green tick.
+   * A duplicate takes the later value, an unclosed quote eats every line after
+   * it, and a line the pattern does not match is simply skipped.
+   *
+   * Never contains any of the file's content: a malformed line is named by its
+   * NUMBER, because whatever is on it may well be the secret.
+   */
+  problems: string[];
+};
+
+/** The parse, with what it had to overlook. parseEnv() is this without the
+ *  second half — there is one scanner so the two can never disagree. */
+export function scanEnv(text: string): EnvScan {
+  const values = new Map<string, string>();
+  const problems: string[] = [];
   // A byte-order mark would otherwise glue itself to the first key's name.
   const lines = (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     if (!line.trim() || line.trimStart().startsWith("#")) continue;
     const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
-    if (!m?.[1]) continue;
+    if (!m?.[1]) {
+      problems.push(`line ${i + 1}: not a KEY=value line and not a comment, so nothing on it was read`);
+      continue;
+    }
+    const key = m[1];
+    if (values.has(key)) {
+      problems.push(`line ${i + 1}: ${key} is set more than once — only the last value would be sent`);
+    }
     const rest = m[2] ?? "";
     const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : "";
     if (!quote) {
-      out.set(m[1], rest.trim());
+      values.set(key, rest.trim());
       continue;
     }
+    const opened = i + 1;
     let body = rest.slice(1);
     let end = closingQuote(body, quote);
     while (end < 0 && i + 1 < lines.length) {
       body += `\n${lines[++i]}`;
       end = closingQuote(body, quote);
     }
+    if (end < 0) {
+      problems.push(
+        `line ${opened}: ${key}'s opening ${quote} is never closed, so it swallowed the ` +
+          `${i - opened + 1} line(s) after it and any keys on them`,
+      );
+    }
     const raw = end < 0 ? body : body.slice(0, end);
     // Single quotes are literal, double quotes carry escapes — the same rule
     // serialiseEnv writes by, so a value survives the round trip unchanged.
-    out.set(m[1], quote === "'" ? raw : unescapeDouble(raw));
+    values.set(key, quote === "'" ? raw : unescapeDouble(raw));
   }
-  return out;
+  return { values, problems };
 }
 
 function closingQuote(body: string, quote: string): number {
@@ -147,10 +186,13 @@ export type EnvPayload = {
   /** On the allowlist, absent locally — reported, because a missing key is
    *  usually a laptop that has drifted rather than a deliberate omission. */
   missing: string[];
+  /** Ways the local file could have lost a key on the way in. Refused, not
+   *  reported: see EnvScan.problems. */
+  problems: string[];
 };
 
 export function buildEnvPayload(localText: string): EnvPayload {
-  const local = parseEnv(localText);
+  const { values: local, problems } = scanEnv(localText);
   const allowed = new Set(ALLOWLIST);
   const pushed = new Map<string, string>();
   const missing: string[] = [];
@@ -171,7 +213,7 @@ export function buildEnvPayload(localText: string): EnvPayload {
     ``,
   ];
   const body = [...pushed].map(([k, v]) => `${k}=${serialiseValue(v)}`);
-  return { text: `${[...header, ...body].join("\n")}\n`, pushed, skipped, missing };
+  return { text: `${[...header, ...body].join("\n")}\n`, pushed, skipped, missing, problems };
 }
 
 /** Compared, never printed. A short value would not survive being shown as a

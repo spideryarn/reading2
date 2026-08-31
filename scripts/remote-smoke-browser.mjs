@@ -62,7 +62,11 @@ const PLAYWRIGHT_ROOTS = () => {
   const home = homedir();
   const roots = [];
   if (process.env.GJD_SMOKE_PLAYWRIGHT) roots.push(process.env.GJD_SMOKE_PLAYWRIGHT);
-  roots.push(path.join(home, "code/spideryarn2"), process.cwd());
+  // /usr/lib resolves /usr/lib/node_modules/playwright-core, the pinned global
+  // that provision.sh installs. It is the floor: it works on a box with no
+  // checkout, which the repo root cannot. The checkout still wins when present,
+  // because that is the copy repo scripts themselves get.
+  roots.push(path.join(home, "code/spideryarn2"), process.cwd(), "/usr/lib");
   const npx = path.join(home, ".npm/_npx");
   try {
     for (const d of readdirSync(npx)) roots.push(path.join(npx, d));

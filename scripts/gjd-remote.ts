@@ -16,12 +16,13 @@
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
+import { type Session, buildSessionScript, parseSessions } from "./gjd-remote-tmux.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
@@ -54,7 +55,17 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,40}$/;
  * a host it has no record of, and still REFUSES one whose key has changed,
  * which is the case actually worth refusing.
  */
-const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"];
+const SSH_OPTS_INTERACTIVE = ["-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"];
+
+/**
+ * BatchMode on top, for the calls nobody is sitting in front of. It turns a
+ * passphrase prompt into a failure, which is right for a helper command and
+ * wrong for a session you are about to type into — hence the two lists. The
+ * interactive paths (`ssh`, `tunnel`, and the ssh fallback for `resume`) used
+ * to pass NO options at all, so a rebuilt box gave them the raw
+ * host-key-verification error the accept-new note above exists to avoid.
+ */
+const SSH_OPTS = ["-o", "BatchMode=yes", ...SSH_OPTS_INTERACTIVE];
 
 const dim = (s: string) => styleText("dim", s);
 const bold = (s: string) => styleText("bold", s);
@@ -77,8 +88,19 @@ function shq(s: string): string {
  * The address comes from Terraform state, never a constant: it changes on every
  * rebuild, and a hardcoded IP would be wrong exactly when you most need it.
  */
+let cachedHost: string | undefined;
+
 function host(): string {
-  if (process.env.GJD_REMOTE_HOST) return process.env.GJD_REMOTE_HOST;
+  // Memoised for the process. HOST() is called on every ssh, scp and mosh, and
+  // `new` makes six of those — six `tofu output` subprocesses to answer a
+  // question whose answer cannot change while we run. It also means an address
+  // that stays consistent across one command even if somebody rebuilds the box
+  // underneath us, which is the behaviour you want when half the work is done.
+  if (cachedHost) return cachedHost;
+  if (process.env.GJD_REMOTE_HOST) {
+    cachedHost = process.env.GJD_REMOTE_HOST;
+    return cachedHost;
+  }
   try {
     const out = execFileSync("tofu", ["-chdir=" + path.join(REPO, "infra/hetzner"), "output", "-json"], {
       encoding: "utf8",
@@ -86,7 +108,8 @@ function host(): string {
     });
     const ip = JSON.parse(out)?.ipv4?.value;
     if (!ip) throw new Error("no ipv4 output");
-    return ip;
+    cachedHost = ip as string;
+    return cachedHost;
   } catch (err) {
     die(
       `could not read the server address from Terraform state (${(err as Error).message}).\n` +
@@ -98,6 +121,67 @@ function host(): string {
 const HOST = () => `${USER}@${host()}`;
 
 /**
+ * One SSH connection, shared by every command this process runs.
+ *
+ * The handshake is the whole cost. Measured against the box on 2026-08-31 at a
+ * healthy 78ms round trip: a fresh `ssh … true` takes ~2.0s, of which the
+ * command itself is free — the rest is roughly fifteen network round trips of
+ * key exchange and authentication. `gjd-remote new` opened SIX fresh
+ * connections and so paid it six times, 12.3s before Claude started. On a bad
+ * link (RTT swung from 74ms to 660ms inside one minute) it was 8-10s each.
+ *
+ * So: start one master, run everything down it, tear it down when we are done.
+ *
+ * SCOPED TO THIS PROCESS, deliberately, and this is the decision worth
+ * defending. The obvious alternative is `ControlPersist=10m`, which would also
+ * make the NEXT `gjd-remote` instant. It buys a failure mode that is much worse
+ * than the delay it removes: a master whose TCP connection has been blackholed
+ * by a sleep or a network change still accepts the local mux handshake, and the
+ * client then waits forever for a remote session that will never open —
+ * `ConnectTimeout` does not bound that request. On a tool where every other
+ * pause is the network, an infinite hang is indistinguishable from a slow link.
+ * A master that dies with the command cannot outlive the network it was made
+ * on. GPT Sol's review made this case; the plan doc records it.
+ *
+ * The path lives directly under /tmp because macOS caps a Unix socket path at
+ * 104 bytes and $TMPDIR here is already 48 of them — and OpenSSH first binds
+ * the master at `<path>.<16 random chars>`, so the limit applies to a name 17
+ * bytes longer than the one written here.
+ */
+let masterSocket: string | undefined;
+let masterDir: string | undefined;
+
+function sshMasterOpts(): string[] {
+  if (masterSocket) return ["-o", `ControlPath=${masterSocket}`];
+  // mkdtemp under /tmp, not tmpdir(): see the sun_path note above.
+  const dir = mkdtempSync("/tmp/gjdr-");
+  const sock = path.join(dir, "s");
+  const r = spawnSync("ssh", [...SSH_OPTS, "-o", `ControlPath=${sock}`, "-M", "-N", "-f", HOST()], {
+    encoding: "utf8",
+  });
+  // A master that would not start is not fatal — every command still works on
+  // its own connection, just slowly. Failing here would turn a performance
+  // optimisation into an outage.
+  if (r.status !== 0) return [];
+  masterDir = dir;
+  masterSocket = sock;
+  return ["-o", `ControlPath=${sock}`];
+}
+
+/** Close the shared connection. Safe to call twice, and safe when none was opened. */
+function closeSshMaster(): void {
+  if (!masterSocket) return;
+  spawnSync("ssh", ["-o", `ControlPath=${masterSocket}`, "-O", "exit", HOST()], { stdio: "ignore" });
+  if (masterDir) rmSync(masterDir, { recursive: true, force: true });
+  masterSocket = undefined;
+  masterDir = undefined;
+}
+
+// Covers the ordinary exit and the `process.exit()` inside die() and attach().
+// Without it a -N master would linger with nothing to do and nobody to close it.
+process.on("exit", closeSshMaster);
+
+/**
  * Run a command on the box over ssh and return stdout.
  *
  * `raw` keeps the bytes exactly as they came back. Everything else here wants
@@ -105,7 +189,7 @@ const HOST = () => `${USER}@${host()}`;
  * the trim would quietly make two different files look identical.
  */
 function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): string {
-  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), remote], { encoding: "utf8" });
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), remote], { encoding: "utf8" });
   if (opts.check !== false && r.status !== 0) {
     die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
   }
@@ -113,10 +197,51 @@ function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): str
   return opts.raw ? out : out.trim();
 }
 
+/**
+ * Put text on the box, in one round trip, and prove it arrived whole.
+ *
+ * `scp` was the obvious choice and is the slow one: measured over an ALREADY
+ * SHARED connection on 2026-08-31, an scp of a 3-byte file took 3.87s against
+ * ~1.0s for a plain command, because the sftp subsystem does its own handshake
+ * on top. `new -p` did two of them.
+ *
+ * The content goes down the command's stdin instead, so there is no local temp
+ * file, no second protocol, and no quoting — the bytes never touch a command
+ * line. Everything the file needs doing to it rides the same connection.
+ *
+ * The byte count is the part not to drop. `cat > f` exits 0 on a stdin that
+ * ended early, so a connection that dies mid-write leaves a TRUNCATED job
+ * script that still starts a session — which is the wrong-tree failure the
+ * cdGuard below exists to prevent, arriving by another route. Comparing the
+ * size on the box against the size we sent costs nothing, because it happens
+ * inside the same remote command, and it turns a silent half-write into a
+ * refusal. Writing to `.part` and renaming only on success means a failed write
+ * never leaves a plausible-looking file at the real path.
+ */
+function writeRemote(content: string, remotePath: string, opts: { exec?: boolean } = {}): void {
+  const bytes = Buffer.byteLength(content, "utf8");
+  const part = `${remotePath}.part`;
+  const cmd = [
+    `mkdir -p ${shq(path.posix.dirname(remotePath))}`,
+    `cat > ${shq(part)}`,
+    `[ "$(wc -c < ${shq(part)})" -eq ${bytes} ]`,
+    ...(opts.exec ? [`chmod +x ${shq(part)}`] : []),
+    `mv -f ${shq(part)} ${shq(remotePath)}`,
+  ].join(" && ");
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), cmd], {
+    input: Buffer.from(content, "utf8"),
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `rm -f ${shq(part)}`], { stdio: "ignore" });
+    die(`writing ${remotePath} failed (${r.status}): ${(r.stderr || "").trim() || `${bytes} bytes did not arrive intact`}`);
+  }
+}
+
 /** Copy one file to the box. Dies on failure — a silent scp is how you get a
  *  box running yesterday's script and a green check that means nothing. */
 function scpTo(local: string, remote: string): void {
-  const r = spawnSync("scp", ["-q", ...SSH_OPTS, local, `${HOST()}:${remote}`], { encoding: "utf8" });
+  const r = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), local, `${HOST()}:${remote}`], { encoding: "utf8" });
   if (r.status !== 0) die(`scp to ${remote} failed: ${(r.stderr || "").trim()}`);
 }
 
@@ -132,7 +257,11 @@ function moshProbe(): { ok: boolean; detail: string } {
   // "tcgetattr/ioctl: Operation not supported on socket" — which is what this
   // probe did on EVERY network, while reporting "UDP blocked?". It was never
   // testing reachability at all. stdin must be the real terminal.
-  if (!process.stdin.isTTY) {
+  //
+  // It asks interactiveStdin() rather than fd 0 because `-p -` spends fd 0 on
+  // the prompt; see that function.
+  const keyboard = interactiveStdin();
+  if (keyboard === null || (keyboard === "inherit" && !process.stdin.isTTY)) {
     return { ok: false, detail: "cannot probe without a terminal; assuming ssh" };
   }
   const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${shq(HOST())} -- true`;
@@ -142,7 +271,7 @@ function moshProbe(): { ok: boolean; detail: string } {
     // handshake starts, and a short timeout reports a blocked network for what
     // was only slowness. Some timeout is required — mosh retries forever.
     timeout: 15_000,
-    stdio: ["inherit", "pipe", "pipe"],
+    stdio: [keyboard, "pipe", "pipe"],
   });
   if (r.status === 0) return { ok: true, detail: "" };
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`
@@ -190,8 +319,15 @@ function attachCmd(name: string, transport: "mosh" | "ssh"): string {
     `tmux attach -d -t =${name}`;
   return transport === "mosh"
     ? // Without MOSH_TITLE_NOPREFIX every tab reads "[mosh] " before the name.
+      // No ControlPath here: mosh 1.4.0's default --experimental-remote-ip=proxy
+      // appends `-S none` to its own ssh command line AFTER anything we pass in
+      // --ssh, so connection sharing is switched off no matter what we ask for.
+      // /opt/homebrew/bin/mosh line 407. Checked because the plan proposed doing
+      // it, and it would have looked like it worked.
       `MOSH_TITLE_NOPREFIX=1 LANG=C.UTF-8 mosh ${shq(HOST())} -- sh -c ${shq(inner)}`
-    : `ssh -t ${shq(HOST())} ${shq(inner)}`;
+    : // Interactive, so no BatchMode — but a rebuilt box must still not greet
+      // the fallback attach with a raw host-key verification failure.
+      `ssh -t ${SSH_OPTS_INTERACTIVE.join(" ")} ${shq(HOST())} ${shq(inner)}`;
 }
 
 /**
@@ -210,21 +346,23 @@ function chooseTransport(force?: string): "mosh" | "ssh" {
 }
 
 function attach(name: string, force?: string): never {
+  const keyboard = interactiveStdin();
+  if (keyboard === null) {
+    die(
+      "the prompt came in on stdin, so there is no terminal left to attach with.\n" +
+        `  The session is running: 'gjd-remote resume ${name}'.\n` +
+        "  Add --no-attach to say you meant that.",
+    );
+  }
+  // Before the transport is chosen, not after: chooseTransport may spend six
+  // seconds bootstrapping mosh, and the shared connection has no work left. An
+  // attach lasts hours, and a -N master idling beside it for all of them is a
+  // connection nobody is watching on a link that drops.
+  closeSshMaster();
   const transport = chooseTransport(force);
-  const r = spawnSync("sh", ["-c", attachCmd(name, transport)], { stdio: "inherit" });
+  const r = spawnSync("sh", ["-c", attachCmd(name, transport)], { stdio: [keyboard, "inherit", "inherit"] });
   process.exit(r.status ?? 0);
 }
-
-type Session = {
-  name: string;
-  created: Date;
-  attached: boolean;
-  windows: number;
-  /** Claude Code's own generated title for the conversation, once it has one. */
-  title: string;
-  /** Whether the name is a placeholder we chose, and so may be replaced. */
-  provisional: boolean;
-};
 
 /** A tmux session name: lower-case, hyphenated, and never surprising to a shell. */
 function slugify(text: string, fallback: string): string {
@@ -244,11 +382,25 @@ function slugify(text: string, fallback: string): string {
   return SLUG.test(slug) ? slug : fallback;
 }
 
+/** `yyMMdd-HHmmss` in LAPTOP LOCAL time — the same day-ordering as docs/plans
+ *  file names, and the same clock as the person reading the name. It was UTC,
+ *  which under BST named a session an hour ago.
+ *
+ *  Seconds are in it because two `new` runs a few seconds apart minted the same
+ *  name and tmux refused the second one: "duplicate session: s-0831-1615". */
+function timestampName(prefix: string): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = `${pad(now.getFullYear() % 100)}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `${prefix}-${day}-${time}`;
+}
+
 /** A placeholder name, used until Claude has decided what the work is about. */
 function provisionalName(prompt?: string): string {
-  const stamp = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "").replace(/(\d{4})(\d{4})/, "$1-$2");
   // A prompt makes a better placeholder than a timestamp, and costs nothing.
-  return prompt ? slugify(prompt.split(/\s+/).slice(0, 5).join(" "), `s-${stamp}`) : `s-${stamp}`;
+  const stamp = timestampName("s");
+  return prompt ? slugify(prompt.split(/\s+/).slice(0, 5).join(" "), stamp) : stamp;
 }
 
 function sessions(): Session[] {
@@ -256,34 +408,37 @@ function sessions(): Session[] {
   // pinned into the tmux environment at launch, and the LAST ai-title line from
   // that conversation's transcript — Claude rewrites it as the work becomes
   // clearer, so the last one is the current one.
-  const remote = `
-    for s in $(tmux ls -F '#{session_name}' 2>/dev/null); do
-      stats=$(tmux display -p -t "=$s" '#{session_created}|#{session_attached}|#{session_windows}')
-      id=$(tmux show-environment -t "=$s" CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-)
-      prov=$(tmux show-environment -t "=$s" GJD_PROVISIONAL 2>/dev/null | cut -d= -f2-)
-      title=""
-      if [ -n "$id" ]; then
-        f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
-        [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
-      fi
-      printf '%s|%s|%s|%s\\n' "$s" "$stats" "$prov" "$title"
-    done`;
-  const out = ssh(remote, { check: false });
-  if (!out) return [];
-  return out.split("\n").flatMap((line) => {
-    const [name, created, attached, windows, prov, ...rest] = line.split("|");
-    if (!name) return [];
-    return [
-      {
-        name,
-        created: new Date(Number(created) * 1000),
-        attached: attached !== "0",
-        windows: Number(windows),
-        title: rest.join("|").trim(),
-        provisional: prov === "1",
-      },
-    ];
-  });
+  //
+  // The script and the parse both live in gjd-remote-tmux.ts, which is where
+  // their tests can reach them. The parse is strict: a line tmux did not fill
+  // in is dropped, not coerced. See tests/gjd-remote-tmux.test.ts for what
+  // coercion did to the AGE and ATT columns.
+  // ssh's exit status is CHECKED, and that is the whole of this line's history:
+  // it used to be `{ check: false }`, so a box that was down, rebuilt, or
+  // unreachable gave empty stdout, an empty list, and `gjd-remote ls` printing
+  // "no sessions." and exiting 0. "No sessions" is the answer least likely to
+  // make anyone look, and every other caller reads absence as permission —
+  // `new` decides the name is free, `resume` picks a most-recent out of nothing.
+  //
+  // What this still cannot tell apart is an idle box from a broken tmux: the
+  // remote script pipes `tmux ls` into a `while` loop, so the loop's exit
+  // status of 0 is all we ever see, whatever tmux did. An explicit sentinel
+  // line for "tmux answered, and there are no sessions" would fix that, but it
+  // belongs in buildSessionScript() in scripts/gjd-remote-tmux.ts, which is
+  // another session's file today. Requested there rather than forked here.
+  const { sessions: list, unreadable } = parseSessions(ssh(buildSessionScript()));
+  // Fail closed. A short list is indistinguishable from a correct one, and
+  // every caller draws a conclusion from absence: `new` decides a name is free,
+  // `resume` with no name picks the "most recent". Neither may act on a list we
+  // know is incomplete.
+  if (unreadable.length > 0) {
+    die(
+      `could not read ${unreadable.length} of the box's tmux sessions, so the list is incomplete:\n` +
+        unreadable.map((l) => `  ${l}`).join("\n") +
+        `\n  'gjd-remote ssh' and 'tmux ls' will show what the box actually has.`,
+    );
+  }
+  return list;
 }
 
 /**
@@ -327,17 +482,25 @@ function age(d: Date): string {
  * `cd`, and a guess about which tree to edit is the expensive kind. `-d ~` still
  * gets you home when that is genuinely what you want.
  *
- * The existence check belongs HERE, before any session is created, and not only
- * because a session that dies on its first line is confusing. It is the half of
- * the guard that can say something useful — by the time the job script runs,
- * nobody is watching. See the job script below for the other half.
+ * The check belongs HERE, before any session is created, and not only because a
+ * session that dies on its first line is confusing. It is the half of the guard
+ * that can say something useful — by the time the job script runs, nobody is
+ * watching. See cdGuard() below for the other half.
+ *
+ * It is `cd`, not `test -d`, and the difference is a real hole: `test -d` only
+ * stats, so a directory with no execute permission passes it and then refuses
+ * every attempt to enter. Asking the question we actually mean costs the same
+ * round trip.
  */
 function sessionDir(given: string | undefined): string {
   const explicit = given !== undefined;
   const dir = remotePath(given ?? REMOTE_REPO(), explicit ? "--dir" : "GJD_REMOTE_REPO");
-  if (spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status === 0) return dir;
+  const probe = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cd ${shq(dir)}`], { encoding: "utf8" });
+  if (probe.status === 0) return dir;
+  const why = (probe.stderr || "").trim().split("\n").at(-1)?.replace(/^bash: line \d+: /, "") ?? "";
   die(
-    `no such directory on the box: ${dir}\n` +
+    `cannot start a session in ${dir} on the box.\n` +
+      (why ? `  the box said: ${why}\n` : "") +
       (explicit
         ? `  --dir is a path on the BOX, not on this laptop.`
         : `  that is where sessions start when you do not say. Either put it there:\n` +
@@ -346,6 +509,66 @@ function sessionDir(given: string | undefined): string {
           `    gjd-remote new -d ~          ${dim("# the home directory")}\n` +
           `  (or set GJD_REMOTE_REPO to a checkout that already exists)`),
   );
+}
+
+/** Where a session's command leaves its last words. Read back by
+ *  confirmStarted() once the session is gone and the pane with it. */
+const failNote = (name: string) => `${REMOTE_WORK}/jobs/${name}.fail`;
+
+/**
+ * Say why, on the pane AND in the note, then end the session.
+ *
+ * The message is shq'd rather than interpolated: a path containing `$()` or a
+ * backtick would otherwise become shell syntax at exactly the moment the guard
+ * fires — which is the one moment nobody is watching.
+ *
+ * printf and redirection only, no `tee`: the first version piped through tee,
+ * and a PATH without it — the very kind of broken environment this guard exists
+ * to report — swallowed the note it was trying to leave.
+ */
+function failTo(name: string, msg: string): string {
+  return (
+    `{ m=${shq(msg)}; printf '%s\\n' "$m" >&2; ` + `printf '%s\\n' "$m" > ${shq(failNote(name))}; exit 1; }`
+  );
+}
+
+/**
+ * Get into the directory, or end the session saying so.
+ *
+ * `tmux new-session -c DIR` is not this guard. tmux does NOT fail closed when
+ * it cannot enter `-c`: it falls back to the user's home, then to `/`, and
+ * exits 0 either way. So `-c` alone buys a healthy-looking session in
+ * /home/greg — the same wrong-tree failure `new` was fixed for, reproduced for
+ * `shell` on the box on 2026-08-31 with a `chmod 000` directory, which `test -d`
+ * passes and `cd` refuses.
+ *
+ * sessionDir() has already asked the box whether it can enter this directory,
+ * so reaching the failure branch means it went away in between. Ending the
+ * session is a failure you can see; a session in the wrong tree is not.
+ */
+function cdGuard(name: string, dir: string, what: string): string {
+  return `cd ${shq(dir)} || ${failTo(name, `FATAL: cannot enter ${dir} on the box — refusing to start ${what} somewhere else`)}`;
+}
+
+/**
+ * Did the session survive being started?
+ *
+ * `tmux new-session -d` exits 0 the moment the pane is spawned, so the green ✓
+ * used to be printed before the command in it had had a chance to fail. One
+ * round trip a second later asks the box instead, and if the session is gone,
+ * the note the guard left says why — the pane that printed it does not outlive
+ * it.
+ */
+function confirmStarted(name: string): void {
+  const note = failNote(name);
+  const out = ssh(
+    `sleep 1; if tmux has-session -t =${name} 2>/dev/null; then printf 'alive\\n'; ` +
+      `else cat -- ${shq(note)} 2>/dev/null || ` +
+      `printf '%s\\n' 'it was gone a second after it started, and left no note'; fi`,
+    { check: false },
+  );
+  if (out.trim() === "alive") return;
+  die(`'${name}' did not survive starting:\n  ${out.trim().split("\n").join("\n  ")}`);
 }
 
 function cmdLs(): void {
@@ -363,6 +586,77 @@ function cmdLs(): void {
       }`,
     );
   }
+}
+
+/**
+ * `-p -` means "the prompt is on stdin".
+ *
+ * `-p "…"` is fine for a sentence, but the text is prose and the local shell
+ * gets it first: in double quotes zsh still eats `$`, backticks and backslashes,
+ * and a prompt about shell commands is exactly the kind that contains all three.
+ * A heredoc hands the text over with no quoting at all:
+ *
+ *     gjd-remote new -p - <<'EOF'
+ *     anything at all, "quoted" or `backticked`
+ *     EOF
+ *
+ * Everything downstream is unchanged — the prompt already travels as a file.
+ *
+ * The TTY check is not politeness. Without it, a bare `-p -` typed at a terminal
+ * blocks on a read that never returns, and on a tool whose every other pause is
+ * the network, that looks precisely like a slow connection.
+ */
+function resolvePrompt(prompt: string | undefined): string | undefined {
+  if (prompt !== "-") return prompt;
+  if (process.stdin.isTTY) {
+    die(
+      "-p - reads the prompt from stdin, but stdin is a terminal.\n" +
+        "  Pipe it in, or use a heredoc: gjd-remote new -p - <<'EOF' … EOF",
+    );
+  }
+  const text = readFileSync(0, "utf8");
+  // An empty stdin would otherwise start Claude with the empty string as its
+  // first message, which is not what anyone meant by piping in a prompt.
+  if (!text.trim()) die("-p - got nothing on stdin");
+  stdinConsumed = true;
+  return text;
+}
+
+/**
+ * Where an interactive child gets its keyboard from.
+ *
+ * `-p -` and attaching fight over one file descriptor. The heredoc that carries
+ * the prompt IS stdin, so by the time the prompt has been read, fd 0 is an
+ * exhausted pipe — and every later step quietly does the wrong thing with it:
+ * `moshProbe` sees a non-TTY and reports mosh unavailable, then `ssh -t`
+ * declines to allocate a pty ("Pseudo-terminal will not be allocated because
+ * stdin is not a terminal") and tmux attaches to nothing. Both verified against
+ * the box on 2026-08-31. `-t -t` forces the pty but leaves stdin an exhausted
+ * pipe, so tmux sees EOF and detaches immediately — worse, because it looks
+ * like it worked.
+ *
+ * /dev/tty is the controlling terminal regardless of what fd 0 was redirected
+ * to, which is exactly the question being asked. Opened once, reused.
+ *
+ * Returns "inherit" when stdin was never consumed — the ordinary case, where fd
+ * 0 is already the terminal — and null when there is no terminal to be had, so
+ * the caller can say something useful instead of hanging.
+ */
+let stdinConsumed = false;
+let ttyFd: number | null | undefined;
+
+function interactiveStdin(): number | "inherit" | null {
+  if (!stdinConsumed) return "inherit";
+  if (ttyFd === undefined) {
+    try {
+      ttyFd = openSync("/dev/tty", "r");
+    } catch {
+      // No controlling terminal: a cron job, a CI runner, another agent's
+      // subprocess. Nothing to attach to, and nothing has gone wrong yet.
+      ttyFd = null;
+    }
+  }
+  return ttyFd;
 }
 
 /**
@@ -396,17 +690,13 @@ function cmdNew(
   // conversation's transcript later, and so how we read back its title.
   const sessionId = randomUUID();
 
-  const promptPath = `/home/${USER}/gjd-remote/prompts/${name}.md`;
-  const jobPath = `/home/${USER}/gjd-remote/jobs/${name}.sh`;
-  ssh(`mkdir -p /home/${USER}/gjd-remote/prompts /home/${USER}/gjd-remote/jobs`);
+  const promptPath = `${REMOTE_WORK}/prompts/${name}.md`;
+  const jobPath = `${REMOTE_WORK}/jobs/${name}.sh`;
+  // The note is removed before the run, never after: one left by an earlier
+  // session of the same name would otherwise be read back as this one's excuse.
+  ssh(`mkdir -p ${REMOTE_WORK}/prompts ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
 
-  const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-"));
-
-  if (opts.prompt) {
-    const f = path.join(stage, `${name}.md`);
-    writeFileSync(f, opts.prompt, "utf8");
-    scpTo(f, promptPath);
-  }
+  if (opts.prompt) writeRemote(opts.prompt, promptPath);
 
   // Non-interactive ssh sources NEITHER .bashrc NOR .bash_profile, so the job
   // gets a stock PATH. Append, never substitute: `PATH=$PATH || default` only
@@ -426,11 +716,13 @@ function cmdNew(
     // the FATAL line one keystroke from scrolling away — and Claude never
     // started. `gjd-remote ls` showed a session; the tree was the wrong one.
     // Reproduced 2026-08-31 by deleting the directory after the check.
-    //
-    // sessionDir() already checked, so reaching here means the directory went
-    // away in between. Exiting ends the session, which is a failure you can see;
-    // a session in the wrong tree is one you cannot.
-    `cd ${shq(dir)} || { echo "FATAL: ${dir} is gone — refusing to start Claude somewhere else"; exit 1; }`,
+    cdGuard(name, dir, "Claude"),
+    // And the same shape one line lower: `claude` not being on the job's stock
+    // PATH does not stop the script, it falls through to `exec bash -l`. That
+    // is a live session, listed by `ls`, with no Claude in it — which is the
+    // wrong-tree failure again, wearing different clothes.
+    `command -v claude >/dev/null 2>&1 || ` +
+      failTo(name, "FATAL: claude is not on this job's PATH — refusing to leave a session with no Claude in it"),
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
     [
@@ -447,10 +739,8 @@ function cmdNew(
     ``,
   ].join("\n");
 
-  const jobLocal = path.join(stage, `${name}.sh`);
-  writeFileSync(jobLocal, job, "utf8");
-  scpTo(jobLocal, jobPath);
-  ssh(`chmod +x ${jobPath}`);
+  // exec: true folds the chmod into the same round trip as the write.
+  writeRemote(job, jobPath, { exec: true });
   // The id and the provisional flag live in the tmux session's own environment,
   // so they survive the rename that `ls` may later perform — a mapping file
   // keyed by name would go stale at exactly that moment.
@@ -459,6 +749,7 @@ function cmdNew(
       `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${shq(`bash ${jobPath}`)}`,
   );
 
+  confirmStarted(name);
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
   if (opts.attach) attach(name, opts.transport);
   else console.log(dim(`  gjd-remote resume ${name}`));
@@ -473,7 +764,7 @@ function cmdNew(
  * terminal, which is what you want for a quick look and never for real work.
  */
 function cmdShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
-  const name = given ?? `sh-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "").replace(/(\d{4})(\d{4})/, "$1-$2")}`;
+  const name = given ?? timestampName("sh");
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
 
   const live = sessions();
@@ -485,10 +776,20 @@ function cmdShell(given: string | undefined, opts: { dir?: string | undefined; t
   const dir = sessionDir(opts.dir);
   console.log(bold(`gjd-remote shell ${name}`) + dim(` → ${HOST()}:${dir}`));
 
+  // `-c ${dir}` is NOT the guard, and used to be all there was: tmux falls back
+  // to the home directory when it cannot enter `-c` and still exits 0, so this
+  // command reported a green ✓ over a shell sitting in /home/greg. The explicit
+  // `cd || exit 1` is the same one `new` runs, for the same reason.
+  //
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
-  ssh(`tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0`);
-  console.log(green(`✓ shell '${name}'`));
+  ssh(`mkdir -p ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
+  ssh(
+    `tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0 ` +
+      shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
+  );
+  confirmStarted(name);
+  console.log(green(`✓ shell '${name}'`) + dim(` in ${dir}`));
   attach(name, opts.transport);
 }
 
@@ -521,6 +822,20 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   if (!existsSync(local)) die(`no such file: ${local}`);
 
   const payload = buildEnvPayload(readFileSync(local, "utf8"));
+  // Refused, not reported. The allowlist stops the file sending a key it should
+  // not; nothing stopped it sending FEWER keys than it appears to — a duplicate
+  // takes the later value, an unclosed quote eats every line after it, and a
+  // line the parser cannot read is skipped. Each of those replaces the box's
+  // env file with a shorter one under a green tick, and the box then fails at
+  // whatever needed the key that went missing.
+  if (payload.problems.length) {
+    die(
+      `${local} is not a file I will push — I would silently drop keys out of it:\n` +
+        payload.problems.map((p) => `  ${p}`).join("\n") +
+        `\n  Fix those lines and run this again. Nothing on the box was touched.` +
+        `\n  (Line numbers only — the contents of a broken line may well be the secret.)`,
+    );
+  }
   if (payload.pushed.size === 0) {
     die(
       `${local} has none of the allowlisted keys — refusing to write an empty env file.\n` +
@@ -570,7 +885,7 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   // every credential is sitting in the repo. The chmod after the copy is belt
   // and braces, not the mechanism.
   ssh(`umask 077 && : > ${shq(tmp)}`);
-  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
+  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
   if (sent.status !== 0) {
     ssh(`rm -f ${shq(tmp)}`, { check: false });
     die(`scp failed: ${(sent.stderr || "").trim()}`);
@@ -580,7 +895,21 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   // one and never a half-written one.
   ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
 
-  const back = parseEnv(ssh(`cat ${shq(dest)}`, { raw: true }));
+  // BYTES first, meaning second. The readback used to go straight through the
+  // parser, which is the one comparison that cannot see what the parser
+  // overlooks: a trailing junk line, an appended comment, a second copy of a
+  // key. Both sides agreed because both sides had the same blind spot.
+  const raw = ssh(`cat ${shq(dest)}`, { raw: true });
+  if (raw !== payload.text) {
+    const at = [...raw].findIndex((c, i) => c !== payload.text[i]);
+    die(
+      `the bytes on the box are not the bytes that were sent — leaving it for you to look at.\n` +
+        `  sent ${payload.text.length} characters, read back ${raw.length}\n` +
+        `  first difference at character ${at < 0 ? Math.min(raw.length, payload.text.length) : at}\n` +
+        `  (positions only — the file is full of credentials, so nothing from it is printed)`,
+    );
+  }
+  const back = parseEnv(raw);
   const wrong = [...payload.pushed].filter(([k, v]) => back.get(k) !== v).map(([k]) => k);
   const extra = [...back.keys()].filter((k) => !payload.pushed.has(k));
   if (wrong.length || extra.length || back.size !== payload.pushed.size) {
@@ -771,16 +1100,24 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
   const before = cloneFacts(base, dest, tokenFile);
   const want = `${repo.owner}/${repo.name}`.toLowerCase();
 
-  // Already there. Success, not an error — but say WHICH repo is sitting there,
-  // because a name collision and a done job look identical from the outside.
+  // Already there — but only success if it is a checkout of the repo that was
+  // ASKED FOR. This used to print the green ✓ and exit 0 for any checkout at
+  // all, adding a red advisory line underneath saying it was a different repo:
+  // a name collision and a done job then looked the same to a caller, to a
+  // script, and to anyone reading the last line.
   if (before.get("checkout") === "yes") {
     const found = remoteSlug(before.get("remote"));
-    console.log(green(`✓ already a checkout — nothing to do`));
-    describeCheckout(before);
     if (found !== want) {
-      console.log(red(`  note: that is ${found ?? "an unrecognised remote"}, not ${want}`));
-      console.log(dim(`  --name or --base-folder if you meant somewhere else`));
+      die(
+        `${dest} on the box is a checkout of a different repository.\n` +
+          `  asked for: ${want}\n` +
+          `  found:     ${found ?? `unrecognised remote '${before.get("remote") || "(none)"}'`}\n` +
+          `  Nothing was cloned and nothing was touched. --name or --base-folder to put\n` +
+          `  ${want} somewhere else.`,
+      );
     }
+    console.log(green(`✓ already a checkout of ${want} — nothing to do`));
+    describeCheckout(before);
     return;
   }
 
@@ -824,7 +1161,7 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
   // is worth watching. GIT_TERMINAL_PROMPT=0 so a credential miss fails instead
   // of hanging on a username nobody is there to type.
   const cmd = `mkdir -p ${shq(base)} && GIT_TERMINAL_PROMPT=0 git clone ${shq(repo.url)} ${shq(dest)}`;
-  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), cmd], { stdio: "inherit" });
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), cmd], { stdio: "inherit" });
   if (r.status !== 0) {
     die(
       `git clone failed on the box (exit ${r.status}) — git's own output is above.\n` +
@@ -868,20 +1205,31 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
  * came out proves the thing works — which is the difference that matters after
  * a rebuild installs a broken package or a half-extracted binary.
  */
-const TOOLS: { name: string; run: string; want?: string }[] = [
-  { name: "claude", run: "claude --version" },
-  { name: "tmux", run: "tmux -V" },
-  { name: "mosh-server", run: "mosh-server --version 2>&1" },
-  { name: "node", run: "node --version" },
-  { name: "google-chrome", run: "google-chrome --version" },
-  { name: "gh", run: "gh --version" },
-  { name: "jq", run: `echo '{"a":42}' | jq -r .a`, want: "42" },
-  { name: "file", run: "file -b /bin/sh" },
-  { name: "rg", run: "rg --count PATH /etc/environment" },
-  { name: "unzip", run: "unzip -v" },
+const TOOLS: { name: string; run: string; want: RegExp }[] = [
+  { name: "claude", run: "claude --version", want: /^\d+\.\d+\.\d+ \(Claude Code\)/ },
+  { name: "tmux", run: "tmux -V", want: /^tmux \d+\.\d/ },
+  { name: "mosh-server", run: "mosh-server --version 2>&1", want: /^mosh-server \(mosh \d+\.\d+/ },
+  { name: "node", run: "node --version", want: /^v\d+\.\d+\.\d+$/ },
+  { name: "google-chrome", run: "google-chrome --version", want: /^Google Chrome \d+\./ },
+  { name: "gh", run: "gh --version", want: /^gh version \d+\.\d+/ },
+  { name: "jq", run: `echo '{"a":42}' | jq -r .a`, want: /^42$/ },
+  // /bin/sh is dash on this box, so `file` reports the symlink. The alternates
+  // are what it says on a box where /bin/sh is a real binary instead.
+  { name: "file", run: "file -b /bin/sh", want: /^(symbolic link to |ELF |POSIX shell script)/ },
+  // One line of /etc/environment mentions PATH. A count of 0 is a tool that ran
+  // and found nothing, which is a different failure from a tool that is absent.
+  { name: "rg", run: "rg --count PATH /etc/environment", want: /^[1-9]\d*$/ },
+  { name: "unzip", run: "unzip -v", want: /^UnZip \d+\.\d+/ },
 ];
 
-/** Did the tool run, and if not, what is the shortest true thing to say? */
+/**
+ * Did the tool run, and if not, what is the shortest true thing to say?
+ *
+ * `want` is required, and used to be optional — only jq had one, so every other
+ * check accepted exit 0 with any output at all, including none. A wrapper
+ * script, a shim that logs and returns, an alias someone left in place: all of
+ * them passed. Exit 0 says something ran; the pattern says it was the tool.
+ */
 function toolVerdict(
   tool: (typeof TOOLS)[number],
   got: { status: number; detail: string } | undefined,
@@ -889,8 +1237,11 @@ function toolVerdict(
   if (!got) return { ok: false, why: "no answer from the box" };
   if (got.status === 127) return { ok: false, why: "not installed" };
   if (got.status !== 0) return { ok: false, why: `exit ${got.status}: ${got.detail}` };
-  if (tool.want !== undefined && got.detail !== tool.want) {
-    return { ok: false, why: `ran, but said '${got.detail}' where '${tool.want}' was expected` };
+  if (!tool.want.test(got.detail)) {
+    return {
+      ok: false,
+      why: `exited 0 but said ${got.detail ? `'${got.detail}'` : "nothing"}, which does not match ${tool.want}`,
+    };
   }
   return { ok: true, why: got.detail };
 }
@@ -1070,12 +1421,31 @@ function runBrowserSmoke(): { ok: boolean; detail: string } {
   const remote = `${REMOTE_WORK}/remote-smoke-browser.mjs`;
   ssh(`mkdir -p ${shq(REMOTE_WORK)}`);
   scpTo(local, remote);
+  // scp's exit code says a transfer finished, not that THESE bytes are what is
+  // now on the box. Hash both ends: the whole point of copying the script every
+  // time is that the check runs the version in this repo, and a truncated or
+  // stale copy that still parses would go on passing for a script nobody has.
+  const want = createHash("sha256").update(readFileSync(local)).digest("hex");
+  const got = ssh(`sha256sum ${shq(remote)} 2>/dev/null | cut -d' ' -f1`, { check: false });
+  if (got !== want) {
+    return { ok: false, detail: `the copy on the box hashes ${got || "(nothing)"}, not ${want} — not running it` };
+  }
   // Chrome starting, two page loads and two screenshots. 20s is the normal
   // shape; the cap is for a browser that has hung rather than failed.
-  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), `node ${shq(remote)}`], { encoding: "utf8", timeout: 120_000 });
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `node ${shq(remote)}`], { encoding: "utf8", timeout: 120_000 });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter(Boolean);
-  if (r.status === 0) return { ok: true, detail: out.at(-1)?.replace(/^ok\s+/, "") ?? "" };
-  return { ok: false, detail: out.at(-1) ?? `no output (exit ${r.status}, signal ${r.signal})` };
+  if (r.status !== 0) return { ok: false, detail: out.at(-1) ?? `no output (exit ${r.status}, signal ${r.signal})` };
+  // Exit 0 is not the check. An empty script exits 0, and so does one whose
+  // assertions were commented out; the smoke test says `ok ` and then what it
+  // proved, so that line IS the result and its absence is a failure.
+  const last = out.at(-1) ?? "";
+  if (!/^ok\s/.test(last)) {
+    return {
+      ok: false,
+      detail: `exited 0 without its 'ok' line — ${out.length} line(s) of output, last: ${last || "(none)"}`,
+    };
+  }
+  return { ok: true, detail: last.replace(/^ok\s+/, "") };
 }
 
 // ---------------------------------------------------------------- main
@@ -1085,7 +1455,7 @@ const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that ne
 ${bold("SESSIONS")}
   ls, (no args)           list sessions, each with Claude's own title for it
   new [name]              start Claude Code and attach
-      -p, --prompt TEXT     give it a first prompt
+      -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
           --no-attach       create it, but stay here
   shell [name]            a persistent shell, no Claude Code
@@ -1140,9 +1510,13 @@ ${bold("WHAT SURVIVES WHAT")}
 
 ${bold("EXAMPLES")}
   gjd-remote new -p "fix the ToC ordering bug"
-      ${dim(`gjd-remote new s-0831-1712 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
-      ${dim("✓ started 's-0831-1712' with a prompt")}
+      ${dim(`gjd-remote new s-260831-171205 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
+      ${dim("✓ started 's-260831-171205' with a prompt")}
       already in the checkout, and named after whatever Claude decides the work is
+  gjd-remote new -p - <<'EOF'
+      the prompt comes from stdin, so nothing needs escaping — quotes, backticks,
+      dollar signs and newlines all arrive as typed
+      EOF
   gjd-remote new -d ~/code/gjdutils
       an unnamed session in a different repo; it takes a name once Claude has a title
   gjd-remote shell
@@ -1199,7 +1573,7 @@ function main(): void {
         },
       });
       return cmdNew(positionals[0], {
-        prompt: values.prompt,
+        prompt: resolvePrompt(values.prompt),
         dir: values.dir,
         attach: !values["no-attach"],
         transport: values.ssh ? "ssh" : undefined,
@@ -1277,12 +1651,26 @@ function main(): void {
     }
 
     case "ssh":
-      process.exit(spawnSync("ssh", ["-t", HOST()], { stdio: "inherit" }).status ?? 0);
+      process.exit(spawnSync("ssh", ["-t", ...SSH_OPTS_INTERACTIVE, HOST()], { stdio: "inherit" }).status ?? 0);
 
     case "tunnel":
       console.log(dim("open http://localhost:6080/vnc.html — and run `start-vnc` on the box"));
+      console.log(dim("ctrl-c closes the tunnel"));
+      // ExitOnForwardFailure is the whole command. Without it, a local 6080
+      // already in use makes ssh print one line and CARRY ON with no forwarding
+      // — and the shell it opened kept the process alive, so it looked exactly
+      // like a working tunnel until the browser showed you whatever else was
+      // already listening on that port.
+      //
+      // -N because there is nothing to run at the far end. The login shell was
+      // only ever a side effect of not saying so, and it made the failure above
+      // survivable in the first place.
       process.exit(
-        spawnSync("ssh", ["-L", "6080:localhost:6080", HOST()], { stdio: "inherit" }).status ?? 0,
+        spawnSync(
+          "ssh",
+          ["-o", "ExitOnForwardFailure=yes", "-N", "-L", "6080:localhost:6080", ...SSH_OPTS_INTERACTIVE, HOST()],
+          { stdio: "inherit" },
+        ).status ?? 0,
       );
 
     case "-h":
