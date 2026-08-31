@@ -275,8 +275,15 @@ Each of these is a hole rather than a to-do, and none of them may be skipped bef
   these three files are in
   `ALLOWED` rather than in `DECLARATIONS` — **a `Declaration` for this call cannot currently be
   typed.**
-- **Nothing caps a session.** A forgotten tab with a live connection open bills audio for as long as
-  it stays open. A wall clock, an idle timeout and a per-reader ceiling all belong here.
+- **Nothing caps a session.** A wall clock, an idle timeout and a per-reader ceiling all belong here.
+
+  **An earlier version of this line overstated it, and the correction is worth keeping.** It said a
+  forgotten tab "bills audio for as long as it stays open". Not quite: a Realtime session has a
+  60-minute server-side maximum, and an idle connection is not itself billed — charges come from
+  responses and from committed input transcription, and VAD normally filters silence out. What is
+  still true, and still enough to need a cap, is that **ambient noise can create billed turns**: a
+  room with people in it can hold a conversation with the model. And a forgotten open microphone is
+  a privacy problem before it is a cost one. Corrected by GPT Sol, 2026-08-31.
 - **Nothing is stored.** The transcripts exist only in the tab. Writing them into the thread through
   `beginTurn`/`finishTurn` ([`src/chat.ts`](../../src/chat.ts)) is the agreed shape and is the next
   substantial piece of work.

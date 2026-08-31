@@ -50,6 +50,8 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
+
 /** Where the connection is. `failed` carries a sentence in `error`. */
 export type LivePhase = "idle" | "connecting" | "live" | "closing" | "failed";
 
@@ -138,6 +140,20 @@ export function useLiveConversation(slug: string): LiveApi {
   const audio = useRef<HTMLAudioElement | null>(null);
   /** Call ids already claimed by `answerTool`. See the note there. */
   const answered = useRef<Set<string>>(new Set());
+  /**
+   * **This session's claim on the page's one microphone**, and the resolver
+   * that tells the next claimant the device has actually gone.
+   *
+   * Live conversation is a third claimant on a device `mic-lock.ts` was written
+   * to arbitrate between two — and it is the greediest of the three, because it
+   * holds the microphone for minutes rather than for the length of a sentence.
+   * A session that took `getUserMedia` without claiming would be invisible to
+   * the dictation hooks, which is exactly the failure that file exists to
+   * prevent: WebKit supports one microphone source at a time, and the second
+   * capture kills or silently reroutes the first.
+   */
+  const claim = useRef<MicClaim | null>(null);
+  const releasedResolve = useRef<(() => void) | null>(null);
 
   /** Fold one turn's text in, creating the line the first time we hear of it. */
   const put = useCallback(
@@ -344,10 +360,42 @@ export function useLiveConversation(slug: string): LiveApi {
     pc.current?.close();
     dc.current = null;
     pc.current = null;
+
+    /* **The device is gone, so say so — and say it after the tracks are
+       actually stopped, never before.** `released` is the promise the next
+       claimant is blocked on, and the entire distinction `mic-lock.ts` draws is
+       between "the old one is stopping" and "the old one has stopped".
+       Resolving optimistically would hand WebKit two live sources, which is the
+       bug that file exists to prevent. */
+    if (claim.current) releaseMicrophone(claim.current);
+    releasedResolve.current?.();
+    releasedResolve.current = null;
+    claim.current = null;
+
+    /* The audio element too. A paused element holding a dead stream keeps a
+       decoder alive and, on some browsers, the tab's "playing audio" chrome. */
+    if (audio.current) {
+      audio.current.srcObject = null;
+      audio.current = null;
+    }
+
     setHearing(false);
     setSpeaking(false);
     setPhase("idle");
   }, []);
+
+  /**
+   * The current `stop`, reachable from a closure that must not go stale.
+   *
+   * `mic-lock` holds the claim object for as long as this session owns the
+   * device and calls `stop()` on it much later, from whichever hook claims
+   * next. Capturing `stop` directly in that object would freeze whatever
+   * identity it had at connect time — which is fine today, because `stop` has
+   * an empty dependency list, and is exactly the kind of "fine today" that
+   * breaks silently the first time somebody gives it a dependency.
+   */
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
 
   const start = useCallback(
     (opts: { microphone?: boolean } = {}) => {
@@ -394,6 +442,46 @@ export function useLiveConversation(slug: string): LiveApi {
           channel.addEventListener("message", onEvent as EventListener);
           channel.addEventListener("open", () => setPhase("live"));
 
+          /* **Claimed before `getUserMedia`, never after** — the whole value of
+             the lock is the gap it closes, and a claim taken once the device is
+             open is a claim on something that has already gone wrong.
+
+             Only when a real microphone is wanted. The synthetic silent track
+             opens no device, so claiming for it would make an automated check
+             evict a reader's live dictation for a device it never touches. */
+          if (microphone) {
+            const mine: MicClaim = {
+              /* Asked to stop by the next claimant.
+                 **This is NOT yet the "stop properly, keep the words" that
+                 `MicClaim.stop` promises, and saying so is the point.** For
+                 dictation, stopping keeps the utterance in progress. Here,
+                 `stop()` closes the data channel first — so a sentence already
+                 spoken but whose `…input_audio_transcription.completed` has not
+                 yet arrived is lost, silently, and the reader sees their last
+                 words simply missing.
+
+                 An earlier version of this comment claimed there was no
+                 half-spoken sentence to preserve because words are committed as
+                 they are said. That is false: the transcription of a committed
+                 item arrives *after* the item, often after the assistant has
+                 begun replying. Found by GPT Sol's review of
+                 docs/plans/live-conversation-in-chat.md, finding 7.
+
+                 The graceful handoff — stop the track, resolve `released` at
+                 once so dictation can have the device, hold the channel open
+                 briefly for the terminal events, then close — is specified in
+                 that plan and is not built. Until it is, a live session is
+                 honest about being interruptible and lossy at the seam rather
+                 than pretending otherwise. */
+              stop: () => stopRef.current(),
+              released: new Promise<void>((res) => {
+                releasedResolve.current = res;
+              }),
+            };
+            claim.current = mine;
+            await claimMicrophone(mine);
+          }
+
           const track = microphone
             ? (await navigator.mediaDevices.getUserMedia({ audio: true })).getAudioTracks()[0]
             : silentTrack();
@@ -424,6 +512,20 @@ export function useLiveConversation(slug: string): LiveApi {
           }
           await conn.setRemoteDescription({ type: "answer", sdp: await answer.text() });
         } catch (err) {
+          /* **Release before reporting.** Everything above this line can throw
+             after the claim is taken — `getUserMedia` on a denied permission,
+             a refused SDP exchange, a network that died between the two. A
+             claim left standing is not a cosmetic leak: `claimMicrophone`
+             chains every claimant onto the previous one's `released`, so a
+             promise that never settles wedges the page's microphone for every
+             dictation box on it, for the life of the tab, with no error
+             anywhere pointing here.
+
+             `stop()` does the whole release and is safe on a half-built
+             session — every field it touches is null-guarded, which is worth
+             more than a bespoke unwind path that would have to be kept in step
+             with `stop` forever. */
+          stopRef.current();
           setError(err instanceof Error ? err.message : String(err));
           setPhase("failed");
         }
