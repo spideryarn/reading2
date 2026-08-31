@@ -1,6 +1,11 @@
 # ToC on request, and the tree that costs nothing
 
-**Status: plan, unreviewed.** Written 2026-08-31, before any of it is built.
+**Status: reviewed, STOPPED, being recut. Do not build the stages below as they stand.** Written
+2026-08-31; [GPT Sol's review](260831ah-toc-on-request-and-the-tree-that-costs-nothing-review-sol.md)
+came back *"STOP. Do not build the stages as written"* with ten P0s and three P1s. **The premise
+survived and the protocol did not** — see § *What the review changed*, which is the part to read
+first, and which contradicts several sentences below that have deliberately been left standing so the
+correction has something to point at.
 
 ## The job
 
@@ -162,6 +167,105 @@ tree, and `summary`'s blocks-only freshness key taught about the tree or refused
 the 260830am review and it does not stop being true here; it is smaller, because a provisional tree is
 now a durable state with a marker rather than a brief window between two publications.
 
+## What the review changed
+
+[GPT Sol](260831ah-toc-on-request-and-the-tree-that-costs-nothing-review-sol.md), 2026-08-31, at
+`high`. **STOP**, ten P0s, three P1s. Each was checked against the code before being written down here;
+the two that most change the plan were verified independently and both hold.
+
+**The premise survived, and it was tested harder than we tested it.** Sol confirmed `toc` changes no
+block text, id, order, role or treatment, traced `sanitize.ts`:147 to show the second clean can only
+rewrite `block.html`, and then **re-applied `blocksArtefact` to all 21 current `output/*.blocks.json`
+and found none changed.** That is the idempotence question answered empirically rather than argued.
+Its one correction: `hashBlocks` ignores HTML ([`src/source-hash.ts`](../../src/source-hash.ts):112),
+so the source-hash assertion this plan proposed **cannot prove byte identity** and stage 1 needs a
+separate exact-idempotence pin.
+
+**The good news first, because it makes the plan smaller.**
+
+- **Stage 3's `AddPage` change is unnecessary — do not make it.** Once `toc` leaves the default steps,
+  `job.status === "done"` *already* fires at ~27 seconds. The plan proposed replacing a gate that will
+  start doing the right thing on its own, and doing so opens a navigation race with no atomic
+  "readable revision published" signal behind it. **Finding 6, and it deletes work.**
+- Of 260830am's six earlier P0s, the crash window between two publications is genuinely dissolved,
+  because a provisional article is now a successful state rather than a half-finished one.
+
+**What actually blocks it**, in the order it has to be fixed:
+
+1. **`assets` breaks the moment `toc` leaves the default list.** It reads `(toc, blocks)` for both its
+   input hash ([`src/pipeline.ts`](../../src/pipeline.ts):868) and its run (:1861). Postgres maps
+   `(blocks, blocks)` and `(toc, blocks)` onto the same rows so this hides there — but
+   [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts):133 keeps them distinct, and **this plan
+   deliberately lands before the flip**, so it breaks the ordinary ingest on day one. Both must move
+   to the canonical block-stage artefact. Finding 1.
+2. **"`blocks` publishes a tree" is not a protocol.** `checkProduct`
+   ([`src/store/session.ts`](../../src/store/session.ts):357) rejects a product the step does not
+   declare, and Postgres publication refuses any revision without a completed real `toc`
+   ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts):1175). A provisional publisher has to
+   exist explicitly, prove the candidate equals `buildHeadingTree` of the stored blocks, and **not**
+   manufacture a completed `toc`. Findings 2 and 11.
+3. **A carried `toc` receipt can suppress the real ToC for ever.** `toc` has no freshness stamp,
+   `stepIsDone` trusts completed outputs, and a new draft copies completed step-run rows from the
+   published revision (`pg-revisions.ts`:668). So a provisional tree written over a draft carrying an
+   old `toc` receipt makes the later unforced job *skip*. This is 260830am's finding 2 wearing a new
+   costume, exactly as this plan predicted, and it is worse here because the provisional state is
+   durable. Finding 3.
+4. **The paid-work gate is two stages too late.** `useArc` auto-starts on every owner article
+   ([`src/web/useArc.ts`](../../src/web/useArc.ts):126) **including in Plain mode**, so publishing a
+   provisional tree immediately buys an arc against it — defeating the whole spend premise. Worse, one
+   job per slug means that arc can 409 the reader's own ToC request
+   ([`src/jobs.ts`](../../src/jobs.ts):1639). **The gate must precede provisional publication, not
+   follow it.** Finding 5, and it moves stage 4 to the front.
+5. **Re-ingest is internally contradictory as specified.** Refresh forces from `fetch` with the default
+   list; with `toc` absent, publishing means downgrading a real tree, keeping it means it describes
+   the wrong blocks, and refusing means the 350 seconds are back. Needs a stated policy — most likely
+   retain the published revision until a ToC finishes. Finding 4.
+6. **PDFs cannot keep today's behaviour**, because steps are fixed at enqueue from a static list
+   before extraction knows whether there are headings (`jobs.ts`:1544). The anti-goal below is
+   therefore **not implementable as written**: either accept the durable flat tree
+   ([`src/heading-tree.ts`](../../src/heading-tree.ts):280 already builds one) or add conditional step
+   injection. Finding 8.
+7. **`useArc` cannot be copied wholesale for the swap.** `useStepJob` can fire a callback, but
+   `useArticleAccess` ([`src/web/App.tsx`](../../src/web/App.tsx):426) has no reload seam and refetches
+   only on slug or identity change — so a finished ToC can leave the reader on the old tree
+   indefinitely. And the scroll hazard is real: `useReadingPosition` (:946) can overwrite `at` with
+   whatever block lands on the old pixel. Finding 7. **The `useArc` shape is right for *triggering* and
+   insufficient for *replacing*, and this plan conflated the two.**
+
+**Stage 1 was scoped wrong, and this is the correction that matters most for
+[260831b](260831b-finish-the-database-move.md).** Do **not** make the public `Article.tree` nullable.
+The reader builds geometry from it unconditionally even in Plain mode (`App.tsx`:1132), and both
+database readers refuse a tree-less revision deliberately (`pg.ts`:1786,
+[`public-reader.ts`](../../src/store/public-reader.ts):438). Since every published article is meant to
+carry a provisional tree atomically, a tree-less state should stay **internal to drafts** and be
+modelled at the stage-input seam only. Broad nullability *"either does nothing, because publication
+continues refusing it, or introduces a client-crashing state"*. Finding 10.
+
+**Two corrections of fact.** The seven article-reading stages are `arc`, `tweets`, `glossary`,
+`ideas`, `quotes`, `timeline` and `sketch` — **`summary` is not one of them**, having left in stage 5e
+of [260831s](260831s-gist-only-summaries.md); Summary reads tree gists instead, so the freshness worry
+this plan inherited from 260830am is aimed at a stage that no longer exists. The paid tree-consumer it
+*did* miss is **`POST /api/similar`** ([`src/routes.ts`](../../src/routes.ts):4344), which must join
+the gate. Finding 13.
+
+**And the visitor hole is worse than "a less good tree".** The client does not branch on
+`tree.provisional` at all, despite [`src/public/dto.ts`](../../src/public/dto.ts):257 claiming it does:
+Hierarchy renders every gistless internal node as a leaf
+([`src/web/TableView.tsx`](../../src/web/TableView.tsx):854) and Summary says *"No summary for this
+section"* ([`src/web/SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx):437) — while visitor policy
+declares all three modes available ([`src/web/visitor.ts`](../../src/web/visitor.ts):188). **A visitor
+cannot start a job, so these are permanently misleading modes, not degraded ones.** That converts the
+risk below from "may grate" into a decision Greg has to take before stage 3. Finding 12.
+
+### What this means for the shape of the work
+
+The idea is intact and the sequencing is not. The order the review implies is: **the paid-work gate
+first**, then the provisional publication protocol with its own step and its own proof, then the
+`assets` input fix, and only then the reader half — of which the `AddPage` change is deleted outright
+and the swap is a bigger piece than "copy `useArc`". Stage 1 shrinks to the stage-input seam plus an
+exact-idempotence test. **None of this is written up as revised stages yet**, and it should not be
+built until it is.
+
 ## The simpler option passed over
 
 **Leave `toc` in the ingest and only make it faster** — `medium` is already the effort
@@ -192,10 +296,13 @@ Two branches of one ask, sharing four files. The note is in
 
 **`src/jobs.ts` is one agent at a time** — their rule, and it binds us equally.
 
-**One thing 260831b should get for free.** `LEASE_MS` is 760s because *"toc alone eats four fifths of
-it"* (commit `38ea362`). With `toc` off the ingest path the claim covers ~27 seconds of work, so the
-lease can shrink and the *"symptom of ephemeral scratch"* that comment describes largely goes away.
-That is their constant to move, not ours, but it moves because of this.
+**~~One thing 260831b should get for free.~~ Wrong, and corrected in their plan.** This said `LEASE_MS`
+could shrink from 760s because the claim would now cover ~27 seconds of work. **An on-demand `toc` is
+still a job on the same claim machinery with the same 320.4s budget**, so a lease sized for a
+27-second ingest would self-abort the one call the reader is waiting for. Sol's finding 9. The
+sentence is kept struck through rather than deleted because it was written into
+[260831b](260831b-finish-the-database-move.md) before the review, and a deleted mistake is one a
+reader of that plan cannot check against.
 
 ## Anti-goals
 
