@@ -10,6 +10,10 @@ work here goes through the Chrome extension —
 connected. This file exists so that the day someone wants scripted, repeatable browser control, the
 research is already done and the traps are already written down.
 
+That day is closest on the **remote box**, where the Chrome extension cannot follow —
+[remote-server-for-claude-code.md](remote-server-for-claude-code.md) is which machine, and
+[remote-server-tmux-mosh.md](remote-server-tmux-mosh.md) is how you reach it.
+
 Researched 2026-08-31 against `playwright@1.62.1` and `@playwright/mcp@0.0.79`, from
 [playwright.dev](https://playwright.dev) plus issue trackers. Claims are marked where the source is a
 blog or a GitHub issue rather than the official docs. **Run `npx playwright --version` and check the

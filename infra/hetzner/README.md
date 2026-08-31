@@ -2,7 +2,9 @@
 
 Terraform + cloud-init for the 24/7 Hetzner server that Claude Code sessions run on.
 The decision behind it, the prices, and what was ruled out are in
-[remote-server-for-claude-code.md](../../docs/research/remote-server-for-claude-code.md).
+[remote-server-for-claude-code.md](../../docs/research/remote-server-for-claude-code.md). Connecting
+to it — mosh, tmux, one iTerm tab per session, and being told when a session wants you — is
+[remote-server-tmux-mosh.md](../../docs/research/remote-server-tmux-mosh.md).
 
 ## The shape, in one paragraph
 

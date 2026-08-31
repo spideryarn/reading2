@@ -3,6 +3,10 @@
 **Status:** research, 2026-08-31. Nothing here is built. It records a decision and the working
 behind it, so the next agent does not redo the survey.
 
+This doc is about **which machine**. How you reach it from iTerm and keep sessions alive across a
+sleeping laptop is [remote-server-tmux-mosh.md](remote-server-tmux-mosh.md); driving a browser once
+you are on it is [playwright-browser-control.md](playwright-browser-control.md).
+
 The ask, from Greg (2026-08-30):
 
 > I want to be able to run Claude Code remotely on a server that can run npm install and run
