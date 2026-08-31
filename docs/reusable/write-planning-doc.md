@@ -117,7 +117,8 @@ Overall approach:
 
 Upfront preparatory actions:
 
-- Pull the latest changes before we start, to make merge conflicts less likely.
+- Pull the latest changes before we start, to make merge conflicts less likely — and if one lands
+  anyway, [git-resolve-merge-conflicts.md](git-resolve-merge-conflicts.md).
 - Upstream suggests a branch per project. **Not here** — several agents share this working tree and
   switching or rebasing branches is forbidden ([AGENTS.md](../../AGENTS.md)).
 

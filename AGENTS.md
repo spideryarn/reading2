@@ -202,6 +202,9 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
   `update-ref`) was removed on 2026-08-30 after it silently staged a revert of other people's work
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
+- **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
+  the best of both, and show Greg the proposal before you change anything —
+  [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked.
 
 ### Before you call it finished

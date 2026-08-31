@@ -15,6 +15,7 @@ rest are one fetch away.
 | [capture-sounding-board-conversation.md](capture-sounding-board-conversation.md) | turning a conversation into a preserved document — what to quote verbatim, what to synthesise |
 | [generate-mermaid-diagram.md](generate-mermaid-diagram.md) | creating or updating a Mermaid diagram and rendering it to SVG |
 | [rename-or-move.md](rename-or-move.md) | renaming/moving files and chasing down every reference to them |
+| [git-resolve-merge-conflicts.md](git-resolve-merge-conflicts.md) | resolving a merge conflict — read both sides, propose first |
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic on the web and writing it up as a reference doc |
 | [third-party-library-selection.md](third-party-library-selection.md) | choosing a library to depend on |
 | [write-planning-doc.md](write-planning-doc.md) | writing the planning doc for a piece of work, and naming it |
