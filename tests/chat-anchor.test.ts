@@ -80,9 +80,13 @@ const WHOLE_BLOCK: ChatAnchor = { blockId: BLOCK };
  * article was it?" should not be a question.
  *
  * `writes` because it is already this repo's ground truth for a healthy
- * fixture: `scripts/deploy-checks.ts` uses `data/writes/*` as the deploy gate's
- * sentinels and `tests/artefact-copy.test.ts` hardcodes it. It is 10 KB of
- * blocks, so the copy stays cheap — which is what "smallest" was for.
+ * fixture: `GATE_FIXTURES` in `scripts/deploy-checks.ts` names it as the deploy
+ * gate's sentinel slug and `tests/artefact-copy.test.ts` hardcodes it. It is
+ * 10 KB of blocks, so the copy stays cheap — which is what "smallest" was for.
+ * The gate reads the tracked copy under `tests/fixtures/data-root/`; the clone
+ * below reads `data/`, and the two are the same slug rather than the same bytes
+ * until the fixture sweep lands — see FLOOR_SLUG in
+ * tests/store-artefact-manifest.test.ts.
  * docs/plans/260901b-committed-fixture-corpus.md.
  */
 const SOURCE_SLUG = "writes";
