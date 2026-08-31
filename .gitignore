@@ -26,3 +26,9 @@ scratch-bakeoff
 # a scan for `sk-or-v1-`, `sb_secret_` and `ANTHROPIC_API_KEY=`. The review it
 # produced belongs in git; the log of how it got there does not.
 *.activity.log
+
+# @playwright/mcp writes here when it runs with a non-isolated profile — traces,
+# a user-data dir, whatever a session downloaded. It appeared in the box's
+# checkout, not on any laptop, so it would only ever be committed by accident
+# from over there.
+.playwright-mcp/
