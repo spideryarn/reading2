@@ -118,6 +118,37 @@ possibly longer than what was heard, and keep it out of `recentHistory` (or redu
 interruption marker). Feeding unheard words silently into the next typed turn is the one outcome to
 refuse.
 
+### 1d. Three things the review missed, and one is nasty
+
+Fable, asked about the persistence shape on 2026-08-31.
+
+**Seeding poisons the voice model with the ids it is forbidden to speak.** This is the nasty one.
+The plan reuses `recentHistory` to seed a live session with the thread so far — and typed assistant
+turns carry `[spya-k3m9qt]` inline, because that is how written chat cites. Seeding those verbatim
+presents the voice model with **examples of its own past speech containing block ids**, while its
+instructions tell it never to say one aloud. That is few-shot pressure against our own prompt, and
+the symptom would be a companion that starts reading ids out with no obvious cause.
+
+So the seeding path strips inline ids from assistant text. `withoutWebLinks` and the citation matcher
+in [`src/web/citations.ts`](../../src/web/citations.ts) / [`src/urls.ts`](../../src/urls.ts) already
+exist — reuse the matcher rather than writing a second one. Reusing `recentHistory` is right for the
+*window*; it is wrong if it means byte-identical text.
+
+**Spoken turns quietly degrade the citation instruments.** `citedBlockIds` / `unknownCitedIds` are
+described in [`src/converse.ts`](../../src/converse.ts) as the numbers watched to tell whether the
+citation prompt still works. Every spoken answer counts as zero citations, so the metric drifts for a
+reason that is not a regression. Spoken provenance has to be explicit on the row — the realtime model
+id in `model` is probably enough — and *"has `passages`"* is not a proxy, because a spoken answer that
+pointed at nothing is perfectly ordinary.
+
+**A reader can press Live on an empty thread.** `appendCompletedTurn` takes an expected tail, and a
+thread with no messages has none. Either Live refuses to start on an empty thread and says so, or the
+append grows a create-thread branch matching `begin`'s `anchor`/`kind` semantics. Leaving it implicit
+is how the two stores diverge.
+
+And the Send-switch must be **awaited**, not hoped for: an unawaited flush racing the typed POST turns
+the expected-tail guard into a 409 we inflicted on ourselves.
+
 ### 2. Seeding the session with the thread
 
 The realtime session is created with `instructions` (article + rules) and then the **conversation**
