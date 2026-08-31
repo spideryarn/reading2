@@ -566,23 +566,6 @@ export const articleRevisions = spideryarn.table(
     glossary: jsonb("glossary").$type<Glossary>(),
 
     /**
-     * **Retired 2026-08-31, and deliberately still here.**
-     *
-     * It held the generated summary ladder — a `short` and a `long` for the
-     * article and each of its parts and sections, written by stage 5e. Greg cut
-     * the whole Length axis (docs/plans/gist-only-summaries.md); Summary mode
-     * now draws the one-sentence gists that were always on the tree, and
-     * nothing reads or writes this column.
-     *
-     * The column stays because dropping one is not reversible and what is in it
-     * is real readers' summaries. `REVISION_READ_POLICY` in src/store/pg.ts
-     * grants it to nobody, which is where a would-be reader trips. Typed
-     * `unknown` rather than left as `Summaries`, so that reviving it means
-     * deciding on a shape rather than inheriting a deleted one.
-     */
-    summary: jsonb("summary").$type<unknown>(),
-
-    /**
      * The propositions a reader has to hold — `Ideas`, stage 5f.
      *
      * The WHOLE artefact, like the four above, and here the reason is the
@@ -1361,13 +1344,13 @@ export const revisionStepRuns = spideryarn.table(
     check(
       "revision_step_runs_step",
       /**
-       * Every name in `StepName` (src/types.ts), plus `'summary'`, which was
-       * a step until 2026-08-31 and is not one any more
-       * (docs/plans/gist-only-summaries.md). It stays in the list because
-       * removing it means re-adding a CHECK that existing `summary` step rows
-       * would violate — the constraint permits a value nothing writes, which
-       * costs nothing, and `tests/db-step-constraint.test.ts` names it as
-       * retired rather than letting the list quietly rot.
+       * Every name in `StepName` (src/types.ts). `'summary'` was one until
+       * 2026-08-31 and came out with stage 5e
+       * (docs/plans/gist-only-summaries.md) — and taking a name *out* is the
+       * direction with a trap in it: Postgres validates a re-added CHECK
+       * against the rows already in the table, so the migration has to delete
+       * the `summary` step runs before it narrows the constraint. It does, in
+       * that order.
        *
        * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
        * step's OUTPUTS rather than a step of its own, so its currency rides
@@ -1381,7 +1364,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','timeline','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
     ),
     check(
       "revision_step_runs_status",

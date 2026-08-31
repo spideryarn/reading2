@@ -101,6 +101,7 @@ import type {
   Ideas,
   Meta,
   Quotes,
+  Timeline,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -585,6 +586,7 @@ export interface ArticleFiles {
   readonly glossary: Glossary | undefined;
   readonly ideas: Ideas | undefined;
   readonly quotes: Quotes | undefined;
+  readonly timeline: Timeline | undefined;
   readonly sketch: Sketch | undefined;
   readonly labels: LabelsFile | undefined;
   /* Reader state, typed from the loaders themselves rather than restated. The
@@ -669,6 +671,8 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   if (!ideas) absent.push("ideas.json");
   const quotes = await readJson<Quotes>(path.join(dir, "quotes.json"));
   if (!quotes) absent.push("quotes.json");
+  const timeline = await readJson<Timeline>(path.join(dir, "timeline.json"));
+  if (!timeline) absent.push("timeline.json");
   const sketch = await readJson<Sketch>(path.join(dir, "sketch.json"));
   if (!sketch) absent.push("sketch.json");
   const labels = await readJson<LabelsFile>(path.join(dir, "labels.json"));
@@ -789,6 +793,7 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
     glossary,
     ideas,
     quotes,
+    timeline,
     sketch,
     labels,
     storedComments,
@@ -847,6 +852,7 @@ export async function importArticleIn(
     glossary,
     ideas,
     quotes,
+    timeline,
     sketch,
     labels,
     storedComments,
@@ -1107,13 +1113,9 @@ export async function importArticleIn(
     assets: assets ?? null,
     tweets: tweets ?? null,
     glossary: glossary ?? null,
-    /* **Never written, and `summary.json` is never read.** The column is
-       retired and left in place with whatever it already holds; writing `null`
-       over it would destroy exactly the data keeping the column was for
-       (docs/plans/gist-only-summaries.md). Omitted from this literal rather
-       than set, so the insert does not name it at all. */
     ideas: ideas ?? null,
     quotes: quotes ?? null,
+    timeline: timeline ?? null,
     sketch: sketch ?? null,
     labels: labels ?? null,
     ...scalars,
@@ -1420,6 +1422,7 @@ export async function importArticleIn(
     { step: "glossary", present: Boolean(glossary), inputHash: glossary?.sourceHash },
     { step: "ideas", present: Boolean(ideas), inputHash: ideas?.sourceHash },
     { step: "quotes", present: Boolean(quotes), inputHash: quotes?.sourceHash },
+    { step: "timeline", present: Boolean(timeline), inputHash: timeline?.sourceHash },
     { step: "sketch", present: Boolean(sketch), inputHash: sketch?.sourceHash },
   ];
   const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);

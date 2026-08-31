@@ -179,6 +179,10 @@ const READS = [
      projection landed and this list did not, which is exactly what the
      assertion below exists to catch. */
   "quotes",
+  /* Added 2026-08-31 with the `timeline` stage. Its projection is the only one
+     on `DATED_FINGERPRINT_COLUMNS` — the cited set plus `published_at` — because
+     it is the only stage judged on the publication date. */
+  "timeline",
 ] as const;
 
 describe("the list of projections this file checks", () => {
@@ -206,20 +210,6 @@ describe("every projection obeys the policy", () => {
     expect(POLICY.glossary.glossary).toBe("value");
     expect(POLICY.tweets.tweets).toBe("value");
     expect(POLICY.tree.article).toBe("value");
-  });
-
-  /**
-   * **The retired column, granted to nobody.**
-   *
-   * `article_revisions.summary` outlived the stage that wrote it
-   * (docs/plans/gist-only-summaries.md): the column is kept because what is in
-   * it is real readers' summaries, and `beginDraftIn` still carries it forward.
-   * What must not come back is a *read* — the whole point of retiring it is
-   * that nothing serves, compares or regenerates those bytes, and an empty
-   * policy entry is easy to fill in by accident while adding a projection.
-   */
-  it("grants the retired summary column to no read at all", () => {
-    expect(POLICY.summary).toEqual({});
   });
 
   it("gives the shelf the cached scalars, which nothing read until 2026-08-28", () => {
@@ -308,7 +298,7 @@ describe("the query actually uses its projection", () => {
    * src/source-hash.ts § `articleFingerprint`.
    */
   it("gives the tree to every read whose staleness compares it, and no other", () => {
-    const compares = new Set(["tweets", "glossary", "ideas", "sketch", "arc"]);
+    const compares = new Set(["tweets", "glossary", "ideas", "sketch", "arc", "timeline"]);
     for (const read of READS) {
       /* `article`, `metadata` and `publish` render or validate the tree rather
          than fingerprinting it, and the library asks about it in SQL. Those

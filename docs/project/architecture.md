@@ -185,12 +185,12 @@ The layout the pipeline writes, one directory per article:
     glossary.json   the terms the piece uses, and which blocks use them (stage 5d,
                     on demand only — glossary.md). Carries a sourceHash too, and
                     a `passes` count, because the list grows a batch at a time.
-    summary.json    RETIRED 2026-08-31. Stage 5e wrote the two generated summary
-                    lengths here; the stage is gone and nothing reads the file
-                    (../plans/gist-only-summaries.md). Existing files and the
-                    Postgres column that holds them were left alone — what is in
-                    them is real readers' summaries. Summary mode now draws the
-                    gists on the tree.
+    summary.json    GONE 2026-08-31, along with stage 5e that wrote it and the
+                    `article_revisions.summary` column that held it
+                    (../plans/gist-only-summaries.md, drizzle/0036). Summary
+                    mode now draws the gists that were always on the tree. Files
+                    left in a `data/` directory are orphans and nothing reads
+                    them.
     ideas.json      the propositions the piece needs you to hold — the ones it
                     assumes and the ones it adds (stage 5f, on demand only —
                     ideas.md).

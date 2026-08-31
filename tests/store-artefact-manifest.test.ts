@@ -95,14 +95,12 @@ const HOMES: Record<string, string> = {
   "ideas.json": "article_revisions.ideas",
   "quotes.json": "article_revisions.quotes",
   "sketch.json": "article_revisions.sketch",
-  /* The column does not exist yet — Stage 4 of docs/plans/timeline-mode.md adds
-     it, with the `revision_step_runs_step` CHECK that drizzle will not write.
-     The entry is here rather than in `NOT_YET_WRITTEN` because that list is for
-     an artefact with **no example on disk**, and this one has one: the stage was
-     run for real against `data/openai-huggingface` on 2026-08-31. This list is a
-     record of where a thing goes, not a claim that it has got there — the same
-     state `labels-progress.json` is in. */
-  "timeline.json": "article_revisions.timeline — decided, column not yet written",
+  /* The column is declared and its migration is written — `drizzle/0035_timeline.sql`,
+     which also carries the `revision_step_runs_step` CHECK that drizzle-kit will
+     not write. **Whether it has been APPLIED is a separate question and Greg's
+     call every time**, so until he runs it this row says where the artefact goes
+     and the database does not yet have the column. */
+  "timeline.json": "article_revisions.timeline",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",
@@ -125,16 +123,14 @@ const HOMES: Record<string, string> = {
  */
 const NOT_MIGRATED: Record<string, string> = {
   ".DS_Store": "macOS. Not ours.",
-  /* **Retired rather than unmigrated**, and the distinction is this list's
+  /* **Deleted rather than unmigrated**, and the distinction is this list's
      whole point. Stage 5e wrote the generated summary ladder here until
-     2026-08-31; the stage, the artefact kind and every reader of it are deleted
-     (docs/plans/gist-only-summaries.md). `article_revisions.summary` was kept
-     on purpose — what is in it on a real database is real readers' summaries,
-     and `REVISION_CARRY_POLICY` still copies it into each new revision — but
-     nothing moves the *file* in either direction any more, which is what this
-     list is about. The files left in `data/` are simply files in a directory
-     now, like `chat.json`. */
-  "summary.json": "retired with stage 5e; the column is kept, the file is not moved",
+     2026-08-31; the stage, the artefact kind, every reader of it and the
+     `article_revisions.summary` column are all gone
+     (docs/plans/gist-only-summaries.md, drizzle/0036). `data/` is gitignored, so
+     the files linger on whichever machine ran the stage — orphans that nothing
+     reads and nothing moves. */
+  "summary.json": "deleted with stage 5e; no home, because there is nothing to home",
   /* **This entry said the opposite until 2026-08-31, and it was stale.** It read
      "a decision not to migrate it, not an omission" — a cache, one file per page
      range, keyed on the PDF's bytes + the prompt version + the reader, holding

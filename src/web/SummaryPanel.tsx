@@ -212,7 +212,26 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
       </div>
 
       <div className="summ-scroll" ref={scroll}>
-        {root ? (
+        {/* **Nothing to outline, which is not the same as nothing to read.**
+            `tree-invariants.ts` permits a root that is a leaf — one block, and
+            no gist, because a summary must never stand where the real prose
+            could — so a one-passage article arrives here with a perfectly good
+            tree and nothing this panel can draw from it. The same holds for a
+            provisional heading tree whose gists were never written.
+
+            Without this the reader got the heading, the Depth pills and a blank
+            band: no title row on the root, no range, no missing-summary line
+            and no `+N` badge, because there are no children to have one. GPT
+            Sol's review of the built code, 2026-08-31. It matters more since
+            the mode stopped being gated — a visitor used to be told nobody had
+            built a summary, and now opens the band unconditionally
+            (src/web/visitor.ts).
+
+            A separate sentence from the one below, and deliberately: *no usable
+            tree* reports a fault, and this tree is fine. */}
+        {root && !root.gist && root.children.length === 0 ? (
+          <p className="summ-quiet">This article has no parts, so there is nothing to outline.</p>
+        ) : root ? (
           /* One group for the whole outline, so running the pointer down a
              column of block ids shows each card immediately rather than
              waiting out the open delay again at every one. Chat's answers do

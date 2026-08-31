@@ -55,6 +55,11 @@ import {
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "../ideas.js";
 import {
+  inputFingerprint as timelineFingerprint,
+  isStale as timelineIsStale,
+  PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
+} from "../timeline.js";
+import {
   inputFingerprint as sketchFingerprint,
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
@@ -72,6 +77,7 @@ import {
   type BlockFingerprint,
   hashBlocks,
   type MetaFingerprint,
+  type MetaFingerprintDated,
   type MetaFingerprintWithUrl,
 } from "../source-hash.js";
 import { isStale as tweetsStale } from "../tweets.js";
@@ -89,6 +95,8 @@ import type {
   Ideas,
   IdeasFound,
   SketchFound,
+  Timeline,
+  TimelineFound,
   LibraryEntry,
   ListOptions,
   Meta,
@@ -285,6 +293,7 @@ type RevisionReader =
   | "glossary"
   | "quotes"
   | "ideas"
+  | "timeline"
   | "sketch"
   | "arc";
 
@@ -301,7 +310,7 @@ const REVISION_READ_POLICY: Record<
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", arc: "value",
+    sketch: "value", arc: "value", timeline: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -320,21 +329,36 @@ const REVISION_READ_POLICY: Record<
   title: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value",
+    sketch: "value", timeline: "value",
   },
   byline: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value",
+    sketch: "value", timeline: "value",
   },
   siteName: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value",
+    sketch: "value", timeline: "value",
   },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
+  /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
+     is the one stage whose freshness fingerprint carries the publication date
+     (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
+     year-less "on July 7" is read against. `article` and `library` take it
+     because it is a `Meta` field and both rebuild a `Meta` through `metaFrom`;
+     the library sorts on `fetchedAt` and shows this nowhere yet, but a `Meta`
+     assembled without it would be a different artefact from the one on disk and
+     tests/store-parity.test.ts compares the two.
+
+     Deliberately **not** on `ideas`, `sketch`, `arc`, `tweets`, `glossary` or
+     `quotes`: none of their prompts prints a date, so a fingerprint over it
+     would spend a paid model call every time a publisher re-dated a post. */
+  publishedAt: {
+    article: "value", library: "value", metadata: "value", timeline: "value",
+  },
   /* `ideas`, `sketch` and `metadata` since 2026-08-31: those two stages send
      `articleWithIds`, whose head prints a `URL:` line, so their freshness
      fingerprint covers it and a read that could not see the column would report
@@ -343,6 +367,9 @@ const REVISION_READ_POLICY: Record<
      over a line the model was never shown spends a model call for nothing. */
   finalUrl: {
     article: "value", library: "value", metadata: "value", ideas: "value", sketch: "value",
+    /* `timeline` sends `articleWithIds` too, so its head prints the same
+       `URL:` line — it is the cited set plus the date, not a set of its own. */
+    timeline: "value",
   },
   fetchedAt: { article: "value", library: "value" },
   rawSha256: { article: "value", library: "value" },
@@ -375,7 +402,7 @@ const REVISION_READ_POLICY: Record<
        cost is small where it lands — each of these reads already pulls every
        block's id and text through `blockHashInputs` to compute the same
        fingerprint, which is the whole article. */
-    arc: "value", sketch: "value",
+    arc: "value", sketch: "value", timeline: "value",
     tweets: "value", glossary: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
@@ -416,14 +443,11 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and **not the library**: a card shows
      four ticks and a fifth would not fit — the same call `sketch` makes below. */
   quotes: { metadata: "value", quotes: "value" },
-  /* **The one column nothing reads and nothing writes**, since 2026-08-31.
-     The generated length ladder was deleted (docs/plans/gist-only-summaries.md)
-     and the column was deliberately left where it is: dropping a column is not
-     reversible and what is in it is real readers' summaries. An empty policy is
-     what makes that visible rather than merely true — a reader added here would
-     be reviving a stage that no longer exists. */
-  summary: {},
   ideas: { metadata: "value", ideas: "value" },
+  /* Its own reader and the metadata page, and **not the library**, on the same
+     call `quotes` and `sketch` make: a card shows four ticks and a fifth would
+     not fit. */
+  timeline: { metadata: "value", timeline: "value" },
   /* Its own reader and the metadata page, and **not the library**: a card shows
      four ticks and a fifth would not fit, and a scene is the widest artefact
      here — up to 46KB of coordinates — so reading it to answer a boolean on a
@@ -479,6 +503,7 @@ const META_COLUMNS = {
   siteName: articleRevisions.siteName,
   lang: articleRevisions.lang,
   excerpt: articleRevisions.excerpt,
+  publishedAt: articleRevisions.publishedAt,
   note: articleRevisions.note,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
@@ -528,6 +553,23 @@ const FINGERPRINT_COLUMNS = {
 const CITED_FINGERPRINT_COLUMNS = {
   ...FINGERPRINT_COLUMNS,
   finalUrl: articleRevisions.finalUrl,
+} as const;
+
+/**
+ * The cited set **plus `published_at`**, for the one read whose stage is judged
+ * on the publication date — `timeline`, and no other
+ * (src/source-hash.ts § `MetaFingerprintDated`).
+ *
+ * A third constant rather than widening the second, for the identical reason
+ * the second is not a widening of the first: `ideas` and `sketch` must **not**
+ * be judged on a date their prompt never prints, and a shared set is how they
+ * would quietly acquire one. Widening `MetaFingerprint` itself would have been
+ * worse still — it feeds five paid stages, so the first article re-extracted
+ * would mark all five stale over bytes no model ever saw.
+ */
+const DATED_FINGERPRINT_COLUMNS = {
+  ...CITED_FINGERPRINT_COLUMNS,
+  publishedAt: articleRevisions.publishedAt,
 } as const;
 
 /**
@@ -606,6 +648,11 @@ export const REVISION_PROJECTIONS = {
     glossary: articleRevisions.glossary,
     quotes: articleRevisions.quotes,
     ideas: articleRevisions.ideas,
+    timeline: articleRevisions.timeline,
+    /* For `timeline`, and for it alone — this page asks every step "would we
+       write this again today", so it needs whatever the widest of them is
+       judged on, and `timeline` is judged on the publication date. */
+    publishedAt: articleRevisions.publishedAt,
     /* The fifth artefact that can carry a `profileHash`, and it is here for
        that alone: `personalisedSteps` must be exhaustive or the confirmation
        dialog tells an owner nothing was personalised while a picture drawn for
@@ -633,6 +680,16 @@ export const REVISION_PROJECTIONS = {
      whose head prints no `URL:` line — src/models.ts § ARTICLE_RENDERER. */
   quotes: { id: articleRevisions.id, quotes: articleRevisions.quotes, ...FINGERPRINT_COLUMNS },
   ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, ...CITED_FINGERPRINT_COLUMNS },
+  /* **The one projection on `DATED_FINGERPRINT_COLUMNS`.** Everything the cited
+     set has, plus `published_at`, because this artefact's `sourceHash` covers
+     the date — and a read that could not see the column would compute a
+     fingerprint with an empty date in it and report the timeline stale for
+     ever, on every article that has one. */
+  timeline: {
+    id: articleRevisions.id,
+    timeline: articleRevisions.timeline,
+    ...DATED_FINGERPRINT_COLUMNS,
+  },
   sketch: {
     id: articleRevisions.id,
     sketch: articleRevisions.sketch,
@@ -898,6 +955,11 @@ function metaFrom(
     ...(revision.finalUrl === null ? {} : { url: revision.finalUrl }),
     ...(revision.fetchedAt === null ? {} : { fetchedAt: revision.fetchedAt.toISOString() }),
     ...(revision.excerpt === null ? {} : { excerpt: revision.excerpt }),
+    /* **Straight through, never re-parsed.** The column is `text` holding the
+       publisher's own ISO string in the publisher's own frame, and
+       `new Date(s).toISOString()` here would move the calendar day — which is
+       the whole content of this field. src/db/schema.ts § `publishedAt`. */
+    ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
     ...(revision.note === null ? {} : { note: revision.note }),
     /* PDF provenance, so the spread pattern above is load-bearing here too:
        `source: null` in `meta.json` is not the same artefact as no `source`
@@ -951,6 +1013,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   glossary: ["article_revisions.glossary"],
   quotes: ["article_revisions.quotes"],
   ideas: ["article_revisions.ideas"],
+  timeline: ["article_revisions.timeline"],
   sketch: ["article_revisions.sketch"],
 };
 
@@ -1060,6 +1123,37 @@ export function citedMetaFingerprintOf(revision: {
   const base = metaFingerprintOf(revision);
   if (base === null) return null;
   return { ...base, ...(revision.finalUrl == null ? {} : { url: revision.finalUrl }) };
+}
+
+/**
+ * The cited head **plus the publication date** — the fingerprint head for
+ * `timeline`, and for nothing else.
+ *
+ * A third function rather than a fourth argument, for the reason
+ * `citedMetaFingerprintOf` is a second one: the stages that must not be judged
+ * on a date cannot then acquire one by a caller passing something extra.
+ * `DATED_FINGERPRINT_COLUMNS` is the projection that feeds it, and requiring
+ * `publishedAt` in the argument type makes a projection that forgot the column a
+ * compile error here rather than a fingerprint quietly built with no date in it.
+ *
+ * **`null` propagates from the base.** No metadata at all is a real, common
+ * state — most of the shelf — and it must hash the same way on both sides of the
+ * seam, which is what `datedArticleFingerprint` handles by hashing the absent
+ * date as `""`.
+ */
+export function datedMetaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+  finalUrl: string | null;
+  publishedAt: string | null;
+}): MetaFingerprintDated | null {
+  const base = citedMetaFingerprintOf(revision);
+  if (base === null) return null;
+  return {
+    ...base,
+    ...(revision.publishedAt == null ? {} : { publishedAt: revision.publishedAt }),
+  };
 }
 
 /**
@@ -1575,6 +1669,7 @@ export const pgArticleReader: Pick<
   | "loadGlossary"
   | "loadQuotes"
   | "loadIdeas"
+  | "loadTimeline"
   | "loadSketch"
   | "loadArc"
 > = {
@@ -1763,6 +1858,9 @@ export const pgArticleReader: Pick<
        when there is no metadata at all. src/source-hash.ts. */
     const metaFingerprint = metaFingerprintOf(revision);
     const citedFingerprint = citedMetaFingerprintOf(revision);
+    /* The cited head plus the publication date, for `timeline` alone — the only
+       stage judged on it. src/source-hash.ts § `MetaFingerprintDated`. */
+    const datedFingerprint = datedMetaFingerprintOf(revision);
     /* The fingerprint every article-reading stage stamps, computed once beside
        `blocksHash` for the same reason: several arms below want it, and `null`
        is "we cannot tell", which answers not-current for all of them. */
@@ -1826,6 +1924,28 @@ export const pgArticleReader: Pick<
         }
         case "ideas":
           return ideasAreCurrent(revision, blocks, citedFingerprint);
+        /* The same shape as `ideas`, over one more value: the publication date.
+           Without an arm here the step falls to `default: true` and every
+           completed run reports itself current on the one page whose job is to
+           say otherwise — which is what happened to `ideas` and then to
+           `sketch`. tests/store-revision-columns.test.ts now holds every stamped
+           step to having an arm. */
+        case "timeline": {
+          const timeline = revision.timeline as Timeline | null;
+          if (!timeline || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: timeline.sourceHash,
+              promptVersion: timeline.version,
+              model: timeline.generator,
+            },
+            {
+              inputHash: timelineFingerprint(blocks, tree, datedFingerprint),
+              promptVersion: TIMELINE_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* The same shape as `ideas`, and absent until 2026-08-31 — see
            `sketchIsCurrent`. tests/store-revision-columns.test.ts now holds
            every stamped step to having an arm here, rather than naming the one
@@ -2081,6 +2201,45 @@ export const pgArticleReader: Pick<
       ideas,
       stale: !tree || ideasAreStale(ideas, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The timeline on its own — the Postgres half of `loadTimeline`.
+   *
+   * **Four inputs, where `loadIdeas` above needs three**, and the fourth is the
+   * publication date. `datedArticleFingerprint` covers it because it is the
+   * frame every year-less date in the artefact was read against, so a
+   * comparison without it would call a re-dated article's timeline current
+   * while the filesystem store called it stale.
+   *
+   * **An empty `events` list is NOT a 404**, unlike the sketch's empty scene
+   * list below. Most articles have no chronology, so a timeline with nothing in
+   * it is the expected answer for them and the panel has a sentence for it —
+   * `SHAPE.timeline` in src/store/artifacts.ts makes the same call and says why.
+   * A 404 here would send the reader to a POST that pays for the same empty
+   * answer again on every open.
+   */
+  async loadTimeline(slug: string): Promise<TimelineFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "timeline");
+    if (!found) throw notFound(slug);
+
+    const timeline = found.revision.timeline as Timeline | null;
+    if (!timeline) {
+      throw Object.assign(
+        new Error(`No timeline for "${slug}" yet. Build one with \`npm run timeline -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      timeline,
+      stale:
+        !tree ||
+        timelineIsStale(timeline, blocks, tree, datedMetaFingerprintOf(found.revision)),
+      outdated: timeline.version !== TIMELINE_PROMPT_VERSION,
     };
   },
 

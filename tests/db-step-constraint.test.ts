@@ -35,23 +35,6 @@ import { STEP_ORDER } from "../src/pipeline.js";
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
 
-/**
- * Names the constraint still permits that are no longer steps — and each one
- * has to be justified here rather than merely tolerated.
- *
- * `'summary'` was stage 5e, deleted on 2026-08-31
- * (docs/plans/gist-only-summaries.md). Taking it out of the CHECK means
- * dropping and re-adding the constraint, and Postgres validates a new CHECK
- * against the rows already in the table — so any `revision_step_runs` row from
- * a summary run would have to be deleted first, which is real readers' history
- * destroyed to tidy a list. A permitted value nothing writes costs nothing.
- *
- * **This list is not a free pass.** A name belongs here only after the step is
- * gone from the code; a name added here to make a red test green is the exact
- * rot the assertion below exists to catch.
- */
-const RETIRED = ["summary"];
-
 /** Every `.sql` migration, oldest first — the numeric prefix is the order. */
 function migrations(): { file: string; sql: string }[] {
   return readdirSync(DRIZZLE)
@@ -96,17 +79,22 @@ describe("the revision_step_runs step constraint", () => {
     expect(declaredSteps()).not.toBeNull();
   });
 
-  it("lists exactly the steps the pipeline can run, plus the retired ones", () => {
+  it("lists exactly the steps the pipeline can run", () => {
     const found = declaredSteps();
     expect(found).not.toBeNull();
     const declared = [...(found as { steps: string[] }).steps].sort();
-    const real = [...STEP_ORDER, ...RETIRED].sort();
+    const real = [...STEP_ORDER].sort();
 
     /* Both directions, and the second one matters as much as the first. A step
        missing from the constraint kills a job at the insert; a name in the
-       constraint that is neither a step nor listed in `RETIRED` above is a rule
-       about something that does not exist, which is how a list rots into being
-       unreadable. */
+       constraint that is no longer a step is a rule about something that does
+       not exist, which is how a list rots into being unreadable.
+
+       **Taking a name out has a trap the other direction does not**, and
+       `'summary'` walked into it on 2026-08-31: Postgres validates a re-added
+       CHECK against the rows already in the table, so the migration has to
+       delete that step's runs before it narrows the constraint.
+       `drizzle/0036_drop_summary_column.sql` does, in that order. */
     expect(declared).toEqual(real);
   });
 

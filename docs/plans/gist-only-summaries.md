@@ -77,33 +77,37 @@ come down inside the article. It joins `hierarchy` and `outline` in `visitorGap`
 The offline cache allowlist is `src/web/lib/api.ts` (not `lib/offline-store.ts`, which is prose) and
 loses its `/api/summary/` entry.
 
-**The database column stays, and this is the one deliberate exception.** `article_revisions.summary`
-holds real readers' summaries and dropping a column is not reversible. The migration that drops it is
-a separate, one-line follow-up that **needs Greg's explicit sign-off** and can happen any time, or
-never (AGENTS.md § Real data belongs to the reader).
+**The database column goes too, and that is a second decision.** The first version of this landing
+kept `article_revisions.summary` on the grounds that dropping a column is irreversible and what is in
+it is real readers' summaries. Greg, 2026-08-31, after seeing that:
 
-The first draft of this plan said *"nothing will read or write it after this"*, and
-[GPT Sol's review](gist-only-summaries-review-sol.md) returned NO-SHIP partly on that sentence being
-false: `REVISION_CARRY_POLICY` classifies `summary` as `"carry"`, `carriedColumns()` derives the copy
-list from the schema, and `beginDraftIn` copies it into every new revision. Taking it out of that
-policy would either throw or strand the bytes on old revisions, which is data loss with no migration
-to blame it on. So the honest statement is narrower and it is the one that ships:
+> We're still in Alpha, so we don't care about the data we have right now. So if we don't need a
+> column going forwards, let's discard it to keep things tidy. Authorised to run the migration
+> locally and on prod.
 
-> Nothing **serves, compares, regenerates or interprets** those bytes. `beginDraftIn` still carries
-> them forward, and `tests/store-carry-forward.test.ts` now asserts the carried value is byte-equal
-> rather than merely non-null. `REVISION_READ_POLICY.summary` is `{}` — granted to no read at all —
-> and `tests/store-revision-columns.test.ts` holds it there.
+`drizzle/0036_drop_summary_column.sql`. It also **narrows the `revision_step_runs_step` CHECK**, and
+the order inside that file is the whole of its difficulty: Postgres validates a re-added CHECK
+against the rows already in the table, so the migration deletes the `summary` step runs *before* it
+adds the narrowed constraint. Adding a name to that list is free; taking one out is not.
 
-**The file stops travelling, and the column does not.** `copyArtefacts` is the production write path
-and it moves artefact *kinds*; `summary` is not one any more, so `db:export` no longer writes
-`summary.json` and `db:import` no longer reads it. Writing a file no importer can put back would be
-worse than not writing it. What backs up a database is a database backup, and the column is in it.
+**Keeping it would not have worked anyway**, which is the useful part.
+[GPT Sol's review of the built code](gist-only-summaries-code-review-sol.md) returned NO-SHIP on two
+findings that were both about the retained column, and both dissolve now it is gone:
 
-**The `revision_step_runs_step` CHECK keeps `'summary'`.** Narrowing it means dropping and re-adding
-a constraint that Postgres validates against existing rows, so any historical summary step run would
-have to be deleted first — real history destroyed to tidy a list. `tests/db-step-constraint.test.ts`
-gains a `RETIRED` list naming it, so the constraint is documented as permitting a value nothing
-writes rather than quietly rotting.
+- `db:import` mints a new revision when the block fingerprint changes, and that revision's `summary`
+  would be `NULL` — so the bytes strand on a revision that is no longer current, and every later
+  `beginRevision` carries the `NULL` forward. The carry policy was protecting the data from the
+  wrong direction.
+- *"Nothing reads it"* was false. `REVISION_READ_POLICY` governs `REVISION_PROJECTIONS` and nothing
+  else, and two bare `.select()` calls — `artifacts-pg.ts` for ordinary artefact reads and
+  `export.ts` — pull every column of the row. An empty policy entry documented an intention rather
+  than enforcing it.
+
+**Deploy order is the one hazard left**, and it is not in this repo's gift to fix quietly:
+`scripts/deploy.ts` applies migrations **before** it pushes, so a single `npm run deploy` would drop
+the column while the previously-deployed code still selects it — 500s on the public article read for
+the length of a Vercel build. It has to go out as two runs: `--skip-migrations` first, so the code
+that no longer names the column is live, then an ordinary deploy to apply the drop.
 
 **The tests.** `tests/summarise.test.ts` and `tests/summary-stamp.test.ts` go. The plan's first
 draft claimed six others merely used `summarise` as a handy example of a step and could all be
@@ -111,8 +115,7 @@ re-pointed; Sol read each one and only **`profile-prompts`** turned out to be a 
 now covers `quotes`, which had no profile coverage at all). The rest were testing this stage:
 `block-policy-prompts` and `job-failure` lose their summary cases with the stage,
 `pipeline-artifact-store` loses its summary rows, `supplement` keeps the gist-only apparatus test and
-loses the stored-summary join, and `store-carry-forward` keeps a case — rewritten around the retired
-column. `summary-expand.test.tsx` keeps its cases and loses the props that no longer exist.
+loses the stored-summary join, and `store-carry-forward` loses its summary fixture with the column. `summary-expand.test.tsx` keeps its cases and loses the props that no longer exist.
 
 Sol also found six more the plan had missed entirely, none of which a typecheck would have caught:
 `stop-details`, `parse-json`, `paid-cli-ledger`, `public-imports`, `deploy-checks` and

@@ -246,6 +246,20 @@
       "when": 1788163164707,
       "tag": "0034_flowery_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788200000000,
+      "tag": "0035_timeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788175229610,
+      "tag": "0036_drop_summary_column",
+      "breakpoints": true
     }
   ]
 }

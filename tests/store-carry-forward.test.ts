@@ -286,30 +286,6 @@ const tweetsFor = (hash: string): TweetThread => ({
   elapsedMs: 1,
 });
 
-/**
- * **The retired column, as opaque bytes.**
- *
- * Stage 5e wrote a `Summaries` here until 2026-08-31
- * (docs/plans/gist-only-summaries.md). The stage, the type and the reader are
- * all gone; `article_revisions.summary` was kept, because what is in it on a
- * real database is real readers' summaries.
- *
- * **So what this fixture is for changed, and it is now the more important of
- * the two jobs it ever had.** It is no longer a shape anything parses — hence
- * the deliberately foreign fields — it is a witness that `beginDraftIn` still
- * copies the column forward byte for byte. Take `summary` out of
- * `REVISION_CARRY_POLICY` (src/store/pg-revisions.ts) and the bytes strand on
- * the old revision, which is data loss with no error and no migration to blame
- * it on. That is the extra assertion beside the carry list below.
- */
-const RETIRED_SUMMARY = {
-  version: "summary/4",
-  generator: CAPABLE_MODEL,
-  slug: SLUG,
-  entries: [{ range: [B1[0]?.id ?? "", B1[B1.length - 1]?.id ?? ""], depth: 0, short: "A fixture, summarised." }],
-  missing: 0,
-} as const;
-
 /* ------------------------------------------------- standing in for stage 5 -- */
 
 /**
@@ -459,7 +435,6 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
         assets: assetsFor(HASH1),
         tweets: tweetsFor(FINGERPRINT1),
         glossary: glossaryFor(FINGERPRINT1),
-        summary: RETIRED_SUMMARY,
       })
       .where(eq(articleRevisions.id, firstRevision));
 
@@ -538,14 +513,9 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        to point at bytes that have gone — and NOT carrying it would leave an
        article hot-linking every image again after an unrelated `{steps:
        ["blocks"]}` run, with nothing anywhere saying so. */
-    for (const column of ["tree", "arc", "assets", "tweets", "glossary", "summary"] as const) {
+    for (const column of ["tree", "arc", "assets", "tweets", "glossary"] as const) {
       expect(draft?.[column], `${column} should have been carried`).not.toBeNull();
     }
-    /* **And the retired one came through unchanged, not merely non-null.**
-       `summary` is the only column here nothing reads, so a `not.toBeNull()`
-       is the whole of what stands between it and being quietly dropped — see
-       `RETIRED_SUMMARY` above. GPT Sol's review of this plan, 2026-08-31. */
-    expect(draft?.summary).toEqual(RETIRED_SUMMARY);
 
     /* And the five that must NOT be carried. They are derivations of the blocks
        and the tree, so a copied `block_count` beside changed blocks is not a

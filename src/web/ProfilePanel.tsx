@@ -247,7 +247,7 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
           prompt rather than here (src/profile.ts § PROFILE_RULES). It is what
           makes a personalised glossary safe to read. */}
       <p className="prof-panel-lede">
-        What the glossary, the summaries, chat and explanations are written for. It changes what
+        What the glossary, the ideas, chat and explanations are written for. It changes what
         gets explained and how much — never what the article says.
       </p>
       <Box

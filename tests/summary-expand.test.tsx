@@ -429,3 +429,66 @@ describe("the apparatus in summary mode", () => {
     expect(rowFor("First part")!.className).not.toContain("supplement");
   });
 });
+
+/**
+ * **A panel with nothing in it must say so**, and until 2026-08-31 it did not.
+ *
+ * GPT Sol's review of the built code found the state. `tree-invariants.ts`
+ * permits a root that is a **leaf** — one block, and no gist, because a summary
+ * must never stand where the real prose could (granularity-zoom.md § node
+ * shape). A one-passage article is exactly that. `buildSummaryTree` returns it,
+ * so `root` is non-null and the "no usable tree" line does not fire; the root
+ * draws no title row, no range and no missing-summary text; and with no
+ * children there is no `+N` badge either. The reader got the word SUMMARY, the
+ * Depth pills, and a blank panel with no explanation.
+ *
+ * It matters more since the mode stopped being gated: a visitor used to be told
+ * *"nobody has built a summary for this piece yet"* and now opens the band
+ * unconditionally (src/web/visitor.ts), so this is the state they land in.
+ *
+ * The same line covers a tree whose gists were never written — a provisional
+ * heading tree — for the same reason, which is that there is nothing to draw.
+ */
+describe("an article with nothing to outline", () => {
+  /** The root as a leaf: one block, no gist, no children. The validator's own case. */
+  const lonely = (): SummaryNode => {
+    const n = node("root", 0, "The whole thing", null);
+    delete (n as { gist?: string }).gist;
+    return { node: n, number: "", startRow: 0, endRow: 0, blocks: 1, children: [] };
+  };
+
+  const render = (r: SummaryNode) =>
+    act(() => {
+      root.render(
+        createElement(SummaryPanel, {
+          root: r,
+          deep: 1,
+          onDeep: (d: number) => deeps.push(d),
+          atRow: null,
+          onJump: () => {},
+        }),
+      );
+    });
+
+  it("says there is nothing to outline rather than drawing an empty list", () => {
+    render(lonely());
+    expect(titles()).toEqual([]);
+    expect(badges()).toEqual([]);
+    expect(host.querySelector(".summ-quiet")?.textContent).toContain("no parts");
+    /* Not the other sentence. "No usable tree" is about a tree we could not
+       read, and this tree is perfectly good — it just has one passage in it.
+       Saying the wrong one of those reports a fault where there is none. */
+    expect(host.textContent).not.toContain("no usable tree");
+  });
+
+  it("still draws a root that has a gist but no parts", () => {
+    /* The control, and the reason the condition is `no gist AND no children`
+       rather than either alone: a short article whose root carries a gist has
+       exactly one useful row, and hiding it behind an empty-state message would
+       be the same bug pointing the other way. */
+    const withGist = { ...lonely(), gist: "The gist of the whole thing." };
+    render(withGist);
+    expect(host.querySelector(".summ-text")?.textContent).toBe("The gist of the whole thing.");
+    expect(host.querySelector(".summ-quiet")).toBeNull();
+  });
+});

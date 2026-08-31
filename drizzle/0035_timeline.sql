@@ -1,0 +1,59 @@
+-- Timeline: when the piece says things happened, in what order, and how sure it
+-- actually is — docs/project/timeline.md, docs/plans/timeline-mode.md.
+--
+-- Two columns and a constraint, and the two columns are for different stages.
+--
+-- `article_revisions.timeline` is one JSONB column beside `ideas`, `quotes` and
+-- `sketch`, for the reason src/db/schema.ts gives on all of them: the WHOLE
+-- artefact, because `sourceHash` is what lets the panel ask whether the article
+-- has moved underneath it. Here that hash covers something none of the others do
+-- — the **publication date** (`datedArticleFingerprint`, src/source-hash.ts, and
+-- this is the only stage that uses it), which is the reference frame for nineteen
+-- of the twenty-four temporal expressions on the test article. A publisher
+-- re-dating a post changes almost every row in this column and not one word in
+-- any other.
+--
+-- `article_revisions.published_at` belongs to stage 2, not to this one, and it is
+-- here because until it exists `Meta.publishedAt` cannot survive a round trip:
+-- `META_COLUMNS` in src/store/artifacts-pg.ts enumerates stage 2's fields
+-- explicitly, so the field would come back missing and the timeline would read
+-- every year-less date against nothing.
+--
+-- **`text`, not `timestamp`, and that is the decision rather than an oversight.**
+-- Postgres normalises `timestamp with time zone` to UTC, and 8pm on 31 December
+-- in New York comes back as 1 January. The calendar day is the entire content of
+-- this field, so a column that can move it by one silently mis-dates a row. The
+-- publisher's own ISO string is kept verbatim. `fetched_at` beside it is a real
+-- timestamp because it is an instant we recorded; this is a claim somebody else
+-- published, and the two are not the same kind of fact.
+--
+-- **The CHECK is hand-written, and this comment is the fifth in a row saying so.**
+-- `drizzle-kit generate` diffs src/db/schema.ts and has no idea a check
+-- expression exists — which is how `'summary'`, `'assets'` (0029) and `'sketch'`
+-- (0031) were each left behind in turn. The failure is a job dying inside
+-- `revision_step_runs` with a `23514 check_violation` a long way from the cause.
+-- `tests/db-step-constraint.test.ts` reads these files statically and is what
+-- makes there not be a sixth: it went red the moment `'timeline'` entered
+-- `STEP_ORDER` and stayed red until this statement was written.
+--
+-- Dropped and re-added rather than altered because Postgres has no ALTER for a
+-- check expression.
+--
+-- `'summary'` is still in the list and is not a step any more
+-- (docs/plans/gist-only-summaries.md). Taking it out would mean validating the
+-- new CHECK against `revision_step_runs` rows that a real summary run wrote, so
+-- it stays permitted and unwritten — `RETIRED` in tests/db-step-constraint.test.ts
+-- names it rather than letting the list quietly rot.
+--
+-- **Written by hand against the next free number, without `drizzle-kit generate`**
+-- — two other sessions were holding 0033 and 0034 when this was written, and
+-- generating into a half-written `_journal.json` produces two migrations with the
+-- same index. `meta/0035_snapshot.json` was therefore written by hand too, from
+-- 0034's, with these two columns and the new check value added; it is what the
+-- NEXT `drizzle-kit generate` diffs against, so if it were missing the next
+-- generated migration would re-emit both columns.
+
+ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "published_at" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "timeline" jsonb;--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_step" CHECK ("spideryarn"."revision_step_runs"."step_name" in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','timeline','sketch'));

@@ -251,12 +251,6 @@ export const REVISION_CARRY_POLICY: Record<
      the panel says so — which is the same bargain the sketch strikes below:
      something to look at, honestly labelled, until the step re-runs. */
   quotes: "carry",
-  /* **Carries although nothing reads it.** The column is retired
-     (docs/plans/gist-only-summaries.md) and left in place with real readers'
-     summaries in it; `"drop"` here would quietly delete them on the next
-     re-extraction, which is the one outcome keeping the column was meant to
-     prevent. */
-  summary: "carry",
   /* Carries like its four neighbours, and its staleness is answered the same
      way: `sourceHash` on the artefact against the blocks and tree now, computed
      at read time. What is different is that a carried `ideas` also survives a
@@ -272,6 +266,12 @@ export const REVISION_CARRY_POLICY: Record<
      whose block ids no longer resolve. That degradation is `readSketch`'s, and
      it is the reason a stale sketch is worth keeping rather than discarding. */
   sketch: "carry",
+  /* Carries like the six above, and the same read-time `sourceHash` answers
+     whether it is stale — with one input none of them has: the publication
+     date. So a re-extraction that changes only the date leaves this artefact
+     carried and correctly reported stale, which is what we want, because every
+     year-less date in it was read against the old one. */
+  timeline: "carry",
 };
 
 const MINTED = new Set(

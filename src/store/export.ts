@@ -394,6 +394,12 @@ export async function exportArticle(
     url: revision.finalUrl,
     fetchedAt: revision.fetchedAt?.toISOString() ?? null,
     excerpt: revision.excerpt,
+    /* **Verbatim, never re-parsed** — the column is `text` holding the
+       publisher's own ISO string in their own frame, and putting it through a
+       `Date` here would move the calendar day, which is the whole content of
+       the field. Placed where stage 2 writes it, so the round trip is
+       byte-identical. src/db/schema.ts § `publishedAt`. */
+    publishedAt: revision.publishedAt,
     note: revision.note,
     source: revision.source,
     method: revision.extractMethod,
@@ -449,15 +455,11 @@ export async function exportArticle(
   if (revision.assets) await put("assets.json", revision.assets);
   if (revision.tweets) await put("tweets.json", revision.tweets);
   if (revision.glossary) await put("glossary.json", revision.glossary);
-  /* **No `summary.json`.** The `summary` artefact kind went with stage 5e on
-     2026-08-31 (docs/plans/gist-only-summaries.md), so the column is not this
-     store's to move any more — `copyArtefacts` cannot carry it in and this
-     cannot carry it out. The bytes are not lost: the column was deliberately
-     kept, `REVISION_CARRY_POLICY` still copies it into every new revision
-     (src/store/pg-revisions.ts), and a database backup is what backs a database
-     up. What would be dishonest is writing a file no importer can put back. */
+  /* No `summary.json`: stage 5e, the `summary` artefact kind and the column
+     that held it all went on 2026-08-31 (docs/plans/gist-only-summaries.md). */
   if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.quotes) await put("quotes.json", revision.quotes);
+  if (revision.timeline) await put("timeline.json", revision.timeline);
   if (revision.sketch) await put("sketch.json", revision.sketch);
   if (revision.labels) await put("labels.json", revision.labels);
 

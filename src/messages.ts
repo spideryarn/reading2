@@ -488,7 +488,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, summarise, toc, glossary, tweets — each
+ * Six pipeline stages — arc, labels, toc, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress
@@ -830,7 +830,7 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
  *
  * ## A const, not a factory taking a noun
  *
- * The glossary, the summaries and the ideas all reload behind what is on
+ * The glossary, the quotes and the ideas all reload behind what is on
  * screen, so `recheckFailed(noun)` is the obvious shape. It is the wrong one:
  * two nouns are two different sentences sharing one code, and *that* is the one
  * thing tests/messages.test.ts forbids outright — a code names a branch, and a
@@ -1335,7 +1335,7 @@ export function sharingConfirmBody(title: string): string {
  * somebody operating a build.
  */
 export const SHARING_PERSONALISED =
-  "The summaries, glossaries and ideas here may have been written for your reader profile, and they " +
+  "The glossaries, ideas and quotes here may have been written for your reader profile, and they " +
   "go out exactly as they are. None of them quotes it — but what a profile made them skip is still " +
   "visible in what they kept.";
 

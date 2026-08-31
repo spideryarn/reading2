@@ -422,7 +422,19 @@ describe("the summary panel's tree", () => {
   it("keeps the body parts numbered as if the apparatus were not there", () => {
     const built = buildSummaryTree(tree, blocks)!;
     const body = built.children.filter((c) => !isSupplementNode(c.node));
-    expect(body.map((c) => c.number)).toEqual(body.map((_, i) => String(i + 1)));
+    /* **The expected list comes from somewhere else**, and the first version of
+       this did not: it compared `body` against `body.map((_, i) => …)`, so if
+       every body part vanished from the panel it compared `[]` with `[]` and
+       passed. GPT Sol's review of the built code, 2026-08-31.
+
+       `partsOf(bodyTree)` is a different tree walked by a different function —
+       the article before the apparatus was appended — so it answers "how many
+       parts are there" without asking the thing under test. The length
+       assertion is what stops *that* going empty and taking the comparison with
+       it. */
+    const expected = partsOf(bodyTree).map((_, i) => String(i + 1));
+    expect(expected.length, "the fixture has no body parts to number").toBeGreaterThan(1);
+    expect(body.map((c) => c.number)).toEqual(expected);
   });
 });
 

@@ -724,7 +724,7 @@ export function Metadata({
               id="article-purpose"
               label="Why you're reading this one"
               placeholder="e.g. I want the evidence, not the history"
-              hint="Changes what the glossary, the summaries, chat and explanations put first — for this article only. Never what the article says."
+              hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
               value={purposeDraft ?? ""}
               onChange={setPurposeDraft}
               onCommit={savePurpose}
