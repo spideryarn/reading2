@@ -48,6 +48,9 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   runs on the box: `--wait`'s durations and the argv for `ssh <command>`. Split out for the same
   reason as the rest — `gjd-remote.ts` calls `main()` at import time, so nothing in it can be
   unit-tested at all: [`tests/gjd-remote-run.test.ts`](../../tests/gjd-remote-run.test.ts).
+- [`scripts/gjd-remote-log.ts`](../../scripts/gjd-remote-log.ts) — the append-only record of what was
+  asked for, and the verdict that says which launches never ran. Tested in
+  [`tests/gjd-remote-log.test.ts`](../../tests/gjd-remote-log.test.ts); see [The log](#the-log).
 
 **The machine**
 
@@ -149,7 +152,8 @@ waiting begins. Three things follow from where the sleep is:
 
 Two things it is not. **It is not a queue** — nothing counts how many sessions are running, and ten
 `--wait 2h` jobs all start at once, two hours from now. And **a waiting session does not survive the
-box rebooting**; nothing does, and there is no replay. Why neither was built, and what would have to
+box rebooting**; nothing does, and there is no replay. What there is instead is a record: [The log](#the-log) below, and
+`gjd-remote log --lost`. Why neither was built, and what would have to
 be true to build them, is in
 [../plans/260901a-gjd-remote-wait-duration-and-ssh-command.md](../plans/260901a-gjd-remote-wait-duration-and-ssh-command.md).
 
@@ -168,6 +172,46 @@ opened a login shell, printed the MOTD and exited 0. Asking the box a question a
 welcome banner is [silent-success.md](../reusable/silent-success.md) in one line — the exit code
 said the command had run, and it had never existed. Everything after `ssh` now goes through
 unparsed, because a command's own flags are not ours to read.
+
+## The log
+
+Every `gjd-remote` command appends one line to
+`${XDG_STATE_HOME:-~/.local/state}/gjd-remote/gjd-remote.ndjson` — `gjd-remote log --path` prints
+where, `GJD_REMOTE_LOG_DIR` moves it. Launches add a second, richer line, and
+**`gjd-remote log --lost` says which of them never became a Claude**, exiting non-zero if any did
+not.
+
+> My only worry is that we might schedule a prompt with a long wait period, and then something
+> happens (e.g. the remote server gets rebooted) and it gets lost.
+>
+> — Greg, 2026-09-01
+
+That is what it is for. A `--wait` job is a `sleep` in a tmux session, and **a session that a reboot
+ate looks exactly like one that finished** — both are simply absent. So the evidence comes from two
+places: the laptop records the intent, and the job script on the box appends one line to
+`~/gjd-remote/log/starts.ndjson` the instant before it execs Claude. `/home` is a separate volume,
+so that line outlives the machine being rebuilt, not merely rebooted.
+
+Four things about it, each of which is a decision rather than a detail:
+
+- **The transcript cannot answer this**, and was the first design. A session started with no prompt
+  had **no** `~/.claude/projects/*/<uuid>.jsonl` after 45 seconds while its process was running,
+  because the file is written from the first message; with a prompt one appeared within 15 seconds.
+  So a transcript proves Claude ran and its absence proves nothing — the wrong way round.
+- **A job you killed is not a loss.** Kills are recorded too, and matched **by uuid**, because `ls`
+  renames a session to Claude's title and the name you kill is usually not the name it was launched
+  under.
+- **It is not in the repo**, though "git-ignored" is what was asked for: worktrees would split the
+  record across checkouts, and the repo is inside Dropbox, so an append-only file there syncs on
+  every command.
+- **It never holds the prompt** — no argv field, no prompt field, only the length and the path on
+  the box. It does hold the session *name*, and for an unnamed session that name is the first five
+  words of the prompt, so the file is `0600` in a `0700` directory and is not as harmless as it
+  looks.
+
+[../plans/260901c-gjd-remote-log-for-lost-waited-jobs.md](../plans/260901c-gjd-remote-log-for-lost-waited-jobs.md)
+has the reasoning, GPT Sol's review, and the four things it deliberately does not do — including the
+per-uuid remote manifest and the box identity that a v2 would want.
 
 ## How slow it is, and why
 

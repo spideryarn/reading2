@@ -16,9 +16,9 @@
  */
 import { type StdioOptions, execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { constants, tmpdir } from "node:os";
+import { constants, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
@@ -31,6 +31,17 @@ import {
 } from "./gjd-remote-tmux.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
+import {
+  LOG_SCHEMA,
+  type LogRecord,
+  buildFactsScript,
+  formatLine,
+  logPath,
+  parseFacts,
+  parseLog,
+  startMarkerCommand,
+  verdict,
+} from "./gjd-remote-log.js";
 import {
   REMOTE_TAB_COLOUR,
   TAB_COLOUR_ENV,
@@ -705,6 +716,147 @@ function confirmStarted(name: string): void {
   die(`'${name}' did not survive starting:\n  ${out.trim().split("\n").join("\n  ")}`);
 }
 
+/**
+ * Append one line to the log, and never fail the command for it.
+ *
+ * Best-effort, because a log is evidence about the work and not part of it —
+ * but LOUD when it cannot write, because a log that silently stopped recording
+ * is worse than no log at all: it answers "nothing was scheduled" with the same
+ * silence as a quiet week. Warned once per process, so a broken directory does
+ * not print on every line.
+ *
+ * appendFileSync opens with 'a', which is O_APPEND, so concurrent gjd-remote
+ * processes cannot interleave — see MAX_LINE_BYTES in scripts/gjd-remote-log.ts
+ * for why the line is capped rather than trusted.
+ */
+let logWarned = false;
+function appendLog(rec: Omit<LogRecord, "v" | "t" | "ms">, opts: { loud?: boolean } = {}): boolean {
+  const now = new Date();
+  const file = logPath(process.env, homedir());
+  try {
+    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    // Encoded once, written once, flushed. 0600 because the file is not as
+    // harmless as it looks: an unnamed session's NAME is the first five words
+    // of its prompt (provisionalName), so this file carries prompt fragments
+    // however carefully the prompt field is left out.
+    const line = Buffer.from(formatLine({ v: LOG_SCHEMA, t: now.toISOString(), ms: now.getTime(), ...rec }), "utf8");
+    appendFileSync(file, line, { mode: 0o600, flush: true });
+    return true;
+  } catch (err) {
+    // `loud` is for the record of a launch, which is the ONLY thing that will
+    // ever say this session existed: if it is not written, a job that a reboot
+    // eats leaves no trace anywhere and `log --lost` will never mention it.
+    // Everything else warns once and gets on with the command, because a log is
+    // evidence about the work rather than part of it.
+    if (opts.loud) {
+      console.error(red(`✗ the session was created but could NOT be written to the log at ${file}`));
+      console.error(red(`  ${(err as Error).message}`));
+      console.error(red("  nothing will notice if this one never runs — kill it, or write it down yourself"));
+      return false;
+    }
+    if (logWarned) return false;
+    logWarned = true;
+    console.error(dim(`(could not write the gjd-remote log at ${file}: ${(err as Error).message})`));
+    return false;
+  }
+}
+
+/**
+ * Which launches never became a Claude.
+ *
+ * The question this answers is Greg's: a `--wait 2h` job is a `sleep` in a tmux
+ * session on the box, and a reboot takes it with no trace at all — the session
+ * is simply not there, which is what a finished session looks like too. So the
+ * laptop keeps the intent and the box's job script records the moment it execs,
+ * and this command puts the two together.
+ *
+ * FAILS CLOSED. If the box cannot be reached, every launch is unknown and this
+ * says so and exits non-zero. Reporting "nothing ran" because nothing answered
+ * would be the same bug as the one the sentinel in gjd-remote-tmux.ts exists to
+ * prevent, with worse consequences: it would cry wolf on every job.
+ */
+function cmdLog(opts: { lost: boolean; limit: number }): void {
+  const file = logPath(process.env, homedir());
+  if (!existsSync(file)) {
+    console.log(dim(`no log yet at ${file}`));
+    console.log(dim("  it is written from the next gjd-remote command onwards"));
+    return;
+  }
+  const { records, unreadable } = parseLog(readFileSync(file, "utf8"));
+  // A launch is a `new-claude` line WITH a session id. Both halves matter: the
+  // plain one-per-command lines have no id and could never be given a verdict,
+  // and `kill` lines DO have one — they started carrying the uuid so that a
+  // renamed session could be matched — so filtering on the id alone listed
+  // every kill as a launch of its own, under the session's new name.
+  const launches = records.filter((r) => r.cmd === "new-claude" && r.id !== undefined);
+  if (unreadable > 0) console.error(dim(`(${unreadable} line(s) in the log could not be read)`));
+  if (launches.length === 0) {
+    console.log(dim("no sessions have been launched from this machine yet"));
+    return;
+  }
+
+  // Every kill this log has seen, by uuid, so a session Greg called off is not
+  // reported as one the box lost.
+  const killed = new Set<string>();
+  for (const r of records) if (r.cmd === "kill" && r.id !== undefined) killed.add(r.id);
+
+  const out = ssh(buildFactsScript(REMOTE_WORK), { check: false });
+  const { facts, failure } = parseFacts(out);
+  if (failure) {
+    console.error(red(`✗ could not ask the box which sessions ran: ${failure}`));
+    console.error(dim(`  ${launches.length} launch(es) in the log, and no verdict for any of them`));
+    process.exit(1);
+  }
+
+  const now = Date.now();
+  const rows = launches
+    .map((r) => ({ r, state: verdict(r, facts, { now, killed }) }))
+    .filter((row) => (opts.lost ? row.state === "lost" || row.state === "unknown" : true))
+    .slice(-opts.limit);
+
+  if (rows.length === 0) {
+    // A file with a damaged line cannot support "nothing was lost": the missing
+    // record is exactly the one that would have said otherwise. Sol's point,
+    // and the same rule ai-calls-fs.ts already applies to its own store.
+    if (unreadable > 0) {
+      console.error(red(`✗ ${unreadable} unreadable line(s), so this cannot say that nothing was lost`));
+      process.exit(1);
+    }
+    console.log(green("✓ nothing was lost") + dim(` — ${launches.length} launch(es) checked`));
+    return;
+  }
+
+  const colour = { lost: red, unknown: red, waiting: dim, ran: green, running: green, killed: dim } as const;
+  const w = Math.max(4, ...rows.map((row) => (row.r.name ?? "").length));
+  console.log(bold(`${"WHEN".padEnd(12)}  ${"NAME".padEnd(w)}  STATE`));
+  let bad = 0;
+  for (const { r, state } of rows) {
+    console.log(`${stamp(r.ms).padEnd(12)}  ${(r.name ?? "?").padEnd(w)}  ${colour[state](state)}`);
+    if (state !== "lost" && state !== "unknown") continue;
+    bad++;
+    console.log(dim(`    was due ${r.waitUntilMs === undefined ? "immediately" : stamp(r.waitUntilMs)}`));
+    // Only when there is actually a prompt to re-run. The first version printed
+    // this line unconditionally with a `…` where the path should be, which is
+    // an instruction that cannot be followed — worse than saying nothing.
+    if (r.promptPath !== undefined) {
+      console.log(dim(`    its prompt is still on the box: ${r.promptPath}`));
+      console.log(dim(`    gjd-remote ssh ${shq(`cat -- ${r.promptPath}`)} | gjd-remote new-claude -d ${r.dir ?? "~"} -p -`));
+    }
+  }
+  // Non-zero when something never ran, so `--lost` can be a check rather than
+  // only a thing to read — the same convention `doctor` uses.
+  if (opts.lost && (bad > 0 || unreadable > 0)) process.exit(1);
+}
+
+/** A fixed `dd MMM HH:mm`, not toLocaleString: this is a column, and its width
+ *  must not depend on which machine's locale is printing it. */
+function stamp(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+  return `${pad(d.getDate())} ${month} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function cmdLs(): void {
   const list = adoptTitles(sessions());
   if (list.length === 0) {
@@ -904,6 +1056,14 @@ function cmdNewClaude(
     // output. Proved by reading the generated job back off the box, not by
     // trusting this comment: see docs/project/remote-box.md.
     opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
+    // One line on the box, one instant before Claude starts, and it is the ONLY
+    // trustworthy answer to "did this job ever run?". The laptop cannot know:
+    // a session that a reboot ate mid-`sleep` and a session that finished
+    // normally are both simply absent. The transcript cannot answer it either —
+    // a session started with no prompt had none after 45 seconds while its
+    // process was running, because the file is written from the first message.
+    // See scripts/gjd-remote-log.ts.
+    startMarkerCommand(REMOTE_WORK, sessionId, name),
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
     [
@@ -931,6 +1091,27 @@ function cmdNewClaude(
   );
 
   confirmStarted(name);
+
+  // Written after the session exists, because the record is of a launch that
+  // happened — and it carries the uuid, which is the only handle that survives
+  // `ls` renaming the session later. A `--wait` job that a reboot eats leaves
+  // this line and nothing else, which is the whole point of it.
+  appendLog(
+    {
+      cmd: "new-claude",
+      name,
+      id: sessionId,
+      dir,
+      host: host(),
+      ...(opts.wait === undefined
+        ? {}
+        : { waitSeconds: opts.wait.seconds, waitUntilMs: Date.now() + opts.wait.seconds * 1000 }),
+      // About the prompt, never its text: how big it was, and the path it is
+      // already sitting at on the box, which is what makes a lost job re-runnable.
+      ...(opts.prompt === undefined ? {} : { promptBytes: Buffer.byteLength(opts.prompt, "utf8"), promptPath }),
+    },
+    { loud: true },
+  );
 
   // A waiting session has NOT started Claude, and saying it has would be the
   // green tick this file keeps having to earn back. What confirmStarted proves
@@ -1714,6 +1895,10 @@ ${bold("SESSIONS")}
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
   resume [name]           reattach; with no name, the most recent session
   kill <name>             end a session
+  log                     every session launched from here, and whether it ran
+      --lost                only the ones that never started ${dim("— the reboot case")}
+      --limit N             how many rows ${dim("(default 40)")}
+      --path                print where the log file is and stop
 
 ${bold("THE BOX")}
   doctor                  check everything, and say what is wrong
@@ -1774,7 +1959,21 @@ ${bold("ANYWHERE")}
 ${bold("WHAT SURVIVES WHAT")}
   laptop sleeps, roams, loses wifi     mosh reconnects; do nothing
   laptop reboots, terminal dies        tmux kept it — ${dim("gjd-remote resume")}
-  the server reboots                   nothing does; ${dim("claude --resume")} by hand
+  the server reboots                   nothing does; ${dim("gjd-remote log --lost")} says what died
+
+${bold("THE LOG")}
+  Every command appends one line to ${dim("~/.local/state/gjd-remote/gjd-remote.ndjson")}
+  (${dim("GJD_REMOTE_LOG_DIR")} to move it, ${dim("--path")} to find it). Launches also record the
+  session uuid, the directory, the wait and when it was due — and about the
+  prompt only its length, a short hash and the path it already sits at on the
+  box. Never the prompt itself: it is prose and it is not ours to keep.
+  ${bold("What it is for")}: a ${dim("--wait")} job is a sleep in a tmux session, and a box reboot
+  takes it with no trace — an absent session is what a FINISHED one looks like
+  too. So the job writes one line on the box the instant before it execs, and
+  ${dim("gjd-remote log --lost")} is the two put together. A job you killed yourself is
+  reported as killed, not as lost, because the kill is in the log as well.
+  It is outside the repo on purpose: worktrees would otherwise split the record
+  across checkouts, and the repo is inside Dropbox.
 
 ${bold("EXAMPLES")}
   gjd-remote new-claude -p "fix the ToC ordering bug"
@@ -1796,6 +1995,11 @@ ${bold("EXAMPLES")}
       a plain shell that is still running tomorrow
   gjd-remote ssh 'free -g; tmux ls'
       one command on the box and its output here — no tmux session, nothing left behind
+  gjd-remote log --lost
+      ${dim("WHEN              NAME            STATE")}
+      ${dim("Sep 01 02:14      fix-the-toc     lost")}
+      ${dim("    was due 01/09/2026, 04:14:00 (--wait 7200s)")}
+      ${dim("    its prompt is still on the box: /home/greg/gjd-remote/prompts/fix-the-toc-….md")}
   gjd-remote resume --ssh
       back into the most recent session, without trying mosh first
   gjd-remote clone gregdetre/gjdutils
@@ -1842,6 +2046,17 @@ function main(): void {
   // rather than after a tmux session exists on the box. The result is thrown
   // away; only the refusal matters here.
   requireTabColour();
+
+  // One line per invocation, before the work rather than after it: several of
+  // these commands hand the terminal to mosh and never return here. It records
+  // the command NAME and nothing else — no argv, because argv is where the
+  // prompt would be, and a field that is never passed in cannot leak. The
+  // interesting records are written by cmdNewClaude and by `kill`, which know
+  // things this point does not.
+  //
+  // `log` and `--help` are exempt: reading the log should not write to it, and
+  // a report whose own noise grows every time you read it is a worse report.
+  if (cmd !== "log" && cmd !== "-h" && cmd !== "--help" && cmd !== "help") appendLog({ cmd: cmd ?? "ls" });
 
   switch (cmd) {
     case undefined:
@@ -1898,7 +2113,18 @@ function main(): void {
     case "kill": {
       const name = rest[0];
       if (!name || !SLUG.test(name)) die("gjd-remote kill <name>");
+      // Read the uuid BEFORE killing it, because a second later there is
+      // nothing to ask. `gjd-remote log` matches kills by uuid rather than by
+      // name: `ls` renames a provisional session to Claude's own title, so the
+      // name here is often not the name the launch was recorded under, and
+      // matching on it would report every killed session as lost. Found by GPT
+      // Sol. `check: false` — a session with no uuid is a `new-shell`, which is
+      // a fine thing to kill and has nothing to record.
+      const killedId = ssh(`tmux show-environment -t =${name}: CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-`, {
+        check: false,
+      }).trim();
       ssh(`tmux kill-session -t =${name}`);
+      appendLog({ cmd: "kill", name, ...(killedId === "" ? {} : { id: killedId }) });
       console.log(green(`✓ killed '${name}'`));
       return;
     }
@@ -1949,6 +2175,22 @@ function main(): void {
       return;
     }
 
+    case "log": {
+      const { values } = parseArgs({
+        args: rest,
+        allowPositionals: false,
+        options: {
+          lost: { type: "boolean", default: false },
+          limit: { type: "string" },
+          path: { type: "boolean", default: false },
+        },
+      });
+      if (values.path) return console.log(logPath(process.env, homedir()));
+      const limit = values.limit === undefined ? 40 : Number(values.limit);
+      if (!Number.isInteger(limit) || limit < 1) die(`--limit wants a whole number, not '${values.limit}'`);
+      return cmdLog({ lost: values.lost, limit });
+    }
+
     case "ssh": {
       // Coloured for the same reason as an attach: while this runs, the tab is
       // a shell on the box and looks exactly like a shell on the laptop.
@@ -1996,7 +2238,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "new-claude", "new-shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
