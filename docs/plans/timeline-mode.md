@@ -69,7 +69,7 @@ wrong, and both answers cut rather than added:
 
 The one place the answers pull against each other: the mark vocabulary Greg picked included a bar
 "drawn to its width", which needs the axis he rejected. Resolved in
-[§ The marks](#the-marks-a-bracket-a-dot-and-a-bracket) — the bar becomes symbolic and fixed-width,
+[§ The marks](#the-marks-two-brackets-and-what-sits-between-them) — the bar becomes symbolic and fixed-width,
 and the duration is said in words beside it.
 
 ---
@@ -110,7 +110,7 @@ worked exam paper. Every temporal expression in it, verbatim:
 **Nineteen of the twenty-four are year-less.** Row 19 is the only one that states 2026, and it does so
 inside a quoted log line. So "infer the year from the publication date" is not a nicety on this piece
 — it is the difference between a timeline and nothing. See
-[§ The reference frame](#the-reference-frame-and-the-year-nobody-writes-down).
+[§ The reference frame](#there-is-no-publication-date-until-stage-2-is-taught-to-keep-one).
 
 Rows 3, 6, 9, 11, 17 all use **"by"**, which is an upper bound: *at or before*. A model asked for "the
 date" will return a point and silently throw away the fact that the event could have happened days
@@ -477,9 +477,10 @@ examples:
 **The "by" rule**, because five of the twenty-four expressions on the test article are this and a
 model will flatten every one of them:
 
-> "by July 4" does not mean July 4. It means *at or before* July 4: `earliest: null, latest:
-> "2026-07-04"`. The same goes for "after", "since", "not until", "by then", "already". These are
-> bounds, and you must not turn a bound into a point.
+> "by July 4" does not mean July 4. It means *at or before* July 4. "after July 12" means at or
+> after. **"not until July 13" is a LOWER bound, not an upper one** — it says the thing had not
+> happened yet, so it happened at or after the 13th. These are bounds, and you must not turn a bound
+> into a point, or flip one.
 
 **The extent rule** — the one judgement still asked of the model, and the spike says it is good at
 it (correct on both showcase rows in both runs, never flipped):
@@ -604,6 +605,39 @@ most of the corpus takes, and it must be the well-tested one. On such an article
 stays year-less and the row falls back to `order`, which is a correct answer and a much less useful
 one.
 
+### `Meta` growing a field is gated by two tests nobody knew were the gate
+
+Found in Stage 0, by tripping it. The moment `publishedAt` reached
+`data/openai-huggingface/meta.json`, two shared tests went red:
+
+```
+tests/store-roundtrip.test.ts > preserves meta.json exactly
+tests/store-parity.test.ts    > returns an identical Article
+-   "publishedAt": "2026-08-29T22:47:53+00:00",
+```
+
+Both push `meta.json` through Postgres and compare. There is no `published_at` column, so the field
+comes back missing. **Nothing is wrong with the code** — `META_COLUMNS` in
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts) enumerates stage 2's fields
+explicitly, and its own comment says *"a stage that grows a field must be made to decide where it
+goes"*. It did exactly that.
+
+**These two tests are the only thing in the repo that enumerates `Meta`'s keys against the store's
+columns.** Nothing else would have caught it, and it is worth knowing that they are load-bearing in a
+way their names do not advertise.
+
+So **Stage 4 must add**: the `published_at` column on `article_revisions`, the entry in
+`META_COLUMNS` and `metaColumns()`, the read in `readMeta`, `pg-revisions.ts`'s carry map,
+`export.ts`, and the migration. Until then the field cannot survive a round trip.
+
+**The date is parked, not shipped.** `data/` is gitignored, so the red existed only on this machine —
+but five sessions share this checkout and several run `npm test`, and two reds from an artefact this
+work created would land in everyone's gate with nothing to say they were not theirs. The line is
+removed from `meta.json`; the code and its fourteen tests stand; `npm run extract` puts it back in
+seconds when Stage 2 needs it. The plan's Stage 0 done-criterion and a green tree are incompatible
+until Stage 4, which is the same shape as the deliberate red from
+[`tests/db-step-constraint.test.ts`](#the-migration-is-not-optional-and-drizzle-will-not-write-it).
+
 ### Most articles are not chronological
 
 This is the mode that will most often have nothing to say, and it must say so plainly rather than
@@ -660,9 +694,14 @@ Written down now so the review can add to them and the build can be checked agai
 4. **Partial ISO strings.** "2026-05" is a legal thing to want and an illegal `Date`. Either the
    interval is always a full day-precision string with the granularity carried separately, or the
    comparison function handles short forms. Pick one, in the types, before either side is written.
-5. **The year-inference boundary.** A piece published on 3 January mentioning "December" means the
-   December two years back is wrong and last December is right; the rule is written down above and
-   will be got wrong by anyone implementing it from intuition.
+5. **The year-inference boundary.** A piece published on 3 January mentioning "December" means last
+   December — **pick, do not widen.** An earlier draft of this plan said both, in two places, and the
+   implementer followed the widening one and produced `2025-12-05 .. 2026-12-05`: a year-wide
+   interval for something almost certainly last December, and a row with no sensible date to print.
+   Since [dates no longer sort anything](#ordering-the-models-reading-and-the-dates-as-a-check-on-it),
+   a wrong pick costs a wrong label rather than a wrong order, which makes picking much cheaper than
+   it looked. The parser takes a **direction hint** so a prediction resolves forwards instead —
+   without it, "in December we expect…" in a January piece resolves to last December, backwards.
 6. **Ids must survive a re-run**, or a reader's link to an event dies on the next re-extraction —
    and **inheriting by label, which is what `ideas` does, will not work here.** Measured: the spike
    reran the same prompt on the same article and the labels paraphrased every time ("Message volume
@@ -879,7 +918,7 @@ state and the two-event state — **looked at in a browser**, in both themes, in
 ### Stage 4 — the plumbing, last and fast
 
 `pipeline.ts`, `models.ts`, `jobs.ts`, `store/*`, `db/schema.ts`, the migration, `routes.ts`,
-`api.ts`, and the table-tests in [§ Changed — the tests](#changed--the-tests-that-are-tables).
+`api.ts`, and the table-tests in [§ Changed — the tests](#changed-the-tests-that-are-tables).
 Mechanical and compiler-guided, done in one sitting against a freshly-read `src/ideas.ts`.
 
 **Writing the migration is free; applying it is Greg's call**, locally as well as remotely.
@@ -954,7 +993,7 @@ This was the plan's central safety claim. It is wrong as designed, and the two p
 independent.
 
 **It rejects correct dates.** The one phrase-check failure in each spike run was the same row — the
-one [§ One interval, two flags](#one-interval-two-flags) holds up as the reason `extent` exists:
+one [§ One interval, two flags](#the-model-supplies-evidence-code-supplies-dates) holds up as the reason `extent` exists:
 
 ```
 block spya-ebtbnm:  "[F]rom July 13 through July 19, agents set their sights on…"
@@ -1086,7 +1125,7 @@ already corrected once. Eval first, then freeze the types, then the UI.
 - [ideas-mode.md](ideas-mode.md) — the stage this is modelled on, and the source of the
   validate-every-id discipline.
 - [ideas.md](../project/ideas.md) — and in particular
-  [§ It is a hypothesis](../project/ideas.md#it-is-a-hypothesis), which is the same worry about
+  [§ It is a hypothesis](../project/ideas.md#it-is-a-hypothesis-and-the-panel-says-so), which is the same worry about
   evidence-shaped output pointed at a different field.
 - [glossary.md](../project/glossary.md#a-prompt-ban-relocates-a-register-it-does-not-delete-one) —
   a prompt ban relocates a register, it does not delete one.
