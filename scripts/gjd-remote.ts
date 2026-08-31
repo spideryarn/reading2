@@ -309,7 +309,7 @@ function cmdDoctor(): void {
     if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(err)) {
       console.log(red("✗ ssh: the host key changed"));
       console.log(dim("  expected after a rebuild — a new machine on the same address."));
-      console.log(dim(`  if you just rebuilt:  ssh-keygen -R ${ip}`));
+      console.log(dim("  if you just rebuilt:  gjd-remote forget-key"));
       return;
     }
     console.log(red("✗ ssh: cannot connect"));
@@ -372,6 +372,7 @@ const HELP = `${bold("gjd-remote")} — Claude Code sessions on the Hetzner serv
        --ssh                      skip mosh (satellite, or any UDP-hostile net)
   gjd-remote kill <name>          end a session
   gjd-remote doctor               check the box and print what is wrong
+  gjd-remote forget-key           after a rebuild: accept the new host key
   gjd-remote ssh                  a plain shell, no tmux
   gjd-remote tunnel               forward noVNC to http://localhost:6080/vnc.html
 
@@ -437,6 +438,20 @@ function main(): void {
 
     case "doctor":
       return cmdDoctor();
+
+    case "forget-key": {
+      // A rebuild puts a new machine on the old address, so ssh refuses with a
+      // warning about a possible attack. That warning is correct and worth
+      // keeping — accept-new deliberately does NOT auto-accept a changed key.
+      // This makes clearing it one deliberate word instead of a remembered
+      // incantation, without ever doing it behind your back.
+      const ip = host();
+      const r = spawnSync("ssh-keygen", ["-R", ip], { encoding: "utf8" });
+      if (r.status !== 0) die(`ssh-keygen -R failed: ${(r.stderr || "").trim()}`);
+      console.log(green(`✓ forgot the old host key for ${ip}`));
+      console.log(dim("  the next connection will accept the new one"));
+      return;
+    }
 
     case "ssh":
       process.exit(spawnSync("ssh", ["-t", HOST()], { stdio: "inherit" }).status ?? 0);
