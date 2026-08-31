@@ -1,6 +1,7 @@
 # Live conversation inside chat mode
 
-**Status: reviewed and rewritten, 2026-08-31. Not built.** GPT Sol reviewed the first version and
+**Status: reviewed, rewritten, and half built, 2026-08-31.** The exchange ledger and the store's
+`appendSpoken` are in with tests; the route, the client operation and the button are not. GPT Sol reviewed the first version and
 returned **BLOCKED** — [the review](live-conversation-in-chat-review-sol.md), nine findings, three
 critical. It was right about all three, and about a comment in shipped code that was simply false.
 The design below is the one it recommended instead: **turn-boundary switching**, which is both safer
@@ -80,17 +81,28 @@ global `lines`, `tools` and `pointers` with nothing associating them to an excha
 produce a safe `{ question, answer, tools, pointers }` at all. **This is the piece to build first**,
 and nothing downstream is safe without it.
 
-### 1. `POST /api/chat/:slug/:threadId/spoken`, and an atomic append
+### 1. `POST /api/chat/:slug/:threadId/spoken`, and an atomic append — **built**
 
-Body `{ exchangeId, expectedTail, question, answer, pointers?, tools?, interrupted? }`.
+`appendSpoken` on `ChatStore`, over a pure `withSpokenTurn` in
+[`src/chat.ts`](../../src/chat.ts) that both stores call — the filesystem inside its mutex,
+Postgres inside its transaction. Both rows, both `done`, adjacent ordinals, one write.
 
-A new store operation, `appendCompletedTurn`, doing all of it in **one** transaction: check
-ownership, check the expected tail, de-duplicate on `exchangeId`, insert both `done` rows at
-adjacent ordinals, return the canonical rows. Not `beginTurn` + `finishTurn` — see above.
+**The exchange id turned out to be unnecessary, and this is the one place the built thing is simpler
+than the plan.** The plan wanted `exchangeId` for de-duplication *and* `expectedTail` for staleness.
+The tail alone does both: a POST retried after succeeding presents a tail the first attempt has
+already moved, so it conflicts rather than appending twice. Two different exchanges racing get
+ordered and the loser looks again. One mechanism, and no third column to migrate.
 
-`exchangeId` and `expectedTail` are not belt-and-braces. Without the first, a retried POST appends
-the exchange twice; without the second, a live session can append a turn after an edit has truncated
-the history that turn was answering.
+So `expectedTailId` is **required**, where `edit`'s version of the same guard is optional — there it
+is a safety net over a destructive operation, here it is the only thing between a replay and a
+duplicated turn, and a caller with no opinion must not be able to skip it by omission. It may be
+`null`, meaning "I believe this thread is empty", which answers Fable's point about pressing Live
+before typing anything.
+
+**The bug it found on the way:** `messageRow` wrote neither `passages` nor `interrupted` — the read
+half of the column mapping was added and the write half was not. Both optional, so nothing failed to
+compile, and every spoken answer would have lost its pointers on the way to the database. Only a
+test against a real database catches it; the pure tests cross no mapping.
 
 **It must be an operation in the existing controller**, with a client id, canonical server rows, 409
 repair and session-epoch fencing, not a second writer beside it. `src/web/chat/` holds one invariant
