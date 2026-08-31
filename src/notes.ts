@@ -6,7 +6,7 @@
  * which, whether there is a `<sup>` at all, whether the note's body is an
  * `<li>` or a `<div>`, and — for Tufte CSS — whether the mechanism is markup we
  * are allowed to keep at all. The four we have measured are in
- * docs/plans/footnotes.md; the two that already worked end to end are Gwern's
+ * docs/plans/260828o-footnotes.md; the two that already worked end to end are Gwern's
  * and Wikipedia's, and they are structurally opposite:
  *
  *     gwern:      <a href="#fn1" id="fnref1"><sup>1</sup></a>   the anchor wraps the sup

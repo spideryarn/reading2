@@ -44,10 +44,15 @@ delete process.env.SPIDERYARN_STORE;
  * what made it time out when this file ran alongside five others.
  */
 const { articleExists, urlForSlug } = await import("../src/pipeline.js");
+/* Same reason, and the same `await`: `freeUploadSlug` reaches `slugIsSpokenFor`,
+   which asks the artefact store, which reads `STORE`. */
+const { freeUploadSlug } = await import("../src/jobs.js");
 
 const WITH_URL = "test-files-slug-claim";
 const UPLOADED = "test-files-slug-claim-upload";
 const URL = "https://example.test/files-slug-claim";
+/** A slug an upload has already taken — see the last describe in this file. */
+const CLAIMED = "test-files-slug-claim-paper";
 
 describe("the filesystem store still answers from meta.json", () => {
   let scratch = "";
@@ -95,5 +100,63 @@ describe("the filesystem store still answers from meta.json", () => {
   it("and says nothing is there when nothing is", async () => {
     expect(await articleExists("test-files-slug-claim-absent")).toBe(false);
     expect(await urlForSlug("test-files-slug-claim-absent")).toBeUndefined();
+  });
+
+  /**
+   * **An upload getting its own slug back on a retry, which nothing tested.**
+   *
+   * `slugIsSpokenFor` (src/jobs.ts) asks `articleExists` and then reads the
+   * `fetch` manifest, and the manifest read is the entire content of the `mine`
+   * argument: without it, retrying a job whose `paper.pdf` already reached
+   * stage 3 finds `data/paper/` occupied — by itself — steps aside to
+   * `paper-2`, re-runs from the top, and pays for the transcription again.
+   *
+   * That was unguarded until 2026-08-31. `tests/uploads-api.test.ts` injects a
+   * fake `claimed`, and `tests/pipeline-slug-claim-files.test.ts` never called
+   * `freeUploadSlug` at all — so replacing the manifest read with a literal
+   * `null` left both green. Found by making exactly that mutation.
+   *
+   * The two cases are one property said twice, and neither is worth having
+   * alone: the same fixture must be *mine* for one upload id and *somebody
+   * else's* for another. A test with only the first passes if the function
+   * always says free; a test with only the second passes if it always says
+   * taken.
+   */
+  describe("an uploaded article's own slug", () => {
+    const OWNER = "upload-that-owns-it";
+
+    beforeAll(async () => {
+      const dir = path.join(scratch, "data", CLAIMED);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "meta.json"),
+        JSON.stringify({ slug: CLAIMED, title: "paper.pdf" }),
+        "utf8",
+      );
+      /* Through `PATHS.fetch.raw`'s filename rather than a spelling of our own:
+         from 2026-08-31 the artefact store is what writes this file, and the
+         read under test goes through the same store. */
+      await writeFile(
+        path.join(dir, "raw.json"),
+        JSON.stringify({
+          kind: "pdf",
+          file: "raw.pdf",
+          origin: "upload",
+          uploadId: OWNER,
+          bytes: 1,
+          sha256: "0".repeat(64),
+          fetchedAt: new Date().toISOString(),
+        }),
+        "utf8",
+      );
+    });
+
+    it("comes back to the upload that made it, so a retry costs nothing", async () => {
+      expect(await freeUploadSlug(CLAIMED, OWNER)).toBe(CLAIMED);
+    });
+
+    it("and is stepped around by any other upload of the same filename", async () => {
+      expect(await freeUploadSlug(CLAIMED, "some-other-upload")).toBe(`${CLAIMED}-2`);
+    });
   });
 });

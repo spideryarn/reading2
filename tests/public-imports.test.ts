@@ -27,7 +27,7 @@
  * exactly the kind of leniency that should be argued for rather than noticed.
  *
  * **A static graph is not the whole proof, which is why it is not the whole
- * check.** docs/plans/public-read-only-access.md already records the first
+ * check.** docs/plans/260827ai-public-read-only-access.md already records the first
  * draft's mistake here — it proposed a static "no public file imports the
  * gateway" test and Sol pointed out `src/api.ts` imports the writers, so the
  * test could not pass. The runtime gateway spy in
@@ -137,9 +137,13 @@ const WRITERS = [
   "src/labels.ts",
   "src/pdf-read.ts",
   "src/pipeline.ts",
-  "src/summarise.ts",
   "src/toc.ts",
   "src/tweets.ts",
+  /* Writes `timeline.json`, and spends. Listed the day the stage landed rather
+     than the day it was wired, because a *missing* row here is a silent gap:
+     nothing goes red when a writer is left out, so the guard simply stops
+     covering it. docs/plans/260831i-timeline-mode.md. */
+  "src/timeline.ts",
   "src/jobs.ts",
 ];
 
@@ -325,7 +329,7 @@ describe("the public API's tables", () => {
    * `articles` and `article_revisions` are the work itself; `revision_blocks` is
    * its prose; `block_identities` is the spine those ids hang on. Everything a
    * *reader* does — comments, chats, searches, lookups, profiles, uploads, jobs
-   * — is a different table by design, and docs/plans/public-read-only-access.md
+   * — is a different table by design, and docs/plans/260827ai-public-read-only-access.md
    * has the diagram: the line Greg drew between what a stranger sees and what
    * they do not is a line the schema already draws.
    *

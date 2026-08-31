@@ -8,7 +8,7 @@
  * fields threaded through five call sites is ten chances for one of them to
  * forget the second.
  *
- * docs/plans/reader-profile.md has the design; docs/project/reader-profile.md
+ * docs/plans/260826t-reader-profile.md has the design; docs/project/reader-profile.md
  * is the operating manual once it is built.
  *
  * ## The previous version built both boxes and read neither
@@ -97,7 +97,7 @@ export function normaliseProfileText(text: string | null | undefined): string | 
  * reader is nobody in particular"* rather than as *"we did not ask"*. So the
  * callers test for `null` and omit the whole section, headings included. The
  * summary steer's own header followed the same rule for the same reason, until
- * it was deleted (docs/plans/steer-becomes-the-profile.md).
+ * it was deleted (docs/plans/260830o-steer-becomes-the-profile.md).
  *
  * The order is fixed and the labels are fixed. Not style: this string is
  * hashed, and a hash that changes when the two halves swap places would mark
@@ -163,7 +163,7 @@ export function renderProfile(opts: {
  * ## Two clauses that nearly landed here, and why they went next door instead
  *
  * The **summary steer** — a fourth box about intent, deleted on 2026-08-30
- * (docs/plans/steer-becomes-the-profile.md) — had its own `SYSTEM` section, and
+ * (docs/plans/260830o-steer-becomes-the-profile.md) — had its own `SYSTEM` section, and
  * two of its five rules had no equivalent below: *never bend a claim to fit*,
  * and *keep the article's own proportions*. Deleting the box while deleting the
  * rules that held it would have answered Greg's ask — *"make sure the LLM
@@ -461,7 +461,7 @@ export async function saveReaderExperimental(on: boolean): Promise<string | null
  * matters most: it is written once and then never looked at again.
  * docs/reusable/silent-success.md. (`readGuidance` in src/routes.ts used to make
  * the same argument about the summary steer; both are gone —
- * docs/plans/steer-becomes-the-profile.md.)
+ * docs/plans/260830o-steer-becomes-the-profile.md.)
  *
  * **It writes one field and leaves the rest of the file alone** — see
  * `patchReaderFile`, which is where the atomic rename now lives. Until

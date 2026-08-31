@@ -131,6 +131,96 @@ when("the Postgres chat store", () => {
     expect((await pgChatStore.load(SLUG))[0]?.title).toBe("What is a squinch?");
   });
 
+  /**
+   * **A spoken exchange survives the round trip, pointers and all.**
+   *
+   * The assertion that matters is `passages`, and it matters because of how it
+   * fails. `messageRow` and `toMessage` each enumerate columns by name, so a
+   * field named in one and not the other is written and never read, or read and
+   * never written — and both are optional on `ChatMessage`, so the compiler is
+   * perfectly happy and every spoken answer quietly loses the passages it
+   * pointed at. That is exactly how `tools` came to be missing once already.
+   *
+   * Only a real database can catch it: the pure `withSpokenTurn` tests pass
+   * either way, because they never cross the column mapping.
+   */
+  it("appends a finished spoken exchange, with its pointers and its interruption", async () => {
+    const { thread, user, reply } = await pgChatStore.appendSpoken(
+      SLUG,
+      {
+        threadId: THREAD,
+        question: "Does he ever use the word qualia?",
+        answer: "He does not, and the search comes back empty.",
+        passages: [{ blockIds: ["spya-aaa111", "spya-bbb222"], why: "the assumption" }],
+        tools: [
+          {
+            name: "search_article_words",
+            label: "searched",
+            detail: "nothing found",
+            /* Stored runs are finished; `running` is a live-panel state only. */
+            status: "done" as const,
+          },
+        ],
+        interrupted: true,
+        expectedTailId: null,
+      },
+      clockFrom("2026-08-31T00:00:00.000Z"),
+    );
+
+    /* Both done. Nothing is pending, because nothing is still coming. */
+    expect(user.status).toBe("done");
+    expect(reply.status).toBe("done");
+    expect(thread.title).toBe("Does he ever use the word qualia?");
+    expect(await ordinals()).toEqual([
+      { id: user.id, ordinal: 0 },
+      { id: reply.id, ordinal: 1 },
+    ]);
+
+    /* Read back through the store rather than asserting on what we just
+       returned — the return value never went near a column. */
+    const [reloaded] = await pgChatStore.load(SLUG);
+    const answer = reloaded?.messages.at(-1);
+    expect(answer?.passages, "passages did not survive the column mapping").toEqual([
+      { blockIds: ["spya-aaa111", "spya-bbb222"], why: "the assumption" },
+    ]);
+    expect(answer?.interrupted).toBe(true);
+    expect(answer?.tools).toHaveLength(1);
+  });
+
+  it("refuses a spoken append whose expected tail has moved", async () => {
+    /* The guard is also the idempotency — there is no exchange-id column, so a
+       replayed request is caught by presenting a tail the first one moved. */
+    await pgChatStore.appendSpoken(
+      SLUG,
+      { threadId: THREAD, question: "one", answer: "first", expectedTailId: null },
+      clockFrom("2026-08-31T00:00:00.000Z"),
+    );
+    await expect(
+      pgChatStore.appendSpoken(
+        SLUG,
+        { threadId: THREAD, question: "one", answer: "first", expectedTailId: null },
+        clockFrom("2026-08-31T00:00:01.000Z"),
+      ),
+    ).rejects.toThrow(ChatConflict);
+    /* And nothing was written by the refused call. */
+    const [reloaded] = await pgChatStore.load(SLUG);
+    expect(reloaded?.messages).toHaveLength(2);
+  });
+
+  it("leaves passages and interrupted off an ordinary answer", async () => {
+    /* Absent, not null and not `[]` — the filesystem store omits the keys and
+       tests/store-roundtrip.test.ts compares the two byte for byte. */
+    const { reply } = await pgChatStore.appendSpoken(
+      SLUG,
+      { threadId: THREAD, question: "plain", answer: "also plain", expectedTailId: null },
+      clockFrom("2026-08-31T00:00:00.000Z"),
+    );
+    const [reloaded] = await pgChatStore.load(SLUG);
+    const stored = reloaded?.messages.find((m) => m.id === reply.id);
+    expect(stored).not.toHaveProperty("passages");
+    expect(stored).not.toHaveProperty("interrupted");
+  });
+
   it("orders messages by ordinal, not by the clock", async () => {
     /* **The clock is made to disagree with the order on purpose, and the first
        version of this test did not do that.**
@@ -573,7 +663,7 @@ when("the Postgres chat store", () => {
      The two fields review added, against the two ways Postgres could lose them
      that the filesystem store cannot. Both are silent failures: no error, no
      visible symptom, and a transcript that still reads as one conversation.
-     docs/plans/review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
+     docs/plans/260827ah-review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
 
   it("keeps a thread's kind across a second turn that does not mention it", async () => {
     /* A client continuing a conversation sends no kind — the thread already has

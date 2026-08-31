@@ -9,7 +9,7 @@
 >
 > Followed for the test runner — see [docs/project/testing.md](../project/testing.md) — for
 > tooltips, see [docs/project/tooltips.md](../project/tooltips.md) — and for the auth provider, see
-> [docs/research/auth-options.md](../research/auth-options.md).
+> [docs/research/260825a-auth-options.md](../research/260825a-auth-options.md).
 
 ## Selection Criteria
 

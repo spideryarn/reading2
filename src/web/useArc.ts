@@ -53,7 +53,7 @@
  * gist where the arc column would be, which is why this needs writing down. It
  * looks like nothing is wrong.
  *
- * See docs/plans/defer-arc-and-rename-hierarchy.md § 2.2.
+ * See docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Arc, ArcFound } from "../types.js";

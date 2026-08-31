@@ -8,7 +8,7 @@
  * out. **The exporter is the rollback mechanism**, so the two are written and
  * tested together — an importer with no way back is a one-way door, and this
  * migration is explicitly not one until the cutover has held for a release.
- * See docs/plans/postgres-migration.md § The order of work.
+ * See docs/plans/260825f-postgres-migration.md § The order of work.
  *
  * ## Idempotent, and what that actually means here
  *
@@ -94,7 +94,17 @@ import { NotTheLiveAttempt, deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
 import type { Assets } from "../assets.js";
 import type { Sketch } from "../sketch-scene.js";
-import type { Arc, Block, Glossary, Ideas, Meta, Summaries, Tree, TweetThread } from "../types.js";
+import type {
+  Arc,
+  Block,
+  Glossary,
+  Ideas,
+  Meta,
+  Quotes,
+  Timeline,
+  Tree,
+  TweetThread,
+} from "../types.js";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 
 const logger = log("store");
@@ -108,6 +118,59 @@ const logger = log("store");
  * so a real pipeline record can never be destroyed by a migration tool.
  */
 const IMPORTED = "imported";
+
+/**
+ * Refused: this article's files say one thing and a **pipeline** run row says
+ * another, and only a person can decide which is right.
+ *
+ * Its own type because the two states behind it want different actions and the
+ * message has to say so: either the pipeline has moved past this directory (in
+ * which case the files are the stale copy and importing them is the mistake),
+ * or somebody edited an artefact behind the pipeline's back. The importer
+ * cannot tell them apart and must not guess — resolving it either way silently
+ * is how a stale artefact ends up served for ever.
+ *
+ * **Thrown from inside the transaction, so the artefact write rolls back with
+ * it.** Without that the importer rewrote the artefact column, correctly
+ * declined to restamp the row beside it, and committed the pair — leaving
+ * `stampForStep` (src/store/artifacts-pg.ts) to throw `StampDisagrees` on the
+ * next preflight, long after the command that caused it reported success.
+ * GPT Sol, 2026-08-31.
+ *
+ * Hashes and names only, never artefact content: an error is a value that
+ * travels and this one is logged wherever it is caught.
+ */
+export class ImportContradictsPipelineRun extends Error {
+  readonly status = 409;
+  constructor(
+    readonly slug: string,
+    readonly step: string,
+    recorded: string,
+    onDisk: string,
+    version: string,
+  ) {
+    /* **The hashes are context, not the reason**, and the sentence has to say
+       so: the rule is ownership, and a matching pair is refused exactly like a
+       differing one. `sourceHash` is over the inputs, so two artefacts can
+       carry the same one and still be different answers — which is the state
+       this class was widened to catch. */
+    const inputs =
+      recorded === onDisk
+        ? `both were made from ${recorded}, which says they were asked the same question and not ` +
+          "that they gave the same answer"
+        : `the row was made from ${recorded} and the file says ${onDisk}`;
+    super(
+      `import "${slug}": the ${step} step already has a ${version} run row, so the pipeline owns ` +
+        `that artefact and this import would replace it. Nothing was imported — ${inputs}.\n` +
+        "A pipeline row outranks a file, so this is either a directory the pipeline has moved " +
+        "past — in which case the files are the stale copy — or an artefact edited behind the " +
+        "pipeline's back.\n" +
+        `Re-run the ${step} step so the pipeline writes the artefact itself, or delete the ` +
+        "stale file, and import again.",
+    );
+    this.name = "ImportContradictsPipelineRun";
+  }
+}
 
 /** What one article's import did, in enough detail to report honestly. */
 export interface ImportResult {
@@ -230,7 +293,7 @@ const TREATMENTS = new Set(["supplement"]);
  * block that arrives claiming to be apparatus and is stored as body is
  * *silently reclassified as argument*, which is the exact failure the whole
  * feature exists to prevent — summarised, embedded, and on the clock, with
- * every count still looking plausible (docs/plans/footnotes.md). An import is a
+ * every count still looking plausible (docs/plans/260828o-footnotes.md). An import is a
  * file somebody handed us, so a value we do not recognise means the file was
  * written by something we do not understand, and the honest answer is to stop.
  *
@@ -298,7 +361,7 @@ const TREATMENTS = new Set(["supplement"]);
  * transaction, with no block id in it, which is the position the existing
  * single-column CHECKs already occupy. The recommendation is that the pair ride
  * along with the next migration this feature needs rather than becoming one of
- * their own; recorded in docs/plans/footnotes.md.
+ * their own; recorded in docs/plans/260828o-footnotes.md.
  */
 export function checkNoteFields(slug: string, blocks: Block[]): void {
   for (const [index, b] of blocks.entries()) {
@@ -521,8 +584,9 @@ export interface ArticleFiles {
   readonly assets: Assets | undefined;
   readonly tweets: TweetThread | undefined;
   readonly glossary: Glossary | undefined;
-  readonly summaries: Summaries | undefined;
   readonly ideas: Ideas | undefined;
+  readonly quotes: Quotes | undefined;
+  readonly timeline: Timeline | undefined;
   readonly sketch: Sketch | undefined;
   readonly labels: LabelsFile | undefined;
   /* Reader state, typed from the loaders themselves rather than restated. The
@@ -575,7 +639,7 @@ export interface ImportArticleInOptions {
  * transaction, and a function that opens its own cannot be part of one. The
  * files can be read long before that transaction opens, and should be —
  * `readFile` inside a transaction holds a row lock across a disk.
- * docs/plans/delete-the-importer.md § D1b.
+ * docs/plans/260827aa-delete-the-importer.md § D1b.
  */
 export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   const dir = path.join(dataRoot(), "data", slug);
@@ -603,10 +667,12 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   if (!tweets) absent.push("tweets.json");
   const glossary = await readJson<Glossary>(path.join(dir, "glossary.json"));
   if (!glossary) absent.push("glossary.json");
-  const summaries = await readJson<Summaries>(path.join(dir, "summary.json"));
-  if (!summaries) absent.push("summary.json");
   const ideas = await readJson<Ideas>(path.join(dir, "ideas.json"));
   if (!ideas) absent.push("ideas.json");
+  const quotes = await readJson<Quotes>(path.join(dir, "quotes.json"));
+  if (!quotes) absent.push("quotes.json");
+  const timeline = await readJson<Timeline>(path.join(dir, "timeline.json"));
+  if (!timeline) absent.push("timeline.json");
   const sketch = await readJson<Sketch>(path.join(dir, "sketch.json"));
   if (!sketch) absent.push("sketch.json");
   const labels = await readJson<LabelsFile>(path.join(dir, "labels.json"));
@@ -642,7 +708,7 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
 
      Skipped rather than fatal, because this is a migration tool and one
      malformed row out of eleven should not block ten good ones — the same
-     partial-salvage rule the summaries stage already follows. Skipped rather
+     partial-salvage rule the glossary stage already follows. Skipped rather
      than repaired, because there is nothing to repair it to: the anchor names
      no paragraph, so there is no right answer to guess. Counted and logged, so
      "the import lost a comment" can never be something you find out later. */
@@ -673,7 +739,7 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   const shelf = await loadShelf(slug);
 
   /* Whichever file stage 1's manifest names — `raw.html` for a web page,
-     `raw.pdf` for a PDF (docs/plans/pdf-ingestion.md). Articles fetched before
+     `raw.pdf` for a PDF (docs/plans/260826c-pdf-ingestion.md). Articles fetched before
      `raw.json` existed have no manifest and are all HTML, so that is the
      fallback. A manifest also *recovers* the content type and encoding, which
      is why the "unrecoverable" note below is now conditional: for a fetch made
@@ -725,8 +791,9 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
     assets,
     tweets,
     glossary,
-    summaries,
     ideas,
+    quotes,
+    timeline,
     sketch,
     labels,
     storedComments,
@@ -783,8 +850,9 @@ export async function importArticleIn(
     assets,
     tweets,
     glossary,
-    summaries,
     ideas,
+    quotes,
+    timeline,
     sketch,
     labels,
     storedComments,
@@ -1030,7 +1098,7 @@ export async function importArticleIn(
     /* PDF provenance — all null for a web page, which is most of them.
        `meta` rather than the manifest: the manifest says what was FETCHED,
        these say how it was READ, and only stage 2 knows that.
-       docs/plans/pdf-ingestion.md. */
+       docs/plans/260826c-pdf-ingestion.md. */
     source: meta?.source ?? null,
     extractMethod: meta?.method ?? null,
     pages: meta?.pages ?? null,
@@ -1045,8 +1113,9 @@ export async function importArticleIn(
     assets: assets ?? null,
     tweets: tweets ?? null,
     glossary: glossary ?? null,
-    summary: summaries ?? null,
     ideas: ideas ?? null,
+    quotes: quotes ?? null,
+    timeline: timeline ?? null,
     sketch: sketch ?? null,
     labels: labels ?? null,
     ...scalars,
@@ -1114,7 +1183,7 @@ export async function importArticleIn(
      importer would delete every comment written since the last export — the
      database would be made to match a file that is no longer being kept up to
      date. The importer is a migration tool, not a sync; see
-     docs/plans/postgres-storage-implementation.md.
+     docs/plans/260826e-postgres-storage-implementation.md.
 
      Deleted inside the same transaction as the inserts, so there is no moment
      at which a reader sees an article with its questions missing.
@@ -1215,7 +1284,7 @@ export async function importArticleIn(
   /* **Comments last, and that is a rule rather than a tidy-up.**
      `Comment.threadId` names a conversation, so an archive's comments can
      only be read against threads that are already in. There is deliberately
-     no foreign key on that column (docs/plans/comments-and-bookmarks.md § no
+     no foreign key on that column (docs/plans/260828a-comments-and-bookmarks.md § no
      foreign key), so nothing *fails* if this runs first — which is exactly
      why the order is written down here rather than left to a constraint to
      enforce. GPT Sol found this block sitting before the chat inserts,
@@ -1322,18 +1391,39 @@ export async function importArticleIn(
      is CORRECT — the file stopped being where the output lives. A migration
      tool must not be able to delete that record, so it deletes only rows
      carrying its own marker. Nothing else writes `imported`. */
-  const produced: { step: string; present: boolean }[] = [
+  /**
+   * **Each stamped artefact's row records the hash the artefact itself carries**,
+   * not the blocks hash, and that is a correctness rule rather than a nicety.
+   *
+   * `stampForStep` (src/store/artifacts-pg.ts) reads the row *and* the artefact
+   * and **throws `StampDisagrees`** when both name an `inputHash` and the two
+   * differ — deliberately, because resolving it silently in either direction is
+   * how a stale artefact gets served for ever. Writing `fingerprint` into every
+   * row put six of these steps permanently in that state, because six
+   * fingerprints are not `hashBlocks`: `arc`, `ideas` and `sketch` had already
+   * widened, and `tweets` and `glossary` joined them on 2026-08-31
+   * (src/source-hash.ts § `articleFingerprint`).
+   *
+   * `?? fingerprint` for the unstamped steps, and **`toc` deliberately keeps
+   * it**: `reasonsNotToPublish` (src/store/pg-revisions.ts) compares
+   * `toc.input_hash` against the stored blocks and refuses the publication when
+   * they differ, so a `toc` row carrying anything else makes the article
+   * unpublishable. `labels.json` records a `structureHash` beside its
+   * `sourceHash`; the blocks half is the one that column means.
+   */
+  const produced: { step: string; present: boolean; inputHash?: string | undefined }[] = [
     { step: "fetch", present: Boolean(rawBytes) },
     { step: "extract", present: Boolean(meta) },
     { step: "blocks", present: blocks.length > 0 },
     { step: "toc", present: Boolean(tree) },
-    { step: "assets", present: Boolean(assets) },
-    { step: "arc", present: Boolean(arc) },
-    { step: "tweets", present: Boolean(tweets) },
-    { step: "glossary", present: Boolean(glossary) },
-    { step: "summary", present: Boolean(summaries) },
-    { step: "ideas", present: Boolean(ideas) },
-    { step: "sketch", present: Boolean(sketch) },
+    { step: "assets", present: Boolean(assets), inputHash: assets?.sourceHash },
+    { step: "arc", present: Boolean(arc), inputHash: arc?.sourceHash },
+    { step: "tweets", present: Boolean(tweets), inputHash: tweets?.sourceHash },
+    { step: "glossary", present: Boolean(glossary), inputHash: glossary?.sourceHash },
+    { step: "ideas", present: Boolean(ideas), inputHash: ideas?.sourceHash },
+    { step: "quotes", present: Boolean(quotes), inputHash: quotes?.sourceHash },
+    { step: "timeline", present: Boolean(timeline), inputHash: timeline?.sourceHash },
+    { step: "sketch", present: Boolean(sketch), inputHash: sketch?.sourceHash },
   ];
   const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);
   if (withdrawn.length) {
@@ -1347,21 +1437,105 @@ export async function importArticleIn(
         ),
       );
   }
-  for (const { step, present } of produced) {
+  for (const { step, present, inputHash } of produced) {
     if (!present) continue;
-    await tx
+    const claimed = inputHash ?? fingerprint;
+    const landed = await tx
       .insert(revisionStepRuns)
       .values({
         revisionId,
         stepName: step,
-        inputHash: fingerprint,
+        inputHash: inputHash ?? fingerprint,
         implementationVersion: IMPORTED,
         status: "done",
       })
-      /* Nothing to update: for a given revision the blocks — and so the
-         fingerprint — cannot change, and a row already here under a real
-         implementation version is a pipeline record that outranks this one. */
-      .onConflictDoNothing();
+      /**
+       * **Updated, and only where the row is one of ours.**
+       *
+       * This said `onConflictDoNothing()`, with a comment claiming there was
+       * nothing to update because "for a given revision the blocks — and so the
+       * fingerprint — cannot change". True of `hashBlocks`, and false of what
+       * these rows now carry: `revisionId` is derived from the blocks, so a
+       * re-cut tree or an edited title keeps the *same* revision, updates the
+       * artefact JSONB in place a few hundred lines up — and left the row beside
+       * it holding the old artefact's hash. `stampForStep` refuses that pair
+       * outright (`StampDisagrees`). The same update repairs every row imported
+       * under the old rule, which is what `arc`, `ideas` and `sketch` have been
+       * sitting in since their fingerprints widened. GPT Sol, 2026-08-31.
+       *
+       * **`setWhere` is the other half of the importer's one rule** — it deletes
+       * only rows carrying its own marker, and it must overwrite only those too.
+       * A pipeline row is the record of a run that really happened; a migration
+       * tool restamping it would make the metadata page report a stage against
+       * an artefact that stage never saw. `status` and `implementation_version`
+       * are deliberately not in `set`: this reconciles what an artefact was made
+       * from, not whether anything ran.
+       */
+      .onConflictDoUpdate({
+        target: [revisionStepRuns.revisionId, revisionStepRuns.stepName],
+        set: { inputHash: claimed },
+        setWhere: eq(revisionStepRuns.implementationVersion, IMPORTED),
+      })
+      .returning({ stepName: revisionStepRuns.stepName });
+
+    /*
+     * **Nothing came back, so the row exists and `setWhere` refused it** — it
+     * belongs to the pipeline, not to us. Declining the row is right; declining
+     * it and carrying on is not, and that was the bug.
+     *
+     * The artefact JSONB was already rewritten earlier in this transaction, so
+     * carrying on commits a revision whose `glossary` column says one thing and
+     * whose `glossary` run row says another. `stampForStep`
+     * (src/store/artifacts-pg.ts) reads both and throws `StampDisagrees` on
+     * precisely that pair — deliberately, because resolving it silently in
+     * either direction is how a stale artefact gets served for ever. So the
+     * importer would have reported success and left the next preflight to fail.
+     * GPT Sol, 2026-08-31.
+     *
+     * **Throwing aborts the whole transaction**, which is the point: the
+     * artefact write rolls back with it, so the revision keeps the pair it
+     * already had rather than acquiring a broken one. Loud, and it names what
+     * to do — the two states are "the pipeline has moved past this directory"
+     * and "somebody edited a file behind the pipeline's back", and only a person
+     * can tell them apart.
+     *
+     * **Any refused row, and the hashes are not consulted.** This compared them
+     * first, and a matching pair was let through as a no-op — which is the
+     * state that actually bites. The hash is over the *inputs*: the blocks, the
+     * tree and the prompt head. Two runs of one prompt over one article agree
+     * on every one of those and can still choose different terms, so
+     * `sourceHash` matching says the two artefacts were asked the same question,
+     * not that they gave the same answer. The importer replaced the pipeline's
+     * glossary with somebody's file, the row still matched, and every freshness
+     * check downstream reported an artefact the pipeline never produced as
+     * current — for ever, because the row it is checked against still agrees.
+     * GPT Sol, 2026-08-31.
+     *
+     * Comparing the two artefacts exactly would allow a genuine no-op through,
+     * and it was weighed and rejected: it is more machinery than a path deleted
+     * at stage 3 is worth, and "the pipeline owns this step" is the fact that
+     * matters rather than "these bytes happen to match today".
+     */
+    if (landed.length === 0) {
+      const [held] = await tx
+        .select({
+          hash: revisionStepRuns.inputHash,
+          version: revisionStepRuns.implementationVersion,
+        })
+        .from(revisionStepRuns)
+        .where(
+          and(
+            eq(revisionStepRuns.revisionId, revisionId),
+            eq(revisionStepRuns.stepName, step),
+          ),
+        );
+      /* `held` can only be absent if the row vanished between the upsert and
+         this read, inside one transaction — which cannot happen, and if it ever
+         does, doing nothing is the same answer the old code gave. */
+      if (held) {
+        throw new ImportContradictsPipelineRun(slug, step, held.hash, claimed, held.version);
+      }
+    }
   }
 
   // The pointer moves LAST, so nothing observes a half-built revision. Not

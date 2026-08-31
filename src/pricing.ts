@@ -11,7 +11,7 @@
  * > For my tracking, so I can estimate costs and set pricing. Also so we can
  * > define a spend limit per user.
  *
- * docs/plans/ai-cost-tracking.md is the whole argument. This file is the
+ * docs/plans/260827q-ai-cost-tracking.md is the whole argument. This file is the
  * arithmetic half of it, and it is deliberately pure: no IO, no database, no
  * clock. Everything here can be checked against a number somebody measured.
  *
@@ -46,7 +46,7 @@
  * Fewer than you would think. **OpenRouter reports what it charged**
  * (`usage.cost`), so for those five the honest record is the provider's own
  * number and this file is only the cross-check on it — see `PRICE_CHECKED` and
- * docs/plans/ai-cost-tracking.md § The reconciliation. Anthropic never returns
+ * docs/plans/260827q-ai-cost-tracking.md § The reconciliation. Anthropic never returns
  * a cost figure at all, so the seven pipeline stages are priced here or not at
  * all.
  *
@@ -163,13 +163,13 @@ function anthropicPrice(input: number, output: number): ModelPrice {
  * `SPIDERYARN_*_MODEL` can point a stage at them for a one-off comparison and a
  * run whose cost silently reads zero would be a poor way to find that out.
  *
- * **Deliberately not a package.** docs/research/ai-cost-tracking-options.md
+ * **Deliberately not a package.** docs/research/260827d-ai-cost-tracking-options.md
  * recommends `@pydantic/genai-prices`, and for an app that reached a hundred
  * models it would be right. Here the whole table is nine numbers, and a
  * dependency that refetches prices from GitHub every hour is the wrong shape
  * for a figure somebody bills against: a price that can change without anyone
  * reviewing it is the problem, not the solution. See
- * docs/plans/ai-cost-tracking.md § A table in git, not a package.
+ * docs/plans/260827q-ai-cost-tracking.md § A table in git, not a package.
  *
  * The OpenRouter spellings are absent on purpose. Those calls carry their own
  * cost and must never be priced from here as if they were the same call —

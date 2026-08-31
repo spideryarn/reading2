@@ -14,7 +14,7 @@
  * while the request was out and overwritten when it came back. Rename from the
  * list, open the conversation while the PATCH is slow, rewrite the first
  * question, and the title goes back to the one you replaced. Found by GPT Sol
- * reviewing stage 1 of docs/plans/chat-operation-model.md, 2026-08-28.
+ * reviewing stage 1 of docs/plans/260828v-chat-operation-model.md, 2026-08-28.
  *
  * **The dev assertion on `legacy.apply` cannot catch this**, and that is the
  * sharp part of Sol's finding: it refuses a legacy write while a

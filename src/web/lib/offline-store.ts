@@ -4,7 +4,7 @@
  * One IndexedDB store of JSON bodies we have already been given, written on the
  * way past in [api.ts](./api.ts) and read back only when the network fails at
  * the transport layer. See
- * docs/plans/offline-reading.md for the whole
+ * docs/plans/260827r-offline-reading.md for the whole
  * design and for what is deliberately not here — no write queue, no sync
  * engine, no service worker.
  *
@@ -16,7 +16,7 @@
  * article body into memory to sort them, which is the opposite of a size cap.
  * `idb` is 1.4KB and promisifies IndexedDB without hiding it. Dexie would do
  * this and much more, and the much more is 31KB we would not use. See
- * docs/plans/offline-reading.md § Libraries.
+ * docs/plans/260827r-offline-reading.md § Libraries.
  *
  * ## The key is the user and the URL, in that order
  *
@@ -344,7 +344,7 @@ export function rememberUser(userId: string | null): void {
  *
  * This is **not** an authorisation. It says which drawer to look in, and every
  * request it accompanies is still checked by the server. See the module
- * docstring, and `docs/plans/offline-reading.md` on why an offline-known-user
+ * docstring, and `docs/plans/260827r-offline-reading.md` on why an offline-known-user
  * *gate* is deliberately not built here.
  */
 export function lastKnownUser(): string | null {

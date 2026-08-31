@@ -10,7 +10,7 @@
 #   {"code":400,"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}
 #
 # which is this endpoint's answer, rendered as a wall. See
-# docs/plans/google-sign-in-production.md.
+# docs/plans/260827i-google-sign-in-production.md.
 #
 # `/auth/v1/settings` is unauthenticated apart from an `apikey` header, and the
 # publishable key is not a secret — it ships in the browser bundle by design.
@@ -26,7 +26,7 @@
 #
 # This repo has already shipped that exact bug once — a redirect checker that
 # grepped for a string which lived somewhere else and therefore passed
-# everything. See docs/plans/auth-ui-and-production.md § The check, and why it
+# everything. See docs/plans/260826ae-auth-ui-and-production.md § The check, and why it
 # is written this way, and docs/reusable/silent-success.md.
 #
 # Exit status: 0 google is on, 1 google is off, 2 the check itself is broken
@@ -98,6 +98,6 @@ if [ "$google" != "ON" ]; then
   echo
   echo "Google is off on this project — that is the 'provider is not enabled' error." >&2
   echo "Fix: npx tsx scripts/supabase-auth-config.ts apply" >&2
-  echo "See docs/plans/google-sign-in-production.md." >&2
+  echo "See docs/plans/260827i-google-sign-in-production.md." >&2
   exit 1
 fi

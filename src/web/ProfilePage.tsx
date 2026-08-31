@@ -40,7 +40,7 @@
  * in this repo — the free-text box above *is* the single global setting its own
  * doc recommended instead); **typography settings** (*"a reader who wants
  * bigger text has a browser zoom"*); **a difficulty score**, for the reason
- * docs/plans/metadata-page.md gives; and **streaks or anything that counts at you**, which
+ * docs/plans/260825e-metadata-page.md gives; and **streaks or anything that counts at you**, which
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
@@ -219,7 +219,7 @@ export function ProfilePage() {
             id="reader-profile"
             label="Your background, expertise and interests"
             placeholder="e.g. Cognitive scientist, twenty years. Rusty on transformer internals. I read for the argument rather than the news."
-            hint="Used on every article — the glossary, the summaries, chat, explanations and threads. It changes what gets explained and how much, never what the article says."
+            hint="Used on every article — the glossary, the ideas, chat, explanations and threads. It changes what gets explained and how much, never what the article says."
             value={profile.draft}
             onChange={profile.setDraft}
             onCommit={profile.flush}
@@ -357,7 +357,7 @@ export function ProfilePage() {
         <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">
           Which model writes what, and which way we reach it. Nothing here is a setting — it is what
           the server is configured with, shown so that "why is the glossary slower than the
-          summaries" has an answer.
+          ideas" has an answer.
         </p>
       </Section>
     </main>

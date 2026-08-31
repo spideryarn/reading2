@@ -3,7 +3,7 @@
  *
  * **Closed to new arrivals since 2026-08-26.** Selecting text used to create a
  * comment here and spend a model call on the spot; it now opens a conversation
- * instead — docs/plans/chat-as-gateway.md. So this hook reads the explanations
+ * instead — docs/plans/260826ab-chat-as-gateway.md. So this hook reads the explanations
  * a reader already has, and offers the two ways to ask one again: `retry` for a
  * model call that failed, `deepen` for an answer they have read and judged thin.
  *
@@ -119,7 +119,7 @@ export interface CommentsApi {
   loadFailed: boolean;
   /* **No `ask`.** Selecting text used to create a comment and spend a model
      call on the spot; since 2026-08-26 it opens a conversation instead
-     (docs/plans/chat-as-gateway.md), so nothing creates a new explanation and
+     (docs/plans/260826ab-chat-as-gateway.md), so nothing creates a new explanation and
      this hook is a reader of old ones plus the two ways to re-ask them.
 
      The rule is not enforced here. `POST /api/comments/:slug` refuses an id it
@@ -301,7 +301,7 @@ export function useComments(slug: string): CommentsApi {
              Answering is its own route since 2026-08-28, and it reads the
              stored passage rather than accepting one — so a retry cannot move a
              comment to different words, and cannot blank the reader's note by
-             resending a subset of the row. docs/plans/comments-and-bookmarks.md. */
+             resending a subset of the row. docs/plans/260828a-comments-and-bookmarks.md. */
           const r = await apiFetch(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(pending.id)}/answer`,
             {

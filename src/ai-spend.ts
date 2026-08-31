@@ -173,7 +173,7 @@ export interface SpendRecord {
  * Raised by a GPT Sol review, which also pointed out what it does **not** catch:
  * if the process dies, this dies with it. Catching that needs a row written to
  * disk before the network call, which is a later phase and is written down in
- * docs/plans/ai-cost-tracking.md rather than half-built here.
+ * docs/plans/260827q-ai-cost-tracking.md rather than half-built here.
  */
 export interface PendingCall {
   job: AiJob;
@@ -337,7 +337,7 @@ export interface AiCallRow {
    * multiplying each row by 1.055 would invent a precision that can never match
    * a bank statement. Cash belongs to a credit-purchase ledger that does not
    * exist yet. Decided with GPT Sol, 2026-08-28, in Greg's absence; see
-   * docs/plans/ai-cost-tracking.md § Questions for Greg, Q5.
+   * docs/plans/260827q-ai-cost-tracking.md § Questions for Greg, Q5.
    */
   creditsUsedNanos: Nanos | null;
   upstreamInferenceNanos: Nanos | null;

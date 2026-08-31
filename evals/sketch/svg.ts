@@ -81,9 +81,17 @@ function attrsFor(cls: string, tone: number | undefined): string {
     if (has("sk-shape-note")) out.push('stroke-dasharray="3 3"');
   } else if (has("sk-note-fold")) {
     out.push('fill="none"', `stroke="${rgba(tone, 0.5)}"`, 'stroke-width="1"');
+  } else if (has("sk-region-more")) {
+    // The "expand" corner mark beside such a region's name.
+    out.push('fill="none"', `stroke="${rgba(tone, 0.55)}"`, 'stroke-width="1.6"');
+    out.push('stroke-linecap="round"');
   } else if (has("sk-region")) {
-    out.push(`fill="${has("sk-region-dashed") ? "none" : rgba(tone, 0.07)}"`);
-    out.push(`stroke="${rgba(tone, 0.24)}"`, 'stroke-width="1"');
+    /* A region that opens a scene is drawn hotter than one that does not — the
+       whole always-on affordance, and the reason it is contrast rather than a
+       second shape is in `MARK` in src/sketch-paint.ts. */
+    const opens = has("sk-region-opens");
+    out.push(`fill="${has("sk-region-dashed") ? "none" : rgba(tone, opens ? 0.13 : 0.07)}"`);
+    out.push(`stroke="${rgba(tone, opens ? 0.62 : 0.24)}"`, `stroke-width="${opens ? 1.8 : 1}"`);
   } else if (has("sk-bracket")) {
     out.push('fill="none"', `stroke="${rgba(tone, 0.5)}"`, 'stroke-width="1.5"');
   } else if (has("sk-head")) {

@@ -1,0 +1,11 @@
+# State records the infrastructure, and can hold values you would not paste in
+# public. It is not needed to rebuild — `terraform import` or a fresh apply will
+# do — so it stays out of the repo.
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!example.tfvars
+
+# .terraform.lock.hcl is deliberately NOT ignored: it pins provider versions
+# so a rebuild resolves the same code. Commit it.

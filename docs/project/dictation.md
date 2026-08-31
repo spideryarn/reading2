@@ -4,11 +4,21 @@ A microphone button beside a text box. Press it, talk, press it again, and your 
 box. It is on four boxes today — both profile boxes, the chat composer, the comment follow-up —
 and adding it to a fifth is three lines.
 
+This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
+back and either of you can cut the other off — is a separate feature, not a setting on this one:
+[live-conversation.md](live-conversation.md). It shares this doc's vocabulary machinery and none of
+its plumbing, because OpenRouter has no realtime API and the audio never reaches our server at all.
+
+The two do share one thing that matters: **the page's one microphone**. A live session claims
+[`mic-lock.ts`](../../src/web/mic-lock.ts) like any dictation box, and holds it for minutes rather
+than for a sentence — so pressing the microphone mid-conversation politely ends the conversation
+rather than fighting it.
+
 This doc is *how it works now*. The day of debugging that got the microphone itself believable —
 the 1.1-second gap nobody could see, the level meter, the conferencing loopback that emitted exact
 digital silence — is in [reader-profile.md § The microphone](reader-profile.md#the-microphone-and-what-it-took-to-make-it-believable),
 and the change described here is planned out with its measurements and its review in
-[dictation-two-pass.md](../plans/dictation-two-pass.md).
+[260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md).
 
 ## It transcribes twice
 
@@ -56,7 +66,7 @@ the reader is least likely to say. Three files, and the split is what makes it r
 [`src/vocabulary-sources.ts`](../../src/vocabulary-sources.ts) turns a *place* into a term list, and
 [`src/transcribe.ts`](../../src/transcribe.ts) takes a vocabulary as a string and never needs to
 know where it came from. The plan, the measurements and the alternatives are in
-[dictation-vocabulary.md](../plans/dictation-vocabulary.md).
+[260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md).
 
 1. **The app's own words** — `Spideryarn`, `granularity zoom`, a block id. Small, flat, always.
    Nothing in an article ever supplies them, and `Spideryarn` is the word a reader is most likely to
@@ -348,8 +358,9 @@ does not.
 ## See also
 
 [reader-profile.md](reader-profile.md) · [comments.md](comments.md) · [glossary.md](glossary.md) ·
+[live-conversation.md](live-conversation.md) ·
 [copy.md](copy.md) · [logging.md](logging.md) ·
-[dictation-two-pass.md](../plans/dictation-two-pass.md) ·
-[dictation-vocabulary.md](../plans/dictation-vocabulary.md) ·
-[microphone-library-options.md](../research/microphone-library-options.md) ·
+[260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md) ·
+[260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md) ·
+[260827b-microphone-library-options.md](../research/260827b-microphone-library-options.md) ·
 [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)

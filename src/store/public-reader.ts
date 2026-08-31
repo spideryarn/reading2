@@ -40,7 +40,7 @@
  * that takes no predicate, and `currentOwnerId()` still throwing as the runtime
  * tripwire.
  *
- * See docs/plans/public-read-only-access.md.
+ * See docs/plans/260827ai-public-read-only-access.md.
  */
 
 import { asc, eq, sql } from "drizzle-orm";
@@ -60,8 +60,8 @@ import { publicArticle, publicMetadata } from "../public/dto.js";
  * What a public reader can be asked for.
  *
  * **Two methods, because two endpoints landed.** Sol's answer 5 sketched six —
- * tweets, glossary, summaries and ideas as well — and those are slice 1b of
- * docs/plans/public-read-only-access.md, along with their DTOs and their tests.
+ * tweets, glossary and ideas as well — and those are slice 1b of
+ * docs/plans/260827ai-public-read-only-access.md, along with their DTOs and their tests.
  * Declaring four methods nothing implements would be four shapes nobody has
  * checked against a real row, which is the sort of thing that gets believed.
  */
@@ -196,10 +196,19 @@ end`;
  * stops being able to tell a selected column from an unselected one — which is
  * most of what a projection is for.
  *
- * Read the absences. No `final_url` (the post-redirect URL, which can carry
- * credentials), no `fetched_at`, no `note`, and none of the six PDF provenance
- * columns. `articles.title_override` is not selected either, so there is
- * nothing here for a `titleFor()` to be called on.
+ * Read the absences. No `fetched_at`, no `note`, and none of the six PDF
+ * provenance columns. `articles.title_override` is not selected either, so there
+ * is nothing here for a `titleFor()` to be called on.
+ *
+ * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
+ * itself.** It was held back here with a note saying a visible "read the
+ * original" link was a separate product decision; Greg made it — *"Public-readable
+ * articles should show their provenance-url to all reader[s]"* — and it wanted
+ * *"its own named field rather than this one leaking sideways into a DTO"*, which
+ * is what it now has. `publicMeta` in src/public/dto.ts runs the column through
+ * `publicSourceUrl` (src/urls.ts) and publishes the result under `PublicMeta.url`;
+ * the credential clause that made this column dangerous is enforced there, at the
+ * one boundary a reviewer reads, rather than by the column being absent here.
  */
 const PUBLIC_PROJECTIONS = {
   article: {
@@ -209,6 +218,7 @@ const PUBLIC_PROJECTIONS = {
     siteName: articleRevisions.siteName,
     lang: articleRevisions.lang,
     excerpt: articleRevisions.excerpt,
+    finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     /* **The image manifest, and this is the half of the feature that is easy to
@@ -217,14 +227,14 @@ const PUBLIC_PROJECTIONS = {
        public article hot-linking to the publisher — the privacy leak this whole
        feature exists to close, happening on exactly the page we invite
        strangers to, while looking finished from the owner's chair.
-       docs/plans/hosting-the-articles-images.md#delivery. */
+       docs/plans/260829b-hosting-the-articles-images.md#delivery. */
     assets: articleRevisions.assets,
     /**
-     * **The four artefacts slice 1b carries, off the same row.**
+     * **The artefacts slice 1b carries, off the same row.**
      *
      * They are JSONB columns on `article_revisions` — the row this query is
-     * already fetching — so a visitor gets the glossary, the summaries, the
-     * ideas and the tweet thread for no extra query and no extra round trip.
+     * already fetching — so a visitor gets the glossary, the ideas, the quotes
+     * and the tweet thread for no extra query and no extra round trip.
      * That is the whole of what Greg's "no new endpoints" decision buys, and it
      * is why there is no `PublicArtefactReader` beside this one.
      *
@@ -243,17 +253,17 @@ const PUBLIC_PROJECTIONS = {
      * There is no column-level alternative: a JSONB document is one column.
      */
     glossary: articleRevisions.glossary,
-    summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
+    quotes: articleRevisions.quotes,
     tweets: articleRevisions.tweets,
   },
   /**
-   * **Five booleans and a title, and not one document.**
+   * **A handful of booleans and a title, and not one document.**
    *
    * `is not null` in SQL rather than reading the JSONB and comparing it here.
    * The metadata page asks whether a glossary exists, not how many terms are in
    * it, and the owner's shelf spent two days dragging every artefact across the
-   * wire to answer exactly that question — docs/plans/library-read-latency.md.
+   * wire to answer exactly that question — docs/plans/260828c-library-read-latency.md.
    * This one starts on the right side of that.
    */
   metadata: {
@@ -281,8 +291,8 @@ const PUBLIC_PROJECTIONS = {
     hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
     hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
     hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
-    hasSummary: sql<boolean>`${articleRevisions.summary} is not null`.as("has_summary"),
     hasIdeas: sql<boolean>`${articleRevisions.ideas} is not null`.as("has_ideas"),
+    hasQuotes: sql<boolean>`${articleRevisions.quotes} is not null`.as("has_quotes"),
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -293,7 +303,7 @@ const PUBLIC_PROJECTIONS = {
    * — the moment it produces body HTML we own two reading views — and the
    * cheapest way to hold that line is here: it cannot render a body from this
    * projection because the blocks are not in it.
-   * docs/plans/public-read-only-access.md § Stage 2.
+   * docs/plans/260827ai-public-read-only-access.md § Stage 2.
    *
    * Six values. `title` and `headingTitle` are the same pair the metadata read
    * uses, for the same reason — an article whose `<h1>` is its only title still
@@ -308,11 +318,18 @@ const PUBLIC_PROJECTIONS = {
    * that answered 200 there would put a title and a description on a link to a
    * blank screen — which is worse than no preview, because it is a claim.
    *
-   * `finalUrl` never reaches the wire as-is: it is the *candidate* canonical,
-   * and `safePublicCanonical` in src/urls.ts decides whether anything is
-   * published at all. It stays out of `PublicMeta` deliberately — a visible
-   * "read the original" link is a separate product decision and would want its
-   * own named field rather than this one leaking sideways into a DTO.
+   * `finalUrl` never reaches the wire as-is here either: for a head it is the
+   * *candidate* canonical, and `safePublicCanonical` in src/urls.ts decides
+   * whether a `<link rel="canonical">` is published at all.
+   *
+   * **This paragraph used to end by saying the column stays out of `PublicMeta`
+   * because a visible "read the original" link was a separate product decision.**
+   * Greg made that decision on 2026-08-30, so the article projection above
+   * selects the column too — and the two publish it under different policies,
+   * which is the point rather than an inconsistency. A canonical is a machine's
+   * claim about which document this is and refuses any query string; the
+   * reader's link is a person clicking through to the piece and keeps it.
+   * src/urls.ts § `publicSourceUrl` weighs the two against each other.
    */
   head: {
     id: articleRevisions.id,
@@ -397,7 +414,7 @@ export function publicBlocksQuery(
          preview has to render a note's whole *range*, and without an identity
          it has only "the block the marker landed on" to show. None of the three
          is about a person or about our pipeline — they are what the article
-         is. docs/plans/footnotes.md, the stage-5 trap. */
+         is. docs/plans/260828o-footnotes.md, the stage-5 trap. */
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
@@ -466,13 +483,14 @@ export const pgPublicReader: PublicArticleReader = {
         lang: found.revision.lang,
         excerpt: found.revision.excerpt,
         headingTitle: headingTitleOf(blocks),
+        finalUrl: found.revision.finalUrl,
         blocks,
         tree,
         arc: found.revision.arc,
         assets: found.revision.assets,
         glossary: found.revision.glossary,
-        summary: found.revision.summary,
         ideas: found.revision.ideas,
+        quotes: found.revision.quotes,
         tweets: found.revision.tweets,
       });
     });
@@ -501,8 +519,8 @@ export const pgPublicReader: PublicArticleReader = {
           arc: found.revision.hasArc,
           tweets: found.revision.hasTweets,
           glossary: found.revision.hasGlossary,
-          summary: found.revision.hasSummary,
           ideas: found.revision.hasIdeas,
+          quotes: found.revision.hasQuotes,
         },
       });
     });

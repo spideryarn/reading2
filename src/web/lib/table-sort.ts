@@ -116,7 +116,7 @@ export type NaturalDirections = Readonly<Record<string, "asc" | "desc">>;
  * on exactly that array) recomputed every render and queued a page-index reset,
  * which set state, which rendered again. The homepage sat there doing about 470
  * renders a second and locked up entirely on the first keystroke.
- * docs/postmortems/shelf-render-loop.md. Taking the `null` here means there is
+ * docs/postmortems/260827e-shelf-render-loop.md. Taking the `null` here means there is
  * no per-render array for anybody to build.
  */
 export function sortingFromUrl(

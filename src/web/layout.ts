@@ -44,7 +44,7 @@
  *
  * **12, halved from 24 on 2026-08-28** — Greg: *"let's make the Spine a little
  * bit narrower … define one, and then halve it from the current"*. What that
- * costs and what it does not is docs/plans/spine-rail.md § What a 12px rail
+ * costs and what it does not is docs/plans/260828ay-spine-rail.md § What a 12px rail
  * actually breaks; the short version is that a mouse loses nothing (the rail is
  * flush against the viewport edge, which is the easy case for Fitts) and a
  * finger loses half of a target that was already below every guideline —
@@ -70,7 +70,7 @@ export const PROSE_MIN = 544; // 34rem — the narrowest the reading column may 
 /**
  * The **mode band** — the strip between the spine and the prose when the middle
  * is something other than the table of contents (chat, and whatever comes after
- * it). See docs/plans/chat-mode.md, and note what it replaces: in a mode, the
+ * it). See docs/plans/260826a-chat-mode.md, and note what it replaces: in a mode, the
  * gist columns are not squeezed, they are *gone*, so this is not a fourth term
  * in the shrink-then-drop negotiation. It is what the negotiation is about
  * instead.
@@ -242,7 +242,7 @@ export function fitView({
    *
    * Whether a phone should also stack the current section's gist above the
    * prose — orientation without a mode switch — is a design question for Greg
-   * rather than something to decide here. docs/plans/mobile-reading-view.md
+   * rather than something to decide here. docs/plans/260827t-mobile-reading-view.md
    * § Open for Greg.
    */
   const gistsThatFit = (avail: number) => {

@@ -17,7 +17,7 @@
  * contents is the default one. So this file is not a special case bolted beside
  * the table; it is the second implementation of a slot, and the layout
  * arithmetic (layout.ts § modeWidth) knows about the slot rather than about
- * chat. See docs/plans/chat-mode.md.
+ * chat. See docs/plans/260826a-chat-mode.md.
  *
  * ## Why it is beside the article and not over it
  *
@@ -49,9 +49,9 @@
  *
  * Three things model syntax reaches that are not text nodes, all of them
  * constrained: the `href` of a link the model wrote, which is opt-in and
- * scheme-checked (Cited.tsx § links, docs/plans/chat-web-links.md); an ordered
- * list's `start`, which is a number; and a heading's element name, clamped to
- * h4–h6.
+ * scheme-checked (Cited.tsx § links, docs/plans/260827ao-chat-web-links.md); an
+ * ordered list's `start`, which is a number; and a heading's element name,
+ * clamped to h4–h6.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -84,7 +84,10 @@ import type {
   ToolRun,
 } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { BlockRef } from "./BlockRef.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { LiveButton } from "./live/LiveButton.js";
+import type { LiveApi } from "./live/useLiveConversation.js";
 import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -97,6 +100,17 @@ import { useRenderCount } from "./perf.js";
 
 interface Props {
   threads: ChatThread[];
+  /**
+   * The live conversation, owned above this component.
+   *
+   * **Above, and not here**, because this panel is remounted every time the
+   * reader switches conversation and a peer connection that a remount destroys
+   * is a connection nothing owns. `ConversationBand` holds it, and it is the
+   * same object for the life of the article.
+   */
+  live?: LiveApi | undefined;
+  /** Begin one, against the conversation the reader is looking at. */
+  onStartLive?: ((threadId: string) => void) | undefined;
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
@@ -197,7 +211,7 @@ interface Props {
    * differs is the empty state, the composer's size, and one `<select>`. A
    * second component would have been a second copy of all of the first list in
    * order to vary the second — which is the duplication GPT Sol's review of
-   * docs/plans/review-mode.md (finding 9) said not to build.
+   * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
    * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
    * modes show every thread for this article, and a review carries a tag.
@@ -209,7 +223,7 @@ interface Props {
    * Above the composer because the composer is keyed by thread id and remounts;
    * seeded by the band from the last answer in the open conversation, so a
    * reader who picked Socratic yesterday finds it still on Socratic. Unused in
-   * chat mode. See docs/plans/review-mode.md § Where the stance picker's value
+   * chat mode. See docs/plans/260827ah-review-mode.md § Where the stance picker's value
    * lives.
    */
   stance: ReviewStance;
@@ -224,7 +238,7 @@ interface Props {
  * and must not be added: it is the anti-goal
  * ([vision.md](../../docs/project/vision.md)) in a single click, and a chat
  * that opens by offering to replace the reading is not the feature that was
- * argued for in docs/plans/chat-mode.md.
+ * argued for in docs/plans/260826a-chat-mode.md.
  *
  * They are borrowed rather than invented. Greg, 2026-08-26: *"borrow ideas from
  * docs/project/original-version/ for suggestions for the user about what to use
@@ -313,6 +327,8 @@ export function ChatPanel({
   kind,
   stance,
   onStance,
+  live,
+  onStartLive,
 }: Props) {
   useRenderCount("ChatPanel");
   const review = kind === "review";
@@ -460,6 +476,12 @@ export function ChatPanel({
           kind={open.kind}
           stance={stance}
           onStance={onStance}
+          /* **Only for the conversation that is open.** A live session is bound
+             to one thread — it is seeded from it and appends to it — so the box
+             under the list, which starts a *new* conversation, has no business
+             offering one. */
+          live={live}
+          onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
       ) : threads.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
@@ -552,7 +574,7 @@ export function ChatPanel({
               now, in `refresh` itself, where pressing `+` fast enough could
               reach it without the box at all — `mergedArrival` and the load
               number in useChat.ts, and
-              docs/plans/chat-mode.md § The list arriving is not allowed to
+              docs/plans/260826a-chat-mode.md § The list arriving is not allowed to
               overwrite what the reader did.
 
               `focusNonce={0}` on purpose: this box must never take the caret.
@@ -892,6 +914,8 @@ export function Conversation({
   kind,
   stance,
   onStance,
+  live,
+  onStartLive,
 }: {
   /** The article, so the composer's profile control can ask about *this* one. */
   slug: string;
@@ -921,6 +945,9 @@ export function Conversation({
   kind: ThreadKind;
   stance?: ReviewStance;
   onStance?: ((next: ReviewStance) => void) | undefined;
+  /** The live session bound to this conversation, if the panel offers one. */
+  live?: LiveApi | undefined;
+  onStartLive?: (() => void) | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const last = thread.messages.at(-1);
@@ -1067,7 +1094,7 @@ export function Conversation({
 
         So the region carries a status line and nothing else. It tells you when
         to go and read, and the answer stays in one place to be read. See the
-        streaming-accessibility note in docs/plans/chat-mode.md.
+        streaming-accessibility note in docs/plans/260826a-chat-mode.md.
       */}
       <p className="sr-only" aria-live="polite">
         {busy
@@ -1092,6 +1119,8 @@ export function Conversation({
         kind={kind}
         {...(stance ? { stance } : {})}
         {...(onStance ? { onStance } : {})}
+        {...(live ? { live } : {})}
+        {...(onStartLive ? { onStartLive } : {})}
       />
     </>
   );
@@ -1317,6 +1346,41 @@ function Turn({
            mid-sentence with nothing to explain it is the thing that reads like
            a bug; one line saying who ended it is the whole fix. */
         <p className="chat-stopped">You stopped this answer.</p>
+      )}
+      {message.interrupted && (
+        /* **Not `stopped`, and the difference is which way the row is wrong.**
+           `stopped` means the reader had read enough and what is stored is what
+           they read. This means they talked over the answer: the server
+           truncated the audio it was still playing and kept the transcript
+           whole, so the text above may run *past* what they actually heard.
+           Saying so is the only honest thing available — the transcript cannot
+           be corrected, only labelled. docs/plans/260831l-live-conversation-in-chat.md § 1c. */
+        <p className="chat-stopped">You spoke over this — it may say more than you heard.</p>
+      )}
+      {message.passages && message.passages.length > 0 && (
+        /* **The pointers a spoken answer made instead of citing.**
+
+           A typed answer carries `[spya-k3m9qt]` in its own text and `Answer`
+           above makes each one pressable. A spoken answer deliberately has
+           none: it is forbidden to say an id aloud, and is given `show_passage`
+           instead. So without this the stored transcript is an *uncited claim*,
+           which is the one thing the chat contract exists to prevent — the
+           reader would have the companion's word for it and no way back to the
+           prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
+        <ul className="chat-pointed">
+          {message.passages.map((passage, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: an immutable stored list
+            <li key={i}>
+              {/* The model's own few words for what is in the passage. Plain
+                  text, never HTML: this is model output about an article we do
+                  not control. */}
+              {passage.why && <span className="chat-pointed-why">{passage.why}</span>}
+              {passage.blockIds.map((id) => (
+                <BlockRef key={id} id={id as BlockId} onJump={onJump} />
+              ))}
+            </li>
+          ))}
+        </ul>
       )}
       {message.citations && message.citations.length > 0 && (
         <ul className="chat-sources">
@@ -1722,6 +1786,8 @@ export function Composer({
   kind = "chat",
   stance = "balanced",
   onStance,
+  live,
+  onStartLive,
 }: {
   slug: string;
   onSend(question: string, useProfile: boolean): void;
@@ -1756,6 +1822,16 @@ export function Composer({
   /** The stance the next review answer will be asked for. Ignored in chat. */
   stance?: ReviewStance;
   onStance?: ((next: ReviewStance) => void) | undefined;
+  /**
+   * The live conversation this composer can hand over to, if there is one.
+   *
+   * Optional because two boxes use this component and only one of them is in a
+   * conversation: the box under the thread list starts a *new* one, and there
+   * is nothing for a live session to be seeded from or appended to there.
+   */
+  live?: LiveApi | undefined;
+  /** Begin one. The panel supplies the conversation; this box supplies nothing. */
+  onStartLive?: (() => void) | undefined;
 }) {
   /* Seeded from the draft and owned here from then on. The panel keeps the map
      because it outlives this component; this keeps the value because typing
@@ -1812,7 +1888,7 @@ export function Composer({
    * a reader asking about this article is about to use. Measured on 2026-08-27:
    * with the terms in the prompt the model got this app's own jargon right
    * every run; without them it made the same mistakes as every dedicated
-   * speech-to-text model. docs/plans/dictation-two-pass.md.
+   * speech-to-text model. docs/plans/260827x-dictation-two-pass.md.
    */
   const dictate = useDictationField({
     value,
@@ -1824,7 +1900,25 @@ export function Composer({
     context: { kind: "article", slug },
   });
 
-  const submit = () => {
+  /**
+   * Send — and **hand over from the live session first, awaited.**
+   *
+   * One modality at a time, because there is only ever one speaker and one
+   * response scheduler. The reader may hold a draft while talking; pressing
+   * Send gracefully ends the conversation, waits for its last exchange to be
+   * written down, and only then uses the proven typed path.
+   *
+   * **The `await` is the whole of it.** A typed turn claims the conversation's
+   * tail, and a flush still in flight is about to move it — so an unawaited
+   * handoff turns the expected-tail guard into a 409 we inflicted on ourselves,
+   * which the reader would see as their question being refused for no reason.
+   * docs/plans/260831l-live-conversation-in-chat.md § 1d.
+   *
+   * The box is cleared before the wait rather than after, which is the same
+   * optimism this button has always had: the question is on its way, and text
+   * the reader types during the handoff is theirs and is not thrown away.
+   */
+  const submit = async () => {
     /* **Not while a transcript is on its way.** `readOnly` stops typing and
        nothing else — Enter still fires, and sending here would post the
        recogniser's rough guess a moment before the good words arrived, which is
@@ -1833,9 +1927,10 @@ export function Composer({
     if (dictate.readOnly) return;
     const question = value.trim();
     if (question === "" || busy) return;
-    onSend(question, withProfile);
     setValue("");
     onDraft("");
+    if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
+    onSend(question, withProfile);
   };
 
   return (
@@ -1843,7 +1938,7 @@ export function Composer({
       className="chat-composer"
       onSubmit={(e) => {
         e.preventDefault();
-        submit();
+        void submit();
       }}
     >
       <textarea
@@ -1887,7 +1982,7 @@ export function Composer({
           e.stopPropagation();
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            submit();
+            void submit();
           }
           /* Escape, in three steps, most-urgent first.
 
@@ -1946,6 +2041,22 @@ export function Composer({
         ) : (
           <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={busy} />
         ))}
+      {/* **Beside the microphone, not instead of it.** They are different
+          things: one turns speech into text in this box, the other holds a
+          conversation. Pressing either while the other is running politely ends
+          it — `mic-lock.ts` arbitrates, because WebKit supports one microphone
+          source at a time.
+          Only where there is a conversation to have: the box under the thread
+          list starts a new one, and a live session there would have nothing to
+          be seeded from. */}
+      {live && onStartLive && (
+        <LiveButton
+          live={live}
+          onStart={onStartLive}
+          disabled={busy || dictate.readOnly}
+          labelled={review}
+        />
+      )}
       {review && onStance && (
         /* **A native `<select>`, not a custom radiogroup**, and that is a
            keyboard decision rather than a lazy one. The dock already owns a
@@ -1953,7 +2064,7 @@ export function Composer({
            composer would sit where arrow keys are already the caret's, and the
            article's own ↑/↓ navigation is a third claimant. A select has all of
            this for free and announces itself correctly. GPT Sol's review of
-           docs/plans/review-mode.md.
+           docs/plans/260827ah-review-mode.md.
 
            Its own `onKeyDown` stop, for the same reason the textarea has one:
            this form sits inside the reading view, whose keynav listens on the

@@ -20,7 +20,7 @@
  * client's own type says it cannot be. So the round-trip is asserted with
  * `toEqual` against an object that simply has no such key.
  *
- * See docs/plans/durable-queue-and-uploads.md.
+ * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
 import { afterEach, describe, expect, it } from "vitest";
 

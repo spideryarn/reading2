@@ -30,7 +30,7 @@
  * the page simply scrolls. `fitView` never hears about this file.
  *
  * Full reasoning, and the right-hand edge that was offered and turned down:
- * docs/plans/bottom-bar.md.
+ * docs/plans/260825c-bottom-bar.md.
  *
  * ## The three things that had to move over
  *
@@ -69,7 +69,7 @@
  * > We can get rid of the panel, and move all its contents into the new page.
  *
  * So there is no About panel here any more, and the markup it used to render
- * lives in Metadata.tsx. See docs/plans/metadata-page.md.
+ * lives in Metadata.tsx. See docs/plans/260825e-metadata-page.md.
  *
  * ## The order, which Greg set by hand
  *
@@ -99,6 +99,7 @@ import {
   BookA,
   Lightbulb,
   ChevronUp,
+  Clock,
   Focus,
   LoaderCircle,
   Network,
@@ -111,6 +112,7 @@ import {
   Search,
   Speech,
   X,
+  Quote,
 } from "lucide-react";
 import type { Comment } from "../types.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
@@ -136,7 +138,7 @@ interface Props {
   view: ArticleView;
   /**
    * Which mode owns the middle band, and how to change it — the reading view
-   * only. See params.ts § modeParam and docs/plans/chat-mode.md.
+   * only. See params.ts § modeParam and docs/plans/260826a-chat-mode.md.
    *
    * Optional for the same reason `drawer` is: the metadata and thread pages
    * have no middle band to put a mode in, so their Chat button is a link back
@@ -168,7 +170,7 @@ interface Props {
    * So pressing a marked mode opens its band and the band carries the sentence
    * in visible text — see `VisitorBand` in PublicChrome.tsx. The dimming and
    * the tooltip line below are the supplement, never the message.
-   * docs/research/public-access-how-others-do-it.md § 2.
+   * docs/research/260828a-public-access-how-others-do-it.md § 2.
    */
   marked?: ReadonlyMap<Mode, string> | undefined;
   /**
@@ -216,7 +218,7 @@ interface Props {
      * there is no `comments: []` for a later edit to read and no `loaded`
      * for it to test. The five that are missing are missing because there is
      * nothing to fetch — `useComments` is not mounted anywhere on a shared
-     * document. docs/plans/public-read-only-access.md.
+     * document. docs/plans/260827ai-public-read-only-access.md.
      *
      * The alternative was passing no drawer at all, which degrades the
      * Comments button to a link back to the page it is already on. A control
@@ -263,8 +265,8 @@ interface Props {
  * own docs single it out as the one to be most suspicious of, and it sits
  * closest to our anti-goals (vision.md). Neither objection was waved away;
  * both are answered at length, in
- * docs/plans/tweet-thread-page.md#say-the-awkward-thing-first and in
- * docs/plans/chat-mode.md#say-the-awkward-thing-first. The chat that was built
+ * docs/plans/260825g-tweet-thread-page.md#say-the-awkward-thing-first and in
+ * docs/plans/260826a-chat-mode.md#say-the-awkward-thing-first. The chat that was built
  * is not the one that was refused: every claim it makes carries a block id and
  * the article stays on screen beside it.
  */
@@ -343,7 +345,7 @@ const MODES_UI: {
      is this piece, and where am I in it — with one nested list instead of
      columns you read across. Greg set this order by hand and it runs from the
      article's own words outwards, so the two structural views belong together
-     at the near end. docs/plans/outline-mode.md. */
+     at the near end. docs/plans/260828aw-outline-mode.md. */
   {
     mode: "outline",
     icon: Focus,
@@ -356,7 +358,7 @@ const MODES_UI: {
     icon: Layers,
     label: "Summary",
     blurb:
-      "The article, its parts and its sections, each at whichever length you ask for — a sentence, a few, or a page",
+      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
   },
   {
     mode: "glossary",
@@ -374,6 +376,32 @@ const MODES_UI: {
     icon: Lightbulb,
     label: "Ideas",
     blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
+  },
+  /* Next again, and it belongs at this end of the order for the same reason
+     Ideas does: the bar runs outwards from the article's own words, and this is
+     the mode that is *closest* to them — every row is a sentence out of the
+     piece rather than something a model wrote about it. Greg set this order by
+     hand, so a new mode goes where it belongs in his reasoning rather than on
+     the end. docs/project/quotes.md. */
+  {
+    mode: "quotes",
+    icon: Quote,
+    label: "Quotes",
+    blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
+  },
+  /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
+     and the reason it lands *here* rather than immediately after the Ideas row:
+     Quotes arrived between the two the same day, and "after Ideas" is a
+     position in the reasoning — with Glossary and Ideas, as a third "here is one
+     dimension of this piece pulled out" — rather than an array index. It is
+     further from the article's own words than either of those, and further than
+     Quotes, so it goes at the far end of that group.
+     docs/plans/260831i-timeline-mode.md § 3. */
+  {
+    mode: "timeline",
+    icon: Clock,
+    label: "Timeline",
+    blurb: "When the piece says these things happened, in order — and how sure it actually is",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That
@@ -412,7 +440,7 @@ const MODES_UI: {
      restated, through the ways into it, to the conversation about it. Review is
      the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
-     article's own words run out. docs/plans/review-mode.md. */
+     article's own words run out. docs/plans/260827ah-review-mode.md. */
   {
     mode: "review",
     icon: Speech,

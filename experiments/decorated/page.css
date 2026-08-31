@@ -3,7 +3,7 @@
  *
  * ORGANISED BY CHANNEL, NOT BY FEATURE. A dozen decorations can only share one page
  * if each owns a different channel and nothing else is allowed to touch it. The
- * budget below came out of the design review (docs/research/decorated-mode-ideas.md
+ * budget below came out of the design review (docs/research/260828c-decorated-mode-ideas.md
  * § The channel budget) and every rule in this file is answerable to it:
  *
  *   hue           the reader's layer only — comments, bookmarks. Nothing the model

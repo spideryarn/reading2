@@ -92,6 +92,54 @@ describe("findQuote", () => {
     expect(text.slice(span!.start, span!.end)).toBe("in the end");
   });
 
+  /**
+   * **One source character can become more than one, and the map used to
+   * assume it could not.**
+   *
+   * `reduce` lowercases as it goes, and `"İ".toLowerCase()` is two code units.
+   * The old loop pushed one map entry per *input* code unit, so from that
+   * character onward `value` and `map` were out of step — and `findQuote`
+   * returned a span an entire sentence too short. Nothing errored: the caller
+   * in src/quotes.ts sliced the block by that span and stored `"T"` as a
+   * verbatim quotation of the author, with no drop counted.
+   *
+   * Found by GPT Sol reviewing the built quotes stage, 2026-08-31, with this
+   * exact string.
+   */
+  describe("characters that do not fold one-to-one", () => {
+    it("spans the whole sentence when a character lowercases to two", () => {
+      const text = "This sufficiently long sentence ends in İstanbul";
+      const span = findQuote(text, text);
+      expect(span).not.toBeNull();
+      expect(text.slice(span!.start, span!.end)).toBe(text);
+    });
+
+    it("matches a needle typed in the other case, and still spans it all", () => {
+      const text = "The city of İstanbul sits on two continents entirely.";
+      const span = findQuote(text, "the city of İSTANBUL sits on two continents entirely.");
+      expect(span).not.toBeNull();
+      expect(text.slice(span!.start, span!.end)).toBe(text);
+    });
+
+    /* An astral character is a surrogate pair, so its end is `start + 2`. The
+       arithmetic version of `endOf` cut it in half and produced a lone
+       surrogate — a string that will not even render. */
+    it("does not cut a surrogate pair in half at the end of a span", () => {
+      const text = "A sentence that finishes on an emoji, right here 🎉";
+      const span = findQuote(text, text);
+      expect(span).not.toBeNull();
+      const got = text.slice(span!.start, span!.end);
+      expect(got).toBe(text);
+      expect(got.endsWith("🎉")).toBe(true);
+    });
+
+    it("keeps the fold's own characters intact mid-span", () => {
+      const text = "Straße is spelled with an eszett, which lowercases to itself.";
+      const span = findQuote(text, text);
+      expect(text.slice(span!.start, span!.end)).toBe(text);
+    });
+  });
+
   describe("choosing between repeats", () => {
     const text = "the self, and later the self again";
 

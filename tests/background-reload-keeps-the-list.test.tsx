@@ -11,10 +11,11 @@
  * read has nothing to fall back on.
  *
  * Three hooks were copied from that one **before** the guard landed, and none
- * of them had it: `useSummaries` (26 Aug), `useIdeas` (27 Aug) and the thread
- * page's own loader in `Tweets.tsx`. Two of the three were live bugs, because
- * `load()` is not only the opening read — every one of them calls it again from
- * `onFinished` whenever a job that writes their artefact completes.
+ * of them had it: `useSummaries` (26 Aug, deleted 2026-08-31 with the summary
+ * ladder), `useIdeas` (27 Aug) and the thread page's own loader in
+ * `Tweets.tsx`. Two of the three were live bugs, because `load()` is not only
+ * the opening read — every one of them calls it again from `onFinished`
+ * whenever a job that writes their artefact completes.
  *
  * ## Why the tests are shaped the way they are
  *
@@ -46,7 +47,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, Ideas, Summaries, TweetThread } from "../src/types.js";
+import type { Article, Ideas, TweetThread } from "../src/types.js";
 
 /* React only permits `act` when the environment says it is a test one. Without
    this every render below still runs, and warns, and the effects it is meant to
@@ -62,7 +63,6 @@ const held: Array<() => void> = [];
 
 /** What each artefact endpoint would return **right now**. Tests mutate these. */
 let ideaNames = ["ideas are cheap"];
-let summaryShorts = ["the short of it"];
 let tweetTexts = ["the first post"];
 
 function ideasArtefact(slug: string): Ideas {
@@ -84,22 +84,6 @@ function ideasArtefact(slug: string): Ideas {
   } as unknown as Ideas;
 }
 
-function summariesArtefact(slug: string): Summaries {
-  return {
-    version: "summary/1",
-    generator: "test",
-    slug,
-    sourceHash: "abc",
-    profileHash: null,
-    entries: summaryShorts.map((short) => ({
-      range: ["spya-a", "spya-b"],
-      depth: 0,
-      short,
-    })),
-    generatedAt: "2026-08-28T00:00:00.000Z",
-    elapsedMs: 1,
-  } as unknown as Summaries;
-}
 
 function threadArtefact(slug: string): TweetThread {
   return {
@@ -132,9 +116,7 @@ function bodyFor(url: string): string {
       profileChanged: false,
     });
   }
-  if (url.startsWith("/api/summary/")) {
-    return JSON.stringify({ summaries: summariesArtefact(slug), stale: false, profileChanged: false });
-  }
+
   if (url.startsWith("/api/tweets/")) {
     return JSON.stringify({ thread: threadArtefact(slug), stale: false, profileChanged: false });
   }
@@ -196,7 +178,6 @@ vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { useSummaries } = await import("../src/web/useSummaries.js");
 const { Tweets } = await import("../src/web/Tweets.js");
 
 /** A job for this article, landing in the hook's poll as finished. */
@@ -218,22 +199,7 @@ function IdeasHarness({ slug }: { slug: string }): ReactElement {
   return createElement("aside", null, all.status === "ready" && all.ideas ? names : all.status);
 }
 
-let summariesHook: ReturnType<typeof useSummaries> | null = null;
 
-/**
- * Keyed on `status`, which is **not** what `SummaryPanel` does — it keys on
- * `summaries !== null` on purpose, and says so in a comment, which is why this
- * hook's copy of the bug is latent rather than live. The invariant being tested
- * is the hook's, and it is the one its three siblings hold: a failed
- * revalidation does not move `status` off `ready`. One edit in the panel would
- * otherwise make this live with nothing red to say so.
- */
-function SummariesHarness({ slug }: { slug: string }): ReactElement {
-  const all = useSummaries(slug);
-  summariesHook = all;
-  const shorts = all.summaries?.entries.map((e) => e.short).join(",") ?? "";
-  return createElement("aside", null, all.status === "ready" && all.summaries ? shorts : all.status);
-}
 
 const ARTICLE = {
   meta: { slug: "constitution", title: "A Constitution", url: "https://example.com/c" },
@@ -253,12 +219,10 @@ beforeEach(() => {
   held.length = 0;
   onFinished = null;
   ideasHook = null;
-  summariesHook = null;
   fails = false;
   runResult = { id: "job1" };
   queueError = null;
   ideaNames = ["ideas are cheap"];
-  summaryShorts = ["the short of it"];
   tweetTexts = ["the first post"];
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -318,32 +282,6 @@ describe("the ideas panel", () => {
     await render(createElement(IdeasHarness, { slug: "constitution" }));
     await settle();
     expect(ideasHook?.status).toBe("error");
-  });
-});
-
-describe("the summary panel", () => {
-  it("keeps the artefact when the reload after a job fails", async () => {
-    await render(createElement(SummariesHarness, { slug: "constitution" }));
-    await settle();
-    expect(host.querySelector("aside")?.textContent).toBe("the short of it");
-
-    fails = true;
-    await act(async () => {
-      finishJob("summary");
-    });
-    expect(asks("/api/summary/")).toBe(2);
-    await settle();
-
-    expect(summariesHook?.status).toBe("ready");
-    expect(summariesHook?.error).toContain("Failed to fetch");
-    expect(host.querySelector("aside")?.textContent).toBe("the short of it");
-  });
-
-  it("still reports a failure that leaves us with nothing", async () => {
-    fails = true;
-    await render(createElement(SummariesHarness, { slug: "constitution" }));
-    await settle();
-    expect(summariesHook?.status).toBe("error");
   });
 });
 

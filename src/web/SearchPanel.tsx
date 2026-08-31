@@ -1,6 +1,6 @@
 /**
  * The search panel — the fourth **mode** in the band between the spine and the
- * prose. See docs/project/search.md, and docs/plans/chat-mode.md for where the
+ * prose. See docs/project/search.md, and docs/plans/260826a-chat-mode.md for where the
  * band came from.
  *
  * ## One box, two matchers
@@ -772,7 +772,7 @@ function Saved({
                           moved down here. The words are the tweet thread
                           page's, deliberately: this is the same fact about
                           the same article and it should not need a second
-                          vocabulary (docs/plans/tweet-thread-page.md). */}
+                          vocabulary (docs/plans/260825g-tweet-thread-page.md). */}
                       {run.stale && (
                         <span
                           className="srch-saved-stale"
@@ -861,7 +861,7 @@ function Saved({
  * The same fact the tweet thread page and the glossary panel already state, in
  * the same words — *"describes an older version of the article"* — because it
  * is the same fact about the same article and a second vocabulary for it would
- * make a reader learn twice (docs/plans/tweet-thread-page.md,
+ * make a reader learn twice (docs/plans/260825g-tweet-thread-page.md,
  * src/web/GlossaryPanel.tsx).
  *
  * **What it deliberately does not offer is a button.** Every other stale banner

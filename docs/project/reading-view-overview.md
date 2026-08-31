@@ -3,7 +3,7 @@
 Everything the reader sees in the browser. The page has **three regions**: the **spine** (where you
 are in the article), the **prose** (what you are reading), and between them a **band** belonging to
 whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
-ideas, search, diagram and chat take turns in.
+ideas, quotes, search, diagram and chat take turns in.
 
 **Two of the ten modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
@@ -45,11 +45,17 @@ of compression, down the page for position and across for detail. Read that firs
 
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
-- **[summaries.md](summaries.md)** — the article at whichever length you ask for, the named ladder
-  wired to every level of the tree, and the panel that follows the reader down the page.
+- **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
+  moves them all at once, and the panel that follows the reader down the page.
 - **[ideas.md](ideas.md)** — the propositions the piece needs you to hold, sibling to the glossary:
   a term is a word you look up, an idea is a claim you hold. The first stage that lets the model
   name block ids.
+- **[quotes.md](quotes.md)** — the lines worth keeping: the piece's own sentences, chosen, checked
+  against it and marked where they sit. The only mode whose list is the article rather than something
+  a model wrote about it — open it for the two things verification cannot prove.
+- **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
+  they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
+  rows on the test article carry no date, and drawing them alike throws away what the article said.
 - **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
   search painted into the spine. Long; open it for the confidence unit or the colours.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
@@ -62,7 +68,7 @@ of compression, down the page for position and across for detail. Read that firs
   Open it for the anchoring, the four store operations and why there are four, and the streaming.
 - **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
-  [chat-mode.md](../plans/chat-mode.md), [chat-as-gateway.md](../plans/chat-as-gateway.md).
+  [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
 - **[review-mode.md](review-mode.md)** — the other direction: the reader says what they took from the
   piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
   cross-family review said not to ship the first one, and the one mode that cannot be used to avoid
@@ -94,6 +100,9 @@ of compression, down the page for position and across for detail. Read that firs
   feature never breaks a link to it.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
+- **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle
+  of a chat: why the audio never touches our server, the three orderings that fail silently, and the
+  one guard that is also the idempotency.
 - **[copy.md](copy.md)** — the words a reader sees when something fails, why they all live in one
   file, and the bracketed code at the end of every message.
 

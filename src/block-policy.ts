@@ -6,7 +6,7 @@
  *
  * Before it, `Block.gistable` was the only axis, and every consumer read it
  * directly and meant something different by it. Measured rather than reasoned
- * about (docs/plans/footnotes.md § `gistable: false` is not the switch):
+ * about (docs/plans/260828o-footnotes.md § `gistable: false` is not the switch):
  *
  * | consumer | what `gistable: false` did |
  * |---|---|
@@ -25,7 +25,7 @@
  * Defining each of these as `gistable && treatment !== "supplement"` is the
  * obvious move and it is wrong in two of the five. GPT Sol was explicit about
  * this before any of it was built
- * (docs/plans/footnotes-stage345-upfront-sol.md, decision 3):
+ * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 3):
  *
  * - `isSearchable` — `gistable` alone, **supplements included**. A note is
  *   often the best sentence in the piece, and a reader who searches for it must
@@ -160,7 +160,7 @@ export function isEmbeddable(block: Gistable & Treated): boolean {
  *
  * On a heavily cited piece this is a third of the labelling bill: 41 of gwern's
  * 175 nav labels and 121 of wikipedia's 335 were being bought for footnotes
- * (docs/plans/footnotes.md § Stage 3's input).
+ * (docs/plans/260828o-footnotes.md § Stage 3's input).
  */
 export function isStructural(block: Gistable & Treated): boolean {
   return block.gistable && isBody(block);
@@ -208,7 +208,7 @@ export interface WordCounts {
  * src/glossary.ts). Prompts that exclude the notes while the output sizes
  * include them is the same braiding one layer down.
  *
- * **Not split per `role`.** `docs/plans/footnotes.md` sketched
+ * **Not split per `role`.** `docs/plans/260828o-footnotes.md` sketched
  * `{ body, footnotes, references, total }`, and only `"footnote"` is ever
  * assigned in v1 — the other four roles are produced by nothing, so a
  * `references` field would be a number that is always zero and a reader-facing

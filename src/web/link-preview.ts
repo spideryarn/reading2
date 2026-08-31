@@ -10,7 +10,7 @@
  * URLs.
  *
  * **It is the floor the rest stands on.** A survey on 2026-08-27
- * (docs/research/link-previews.md) put four sources of card content in order,
+ * (docs/research/260827a-link-previews.md) put four sources of card content in order,
  * and this is the first: the free one, which has to render instantly and is the
  * entire card for every link nobody can tell us anything more about. Two of the
  * richer three are now built — an article already in this library, and

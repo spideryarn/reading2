@@ -169,7 +169,7 @@ counts parts knows about it — `partsOf` in [`arc.ts`](../../src/arc.ts), the s
 section counts, the arc's step marker ("3 / 7", never "3 / 9") — and the four things that navigate
 by column share one projection, `navigableItems` in [`web/tree.ts`](../../src/web/tree.ts), so that
 a reader standing mid-Notes is *in* the "Notes" item in the fisheye, in keyboard navigation, in the
-saved reading position and in the arc alike. See [footnotes.md](../plans/footnotes.md).
+saved reading position and in the arc alike. See [260828o-footnotes.md](../plans/260828o-footnotes.md).
 
 ### Where the tree comes from
 
@@ -398,7 +398,7 @@ Four decisions worth keeping:
   it is doing for us: [tooltips.md](tooltips.md).
 - **There is one rail, and it is the collapsed one** — 12px of bands, ticks and marks, at every
   window width. Halved from 24px on 2026-08-28, and the names it can no longer hold were already in
-  the hover card — [spine-rail.md](../plans/spine-rail.md).
+  the hover card — [260828ay-spine-rail.md](../plans/260828ay-spine-rail.md).
    Greg, 2026-08-26: *"There are two versions of the Spine — a collapsed and an
   expanded view. Let's get rid of the expanded view, so it's always collapsed."*
 

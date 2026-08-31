@@ -252,4 +252,275 @@ when("re-importing an article whose blocks have not changed", () => {
       );
     expect(rows.map((r) => r.version)).toEqual(["pipeline-1"]);
   }, 30_000);
+
+  /**
+   * **A stamped artefact's row records what the artefact says it was made
+   * from**, not the blocks hash.
+   *
+   * `stampForStep` (src/store/artifacts-pg.ts) reads the row *and* the artefact
+   * and throws `StampDisagrees` when both name an `inputHash` and the two
+   * differ — deliberately, because silently preferring either is how a stale
+   * artefact gets served for ever. The importer wrote `hashBlocks(blocks)` into
+   * every row, which was fine only while every stamped artefact hashed the
+   * blocks alone. Six of them no longer do: `arc`, `ideas` and `sketch` widened
+   * first, and `tweets`, `glossary` and `summary` joined them on 2026-08-31
+   * (src/source-hash.ts § `articleFingerprint`). So every imported revision was
+   * one Postgres-backed preflight away from refusing outright.
+   *
+   * A literal rather than a real fingerprint, on purpose: what is being asserted
+   * is that the row copies the artefact, and a value that could not be arrived
+   * at any other way is the only way to see that it did.
+   */
+  const glossaryRun = async (revisionId: string) => {
+    const rows = await getDb()
+      .select({
+        hash: revisionStepRuns.inputHash,
+        version: revisionStepRuns.implementationVersion,
+      })
+      .from(revisionStepRuns)
+      .where(
+        and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "glossary")),
+      );
+    return rows;
+  };
+
+  /**
+   * `term` is what makes one glossary **materially different** from another at
+   * the same `sourceHash` — the substance of the artefact, not a flag added for
+   * the test. Two runs of the same prompt over the same article can disagree
+   * about which terms are worth an entry, so this is the ordinary shape of the
+   * difference rather than a contrived one.
+   */
+  const writeGlossary = (sourceHash: string, term = "Fixture") =>
+    write("glossary.json", {
+      version: "glossary/2",
+      generator: "fixture",
+      slug: SLUG,
+      sourceHash,
+      entries: [{ id: BLOCK_ID, name: term, kind: "term", aliases: [], blocks: [BLOCK_ID] }],
+      passes: 1,
+    });
+
+  const glossaryTerms = async (): Promise<string[]> => {
+    const held = (await revisionRow())?.revision.glossary as
+      | { entries?: { name?: string }[] }
+      | null;
+    return (held?.entries ?? []).map((e) => e.name ?? "");
+  };
+
+  /**
+   * **A stamped artefact's row records what the artefact says it was made
+   * from**, not the blocks hash — on the first import *and* on every one after.
+   *
+   * `stampForStep` (src/store/artifacts-pg.ts) reads the row *and* the artefact
+   * and throws `StampDisagrees` when both name an `inputHash` and the two
+   * differ — deliberately, because silently preferring either is how a stale
+   * artefact gets served for ever. The importer wrote `hashBlocks(blocks)` into
+   * every row, which was fine only while every stamped artefact hashed the
+   * blocks alone. Six of them no longer do: `arc`, `ideas` and `sketch` widened
+   * first, and `tweets`, `glossary` and `summary` joined them on 2026-08-31
+   * (src/source-hash.ts § `articleFingerprint`). So every imported revision was
+   * one Postgres-backed preflight away from refusing outright.
+   *
+   * **The second half is the one the first version of this test hid.** It
+   * deleted the row before importing, so it proved insertion and said nothing
+   * about `onConflictDoNothing` — and re-import is the ordinary case: a re-cut
+   * tree or an edited title leaves the blocks alone, so the revision keeps its
+   * id, the JSONB is updated in place, and the row beside it does not move.
+   * Rows already imported under the old rule are in exactly that state and are
+   * repaired by the same update. GPT Sol, 2026-08-31.
+   *
+   * Literals rather than real fingerprints, on purpose: what is being asserted
+   * is that the row copies the artefact, and a value that could not be arrived
+   * at any other way is the only way to see that it did.
+   */
+  it("stamps a step row with the artefact's own source hash, on every import", async () => {
+    const revision = (await revisionRow())?.revision;
+    const db = getDb();
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+
+    await writeGlossary("first-hash-not-the-blocks-hash");
+    await importArticle(SLUG);
+    expect((await glossaryRun(revision!.id)).map((r) => r.hash)).toEqual([
+      "first-hash-not-the-blocks-hash",
+    ]);
+
+    /* The conflict path: same blocks, so the same revision, so the row is
+       already there. The artefact moves and the row has to move with it. */
+    await writeGlossary("second-hash-after-the-tree-was-recut");
+    await importArticle(SLUG);
+    expect((await glossaryRun(revision!.id)).map((r) => r.hash)).toEqual([
+      "second-hash-after-the-tree-was-recut",
+    ]);
+
+    /* And `toc` keeps the blocks hash, which is the one row that must:
+       `reasonsNotToPublish` compares that column against the stored blocks and
+       refuses the publication when they differ. */
+    const toc = await db
+      .select({ hash: revisionStepRuns.inputHash })
+      .from(revisionStepRuns)
+      .where(
+        and(eq(revisionStepRuns.revisionId, revision!.id), eq(revisionStepRuns.stepName, "toc")),
+      );
+    expect(toc[0]?.hash).not.toBe("second-hash-after-the-tree-was-recut");
+
+    await rm(path.join(DIR, "glossary.json"), { force: true });
+  }, 30_000);
+
+  /**
+   * **A pipeline row blocks a materially different artefact, not merely a
+   * different input hash.**
+   *
+   * The state this catches, and it is the ordinary one rather than the exotic
+   * one: the pipeline produced glossary **A** and recorded the hash it was made
+   * from; somebody's `glossary.json` holds glossary **B** made from the same
+   * blocks, tree and head — a second run of the same prompt, which legitimately
+   * chooses different terms. The hashes agree because the *inputs* agree. The
+   * artefacts do not.
+   *
+   * The importer replaced A with B, the guarded upsert correctly refused to
+   * touch the row, the hash comparison saw nothing wrong, and the transaction
+   * committed. Every freshness check then reported an artefact the pipeline
+   * never produced as current, for ever, because the row it is checked against
+   * still matches. GPT Sol, 2026-08-31 — the third round of this test being
+   * about the case I was thinking of rather than the case that bites.
+   *
+   * **So the rule is now "abort on any refused pipeline row"**, hashes
+   * unexamined. Comparing the two artefacts exactly would allow a genuine
+   * no-op, and it is more machinery than a path deleted at stage 3 is worth.
+   */
+  it("refuses an artefact its pipeline row did not produce, even at the same hash", async () => {
+    const revision = (await revisionRow())?.revision;
+    const db = getDb();
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+
+    await writeGlossary("one-hash-for-both", "Written by the pipeline");
+    await importArticle(SLUG);
+    expect(await glossaryTerms()).toEqual(["Written by the pipeline"]);
+
+    await db
+      .update(revisionStepRuns)
+      .set({ implementationVersion: "pipeline-1" })
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+
+    /* **The same `sourceHash`**, so the row and the file agree about the inputs
+       and disagree about the answer. Nothing in the old rule could see this. */
+    await writeGlossary("one-hash-for-both", "Written by somebody else");
+    await expect(importArticle(SLUG)).rejects.toThrow(/glossary/);
+
+    expect(await glossaryTerms(), "the artefact was not replaced").toEqual([
+      "Written by the pipeline",
+    ]);
+    expect((await glossaryRun(revision!.id))[0]?.version).toBe("pipeline-1");
+
+    await rm(path.join(DIR, "glossary.json"), { force: true });
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+    await importArticle(SLUG);
+  }, 30_000);
+
+  /**
+   * **The update is scoped to the importer's own rows — and where it refuses,
+   * the whole import refuses with it.**
+   *
+   * The delete a few tests up is scoped to `implementation_version = 'imported'`
+   * — the importer saying "I only clean up after myself" — and the upsert is
+   * scoped the same way, or the second half of that rule is missing. A pipeline
+   * row is a record of a run that really happened; a migration tool overwriting
+   * its `input_hash` would make the metadata page report a stage against an
+   * artefact that stage never saw.
+   *
+   * **Refusing the row is not enough on its own, and that was the bug.** The
+   * artefact JSONB is rewritten earlier in the same transaction, so a scoped
+   * upsert that simply declined left the column holding one hash and the row
+   * beside it holding another — and *committed*, reporting success.
+   * `stampForStep` (src/store/artifacts-pg.ts) reads both and throws
+   * `StampDisagrees` on exactly that pair, deliberately, because silently
+   * preferring either is how a stale artefact gets served for ever. So the
+   * import has to abort instead. GPT Sol, 2026-08-31.
+   *
+   * Asserted as the transaction **rolling back** rather than by calling
+   * `stampForStep` afterwards: with the fix in place there is no poisoned pair
+   * left to ask about, and "the column still holds what it held" is the direct
+   * statement of the property. The third assertion is what makes it more than a
+   * thrown error — an import that threw *after* writing would pass the first
+   * two and fail this one.
+   */
+  it("refuses the whole import rather than committing an artefact its row contradicts", async () => {
+    const revision = (await revisionRow())?.revision;
+    const db = getDb();
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+
+    /* An ordinary import first, so the column and the row agree and the state
+       under test is reached the way a real installation would reach it. */
+    await writeGlossary("what-the-pipeline-recorded");
+    await importArticle(SLUG);
+
+    /* Now the row belongs to the pipeline rather than to the importer. */
+    await db
+      .update(revisionStepRuns)
+      .set({ implementationVersion: "pipeline-1" })
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+
+    /* And the file has moved on. Overwriting the column here would leave the
+       pair `stampForStep` refuses. */
+    await writeGlossary("what-the-file-says");
+    await expect(importArticle(SLUG)).rejects.toThrow(/glossary/);
+
+    expect(await glossaryRun(revision!.id)).toEqual([
+      { hash: "what-the-pipeline-recorded", version: "pipeline-1" },
+    ]);
+    const after = (await revisionRow())?.revision.glossary as { sourceHash?: string } | null;
+    expect(after?.sourceHash, "the artefact was not written either").toBe(
+      "what-the-pipeline-recorded",
+    );
+
+    await rm(path.join(DIR, "glossary.json"), { force: true });
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revision!.id),
+          eq(revisionStepRuns.stepName, "glossary"),
+        ),
+      );
+    await importArticle(SLUG);
+  }, 30_000);
 });

@@ -5,7 +5,7 @@
  * Neither had a single test before this file — `grep -rn "\.rename(" tests/`
  * found nothing at all, and `.remove(` was only ever called against a fetch
  * stubbed to succeed. Written as a net before
- * docs/plans/chat-operation-model.md's stage 1 migrates both into operations,
+ * docs/plans/260828v-chat-operation-model.md's stage 1 migrates both into operations,
  * so a regression during that migration goes red here instead of shipping.
  *
  * **These pin what the code does today, not what it should do.** Where that is

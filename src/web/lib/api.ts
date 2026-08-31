@@ -19,7 +19,7 @@
  * That is what the whole homepage said on 2026-08-26 when the deployed function
  * was crashing — "A server error has occurred" is Vercel's plain-text 500, and
  * `The page c…` is its 404. The error handling was not missing; it was
- * unreachable. See docs/postmortems/first-vercel-deploy-silent-failures.md.
+ * unreachable. See docs/postmortems/260826g-first-vercel-deploy-silent-failures.md.
  *
  * ## And nothing was written down
  *
@@ -53,7 +53,7 @@
  * useChat.ts says in its own comment why it reads SSE off a `fetch` body
  * instead, and that decision — made for other reasons — is what leaves a
  * bearer token available here. Cookies would have brought a CSRF surface with
- * them. docs/plans/auth-supabase.md.
+ * them. docs/plans/260826w-auth-supabase.md.
  */
 
 import {
@@ -350,7 +350,7 @@ export async function fetchOk(input: string, init: RequestInit = {}): Promise<Re
  *   would resurrect requests the caller had already decided it did not want.
  * - **Anything that is not a GET.** A failed write has not happened, and the
  *   reader has to be told. See
- *   docs/plans/offline-reading.md for why there
+ *   docs/plans/260827r-offline-reading.md for why there
  *   is no write queue.
  */
 async function attempt(
@@ -435,7 +435,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
          Not fixable inside `resourceOf`, which maps a URL to *its own*
          resource and is right to: this is a second resource the write affects,
          and it has to be named. GPT Sol's review of the built code,
-         2026-08-30; docs/plans/profile-panel.md. */
+         2026-08-30; docs/plans/260830c-profile-panel.md. */
       if (user && prefix.startsWith("/api/library/")) void invalidate("/api/reader", user);
     }
     return res;
@@ -500,7 +500,10 @@ function slugOf(input: string): string {
  * shelf — Greg's ask was that *"stuff that has already been computed (e.g.
  * existing ToC, glossary, summary, ideas, chat history, etc etc)"* survive
  * losing the connection. The ToC needs no entry of its own: it arrives inside
- * the article payload.
+ * the article payload — and since 2026-08-31 so does everything summary mode
+ * draws, which is why there is no `/api/summary/` here any more
+ * (docs/plans/260831s-gist-only-summaries.md). Cached responses under that key are
+ * unreachable and expire through ordinary eviction.
  *
  * What is missing is as deliberate. `/api/jobs` describes work in flight and a
  * stale copy of it would be a lie about the present; `/api/library/search`
@@ -511,8 +514,8 @@ function slugOf(input: string): string {
 const CACHEABLE = [
   "/api/article/",
   "/api/glossary/",
-  "/api/summary/",
   "/api/ideas/",
+  "/api/quotes/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

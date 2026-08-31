@@ -33,11 +33,14 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, on wherever there is prose ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
-| `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
+| `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md) | push | `?mode=chat` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
+| `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
+| `rank` | how the quote list is ordered, absent for `document` — which is the **default**, on Greg's own instruction, unlike the glossary's `sort` below | push | `?rank=prioritised` |
+| `bar` | how high the quotes' prioritised bar is — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `0.70` | **replace**, debounced | `?bar=0.55` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | how high the prioritised order's bar is — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `0.30` | **replace**, debounced | `?gate=0.45` |
 | `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
@@ -45,7 +48,6 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
 | `conf` | the bar `prioritised` hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
-| `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 | `diagram` | which of the three pictures diagram mode is drawing, absent for `force` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
@@ -55,7 +57,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo
 it, where the other two are ways of looking at one picture — a reader flicking
 between lanes and spread to compare them should not have to press Back eight
-times to leave. Same call `?len=` and `?gate=` make on either side of the same
+times to leave. Same call `?gate=` makes on either side of the same
 line.
 
 **Diagram mode's one exception, and it is deliberate**: which sections the
@@ -105,11 +107,11 @@ the boundary was sealed, 2026-08-26. Beyond that: a URL should be readable witho
 page it is for, and a table with two rows called `sort` is a table apologising for itself.
 
 The reasoning, including the three sorting rules that fail silently, is in
-[library-sorting.md](../plans/library-sorting.md).
+[260826y-library-sorting.md](../plans/260826y-library-sorting.md).
 
 **Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
 and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a
-page now, `/read/<slug>/metadata` ([metadata-page.md](../plans/metadata-page.md)). Old links carrying
+page now, `/read/<slug>/metadata` ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)). Old links carrying
 either spelling are rewritten to that page before React mounts, by
 [`main.tsx`](../../src/web/main.tsx), keeping every other parameter they arrived with. `about=0` is
 left alone — it meant the panel was shut, which is not a reason to send anybody anywhere.
@@ -148,7 +150,7 @@ already right — and leaving chat mode puts the panel back where the reader lef
 
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
 nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
-See [chat-as-gateway.md](../plans/chat-as-gateway.md).
+See [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
 
 **The passage a *new* conversation is about is not in the URL.** Before the reader sends anything
 there is no conversation to link to, and the quote is the article's words sitting in their selection
@@ -168,7 +170,7 @@ article now has an address rather than a setting. `/` is the shelf; anything tha
 instead of on a 404.
 
 **A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
-the middle band between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
+the middle band between the spine and the prose ([260826a-chat-mode.md](../plans/260826a-chat-mode.md),
 [glossary.md](glossary.md), [search.md](search.md)).
 
 **The default is `plain` since 2026-08-31**, and it was `hierarchy` before that. Plain is the
@@ -363,7 +365,7 @@ can be watched failing, which is how they were checked
 ([`tests/reading-position.test.ts`](../../tests/reading-position.test.ts)). GPT Sol found the glide
 half of it in review of the first fix, 2026-08-30. The whole story, including the two commits between
 which the assumption stopped being true and why it stayed invisible for five days, is
-[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
+[260830b-the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/260830b-the-spy-wrote-a-section-over-the-paragraph.md).
 
 **It is emphatically not a node id.** Node ids (`n0003`) are handed out sequentially when the tree is
 generated and are regenerated whenever `tree.json` is rebuilt, so a URL holding one would silently
@@ -444,7 +446,7 @@ page: `?at=` restored the section, `?note=` opened the dialog, and nothing conne
 `/read/<slug>?note=<id>` **with no `?at=` beside it** opened an explanation of a paragraph that was
 somewhere off screen, with no way to tell where. That is not an edge case — it is the ordinary shape
 of a link somebody *sends*, because `?at=` is only in the URL if the sender happened to have scrolled.
-It was recorded as open in [metadata-page.md](../plans/metadata-page.md) and is fixed now.
+It was recorded as open in [260825e-metadata-page.md](../plans/260825e-metadata-page.md) and is fixed now.
 
 The rule, and the reason for it: **`?at=` is a byproduct and `?note=` is the point.** Position is
 written by scrolling — debounced, replacing rather than pushing, saying where the sender's eye was

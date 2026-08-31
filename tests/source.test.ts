@@ -6,7 +6,7 @@
  * a separate module rather than logic living inside a storage adapter. A rule
  * you can only test by standing up a container is a rule that gets tested once.
  *
- * See docs/plans/pdf-upload-and-storage.md.
+ * See docs/plans/260826u-pdf-upload-and-storage.md.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -271,7 +271,7 @@ describe("the words a refused upload gets", () => {
    * That only became visible when the step was built, because until then
    * nothing could press the button. So the kind is `blocked` and both sentences
    * now name the thing that does work — choosing the file again, which mints a
-   * fresh grant at a fresh key. docs/postmortems/toc-max-tokens.md is the same
+   * fresh grant at a fresh key. docs/postmortems/260826a-toc-max-tokens.md is the same
    * shape.
    */
   it("does not offer a Retry that would read the same bad bytes again", () => {

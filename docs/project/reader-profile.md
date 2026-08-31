@@ -4,7 +4,7 @@ Every model call in this app used to write for a reader it knew nothing about. T
 explained *entropy* to a physicist; chat pitched an answer at nobody in particular. This is the box
 where you say who you are, and the plumbing that carries it to the calls that should care.
 
-Built 2026-08-26 from [reader-profile.md (the plan)](../plans/reader-profile.md), which has the
+Built 2026-08-26 from [reader-profile.md (the plan)](../plans/260826t-reader-profile.md), which has the
 reasoning, the two reviews that reshaped it, and what was deliberately left out.
 
 > Add a multi-line-text-input box to the Metadata for the user to describe their
@@ -81,13 +81,13 @@ overweight this and give a really distorted summary"*. Read clause by clause aga
 three of its five rules already had an equivalent and **two did not**: *never add, sharpen, or bend a
 claim to fit*, and *keep the piece's own proportions* — and there was nothing about proportions in
 `PROFILE_RULES` at all. Those two moved rather than going in the bin — **into
-[`src/summarise.ts`](../../src/summarise.ts)'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
+`src/summarise.ts`'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
 distinction was a correction rather than a preference. The shared string reaches *seven* prompts, and
 *"if the article does not say it, it does not go in"* is exactly backwards for two of them: `ideas`
 defines its more valuable half as what the piece *never states*, and a glossary entry's `background`
 is explicitly not the article's knowledge. A profiled ideas run could have obeyed the shared rule by
 returning none of the half the feature exists for. GPT Sol caught it before it shipped.
-[steer-becomes-the-profile.md](../plans/steer-becomes-the-profile.md) has the working, and
+[260830o-steer-becomes-the-profile.md](../plans/260830o-steer-becomes-the-profile.md) has the working, and
 `tests/profile.test.ts` pins both clauses where they landed — a moved rule is the easiest kind to
 lose, because both halves of the move compile and nothing anywhere goes red.
 
@@ -227,7 +227,7 @@ the reader's profile and the article's shelf row, and the Postgres glossary read
 block hashes and the stored lookups. So under enough load this moves latency rather than removing
 it. Worth it for the single reader waiting on a panel, which is the case that matters; nobody has
 measured the loaded case. The full reasoning is in
-[library-read-latency.md § 8](../plans/library-read-latency.md).
+[260828c-library-read-latency.md § 8](../plans/260828c-library-read-latency.md).
 
 ### `existingFor` is the sharp edge
 
@@ -247,7 +247,7 @@ nobody in particular.
 
 The profile is resolved **once**, by the route (`resolveProfile` in [`src/routes.ts`](../../src/routes.ts)),
 and carried on the job — `Job.profile` → `StepContext.profile` → the step. (A `guidance` steer
-travelled the same way and is gone: [steer-becomes-the-profile.md](../plans/steer-becomes-the-profile.md).) A summary run is several batches at once, and a reader who edits their box mid-run would
+travelled the same way and is gone: [260830o-steer-becomes-the-profile.md](../plans/260830o-steer-becomes-the-profile.md).) A summary run is several batches at once, and a reader who edits their box mid-run would
 otherwise get one artefact written from two profiles and stamped with whichever finished last.
 
 It is also part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts). Unticking the box and pressing
@@ -343,7 +343,7 @@ uses the profile.
 Both controls above are also the way in to a **profile panel** — what your
 profile currently says, and a working link to each of the two pages that edit
 it ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
-2026-08-30 from [the plan](../plans/profile-panel.md)).
+2026-08-30 from [the plan](../plans/260830c-profile-panel.md)).
 
 ```
   ☑ Use your profile 👤      [ Find the terms ]
@@ -447,7 +447,7 @@ as *Spiderion*, the block id `spya-k3m9qt` as *"Spire k three m nine q t"* — a
 the article's glossary got them right every run. **How it works now is [dictation.md](dictation.md)** — it stopped being a
 property of this page the moment the button went into chat and the comment box too. The argument,
 the numbers and the nine things GPT Sol found wrong with it are in
-[dictation-two-pass.md](../plans/dictation-two-pass.md). What stays here is the day of debugging
+[260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md). What stays here is the day of debugging
 that got the microphone itself believable, because that is what this page was the scene of.
 
 Two consequences worth having in mind before reading the rest of this section, because both reverse
@@ -530,7 +530,7 @@ would naturally run ("did the button light up?") gives the reassuring answer eit
 sentence or a deliberate silence, never an accident.
 
 The full diagnosis, the measurements, the two reviews and the traps are in
-[microphone-level-meter.md](../plans/microphone-level-meter.md) — including the one that costs the
+[260827f-microphone-level-meter.md](../plans/260827f-microphone-level-meter.md) — including the one that costs the
 most time: **`requestAnimationFrame` does not run in a hidden tab**, so the meter reads a flat zero
 when driven from browser automation that is not frontmost, with every other part of the audio graph
 checking out perfectly.
@@ -608,7 +608,7 @@ itself: one that fails before producing a byte is replaced with the next contain
 after is a real failure and offers nothing.
 
 The measurements, both reviews and the two bugs the tests found after the reviews are in
-[microphone-device-and-recording.md](../plans/microphone-device-and-recording.md).
+[260827k-microphone-device-and-recording.md](../plans/260827k-microphone-device-and-recording.md).
 
 ## Where the pieces are
 
@@ -656,7 +656,7 @@ The measurements, both reviews and the two bugs the tests found after the review
   the next piece.
 - **Instant switching between a profiled and a plain artefact** is not built. Flipping the checkbox
   and pressing "Write them again" is the whole feature minus the instant part; storing both copies is
-  [deferred with reasons](../plans/reader-profile.md#storing-both-copies-is-deferred-and-the-deferral-now-has-teeth).
+  [deferred with reasons](../plans/260826t-reader-profile.md#storing-both-copies-is-deferred-and-the-deferral-now-has-teeth).
 - **Two tabs.** Last write wins, which is what `shelf.json` already does.
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.
@@ -703,13 +703,13 @@ next that nobody is checking. That is why the removal has a test and not just a 
 
 ## See also
 
-- [reader-profile.md (the plan)](../plans/reader-profile.md) · [glossary.md](glossary.md) ·
+- [reader-profile.md (the plan)](../plans/260826t-reader-profile.md) · [glossary.md](glossary.md) ·
   [summaries.md](summaries.md) · [comments.md](comments.md) · [prompt-caching.md](prompt-caching.md)
-- [microphone-level-meter.md](../plans/microphone-level-meter.md) — the microphone's diagnosis and
+- [260827f-microphone-level-meter.md](../plans/260827f-microphone-level-meter.md) — the microphone's diagnosis and
   rebuild, and the two GPT Sol reviews behind it
-- [microphone-device-and-recording.md](../plans/microphone-device-and-recording.md) — the device that
+- [260827k-microphone-device-and-recording.md](../plans/260827k-microphone-device-and-recording.md) — the device that
   emitted digital silence, the stop glyph, the timer, and the audio kept when nothing came back
-- [microphone-library-options.md](../research/microphone-library-options.md) — **should a library
+- [260827b-microphone-library-options.md](../research/260827b-microphone-library-options.md) — **should a library
   have done all this?** No, in all four areas — though recording got there the long way, by being
   rejected, un-rejected on review, and then **rejected on measurement**. The candidate that came
   close and the file-size number that killed it; the spike that reproduced the encoder failure and

@@ -296,7 +296,7 @@ describe("splitIntoBlocks after sanitising", () => {
  * The matcher used to normalise text with `[^a-z0-9 ]`, which is a correct
  * spelling of "punctuation" only if the only text you have ever looked at is
  * English. In every other script it deleted the paragraph, and the failures all
- * reported success — see docs/postmortems/block-id-matching-non-latin.md.
+ * reported success — see docs/postmortems/260826d-block-id-matching-non-latin.md.
  *
  * Every test here fails against that regex, and most of them fail silently in
  * production rather than loudly: a re-minted id is indistinguishable from a new
@@ -413,7 +413,7 @@ describe("text in a script other than Latin", () => {
  * GPT Sol reviewed the fix above and found four more wrong-anchor paths in the
  * same matcher, 2026-08-26. Each one carries a real id onto content a reader
  * would call different, and every one of them reports success.
- * See docs/postmortems/block-id-matching-non-latin.md § The second review.
+ * See docs/postmortems/260826d-block-id-matching-non-latin.md § The second review.
  */
 describe("the matcher's remaining ways to guess", () => {
   it("does not trade ids between a heading and a paragraph that read alike", () => {

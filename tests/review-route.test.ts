@@ -11,7 +11,7 @@
  * The 409 tests also pin *where* the check runs. `settleThread` stops a live
  * answer in the thread, and a request rejected after that has aborted the
  * answer another tab's reader was watching and told them they stopped it — a
- * bug this route has had once already (docs/plans/chat-mode.md § The race a
+ * bug this route has had once already (docs/plans/260826a-chat-mode.md § The race a
  * retry created). So a retry or an edit carrying a kind is refused before
  * anything is read, let alone settled.
  *

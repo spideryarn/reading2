@@ -65,6 +65,6 @@ export const REDACT = [
   // The bound values of a database query, once Drizzle is wired up. They are
   // article text, URLs and comment bodies, and they arrive positionally — so
   // this redacts the array wholesale, which is the only thing a path-based
-  // redactor can do about it. docs/plans/postgres-migration.md.
+  // redactor can do about it. docs/plans/260825f-postgres-migration.md.
   "params",
 ];

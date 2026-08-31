@@ -4,7 +4,7 @@
  * **A weak test, on purpose, and here is exactly how weak.** The rule that
  * decides where a pasted `?note=` lands is pure and properly tested in
  * scroll.test.ts. The *wiring* — one effect in App.tsx — is React, and this
- * repo has no component runner (docs/plans/chat-mode.md), so nothing here can
+ * repo has no component runner (docs/plans/260826a-chat-mode.md), so nothing here can
  * say the page actually moves. All this catches is the one regression that
  * would otherwise be silent: the effect being deleted or commented out while
  * everything else stays green, because the pure test would keep passing on a

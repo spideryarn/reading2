@@ -5,7 +5,7 @@
  * The window is real and it is common — the `begin` frame is emitted
  * immediately after the server writes the conversation, so "no frame yet"
  * mostly means "not written yet". What used to happen in it was written up in
- * docs/postmortems/cancel-before-begin.md: one `/cancel` went out at once,
+ * docs/postmortems/260828b-cancel-before-begin.md: one `/cancel` went out at once,
  * naming a row this client had invented, and `cancelChat` had two answers for
  * it and both were wrong for the reader.
  *
@@ -22,7 +22,7 @@
  *
  * **Stage 2 closes the window rather than picking between those two answers**,
  * and that is why this file changed on 2026-08-28. The two rules, from
- * docs/plans/chat-operation-model.md: send **once**, when there is an id the
+ * docs/plans/260828v-chat-operation-model.md: send **once**, when there is an id the
  * server can match; and never read "the server could not match that id" as a
  * refusal *or* as a success, because case one comes back `200`. Both are
  * satisfied by the same move — the turn is an operation now, so the client can

@@ -19,7 +19,7 @@
  * The exit code was not checked, and the `rmSync` on the next line deleted the
  * directory anyway. So every deploy left a registration behind pointing at a
  * path that no longer existed — sixteen of them, against a repository four days
- * old, found while planning docs/plans/worktrees.md. `git worktree prune` does
+ * old, found while planning docs/plans/260828r-worktrees.md. `git worktree prune` does
  * not clear them either: it exempts locked entries by design, which is how they
  * reached sixteen.
  *
@@ -29,7 +29,7 @@
  * something it can fail on.
  *
  * Also the shared half of `worktree:doctor` and `worktree:rm` in
- * docs/plans/worktrees.md.
+ * docs/plans/260828r-worktrees.md.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -56,7 +56,7 @@ export interface RemovalResult {
  * `worktree:rm`, where the tree holds an agent's only copy of its work.
  *
  * Use it only for a worktree this process created and is about to delete.
- * `worktree:rm` gets a guarded path of its own — see docs/plans/worktrees.md,
+ * `worktree:rm` gets a guarded path of its own — see docs/plans/260828r-worktrees.md,
  * failure mode 12.
  *
  * Never throws: teardown runs in a `finally`, and a throw there would replace

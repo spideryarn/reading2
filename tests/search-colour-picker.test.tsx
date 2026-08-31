@@ -11,7 +11,7 @@
  * Written in place of a browser pass rather than as well as one — Claude in
  * Chrome was not connected on the day (`list_connected_browsers` returned an
  * empty list), and a check nobody can run is not a check. There is a throwaway
- * preview page in the plan for when it is: docs/plans/search-row-colour.md.
+ * preview page in the plan for when it is: docs/plans/260827l-search-row-colour.md.
  *
  * jsdom lays nothing out, so nothing here asserts about *position*. Floating
  * UI's placement is the one part of this that only a real browser can judge,

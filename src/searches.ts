@@ -6,7 +6,7 @@
  * write, and a serialised read-modify-write queue. That repetition is
  * deliberate. A second good way to store reader state would be one way too
  * many, and when this all moves to Postgres
- * (docs/plans/postgres-migration.md) three identical shapes become three
+ * (docs/plans/260825f-postgres-migration.md) three identical shapes become three
  * identical tables and none of these modules' interfaces change.
  *
  * ## Why searches are saved at all
@@ -283,7 +283,7 @@ export function update(
  * named again, which left the spinner the reader was watching turning forever —
  * the exact failure `finishRun`'s comment below says appending must never cause,
  * arriving from the other end of the same run's life. See
- * docs/postmortems/search-retry-remints-instead-of-resetting.md.
+ * docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md.
  *
  * `createdAt` is kept from the original on a reset, because it is still the same
  * search the reader asked for; only the attempt is new.

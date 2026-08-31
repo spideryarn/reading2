@@ -7,7 +7,7 @@
  * point: a shared guard that only one caller is tested for is a guard the other
  * caller can lose without anything going red. Each one here has been watched
  * fail with the guard broken; the list is in
- * docs/plans/hosting-the-articles-images.md.
+ * docs/plans/260829b-hosting-the-articles-images.md.
  *
  * Offline throughout, through the same injected fetch/DNS/clock/jitter seams
  * tests/fetch.test.ts uses. Nothing here sniffs an image: that is `sniffImage`

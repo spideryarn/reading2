@@ -5,7 +5,7 @@
  * `SourceLink` fetches authenticated `GET /api/source/:slug`, and stage 1
  * deliberately does not serve it publicly: *"Serving somebody's uploaded bytes
  * to the world is a separate decision from serving the extracted text. Hide the
- * link rather than 404 it."* docs/plans/public-read-only-access.md.
+ * link rather than 404 it."* docs/plans/260827ai-public-read-only-access.md.
  *
  * ## Why this is its own file rather than a line in the network trace
  *
@@ -139,7 +139,7 @@ describe("the PDF provenance note", () => {
 
     /* The sentence stays. How much of a scanned document was verified is a fact
        about how far to trust what you are reading, and it is the whole reason
-       the note exists. docs/plans/pdf-ingestion.md § A scan with no text layer. */
+       the note exists. docs/plans/260826c-pdf-ingestion.md § A scan with no text layer. */
     expect(host.textContent).toContain("Transcribed by a machine from a PDF");
     expect(host.textContent).toContain("12 of 12 pages");
   });

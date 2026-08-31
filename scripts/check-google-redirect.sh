@@ -7,7 +7,7 @@
 #   ./scripts/check-google-redirect.sh https://some/other/cb  # or name your own
 #
 # Why this exists, and why it is written this way, is in
-# docs/plans/auth-ui-and-production.md § The one thing that blocks production.
+# docs/plans/260826ae-auth-ui-and-production.md § The one thing that blocks production.
 # Short version, because it is the trap this repo already paid for once:
 #
 #   * `-L` is not optional. Without it curl fetches the body of a 302 — a stub —
@@ -27,7 +27,7 @@ export LC_ALL=C
 
 CID=$(grep '^SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=' .env.local 2>/dev/null | cut -d= -f2- | tr -d '"')
 if [ -z "${CID:-}" ]; then
-  echo "No SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID in .env.local — see docs/plans/auth-supabase.md" >&2
+  echo "No SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID in .env.local — see docs/plans/260826w-auth-supabase.md" >&2
   exit 2
 fi
 
@@ -42,7 +42,7 @@ else
   # the project we used to be on: the old callback stays registered with Google
   # after we move, so the check would pass while naming the wrong thing. This is
   # the same class as the admin account id read off a laptop —
-  # docs/postmortems/admin-id-was-the-local-one.md. GPT Sol, 2026-08-28.
+  # docs/postmortems/260828f-admin-id-was-the-local-one.md. GPT Sol, 2026-08-28.
   LOCAL_URL=$(grep '^SUPABASE_URL=' .env.local 2>/dev/null | cut -d= -f2- | tr -d '"')
   PROD_URL=$(grep '^SUPABASE_URL=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"')
   if [ -z "${PROD_URL:-}" ]; then
@@ -99,7 +99,7 @@ esac
 
 if [ "$rejected" -ne 0 ]; then
   echo; echo "$rejected of the URIs you asked about are NOT registered with this Google client." >&2
-  echo "Add them at https://console.cloud.google.com/apis/credentials — see docs/plans/auth-ui-and-production.md" >&2
+  echo "Add them at https://console.cloud.google.com/apis/credentials — see docs/plans/260826ae-auth-ui-and-production.md" >&2
   exit 1
 fi
 

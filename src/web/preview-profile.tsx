@@ -15,7 +15,7 @@
  * layout and reports any link as reachable, which is exactly how the tooltip
  * version of this shipped with a dead link. The probe is
  * `document.elementFromPoint` at each link's own centre —
- * see docs/plans/profile-panel.md § Tests.
+ * see docs/plans/260830c-profile-panel.md § Tests.
  *
  * **Kept rather than deleted**, unlike most preview pages here: the gate above
  * is not a one-off, it is the only check that can see the thing this component

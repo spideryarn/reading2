@@ -89,7 +89,7 @@ function article(): { root: SummaryNode; blocks: Block[] } {
   mk("n7", 2, "n5", [], 6, 7, "Perception again");
 
   const tree = { version: "1", generator: "t", slug: "s", rootId: "n1", nodes } as unknown as Tree;
-  const root = buildSummaryTree(tree, blocks, null);
+  const root = buildSummaryTree(tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
   return { root, blocks };
 }
@@ -157,7 +157,7 @@ function articleWithNotes(): { root: SummaryNode; blocks: Block[] } {
   mk("s2", 2, "s1", [], 8, 8, "");
   mk("s3", 2, "s1", [], 9, 9, "");
 
-  const root = buildSummaryTree(tree as unknown as Tree, blocks, null);
+  const root = buildSummaryTree(tree as unknown as Tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
   return { root, blocks };
 }
@@ -277,7 +277,7 @@ describe("buildGraph", () => {
       };
     });
     const t = { version: "1", generator: "t", slug: "s", rootId: "r", nodes } as unknown as Tree;
-    const r2 = buildSummaryTree(t, blocks2, null);
+    const r2 = buildSummaryTree(t, blocks2);
     if (!r2) throw new Error("fixture unusable");
     return buildGraph(r2, blocks2);
   }
@@ -367,7 +367,7 @@ describe("buildGraph", () => {
       q: { id: "q", depth: 1, parent: "r", children: [], range: [b.id, b.id], title: "Octopus" },
     };
     const t = { version: "1", generator: "t", slug: "s", rootId: "r", nodes } as unknown as Tree;
-    const r2 = buildSummaryTree(t, [a, b], null);
+    const r2 = buildSummaryTree(t, [a, b]);
     expect(r2).not.toBeNull();
     if (!r2) return;
     const g2 = buildGraph(r2, [a, b]);
@@ -392,7 +392,7 @@ describe("buildGraph", () => {
       q: { id: "q", depth: 1, parent: "r", children: [], range: [blocks2[1]?.id, blocks2[1]?.id], title: "Plants" },
     };
     const t = { version: "1", generator: "t", slug: "s", rootId: "r", nodes } as unknown as Tree;
-    const r2 = buildSummaryTree(t, blocks2, null);
+    const r2 = buildSummaryTree(t, blocks2);
     expect(r2).not.toBeNull();
     if (!r2) return;
     const g2 = buildGraph(r2, blocks2);
@@ -519,7 +519,7 @@ describe("the Force layout", () => {
     const tree2 = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
     const rawB = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
     const blocks2 = (Array.isArray(rawB) ? rawB : (rawB as { blocks: Block[] }).blocks) as Block[];
-    const r2 = buildSummaryTree(tree2, blocks2, null);
+    const r2 = buildSummaryTree(tree2, blocks2);
     expect(r2).not.toBeNull();
     if (!r2) return;
     const nodes = drawn(layoutDiagram("force", r2, OPTS, buildGraph(r2, blocks2))).nodes;
@@ -577,7 +577,7 @@ describe("the Force picture, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
   const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
-  const root = buildSummaryTree(tree, blocks, null);
+  const root = buildSummaryTree(tree, blocks);
 
   it("reads the real prose and measures it in words", () => {
     expect(root).not.toBeNull();

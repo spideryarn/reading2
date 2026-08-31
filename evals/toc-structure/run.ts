@@ -8,7 +8,7 @@
  * wait (labels run concurrently, the arc is deferred — the measured breakdown
  * is in the research doc), and the decisions queued against it (waves, seeding
  * the author's headings, changing model or effort — see
- * docs/research/opening-an-article-before-the-toc.md) need a number to decide
+ * docs/research/260830a-opening-an-article-before-the-toc.md) need a number to decide
  * against. This is the harness for that number. evals/README.md
  * § toc-structure says what each measure is a proxy for.
  *
@@ -36,7 +36,7 @@ import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
-import type { BuildReport } from "../../src/toc.js";
+import { repairedBlockCount, type BuildReport } from "../../src/toc.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -92,7 +92,14 @@ interface ArmResult {
    * would read a necessary 1 for every paid arm. Absent on a free arm, which
    * builds no tree from a model. GPT Sol's review of the repairs.
    */
-  repaired?: { ranges: number; where: string[]; droppedHeadings: string[] };
+  repaired?: {
+    ranges: number;
+    /** Blocks moved in total, and the worst single boundary — see the write site. */
+    blocks: number;
+    largest: number;
+    where: string[];
+    droppedHeadings: string[];
+  };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
 }
@@ -264,7 +271,8 @@ function print(r: ArmResult): void {
      says "valid" cannot say both. */
   if (r.repaired && (r.repaired.ranges > 0 || r.repaired.droppedHeadings.length > 0)) {
     console.log(
-      `  repaired      ${r.repaired.ranges} off-by-one range(s)` +
+      `  repaired      ${r.repaired.ranges} misaligned range(s) moving ` +
+        `${r.repaired.blocks} block(s), largest ${r.repaired.largest}` +
         `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
         `${r.repaired.droppedHeadings.length} unbacked heading claim(s) — ` +
         `this answer was NOT valid as written`,
@@ -475,7 +483,23 @@ async function main(): Promise<void> {
             ? {
                 repaired: {
                   ranges: chose.built.repairs.length,
-                  where: chose.built.repairs.map((r) => `${r.where} (${r.kind})`),
+                  /* The size, since the repair stopped being bounded at one
+                     block (src/toc.ts § `repairedChildRanges`). Without it an
+                     arm that put a boundary a paragraph out and an arm that
+                     handed a section forty of its neighbour's blocks both
+                     record "1 range repaired" and both score `ok` — the repair
+                     living inside the thing under measurement, redefining the
+                     measurement, which is the mistake this eval already had to
+                     be told about once. */
+                  /* Through `repairedBlockCount`, which is the same function
+                     `generateToc` reports with — a cascade is one boundary
+                     recorded once per depth, and summing the entries counted an
+                     arm's 40-block movement as 120 if the tree happened to be
+                     three deep there. An eval that measures a repair differently
+                     from the code under measurement is worse than no measure. */
+                  blocks: repairedBlockCount(chose.built.repairs),
+                  largest: chose.built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
+                  where: chose.built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`),
                   droppedHeadings: chose.built.droppedHeadings,
                 },
               }

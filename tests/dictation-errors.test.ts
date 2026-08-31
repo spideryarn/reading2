@@ -11,7 +11,7 @@
  * From the reader's chair that is indistinguishable from the feature not
  * existing: you press a microphone, it glows for a moment, it stops, and the
  * box is exactly as empty as it was. Greg hit it on 2026-08-27 and reported it
- * as "nothing seemed to happen" — docs/plans/microphone-level-meter.md.
+ * as "nothing seemed to happen" — docs/plans/260827f-microphone-level-meter.md.
  *
  * So the property under test is not "these four strings are right". It is
  * **totality**: any code at all, including one nobody has heard of, either

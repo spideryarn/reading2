@@ -9,7 +9,7 @@
  * needs the judgement to be reachable without a deployment.
  * docs/reusable/silent-success.md, and tests/deploy-checks.test.ts.
  *
- * See docs/plans/deploy-pipeline.md for what each of these is guarding.
+ * See docs/plans/260827v-deploy-pipeline.md for what each of these is guarding.
  */
 
 import { sameCommit } from "./build-stamp.js";
@@ -577,7 +577,7 @@ export function readLogQuery(exitCode: number, stdout: string, deploymentId: str
  * cascade-skips, which read like a broken commit and were nothing of the kind.
  *
  * **Named sentinel files, not bare directories.** A bare `"data"` cannot fail:
- * the article-artefact migration (docs/plans/delete-the-importer.md) deletes
+ * the article-artefact migration (docs/plans/260827aa-delete-the-importer.md) deletes
  * `raw.json`, `blocks.json`, `tree.json` and the rest of an article's own files
  * from `data/<slug>/` while deliberately keeping **reader** state there —
  * `chat.json`, `comments.json`, `searches.json`, `shelf.json`,
@@ -608,7 +608,6 @@ export const GATE_FIXTURES = [
   "data/writes/arc.json",
   "data/writes/tweets.json",
   "data/writes/glossary.json",
-  "data/writes/summary.json",
   "data/writes/ideas.json",
   "data/constitution/labels.json",
   "output/writes.html",
@@ -791,7 +790,7 @@ export interface RunningBucket {
  * saying `{application/pdf}`, and every HTML fetch threw a 415 for seven hours
  * with nobody looking, because a comment beside the edit said the allowlist
  * could not matter. Both halves are
- * docs/postmortems/the-config-file-is-not-the-bucket.md.
+ * docs/postmortems/260828a-the-config-file-is-not-the-bucket.md.
  *
  * ## Pure, for the reason everything else in this file is pure
  *

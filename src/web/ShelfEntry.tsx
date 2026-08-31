@@ -213,14 +213,13 @@ function opensLine(entry: LibraryEntry): string {
  * `chat_threads` / `search_runs` tables exist but nothing touches them. A count
  * that reads 7 on the filesystem and 0 in Postgres is worse than no count,
  * because it looks like an answer. They go in when step 10 of
- * docs/plans/postgres-storage-implementation.md lands.
+ * docs/plans/260826e-postgres-storage-implementation.md lands.
  */
 export function Details({ entry }: { entry: LibraryEntry }) {
   const built = [
     entry.has.arc && "arc",
     entry.has.tweets && "thread",
     entry.has.glossary && "glossary",
-    entry.has.summary && "summaries",
   ].filter(Boolean) as string[];
 
   const rows: [string, string][] = [

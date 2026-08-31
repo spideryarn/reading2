@@ -3,11 +3,11 @@
 The article is the long part of nine prompts and it never changes. This is how we stop paying for it
 every time.
 
-Built 2026-08-26 from [prompt-caching.md](../plans/prompt-caching.md), which has the reasoning and
+Built 2026-08-26 from [prompt-caching.md](../plans/260826g-prompt-caching.md), which has the reasoning and
 the alternatives. The research behind it:
-[anthropic](../research/prompt-caching-anthropic.md) (mechanics, pricing, invalidation),
-[openrouter](../research/prompt-caching-openrouter.md) (the request-path calls),
-[callsites](../research/prompt-caching-callsites.md) (the audit).
+[anthropic](../research/260826b-prompt-caching-anthropic.md) (mechanics, pricing, invalidation),
+[openrouter](../research/260826d-prompt-caching-openrouter.md) (the request-path calls),
+[callsites](../research/260826c-prompt-caching-callsites.md) (the audit).
 
 This doc is the operating manual: where the caches are, what breaks them, and how to tell.
 
@@ -29,7 +29,7 @@ before, and two of them had already drifted.
 > raised `max_uses` on the web-search tool. That is **worse**: tools render at position 0, so a tool
 > edit invalidates all three tiers, for both variants. The instruction now rides in the last user
 > part, after the breakpoint, and the tool definition is byte-identical on every call.
-> [explain-deeper-answers.md](../plans/explain-deeper-answers.md#what-the-review-changed).
+> [260826l-explain-deeper-answers.md](../plans/260826l-explain-deeper-answers.md#what-the-review-changed).
 
 ## Where the caches are
 
@@ -75,7 +75,7 @@ They still cannot share a cache, because **`output_config.effort` is part of the
 [src/tweets.ts:402](../../src/tweets.ts)).
 
 This is measured, not inferred — four calls with an identical 7,291-token cached block, varying only
-`effort`, in [../research/prompt-caching-anthropic.md](../research/prompt-caching-anthropic.md).
+`effort`, in [../research/260826b-prompt-caching-anthropic.md](../research/260826b-prompt-caching-anthropic.md).
 Changing effort paid a full write; changing back read the original. GPT Sol's review raised it and
 the repo's own research doc said the opposite, so it had to be settled with an experiment.
 
@@ -175,7 +175,7 @@ only at the breakpoint — there was no article-only entry underneath. Every tur
 a cold write of the whole article, whenever the reader had scrolled, which is always.
 
 Chat now has an explicit breakpoint on the article, like the other two.
-[chat-cache-automatic-breakpoint.md](../postmortems/chat-cache-automatic-breakpoint.md) has the
+[260826h-chat-cache-automatic-breakpoint.md](../postmortems/260826h-chat-cache-automatic-breakpoint.md) has the
 whole of it, including why all three defences on this page were blind to it.
 
 **The rule it leaves behind: automatic mode needs the last user message to be reproduced
@@ -381,7 +381,7 @@ session's calls land within minutes of each other. A cache hit refreshes the TTL
 
 ## See also
 
-- [prompt-caching.md (the plan)](../plans/prompt-caching.md) — the steps, and the honest assessment
+- [prompt-caching.md (the plan)](../plans/260826g-prompt-caching.md) — the steps, and the honest assessment
 - [original-version/prompt-caching.md](original-version/prompt-caching.md) — the same design, written
   for the previous version of this app and never built. It named the prerequisite that killed it —
   five prompts each wrapping the article differently — and warned this repo would reproduce it. It

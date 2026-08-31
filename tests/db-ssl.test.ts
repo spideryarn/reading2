@@ -109,3 +109,39 @@ describe("sslDecisionFor", () => {
     expect(decision.mode).toBe("verified");
   });
 });
+
+/**
+ * A connection string can name one host in its authority and connect to another.
+ *
+ * `pg` parses with `pg-connection-string`, which honours a `?host=` query
+ * parameter and lets it OVERRIDE the authority host — libpq's `host` keyword,
+ * reachable from a URL. So
+ *
+ *     postgres://u:p@127.0.0.1:54362/db?host=remote.example.com
+ *
+ * parses to `{ host: "remote.example.com" }` while `new URL(...).hostname` says
+ * `127.0.0.1`. Every caller of `isLocalDatabaseUrl` asked the URL and got the
+ * wrong answer: `scripts/db-migrate.ts` would let it past the guard that exists
+ * to stop a migration reaching production, print a `Target:` line naming the
+ * loopback address, and apply the migrations to the remote host — with TLS
+ * turned off, because this same function decides that too.
+ *
+ * The rule is the one the docstring above already states: the question is "is
+ * this the throwaway container", not "where do the packets probably go". A URL
+ * that carries a host override is not answering that question, so it fails
+ * closed like anything else this cannot read. Found by GPT Sol, 2026-08-31.
+ */
+describe("a host override in the query string", () => {
+  it.each([
+    ["host", "postgres://u:p@127.0.0.1:54362/db?host=remote.example.com"],
+    ["hostaddr", "postgres://u:p@127.0.0.1:54362/db?hostaddr=203.0.113.4"],
+    ["host, among other params", "postgres://u:p@localhost:54362/db?sslmode=disable&host=remote.example.com"],
+  ])("is not local, however loopback the authority looks (%s)", (_label, url) => {
+    expect(isLocalDatabaseUrl(url)).toBe(false);
+  });
+
+  it("still accepts an ordinary local URL with harmless parameters", () => {
+    expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db?sslmode=disable")).toBe(true);
+    expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db")).toBe(true);
+  });
+});

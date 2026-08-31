@@ -5,7 +5,7 @@
  * assets. **It may not be recoloured, restyled or squashed** — that is a
  * condition of using the API, not a style preference. See
  * https://developers.google.com/identity/branding-guidelines and
- * docs/plans/auth-supabase.md § The Google button is specified, not designed.
+ * docs/plans/260826w-auth-supabase.md § The Google button is specified, not designed.
  *
  * Inline SVG rather than a file in `public/`, for one reason: a button whose
  * icon 404s is a button that still looks clickable, and nobody notices until a

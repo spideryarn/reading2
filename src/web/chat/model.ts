@@ -1,7 +1,7 @@
 /**
  * The chat client's state, its events, and the operations in between.
  *
- * The reasoning is in docs/plans/chat-operation-model.md, and the one sentence
+ * The reasoning is in docs/plans/260828v-chat-operation-model.md, and the one sentence
  * that produced this directory is GPT Sol's, 2026-08-28:
  *
  * > Every asynchronous action is an operation with its own identity, phase,
@@ -320,6 +320,53 @@ export interface TurnOperation extends Registered {
 }
 
 /**
+ * **One finished spoken exchange, on its way to disk.**
+ *
+ * Live conversation's counterpart to a send, and the shape differs for one
+ * reason: both halves are already known. Nothing streams, nothing is pending,
+ * and there is no second frame to wait for — the browser talked to OpenAI
+ * directly and this operation is the only thing that talks to us about it.
+ *
+ * **It draws its two rows rather than writing them into `base`**, which is the
+ * opposite of a send, and the rule is the one `project.ts` states: an operation
+ * projects what can still be *withdrawn*. A send's rows stay because the reader
+ * typed them and nothing takes them back. These can be taken back — the server
+ * refuses an append behind a conversation that has moved on — and when it does,
+ * dropping this operation is the whole of putting the screen right.
+ *
+ * ## Why there is no client-minted id for the exchange
+ *
+ * Because `expectedTailId` is already the idempotency. A POST replayed after it
+ * succeeded presents a tail the first attempt has moved, so it conflicts rather
+ * than appending twice — which is also what makes the retry in
+ * `effects.appendSpoken` safe. `SpokenTurn` in src/chat.ts, and
+ * docs/plans/260831l-live-conversation-in-chat.md § 1.
+ */
+export interface SpokenOperation extends Registered {
+  kind: "spoken";
+  /** The conversation. Replaced by the server's name if it overrules this one. */
+  threadId: string;
+  /** The reader's words. Empty when the transcription failed — a real state. */
+  question: ChatMessage;
+  /** The companion's words, as the ledger assembled them. */
+  reply: ChatMessage;
+  /**
+   * **The row this append claims is last, and it is a claim about the *server*,
+   * not about the screen.**
+   *
+   * It comes from the live session — the `/live` ticket's `tailId` for the
+   * first exchange, and the previous exchange's stored answer id after that —
+   * rather than being read off `base` here. That is deliberate: reading it off
+   * the projection would pick up ids this tab invented and has not had
+   * confirmed, and a guard whose value is a name the server has never heard of
+   * conflicts every time, for a reason nobody could see.
+   */
+  expectedTailId: string | null;
+  /** `updatedAt` for the conversation. Minted outside the reducer. */
+  at: string;
+}
+
+/**
  * A pending answer nobody is streaming, being looked for.
  *
  * Stage 2 builds this too, and it has to arrive with the turn rather than
@@ -403,6 +450,7 @@ export type Operation =
   | LoadOperation
   | RepairOperation
   | TurnOperation
+  | SpokenOperation
   | RecoveryOperation
   | RenameOperation
   | DeleteOperation
@@ -517,6 +565,15 @@ export type ChatInput =
       payload: Record<string, unknown>;
     }
   /**
+   * A finished spoken exchange, on its way to disk.
+   *
+   * Everything it puts on screen is on the op, like a turn's; unlike a turn's
+   * there is no separate `payload`, because the two rows and the tail guard
+   * *are* the request. The effect builds the body from them, so there is one
+   * copy of what a spoken exchange is rather than two that have to agree.
+   */
+  | { type: "spoken.started"; op: Registering<SpokenOperation> }
+  /**
    * A `pending` answer with nobody behind it, being looked for.
    *
    * Registered from two places and they must not both take it: the hook's scan
@@ -625,6 +682,30 @@ export type ChatResult =
       /** Only the id: which conversation to repair is the turn's own. */
       repair: { id: OpId };
     }
+  /**
+   * The exchange is on disk, and this is the server's copy of the conversation
+   * it landed in — **including the ids it actually minted**.
+   *
+   * The whole thread rather than the two rows, because that is what the write
+   * returns and because the conversation may not have existed before this: the
+   * server may have had to create it, and may have overruled the id this tab
+   * invented for it. The drawn rows go the moment this is admitted, replaced by
+   * the ones underneath.
+   */
+  | { type: "spoken.succeeded"; opId: OpId; thread: ChatThread }
+  /**
+   * A 409: the conversation moved on since the live session read its tail.
+   *
+   * Somebody typed a turn, or edited one away, or this very request already
+   * succeeded and its response was lost. All three want the same answer — drop
+   * what was drawn and go and look — so they are one event, and it carries the
+   * repair's id for the same reason `turn.refused` does: dropping and repairing
+   * are one decision, and split across two transitions there is a moment where
+   * neither is true.
+   */
+  | { type: "spoken.refused"; opId: OpId; error: string; repair: { id: OpId } }
+  /** Every attempt failed to reach the server. The exchange is not stored. */
+  | { type: "spoken.failed"; opId: OpId; error: string }
   /** The server's copy of one conversation. `null` means it does not have it. */
   | { type: "repair.succeeded"; opId: OpId; thread: ChatThread | null }
   | { type: "repair.failed"; opId: OpId; error: string }
@@ -725,6 +806,26 @@ export type ChatCommand =
       threadId: string;
       payload: Record<string, unknown>;
     }
+  /**
+   * Write one finished spoken exchange. One request, one answer, no stream.
+   *
+   * The body is built by the effect from the operation's own rows, so that
+   * "what a spoken exchange is" has one definition rather than a copy here and
+   * a copy in the reducer that have to agree about, say, whether an empty
+   * `passages` array is sent as a key.
+   */
+  | {
+      type: "spoken";
+      opId: OpId;
+      slug: string;
+      threadId: string;
+      question: string;
+      answer: string;
+      expectedTailId: string | null;
+      passages?: { blockIds: string[]; why: string }[];
+      tools?: ToolRun[];
+      interrupted?: boolean;
+    }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }
   /** Go and find out whether an answer nobody is streaming ever finished. */
@@ -742,7 +843,7 @@ export type ChatCommand =
    *
    * Emitted either at `intent.started`, when the row already has a name the
    * server can match, or at `turn.began`, which is the instant one that did not
-   * gets one. **Once**, either way — docs/postmortems/cancel-before-begin.md.
+   * gets one. **Once**, either way — docs/postmortems/260828b-cancel-before-begin.md.
    */
   | {
       type: "intent";

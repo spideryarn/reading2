@@ -50,4 +50,4 @@ reading and it disables v1's principal check, which is the point.
 
 It is also the document that decided the bake-off: every Claude Haiku 4.5 variant silently dropped
 the first page of a two-page chunk, three runs out of three, while Gemini 3.7 Flash read both. See
-[pdf-ingestion.md § The bake-off](../../../docs/plans/pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26).
+[260826c-pdf-ingestion.md § The bake-off](../../../docs/plans/260826c-pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26).

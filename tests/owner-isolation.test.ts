@@ -600,27 +600,36 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
   /**
    * And the route really does ask, rather than the check merely existing.
    *
+   * **The second half of this moved on 2026-08-31 and the property did not.**
+   * It used to read *before `fsLocations(slug)`*, because `sendSource` fetched
+   * the bytes off the disk itself; it now reads *before
+   * `sourceStore.readPdf(slug)`*, because that read went through the store
+   * (docs/plans/260831b-finish-the-database-move.md, stage 1b). The thing being
+   * pinned is unchanged — **authorise, then move bytes** — and it is worth being
+   * explicit that this is the same assertion at a new seam rather than a
+   * weakened one: the store call is the *only* way this function can now obtain
+   * a byte, so anything after it is after the check.
+   *
    * **It reads code, not comments, and that distinction is the whole reason
    * this note is long.**
    *
-   * It compared the ownership call against `fsLocations(slug)`, which
-   * `sendSource` stopped *calling* on 2026-08-31, when the route began reading
-   * through the store instead of off the disk. GPT Sol read the diff and
-   * predicted the test would fail — `indexOf` answers `-1` for a string that is
-   * not there, and nothing is `< -1`.
-   *
-   * **It did not fail.** The rewrite left a comment in `sendSource` explaining
-   * what the route used to do — *"This used to be `fsLocations(slug)` plus a
+   * The first rewrite of this route left a comment in `sendSource` explaining
+   * what it used to do — *"This used to be `fsLocations(slug)` plus a
    * `readFile`"* — and the regex matches the function's whole text, prose
-   * included. So the test went on passing, still asserting an ordering between
-   * a live call and a sentence about a call that no longer exists. Neither Sol
-   * reading the diff nor a green suite would have told you: one predicted the
+   * included. So the test went on passing while asserting an ordering between a
+   * live call and a sentence about a call that no longer exists. GPT Sol read
+   * the diff and predicted a failure; the suite stayed green. One predicted the
    * wrong outcome, the other reported the right outcome for the wrong reason.
    * docs/reusable/silent-success.md.
    *
    * So the body has its comments stripped first, and then both operands are
    * asserted present before their order is compared — because two `-1`s also
    * satisfy `<`, which is the other way this assertion can go quiet.
+   *
+   * tests/source-store.test.ts restates the ordering outside this suite's
+   * `describe`, which is `describe.skip` when there is no database; a security
+   * ordering that only holds when Postgres is up is not a property anybody wants
+   * to depend on.
    */
   it("and the route asks before it fetches the bytes", async () => {
     const { readFile } = await import("node:fs/promises");
@@ -639,15 +648,18 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
     /* Both present, asserted separately: two `-1`s satisfy `<` perfectly well,
        so the ordering below proves nothing on its own. */
     expect(body).toContain("shelfStore.read(slug)");
-    expect(body).toContain("loadSource(slug)");
+    expect(body).toContain("sourceStore.readPdf(slug)");
     /* And the comment-stripping does something, or the two lines above are
-       being satisfied by prose again. */
+       being satisfied by prose again. `sendSource`'s own comment still names the
+       filesystem read it replaced, which is what makes this a live control. */
     expect(body).not.toContain("fsLocations(slug)");
     expect(whole).toContain("fsLocations(slug)");
 
     /* Before the read, not after. A check that runs after the bytes have been
        fetched is not a check, and the order is the whole of it. */
-    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(body.indexOf("loadSource(slug)"));
+    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(
+      body.indexOf("sourceStore.readPdf(slug)"),
+    );
   });
 
   /** The reader profile is keyed on owner directly, rather than through a slug. */

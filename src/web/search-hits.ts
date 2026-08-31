@@ -28,7 +28,13 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
-import type { Block, BlockId, IdeaOccurrence, SearchHit } from "../types.js";
+import type {
+  Block,
+  BlockId,
+  IdeaOccurrence,
+  SearchHit,
+  TimelineOccurrence,
+} from "../types.js";
 import type { HitOrder } from "./params.js";
 
 /**
@@ -459,6 +465,126 @@ export function resolveIdea(
       ...(o.start !== undefined && { start: o.start }),
       confidence: null,
       reasoning: o.reasoning,
+    });
+    if (one) out.push(one);
+  }
+  return out;
+}
+
+/**
+ * One quote, resolved into the same `Found` every search hit and idea becomes.
+ *
+ * A quote is a `{blockId, text, start}`, which is what `resolveOne` already
+ * takes — so this is a shape change and nothing else, and that is deliberate: a
+ * second way of drawing a marked passage is a second thing to keep in step with
+ * the first. The prose gets the same wash, the rail gets the same lane, and the
+ * panel steps through it with the same component.
+ *
+ * Three fields worth a word:
+ *
+ * - **`confidence: null`.** A search hit's confidence answers *is this what you
+ *   asked for*, and nobody asked the article a question. The value a literal
+ *   word-match already carries, so `keepAbove`, the ordering and the wash all
+ *   already know what to do with it.
+ * - **`reasoning` is the model's `reason`**, which the panel shows in a tooltip
+ *   rather than as body text. It reaches the prose hover card too, which is the
+ *   right place for it: it is a caption on the passage either way.
+ * - **A real `slot`, and `runId` is the quote's own id.** One lane per quote,
+ *   and a slot so the paragraph bar has a hue — `blockHues` drops `null` slots,
+ *   so a quote without one would paint the rail and leave the bar blank, which
+ *   looks like a rendering bug and is not one.
+ *
+ * **The `text` here is the article's own characters**, not the model's typing —
+ * src/quotes.ts § `place` slices the block. So this re-find is looking for the
+ * real words, which is the one place the two halves of src/quote-match.ts are
+ * allowed to differ: this side runs both passes, because the rendered text
+ * genuinely lacks whitespace `extractText` invented.
+ *
+ * **And it deliberately sends no `start`.** The stored offset is in
+ * `block.text`'s space and this search is in the rendered text's space; the two
+ * drift by every character `extractText` collapsed or inserted, so the hint
+ * would pick a repeat rather than disambiguate between them. See the parameter
+ * below.
+ */
+export function resolveQuote(
+  blocks: Block[],
+  /**
+   * **No `start`, deliberately** — see the note in the docstring above.
+   *
+   * The stored offset is measured in `block.text`; this function searches the
+   * *rendered* text, which is a different string of a different length. Passing
+   * it as `near` does not disambiguate, it misdirects: GPT Sol reproduced a
+   * table where `block.text` put the first occurrence at 120 while the rendered
+   * occurrences were at 60 and 126, so the hint chose the second sentence and
+   * the mark landed on the wrong one.
+   *
+   * Omitting it is not a loss here, and that is what makes this the right fix
+   * rather than a retreat: `locate` in src/quotes.ts always takes the **first**
+   * occurrence, so the first rendered occurrence is the one that was meant.
+   * Search and ideas cannot do this — their offsets come from a model naming a
+   * block — which is why the general fix is an occurrence ordinal and is not
+   * built.
+   */
+  quote: { id: string; slot: number; blockId: BlockId; text: string; reason?: string },
+): Found[] {
+  const one = resolveOne(page(blocks), {
+    /* The same three-part key shape as a hit and an occurrence, with `0` for
+       the index: a quote is exactly one passage, so there is no second one to
+       tell apart — and keeping the shape means nothing downstream has to know
+       which of the three sources it is looking at. */
+    key: `${quote.id}:${quote.blockId}:0`,
+    blockId: quote.blockId,
+    runId: quote.id,
+    slot: quote.slot,
+    quote: quote.text,
+    confidence: null,
+    reasoning: quote.reason ?? "",
+  });
+  return one ? [one] : [];
+}
+
+/**
+ * One timeline event's occurrences, resolved into the same `Found[]` the ideas
+ * and the search hits become.
+ *
+ * `resolveIdea` with two fields removed, and both removals are the artefact
+ * being honest rather than this being a lesser version of it:
+ *
+ * - **No `reasoning`.** A timeline occurrence is `{ blockId, quote, start }` and
+ *   nothing else — the model is asked where the event is mentioned, never for a
+ *   line about why. The row shows the article's words; there is no commentary to
+ *   caption them with, and inventing an empty string here would put a blank
+ *   caption slot into the prose hover card.
+ * - **`slot: 0`.** Timeline paints no lane down the rail — that is on the
+ *   deferred list with the marks (docs/plans/260831i-timeline-mode.md § Appendix), so
+ *   there is no palette to assign from. Zero is the value `assignSlots` would
+ *   give the first row anyway, so the wash in the prose is the ordinary one.
+ *
+ * **`start` is passed**, unlike `resolveQuote` next door, and for the reason
+ * that one gives: these offsets come from a model naming a block, so the first
+ * rendered occurrence is not necessarily the one meant. Same call as
+ * `resolveIdea`, which has the same provenance.
+ */
+export function resolveTimelineEvent(
+  blocks: Block[],
+  event: { id: string; occurrences: TimelineOccurrence[] },
+): Found[] {
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const [n, o] of event.occurrences.entries()) {
+    const one = resolveOne(at, {
+      /* The same three-part key as a hit, an occurrence and a quote. One event
+         really can be mentioned twice in the same paragraph — the test article
+         recounts the same three months once per civilisation — so `blockId:n`
+         alone is not an identity. */
+      key: `${event.id}:${o.blockId}:${n}`,
+      blockId: o.blockId,
+      runId: event.id,
+      slot: 0,
+      quote: o.quote,
+      start: o.start,
+      confidence: null,
+      reasoning: null,
     });
     if (one) out.push(one);
   }

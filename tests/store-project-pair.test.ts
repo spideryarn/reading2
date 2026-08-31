@@ -6,7 +6,7 @@
  * `DATABASE_URL` picks the database, and the presence of a service key picks the
  * blob store (`src/store/blobs.ts`). Nothing checks they agree.
  *
- * So the dangling reference every version of docs/plans/raw-bytes-in-storage.md
+ * So the dangling reference every version of docs/plans/260827o-raw-bytes-in-storage.md
  * has tried to make impossible arrives anyway, with nobody deleting anything:
  * put the object in project B, commit the reference in project A, and every
  * correctly-configured reader of A finds nothing. GPT Sol, 2026-08-27,

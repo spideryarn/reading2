@@ -2,7 +2,7 @@
  * Copying an article between two stores, through the seam and nothing else.
  *
  * This is the replacement for `db:import` in the three suites that use it to
- * get an article into Postgres — docs/plans/delete-the-importer.md § What it
+ * get an article into Postgres — docs/plans/260827aa-delete-the-importer.md § What it
  * costs. Here it is exercised filesystem-to-filesystem, because that half needs
  * no database and can therefore be proved before the Postgres adapter exists.
  *
@@ -13,7 +13,7 @@
  * 1. **`readParts` and `copyArtefacts` preserve everything.** Every artefact of
  *    every step arrives at the other end equal to what it left as.
  * 2. **`ArtifactStore.write` works at all.** It has *no production caller* —
- *    docs/plans/transactional-stage-runner.md says so in as many words — and
+ *    docs/plans/260827j-transactional-stage-runner.md says so in as many words — and
  *    the first time anything called it, it failed: `writeAtomic` never created
  *    its directory, because every stage `mkdir`s for itself before its own
  *    `writeFile`. Landing D deletes those stage-level `mkdir`s. Fixed in the
@@ -75,8 +75,21 @@ const OWNED = [
   "data/writes/arc.json",
   "data/writes/tweets.json",
   "data/writes/glossary.json",
-  "data/writes/summary.json",
+  /* **No `summary.json`.** The stage that wrote it and the `summary` artefact
+     kind both went on 2026-08-31 (docs/plans/260831s-gist-only-summaries.md), so the
+     store no longer owns the file — `data/writes/summary.json` is still on disk
+     and is now just a file in the directory, like `chat.json`. The Postgres
+     column that held it was kept and travels by `db:export`/`db:import`
+     instead. */
   "data/writes/ideas.json",
+  /* **`quotes.json` is deliberately NOT here yet**, and the reason is this
+     list's own first assertion: every row asserts the fixture HAS the file
+     before it asserts the copy does, so a row for an artefact nothing has
+     generated fails rather than passing vacuously. Nothing has run
+     `npm run quotes` against `data/writes`. Add the row on the first real run
+     — `quotes` is already in the store's own maps and in
+     tests/store-roundtrip.test.ts, so what is missing is the fixture and not
+     the wiring. docs/project/quotes.md § What is still open. */
   "output/writes.html",
   "output/writes.blocks.json",
 ] as const;

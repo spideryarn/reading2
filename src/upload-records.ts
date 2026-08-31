@@ -8,7 +8,7 @@
  * grant and queueing the job are **two HTTP requests**, and on a serverless host
  * they may not run on the same machine — so a record on a function's local disk
  * is one the second request cannot find. See
- * docs/plans/durable-queue-and-uploads.md.
+ * docs/plans/260827h-durable-queue-and-uploads.md.
  *
  * ## What did not move, and why that is the point
  *
@@ -169,7 +169,7 @@ export function forgetUpload(id: string): Promise<void> {
  * **This staying true is not the same as uploading working.** The pipeline's
  * stages still write `data/<slug>/*.json`, so an upload that got past this on a
  * serverless host would still fail at the first step boundary — the artefacts
- * have to move too. docs/plans/durable-queue-and-uploads.md § The dependency.
+ * have to move too. docs/plans/260827h-durable-queue-and-uploads.md § The dependency.
  */
 export function recordsSurviveTheRequest(): boolean {
   return STORE === "postgres" || !process.env.VERCEL;

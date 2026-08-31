@@ -23,7 +23,7 @@
  * state. That half is genuinely not identical yet — `useGlossary` has
  * generations, a dedupe and trailing fetches that the other three have none of
  * — and unifying it *changes behaviour*, so it is its own piece of work
- * (docs/plans/simplification-wave-2.md § 2.6). What this hook takes is the job
+ * (docs/plans/260828aj-simplification-wave-2.md § 2.6). What this hook takes is the job
  * half, where the four really were the same code.
  *
  * ## Who uses it

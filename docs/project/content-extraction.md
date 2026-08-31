@@ -9,9 +9,12 @@ Strips a rich HTML page (article/blog post) down to the main content — drops n
   [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
   code path and no way for them to disagree.
 - The fetch itself is no longer here. Stage 1 is [`src/fetch.ts`](../../src/fetch.ts), which keeps
-  what it got in `data/<slug>/raw.html` — or `raw.pdf` — with a `raw.json` manifest beside it saying
-  which, so re-extracting costs nothing and does not ask the publisher again.
-- Output: a standalone, styled HTML file (not Markdown — kept as HTML to avoid losing structure/links/images)
+  what it got as a content-addressed object in the `sources` bucket, with a manifest naming it, so
+  re-extracting costs nothing and does not ask the publisher again. Since 2026-08-31 it writes no
+  files — [fetching.md § What stage 1 leaves behind](fetching.md#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk).
+- Output: a standalone, styled HTML page and the metadata, **both returned rather than written**. The
+  page is HTML and not Markdown, to avoid losing structure, links and images; the command line is the
+  only caller that puts either on a disk.
 - Dependencies: `@mozilla/readability` + `jsdom` (parses HTML into a DOM, since Node has none natively)
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
@@ -41,8 +44,10 @@ design, and it is why the PDF path is not a parallel pipeline.
 **The branch is on the manifest, never on the URL.** A `.pdf` address that served a Cloudflare
 challenge is HTML; an `application/octet-stream` that starts `%PDF-` is a PDF. Stage 1 already looked
 at the bytes and wrote down what it found ([fetching.md](fetching.md#what-kind-of-document-it-is)),
-so stage 2 reads `raw.json` rather than guessing — and rather than picking "whichever raw file is
-there", which makes a stale file authoritative by accident after a refresh.
+so stage 2 reads the manifest rather than guessing — and rather than picking "whichever raw file is
+there", which makes a stale file authoritative by accident after a refresh. Content addressing
+closes that a second way: since 2026-08-31 stage 2 asks `readRawBytes(manifest)` for the bytes, and
+they are named by what they *are*, so a manifest cannot point at last week's document.
 
 The differences that matter to a reader:
 
@@ -52,9 +57,15 @@ The differences that matter to a reader:
   layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
   than writing a half-transcribed article that reads fluently.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A word broken by a page break is mended from the text layer, not by a second model call.** The
+  chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
+  as two records and used to render as "dis patcher". `mendSeamHyphens` in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
+  pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
+  in the comment above the function.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
-[../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
+[../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
 
 **And since 2026-08-27 the PDF need not have been fetched at all.** A reader can upload one, and
 that is a change to stage *1*, not to this stage: the acquisition step verifies the bytes and writes
@@ -127,7 +138,22 @@ notices — the prose around a discarded formula is intact.
 
 The measurements, the five bugs the instrument shipped with, the fifteen committed fixtures, and what
 a model pass would and would not buy are all in
-**[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**.
+**[../plans/260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)**.
+
+**And there is a second failure, opposite in direction, found 2026-08-30.** Everything above measures
+what Readability *threw away*. Nothing measured what it *kept* — and Paul Graham's *How to Do Great
+Work*, which the corpus scores as losing nothing at all (ratio 1.000), reaches the reader as 328
+blocks of which **87 hold six characters or fewer**: `[1]`…`[29]`, a bare `[`, a bare number. They are
+all `gistable`, so the table of contents, the summaries and the zoom tree treat punctuation as
+content. The same shape is on Wikipedia (nineteen `[edit]`), MDN (thirty `http` code-fence labels),
+RFC 9110 (`¶` permalinks) and a MacTutor biography (bare years, and the words `in` and `'s`, split
+mid-sentence).
+
+The instrument for it is [`evals/extraction/probe.mts`](../../evals/extraction/probe.mts), which runs
+this stage **and stage 3's real splitter** and reports what a reader would actually get. What a model
+pass buys, what a four-line regex buys for free, and the two fixtures whose whole article arrives as
+one 67,890-character block are in
+**[../plans/260830at-readability-tidy-pass.md](../plans/260830at-readability-tidy-pass.md)**.
 
 ## Where this sits
 
@@ -158,7 +184,10 @@ one thing it writes for a person to open.
 
 **The debug page is sanitised here, 2026-08-26.** The window between running this stage and running
 stage 3 is exactly what `output/<slug>.html` is for — the command prints the path and the next thing
-you do is open it — so the file goes through `sanitizeHtml` before it is written.
+you do is open it — so it goes through `sanitizeHtml` before it leaves this stage. Note that this
+page **is** the `extractedHtml` artefact, not a second copy of it: stage 3 reads it and stamps block
+ids into it. That is worth stating rather than tidying, because making the artefact the bare body
+would change every block stage 3 cuts, on every article.
 
 The estimate for that fix, written down here and in security.md, was two lines. It was not, and the
 reason is the useful part: sanitising the body closes one hole and there were **four**. Readability
@@ -177,16 +206,17 @@ stages share this file and stage 3 writes block ids back into it.
 Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
-The standalone styled HTML output is a debug view; once the server exists
-([architecture.md § Server and client](architecture.md#server-and-client)), the durable artefacts are
-`article.html` + `meta.json` under `data/<slug>/`.
+The standalone styled HTML output doubles as a debug view; the durable artefacts are the same two
+things this stage returns, and where they land is the store's decision — `output/<slug>.html` plus
+`data/<slug>/meta.json` on a filesystem, columns on `article_revisions` in Postgres.
 
-`meta.json` landed on 2026-08-25, when the library needed something to put on a card: title, byline,
-site, language, source URL, fetch date and Readability's excerpt. **It is the only place the source
-URL and the byline survive past this script**, and it is written on every run, because re-extracting
-is how you refresh a page and the fetch date should follow. One subtlety worth reading before
-touching it — the slug comes from the *output filename* rather than from the URL, because that is
-what stages 3 and 4 will name the data directory after. Both are in
+The metadata landed on 2026-08-25, when the library needed something to put on a card: title,
+byline, site, language, source URL, fetch date and Readability's excerpt. **It is the only place the
+source URL and the byline survive past this script**, and it is rebuilt on every run, because
+re-extracting is how you refresh a page and the fetch date should follow. One subtlety worth reading
+before touching it — the **command line** derives the slug from the *output filename* rather than
+from the URL, because that is what stages 3 and 4 will name the data directory after; `runExtract`
+itself now takes the slug as an argument, since the queue has always known it. Both are in
 [library.md § meta.json](library.md#metajson-and-the-articles-identity).
 
 Why any of this exists at all: [vision.md](vision.md).

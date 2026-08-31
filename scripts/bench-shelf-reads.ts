@@ -5,7 +5,7 @@
  *
  * Times `pgArticleReader.listArticles()` and counts the statements it sends.
  * Run it before and after any change to the homepage's reads —
- * docs/plans/library-read-latency.md records what it said on 2026-08-28:
+ * docs/plans/260828c-library-read-latency.md records what it said on 2026-08-28:
  *
  * ```
  *                          before      after

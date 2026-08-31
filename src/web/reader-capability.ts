@@ -3,7 +3,7 @@
  *
  * ## Why this is an object and not a boolean
  *
- * The first draft of docs/plans/public-read-only-access.md said the reading
+ * The first draft of docs/plans/260827ai-public-read-only-access.md said the reading
  * view would take a `readOnly` prop. GPT Sol went and read the reading view,
  * and returned the finding this file exists because of:
  *

@@ -6,7 +6,7 @@
  * handed the page "Microsoft Teams Audio Device (Virtual)", which emits
  * **exactly** `0.0` — digital silence, not a quiet room. Recognition heard
  * nothing, the meter drew nothing, and both were right.
- * docs/plans/microphone-device-and-recording.md.
+ * docs/plans/260827k-microphone-device-and-recording.md.
  *
  * The property that matters most here is that **`exact` is used rather than
  * `ideal`**. `ideal` silently substitutes another device when the named one is

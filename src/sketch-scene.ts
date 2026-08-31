@@ -217,10 +217,14 @@ export interface Sketch {
   generator?: string;
   slug?: string;
   /**
-   * The blocks and the section boundaries this was drawn against, together —
-   * `hashBlocks(blocks).structureHash(tree)`, the same pair `ideas` uses. Both
-   * halves matter: the prompt shows the model the tree, so re-cutting the
-   * sections changes the question with every block byte-identical.
+   * What this was drawn against — `articleWithIdsFingerprint` in
+   * src/source-hash.ts, the same function `ideas` uses.
+   *
+   * The blocks, the section boundaries **and the prompt head**. All three
+   * matter: the prompt shows the model the tree, so re-cutting the sections
+   * changes the question with every block byte-identical; and it prints the
+   * title, byline, site and URL above the prose, falling back to the tree's
+   * slug when there is no metadata at all.
    */
   sourceHash?: string;
   /**

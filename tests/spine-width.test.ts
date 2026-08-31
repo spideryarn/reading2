@@ -42,7 +42,7 @@
  *
  * What this still cannot see: whether the browser lays anything out at that
  * width. That needs a rendered check, and it is a browser pass rather than a
- * unit test — docs/plans/spine-rail.md § Evidence.
+ * unit test — docs/plans/260828ay-spine-rail.md § Evidence.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

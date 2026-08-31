@@ -6,7 +6,7 @@
  * on a second attempt, and neither can a missing source URL, a tree whose root
  * is not in its own node list, or a page Readability has already refused once
  * over bytes that are sitting in the cache. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * **Most of these drive the real stage rather than a stand-in.** A classifier
  * that recognises a failure by a sentence somebody else's file writes is only
@@ -25,7 +25,7 @@ import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
 import { providerHttpFailure } from "../src/messages.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
 import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
-import { generateSummaries } from "../src/summarise.js";
+import { storeRawSource } from "../src/store/blobs.js";
 import {
   budgetFor,
   MODEL_MAX_TOKENS,
@@ -53,7 +53,7 @@ function failed(failureKind?: Job["failureKind"]): Job {
  * The job card as HTML.
  *
  * A real render, not a scan of the source. There is no component test runner
- * here and `docs/plans/chat-mode.md` records that — but `JobCard` is a plain
+ * here and `docs/plans/260826a-chat-mode.md` records that — but `JobCard` is a plain
  * function of its props, so `renderToStaticMarkup` needs neither a DOM nor a
  * JSX transform, and `createElement` keeps this file a `.ts` that
  * vitest.config.ts's `include` will actually pick up.
@@ -189,7 +189,7 @@ describe("the failures a retry cannot change", () => {
     // Not arithmetic, unlike `TooLongForOnePass` — adaptive output varies, so
     // this is "unlikely to differ" rather than "cannot". It is `bug` because
     // the thing that needs changing is a constant in src/token-budget.ts, and
-    // the message says which. See docs/postmortems/toc-max-tokens.md.
+    // the message says which. See docs/postmortems/260826a-toc-max-tokens.md.
     const err = truncationFailure("table of contents", 77_100, 37_100, {
       outputTokens: 77_100,
       answerChars: 40_000,
@@ -213,25 +213,6 @@ describe("the failures a retry cannot change", () => {
     const err = await threw(() => partsOf(tree));
     expect((err as Error).message).toMatch(/is not in nodes/);
     expect(failureKindOf(err)).toBe("bug");
-  });
-
-  it("calls a tree with nothing to summarise `bug`", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-summ-"));
-    try {
-      await writeFile(
-        path.join(dir, "blocks.json"),
-        JSON.stringify({ blocks: [{ id: "spya-aaaaaa", tag: "p", text: "hello" }] }),
-      );
-      await writeFile(
-        path.join(dir, "tree.json"),
-        JSON.stringify({ rootId: "spya-absent", nodes: {} }),
-      );
-      const err = await threw(() => generateSummaries({ dir }));
-      expect((err as Error).message).toMatch(/covers enough text/);
-      expect(failureKindOf(err)).toBe("bug");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
   });
 
   /**
@@ -281,9 +262,36 @@ describe("the failures a retry cannot change", () => {
     // extractor: change that sentence in src/extract.ts and this goes red.
     const dir = await mkdtemp(path.join(tmpdir(), "spya-extract-"));
     try {
-      await writeFile(path.join(dir, "raw.html"), "");
+      /* **The manifest and the object, not `raw.html`.** Since 2026-08-31 stage
+         1 leaves nothing in the article's directory: it puts the document in the
+         content-addressed `sources` bucket and returns a manifest naming it by
+         hash, and stage 2 reads the manifest from the store and the bytes by
+         address (docs/plans/260831b-finish-the-database-move.md § Stage 2c). A fixture
+         that wrote `raw.html` would now fail before Readability ever saw the
+         page — which is how this test found out, with the wrong sentence. */
+      const htmlFile = path.join(dir, "a-slug.html");
+      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
+      const page = new TextEncoder().encode("");
+      const put = await storeRawSource(page, "html");
+      await writeFile(
+        path.join(dir, "raw.json"),
+        JSON.stringify({
+          kind: "html",
+          file: "raw.html",
+          requestedUrl: "https://example.com/a-piece",
+          url: "https://example.com/a-piece",
+          contentType: "text/html",
+          encoding: "utf-8",
+          bytes: page.byteLength,
+          sha256: put.sha256,
+          storedSha256: put.sha256,
+          storedBytes: page.byteLength,
+          fetchedAt: new Date().toISOString(),
+        }),
+        "utf8",
+      );
       const err = await threw(() =>
-        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), fsArtifacts),
+        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), store),
       );
       expect((err as Error).message).toMatch(/Readability/);
       expect(failureKindOf(err)).toBe("blocked");

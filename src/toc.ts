@@ -21,8 +21,14 @@
  * bound — 73% of this stage's answer on a 360-block article — and they took the
  * whole stage over the 128,000-token ceiling on a single response. They now live
  * in src/labels.ts, batched along this tree's own section boundaries and run in
- * parallel. `generateToc` still drives both and still writes one set of
- * artefacts, so the pipeline sees one step. docs/plans/toc-scaling.md.
+ * parallel. `generateToc` still drives both and still returns one set of
+ * artefacts, so the pipeline sees one step. docs/plans/260826h-toc-scaling.md.
+ *
+ * **The stage reads no path and writes no file.** It is handed the blocks and
+ * hands back the three artefacts in one object; the caller stores them. The
+ * pipeline gives that object to the artefact store as a single `parts` map, and
+ * `main()` below is the only thing left that turns them into files.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -37,7 +43,8 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
-import { generateLabels, mergeLabels } from "./labels.js";
+import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
+import { hashBlocks } from "./source-hash.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -52,28 +59,45 @@ const PROMPT_VERSION = "toc/2";
 /**
  * How hard the model thinks before it starts writing.
  *
- * **Back to `"high"`, and getting it back is the point of the split.**
+ * **`"medium"`, and this setting has now been wrong in both directions twice.**
  *
- * The history is worth keeping, because this setting has been wrong in both
- * directions. It was `"high"` originally, by default rather than by decision.
- * The max_tokens postmortem forced it down to `"medium"`: the first attempt at
- * fixing the budget raised `max_tokens` from 32,000 to 77,100 and failed again,
- * having spent roughly 64,000 tokens on thinking, because at `"high"` adaptive
- * thinking **expands into whatever room it is given**. `max_tokens` is a
- * ceiling, not a leash; `effort` is the leash.
+ * The history, because it is the argument. It was `"high"` originally, by
+ * default rather than by decision. The max_tokens postmortem forced it down to
+ * `"medium"`: raising `max_tokens` from 32,000 to 77,100 failed again, having
+ * spent roughly 64,000 tokens on thinking, because at `"high"` adaptive thinking
+ * **expands into whatever room it is given**. `max_tokens` is a ceiling, not a
+ * leash; `effort` is the leash. Moving the nav labels out to src/labels.ts then
+ * bought enough room to put it back to `"high"`, and the comment here argued
+ * that case well.
  *
- * That was a real quality concession and it was made under duress — the reasoning
- * this stage needs is finding topic shifts and balancing the levels, which is
- * exactly the part worth thinking about. It was affordable only because the
- * other 73% of the answer was one mechanical label per paragraph, which does not
- * improve for being brooded over.
+ * It went wrong the same way a third time. On 2026-08-30 Stephen Wolfram's
+ * "Towards a theory of bugs" was sized for a 52,225-token budget — 12,225 for
+ * the answer, 40,000 of `THINKING_HEADROOM` — and came back truncated having
+ * spent 2,825 on the answer and 49,400 on reasoning. Those two sum to 52,225
+ * **exactly**. The reasoning did not overrun the reservation; it expanded to
+ * fill the ceiling, which is what it does at `"high"` and what it will do at
+ * any ceiling. So no value of `THINKING_HEADROOM` fixes this, and neither does
+ * a better answer estimate: both make the room bigger and the thinking takes
+ * the room. Greg's call, the same day.
  *
- * Those labels now live in src/labels.ts, generated in batches at `"low"`. What
- * is left here is ~7,000 tokens of structure on a 360-block article, with room
- * to think about it properly. See docs/plans/toc-scaling.md and
- * docs/postmortems/toc-max-tokens.md.
+ * **What this costs, said plainly, because a quality setting is being lowered.**
+ * The reasoning this stage needs — finding topic shifts, balancing the levels —
+ * is exactly the part worth thinking about, and nobody has measured `high`
+ * against `medium` *for this stage*. That comparison exists for arc, thread and
+ * glossary and was never run for the tree. So this is a decision taken on a
+ * failure mode rather than on a quality measurement, and the measurement is
+ * still owed.
+ *
+ * **If you run that comparison, read `repairedBlocks` and `largestRepair`
+ * alongside the score.** Since `0062f74` a tree that does not tile is snapped
+ * shut and repaired rather than thrown away, so an arm can score `ok` having
+ * been repaired into shape — and a boundary one paragraph out and a section
+ * handed forty of its neighbour's blocks would otherwise look identical.
+ * `evals/toc-structure/run.ts` records both.
+ *
+ * See docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
  */
-const EFFORT = "high" as const;
+const EFFORT = "medium" as const;
 
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
@@ -233,27 +257,19 @@ export function structureRequest(body: Block[]): {
 }
 
 /**
- * How much of the article the labels have to reach. **All of it.**
+ * How much of the article the labels have to reach — **and it lives in
+ * src/labels.ts now.**
  *
- * This was 0.95 when one model call wrote the whole tree, and the missing 5%
- * was an escape hatch: the model was allowed to skip a trivial transition
- * sentence, and an unlabelled gistable leaf is still only a *warning* in
- * [validate-tree.ts](./validate-tree.ts) for that reason
- * (docs/project/table-of-contents.md). The floor existed to tell a used escape
- * hatch apart from an answer that had quietly stopped early.
- *
- * The split removes the ambiguity. src/labels.ts asks for an exact set of
- * numbered paragraphs per call and refuses a response returning any other set,
- * so a batch is complete or it throws; and `planBatches` puts every gistable
- * block in exactly one batch. There is no longer a path by which a block is
- * legitimately unlabelled, so anything under 100% is a bug in the batching
- * rather than a judgement by the model — and a floor that tolerated it would be
- * hiding the one failure this design can have.
- *
- * Every real tree came back at 100% under the old rule anyway: 29 of 29, 117 of
- * 117, 18 of 18. The escape hatch was never once used.
+ * Moved on 2026-08-31, and re-exported here so that nothing which already
+ * imported it from this module had to change. The same move `structureHash` made
+ * out of this file, for the same reason: the check it feeds has to happen on
+ * both ways into stage 4, and a second copy of the number in the other file
+ * could only ever drift. `generateToc` still applies it through `checkCoverage`
+ * below, over the tree's own leaves — a different measurement of the same floor,
+ * and the one that would catch a merge that lost labels rather than a run that
+ * dropped them.
  */
-const COVERAGE_FLOOR = 1;
+export { COVERAGE_FLOOR };
 
 /**
  * How to name a value from the model in an error message — and when not to.
@@ -301,7 +317,7 @@ function nameValue(value: unknown): string {
  * So the completeness check lives out here, where the two are distinguishable
  * by how many. This is the guard between a loud failure and the quiet one that
  * would replace it — see docs/reusable/silent-success.md, and the postmortem in
- * docs/postmortems/toc-max-tokens.md for why this stage in particular attracts
+ * docs/postmortems/260826a-toc-max-tokens.md for why this stage in particular attracts
  * partial answers.
  *
  * A label naming a block that isn't in the article fails it too. That is not a
@@ -361,9 +377,12 @@ export function checkCoverage(
     throw new Error(
       `The table of contents covers ${structural.length - missing.length} of ${structural.length} ` +
         `paragraphs — ${missing.length} have no row (${missing.slice(0, 3).map((b) => b.id).join(", ")}). ` +
-        `Every nav label is asked for by number and every batch is checked against the exact set ` +
-        `it was given, so this is not a model that stopped early. Look at planBatches in ` +
-        `src/labels.ts, and at whether the tree tiles the article. Nothing has been written.`,
+        `A batch may leave a paragraph or two of itself bare when the model will not label them ` +
+        `(src/labels.ts, droppedBudget), and that is what the ${Math.round(
+          (1 - COVERAGE_FLOOR) * 100,
+        )}% here is for; this is past it. ` +
+        `Look at the run's dropped count, at planBatches in src/labels.ts, and at whether the ` +
+        `tree tiles the article. Nothing has been written.`,
     );
   }
 }
@@ -477,7 +496,17 @@ function assertChildrenPartition(
  * climbing, the prompt is drifting and the repairs are hiding it.
  */
 export interface BuildReport {
-  /** Off-by-one partitions snapped rather than refused. */
+  /**
+   * Partitions that missed and were snapped shut rather than refused — **by
+   * however much they missed.**
+   *
+   * This said "off-by-one" until 2026-08-31, and it was left behind when the
+   * one-block bound went (see `repairedChildRanges`, and Greg's ruling that we
+   * should allow gaps). A repair can now move a section's boundary by forty
+   * blocks, and a field description promising off-by-one is the kind of thing a
+   * reader believes instead of reading the code. `size` is the number that says
+   * how far, and `repairedBlockCount` is how to add them up.
+   */
   repairs: PartitionRepair[];
   /**
    * Nodes whose `sourceHeading` claim no heading block in their range backed
@@ -502,6 +531,52 @@ export interface PartitionRepair {
    * child are the same boundary seen at two depths, so they share a coordinate.
    */
   at: number;
+  /**
+   * How many blocks the boundary moved — **the number that used to be the
+   * bound, and is now the whole of what replaced it.**
+   *
+   * While a repair could only ever be one block, its size was not worth
+   * recording: every repair was the same size and the count said everything.
+   * Since the bound was lifted (see `repairedChildRanges`) the count no longer
+   * distinguishes a boundary a paragraph out from a section handed forty blocks
+   * that belonged to its neighbour, and those are not the same event. A repair
+   * nobody is told the size of is now the shape of the bug it repaired, which is
+   * the argument this file already made about the count.
+   *
+   * A cascade reports the same size at each depth, because it is one boundary
+   * moving the same distance; `at` is what tells the two apart.
+   */
+  size: number;
+}
+
+/**
+ * **How many blocks the repairs actually moved** — one entry per boundary, not
+ * one per level.
+ *
+ * A cascade emits a `PartitionRepair` at every depth the same boundary appears
+ * at, deliberately: moving a node's start moves its first child's start too, and
+ * each of those is a real edit to a real range. But they are one physical
+ * movement of one set of blocks, so adding their sizes up counts the same blocks
+ * two, three or four times over. The sum was `repairs.reduce((n, r) => n +
+ * r.size, 0)`, so one 40-block movement through three levels reported 120 — and
+ * this is the number the CLI prints, src/pipeline.ts logs, and the eval scores
+ * arms on. A count that inflates with the tree's depth cannot be compared
+ * between articles at all, which is the whole of what it is for. GPT Sol's
+ * review of stage 1, 2026-08-31, finding 6.
+ *
+ * The maximum per boundary rather than the first or last: a repair that cascades
+ * can widen on the way down (the parent's start moves two, the child's start was
+ * further out still), and what the reader wants to know is how much of the
+ * article ended up somewhere else.
+ *
+ * `largestRepair` needs no such treatment — a maximum over duplicates is the
+ * same maximum — and is deliberately left as it is rather than routed through
+ * here for symmetry.
+ */
+export function repairedBlockCount(repairs: PartitionRepair[]): number {
+  const perBoundary = new Map<number, number>();
+  for (const r of repairs) perBoundary.set(r.at, Math.max(perBoundary.get(r.at) ?? 0, r.size));
+  return [...perBoundary.values()].reduce((n, size) => n + size, 0);
 }
 
 /**
@@ -509,7 +584,7 @@ export interface PartitionRepair {
  *
  * One, and the number is the evidence rather than a round figure. Every
  * recorded tiling failure — the two in the 2026-08-30 calibration and the two
- * in docs/postmortems/the-article-with-one-heading.md — was a *single* slipped
+ * in docs/postmortems/260830a-the-article-with-one-heading.md — was a *single* slipped
  * boundary. An answer with several independent ones is not the same event
  * observed again; it is a different failure, and mending each of them
  * separately would let a systematically misaligned tree through one block at a
@@ -521,24 +596,52 @@ export interface PartitionRepair {
  * is one mistake — see `at`.
  *
  * **What would justify raising it** is a measured distribution, not an argument:
- * the repair counts now reach the pipeline log, so if answers with two
- * independent slips turn out to be common and their repaired trees turn out to
- * be good, that is the evidence. Thirteen calls is not it.
+ * if answers with two independent slips turn out to be common, that is the
+ * evidence. Thirteen calls is not it.
+ *
+ * **Where that evidence comes from, since it is not the pipeline log.** This
+ * comment used to say the repair counts reach the log and leave it there, which
+ * was true of every run except the ones this bound refuses: when it fires,
+ * `buildTree` throws, `generateToc` never returns, and the success log never
+ * gets a report — the monitoring path went dark precisely when somebody would go
+ * looking. `generateToc` now puts what it had mended into the *error* as well
+ * (search for `MAX_REPAIRED_BOUNDARIES` there), so a refused answer says how
+ * many boundaries it had already spent and how far each moved. What no amount of
+ * logging can supply is the other half of the old claim — whether the repaired
+ * tree would have been *good* — because the answer is refused rather than
+ * repaired. Deciding that needs the eval, evals/toc-structure, with the bound
+ * raised on an arm. GPT Sol's review of stage 1, 2026-08-31, finding 7.
+ *
+ * **It is now the only bound, and it was one of two.** The per-repair size bound
+ * went on 2026-08-30 (`repairedChildRanges`), so this is what is left between a
+ * slipped boundary and an answer that is misaligned throughout. It still asks
+ * the right question — *how many separate places did the model get wrong*, which
+ * is what distinguishes a slip from a different reading of the article, and
+ * unlike size that does not vary with how long the article is.
+ *
+ * But it is carrying more than it was fitted for, and it is fitted to the same
+ * four HTML-with-headings observations the size bound was. **A headingless PDF
+ * with two independent slips still loses its whole ToC** — which is the fatal
+ * failure Greg's ruling was about, arriving by the other door. That is a known
+ * gap, left open deliberately: one observation is not enough to move two bounds
+ * at once, and the honest fix for both is the re-ask he describes rather than a
+ * larger number here. **It is one character to change when the evidence arrives**
+ * — which is the reason to leave it rather than to guess now.
  */
 const MAX_REPAIRED_BOUNDARIES = 1;
 
 /**
- * **Snap a partition that misses by exactly one block, and only by one.**
+ * **Snap a partition that misses, by however much it misses.**
  *
  * The argument for repairing at all is measured rather than assumed. A paid
  * calibration of this stage threw on 4 of 13 structure calls, and every tiling
- * failure anyone has recorded — those two, plus the two in
- * docs/postmortems/the-article-with-one-heading.md — was **off by a single
+ * failure recorded up to 2026-08-30 — those two, plus the two in
+ * docs/postmortems/260830a-the-article-with-one-heading.md — was **off by a single
  * block**. So the practical choice is not between trusting the model and
  * checking it; it is whether a two-and-a-half-minute call that put one boundary
  * one paragraph out should cost the reader the article. It should not, and a
  * fifth of structure calls were costing exactly that
- * (docs/research/opening-an-article-before-the-toc.md § 7b).
+ * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
  *
  * **Why here, on the model's proposal, rather than in `assertChildrenPartition`.**
  * By the time that check runs, `visit` has already walked the children and
@@ -551,11 +654,46 @@ const MAX_REPAIRED_BOUNDARIES = 1;
  * first child's start too, and a repair that stopped at one level would trade a
  * broken partition at depth 1 for a broken one at depth 2.
  *
- * **Bounded at one block, deliberately.** A repair that grew with the size of
- * the mistake would be the model marking its own homework. Two blocks out is
- * not a slip, it is a different reading of the article, and it still throws —
- * as do a backwards range, an invented id, and a root that misses the article's
- * ends. Nothing is repaired that would leave a node covering no blocks at all.
+ * **This was bounded at one block until 2026-08-30, and the bound was overridden
+ * rather than refuted.** The argument for it was: a repair that grows with the
+ * size of the mistake is the model marking its own homework, and two blocks out
+ * is not a slip, it is a different reading of the article. That is still true,
+ * and it is still the reason to be uncomfortable with this function. What
+ * changed is the price of acting on it.
+ *
+ * The bound was fitted to four observations, and they were **all off by one and
+ * all from HTML articles with headings** — the half of the corpus where the
+ * model has the author's own structure to agree with. PDFs are headingless, they
+ * are the half where the model is measured disagreeing with *itself* between
+ * runs (docs/research/260830a-opening-an-article-before-the-toc.md § 7b), and PDF ingest
+ * reached production on the day this changed. The first thing it did was fail a
+ * 9-page arXiv paper on a gap of **three**: one completed call, $0.1617 spent,
+ * article lost, and nothing the reader could do about it. Greg, 2026-08-30:
+ *
+ * > I think for now, we should allow gaps. It's not ideal, but it's not the end
+ * > of the world, and better than things failing fatally. Perhaps in future, it
+ * > should trigger a re-run of the LLM, where we feed in the previous output,
+ * > with information about the gaps and ask it to adjust. But that's for later.
+ *
+ * **That re-ask is the proper fix and this is not it.** Snapping puts the
+ * orphaned blocks in the section beside them, which is a guess — the reader gets
+ * a paragraph filed under a heading that may not describe it. The re-ask would
+ * get the model to redraw the boundary it actually meant. What snapping buys in
+ * the meantime is that every block is reachable, which is the invariant that
+ * cannot be traded (a block in no node cannot be addressed by granularity zoom
+ * at all), and an article that opens rather than one that does not.
+ *
+ * **So the size of every repair is reported** — `PartitionRepair.size`, summed
+ * and maxed into `TocRun`, printed by the CLI and logged by src/pipeline.ts.
+ * That is the whole of what stands where the bound used to: if these numbers
+ * start showing sections handed forty blocks that belonged to their neighbour,
+ * the prompt has drifted or the model cannot read this kind of document, and
+ * either way somebody has to be able to see it.
+ *
+ * What still throws, unchanged: an answer with two *independent* slipped
+ * boundaries (`MAX_REPAIRED_BOUNDARIES`), a backwards range, an invented id, a
+ * root that misses the article's ends, and children that run past their parent.
+ * Nothing is repaired that would leave a node covering no blocks at all.
  *
  * Returns one entry per child: a mended `[start, end]`, or `undefined` for
  * "use what the model wrote".
@@ -600,29 +738,62 @@ function repairedChildRanges(
     if (!span) return out;
     const [lo, hi] = span;
     /* `cursor <= hi` is the guard against repairing a node into nothing: an
-       overlap snap moves the start forward, and a single-block child that its
-       neighbour already ate has no snap that leaves it non-empty. Without this
+       overlap snap moves the start forward, and a child its neighbour has
+       already eaten whole has no snap that leaves it non-empty. Without this
        the repair would hand `visit` a range running backwards, and the error
-       two lines later would describe a range we wrote ourselves. */
-    if (lo !== cursor && Math.abs(lo - cursor) === 1 && cursor <= hi && affordable(cursor)) {
+       two lines later would describe a range we wrote ourselves.
+
+       **This one clause still refuses, and it refuses more often now that an
+       overlap of any size is snapped.** A large overlap can swallow the next
+       child entirely, and that is where the repair stops being the same kind of
+       act: moving a boundary keeps every section the model asked for and
+       changes where one ends, while emptying a child *deletes a section* — the
+       model said this article has eight parts and we would be storing seven.
+       Nothing here knows whether the right answer is to drop that section or to
+       give it back a block from either side, and guessing wrong writes a
+       structure nobody proposed. The size bound went because refusing cost the
+       reader an article that was nearly right; this refusal is not that, and it
+       is the one place `repairedChildRanges` still says no to a slip it can see.
+       tests/toc-repairs.test.ts § "does not repair an overlap that would leave
+       the node covering nothing". */
+    if (lo !== cursor && cursor <= hi && affordable(cursor)) {
       out[i] = [blocks[cursor]!.id, (child.range as [string, string])[1]] as const;
       repairs.push({
         where: `${where} > child ${i + 1}`,
         kind: lo > cursor ? "gap" : "overlap",
         at: cursor,
+        size: Math.abs(lo - cursor),
       });
     }
     cursor = hi + 1;
   }
 
-  /* The same fault at the other end: the last child stops one block before its
-     parent does, and that block would grow no leaf anywhere. `cursor` is one
-     past the last child's end, so `cursor === parent[1]` is exactly one short. */
+  /* The same fault at the other end: the children stop before their parent does,
+     and every block after them would grow no leaf anywhere. `cursor` is one past
+     the last child's end, so `cursor <= parent[1]` is short by `parent[1] + 1 -
+     cursor` blocks.
+
+     **`<=`, not `===`, since the size bound went.** It was `=== 1` for the same
+     reason the loop above was, and leaving it behind would have left the repair
+     mending a gap of forty in the middle of an article and refusing a gap of two
+     at the end of it — one rule, applied at both ends, or the next person has to
+     discover which end they are at before they can predict what happens.
+
+     The overrun (`cursor > parent[1] + 1`) is deliberately not repaired here and
+     never was: children claiming blocks their parent does not have is a
+     different fault, and its two honest repairs — shrink the child, or grow the
+     parent — are two different readings of the answer with nothing to choose
+     between them. `assertChildrenPartition` still refuses it. */
   const last = children.length - 1;
-  if (last >= 0 && cursor === parent[1] && affordable(parent[1])) {
+  if (last >= 0 && cursor <= parent[1] && affordable(parent[1])) {
     const start = out[last]?.[0] ?? (children[last]!.range as [string, string])[0];
     out[last] = [start, blocks[parent[1]]!.id] as const;
-    repairs.push({ where: `${where} > child ${last + 1}`, kind: "short", at: parent[1] });
+    repairs.push({
+      where: `${where} > child ${last + 1}`,
+      kind: "short",
+      at: parent[1],
+      size: parent[1] + 1 - cursor,
+    });
   }
 
   return out;
@@ -695,7 +866,7 @@ export function buildTree(
      * contrast, costs the reader the article: four structure calls in four made
      * the same wrong claim on the same document, which makes a refusal not an
      * occasional loss but a guaranteed failure loop for it
-     * (docs/research/opening-an-article-before-the-toc.md § 7b).
+     * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
      *
      * **Read with `sameHeading`, over the same range, so this is a repair and
      * not a second opinion.** `checkTree` asks the identical question later,
@@ -836,9 +1007,81 @@ export function slugForBlocksPath(blocksPath: string): string {
   return path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
 }
 
-export interface TocRun {
+/**
+ * **Stage 4's three artefacts, and all three are required.**
+ *
+ * They are one object because they are one write. `labels.json` and the tree
+ * are two halves of the same answer — a tree with a third of its labels missing
+ * is a valid-looking artefact that quietly describes part of an article — and
+ * the blocks are the thing both of them address. A caller that stored the tree
+ * and not the labels would publish exactly that, and the step that stored them
+ * as three separate calls had a window in which it could.
+ *
+ * So the shape refuses it: **a `generateToc` that returned the tree without the
+ * labels would not compile**, which is a guarantee no test has to be remembered
+ * for (docs/project/typechecking.md § Let the types catch it). What the type
+ * cannot say is that the three are *about each other*, and that is why
+ * `generateToc` runs `assertTreeSound` and `checkCoverage` over this object
+ * rather than over the locals it was built from.
+ *
+ * `blocks` is `ReturnType<typeof blocksArtefact>` rather than `{ blocks }`, so
+ * the sanitiser stamp stage 3 puts in it cannot be dropped here by a tidier
+ * declaration — an absent stamp reads as stale and costs every reader a
+ * re-clean on every load (see the note at the write in `main` below).
+ */
+export interface TocArtefacts {
   tree: Tree;
-  outDir: string;
+  labels: LabelsFile;
+  blocks: ReturnType<typeof blocksArtefact>;
+}
+
+export interface TocRun {
+  /**
+   * What this run produced, for the caller to store. Assignable to
+   * `ArtifactParts` (src/store/artifacts.ts) as it stands, so the pipeline step
+   * hands the whole object to one `write` and the three land together.
+   */
+  parts: TocArtefacts;
+  /**
+   * **The hash the caller must record for this step**, read off `labels.json`
+   * rather than computed beside it.
+   *
+   * `toc` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
+   * at length, and it is not an oversight. Recording *no input hash* is a
+   * different thing: `reasonsNotToPublish` compares `toc`'s `input_hash`
+   * against the stored blocks and refuses the publication when they differ, so
+   * a run left carrying `NO_INPUT_HASH` makes the article unpublishable
+   * (src/store/pg-revisions.ts, src/store/artifacts-pg.ts § `writeArtefacts`).
+   *
+   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.toc` is
+   * `"labels"`: whatever the caller passes as `inputHash` is compared against
+   * that same field by `assertStampAgrees` on the way into either store, and a
+   * second computation of "the blocks hash" is how the two come to disagree.
+   * It is `hashBlocks` of the blocks in `parts.blocks` — checked at the seam
+   * below rather than assumed, since the two are computed by different modules
+   * over arguments only a convention keeps equal.
+   *
+   * **Only `inputHash`.** A caller that also declares a `promptVersion` gets a
+   * throw: the labels file is stamped `labels/1` and the tree is `toc/2`, so a
+   * stamp carrying the tree's version contradicts the artefact the stamp is
+   * read from. Verified against a real artefact, not reasoned about.
+   */
+  inputHash: string;
+  /**
+   * Throw the label run's working state away — **call it once the artefacts are
+   * stored**, not when this function returns.
+   *
+   * Returned rather than called here, and the gap is the whole point. It
+   * protects **money, not consistency**: a checkpoint left behind is read by the
+   * next run, matched fingerprint by fingerprint, and either reused correctly or
+   * ignored (src/labels.ts § `LabelRun.clearCheckpoint`), so forgetting to call
+   * this costs nothing. Calling it too early costs a whole label pass, because
+   * a caller that dies between here and its store's commit has thrown away every
+   * batch it just paid for — which is the case the checkpoint exists for.
+   *
+   * A no-op when no `checkpointDir` was given.
+   */
+  clearCheckpoint: () => Promise<void>;
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
   model: string;
   blocks: number;
@@ -865,7 +1108,7 @@ export interface TocRun {
    */
   strandedSupplement: number;
   /**
-   * **Off-by-one partitions this run snapped shut rather than refused**, and
+   * **Misaligned partitions this run snapped shut rather than refused**, and
    * `sourceHeading` claims it dropped because no heading in the node's range
    * backed them up. Both are repairs of a model's slip, both are bounded, and
    * both are reported for the same reason `strandedSupplement` is: a repair
@@ -874,6 +1117,23 @@ export interface TocRun {
    * number that climbs means the prompt has drifted and these are hiding it.
    */
   repairedRanges: number;
+  /**
+   * How far those repairs moved a boundary: blocks moved in total, and the
+   * worst single one.
+   *
+   * **Two numbers because the count stopped being enough** when the size bound
+   * was lifted (src/toc.ts § `repairedChildRanges`). "One repair" now covers
+   * both a boundary a paragraph out and a section handed forty blocks that
+   * belonged to its neighbour, and those need opposite responses: the first is
+   * the slip this stage was built to forgive, the second means the model could
+   * not read the document and the reader is getting prose filed under a heading
+   * that does not describe it.
+   *
+   * `largestRepair` is the one to watch, and it is not derivable from the sum —
+   * six one-block snaps and one six-block snap add up the same.
+   */
+  repairedBlocks: number;
+  largestRepair: number;
   droppedHeadings: number;
   labelled: number;
   internal: number;
@@ -886,15 +1146,33 @@ export interface TocRun {
    * calls after making two. GPT-5.6-sol, 2026-08-26.
    */
   labelBatches: number;
-  /** Batches this run actually asked the model for. */
+  /**
+   * **Requests** this run actually made for labels, which is not the batch count
+   * in either direction: a resumed batch costs none, and a batch that was
+   * repaired or re-drawn costs two. It was the number of records until
+   * 2026-08-31 and so said one after making two — see `LabelRun.calls` in
+   * src/labels.ts for why that number in particular has to be right.
+   */
   labelCalls: number;
   /** Batches taken from a checkpoint left by an earlier, failed run. */
   labelsResumed: number;
+  /**
+   * Paragraphs left with no nav label — **normally 0, and it is reported at 0
+   * as well as above it.**
+   *
+   * A dropped label is invisible in the product: the leaf simply has no row.
+   * The count is the only trace, so it is on the run, in the log line
+   * (src/pipeline.ts), on the CLI, and in `labels.json`. The blocks themselves
+   * are in that file's `dropped`. See `droppedBudget` in src/labels.ts for what
+   * bounds it per batch and `COVERAGE_FLOOR` — which lives in that file too now
+   * — for what refuses it across the article, on both ways into the stage.
+   */
+  labelsDropped: number;
   inputTokens: number;
   outputTokens: number;
   /* From the label pass only — the structure call is one call per article and
      is deliberately not cached, so there is nothing for it to read. See
-     docs/plans/prompt-caching.md on why a prefix used once is worth 1.25× and
+     docs/plans/260826g-prompt-caching.md on why a prefix used once is worth 1.25× and
      no more. */
   cacheReadTokens: number;
   cacheWriteTokens: number;
@@ -903,6 +1181,11 @@ export interface TocRun {
 
 /**
  * Write JSON so that it is either wholly there or not there at all.
+ *
+ * **`main()`'s, and nothing else's.** The stage itself no longer writes: it
+ * returns `TocArtefacts` and the pipeline hands all three to the store in one
+ * call. This is the command line's own writer, and the three files it produces
+ * are the same three files in the same three places.
  *
  * `writeFile` truncates its target before it writes, so a process killed at the
  * wrong moment leaves a file that exists and is not valid JSON — and existence
@@ -922,21 +1205,28 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
 }
 
 /**
- * Stage 4 over a blocks.json on disk: the structure in one call, the nav labels
- * in parallel batches after it, then `tree.json`, `labels.json` and a copy of
- * `blocks.json`.
+ * Stage 4 over a block sequence: the structure in one call, the nav labels in
+ * parallel batches after it, then the tree, the labels file and this stage's
+ * copy of the blocks — **returned, not written.**
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  *
- * **Two model passes, one pipeline step, and nothing written until both are
+ * **The blocks come in, the artefacts go out, and the stage knows nothing about
+ * where either lives.** It used to open a path and write a directory, which
+ * meant the pipeline hashed what the *store* held and generated from what the
+ * *disk* held — the same defect src/article-input.ts was written to close for
+ * the seven article-reading stages. docs/plans/260831b-finish-the-database-move.md.
+ *
+ * **Two model passes, one pipeline step, and nothing returned until both are
  * done.** The split exists so the unbounded half can be batched
- * (docs/plans/toc-scaling.md), not so it can be published separately — a tree on
- * disk with a third of its labels missing is a valid-looking artefact that quietly
- * describes part of an article, which is docs/reusable/silent-success.md exactly.
- * Deferring the labels so a reader can start sooner is a real option and a
- * deliberate later one; it needs a state that says "still arriving" rather than
- * an absence that says nothing.
+ * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
+ * stored with a third of its labels missing is a valid-looking artefact that
+ * quietly describes part of an article, which is
+ * docs/reusable/silent-success.md exactly. `TocArtefacts` is what now makes
+ * that unsayable rather than merely undone. Deferring the labels so a reader
+ * can start sooner is a real option and a deliberate later one; it needs a
+ * state that says "still arriving" rather than an absence that says nothing.
  *
  * `onProgress` reports what is arriving. For the structure call there is nothing
  * useful to say about *what* has been written — the JSON is unparseable until it
@@ -944,22 +1234,32 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * do better, and counts finished sections.
  */
 export async function generateToc(opts: {
-  blocksPath: string;
-  outDir?: string;
+  blocks: Block[];
+  /** Stamped into the tree and the labels file; the article's own name. */
+  slug: string;
+  /**
+   * Where the **label checkpoint** goes, and it is not where the artefacts go
+   * any more — nothing this function returns is written by it.
+   *
+   * Still a directory, and still the filesystem, because the checkpoint store
+   * (src/store/checkpoints.ts) is not the seam this call can go through yet:
+   * it is keyed on an `articleId` this stage is not given, and it has no
+   * `delete`, deliberately — landing D drops `clearCheckpoint` along with the
+   * one-file-per-run format that made it necessary. Redirecting it early would
+   * silently stop resuming and re-buy a paid model call per batch, so it stays
+   * on disk until that landing moves both halves at once.
+   *
+   * **No directory, no checkpoint**, exactly as `generateLabels` has it: a
+   * caller that has one passes it, and a test or a one-off gets nothing on
+   * disk. `TocRun.labelsResumed` is how a caller that meant to checkpoint and
+   * did not finds out.
+   */
+  checkpointDir?: string;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
 }): Promise<TocRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(opts.blocksPath, "utf-8"),
-    "blocks.json",
-  );
-  const slug = slugForBlocksPath(opts.blocksPath);
-  const outDir = opts.outDir ?? path.join("data", slug);
+  const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
 
@@ -1046,7 +1346,42 @@ export async function generateToc(opts: {
      `buildTree` — the tiling, the "covers the whole article" guard — is asked
      about the argument the model was actually shown. */
   const built: BuildReport = { repairs: [], droppedHeadings: [] };
-  const structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+  let structure: Tree;
+  try {
+    structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+  } catch (err) {
+    /**
+     * **The one place the repair figures are unreachable is the place they
+     * decide something**, so they are put in the error instead.
+     *
+     * `MAX_REPAIRED_BOUNDARIES` says out loud that what would justify raising it
+     * is a measured distribution, and that the counts now reach the pipeline
+     * log. Both halves were true only of runs that *succeeded*: when the bound
+     * fires, `buildTree` throws here, `generateToc` never returns, and the
+     * success log at src/pipeline.ts never gets a report — so the evidence for
+     * revisiting the bound could be collected on every run except the ones the
+     * bound refused. That is a monitoring path that goes dark exactly when
+     * somebody would look at it. GPT Sol, finding 7.
+     *
+     * `where`, `kind`, `at` and `size` are all derived from the shape of the
+     * answer rather than from anything in it, so they are safe to put in a
+     * message that will be logged and copied onto the job card — see `nameValue`
+     * above for the rule and why this file has to keep restating it.
+     */
+    if (built.repairs.length === 0) throw err;
+    const spent = [...new Set(built.repairs.map((r) => r.at))].length;
+    throw new Error(
+      `${err instanceof Error ? err.message : String(err)}\n` +
+        `  Before this it mended ${spent} boundary(ies), moving ` +
+        `${repairedBlockCount(built.repairs)} block(s): ` +
+        `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
+        `The bound is MAX_REPAIRED_BOUNDARIES in src/toc.ts, and this line is the only place ` +
+        `these numbers are visible on a run that failed.`,
+    );
+    /* No `cause`, for the reason the label stage gives at the same shape:
+       src/log.ts follows cause chains and would write the original message into
+       the log a second time under another key. It is already in the text. */
+  }
 
   /* **Appended before `generateLabels`, not after.** `labels.json` records
      `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
@@ -1076,7 +1411,7 @@ export async function generateToc(opts: {
      line, so that check is vacuous here and only the later call can make it.
      Two calls, deliberately: this one is a cost guard, the one below is the
      guarantee about the file. `checkTree` is pure and takes microseconds.
-     docs/postmortems/the-article-with-one-heading.md. */
+     docs/postmortems/260830a-the-article-with-one-heading.md. */
   assertTreeSound(blocks, structure);
 
   /* Pass two. The tree has to exist first: the batches are cut along its own
@@ -1085,7 +1420,7 @@ export async function generateToc(opts: {
   /* Before the labels, not after, because the checkpoint they write as they
      land goes in here — and a directory that does not exist yet would turn the
      first batch's saved work into a thrown ENOENT. */
-  await mkdir(outDir, { recursive: true });
+  if (opts.checkpointDir) await mkdir(opts.checkpointDir, { recursive: true });
 
   const labelRun = await generateLabels({
     tree: structure,
@@ -1095,63 +1430,142 @@ export async function generateToc(opts: {
        lands, so a 429 or a 5xx eight batches into a book costs the one batch
        rather than the eight — and the retry the queue makes (src/jobs.ts) picks
        up where this one stopped. src/labels.ts § `usableCheckpoint` for the
-       four things that have to match before a single one is reused. */
-    dir: outDir,
+       four things that have to match before a single one is reused.
+       Absent when the caller gave no `checkpointDir`: `generateLabels` treats
+       that as "no checkpoint" rather than defaulting to a directory, so this
+       spread is the difference between the two rather than a tidy-up. */
+    ...(opts.checkpointDir ? { dir: opts.checkpointDir } : {}),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     ...(opts.signal ? { signal: opts.signal } : {}),
   });
 
-  const tree = mergeLabels(structure, labelRun.labels);
-  /* **The invariants, on the artefact that is about to be written.** They ran
-     in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
+  /**
+   * **The three artefacts, assembled once, and every check below asks about
+   * this object rather than about the locals it was built from.**
+   *
+   * The distinction is the whole of what stops the set going out inconsistent.
+   * A tree merged from one set of labels and returned beside another, or
+   * checked against one block array and returned beside a second, is a set that
+   * looks finished and describes two different articles — and no check written
+   * over `tree`, `labels` and `blocks` as three separate variables can see the
+   * difference, because it is a fact about what was *returned*.
+   *
+   * So the merge reads `labelRun.file.labels`, the labels this object carries,
+   * rather than `labelRun.labels`, which is the same map by construction today
+   * and would be the wrong thing to depend on tomorrow. Everything after this
+   * line reads `parts.*`.
+   *
+   * `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser version
+   * into `output/<slug>.blocks.json`; this is the copy the reading view
+   * actually opens, and handing back the bare array dropped the stamp on every
+   * article. Not unsafe — an absent stamp reads as stale, and stale means
+   * re-sanitise — but it made the stamp worthless: every article paid the
+   * re-clean on every load and fired the "predates the sanitiser" warn every
+   * time, which is how a warning stops being read. Note the check anybody would
+   * run, "is stage 3 writing the stamp?", answers yes. It is, into a different
+   * file. See docs/project/security.md.
+   */
+  const parts: TocArtefacts = {
+    labels: labelRun.file,
+    blocks: blocksArtefact(blocks),
+    tree: mergeLabels(structure, labelRun.file.labels),
+  };
+
+  /* **The invariants, on the artefacts that are about to be handed back.** They
+     ran in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
      (src/store/pg-revisions.ts, which collects reasons rather than throwing),
      and nowhere on this path — so a stage-4 regression was invisible in exactly
      the workflow most of this repo's testing goes through. GPT Sol, F5.
      After `mergeLabels` rather than before `generateLabels`: what this
-     guarantees is a property of the file, and checking `structure` instead
+     guarantees is a property of the artefact, and checking `structure` instead
      would leave the merge unchecked while costing the same. It does mean a
      tree the model got wrong is found after a full label run has been paid
-     for; that is the cheaper of the two mistakes. */
-  assertTreeSound(blocks, tree);
-  checkCoverage(labelRun.labels, tree, blocks);
+     for; that is the cheaper of the two mistakes.
+     Over `parts.blocks.blocks`, which is the array the caller stores, not the
+     `blocks` argument it was derived from — `blocksArtefact` maps one to one and
+     touches only `html`, so the two agree, and asking the question about the
+     wrong one of them is precisely the mistake this whole stage of the migration
+     exists to stop. */
+  assertTreeSound(parts.blocks.blocks, parts.tree);
+  checkCoverage(parts.labels.labels, parts.tree, parts.blocks.blocks);
 
-  /* Each file is written to a temporary name and renamed into place, and the
-     tree goes last.
-     **Ordering alone was not enough, and the first version of this claimed it
-     was.** The queue decides a step is done by whether its output files exist
-     (src/pipeline.ts), so "write the tree last" only helps if a half-written
-     tree does not exist — and `writeFile` creates and truncates its target
-     before it has anything to put in it. A process killed mid-write leaves a
-     truncated `tree.json` that is very much present, the step reports itself
-     finished, and a retry skips it. On a forced regeneration it is worse: the
-     *old* tree is on disk throughout, so a crash can leave new labels and new
-     blocks beside last week's tree, all three present and mutually
-     inconsistent.
-     `rename` within a directory is atomic on every filesystem this runs on, so
-     each file appears whole or not at all, and the tree — the one every reader
-     starts from — appears only after the other two are already whole. Raised by
-     GPT-5.6-sol, 2026-08-26; see docs/plans/toc-scaling.md for what this still
-     does not give us, which is a way to tell a *stale* complete set from a
-     current one. */
-  await writeAtomic(path.join(outDir, "labels.json"), labelRun.file);
-  /* Through `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser
-     version into `output/<slug>.blocks.json`; this line rewrites the copy the
-     reading view actually opens, and writing the bare array here dropped the
-     stamp on every article. Not unsafe — an absent stamp reads as stale, and
-     stale means re-sanitise — but it made the stamp worthless: every article
-     paid the re-clean on every load and fired the "predates the sanitiser"
-     warn every time, which is how a warning stops being read. Note the check
-     anybody would run, "is stage 3 writing the stamp?", answers yes. It is,
-     into a different file. See docs/project/security.md. */
-  await writeAtomic(path.join(outDir, "blocks.json"), blocksArtefact(blocks));
-  await writeAtomic(path.join(outDir, "tree.json"), tree);
-  /* The working state is only now safe to throw away — see
-     src/labels.ts § `LabelRun.clearCheckpoint`. */
-  await labelRun.clearCheckpoint();
+  /**
+   * **The blocks that went in and the blocks that come out hash the same, and
+   * that is asserted rather than assumed.**
+   *
+   * Three parties hash "the blocks this tree was built from" and none of them
+   * talks to the other two. `generateLabels` hashes what it was handed and
+   * stamps it into `labels.json`. The pipeline step records `hashBlocks` of the
+   * array it read from the store and passed in here — that is the value
+   * `reasonsNotToPublish` compares against the published blocks, and the value
+   * `assertStampAgrees` compares against `labels.sourceHash` on the way into
+   * either store. And this stage returns `blocksArtefact(blocks)`, which is
+   * what actually gets stored.
+   *
+   * They agree today, and for a narrow reason: `hashBlocks` reads `id`, `text`,
+   * `role` and `treatment`, and `blocksArtefact` maps one to one and rewrites
+   * only `html`. Both halves of that could move — a label pass over the body
+   * alone, a sanitiser that touched text — and the failure is silent at the
+   * point it happens and loud somewhere useless: every article becomes
+   * unpublishable with *"the tree was built from different blocks"*, from runs
+   * that all reported success.
+   *
+   * So it is checked here, at the seam, where the answer is known and the
+   * message can say what actually went wrong.
+   */
+  const storedHash = hashBlocks(parts.blocks.blocks);
+  if (parts.labels.sourceHash !== storedHash) {
+    throw new Error(
+      `The labels were written against different blocks from the ones this stage is returning ` +
+        `(${parts.labels.sourceHash} vs ${storedHash}). The step records a hash of the blocks it ` +
+        `handed in, and the publish guard compares that against the blocks that were stored, so ` +
+        `this would make the article unpublishable. Nothing has been written.`,
+    );
+  }
+
+  /* **No write, and no ordering.** This function used to write `labels.json`,
+     then `blocks.json`, then `tree.json`, and the tree went last on purpose: the
+     queue decided a step was done by whether its output files existed
+     (src/pipeline.ts) and `writeFile` truncates its target before it has
+     anything to put in it, so a crash mid-sequence left a present-but-truncated
+     tree that a retry skipped — or, on a forced regeneration, new labels beside
+     last week's tree.
+     Both halves of that justification are about three separate writes, and this
+     function makes none: it hands all three to its caller in one `parts` map
+     and the caller gives them to its store in one call.
+
+     **What that map does and does not buy, because an earlier version of this
+     comment said they "land together or not at all" and that is false on the
+     filesystem.** `fsStoreSession` has no transaction and says so outright
+     (src/store/session.ts); its writes are sequential, so a kill between them
+     really does leave one artefact new and another old. Three separate things
+     make the ordering unnecessary anyway:
+
+     - **On the filesystem**, the `beginStep` marker. A step that did not finish
+       leaves it behind, so the next run re-runs the step over whatever the
+       partial write left rather than skipping it. That marker is the
+       filesystem's whole answer to atomicity, and it is weaker than a
+       transaction rather than an imitation of one.
+     - **On Postgres**, the store's transaction, which does make the three
+       atomic — the property the old sentence claimed, in the one store that has
+       it.
+     - **And the map itself** centralises ownership: one place that knows what
+       this stage produces, so nothing can write two of the three and forget the
+       third. That is worth having and it is not atomicity.
+
+     The ordering survives in exactly one place — `main()` below, which really
+     does write three files. GPT Sol, 2026-08-31. */
 
   return {
-    tree,
-    outDir,
+    parts,
+    /* `parts.labels.sourceHash`, not `storedHash`, though the check above has
+       just proved them equal. The caller's stamp is compared against the labels
+       file by `assertStampAgrees`, so the value that travels has to be *read
+       off the artefact* rather than computed alongside it — otherwise the two
+       are equal by a convention rather than by construction, which is the
+       arrangement this whole stage of the migration exists to remove. */
+    inputHash: parts.labels.sourceHash,
+    clearCheckpoint: labelRun.clearCheckpoint,
     model: CAPABLE_MODEL,
     blocks: blocks.length,
     structural,
@@ -1159,12 +1573,20 @@ export async function generateToc(opts: {
     supplementBlocks: blocks.length - body.length,
     strandedSupplement: stranded,
     repairedRanges: built.repairs.length,
+    /* Deduplicated by boundary — see `repairedBlockCount`. A cascade is one
+       movement recorded at every depth it passes through, so summing the entries
+       counted the same blocks once per level. */
+    repairedBlocks: repairedBlockCount(built.repairs),
+    /* `Math.max` of an empty list is -Infinity, which would print and log as
+       nonsense on the run where nothing was repaired — the common case. */
+    largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedHeadings: built.droppedHeadings.length,
-    labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
-    internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
+    labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
+    internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
+    labelsDropped: labelRun.dropped.length,
     /* Both passes together. What this number answers is "what did a tree cost",
        and a structure figure alone would now understate it by most of the bill. */
     inputTokens: message.usage.input_tokens + labelRun.inputTokens,
@@ -1175,35 +1597,93 @@ export async function generateToc(opts: {
   };
 }
 
+/**
+ * `npm run toc -- <blocks.json> [outDir]` — **the only caller that still turns
+ * these artefacts into files.**
+ *
+ * It reads the blocks itself and writes the three files itself, which is what
+ * "every stage stays runnable on its own" costs now that the stage neither
+ * reads a path nor writes a directory. The files are the same three files, in
+ * the same three places, with the same contents.
+ */
 async function main(): Promise<void> {
   const blocksPath = process.argv[2];
   if (!blocksPath) {
     console.error("Usage: tsx src/toc.ts <blocks.json> [outDir]");
     process.exit(1);
   }
-  const argOutDir = process.argv[3];
-  // Before the call, not after: this is the only thing on screen for the two
-  // minutes the model takes.
+  const slug = slugForBlocksPath(blocksPath);
+  const outDir = process.argv[3] ?? path.join("data", slug);
   /* At the program's edge, not inside the gateway — see `messagesClient` in
      src/messages-stream.ts for the test that proved the difference. Without it
      this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
+     there in `.env.local`.
+
+     **Before the first `await`**, which is why it sits above the read rather
+     than beside the call it is for: "the file is read before the work starts"
+     is the property, and a rule that has to make an exception for which awaits
+     are harmless is not a rule. src/labels.ts § `main` makes the same point,
+     and tests/paid-cli-ledger.test.ts is what caught this one going below the
+     blocks read when stage 4 stopped reading them itself. */
   loadEnvLocal();
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a CLI's uncaught throw is printed, and the same text
+     reaches the log when a stage throws (src/jobs.ts § `errorFields`).
+     src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
+    await readFile(blocksPath, "utf-8"),
+    "blocks.json",
+  );
+  // Before the call, not after: this is the only thing on screen for the two
+  // minutes the model takes.
   console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
+  /* The checkpoint lands in the output directory, as it always has, so a CLI
+     run killed eight batches into a book resumes rather than paying again.
+     `generateToc` makes the directory before the first batch can save into it. */
   const run = await generateToc({
-    blocksPath,
-    ...(argOutDir ? { outDir: argOutDir } : {}),
+    blocks,
+    slug,
+    checkpointDir: outDir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
+  /* **Labels, blocks, then the tree — and here the ordering is still real.**
+     These are three separate writes into a directory other things read, and the
+     filesystem store answers "is this step done?" with "do its files exist?".
+     Each is written beside its target and renamed, so it appears whole or not at
+     all, and the tree — the file every reader starts from — appears only once the
+     other two are already there.
+     The stage itself no longer does any of this: it returns all three and the
+     pipeline stores them in one call, where a partial set is not a state that
+     exists. See the note at the end of `generateToc`. */
+  await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
+  await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
+  await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
+  /* Only now is the working state safe to throw away — see
+     `TocRun.clearCheckpoint`, and src/labels.ts for what it protects. */
+  await run.clearCheckpoint();
+
   console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
-  console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
+  console.log(
+    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)`,
+  );
   console.log(
     `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s)` +
       (run.labelsResumed > 0
         ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
         : ""),
   );
+  /* Only when it happened, unlike the two lines below — the ratio above already
+     says it every run, and this line is the *reason* for a ratio under one. A
+     dropped label is a leaf that renders as nothing at all, so the run that
+     produced it is the last moment anybody is looking. */
+  if (run.labelsDropped > 0) {
+    console.log(
+      `Dropped:   ${run.labelsDropped} paragraph(s) came back unlabelled twice and were left ` +
+        `bare — see "dropped" in labels.json`,
+    );
+  }
   /* **Said out loud, every run, including when it is zero.** `strandedSupplement`
      is the count of apparatus blocks the split refused to place — non-zero means
      no supplement node was built and the tree is exactly what it would have been
@@ -1219,15 +1699,22 @@ async function main(): Promise<void> {
   /* Printed every run, including at zero, for the reason the Notes line above
      is. These are the two places stage 4 now forgives the model, and a number
      computed and never shown is the same as no number. */
+  /* The size goes on the same line as the count, because the count on its own
+     stopped meaning anything the day the size bound was lifted: one repair can
+     be a paragraph or it can be a section handed forty blocks that belonged to
+     its neighbour. src/toc.ts § `repairedChildRanges`. */
   console.log(
-    `Repaired:  ${run.repairedRanges} off-by-one range(s), ` +
-      `${run.droppedHeadings} unbacked heading claim(s)`,
+    `Repaired:  ${run.repairedRanges} misaligned range(s)` +
+      (run.repairedRanges > 0
+        ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
+        : "") +
+      `, ${run.droppedHeadings} unbacked heading claim(s)`,
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
-  console.log(`Validate:  npm run validate-tree -- ${run.outDir}`);
-  console.log(`Eval:      npm run eval:toc -- ${run.outDir}`);
+  console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
+  console.log(`Validate:  npm run validate-tree -- ${outDir}`);
+  console.log(`Eval:      npm run eval:toc -- ${outDir}`);
 }
 
 /* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`

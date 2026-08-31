@@ -11,7 +11,7 @@
  * quietly isn't where something looked.
  *
  * See docs/project/database.md for the layout itself and
- * docs/plans/postgres-storage-implementation.md § Step 11 for why the seam is
+ * docs/plans/260826e-postgres-storage-implementation.md § Step 11 for why the seam is
  * shaped this way.
  *
  * ## The two things that are easy to get wrong here
@@ -33,6 +33,7 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { readRawBytes } from "../fetch.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -52,6 +53,7 @@ import type {
   ArtifactParts,
   ArtifactStore,
 } from "./artifacts.js";
+import type { SourceStore } from "./contracts.js";
 
 /* `"store"` because that is what this is — src/log.ts keeps the component list
    closed on purpose, and every line here carries `step` and `kind` besides. */
@@ -139,7 +141,7 @@ export const PATHS: {
   },
   /* Beside the article, not in a folder of its own: the bytes are
      content-addressed objects in the `sources` bucket and this is only the list
-     saying which of them belong here. docs/plans/hosting-the-articles-images.md. */
+     saying which of them belong here. docs/plans/260829b-hosting-the-articles-images.md. */
   assets: {
     assets: (at) => path.join(at.dir, "assets.json"),
   },
@@ -152,11 +154,14 @@ export const PATHS: {
   glossary: {
     glossary: (at) => path.join(at.dir, "glossary.json"),
   },
-  summary: {
-    summary: (at) => path.join(at.dir, "summary.json"),
-  },
   ideas: {
     ideas: (at) => path.join(at.dir, "ideas.json"),
+  },
+  quotes: {
+    quotes: (at) => path.join(at.dir, "quotes.json"),
+  },
+  timeline: {
+    timeline: (at) => path.join(at.dir, "timeline.json"),
   },
   sketch: {
     sketch: (at) => path.join(at.dir, "sketch.json"),
@@ -257,7 +262,16 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */
   ideas: { maxBytes: 32 * MiB, decode: json("ideas") },
-  summary: { maxBytes: 32 * MiB, decode: json("summary") },
+  /* At most sixteen quotes of at most 400 characters each, so a real one is a
+     few KB — but the same ceiling as its neighbours, because the cap is a
+     guard against a corrupt or hostile file rather than a size estimate. */
+  quotes: { maxBytes: 32 * MiB, decode: json("quotes") },
+  /* Forty events at most (`MAX_EVENTS` in src/timeline.ts), each a short label,
+     an interval and up to six quoted passages — the real one on the test
+     article is 40KB. The same ceiling as its neighbours all the same, because
+     the cap is a guard against a corrupt or hostile file rather than a size
+     estimate. */
+  timeline: { maxBytes: 32 * MiB, decode: json("timeline") },
 };
 
 /** The path for one `(step, kind)`, or a clear error rather than `undefined`. */
@@ -389,7 +403,7 @@ async function readOne(
  */
 async function writeAtomic(file: string, body: string): Promise<void> {
   /* **The directory, first.** `write` had no production caller until landing D
-     of docs/plans/transactional-stage-runner.md, and every stage `mkdir`s for
+     of docs/plans/260827j-transactional-stage-runner.md, and every stage `mkdir`s for
      itself before its own `writeFile` — src/fetch.ts and src/extract.ts both do.
      So the one method that has to own this is the one that never had to prove
      it could, and writing the first artefact of a new article through the seam
@@ -420,7 +434,7 @@ function serialise(kind: ArtifactKind, value: unknown): string {
  * because the alternative is read-modify-write and this has to stay correct
  * once two processes can be advancing the same article — which is exactly what
  * the browser-driven advance endpoint makes possible
- * (docs/plans/job-queue-rethink.md).
+ * (docs/plans/260826q-job-queue-rethink.md).
  *
  * Under `data/<slug>/` rather than somewhere central so that deleting an
  * article deletes its markers with it. It is not an artefact and has no home in
@@ -435,10 +449,16 @@ function markerFile(at: ArtifactLocations, step: StepName): string {
  * An artefact store over the filesystem.
  *
  * `locate` is how the fixture gets served. Most callers want the default —
- * `data/<slug>/` beside `output/<slug>.html` — but src/api.ts's metadata page
- * falls back to `example/` for an article with no directory of its own, and a
- * store that insisted on the default would report every stage of the fixture
- * unfinished. See `candidateDirs` there.
+ * `data/<slug>/` beside `output/<slug>.html` — but src/api.ts resolves the
+ * fixture's own slug to `example/`, and a store that insisted on the default
+ * would report every stage of the fixture unfinished. See `candidateDirs`
+ * there.
+ *
+ * **Not a fallback for any other slug**, and this comment said it was until
+ * 2026-08-31. `candidateDirs` used to append `example/` to every slug that had
+ * no `blocks.json` + `tree.json` of its own, so an article mid-ingest was
+ * answered with the fixture's prose under the reader's name. It now offers
+ * `example/` for `example` and for nothing else; a missing article is a 404.
  */
 export function createFsArtifactStore(
   locate: (slug: string) => ArtifactLocations = fsLocations,
@@ -628,3 +648,62 @@ export function createFsArtifactStore(
 
 /** The ordinary store: `data/<slug>/` and `output/<slug>.html`. */
 export const fsArtifacts: ArtifactStore = createFsArtifactStore();
+
+/**
+ * **The reader's own file, off the disk** — the filesystem half of
+ * `GET /api/source/:slug`.
+ *
+ * It is here rather than in [fs.ts](fs.ts), where the other filesystem adapters
+ * are assembled, because this is the module that is allowed to know where an
+ * article's files are, and the whole of this answer is one path: the manifest
+ * says which file holds the bytes, and the bytes are beside it. `fs.ts`
+ * delegates to code that already does the job and adds no behaviour; there was
+ * no such code for this — it was written out inline in `sendSource`, which is
+ * exactly the problem.
+ *
+ * **Through `fsArtifacts.read`, not a second `readRaw`.** The manifest is
+ * already an artefact of the `fetch` step, with a path in `PATHS` and a shape
+ * check in `SHAPE`; reaching for `raw.json` again here would be a second copy
+ * of where it is and of what a usable one looks like.
+ *
+ * The bytes are **not** an artefact and deliberately are not becoming one: an
+ * `ArtifactKind` is a JSON value both stores can hold in a column, and up to
+ * 32 MiB of somebody's scan is not that. Postgres keeps it as a reference to an
+ * object in a bucket — see [pg-source.ts](pg-source.ts).
+ */
+export const fsSourceStore: SourceStore = {
+  async readPdf(slug) {
+    const manifest = await fsArtifacts.read(slug, "fetch", "raw");
+    /* Absent, unreadable, or a web page — all three are "no PDF here", and the
+       route says one sentence for all three. */
+    if (manifest?.kind !== "pdf") return null;
+    /* **By content address, not `path.join(dir, manifest.file)`.** Since
+       2026-08-31 stage 1 leaves nothing on disk: it puts the document in the
+       content-addressed `sources` bucket and returns the manifest that names
+       it (docs/plans/260831b-finish-the-database-move.md § Stage 2c). So a PDF fetched
+       after that has no `raw.pdf` beside its manifest and the old read
+       404'd — a route quietly failing for new articles while going on working
+       for the ones a developer already had, which is the worst way for it to
+       break.
+
+       **A refusal here is a throw, not a `null`.** The manifest is stage 1
+       saying the object exists; an assertion that turns out false is a fault
+       somebody should see, not an article that never had a scan.
+       `RawDocumentUnavailable` carries the reason and the key. routes.ts
+       answers 404 on `err.code === "ENOENT"`, which the filesystem blob store
+       still raises for a missing object, so the route's behaviour is
+       unchanged. */
+    const bytes = await readRawBytes(manifest, { slug });
+    /* **The reader's own name for the file, and only when it is theirs.** A
+       fetched document has no name anybody chose, and `manifest.filename` is
+       absent for it; `origin` is what tells the two apart, and it is absent —
+       meaning `"url"` — on every manifest written before uploads existed
+       (src/fetch.ts § `RawManifest.origin`). The route falls back to the slug.
+       Carried across when `sendSource` moved to this seam on 2026-08-31: the
+       Postgres half reads the same fact out of `raw_filename`. */
+    return {
+      bytes,
+      filename: manifest.origin === "upload" ? (manifest.filename ?? null) : null,
+    };
+  },
+};

@@ -8,7 +8,7 @@
  * migration going first:
  *
  * > **A faulty helper makes every CLI silently do nothing.**
- * > — docs/plans/simplification-wave-2.md §2.5
+ * > — docs/plans/260828aj-simplification-wave-2.md §2.5
  *
  * Both directions of wrong are silent. Answering `true` when the module was
  * merely imported runs a stage as a side effect of an `import`, which is the one

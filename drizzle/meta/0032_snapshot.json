@@ -1,5 +1,5 @@
 {
-  "id": "4bc852dc-2e7e-4f0a-aa84-d811c489b31f",
+  "id": "cbc9f702-0509-4b06-be42-0949622c59dd",
   "prevId": "13abf7f1-3816-428e-8dcd-38605d83cd7b",
   "version": "7",
   "dialect": "postgresql",
@@ -1733,22 +1733,6 @@
         }
       },
       "indexes": {
-        "jobs_only_one_running": {
-          "name": "jobs_only_one_running",
-          "columns": [
-            {
-              "expression": "(true)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"jobs\".\"status\" = 'running'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "jobs_draft_revision_unique": {
           "name": "jobs_draft_revision_unique",
           "columns": [
@@ -1974,12 +1958,6 @@
         "profile": {
           "name": "profile",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "experimental_since": {
-          "name": "experimental_since",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

@@ -4,7 +4,7 @@
  *
  * Anthropic answers a blocked request with `stop_reason: "refusal"` and a
  * `stop_details` object beside it. Seven pipeline stages — arc, glossary, ideas,
- * labels, summarise, toc, tweets — see that object, and until 2026-08-26 every one of
+ * labels, toc, tweets — see that object, and until 2026-08-26 every one of
  * them threw `` `Model refused: ${JSON.stringify(message.stop_details)}` ``.
  * A thrown message is not a private thing: src/jobs.ts logs a failed step with
  * `errorFields`, which keeps `message` and `stack`, and copies the same string
@@ -53,14 +53,13 @@
  * `[ai-model-refused]`, which only `MODEL_REFUSED` produces and which nothing
  * reaches except through the `stop_reason === "refusal"` branch. A stage that
  * threw ENOENT before it ever called a model would also contain no sentinel,
- * and this is what tells the two apart. (`summarise` is the exception, and the
- * note beside it says why.)
+ * and this is what tells the two apart.
  *
  * ## And a second, cheaper guard
  *
  * The behavioural half covers the six stages that exist. The source scan at the
  * bottom covers the seventh nobody has written yet: **no code under `src/` may
- * read `stop_details` at all.** Zero, not a count — docs/plans/error-boundary.md
+ * read `stop_details` at all.** Zero, not a count — docs/plans/260826p-error-boundary.md
  * on why a counting test is the wrong shape, having found "three sites, then
  * six, then seven". If a future stage wants `stop_details?.type` in a log, that
  * is a decision worth making on purpose, and the way to make it is to come here
@@ -92,7 +91,6 @@ const LEAK = {
   arc: "ZQARCBBBBB",
   tweets: "ZQTWEETSCC",
   glossary: "ZQGLOSSDDD",
-  summarise: "ZQSUMMEEEE",
   labels: "ZQLABELFFF",
   ideas: "ZQIDEASHHH",
   control: "ZQCTRLGGGG",
@@ -105,7 +103,7 @@ const LEAK = {
  * one stage added after this harness was written was the one stage never checked
  * for the leak the harness exists to catch. GPT Sol pointed it out twice.
  */
-const STAGES = ["toc", "arc", "tweets", "glossary", "summarise", "ideas", "labels"] as const;
+const STAGES = ["toc", "arc", "tweets", "glossary", "ideas", "labels"] as const;
 
 /**
  * One line per stage, plus the control. Counted rather than guessed, so that a
@@ -182,10 +180,10 @@ beforeAll(async () => {
 
     /* Installed before anything that talks to the SDK is imported. Also the
        only place that can see an outgoing request, which is the other
-       direction the sentinel can travel: src/summarise.ts hands a failed
-       batch's error message back to the model as a repair instruction, so a
-       stringified \`stop_details\` would leave the building that way without
-       ever reaching a log.
+       direction the sentinel can travel: a stage that hands a failed call's
+       error message back to the model as a repair instruction would let a
+       stringified \`stop_details\` leave the building that way without ever
+       reaching a log.
 
        Only the sentinel is written down when that happens — never the body,
        which is the article. */
@@ -201,7 +199,7 @@ beforeAll(async () => {
     const { generateArc } = await import(${src("arc.ts")});
     const { generateTweets } = await import(${src("tweets.ts")});
     const { generateGlossary } = await import(${src("glossary.ts")});
-    const { generateSummaries } = await import(${src("summarise.ts")});
+    const { readArticleFromDir } = await import(${src("article-input.ts")});
     const { generateIdeas } = await import(${src("ideas.ts")});
     const { generateLabels } = await import(${src("labels.ts")});
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
@@ -211,6 +209,12 @@ beforeAll(async () => {
     const nodePath = await import("node:path");
     const blocks = JSON.parse(await fs.readFile(nodePath.join(DIR, "blocks.json"), "utf8")).blocks;
     const tree = JSON.parse(await fs.readFile(nodePath.join(DIR, "tree.json"), "utf8"));
+
+    /* Read once here rather than inside the steps: this simulation is about what
+       a *refusal* does, so a stage that threw on its own inputs before making a
+       call would report "step failed" for the wrong reason and the absence of a
+       leak would be measuring nothing. src/article-input.ts. */
+    const article = await readArticleFromDir(DIR);
 
     /* Exactly how src/jobs.ts records a step that threw — and exactly one line
        either way, so that a stage which stopped failing is visible as a line
@@ -229,12 +233,11 @@ beforeAll(async () => {
       }
     };
 
-    await step("toc", () => generateToc({ blocksPath: nodePath.join(DIR, "blocks.json"), outDir: DIR }));
-    await step("arc", () => generateArc({ dir: DIR }));
-    await step("tweets", () => generateTweets({ dir: DIR }));
-    await step("glossary", () => generateGlossary({ dir: DIR }));
-    await step("summarise", () => generateSummaries({ dir: DIR }));
-    await step("ideas", () => generateIdeas({ dir: DIR }));
+    await step("toc", () => generateToc({ blocks, slug: "stop-details" }));
+    await step("arc", () => generateArc({ article }));
+    await step("tweets", () => generateTweets({ article }));
+    await step("glossary", () => generateGlossary({ article, previous: null }));
+    await step("ideas", () => generateIdeas({ article, previous: null }));
     await step("labels", () => generateLabels({ tree, blocks, slug: "stop-details" }));
 
     /* The control: the code that was deleted, run against the same stream and
@@ -315,7 +318,7 @@ describe("a refused generation in the log", () => {
     expect(stdout).toContain(LEAK.control);
   });
 
-  it.each(STAGES.filter((s) => s !== "summarise"))(
+  it.each(STAGES)(
     "still says a refusal is what happened, in %s",
     (stage) => {
       /* Absence proves nothing on its own — a stage that died on a missing
@@ -329,25 +332,6 @@ describe("a refused generation in the log", () => {
     },
   );
 
-  it("keeps the refusal out of the repair prompt too, in summarise", () => {
-    /* summarise is the one stage whose refusal does not surface as a refusal.
-       A batch that throws is retried once with its own error message handed
-       back to the model as a repair instruction, and a batch that fails twice
-       is dropped rather than thrown — the partial salvage that stops one bad
-       batch taking eight good ones with it (docs/project/summaries.md). So
-       what comes out is "no usable summaries", and the refusal message went
-       *outwards*, into the next request.
-
-       Which is the leak this stage would have had: not a log line, a second
-       API call carrying the provider's words back to the provider. The
-       stubbed `fetch` in the child watches for exactly that and logs the
-       sentinel if it sees it, so the same absence assertion covers it. This
-       test states the other half — that the stage really did run and really
-       did fail. */
-    const err = lineFor("summarise").err as { message?: string };
-    expect(err?.message ?? "").toContain("summaries");
-    expect(stdout).not.toContain(LEAK.summarise);
-  });
 });
 
 /**

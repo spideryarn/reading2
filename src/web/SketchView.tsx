@@ -63,10 +63,20 @@
  * no `opens` anywhere. Depending on it would have meant paying for two pictures
  * per article that nobody could ever see.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
-import { paintScene, type Painted, type PaintedNode, type Prim } from "../sketch-paint.js";
-import type { SketchNode } from "../sketch-scene.js";
+import {
+  anchorTransform,
+  type Box,
+  paintScene,
+  type Painted,
+  type PaintedNode,
+  peekViewport,
+  type Prim,
+  zoomAnchor,
+  type ZoomAnchor,
+} from "../sketch-paint.js";
+import { CANVAS_W, type SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
 import { JobProgress } from "./JobProgress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -170,6 +180,71 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   const dialog = useRef<HTMLDialogElement | null>(null);
 
   /**
+   * **Which region is showing a ghost of what is inside it**, by its index in
+   * `painted.regions` — a region has no id of its own, and the list is
+   * recomputed whole every time the scene changes, so an index cannot come to
+   * mean a different region while it is being held.
+   *
+   * Hover *and* focus, because the keyboard reader has no pointer and the peek
+   * is the only thing that says what a part contains before you go into it.
+   */
+  const [peek, setPeek] = useState<number | null>(null);
+
+  /**
+   * **The zoom, in three refs and a counter**, docs/plans/260830ap-sketch-zoomable-subsections.md.
+   *
+   * `anchor` is the box the reader pressed to get where they are, kept so that
+   * going back can be the exact reverse of going in rather than another
+   * animation that happens to point the other way. `pending` is what the next
+   * entrance should run, written by the press and read by the layout effect.
+   * `nav` is what tells the effect a navigation happened at all — keying it on
+   * the scene would replay the last zoom whenever the artefact reloaded
+   * underneath, which is a picture leaping about for no reason a reader can see.
+   */
+  const anchor = useRef<ZoomAnchor | null>(null);
+  const pending = useRef<{ a: ZoomAnchor | null; dir: "in" | "out" } | null>(null);
+  const stage = useRef<SVGGElement | null>(null);
+  const scroll = useRef<HTMLDivElement | null>(null);
+  /**
+   * **The entrance in flight, so that anything can stop it.**
+   *
+   * Living only in the layout effect's closure, it was cancelled when the next
+   * navigation replaced it and at no other time — so a reload of the artefact
+   * mid-flight left the reused `<g>` wearing the old scene's transform while
+   * its contents changed underneath, and Enlarge or Close, which unmounts the
+   * whole picture body and mounts it again in the dialog, detached the animated
+   * node with its animation still attached to it. ⟨Sol⟩, 2026-08-30.
+   */
+  const running = useRef<Animation | null>(null);
+  /**
+   * Where the picture was scrolled to when the press happened, and how many
+   * pixels a canvas unit was worth then. Both are read before the swap and used
+   * after it, to keep the entrance starting where the reader's finger was
+   * rather than where the box would be if nothing were scrolled.
+   */
+  const scrolledAt = useRef<{ top: number; unit: number } | null>(null);
+  /** Focus the picture after the next navigation — see `goTo`'s callers. */
+  const takeFocus = useRef(false);
+
+  /**
+   * The group everything is drawn into, and the one thing the zoom moves.
+   *
+   * A callback ref rather than a plain one, so that the element *leaving* is an
+   * event: Enlarge and Close unmount this whole body and mount it again inside
+   * the `<dialog>`, and an animation still attached to the node that went away
+   * is one nothing can reach. `attachDialog` below is a callback ref for the
+   * neighbouring reason, and its comment has the longer version.
+   */
+  const attachStage = useCallback((el: SVGGElement | null) => {
+    if (el !== stage.current) {
+      running.current?.cancel();
+      running.current = null;
+    }
+    stage.current = el;
+  }, []);
+  const [nav, setNav] = useState(0);
+
+  /**
    * Whether *we* are the ones closing it.
    *
    * `close()` fires the same `close` event Escape does, so without this our own
@@ -264,6 +339,17 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   useEffect(() => {
     setOpen(null);
     setFocused(0);
+    setPeek(null);
+    /* And the way back out of a scene that no longer exists. Left standing, it
+       would run the next Back as a zoom out of a box from the previous
+       drawing. */
+    anchor.current = null;
+    pending.current = null;
+    /* And a zoom half-played into a picture that has just been replaced. The
+       `<g>` is reused across the change, so an entrance left running would go
+       on scaling the new scene out of the old one's region. */
+    running.current?.cancel();
+    running.current = null;
   }, [sketch]);
 
   const scene = useMemo(() => {
@@ -272,6 +358,156 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   }, [sketch, open]);
 
   const painted: Painted | null = useMemo(() => (scene ? paintScene(scene) : null), [scene]);
+
+  /**
+   * **Go to a scene, and remember where you came from.**
+   *
+   * The order in here is the load-bearing part: the scene is swapped
+   * **synchronously**, and the animation is arranged afterwards. Animating and
+   * then swapping would put the whole navigation behind a callback that can
+   * fail to arrive — `Element.animate` missing, the element unmounted
+   * mid-flight, a `finished` promise that never settles because the tab went to
+   * the background — and a reader who presses a region's name and lands nowhere
+   * has met the same failure this feature was built to fix, one layer down.
+   * docs/reusable/silent-success.md.
+   *
+   * `from` is the box that was pressed, in canvas units, or `null`. **Arriving
+   * with no anchor is a normal case, not an error**: pressing a chip in the
+   * scene row means "show me that part", not "zoom into this box", and it gets
+   * a plain fade. The anchor is dropped on any move that is not a press on the
+   * picture itself, so Back can never zoom out to a box the reader never
+   * pressed.
+   */
+  const goTo = useCallback(
+    (next: string | null, from: Box | null) => {
+      /* Measured *before* the swap, while the outgoing scene is still the one
+         on screen — see the layout effect for what it is for. */
+      scrolledAt.current = scroll.current
+        ? {
+            top: scroll.current.scrollTop,
+            /* **The rendered box, not `clientWidth`.** `clientWidth` is defined
+               on HTML elements and is a browser courtesy on an `<svg>`; the
+               rect is what SVG actually guarantees. The `<svg>` itself is never
+               inside the transform the entrance animates — that is on a `<g>`
+               beneath it — so this cannot pick up a scale mid-flight. */
+            unit: (svg.current?.getBoundingClientRect().width ?? 0) / CANVAS_W,
+          }
+        : null;
+      setOpen(next);
+      setFocused(0);
+      setPeek(null);
+      if (next === null) {
+        pending.current = { a: anchor.current, dir: "out" };
+        anchor.current = null;
+      } else {
+        /* **Anchored only from the overview.** A box measured inside one detail
+           scene means nothing in another, and Back always lands on the
+           overview — so an anchor carried across a detail-to-detail move would
+           zoom out to a rectangle from a picture the reader is no longer in.
+           ⟨Sol⟩, 2026-08-30. Every other move is a plain fade, which is what
+           the scene row's chips have always been. */
+        const target = open === null && from ? sketch?.scenes.find((sc) => sc.id === next) : null;
+        const a = target && from ? zoomAnchor(from, target.height) : null;
+        anchor.current = a;
+        pending.current = { a, dir: "in" };
+      }
+      setNav((n) => n + 1);
+    },
+    [open, sketch],
+  );
+
+  /**
+   * **The entrance.** Runs after the DOM already holds the new scene, so there
+   * is no frame of it sitting untransformed before the animation starts —
+   * which is the whole reason this is a layout effect and not an effect.
+   *
+   * Everything in here is allowed to decline. `Element.animate` is not a
+   * function under jsdom, so every test in this repo takes the early return and
+   * the scene is simply *there*; a reader who has asked for less motion gets
+   * the same. That is the point: the navigation already happened in `goTo`.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the navigation counter is the trigger; the anchor it should run is read from a ref, on purpose, so that a reload of the artefact cannot replay the last zoom
+  useLayoutEffect(() => {
+    if (nav === 0) return;
+    const g = stage.current;
+    const p = pending.current;
+    if (!g || !p || typeof g.animate !== "function") return;
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    /* **The box was measured in a scrolled picture, and the new one may not be
+       scrolled the same way.** The overview is 1150 units tall in a band under
+       400px, so it is nearly always scrolled somewhere; the scene it opens is
+       shorter, and the browser silently clamps `scrollTop` to what the new
+       picture can offer. Left alone, the entrance would start from where the
+       region *would* have been if nothing were scrolled, which is not where the
+       reader pressed. So the anchor is shifted by whatever the scroll actually
+       did, converted back into canvas units.
+
+       Both measurements have to be real for the correction to be: a container
+       with no width — jsdom, a display:none ancestor — gives a unit of zero and
+       a shift of infinity, so it declines instead. ⟨Sol⟩, 2026-08-30. */
+    const was = scrolledAt.current;
+    scrolledAt.current = null;
+    let shiftY = 0;
+    if (p.a && was && was.unit > 0 && scroll.current) {
+      const dy = (scroll.current.scrollTop - was.top) / was.unit;
+      if (Number.isFinite(dy)) shiftY = dy;
+    }
+    /* No anchor is a plain fade with a touch of scale — enough to say "this is
+       a different picture" without claiming it came from somewhere.
+
+       **The shift goes to `anchorTransform`, not into the anchor.** Folding it
+       into `ty` first was right for "in" and badly wrong for "out", where the
+       inverse then put it through the magnification and flipped its sign — a
+       +250-unit correction arriving as −900, and the overview entering from far
+       above the region it was pulling out of. That function's own comment has
+       the arithmetic. ⟨Sol⟩, 2026-08-30. */
+    const from = p.a ? anchorTransform(p.a, p.dir, shiftY) : "scale(0.96)";
+    running.current?.cancel();
+    const run = g.animate(
+      [
+        { transform: from, opacity: 0.35 },
+        { transform: "none", opacity: 1 },
+      ],
+      /* `fill: "none"`, so the element is back to its own untouched transform
+         the moment this ends and there is nothing to clean up. A `forwards`
+         fill would leave the picture wearing the last keyframe, which is
+         identity today and would silently become a trap the first time the
+         keyframes changed. */
+      { duration: 280, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)", fill: "none" },
+    );
+    running.current = run;
+    return () => {
+      run.cancel();
+      if (running.current === run) running.current = null;
+    };
+  }, [nav]);
+
+  /**
+   * **Where focus goes when the thing holding it is gone.**
+   *
+   * A region's name is a `button` inside the picture, and pressing it opens the
+   * scene that name refers to — which is a scene with no such region in it, so
+   * the element with focus unmounts and focus falls to `<body>`. A keyboard
+   * reader is then nowhere, with no announcement of where they arrived.
+   * ⟨Sol⟩, 2026-08-30.
+   *
+   * So focus moves to the picture itself, which is the listbox and the one tab
+   * stop the scene has. Its `aria-label` is the scene's own title and caption,
+   * so being focused *is* the announcement — no live region, and nothing said
+   * twice.
+   *
+   * Only when a control that is about to disappear asked for it. Pressing a
+   * chip in the scene row must not steal focus off the row: the reader is
+   * arrowing along it, and the row survives the change.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the navigation counter is the trigger; whether to take focus is a decision the press already made
+  useLayoutEffect(() => {
+    if (!takeFocus.current) return;
+    takeFocus.current = false;
+    svg.current?.focus();
+  }, [nav]);
 
   /**
    * **The node the reader is standing in**, or `null`.
@@ -294,20 +530,44 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
     return best?.id ?? null;
   }, [painted, atRow, blockOrder, open]);
 
+  /**
+   * **A ghost of what is inside the region being hovered**, or `null`.
+   *
+   * The overview already says a region opens something — the stack behind its
+   * panel and the mark beside its name. This says *what*: the scene's own nodes
+   * and edges, scaled into the region's own box.
+   *
+   * **It is the real scene, painted by the one painter**, dropped into a nested
+   * SVG viewport that scales and clips it — not a simplified redraw. See
+   * `peekViewport` for what that is worth and what the simplified version threw
+   * away. `null` whenever there is no room, which leaves the region alone
+   * rather than dropping a bare scrim on it.
+   */
+  const peeked = useMemo(() => {
+    if (peek === null || !painted || !sketch) return null;
+    const r = painted.regions[peek];
+    if (!r?.region.opens) return null;
+    const target = sketch.scenes.find((sc) => sc.id === r.region.opens);
+    if (!target) return null;
+    const area = peekViewport(r.region, target.height, painted.height);
+    if (!area) return null;
+    return { ...area, target, art: paintScene(target) };
+  }, [peek, painted, sketch]);
+
   const shown = hover ?? (painted?.nodes[focused]?.node.id ?? null);
   const card = painted?.nodes.find((n) => n.node.id === shown)?.node ?? null;
 
   const activate = useCallback(
     (n: PaintedNode) => {
-      /* `opens` wins — see the header. */
+      /* `opens` wins — see the header. The node's own box is the anchor, so the
+         scene grows out of the shape that was pressed. */
       if (n.node.opens) {
-        setOpen(n.node.opens);
-        setFocused(0);
+        goTo(n.node.opens, n.hit);
         return;
       }
       if (n.node.block) onJump(n.node.block);
     },
-    [onJump],
+    [goTo, onJump],
   );
 
   const onKey = useCallback(
@@ -336,11 +596,10 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
            swallowing it to pop a scene instead would leave them pressing Escape
            twice with the first press appearing to do nothing. */
         e.preventDefault();
-        setOpen(null);
-        setFocused(0);
+        goTo(null, null);
       }
     },
-    [painted, focused, activate, open, full],
+    [painted, focused, activate, goTo, open, full],
   );
 
   if (view.status === "loading") {
@@ -441,8 +700,11 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
               type="button"
               className="sk-up"
               onClick={() => {
-                setOpen(null);
-                setFocused(0);
+                /* This button is only rendered while a zoom is open, so pressing
+                   it unmounts the thing that has focus — same hole the region
+                   labels had, same fix. ⟨Sol⟩, 2026-08-30. */
+                takeFocus.current = true;
+                goTo(null, null);
               }}
             >
               <ChevronLeft size={13} /> Back
@@ -494,10 +756,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
                     tabIndex={on ? 0 : -1}
                     className={`sk-scene${on ? " on" : ""}`}
                     data-sk-scene={sc.id}
-                    onClick={() => {
-                      setOpen(i === 0 ? null : sc.id);
-                      setFocused(0);
-                    }}
+                    onClick={() => goTo(i === 0 ? null : sc.id, null)}
                     onKeyDown={(e) => {
                       const d =
                         e.key === "ArrowRight" || e.key === "ArrowDown"
@@ -516,8 +775,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
                       const at = (i + d + sketch.scenes.length) % sketch.scenes.length;
                       const next = sketch.scenes[at];
                       if (!next) return;
-                      setOpen(at === 0 ? null : next.id);
-                      setFocused(0);
+                      goTo(at === 0 ? null : next.id, null);
                       /* **And focus follows**, or the newly-checked radio is
                          the tab stop while the old one still has focus, and the
                          next press steps from the same place — you reach the
@@ -596,7 +854,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
 
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 
-      <div className="sk-scroll">
+      <div className="sk-scroll" ref={scroll}>
         {/* biome-ignore lint/a11y/useSemanticElements: SVG has no listbox element; the roles are written out for the same reason scatter.ts's are — the DOM is flat and nothing in the markup says this is the third of twelve */}
         <svg
           ref={svg}
@@ -625,6 +883,11 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           onBlur={() => setHover(null)}
         >
           <title>{scene.caption ?? sketch.caption}</title>
+          {/* **Everything that is drawn hangs off one group, so the zoom has a
+              single thing to move.** The `<title>` stays outside it: it is what
+              the accessibility tree reads, not something on the canvas, and an
+              animation has no business touching it. */}
+          <g ref={attachStage} className="sk-stage">
           {/* biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes and an index cannot come to mean a different thing. Minting ids would be inventing identity to satisfy a rule about preserving it. */}
           {painted.behind.map((p, i) => (
             <Shape key={`b${i}`} p={p} />
@@ -644,7 +907,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
               Only the words, never the panel: a region is a large area lying
               behind the nodes, and making all of it pressable would put a second
               meaning on every pixel between the boxes. */}
-          {painted.regions.map((r) =>
+          {painted.regions.map((r, i) =>
             r.region.opens && r.hit ? (
               /* biome-ignore lint/a11y/useKeyWithClickEvents: reached by Tab and activated by Enter as a real `button` role with its own tabIndex — unlike the nodes, which share the picture's single tab stop because there are thirty of them */
               <g
@@ -657,16 +920,38 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
                   /* The picture is one tab stop and this is another inside it,
                      so the press must not also reach the listbox behind. */
                   e.stopPropagation();
-                  setOpen(r.region.opens as string);
-                  setFocused(0);
+                  takeFocus.current = true;
+                  goTo(r.region.opens as string, r.region);
                 }}
                 onKeyDown={(e) => {
+                  /* **The arrows are swallowed here too, and that is a fix.**
+                     This group is focusable and sits inside the listbox, so
+                     an arrow pressed on a region's name bubbled to the
+                     picture's own handler and walked the roving marker over
+                     nodes the reader could not see moving — the selection
+                     changing while focus was somewhere else entirely.
+                     ⟨Sol⟩, 2026-08-30. */
+                  if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") {
+                    /* **Both, and `stopPropagation` alone was half a fix.** It
+                       stopped the arrows walking the listbox's marker behind
+                       this group, and left the browser's own default — which on
+                       a focused element inside a scrollable box is to scroll
+                       `.sk-scroll`, or the page. So the selection no longer
+                       moved and the picture did instead. ⟨Sol⟩, 2026-08-30. */
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
                   if (e.key !== "Enter" && e.key !== " ") return;
                   e.preventDefault();
                   e.stopPropagation();
-                  setOpen(r.region.opens as string);
-                  setFocused(0);
+                  takeFocus.current = true;
+                  goTo(r.region.opens as string, r.region);
                 }}
+                onMouseEnter={() => setPeek(i)}
+                onMouseLeave={() => setPeek((was) => (was === i ? null : was))}
+                onFocus={() => setPeek(i)}
+                onBlur={() => setPeek((was) => (was === i ? null : was))}
               >
                 {r.label.map((p, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above
@@ -710,6 +995,85 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           {painted.front.map((p, i) => (
             <Shape key={`f${i}`} p={p} />
           ))}
+
+          {/* **Last, so it is over everything it veils** — the region's own
+              boxes are still underneath and have to recede, or the ghost is
+              drawn into a thicket. `aria-hidden` and, in the stylesheet,
+              `pointer-events: none`: it is a picture of a picture, it has
+              nothing to say to a screen reader that the scene row does not say
+              better, and a scrim that could be hovered would fight the label
+              that summoned it and flicker. */}
+          {peeked && (
+            <g className="sk-peek" aria-hidden="true">
+              {/* The scrim starts below the region's own name — the name is the
+                  control that summoned this, and veiling it would hide the one
+                  thing the reader is pointing at — and it may reach further
+                  DOWN than the region does, because a landscape region cannot
+                  hold a portrait scene at any useful size. `peekViewport` has
+                  the measurements. */}
+              <rect
+                className="sk-peek-scrim"
+                x={peeked.scrim.x}
+                y={peeked.scrim.y}
+                width={peeked.scrim.w}
+                height={peeked.scrim.h}
+                rx={8}
+              />
+              {/* **A nested viewport, so the browser does the fitting and the
+                  clipping.** `meet` is a uniform scale — stretching each axis
+                  to fill a short wide band would turn a funnel into a rank,
+                  which is a different argument from the one the model drew —
+                  and an inner `<svg>` clips what will not fit rather than
+                  letting it spill over the region's neighbours. */}
+              <svg
+                x={peeked.port.x}
+                y={peeked.port.y}
+                width={peeked.port.w}
+                height={peeked.port.h}
+                viewBox={`0 0 ${CANVAS_W} ${peeked.art.height}`}
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
+                {peeked.art.behind.map((p, i) => (
+                  <Shape key={`kb${i}`} p={p} />
+                ))}
+                {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
+                {peeked.art.links.map((p, i) => (
+                  <Shape key={`kl${i}`} p={p} />
+                ))}
+                {peeked.art.nodes.map((n) => (
+                  <g key={n.node.id} className="sk-node">
+                    {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
+                    {n.prims.map((p, j) => (
+                      <Shape key={`kp${j}`} p={p} />
+                    ))}
+                  </g>
+                ))}
+                {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
+                {peeked.art.front.map((p, i) => (
+                  <Shape key={`kf${i}`} p={p} />
+                ))}
+                {/* **And the labels of any region inside that opens something.**
+                    `paintScene` keeps those out of `front` because the panel
+                    draws them inside a pressable group of its own — which the
+                    peek has no reason to build, and so they were the one piece
+                    of non-text paint the ghost was dropping. It is the corner
+                    mark that matters here: without this, a part with parts of
+                    its own previewed as one that had none. ⟨Sol⟩, 2026-08-30. */}
+                {peeked.art.regions.map((r) =>
+                  r.region.opens ? (
+                    <g key={`kr-${r.region.x}-${r.region.y}`}>
+                      {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
+                      {r.label.map((p, i) => (
+                        <Shape key={`krl${i}`} p={p} />
+                      ))}
+                    </g>
+                  ) : null,
+                )}
+              </svg>
+            </g>
+          )}
+          </g>
         </svg>
       </div>
 

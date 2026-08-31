@@ -114,7 +114,7 @@
    * and looks perfect. There is nothing to see until it is on the phone. To
    * check one, set the token to `40px` here and watch the chrome move — a rule
    * that cannot be made to move that way will not move on the device either.
-   * docs/plans/mobile-screen-real-estate.md § How we will know.
+   * docs/plans/260828av-mobile-screen-real-estate.md § How we will know.
    *
    * The fallback second argument is not decoration: a browser that knows
    * `env()` but not a given keyword resolves to it, and one that knows neither
@@ -139,7 +139,7 @@
    *
    * It is `--bar-h` everywhere except a small device being scrolled down
    * through, where § a small device switches it to `0px`. See
-   * docs/plans/mobile-reading-view.md for why a landscape phone needed the 44px.
+   * docs/plans/260827t-mobile-reading-view.md for why a landscape phone needed the 44px.
    *
    * **Deliberately a plain custom property, and deliberately not animated
    * itself.** The first version of this was a `@property`-registered
@@ -294,7 +294,7 @@
    spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
    layout.ts; change both together, and `tests/spine-width.test.ts` is what
    notices when you don't. Halved from 24px on 2026-08-28 —
-   docs/plans/spine-rail.md. */
+   docs/plans/260828ay-spine-rail.md. */
 .reader.spine-on { --spine-w: 12px; }
 .reader.spine-off { --spine-w: 0px; }
 
@@ -398,7 +398,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    then in the bottom drawer. It is gone because the panel is — the details are
    a page of their own now, Metadata.tsx, styled with Tailwind utilities like
    the rest of the chrome (web-client.md#tailwind-and-shadcn-components).
-   docs/plans/metadata-page.md. */
+   docs/plans/260825e-metadata-page.md. */
 
 /* How this article was made, when the answer is not "a web page" — see
    Masthead.tsx. Deliberately the same size and colour as `.facts` rather than a
@@ -901,7 +901,7 @@ td.gist.arc.active .gist-text { color: var(--ink-soft); }
    as chrome rather than as prose. "Notes" is a label *about* the article, not a
    compression *of* it, so it must not dress as a gist — a reader who has
    learned the column's grammar reads the difference without being told.
-   docs/plans/footnotes.md § What the reader sees. */
+   docs/plans/260828o-footnotes.md § What the reader sees. */
 .arc-step.arc-supplement {
   color: var(--ink-faint);
   font-weight: 500;
@@ -1526,7 +1526,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    the tint drops so that the eye reads the argument as ending at its top edge.
    Search lanes still paint over it, deliberately: a hit inside a footnote is a
    real hit, and the dimming makes those marks more legible rather than less.
-   docs/plans/footnotes.md § What the reader sees. */
+   docs/plans/260828o-footnotes.md § What the reader sees. */
 .spine-part.supplement::before { opacity: 0.1; }
 .spine-part.supplement.active::before { opacity: 0.4; }
 
@@ -2959,7 +2959,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------------------ dock --
    The bottom bar and the drawer that rises out of it — Dock.tsx, and
-   docs/plans/bottom-bar.md for why the bottom rather than the left.
+   docs/plans/260825c-bottom-bar.md for why the bottom rather than the left.
 
    The whole point of this edge is that it costs the table nothing. Note what is
    NOT here as a result: no `--dock-w`, no term added to any `calc()` that
@@ -2984,7 +2984,7 @@ td.text.has-hit[data-hues="8"] {
   /* **The bar gets out of the way while you read**, on a small device scrolled
      down through — the same `data-bars="hidden"` switch the controls bar, the
      table head, the spine and the mode band have answered to since
-     docs/plans/mobile-reading-view.md, which this one never joined. § a small device does
+     docs/plans/260827t-mobile-reading-view.md, which this one never joined. § a small device does
      the switching; this turns it into movement, and `--dock-space -
      --dock-bottom` is `0` at rest and a bar's height when hidden.
 
@@ -3032,7 +3032,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------- the install hint --
    One line above the bar, on an iPhone, once — InstallHint.tsx, and
-   docs/plans/mobile-screen-real-estate.md § 1 for why the advice is "leave the
+   docs/plans/260828av-mobile-screen-real-estate.md § 1 for why the advice is "leave the
    browser" rather than anything this stylesheet could do.
 
    Pinned to the bar's *resting* room (`--dock-space`) rather than to
@@ -3645,7 +3645,7 @@ td.text.has-hit[data-hues="8"] {
 /* --------------------------------------------------------- § mode band ----
    The strip between the spine and the prose when the middle belongs to a mode
    rather than to the table of contents. Chat is the first one; see
-   ChatPanel.tsx and docs/plans/chat-mode.md.
+   ChatPanel.tsx and docs/plans/260826a-chat-mode.md.
 
    THE ONE THING TO UNDERSTAND HERE: the band is `position: fixed`, and the
    room for it is made by `--mode-w` in four rules further up this file —
@@ -4091,7 +4091,7 @@ td.text.has-hit[data-hues="8"] {
 
    `break-word` for the reason the prose has it: a bare URL is one unbroken
    token, and this column is 22rem at its widest. Cited.tsx,
-   docs/plans/chat-web-links.md. */
+   docs/plans/260827ao-chat-web-links.md. */
 .cited-link {
   color: var(--highlight-ink);
   text-decoration-thickness: 1px;
@@ -4189,7 +4189,22 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-input {
   flex: 1;
-  min-width: 0;
+  /**
+   * **A floor on the box, so a crowded row wraps instead of crushing it.**
+   *
+   * `min-width: 0` was right when the row held a textarea, Send and one
+   * microphone: it lets the box give way rather than overflow. With live
+   * conversation there are three more items, and the two that appear only while
+   * a session is running — the lit button and the word "Listening…" — do not
+   * shrink. At a 320px dock that left the textarea 58px wide, one word per
+   * line: nothing overflowed, nothing wrapped, and it read as broken.
+   *
+   * 7rem is about eight characters, which is the width at which the box still
+   * looks like somewhere to type. Below that the row wraps — `flex-wrap` is
+   * already on for the profile checkbox — and two clean lines beat one cramped
+   * one. Found in a browser pass at 320px, 2026-08-31.
+   */
+  min-width: 7rem;
   /* Height is set inline by the component as the content grows; this is the
      floor, and `resize: none` is what stops the reader dragging the box over
      the article it is supposed to sit beside. */
@@ -4257,10 +4272,11 @@ td.text.has-hit[data-hues="8"] {
    Without this the box wraps to `send · talk · stance`, which strands send at
    the far left of a full-width row with the stance at the far right. */
 .review .chat-talk { order: 1; }
-.review .chat-stance { order: 2; }
-.review .chat-send { order: 3; }
-.review .prof-row { order: 4; }
-.review .prof-listening { order: 5; }
+.review .chat-live { order: 2; }
+.review .chat-stance { order: 3; }
+.review .chat-send { order: 4; }
+.review .prof-row { order: 5; }
+.review .prof-listening { order: 6; }
 
 .chat-talk {
   display: inline-flex;
@@ -4276,6 +4292,90 @@ td.text.has-hit[data-hues="8"] {
    is genuinely open — the same signal, said twice, for a control whose whole
    job is to be unambiguous about whether it is hearing you. */
 .chat-talk:has(.prof-mic.on) .chat-talk-label { color: var(--highlight-ink); }
+
+/* **Live conversation, beside the dictation microphone.** Two different things
+   in one row: one turns speech into text in the box, the other holds a
+   conversation. They share the button size and the lit/opening vocabulary of
+   `.prof-mic`, because they compete for the same device and a reader who has
+   learned one has learned the other. src/web/live/LiveButton.tsx. */
+.chat-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.chat-live-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-live-btn:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+.chat-live-btn:disabled { opacity: 0.4; cursor: default; }
+/* Connecting, or hanging up. Outlined rather than filled, for the reason
+   `.prof-mic.opening` is: filled is a claim to be hearing you, and in this
+   second it would be false — the microphone track is deliberately disabled
+   until the session has been told the conversation so far. */
+.chat-live-btn.opening {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+.chat-live-btn.on {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  /* `--page`, which is what `.prof-mic.on` uses — the microphone beside this
+     one, lit the same way. It said `--paper` for about an hour, which is a
+     token this app does not have: an undefined custom property with no fallback
+     makes the whole declaration invalid, so the glyph would have *inherited*
+     its colour and gone near-invisible on the orange. Nothing errors.
+     tests/css-tokens.test.ts is the only thing that would ever have said so. */
+  color: var(--page);
+}
+.chat-live-label {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+/* The label follows the button, so "Listening…" carries the same signal the
+   colour does — said twice, for the one control in this app worth being
+   unambiguous about. */
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-ink); }
+.chat-live-mic select {
+  padding: 0.1rem 0.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+.chat-live-mic select:disabled { opacity: 0.5; }
+
+/* **What a spoken answer pointed at**, in place of the citations it cannot
+   make: it is forbidden to say a block id aloud and uses `show_passage`
+   instead. Quiet, under the answer, one row per pointer.
+   src/web/ChatPanel.tsx § passages. */
+.chat-pointed {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+.chat-pointed li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+.chat-pointed-why { color: var(--ink-faint); }
 
 .chat-stance {
   display: inline-flex;
@@ -4635,19 +4735,12 @@ td.text.has-hit[data-hues="8"] {
    under `hardest` or `most central`, two under `prioritised`, none under `first
    use`. The single letter in front of each is which score it is; the full words
    are in the cell's `title`. */
+/* The bars, where `d·72 c·85` used to be — see src/web/ScoreBars.tsx and the
+   comment at the call site. `flex-shrink: 0` for the same reason it always
+   was: the term's name gives way, the scores do not. */
 .gloss-score {
-  display: flex;
-  flex-shrink: 0; /* the name gives way, not the numbers */
-  gap: 0.3rem;
+  flex-shrink: 0;
   margin-left: auto;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-.gloss-score-key {
-  margin-right: 0.1rem;
-  opacity: 0.6;
 }
 .gloss-gloss {
   display: block;
@@ -5021,7 +5114,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------- footnotes ------
    The apparatus, dressed as apparatus. src/web/notes-view.ts, and
-   docs/plans/footnotes.md § What the reader sees.
+   docs/plans/260828o-footnotes.md § What the reader sees.
 
    A marker is **chrome inside prose** — a superscript that says "there is a
    note here", not a word of the author's sentence — so it takes the UI face and
@@ -5204,7 +5297,7 @@ td.text.has-hit[data-hues="8"] {
 /* ------------------------------------------------------- the mode switch --
    The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
    as one control rather than three buttons that happen to be adjacent. See
-   DockModes in Dock.tsx, and docs/plans/chat-mode.md for what a mode is.
+   DockModes in Dock.tsx, and docs/plans/260826a-chat-mode.md for what a mode is.
 
    The grouping is the entire visual job here. Exactly one of these is on at any
    moment, and three separate-looking buttons where only one ever lights up
@@ -6087,7 +6180,7 @@ td.text.has-hit[data-hues="8"] {
    the reader can jump to and never a section of the piece — the same grammar
    `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
    has learned it in one panel reads it in this one without being told.
-   docs/plans/footnotes.md. */
+   docs/plans/260828o-footnotes.md. */
 .summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
   color: var(--ink-faint);
   font-weight: 500;
@@ -6248,25 +6341,10 @@ td.text.has-hit[data-hues="8"] {
 .summ-range:hover { opacity: 1; }
 .summ-list > .summ-entry > .summ-body > .summ-range { margin-left: 0; }
 
-/* Which rung this actually is, when it is not the one that was asked for. The
-   whole point is that it is visible: a silent fallback is what makes a
-   partly-written artefact read as a complete one. */
-.summ-rung-tag {
-  margin-right: 0.4rem;
-  padding: 0.02rem 0.28rem;
-  border: 1px dashed var(--rule-strong);
-  border-radius: 4px;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.65rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 
-/* "+4 sections". A control when the reader closed them, a fact when the depth
-   cut-off hid them — the disabled state is the difference, and pressing it in
-   that state would silently overrule the Depth buttons. */
+/* "+4 sections", and "−2 parts" on the root once its parts are open. A control
+   on every row since 2026-08-31, the root included — it writes one node into
+   `opened` rather than moving the Depth buttons. SummaryPanel.tsx. */
 .summ-more {
   margin: 0.3rem 0 0 1.25rem;
   padding: 0.1rem 0.4rem;
@@ -6281,51 +6359,20 @@ td.text.has-hit[data-hues="8"] {
 }
 .summ-more:hover { color: var(--ink); border-color: var(--highlight); }
 
-/* ---- the offer at the bottom, and the things that go wrong ---- */
-.summ-foot {
-  flex: none;
-  padding: 0.55rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-.summ-hint {
-  margin: 0 0 0.45rem;
-  color: var(--ink-faint);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
 .summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
-.summ-error {
-  margin: 0.4rem 0 0;
-  color: var(--highlight-ink);
-  font-size: 0.78rem;
-}
 
-.summ-stale {
-  flex: none;
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--highlight-wash);
-}
-.summ-stale p {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0 0 0.4rem;
-  color: var(--highlight-ink);
-  font-size: 0.78rem;
-}
-
-/* The summary panel's run button, its running row and its spinner used to be
-   here — .summ-btn, .summ-running, .summ-detail-live, .summ-spin. They went on
-   2026-08-26 with the third copy of the component that used them: the glossary,
-   the summaries and the thread now share src/web/JobProgress.tsx, drawn with
-   shadcn's Button. See docs/project/web-client.md § Tailwind and shadcn. */
+/* **Summary mode spends nothing, so it has no foot.** `.summ-foot`,
+   `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
+   2026-08-31 with the generated length ladder: there is no job to report, no
+   artefact to be stale, and no shorter rung to fall back to
+   (docs/plans/260831s-gist-only-summaries.md). Its run button had gone earlier, on
+   2026-08-26, into the shared src/web/JobProgress.tsx. */
 
 
 /* ------------------------------------ chat: suggestions and cited blocks --
    Two additions from 2026-08-26: what an empty conversation offers, and what a
    citation chip shows on hover. See ChatPanel.tsx § SUGGESTIONS and CitedBlock,
-   and docs/plans/chat-mode.md. */
+   and docs/plans/260826a-chat-mode.md. */
 
 .chat-suggest ul {
   margin: 0.7rem 0 0;
@@ -6400,7 +6447,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* --------------------------------------------- § chat actions and stopping ---
    Copy, retry, edit, stop, and jump-to-latest. Everything a reader does to a
-   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/chat-mode.md.
+   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/260826a-chat-mode.md.
 
    The governing constraint is width: this band is around 400px and the answers
    in it are prose. So the controls are hover-revealed rather than permanent —
@@ -6586,7 +6633,7 @@ td.text.has-hit[data-hues="8"] {
 /* The two free-text boxes in the app about what the reader wants — "about you"
    and "why you're reading this one" — and they share this so they do not look
    like two different mechanisms. There were three until 2026-08-30, when the
-   summary steer went (docs/plans/steer-becomes-the-profile.md) and .summ-steer-box
+   summary steer went (docs/plans/260830o-steer-becomes-the-profile.md) and .summ-steer-box
    with it. The reading face, because this is a sentence somebody writes rather
    than a setting they pick. */
 .prof-box-input {
@@ -6651,7 +6698,7 @@ td.text.has-hit[data-hues="8"] {
    old version rendered *nothing at all* until the first transcript came back —
    a measured several seconds during which the layout was byte-for-byte what it
    had been before the press, so the reader watching the box saw the feature not
-   happen. docs/plans/microphone-level-meter.md. */
+   happen. docs/plans/260827f-microphone-level-meter.md. */
 .prof-listening {
   display: flex;
   align-items: baseline;
@@ -6747,7 +6794,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------- the timer and the device -----
    Both live in the strip, and both exist because of what the reader could not
-   tell apart without them. docs/plans/microphone-device-and-recording.md. */
+   tell apart without them. docs/plans/260827k-microphone-device-and-recording.md. */
 
 /* `m:ss`. Tabular figures so the row does not shuffle sideways every time the
    seconds tick over — the one thing a timer must not do is draw attention to
@@ -7130,6 +7177,21 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
+  /* **One line, cut** — as `.chat-head h2` above, and here for a reason that is
+     easy to miss. The row holds the caveat icon so that the caveat costs no
+     vertical space, and the argument for that was `.diag-head` having no
+     `flex-wrap`, so it cannot gain a flex line. True, and not the whole story:
+     a flex item can gain a *text* line instead, which makes the row just as
+     tall. "Diagram" is one word and so cannot wrap today — but that is a fact
+     about the heading, not about the row, and it would stop being true the
+     moment the heading became two words. These four make it a fact about the
+     row. `min-width: 0` is the one that does the work: without it a flex item's
+     automatic minimum is its longest word, so it never shrinks far enough for
+     `text-overflow` to have anything to do. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The three pictures, as one control. Same shape as `.gloss-sort`, because it
@@ -7504,7 +7566,7 @@ line.diag-now {
 
 
 /* ---------------------------------------------- the floating chat panel -- */
-/* docs/plans/chat-as-gateway.md. Shares the slot and the geometry of
+/* docs/plans/260826ab-chat-as-gateway.md. Shares the slot and the geometry of
    `.cmt-dialog` above — one of the two is ever open, decided by the overlay
    state in App.tsx rather than by either panel noticing the other. */
 
@@ -7535,7 +7597,7 @@ line.diag-now {
    floating chat beside it, on purpose: they occupy the same corner and one
    becomes the other when the reader ticks the box, so a different shape would
    read as the panel jumping rather than continuing.
-   docs/plans/comments-and-bookmarks.md. */
+   docs/plans/260828a-comments-and-bookmarks.md. */
 .annotate-dialog {
   position: fixed;
   /* `--safe-right`: these are `position: fixed` against the physical screen,
@@ -8043,7 +8105,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    only what an idea has and a term does not: two labelled groups, a name that
    is a sentence rather than a word, and a list of quoted passages.
 
-   docs/plans/ideas-mode.md. */
+   docs/plans/260826ac-ideas-mode.md. */
 
 /* The scroller. `.mode-band` is a fixed column between the controls bar and
    the dock, and its `min-height: 0` exists for exactly this child — without one
@@ -8409,14 +8471,14 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
  * invisible, so the margin is worth more than the two hundred pixels of text.
  *
  * This does not make the bar right at every width; it makes it *honest* at
- * every width. Whether thirteen buttons in one row is the design is Greg's
- * call — see docs/plans/ideas-mode.md § Questions. */
+ * every width. Whether twelve buttons in one row is the design is Greg's
+ * call — see docs/plans/260826ac-ideas-mode.md § Questions. */
 @media (max-width: 1100px) {
   .dock-modes .dock-btn-label { display: none; }
   /* Except one — see `keepLabel` in Dock.tsx for which and why. */
   .dock-modes .dock-btn-label.always { display: inline; }
-  /* Square-ish once the text is gone, so six icons read as one segmented
-     control rather than as six loose glyphs. */
+  /* Square-ish once the text is gone, so twelve icons read as one segmented
+     control rather than as twelve loose glyphs. */
   .dock-modes .dock-btn { padding-inline: 0.6rem; }
 }
 
@@ -8521,6 +8583,96 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    extent, and the text's extent is not the target's. */
 .sk-region-open:focus-visible .sk-hit { stroke: var(--highlight); stroke-width: 2; rx: 3; }
 
+/* ---- a part that opens: the mark, and the peek inside it ---- */
+
+
+/* The corner mark, beside the name. Faint until the name is hovered, then it is
+   the same colour as the name — one control, one state.
+   `vector-effect` here and on the stack: the band scales 760 canvas units into
+   under 400 pixels, so a 1.6-unit stroke arrives at three quarters of a pixel
+   and the one mark that says a part opens is a grey suggestion. Held at its
+   painted weight it is the same line in the band and at full screen, which is
+   the whole job. ⟨Sol⟩, 2026-08-30. */
+.sk-region-more {
+  fill: none;
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.55);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sk-region-open:hover .sk-region-more,
+.sk-region-open:focus-visible .sk-region-more {
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)));
+}
+
+/*
+ * **The peek** — a ghost of the scene a region opens, drawn inside that region.
+ *
+ * `pointer-events: none` on the group is not a nicety: the scrim covers the
+ * boxes whose region summoned it, and a scrim that could be hovered would take
+ * the pointer off the label, unset the peek, hand the pointer back, and do it
+ * again sixty times a second.
+ */
+.sk-peek { pointer-events: none; animation: sk-peek-in 140ms ease-out; }
+@keyframes sk-peek-in { from { opacity: 0; } to { opacity: 1; } }
+/* The colour of the page, not a shade of grey: it has to *remove* what is
+   under it rather than tint it, or the ghost is drawn into a thicket.
+   `fill-opacity` rather than an alpha inside the colour: `--page` is a `var()`
+   chain ending in an `oklch()`, and `rgb(oklch(…) / 0.88)` is invalid at
+   computed-value time and drops the whole declaration without a word — the trap
+   `.diag-card` and the note at the top of this section both carry. */
+.sk-peek-scrim {
+  fill: var(--page);
+  fill-opacity: 0.88;
+  /* **A frame, because the peek reaches past the region it belongs to.** It
+     grows downward to give a portrait scene room in a landscape region
+     (`peekViewport`), so its lower part lies over the picture with nothing to
+     say where it begins — a browser pass, 2026-08-31, read that as a spill
+     rather than a panel, and noted the ghost landing over a real node and
+     momentarily looking like a highlight of it. One faint edge makes it a thing
+     laid on top rather than a hole in what is underneath. */
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+/*
+ * **The only thing the peek drops is the words**, and it is the one thing that
+ * cannot survive the scale: a region is a fifth of the canvas high, so 12-unit
+ * text lands at about one pixel and renders as grey dust over the shapes it is
+ * meant to be inside. Everything else — the shapes the model chose, the routed
+ * edges, the arrowheads, the dashes, the regions within — is the real painting
+ * of the real scene, because the peek is `paintScene`'s own output dropped in a
+ * nested viewport rather than a second, simpler painter. ⟨Sol⟩, 2026-08-30.
+ */
+.sk-peek text { display: none; }
+/* **And the plate the text was sitting on.** An edge label is drawn as a
+   page-coloured rectangle with the words on top, so hiding only the words left
+   a blank hole in the middle of a connector — a shape the model never drew,
+   which is the one thing the ghost is not allowed to invent. ⟨Sol⟩, 2026-08-30. */
+.sk-peek .sk-label-plate { display: none; }
+/* Strokes held at their painted weight rather than scaled down with everything
+   else: a 1.2-unit stroke inside a 4x reduction is a third of a pixel, and the
+   ghost dissolves into its own scrim. **By element, not by class** — the first
+   version listed six classes and missed `.sk-note-fold`, and a list of names is
+   a thing that goes stale every time the painter learns a new one. */
+.sk-peek :is(rect, path, ellipse, polygon) { vector-effect: non-scaling-stroke; }
+.sk-peek .sk-node { opacity: 0.85; }
+
+/*
+ * **The zoom.** Everything drawn hangs off `.sk-stage`, so the entrance has one
+ * element to move — SketchView.tsx runs it with `Element.animate`, in canvas
+ * units, which is why the origin has to be the canvas's own corner rather than
+ * the group's bounding box. `view-box` is already the default for an SVG
+ * element and it is written out because the whole animation's arithmetic
+ * silently becomes wrong if it is ever `fill-box`.
+ */
+.sk-stage { transform-box: view-box; transform-origin: 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The panel checks the same query before it animates at all; this is the
+     other half, for the peek, which fades in from the stylesheet. */
+  .sk-peek { animation: none; }
+}
+
 /* ---- full screen ---- */
 
 /*
@@ -8588,6 +8740,43 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 
 .sk-region { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.07); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.24); stroke-width: 1; }
 .sk-region-dashed { fill: none; stroke-dasharray: 5 4; }
+
+/* **Below `.sk-region`, and that is load-bearing.** Both are a single class, so
+   they carry the same specificity and the later one wins. Written above them —
+   where they were, next to the rest of this feature — every declaration here was
+   outvoted by the plain region's own 0.24 and 0.07, and the affordance simply
+   did not exist. Nothing errors and nothing warns; the rule is just quietly
+   overruled. Keep these two together, in this order. */
+/*
+ * **A region that opens something is drawn hotter than one that does not**, and
+ * that is the whole always-on affordance — no second shape, no glyph carrying
+ * the load.
+ *
+ * The first version was geometry: a second panel offset behind the first, a
+ * stack of cards. A browser pass on the real drawing at 288px could not see it,
+ * and could not tell which of the four regions were pressable — which is the
+ * thing this feature exists to fix. `MARK` in src/sketch-paint.ts has the
+ * finding and the arithmetic; the short version is that the band scales 760
+ * units into under 400 pixels, so every *distance* is halved and a five-unit
+ * offset is two and a half pixels.
+ *
+ * **Contrast is the one property that does not shrink.** A stroke held at
+ * 1.8px by `non-scaling-stroke` is the same line in the band as at full screen,
+ * and an alpha is an alpha at any scale. So: a brighter edge and a stronger
+ * wash, against the 0.24/0.07 an ordinary region gets above. What the reader
+ * learns is "the brighter boxes are the ones that open", and the corner mark
+ * beside the name says why, once the picture is big enough to read it.
+ */
+.sk-region-opens {
+  fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.13);
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62);
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+/* Dashed regions keep `fill: none` from `.sk-region-dashed`, which follows this
+   in the cascade only by accident of ordering — say it, so a region the model
+   asked to be an outline does not quietly acquire a wash. */
+.sk-region-opens.sk-region-dashed { fill: none; }
 .sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95); font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
 .sk-bracket { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1.5; }
 
@@ -8699,7 +8888,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
  *
  * The two pictures whose axes came out of a model: one dot per paragraph,
  * placed by what the paragraph is *about* (src/web/scatter.ts,
- * docs/plans/embedding-scatter-diagrams.md).
+ * docs/plans/260827g-embedding-scatter-diagrams.md).
  *
  * **They reuse `.diag-dot` rather than growing a shape of their own.** A dot on
  * a spine is what `arc` and `cluster` already draw, and the arrangement those
@@ -8719,6 +8908,48 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   border-bottom: 1px solid var(--rule);
 }
 .diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
+/* **The scatter's caveat, at the end of the heading row.** It replaced four
+   lines of 10.5px prose above the picture, and the sentence itself is still in
+   the DOM as an `.sr-only` live region — this is a change to where it is
+   *shown*, not to whether it is said. DiagramPanel.tsx § ScatterNote.
+
+   **It lives in `.diag-head` because `.diag-head` cannot wrap.** It was on
+   `.diag-opts` first, which does, and the "costs no vertical space" claim was
+   false there in a way that took two checks and a browser sweep to see. Auto
+   margins right-align an item on the line it lands on; they do not stop it
+   starting a new one — and nesting the chips in an inner wrapping box only moved
+   which item wrapped, because the binding constraint is **total intrinsic
+   width**, not alignment. At the ideal band width Drift's two chip groups plus
+   this icon do not fit on one line, so something wraps whichever way the
+   alignment is written. `.diag-head` has no `flex-wrap`, so it shrinks its
+   heading instead of gaining a flex line.
+
+   **That is still not the whole argument, and the missing half is a text
+   line.** A row with no `flex-wrap` cannot gain a line, but the flexible item
+   inside it can wrap its own text once it has been shrunk far enough, and the
+   row is then just as tall. Nothing about `.diag-head` prevented that; only
+   the heading being the single unbreakable word "Diagram" did, which is a fact
+   about today's copy rather than about the row. `.diag-head h2` now declares
+   the one-line-cut four (§ heading), so the claim is a property of the markup.
+
+   `flex: none` so it is the icon that keeps its size when that shrinking
+   happens, rather than collapsing and taking the caveat with it;
+   `h2 { flex: 1 }` above is what pushes it right.
+
+   `cursor: help` rather than `pointer`, because pressing it does nothing — the
+   card is the whole of it. Sized to the row rather than to a thumb: what this
+   panel offers a finger is the step bar. */
+.diag-about {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faintest, var(--ink-faint));
+  cursor: help;
+}
+.diag-about:hover, .diag-about:focus-visible { color: var(--ink-soft); }
 .diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
 .diag-opt-label {
   margin-right: 0.15rem;
@@ -8994,7 +9225,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    bug it was about). The sentence — your voice is sent to be transcribed and is
    not stored — is carried as the button's accessible description and as its
    `title`, and takes no room on screen: it is a fact about how the control
-   works, not a warning about whether it does. docs/plans/dictation-two-pass.md. */
+   works, not a warning about whether it does. docs/plans/260827x-dictation-two-pass.md. */
 /* **Nothing at all, on purpose.** It carries the sentence for screen readers
    and takes no space, because it now sits inside every microphone button
    wherever one appears — including the chat composer, which is a flex row where
@@ -9021,7 +9252,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 /* A microphone was chosen and could not be opened, so something else is in use.
    Warm rather than red: it is a fact worth knowing, not a failure — dictation is
    working, just not through the device the reader picked.
-   docs/plans/microphone-device-and-recording.md. */
+   docs/plans/260827k-microphone-device-and-recording.md. */
 .prof-mic-warn {
   margin: 0.25rem 0 0;
   color: var(--highlight-ink, var(--highlight));
@@ -9038,7 +9269,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    Everything here is one of two rules followed further than the desktop needed,
    never a second layout. There is no mobile view to keep in step with this one.
 
-   docs/plans/mobile-reading-view.md has the measurements and the arguments.
+   docs/plans/260827t-mobile-reading-view.md has the measurements and the arguments.
 
    ## The breakpoint is derived, not chosen
 
@@ -9175,14 +9406,15 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      machine this rule was written to stop. Pinning `flex-grow` to `0` as well
      was incidental, and it silently outranked § a coarse pointer's attempt to
      let the buttons share the bar (this selector is (0,2,0) against that
-     rule's (0,1,0)), leaving thirteen icons huddled at the left end of a phone.
+     rule's (0,1,0)), leaving fifteen icons huddled at the left end of a phone.
      Nothing may shrink; growing into space that is already there costs the
      guarantee nothing. */
   .dock > *:not(.dock-gap) { flex-shrink: 0; }
 
-  /* Every dock button drops its label, not just the six modes. The modes have
-     done this below 1100px since Ideas made them six (§ the modes segment); at
-     390px the other three have to follow or thirteen buttons cannot share 390px.
+  /* Every dock button drops its label, not just the twelve modes. The modes
+     have done this below 1100px since Ideas made them six (§ the modes segment);
+     at 390px the other three have to follow or fifteen buttons cannot share
+     390px.
      Same argument as there: each carries its name in a tooltip and in an
      explicit `aria-label`, so this costs a sighted reader a hover and costs a
      screen-reader user nothing. */
@@ -9190,15 +9422,16 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   /* Except one — see `keepLabel` in Dock.tsx. The row already scrolls sideways
      at this width (§ a coarse pointer does the arithmetic), and this button is
      leftmost, so the word costs the reader nothing they can see: what it buys is
-     that the way out of a mode is legible without hovering ten glyphs. */
+     that the way out of a mode is legible without hovering eleven glyphs. */
   .dock .dock-btn-label.always { display: inline; }
-  /* Thirteen icons in 390px, which no longer fit — see § a coarse pointer for
+  /* Fifteen icons in 390px, which no longer fit — see § a coarse pointer for
      the arithmetic and for why the row scrolls rather than shrinking further.
      0.45rem rather than the 0.6rem the 1100px query uses,
-     and the extra 0.15 is not cosmetic — at 0.55rem the row came to 401px
-     against 390 of bar, and closing an 11px gap exactly would have reopened it
-     the moment the Questions count reached three digits. This leaves ~25px of
-     slack, which is a badge's worth. */
+     and the extra 0.15 is not cosmetic — measured at thirteen icons, 0.55rem
+     brought the row to 401px against 390 of bar, and closing an 11px gap exactly
+     would have reopened it the moment the Questions count reached three digits.
+     The row overflows outright at fifteen and scrolls, which is the safety net
+     § a coarse pointer put there for exactly this. */
   .dock .dock-btn { padding-inline: 0.45rem; }
   .dock {
     padding-left: calc(0.2rem + var(--safe-left));
@@ -9342,7 +9575,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
        to 2.2rem to claw some back, which is the wrong direction for a bar you
        have to hit with a thumb. Now it leaves entirely while you read, and can
        afford to be 52px tall when it is there (§ a coarse pointer).
-       docs/plans/mobile-screen-real-estate.md § 3. */
+       docs/plans/260828av-mobile-screen-real-estate.md § 3. */
     --dock-bottom: 0px;
   }
   /* Each consumer animates its own ordinary property. `top` is animatable on a
@@ -9526,10 +9759,10 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    costs 40px** (the floor below) and each mode costs a further 1px of hairline;
    `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
    modes the row is roughly `40 × (m + 3) + m + 9`. At m=8 that is 457px, at m=9
-   it is 498, at m=10 it is 539, and the bar is 384. **A phone in portrait
-   scrolls, and every new mode makes it scroll by another 41px.**
+   it is 498, at m=10 it is 539, at m=12 it is 621, and the bar is 384. **A phone
+   in portrait scrolls, and every new mode makes it scroll by another 41px.**
 
-   **`plain` is the tenth (2026-08-31), and it is the one that had to be
+   **`plain` is the twelfth (2026-08-31), and it is the one that had to be
    leftmost.** A scrolling row means the buttons past the fold are found by
    dragging a bar most readers do not know drags — so the position matters most
    for the button somebody reaches for when they want *out* of where they are.
@@ -9537,17 +9770,17 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    another ~35px of a row that already overflows and buys the one thing the
    overflow takes away: being able to see what the exit is without hovering it.
 
-   No floor small enough to avoid it would be worth having: thirteen buttons
-   sharing 384px is 30px each, which is smaller than they were before any of
+   No floor small enough to avoid it would be worth having: fifteen buttons
+   sharing 384px is 25px each, which is smaller than they were before any of
    this.
 
    Greg was asked and chose this, 2026-08-28: *"maybe also row scrolls sideways
    if it doesn't fit horizontally"*. So the floor is set at the size worth
    pressing rather than at the size that would fit, and the row scrolls — which
    § a narrow window already made it do, with the scrollbar hidden. **What this
-   query cannot claim is that a phone reader can see all thirteen at once.** The
+   query cannot claim is that a phone reader can see all fifteen at once.** The
    two-row bar that would fix that properly is written up in
-   docs/plans/mobile-screen-real-estate.md § Open for Greg; it is a design
+   docs/plans/260828av-mobile-screen-real-estate.md § Open for Greg; it is a design
    change rather than a size change, and his to make.
 
    `flex-grow` therefore does nothing at 390px and everything on a tablet, where
@@ -9851,7 +10084,7 @@ table.only-prose thead { display: none; }
    The whole document as one nested list that never scrolls, in the mode band.
    The shell is `.mode-band` far above; everything here is what goes inside it.
 
-   Read OutlinePanel.tsx and outline.ts first, and docs/plans/outline-mode.md
+   Read OutlinePanel.tsx and outline.ts first, and docs/plans/260828aw-outline-mode.md
    for why the list is shaped this way. Three things here are load-bearing
    rather than decorative:
 
@@ -10206,4 +10439,528 @@ table.only-prose thead { display: none; }
     animation: none;
     opacity: 0.08;
   }
+}
+
+/* ---------------------------------------------------------- § quotes mode ----
+   The tenth mode: the lines worth keeping, in the article's own words —
+   docs/project/quotes.md, docs/plans/260831j-quotes-mode.md.
+
+   **The one rule that shapes all of this: the reader's eye should land on the
+   author's sentence and nothing else.** Every other panel in this band is a
+   list of things a model wrote, so its rows can be styled like UI. A row here
+   IS the article, and everything around it — the two scores, the ⓘ, the block
+   ref — is furniture that has to get out of the way. Hence the size step
+   between `.quotes-text` and its neighbours, which is bigger than anywhere else
+   in the band, and hence the scores sitting under the quote rather than beside
+   it: an 18rem column has no room for a sentence and a number on one line, and
+   the number is the one that gives way.
+
+   The head, the order buttons and the bar deliberately match `.gloss-*` rule
+   for rule. They are the same three controls doing the same three jobs, and a
+   second look for them would teach the reader they mean something else. What is
+   NOT shared is the row, which is a different thing entirely. */
+.quotes-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-head-icon { color: var(--ink-faint); flex: none; }
+.quotes-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.quotes-count { color: var(--ink-faint); font-size: 0.75rem; }
+
+.quotes-rank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-rank-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+.quotes-rank-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
+.quotes-rank-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--highlight-ink);
+}
+.quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The bar. Same rules as `.gloss-gate`, and the same reason for the native
+   range input: `accent-color` is one line where `::-webkit-slider-thumb` is the
+   track, the thumb, the focus ring and the dark-mode colours of all three in
+   two vendor dialects. */
+.quotes-bar {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.quotes-bar-label {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+.quotes-bar-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.quotes-bar-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.quotes-bar-reset:hover { color: var(--ink); }
+.quotes-bar-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-bar-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.quotes-bar-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.quotes-bar-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+/* What the stage would not store. Quiet, above the list, and only when there is
+   something to say — the reader is entitled to know their list is shorter than
+   what the model offered, and a log line does not tell them.
+   docs/reusable/silent-success.md. */
+.quotes-discarded {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.quotes-discarded svg { flex: none; transform: translateY(1px); }
+
+.quotes-error,
+.quotes-quiet {
+  margin: 0;
+  padding: 0.7rem;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.quotes-error { color: var(--highlight-ink); }
+
+.quotes-empty { padding: 0.7rem; }
+.quotes-empty p { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--ink-soft); }
+.quotes-hint { color: var(--ink-faint) !important; font-size: 0.74rem !important; line-height: 1.45; }
+.quotes-run { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.quotes-stale {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+.quotes-stale p {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.quotes-stale svg { flex: none; color: var(--highlight-ink); transform: translateY(1px); }
+
+.quotes-list { flex: 1; overflow-y: auto; }
+.quotes-group { border-bottom: 1px solid var(--rule); }
+.quotes-group:last-child { border-bottom: none; }
+/* The divider that names the rule which promoted the group under it. A
+   threshold with no visible divider is a judgment made silently. */
+.quotes-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  background: var(--surface-raised);
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.quotes-group-count { margin-left: auto; font-weight: 400; letter-spacing: 0; }
+.quotes-group-list { margin: 0; padding: 0; list-style: none; }
+
+/* One row: the sentence, and the furniture beside it. `align-items: start` so
+   the ⓘ sits level with the quote's first line rather than floating in the
+   middle of a five-line one. */
+.quotes-row {
+  display: flex;
+  align-items: start;
+  gap: 0.2rem;
+  padding: 0.1rem 0.4rem 0.1rem 0.2rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-row:last-child { border-bottom: none; }
+.quotes-row.on { background: var(--surface-raised); }
+
+/* The whole sentence is the target, because in an 18rem band the target wants
+   to be as big as it can be and there is nothing else in a row to press. */
+.quotes-quote {
+  flex: 1;
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.35rem 0.45rem 0.5rem;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.quotes-quote:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+/* The author's words, and the only thing on this panel styled as prose. The
+   left rule is the glossary's `in this piece` rule and it means the same thing
+   here — **this came from the article** — which is why it is the solid one and
+   not the dotted one the model's own contributions get. */
+.quotes-text {
+  margin: 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.quotes-row.on .quotes-text { border-left-color: var(--highlight); }
+
+/* Under the sentence, never beside it: there is no room for both on one line
+   and the number is the one that gives way. Mono so they line up with the bar's
+   readout, which is the same quantity. */
+/* Under the sentence, never beside it: there is no room for both on one line.
+   Indented to the quote's own left rule, so the bars start where the words do. */
+.quotes-scores {
+  margin: 0.35rem 0 0 0.5rem;
+}
+
+.quotes-row-side {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+}
+/* The model's reason, behind a press. A second button BESIDE the row's button
+   and never inside it: a button inside a button is invalid, and the browser's
+   recovery from it is not something to design against. */
+.quotes-why {
+  display: flex;
+  align-items: center;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.quotes-why:hover { color: var(--ink); background: var(--surface-raised); }
+.quotes-why.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.quotes-why:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* Wider than a spine tooltip, because this holds a sentence rather than a
+   label. */
+.quotes-why-card { max-width: 16rem; }
+.quotes-where { flex: none; }
+
+.quotes-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.quotes-provenance {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+}
+
+/* ------------------------------------------------------- § score bars ----
+   The model's 0–1 judgments as lengths rather than digits — Greg, 2026-08-31:
+   *"Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus
+   tooltip instead of numbers ... Same goes for Glossary etc."*
+
+   One set of rules for both panels, because they are showing the same kind of
+   thing and two looks would teach the reader it means two things. The component
+   is src/web/ScoreBars.tsx and the reasoning is there.
+
+   **The track is always the whole scale.** Nothing here normalises to the list,
+   so an article whose scores are all middling looks middling — a bar stretched
+   to make its own biggest score full-width would make every article look like
+   it had one outstanding term, and no two articles comparable. */
+.score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 2.4rem;
+  cursor: default;
+}
+/* The track. Faint enough to read as a scale rather than as a rule, and it has
+   to be visible: a fill with no track is a bar chart with no axis, and 0.2 and
+   0.9 then look like two different things rather than two points on one scale. */
+.score-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--ink-faint) 22%, transparent);
+  overflow: hidden;
+}
+.score-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink-faint);
+}
+/* The upper bar of each pair is the load-bearing one — centrality in a
+   glossary, importance in a quote — and it takes the accent, so a column of
+   rows can be read for "what the argument rests on" without the tooltip.
+   The lower bar stays neutral. Two *positions* rather than two hues doing the
+   work, because a hue difference alone is not a difference for a reader who
+   cannot see it, and the aria-label carries the rest. */
+.score-bar-fill.centrality,
+.score-bar-fill.importance {
+  background: color-mix(in oklab, var(--highlight) 70%, var(--ink-faint));
+}
+.gloss-term.on .score-bar-fill,
+.quotes-row.on .score-bar-fill {
+  background: var(--highlight);
+}
+/* Narrow, because it holds two short lines and a wide card over a list row
+   covers the rows either side of the one being pointed at. */
+.score-bars-card { max-width: 15rem; }
+
+/* ------------------------------------------------------- § timeline mode ----
+   The eleventh mode. `.timeline` is `.gloss` with a class beside it, like
+   `.ideas` next door, so the band shell, the head, the run button, the stale
+   banner and the two provenance rules all come from § glossary mode unchanged.
+   What is here is only what an event has and an idea does not: a date column
+   that has four quite different things to say, and a row that stacks rather
+   than sitting on one line.
+
+   **There are no marks and no legend**, deliberately — Greg deferred the drawn
+   notation on 2026-08-31 and v1 writes the words instead. So there is nothing
+   here that draws a bracket, a bar or a ⊘, and adding one is a change to the
+   design rather than to this file.
+   docs/plans/260831i-timeline-mode.md § Appendix: the visual design, deferred. */
+
+/* Same three properties as `.ideas-scroll`, `.gloss-list`, `.chat-scroll` and
+   `.summ-scroll`, and for the reason the ideas panel had to learn the hard way:
+   `.mode-band` is a fixed column between the controls bar and the dock, so
+   without a scrolling child the panel's own content decides its height — which
+   a fixed element cannot honour — and everything past the dock is unreachable.
+   Twenty-six events is well past it on any laptop window, and it looks
+   perfectly fine on a tall one. */
+.tl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+/* The two sentences above the list — the year the piece is in, and how few
+   events there are. Both are said once here rather than on every row. */
+.tl-frame,
+.tl-thin {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.tl-thin { border-bottom: 1px solid var(--rule); }
+
+.tl-group { margin: 0; padding: 0.5rem 0 0; }
+/* Heavier than the rule between two events, because the break between what the
+   piece says happened and what it merely expects is a change of tense rather
+   than a change of row — the whole reason the divider exists is to stop a
+   reader's eye running from a date into a forecast. */
+.tl-group + .tl-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.tl-group > h3 {
+  /* Sticky, so *which half am I looking at* survives scrolling — see the note
+     on `.ideas-group > h3`, and docs/reusable/css-sticky-containing-block.md
+     for the case where a sticky heading silently does nothing. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tl-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.tl-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.tl-list { margin: 0; padding: 0; list-style: none; }
+.tl-item { border-top: 1px solid var(--rule); }
+.tl-item:first-child { border-top: none; }
+
+/* **Stacked, not two columns**, and that is a measurement rather than a taste:
+   the band is 288px at `MODE_MIN` (layout.ts), and "at or before 12 May" beside
+   a ten-word label in that width leaves both of them about nine characters a
+   line. The date leads because a chronology is what the reader scans down. */
+.tl-row {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The date column, and the four things it can say. They are four different
+   kinds of statement, so they are four different treatments — one class with
+   the text carrying the difference would set *"dated — but which year?"* in the
+   same face as *"26 May"*, which reads as a very odd date rather than as a note
+   about one. */
+.tl-when {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+/* A fact the article stated. The only one of the four in the full ink. */
+.tl-when-dated { color: var(--ink); font-weight: 600; }
+/* The article's own words, already in quotation marks in the markup. Italic
+   because it is a quotation and not our sentence. */
+.tl-when-words { color: var(--ink-soft); font-style: italic; }
+/* No time at all. Faint, because there is nothing here to read — and it must
+   not be mistaken for the row below it, which is us failing rather than the
+   article saying nothing. */
+.tl-when-none { color: var(--ink-faint); }
+/* **We could not read a date the piece plainly gives.** The one state that is
+   about us, and the one that must not look like an ordinary blank: the review's
+   whole point was that a rejected date rendering identically to a genuine
+   absence makes "fails visibly" true only inside a counter. A dotted underline
+   rather than a colour alone, so it is still distinguishable without colour. */
+.tl-when-rejected {
+  color: var(--ink-faint);
+  font-style: italic;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--rule-strong);
+}
+
+/* A handle, not a retelling — three to ten words, wrapping. Wrapping rather
+   than truncating for the reason `.ideas-name` gives: the half a truncation
+   keeps is the wrong half. */
+.tl-label {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.tl-row:hover .tl-label { color: var(--highlight-ink); }
+.tl-item.open > .tl-row .tl-label { color: var(--highlight-ink); font-weight: 600; }
+
+.tl-detail { padding: 0 0 0.6rem; }
+.tl-where { margin-top: 0.55rem; }
+/* The stepper on the label line rather than under it — the label is short and
+   the row is otherwise empty to the right. Almost always invisible: 26 of the
+   26 events on the test article have exactly one occurrence. */
+.tl-where > .gloss-part-label { display: flex; align-items: center; gap: 0.3rem; }
+
+.tl-occurrences { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.tl-occurrences > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.tl-occurrences > li > button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  border-left: 2px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.tl-occurrences > li > button:hover { border-left-color: var(--highlight); }
+/* The one the reader last landed on, so the panel and the wash in the prose
+   agree about where they are. */
+.tl-occurrences > li.open > button {
+  border-left-color: var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 8%, transparent);
+}
+.tl-quote {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* Pinned under the scroller rather than at the end of it, like `.ideas-again`:
+   the control that spends a model call must not be something you have to
+   scroll twenty-six events to reach. */
+.tl-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
 }

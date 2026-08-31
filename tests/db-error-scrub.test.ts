@@ -23,7 +23,7 @@
  * exists so that a future Drizzle release which stops doing this is noticed
  * rather than assumed. The rest assert the seam translates it.
  *
- * See docs/plans/error-boundary.md and docs/project/logging.md.
+ * See docs/plans/260826p-error-boundary.md and docs/project/logging.md.
  *
  * Skips loudly when there is no database — see tests/db-schema.test.ts.
  */
@@ -272,7 +272,7 @@ when("a failed query in the Postgres store", () => {
  * branch that decides **whether the reader is offered another go** cannot be
  * driven from a real failure without arranging a deadlock, and an untested
  * branch that decides a button is how this codebase got here in the first place
- * (docs/plans/simplification-audit.md — "a rule can be documented, implemented
+ * (docs/plans/260826m-simplification-audit.md — "a rule can be documented, implemented
  * and tested and still not reach the screen").
  *
  * The assertions go through `worthRetrying` rather than pinning a sentence,

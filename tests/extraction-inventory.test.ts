@@ -10,7 +10,7 @@
  *
  * It calls no model and touches no network: `compare` takes the before and the
  * after as two strings, which is the reason it exists as a separate function.
- * See docs/plans/readability-repair-pass.md.
+ * See docs/plans/260827ab-readability-repair-pass.md.
  */
 import { describe, expect, it } from "vitest";
 import { compare } from "../evals/extraction/inventory.mjs";

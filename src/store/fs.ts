@@ -8,12 +8,12 @@
  * A reimplementation would be comparing the migration against a fresh set of
  * bugs.
  *
- * It is also the rollback. docs/plans/postgres-migration.md § The order of work
+ * It is also the rollback. docs/plans/260825f-postgres-migration.md § The order of work
  * keeps the filesystem adapter, the importer and the exporter for one release
  * after cutover and then deletes them. This is the first of those three.
  *
  * **This is not where a fallback lives.** Nothing may catch a Postgres error
- * and call into here — see docs/plans/postgres-storage-implementation.md
+ * and call into here — see docs/plans/260826e-postgres-storage-implementation.md
  * § Rules. A silent fallback hides divergence and makes the parity exercise
  * worthless, which is the single most important line in the plan.
  */
@@ -27,9 +27,10 @@ import {
   loadGlossary,
   loadArc,
   loadIdeas,
+  loadQuotes,
   loadSketch,
   loadSource,
-  loadSummaries,
+  loadTimeline,
   loadTweets,
 } from "../api.js";
 import {
@@ -42,6 +43,7 @@ import {
   retryTurn,
   update as updateThreads,
   withEdit,
+  withSpokenTurn,
 } from "../chat.js";
 import {
   beginAnswer,
@@ -91,9 +93,10 @@ export const fsArticleReader: ArticleReader = {
   articleMetadata,
   loadTweets,
   loadGlossary,
-  loadSummaries,
+  loadQuotes,
   loadArc,
   loadIdeas,
+  loadTimeline,
   loadSketch,
   loadSource,
 };
@@ -288,6 +291,39 @@ export const fsChatStore: ChatStore = {
        has no way to produce and no caller wants. Caught by
        tests/store-reader-state-parity.test.ts, which is exactly the kind of
        difference it exists for: nothing else would have noticed. */
+    const { threads: _written, ...turn } = out;
+    return { ...turn, attempt: undefined };
+  },
+
+  /**
+   * A finished exchange, appended inside the mutex.
+   *
+   * **The tail check is inside `updateThreads`, with the write**, for exactly
+   * the reason `edit` gives above: checking it in the route is checking a copy,
+   * and a `begin` can land between the two reads. Here it matters more than
+   * there, because this guard is also the idempotency — a replayed request that
+   * checked a stale copy would append the turn twice.
+   */
+  async appendSpoken(slug, spoken, now) {
+    let out!: ReturnType<typeof withSpokenTurn>;
+    await updateThreads(slug, (threads) => {
+      const at = (now ?? (() => new Date().toISOString()))();
+      out = withSpokenTurn(threads, spoken, at);
+      return out.threads;
+    });
+    log("store").info(
+      {
+        slug,
+        threadId: out.thread.id,
+        messageId: out.reply.id,
+        turns: out.thread.messages.length,
+        interrupted: spoken.interrupted === true,
+      },
+      "spoken turn appended",
+    );
+    /* `threads` dropped rather than spread, the same rule `edit` follows: the
+       Postgres store cannot produce that key and no caller wants it, and
+       tests/store-parity.test.ts compares the two. */
     const { threads: _written, ...turn } = out;
     return { ...turn, attempt: undefined };
   },

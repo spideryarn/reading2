@@ -261,6 +261,45 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
 }
 
 /**
+ * **The one hole that is not in `DECLARATIONS`, and cannot be put there.**
+ *
+ * Live conversation mode (docs/plans/260831g-live-conversation.md) spends real money
+ * that nothing in this report can see. It is not an oversight and it is not a
+ * bypass that somebody forgot to declare — a `Declaration` for it **cannot be
+ * typed**: `ProviderAccount` is `"openrouter" | "anthropic"` with no
+ * `"openai"`, and `Wire` is `"messages" | "chat" | "embeddings"` with no
+ * `"realtime"`. So it sits in the scan's `ALLOWED` list in
+ * `tests/no-undeclared-spend.test.ts` instead, where a reason is written down
+ * and no row is ever produced.
+ *
+ * **It is printed here anyway, because the alternative is this report lying.**
+ * `undeclared()` reads `DECLARATIONS`, so the day the last `metered: false`
+ * entry is wired up this script would have printed *"Every known way of
+ * spending money in this repo writes a row"* — while a reader could be holding
+ * a live conversation that bills audio by the minute into no total at all. A
+ * report that goes silently complete while a hole is open is exactly the
+ * failure docs/reusable/silent-success.md is about, and this is a report whose
+ * whole value is being believed.
+ *
+ * Greg accepted the gap knowingly on 2026-08-31, with the ask that it be
+ * commented here and in the docs rather than closed now. Closing it is not a
+ * fourth `Observer` method: the usage exists only in the reader's browser tab,
+ * so it needs a way for a tab to report what it spent and a reason for the
+ * server to believe it — live-conversation.md § What is missing.
+ */
+function liveConversationGap(): void {
+  console.log("\nNot counted here, and NOT in the table below — live conversation mode:");
+  console.log("  src/live.ts");
+  console.log(
+    "      the audio is a WebRTC connection from the browser straight to OpenAI, so no",
+  );
+  console.log(
+    "      row is written and no figure above includes it. Accepted 2026-08-31.",
+  );
+  console.log("  docs/plans/260831g-live-conversation.md says what closing it needs.");
+}
+
+/**
  * **What is knowably still missing** — by name, every run.
  *
  * This replaced the sentence *"Not counted here: anything evals/ spends"*,
@@ -269,11 +308,15 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
  * the list empties as they are wired up. `tests/no-undeclared-spend.test.ts`
  * fails if a way of reaching a provider exists that is not in that table, so
  * this cannot go quietly out of date.
+ *
+ * It is **not** the whole story on its own — see `liveConversationGap` above,
+ * which is why the "everything writes a row" line below is careful to say
+ * *declared*.
  */
 function undeclared(): void {
   const open = DECLARATIONS.filter((d) => !d.metered);
   if (open.length === 0) {
-    console.log("\nEvery known way of spending money in this repo writes a row.");
+    console.log("\nEvery declared way of spending money in this repo writes a row.");
     return;
   }
   console.log(`\nNot counted here — ${open.length} known way(s) of spending that write no row:`);
@@ -321,6 +364,7 @@ async function main(): Promise<void> {
        being recorded at all", and the list of things that are knowably *not*
        is the most useful thing on the page. It was after the return until GPT
        Sol reproduced the output. */
+    liveConversationGap();
     undeclared();
     if (args.reconcile) await reconcile();
     return;
@@ -332,7 +376,7 @@ async function main(): Promise<void> {
      gets set wrong. Storing eval rows and separating them at the report is the
      right way round: a scope can always be excluded from a total, and a row
      that was never written cannot be recovered. GPT Sol, 2026-08-28, on the
-     open question Greg has not answered (ai-cost-tracking.md, question 4). */
+     open question Greg has not answered (260827q-ai-cost-tracking.md, question 4). */
   const product = rows.filter((r) => r.scopeKind !== "eval");
   const evals = rows.filter((r) => r.scopeKind === "eval");
   /* An empty pocket is not printed as `$0.0000 over 0 call(s)`: a zero with a
@@ -377,6 +421,7 @@ async function main(): Promise<void> {
         "\n  A read that falls to zero is the cache silently switching off — docs/project/prompt-caching.md.",
     );
 
+  liveConversationGap();
   undeclared();
 
   if (args.reconcile) await reconcile();

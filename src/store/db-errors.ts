@@ -27,7 +27,7 @@
  *
  * ## The rule
  *
- * From docs/plans/error-boundary.md, which is GPT Sol's:
+ * From docs/plans/260826p-error-boundary.md, which is GPT Sol's:
  *
  * > No arbitrary `Error`, and no arbitrary string, may cross an HTTP, SSE, log,
  * > or persisted-error boundary.
@@ -41,7 +41,7 @@
  *
  * The narrow version — detect `DrizzleQueryError`, translate that, pass the
  * rest through — is the one that keeps needing a fifth round. It is a list, and
- * the whole history in docs/plans/error-boundary.md is of lists that were
+ * the whole history in docs/plans/260826p-error-boundary.md is of lists that were
  * complete when they were written. A store that one day throws
  * `new Error(\`bad row \${JSON.stringify(row)}\`)` is not on anybody's list.
  *
@@ -113,7 +113,7 @@
  * the last two quote query text.
  *
  * See also: docs/project/logging.md, docs/project/copy.md,
- * docs/plans/error-boundary.md.
+ * docs/plans/260826p-error-boundary.md.
  */
 
 import { ChatConflict } from "../chat.js";
@@ -198,13 +198,32 @@ function chainOf(err: unknown, depth = 0): unknown[] {
  * constraint name** — from the top a unique violation looks like nothing at all
  * — so the obvious check compiles, reads correctly, and never matches. Written
  * after `pgJobStore.claim` did exactly that and let `jobs_only_one_running`
- * escape as a 500 where it should have been an ordinary `busy`.
+ * escape as a 500 where it should have been an ordinary `busy`. (That index was
+ * dropped on 2026-08-30; the reading mistake it taught did not go with it.)
  *
- * By **name**, never by code alone: two partial unique indexes on `jobs` both
- * raise 23505 and mean completely different things — one is "something else is
- * running", the other is "this slug is taken". Catching the code would turn the
- * second into the first.
+ * By **name**, never by code alone: `jobs` carries several unique indexes and
+ * they all raise 23505 while meaning completely different things — "this slug
+ * already has a job in flight" is not "this draft is already claimed". Catching
+ * the code would turn each into whichever one the call site expected.
  */
+/**
+ * Did a `FOR UPDATE NOWAIT` find the row already locked?
+ *
+ * `55P03` is `lock_not_available`, and it is **an answer rather than a failure**
+ * — the same reading `violatesConstraint` exists for, one SQLSTATE along. A
+ * claimant that asks for the queue lock and is told somebody else has it should
+ * back off, which is exactly what it does when told `busy`.
+ *
+ * By code and not by name, because unlike 23505 there is only one thing this can
+ * mean at the one place that asks for it: src/store/pg-jobs.ts § `claim` is the
+ * only `NOWAIT` in the repo. Note that `55P03` is already in `TRANSIENT_CODES`
+ * above, which is the same judgement made for retries; this is the caller-facing
+ * half of it.
+ */
+export function lockUnavailable(err: unknown): boolean {
+  return chainOf(err).some((link) => sqlstateOf(link) === "55P03");
+}
+
 export function violatesConstraint(err: unknown, constraint: string): boolean {
   return chainOf(err).some(
     (link) =>
@@ -351,7 +370,7 @@ export function isGuardedStore(store: unknown): string | undefined {
  * Wrapping the object rather than each method is the point. A guard you have to
  * remember to apply is a guard that is missing from the method somebody adds
  * next year, and this migration has a written history of exactly that
- * (docs/plans/simplification-audit.md, Rule 1: *grep the genre, not the list*).
+ * (docs/plans/260826m-simplification-audit.md, Rule 1: *grep the genre, not the list*).
  *
  * The two casts inside are the price of doing it once: the wrapper has to take
  * every method shape in `contracts.ts` at the same time, so it is written

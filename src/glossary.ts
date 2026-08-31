@@ -38,16 +38,17 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
@@ -60,7 +61,6 @@ import type {
   Glossary,
   GlossaryEntry,
   GlossaryKind,
-  Meta,
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
@@ -70,7 +70,7 @@ import { stageCli } from "./cli-ledger.js";
  * Bumped whenever the prompt changes in a way that changes what an entry *is*.
  *
  * `glossary/2`, 2026-08-26: one blended `gloss` became `senseHere` and
- * `background` — see docs/plans/glossary-entries-worth-reading.md. Bumping it
+ * `background` — see docs/plans/260826d-glossary-entries-worth-reading.md. Bumping it
  * is what marks every existing glossary stale, which is not a side effect but
  * the migration: the panel says so at the top and offers "Find them again".
  *
@@ -338,7 +338,7 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * under labels that do not describe them. Certified rather than replaced.
  *
  * So: refuse here, and inherit the identity next door. `idsByTerm` is the half
- * that was missing. See docs/plans/glossary-entries-worth-reading.md
+ * that was missing. See docs/plans/260826d-glossary-entries-worth-reading.md
  * § What review caught.
  *
  * **A glossary written from a different reader profile is refused for the same
@@ -349,7 +349,7 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * stamped with the new hash. A lie about provenance, written by us, into a
  * file. Refusing sends it down the rewrite path instead, where `idsByTerm`
  * keeps the reader's `?term=` links alive across the change. Found by GPT Sol's
- * review of docs/plans/reader-profile.md, 2026-08-26.
+ * review of docs/plans/260826t-reader-profile.md, 2026-08-26.
  *
  * Note this is a stricter test than `profileIsStale`: there, `null` never
  * counts as stale, because a reader who asked for a plain glossary should not
@@ -705,10 +705,16 @@ export function buildGlossary(
  * The pipeline no longer calls this. Its `stamp` (src/pipeline.ts) applies the
  * same rule to the same `sourceHash` independently, which is a second place the
  * comparison lives — worth knowing, because the two agreeing is a convention
- * rather than something enforced.
+ * rather than something enforced. Both now go through `articleFingerprint`
+ * (src/source-hash.ts), so the convention is at least one function wide.
  */
-export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean {
-  return glossary.sourceHash !== hashBlocks(blocks);
+export function isStale(
+  glossary: Glossary,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): boolean {
+  return glossary.sourceHash !== articleFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -757,7 +763,7 @@ export class GlossaryBaselineUnusable extends Error {
  *
  * Until 2026-08-28 this was `readGlossary(opts.dir)` inside `generateGlossary`,
  * whose `catch` returns `null` for everything. Landing D of
- * docs/plans/delete-the-importer.md takes the file away, so that read starts
+ * docs/plans/260827aa-delete-the-importer.md takes the file away, so that read starts
  * failing on every run while reporting *first run for this article*: `taken` is
  * empty, every entry id is re-minted, every `?term=` link goes dead and every
  * stored lookup is orphaned. The comment inside `generateGlossary` has
@@ -1034,7 +1040,7 @@ That is a real answer and a better one than padding.
      it, which moved every byte of the article behind it, so each pass
      invalidated the one before it. Glossary is the stage that calls repeatedly
      over one piece, so it was the stage with the most to gain and the ordering
-     that guaranteed it gained nothing. docs/plans/prompt-caching.md. */
+     that guaranteed it gained nothing. docs/plans/260826g-prompt-caching.md. */
   /* Near the top, where it will be read, and before the shape — the reader is
      context for *choosing* the terms, and the choosing is what the rest of this
      prompt is about. The long rules are in SYSTEM, where the profile cannot
@@ -1063,7 +1069,6 @@ function parseJson(raw: string): { entries?: unknown } {
 
 export interface GlossaryRun {
   glossary: Glossary;
-  outFile: string;
   blocks: number;
   words: number;
   /** How many entries this pass added, after dedup. Zero is a real answer on a later pass. */
@@ -1083,8 +1088,13 @@ export interface GlossaryRun {
 }
 
 /**
- * Stage 5d over a data directory: one model call, then `glossary.json` beside
- * the tree, the arc and the thread.
+ * Stage 5d over one article: one model call, and the glossary handed back.
+ *
+ * **It does not write anything.** The caller stores what it returns — the
+ * pipeline through the artefact store, `main()` below to `glossary.json` beside
+ * the tree, the arc and the thread. A stage that writes its own file works on a
+ * laptop and cannot work through a store that puts the artefact in a Postgres
+ * column. docs/plans/260831b-finish-the-database-move.md § stage 2.
  *
  * **It appends when there is already a current glossary.** That is what makes
  * "Find more terms" a re-run of this step rather than a second mechanism, and
@@ -1098,7 +1108,13 @@ export interface GlossaryRun {
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  */
 export async function generateGlossary(opts: {
-  dir: string;
+  /**
+   * The blocks, the tree and the metadata, read once by whoever has a store or
+   * a directory — src/article-input.ts. This stage no longer knows where an
+   * article comes from, which is what lets the same code run against Postgres
+   * and against a folder.
+   */
+  article: Article;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -1135,8 +1151,8 @@ export async function generateGlossary(opts: {
    * The glossary this article already has, or `null` **only** when it genuinely
    * has none — `previousGlossaryFrom` above is how the pipeline gets it.
    *
-   * **Required, and that is the point of it.** It used to be read here, from
-   * `opts.dir`, through a `readGlossary` whose `catch` returns `null` for
+   * **Required, and that is the point of it.** It used to be read here, off the
+   * directory this stage was given, through a `readGlossary` whose `catch` returns `null` for
    * everything — so the day the pipeline's artefacts leave the filesystem that
    * read fails on every run, every article looks like a first pass, and every
    * entry id in the database is re-minted while the step reports success. An
@@ -1151,26 +1167,24 @@ export async function generateGlossary(opts: {
    */
   previous: Glossary | null;
 }): Promise<GlossaryRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  // Optional, and only ever used to tell the model what it is reading. A
-  // missing meta.json is not worth failing the whole stage over.
-  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
+  /* `meta` stays nullable all the way to the fingerprint. An article with no
+     metadata is a legitimate input — the head of the prompt simply loses its
+     lines — and substituting anything for the `null` here would hash to a
+     different fingerprint from every artefact already stamped.
+     src/article-input.ts. */
+  const { blocks, tree, meta } = opts.article;
 
-  const sourceHash = hashBlocks(blocks);
-  /* **Handed in, not read from `opts.dir`** — see `previous` on the options
+  /* **Blocks, tree and metadata**, not the blocks alone. `renderPrompt` builds
+     the skeleton out of `partsOf(tree)` and `articleText` writes the `TITLE:`,
+     `BY:` and `PUBLISHED IN:` head, so all three are inputs to the question the
+     model was asked. This decides two things and the second is the sharp one:
+     whether the step may skip, and — through `existingFor` below — whether the
+     next run *appends* to this list or starts it again. A fingerprint that
+     missed a re-cut tree would go on appending terms to a glossary written
+     about a differently-shaped article. src/source-hash.ts §
+     `articleFingerprint`, docs/plans/260831b-finish-the-database-move.md § stage 1. */
+  const sourceHash = articleFingerprint(blocks, tree, meta);
+  /* **Handed in, not read off a directory** — see `previous` on the options
      above, and `previousGlossaryFrom` for the four states the caller had to
      tell apart before it could pass one. The name stays `onDisk` because
      everything below reads better for it and because that is what it is on the
@@ -1272,7 +1286,7 @@ export async function generateGlossary(opts: {
            inside the 5-minute TTL — a question about when somebody clicks, not
            something the code can promise. The reliable win here is cross-stage:
            the arc and the thread send these same bytes, and in one ingest the
-           three share an entry. docs/research/prompt-caching-callsites.md. */
+           three share an entry. docs/research/260826c-prompt-caching-callsites.md. */
         system: [
           {
             type: "text" as const,
@@ -1350,12 +1364,8 @@ export async function generateGlossary(opts: {
     inherit,
   });
 
-  const outFile = path.join(opts.dir, "glossary.json");
-  await writeFile(outFile, JSON.stringify(glossary, null, 2), "utf-8");
-
   return {
     glossary,
-    outFile,
     blocks: blocks.length,
     words,
     added: glossary.entries.length - (existing?.entries.length ?? 0),
@@ -1385,7 +1395,9 @@ async function main(): Promise<void> {
   loadEnvLocal();
   console.log(`Finding the terms with ${CAPABLE_MODEL}…`);
   const run = await generateGlossary({
-    dir,
+    /* A folder and no store, so the last filesystem read in this half of the
+       pipeline is here at the command line — src/article-input.ts. */
+    article: await readArticleFromDir(dir),
     /* The CLI has files and no store, so it reads the file — and `readGlossary`
        swallows the difference between "no glossary" and "a glossary I cannot
        read", which is exactly why this is not the pipeline's path any more.
@@ -1396,6 +1408,11 @@ async function main(): Promise<void> {
   });
 
   const { glossary } = run;
+  /* The generator hands its product back and writes nothing, so the command
+     line writes the file it has always written, in the place it has always
+     written it. */
+  const outFile = path.join(dir, "glossary.json");
+  await writeFile(outFile, JSON.stringify(glossary, null, 2), "utf-8");
   console.log(
     `\n${run.blocks} blocks, ${run.words} words → ${glossary.entries.length} terms ` +
       `(${run.added} new, pass ${glossary.passes})`,
@@ -1403,7 +1420,7 @@ async function main(): Promise<void> {
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`Unmatched: ${run.unmatched}`);
-  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
   for (const entry of glossary.entries) {
     // The occurrence count is the interesting number here: a term with no
     // occurrences is the alias instruction not landing, and it is the one thing

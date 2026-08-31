@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { CORPUS } from "../corpus.mjs";
+import { CORPUS, EXTRA_FIXTURES, FIXTURE_UA } from "../corpus.mjs";
 
 /**
  * Fixtures that are committed and hashed here but are **not** part of the
@@ -45,20 +45,13 @@ import { CORPUS } from "../corpus.mjs";
  * by neither list is a failure, so the next person to add a fixture cannot
  * repeat it by forgetting.
  */
-const EXTRA: { name: string; file: string; url: string }[] = [
-  {
-    name: "acx-footnotes",
-    file: "acx_footnotes.html",
-    url: "https://www.astralcodexten.com/p/your-book-review-the-pale-king",
-  },
-];
+const EXTRA = EXTRA_FIXTURES;
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MANIFEST = path.join(HERE, "hashes.json");
-/** Same string the fixtures were captured with, so a server that varies by UA varies the same way. */
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+/** Same string the fixtures were captured with, so a server that varies by UA
+ *  varies the same way. Shared with probe.mts — see FIXTURE_UA in corpus.mts. */
+const UA = FIXTURE_UA;
 
 const sha256 = (b: Buffer | string): string => createHash("sha256").update(b).digest("hex");
 

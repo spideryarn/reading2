@@ -52,10 +52,16 @@
  * loudly — but a *read* would quietly find nothing and report an article that
  * exists as absent.
  *
- * `GET /api/source/:slug` (src/routes.ts) is a real caller in exactly that
- * state and is already known to be one. It should stop being one; until it
- * does, it must fail with a sentence naming the problem rather than answer
- * wrongly.
+ * `GET /api/source/:slug` (src/routes.ts) **was** a real caller in exactly that
+ * state, and stopped being one on 2026-08-31: `sendSource` went through
+ * `sourceStore` (src/store/index.ts), so on a deployment it reads the article's
+ * source document out of Postgres and the `sources` bucket and never asks this
+ * function anything. docs/plans/260831b-finish-the-database-move.md, stage 1.
+ *
+ * The refusal stays, and it is not now decorative. Anything else that reaches a
+ * path outside `runInJob()` on a deployment lands here, and the two answers
+ * available to it are still the two wrong ones — so it must go on failing with
+ * a sentence naming the problem rather than answering wrongly.
  */
 
 import { existsSync } from "node:fs";

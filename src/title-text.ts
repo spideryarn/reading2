@@ -53,7 +53,7 @@
  * arrived. GPT Sol, 2026-08-30.
  *
  * See docs/project/page-titles.md for the rules behind the composition, and
- * docs/plans/public-read-only-access.md § Stage 2 for the server half.
+ * docs/plans/260827ai-public-read-only-access.md § Stage 2 for the server half.
  */
 import { normaliseText } from "./html.js";
 import { DEFAULT_MODE, type Mode } from "./modes.js";
@@ -217,7 +217,7 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
 };
 
 /**
- * **Which of the ten middle-band modes, by the name the Dock uses**, so that
+ * **Which of the twelve middle-band modes, by the name the Dock uses**, so that
  * the tab and the button the reader pressed to get there say the same word.
  *
  * Here rather than in src/web/page-title.ts because the server composes this
@@ -235,6 +235,8 @@ export const MODE_LABEL: Record<Mode, string> = {
   summary: "Summary",
   glossary: "Glossary",
   ideas: "Ideas",
+  quotes: "Quotes",
+  timeline: "Timeline",
   search: "Search",
   diagram: "Diagram",
   chat: "Chat",

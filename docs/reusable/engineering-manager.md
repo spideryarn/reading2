@@ -2,6 +2,17 @@
 
 Not project-specific. How to run a job that is too big for one sitting.
 
+## How far to run
+
+Run the job through to the end. If you need to ask questions — to clarify intent, question a
+tradeoff, propose a simplification — try to ask them upfront, so the rest of the work can proceed
+autonomously without human input until it is finished. After that, stop only for a **product** call:
+you're guessing at what the user wants, it changes user-visible behaviour nobody asked for, it's hard
+to reverse (a schema, a shared contract, a prompt), or somebody has unease that another round of
+review won't settle. Technical forks are yours — settle them with a second opinion, not a question.
+
+Running low on context is not a reason to stop. The plan doc is the memory: update it and keep going.
+
 ## The plan doc
 
 Write the plan down **before the work starts**, in a file, not in your head or the chat. It says what
@@ -42,8 +53,9 @@ arrived, exit code *and* answer file. Mechanics in
 
 The orchestrator should do **little of the implementation**. Hand the main work to Opus subagents,
 and the low-level work — research, repo-wide trawls, Claude-in-Chrome, running tests and reading
-logs — to Sonnet. Those are defaults, not rules; use your judgment about what a given piece of work
-needs.
+logs — to Sonnet. GPT Luna via [codex-cli-as-subagent.md](codex-cli-as-subagent.md) is the cheap tier
+for the same low-level and token-heavy work, and it's a different model family, so the variety is
+free. Those are defaults, not rules; use your judgment about what a given piece of work needs.
 
 Keep for yourself: the plan, the stage boundaries, the briefs, reading the diffs, deciding what the
 reviews were right about, and the commits.
@@ -51,6 +63,37 @@ reviews were right about, and the commits.
 A subagent starts with nothing but your prompt. Name the files, say what the stage excludes as well
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
+
+Subagents all reading the same code can agree confidently without anyone having touched real
+evidence. Send one to run the thing, read the logs, or reproduce it.
+
+**When a subagent fails, re-dispatch it.** An empty, stale or wrong report means running it again, or
+handing it to a different model — not doing its work yourself. Several failures in a row is the
+environment being broken; stop and ask rather than taking the whole job back.
+
+## What the work turns up
+
+A cleanup the change exposed, a bug you tripped over, an abstraction in the way, two paths that
+should be one — **default to doing them now**, folded into a stage or added as one. The machinery is
+already open, and rediscovering it later costs more. Dropping something non-trivial wants a reason
+from someone other than you — a reviewer who says it isn't worth it.
+
+The test is whether it leaves the codebase long-term-best — straightforward, and easy to change
+later — which is usually *fewer* moving parts, not more. Anything that adds machinery is a proposal
+for the plan rather than something to slip in, and the licence is for the engineering, not the
+product: features still take the simplest version first.
+
+## Bug-mode
+
+Diagnose before you plan. Send two or three subagents at it with different angles, working from
+evidence — a reproduction, the logs, the on-disk state — and not only from reading the code; agents
+reasoning from the same source reach the same wrong answer confidently.
+
+At the end, a postmortem in `docs/postmortems/`: the real cause, the commit that introduced it, the
+fix that's right for the long term, and what would have caught the whole class. **Then do what it
+says, in this run.** The prevention it recommends becomes a stage — rearchitecting so the class
+can't recur is the point of writing it down. Filed at the finish line is filed and never done, and
+the machinery is still open now.
 
 ## Along the way
 

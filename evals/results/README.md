@@ -10,7 +10,7 @@ hand to say what they *are*, because they are the baseline the label split is ju
 
 ## The label split (`toc-labels.ts`), 2026-08-26
 
-See [docs/plans/toc-scaling.md](../../docs/plans/toc-scaling.md).
+See [docs/plans/260826h-toc-scaling.md](../../docs/plans/260826h-toc-scaling.md).
 
 | File | What it is |
 |---|---|

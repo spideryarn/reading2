@@ -36,7 +36,13 @@ import path from "node:path";
 import { globSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const DOC_FILES = ["AGENTS.md", ...globSync("docs/**/*.md")];
+// infra/hetzner/README.md is named explicitly rather than picked up by a glob,
+// because it is the only markdown outside docs/ that is a runbook someone
+// follows literally — and it was outside this gate until 2026-08-31, which is
+// exactly how it came to carry a link to a `#mcp-servers` heading that did not
+// exist. A dead anchor there costs more than one in docs/: it is read while
+// building a machine, by someone who cannot yet ask the repo anything.
+const DOC_FILES = ["AGENTS.md", "infra/hetzner/README.md", ...globSync("docs/**/*.md")];
 
 /** Everything that carries prose about the docs in a comment. */
 const SOURCE_FILES = [

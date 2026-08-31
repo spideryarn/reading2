@@ -7,7 +7,7 @@
  * article's extracted title and the model's root gist. Both are untrusted:
  * [security-map.md](../docs/project/security-map.md) counts the content and the
  * model's output as two of the four untrusted parties, and this is a new sink
- * for both. docs/plans/public-read-only-access.md § Stage 2.
+ * for both. docs/plans/260827ai-public-read-only-access.md § Stage 2.
  *
  * ## Why these assertions parse rather than compare
  *

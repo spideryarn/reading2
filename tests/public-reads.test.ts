@@ -81,9 +81,17 @@ describe("the public revision read", () => {
     expect(article).toContain('"articles"."slug"');
   });
 
-  /** The masthead's forbidden fields, absent from the statement rather than the map. */
-  it("never asks for the final URL, the fetch time or the extraction note", () => {
-    expect(article).not.toContain("final_url");
+  /**
+   * The masthead's forbidden fields, absent from the statement rather than the map.
+   *
+   * **`final_url` left this list on 2026-08-30** and is asserted *present* in the
+   * test below, because Greg decided a public article should show where it came
+   * from. The column is selected; what a stranger receives is `publicSourceUrl`'s
+   * answer, not the column — and `tests/public-dto.test.ts` § the source URL is
+   * where that is held, because it is a fact about the value and this file only
+   * ever reads SQL.
+   */
+  it("never asks for the fetch time or the extraction note", () => {
     expect(article).not.toContain("fetched_at");
     expect(article).not.toContain('"note"');
   });
@@ -124,8 +132,8 @@ describe("the public revision read", () => {
    * finding 3 on slice 1a, one slice later, and it is why this assertion is on
    * the same `articleQuery` object the predicate case above reads.
    */
-  it("asks for the four artefacts on the row it already filtered", () => {
-    for (const column of ["glossary", "summary", "ideas", "tweets"]) {
+  it("asks for the artefacts on the row it already filtered", () => {
+    for (const column of ["glossary", "ideas", "quotes", "tweets"]) {
       expect(article, column).toContain(`"${column}"`);
     }
     /* **And the image manifest, on this same statement.** It is the half of
@@ -137,7 +145,7 @@ describe("the public revision read", () => {
        downstream throws; the pictures just carry on coming from Noema's CDN.
        Dropping `assets` from `PUBLIC_PROJECTIONS` is a typecheck error, and
        this is the assertion that says the *query* carries it.
-       docs/plans/hosting-the-articles-images.md#delivery. */
+       docs/plans/260829b-hosting-the-articles-images.md#delivery. */
     expect(article, "assets").toContain('"assets"');
     /* The predicate, restated against this same statement rather than trusted
        from the case above — the two facts are only worth anything together. */
@@ -148,10 +156,10 @@ describe("the public revision read", () => {
   /**
    * The metadata read asks whether an artefact exists, in SQL — not by dragging
    * the JSONB document across the wire to compare it with null. That mistake
-   * was two days of docs/plans/library-read-latency.md on the owner's shelf.
+   * was two days of docs/plans/260828c-library-read-latency.md on the owner's shelf.
    */
-  it("asks the metadata question as five is-not-nulls rather than five documents", () => {
-    for (const column of ["tree", "arc", "tweets", "glossary", "summary", "ideas"]) {
+  it("asks the metadata question as is-not-nulls rather than documents", () => {
+    for (const column of ["tree", "arc", "tweets", "glossary", "ideas"]) {
       expect(metadata, column).toMatch(new RegExp(`"${column}" is not null`));
     }
     /* And the documents themselves are not selected — the `is not null` above is
@@ -167,7 +175,7 @@ describe("the public revision read", () => {
  * bundle loads, so a shared link previews as something. Everything above about
  * the article read applies to it — it is in the visibility loop and the
  * `owner_id` assertion — and these are the things that are true of it alone.
- * docs/plans/public-read-only-access.md § Stage 2.
+ * docs/plans/260827ai-public-read-only-access.md § Stage 2.
  */
 describe("the public head read", () => {
   /**
@@ -209,20 +217,26 @@ describe("the public head read", () => {
   });
 
   /**
-   * **`final_url` is here and is forbidden in the article read**, three tests
-   * above. That is not a contradiction and the difference is worth stating
-   * where somebody will hit it.
+   * **Both reads ask for `final_url` now, and publish it under different
+   * policies.** Until 2026-08-30 the article read was forbidden it, and the
+   * paragraph here explained why that was not a contradiction. Greg's decision —
+   * *"Public-readable articles should show their provenance-url to all
+   * reader[s]"* — removed the asymmetry in the SQL and left it in the policy,
+   * which is where it was always the more useful half.
    *
-   * There it is the masthead's provenance and a visitor has no business with
-   * it. Here it never reaches a browser as data: it is the *candidate*
-   * canonical, and `safePublicCanonical` decides whether any tag is published —
-   * refusing outright on a query string, a credential, or a non-web scheme.
-   * The column crossing into a server-side head is a different act from the
-   * column crossing into a payload.
+   * A head's copy is the *candidate* canonical and `safePublicCanonical` refuses
+   * any query string, because a canonical naming the wrong page is believed. An
+   * article's copy is a link a person clicks, and `publicSourceUrl` keeps the
+   * query, because on many sites the query is the article. Both refuse a
+   * credential.
+   *
+   * So this file can no longer tell the two apart — the statements agree — and
+   * the distinction is asserted where the values are, in
+   * `tests/public-dto.test.ts` § the source URL.
    */
-  it("asks for the final URL, which the article read must not", () => {
+  it("asks for the final URL in both reads", () => {
     expect(headSql).toContain("final_url");
-    expect(article).not.toContain("final_url");
+    expect(article).toContain("final_url");
   });
 
   /**

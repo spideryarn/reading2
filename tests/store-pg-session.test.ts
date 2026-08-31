@@ -4,7 +4,7 @@
  *
  * `tests/store-session.test.ts` is the filesystem half of the seam, where there
  * is no transaction to hold and the file says so out loud. This is the Postgres
- * half — `src/store/pg-session.ts`, D1b of docs/plans/delete-the-importer.md —
+ * half — `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md —
  * and everything here is a claim that could not be made on the filesystem.
  *
  * ## The eight, and what each is for
@@ -45,7 +45,7 @@
  *    attempt).
  *
  * Five more arrived on 2026-08-30 with GPT Sol's review of the built code
- * (docs/plans/delete-the-importer-d1b-sol.md):
+ * (docs/plans/260827aa-delete-the-importer-d1b-sol.md):
  *
  * 9. Case 5 again, **through `advanceJobWith`** rather than through the session:
  *    a settlement nobody reads correctly is a settlement that does nothing, and
@@ -68,7 +68,7 @@
  * prove something else. Production is hardwired to `fsStoreSession` and stays
  * that way until D2, so `advanceJobWith` takes the session factory and the step
  * registry as arguments and production supplies today's defaults. GPT Sol,
- * 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md finding 4.
+ * 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
  *
  * ## `SPIDERYARN_STORE=postgres`, set before any import runs
  *
@@ -83,17 +83,20 @@
  *
  * ## Why it takes tests/store-jobs-parity.test.ts's advisory lock
  *
- * Two global resources, neither scoped to an owner. `jobs_only_one_running` is
- * a unique index on `(true)`, so one `running` row at a time in the whole table;
- * and `advanceJob` calls `failExpired`, which sweeps **every** expired job and
- * returns a count that parity suite asserts exactly — and since 2026-08-30 a
- * case here calls `failExpired` itself, which is the same collision from the
- * other side. A lock only excludes the
+ * A global resource, scoped to no owner: `advanceJob` calls `failExpired`,
+ * which sweeps **every** expired job and returns a count the parity suite
+ * asserts exactly — and since 2026-08-30 a case here calls `failExpired` itself,
+ * which is the same collision from the other side. A lock only excludes the
  * holders that agree to take it, so this file takes the same key rather than a
  * key of its own — the point is to exclude *that file*, which is the only other
- * thing in the repo that sweeps and counts. Contention from anything else (a
- * fixture loader, a real ingest on the same laptop) is handled by waiting on
- * the constraint itself, in `insertWhenSlotFree` and `claimWhenSlotFree`.
+ * thing in the repo that sweeps and counts.
+ *
+ * There was a second global resource until 2026-08-30: `jobs_only_one_running`,
+ * a unique index on `(true)`, one `running` row at a time in the whole table.
+ * It is gone, and the cap is a count now. What is left is per-article — this
+ * file's fixed slugs — plus the cap being full. Contention from anything that
+ * never takes the lock (a fixture loader, a real ingest on the same laptop) is
+ * still handled by waiting, in `insertWhenSlotFree` and `claimWhenSlotFree`.
  *
  * ## The mutation that reddened each, watched on 2026-08-30
  *
@@ -218,7 +221,12 @@ import { STORAGE_FAILED } from "../src/messages.js";
 import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
 import { runAsOwner } from "../src/owner.js";
 import { STEPS, contextPaths } from "../src/pipeline.js";
-import type { PipelineStep, StepContext, StepProduct } from "../src/pipeline.js";
+import type {
+  ConvertedProduct,
+  PipelineStep,
+  StepContext,
+  StepProduct,
+} from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactOutcome, ArtifactReads } from "../src/store/artifacts.js";
@@ -319,8 +327,9 @@ if (reachable) {
   const lockClient = runLock.client;
 
   /* The lock is held, so no sibling can be using any of this. Jobs first: they
-     reference drafts, and a leftover `running` row from a killed run takes the
-     one running slot away from every suite in the repo. */
+     reference drafts, and a leftover `running` row from a killed run blocks
+     this file's own slugs and counts against the concurrency cap until its
+     lease lapses. */
   await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
   await lockClient.query(
@@ -549,13 +558,30 @@ interface StepLog {
  * A **converted** `arc`: it writes nothing itself and returns the artefact.
  *
  * A real step name, because `StepRegistry` is keyed by `StepName` and the
- * coordinator looks the step up by the name on the job. `arc` is the one D3
- * converts first, which makes it the honest stand-in — and it declares exactly
- * one artefact, so a product missing that one artefact is a product missing
- * everything, which is what test 2 wants to say.
+ * coordinator looks the step up by the name on the job. `arc` was the first
+ * stage converted for real (2026-08-31), which makes it the honest stand-in —
+ * and it declares exactly one artefact, so a product missing that one artefact
+ * is a product missing everything, which is what test 2 wants to say.
  *
  * No `stamp` and no `isDone`, so `stepIsDone` reduces to *is the artefact there
  * and is the step not interrupted* — the two questions tests 6 and 8 are about.
+ *
+ * ## The cast, and why it is not a fixture inventing an impossible state
+ *
+ * Most callers below hand back `{ detail: "" }` with no `parts`, because what
+ * they are testing is that the coordinator **refuses** exactly that. Since
+ * `arc` came off `LEGACY_UNCONVERTED_STEPS` the type system forbids it:
+ * `PipelineStep<"arc">["run"]` returns `ConvertedProduct`, where `parts` is
+ * required. That is the compile-time half of the same rule and it is working.
+ *
+ * The runtime half still has to be tested, and it is not redundant. The
+ * transactional session asks `checkProduct` with an **empty** unconverted set,
+ * so it refuses a product with no `parts` for *every* step — including the four
+ * still on the legacy list, whose types permit `{ detail }` today. A type is
+ * also only a claim about this repository's own callers. So the fixture reaches
+ * past the compiler on purpose, in one place, with the reason written down —
+ * rather than each call site casting, or the whole test being rewritten around
+ * a still-legacy step and quietly ceasing to say anything about a converted one.
  */
 function fakeArc(
   produce: (ctx: StepContext, store: ArtifactReads) => Promise<StepProduct>,
@@ -571,7 +597,7 @@ function fakeArc(
         log.calls += 1;
         log.sawArc = await store.read(ctx.slug, "arc", "arc");
       }
-      return await produce(ctx, store);
+      return (await produce(ctx, store)) as ConvertedProduct;
     },
   };
 }
@@ -668,17 +694,21 @@ async function queueJob(slug: string, names: StepName[], force = false): Promise
 }
 
 /**
- * Claim it, waiting out anybody else holding the single running slot.
+ * Claim it, waiting out anybody else who got there first.
  *
- * `claim` answers `busy` rather than throwing when `jobs_only_one_running`
- * refuses, so this is the `insertWhenSlotFree` of the claim path: the same
- * contention, reported differently. A `busy` that never clears is named in the
+ * `claim` answers `busy` rather than throwing when it is refused — this article
+ * already has a job in flight, or the counted concurrency cap is full — so this
+ * is the `insertWhenSlotFree` of the claim path: the same contention, reported
+ * differently. Before 2026-08-30 the refusal that mattered was
+ * `jobs_only_one_running`, one running job anywhere; the wait outlived it
+ * because `busy` did. A `busy` that never clears is named in the
  * failure rather than left as a bare assertion, because the two readings —
  * somebody else is working, versus a row is wedged — want different repairs.
  */
 async function claimWhenSlotFree(id: string, attempt: string): Promise<Job> {
   for (let n = 1; n <= 40; n++) {
-    const outcome = await pgJobStore.claim(id, OWNER, attempt, LEASE_MS);
+    /* A cap high enough to be beside the point: this case is not about it. */
+    const outcome = await pgJobStore.claim(id, OWNER, attempt, LEASE_MS, 4);
     if (outcome.kind === "claimed") return outcome.job;
     if (outcome.kind !== "busy") {
       throw new Error(`claiming ${id} answered ${outcome.kind}, which this fixture cannot use`);
@@ -686,18 +716,19 @@ async function claimWhenSlotFree(id: string, attempt: string): Promise<Job> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(
-    `could not claim ${id} in 20s: something else holds the single running slot. If nothing ` +
-      "is actually working, a `running` row is wedged and waiting will not clear it.",
+    `could not claim ${id} in 20s: something else is already running on this article, or ` +
+      "the concurrency cap is full. If nothing is actually working, a `running` row is wedged " +
+      "and waiting will not clear it.",
   );
 }
 
 /**
- * `advanceJobWith`, waiting out anybody else holding the single running slot.
+ * `advanceJobWith`, waiting out anybody else who got there first.
  *
- * The coordinator's own answer to a taken slot is `busy: true` with the job
+ * The coordinator's own answer to a refused claim is `busy: true` with the job
  * still `queued` — the same contention `claimWhenSlotFree` waits on, arriving
  * through the endpoint rather than through the store. Watched happening on
- * 2026-08-30 while a peer's suite held the slot: three cases here failed
+ * 2026-08-30 while a peer's suite was running: three cases here failed
  * asserting `ran` was null, which says nothing about the session at all.
  *
  * **`busy` with the job no longer queued is not contention** and is returned
@@ -712,8 +743,9 @@ async function advanceWhenSlotFree(id: string, parts: AdvanceParts) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(
-    `advancing ${id} answered busy for 20s: something else holds the single running slot. ` +
-      "If nothing is actually working, a `running` row is wedged and waiting will not clear it.",
+    `advancing ${id} answered busy for 20s: something else is already running on this ` +
+      "article, or the concurrency cap is full. If nothing is actually working, a `running` " +
+      "row is wedged and waiting will not clear it.",
   );
 }
 
@@ -847,13 +879,14 @@ when("the transactional session", () => {
      shared fixture would make the order of the file part of the test. */
 
   /**
-   * **Give the running slot back after every case**, including the ones that
+   * **Take the job away after every case**, including the ones that
    * deliberately leave a job mid-claim.
    *
-   * `jobs_only_one_running` is global, so a case that ends with its job still
+   * These cases share fixture slugs, so a case that ends with its job still
    * `running` does not merely leak a row — it stops the *next* case claiming at
    * all, and the symptom is a twenty-second wait ending in a timeout somewhere
-   * unrelated. Deleting rather than finishing, for the reason
+   * unrelated. It was worse when `jobs_only_one_running` was there: one leak
+   * blocked every job suite in the repo, not just this file. Deleting rather than finishing, for the reason
    * tests/helpers/load-article.ts gives: marking a job done would write
    * synthetic history that reads as a real ingest, while a deleted row says the
    * true thing — this job never existed.
@@ -1159,7 +1192,7 @@ when("the transactional session", () => {
          (src/store/pg-jobs.ts), so this is what proves its rejection still comes
          out through the session's guard with the query text and the bound
          parameters taken off it. GPT Sol, 2026-08-30,
-         docs/plans/delete-the-importer-d1b-sol.md finding 3. */
+         docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 3. */
     ).rejects.toMatchObject({
       name: "StoreFailure",
       message: STORAGE_FAILED.message,
@@ -1257,7 +1290,7 @@ when("the transactional session", () => {
    * The case this is about is the one where the flag arrives from *another
    * instance* — the step finishes normally and the release is where the cancel
    * lands. GPT Sol, 2026-08-30,
-   * docs/plans/delete-the-importer-d1b-sol.md finding 5.
+   * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 5.
    */
   mine("answers done when a Stop lands while the coordinator is inside a step", async () => {
     const slug = `${SLUG_PREFIX}coordinator-stop`;
@@ -1338,7 +1371,7 @@ when("the transactional session", () => {
    * this passing at all: `finishStepRun` takes `requireLiveJobOwnsDraft`, which
    * wants the job still `running` and still pointing at this draft — so marking
    * the step after `failRevisionIn` or after `finishIn` would be refused.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 2.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 2.
    */
   mine("marks the step run error when the stage fails, rather than leaving it running", async () => {
     const slug = `${SLUG_PREFIX}step-error`;
@@ -1621,7 +1654,7 @@ when("the transactional session", () => {
    * The assertion is that the reader ends up looking at **request one's arc**.
    * Discarding instead would report the job done having thrown that work away —
    * a silent success, in the path built to prevent them. GPT Sol, 2026-08-30,
-   * docs/plans/delete-the-importer-d1b-sol.md finding 5.
+   * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 5.
    */
   mine("publishes the work an earlier request released, when every step skips", async () => {
     const slug = `${SLUG_PREFIX}skipped`;
@@ -1744,7 +1777,7 @@ when("the transactional session", () => {
    * **It starts from a real pointer, and that is not decoration.** A job with no
    * draft satisfies "the pointer is null" before the sweep as well as after it,
    * so the same assertion over the same code would pass with the fix deleted.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 1.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1.
    */
   mine("clears the draft pointer when a lapsed claim is swept", async () => {
     const slug = `${SLUG_PREFIX}expired`;
@@ -1846,7 +1879,7 @@ when("the transactional session", () => {
    * literal would be refused by excess-property checking whatever the parameter
    * type were, so the transition is a named `JobTransition` const: the sneaky
    * form, and the only one that tests the narrowing rather than the literal.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 4.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 4.
    */
   it("takes only endings through settleJob", () => {
     const release: JobTransition = {

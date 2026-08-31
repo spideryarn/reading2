@@ -13,7 +13,7 @@
  * carrying the redundant parameter, so the next rename does not inherit the same
  * problem.
  *
- * docs/plans/defer-arc-and-rename-hierarchy.md § 3.2.
+ * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.2.
  */
 import { describe, expect, it } from "vitest";
 import { withMode } from "../src/web/Dock.js";

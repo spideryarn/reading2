@@ -19,7 +19,7 @@
  * with real pointer events, and it has been seen to *fail* — against the
  * tooltip version, where `document.elementFromPoint` at the link's centre
  * returns the page behind it while a control link on the same page returns
- * itself. docs/plans/profile-panel.md § Tests.
+ * itself. docs/plans/260830c-profile-panel.md § Tests.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

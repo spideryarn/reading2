@@ -217,7 +217,7 @@ const rawPgUploadStore: UploadStore = {
     /* The staging object is deliberately left alone. Deleting one **re-arms**
        any grant still live over its key — measured against the running stack —
        so a tidy-up inside the two-hour TTL races the browser it is cleaning up
-       after. docs/plans/pdf-upload-and-storage.md. */
+       after. docs/plans/260826u-pdf-upload-and-storage.md. */
     await db.delete(uploads).where(eq(uploads.id, id));
   },
 };

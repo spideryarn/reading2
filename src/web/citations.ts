@@ -1,6 +1,6 @@
 /**
  * Finding the block ids in a model's answer — the pure half of the citation
- * contract. See docs/plans/chat-mode.md § The citation contract, and
+ * contract. See docs/plans/260826a-chat-mode.md § The citation contract, and
  * ChatPanel.tsx for the half that draws them.
  *
  * A module of its own, DOM-free and testable, for the same reason layout.ts,

@@ -25,8 +25,9 @@ Code: [`src/web/Cited.tsx`](../../src/web/Cited.tsx) (the parse and the whole dr
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `Answer`,
 [`src/web/styles.css`](../../src/web/styles.css) § the shapes a model writes.
 Tests: [`tests/chat-markdown-render.test.tsx`](../../tests/chat-markdown-render.test.tsx).
-Sits on top of [chat-mode.md](chat-mode.md) (the citation contract) and
-[chat-web-links.md](chat-web-links.md) (the link rules), and interprets neither differently.
+Sits on top of [260826a-chat-mode.md](260826a-chat-mode.md) (the citation contract) and
+[260827ao-chat-web-links.md](260827ao-chat-web-links.md) (the link rules), and interprets neither
+differently.
 
 ## The parser we wrote, and why it lasted a day
 

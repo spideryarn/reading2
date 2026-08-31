@@ -7,7 +7,7 @@
  * all of it is testable without any of those, and all of it is shared between
  * the pipeline and the browser rather than written twice.
  *
- * Step 2 of docs/plans/hosting-the-articles-images.md. The plan has the
+ * Step 2 of docs/plans/260829b-hosting-the-articles-images.md. The plan has the
  * reasoning; three things are worth knowing before editing anything here.
  *
  * ## 1. Both sides must read a URL the same way, so both sides use a DOM

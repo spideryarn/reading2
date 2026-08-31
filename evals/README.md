@@ -14,7 +14,7 @@ somebody's memory of last week.
 
 The odd one out on this page: **no script and no numbers yet**, just three source PDFs committed
 with their licences and one committed result. It is here because the fixtures already did their job
-— the first-hour bake-off for [PDF ingestion](../docs/plans/pdf-ingestion.md) ran on them, and
+— the first-hour bake-off for [PDF ingestion](../docs/plans/260826c-pdf-ingestion.md) ran on them, and
 [`pdf/baselines/bakeoff-2026-08-26.json`](pdf/baselines/bakeoff-2026-08-26.json) is the number the
 next change gets compared against.
 
@@ -92,7 +92,7 @@ in the repo rather than left to be re-derived.
 
 ## `toc-labels.ts` — are batched nav labels as good as whole-pass ones?
 
-Written for [toc-scaling.md](../docs/plans/toc-scaling.md), which splits stage 4 into one
+Written for [260826h-toc-scaling.md](../docs/plans/260826h-toc-scaling.md), which splits stage 4 into one
 whole-document structure call plus parallel label batches. The worry that split has to answer is
 coherence: labels written in separate calls, each blind to the others, might not read as a series.
 
@@ -178,7 +178,7 @@ So the numbers are printed and nothing is concluded from them. A directional cla
 a blinded comparison across several texts and several runs with its uncertainty stated, which this
 harness does not do. Until then the coherence claim rests on the mechanism — labelling synthesises
 nothing across chunks, and sibling batching keeps every compared pair inside one call — and
-[toc-scaling.md](../docs/plans/toc-scaling.md) says so too.
+[260826h-toc-scaling.md](../docs/plans/260826h-toc-scaling.md) says so too.
 
 ### What it cannot do
 
@@ -188,7 +188,7 @@ distinctive terms survived. `--shuffle` prints those sets ready to hand to someo
 
 ## `toc-structure/` — is the structure pass worth what it costs?
 
-Written for [opening-an-article-before-the-toc.md](../docs/research/opening-an-article-before-the-toc.md).
+Written for [260830a-opening-an-article-before-the-toc.md](../docs/research/260830a-opening-an-article-before-the-toc.md).
 `toc-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
 in [src/toc.ts](../src/toc.ts) that proposes the nested structure, which is 163–320 seconds and
 88% of the ingest wait now that the labels run concurrently and the arc is deferred. The decisions queued against it (progressive waves, seeding the
@@ -464,7 +464,7 @@ matters: the point of writing these out is to compare a run against the one befo
 that collided on the same day would overwrite the "before" you re-ran in order to have.
 
 They are the record, not a formality — the numbers quoted in
-[toc-scaling.md](../docs/plans/toc-scaling.md) come from these files, and a later change should be
+[260826h-toc-scaling.md](../docs/plans/260826h-toc-scaling.md) come from these files, and a later change should be
 argued against them rather than against a paragraph of prose.
 [`results/README.md`](results/README.md) says which is which, and which one is no longer obtainable.
 

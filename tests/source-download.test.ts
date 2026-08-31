@@ -5,9 +5,17 @@
  * uploaded PDF, or the one we fetched. It read that document off the local
  * filesystem until 2026-08-31, which meant the feature worked on a laptop and
  * 404d on every production request, because Vercel has no such disk. It goes
- * through the store now (`ArticleReader.loadSource`), and the Postgres half of
- * that reuses `readRawDocument` in src/store/raw-document.ts rather than reading the
- * same four columns a second way.
+ * through the store now — `SourceStore.readPdf`, since two sessions fixed the
+ * same bug on 2026-08-31 and that narrower seam is the one the route took
+ * (docs/plans/260831b-finish-the-database-move.md § stage 1b).
+ *
+ * **`readRawDocument` is still the reading of these four columns**, and that is
+ * why it is still tested here. `db:export` calls it, `ArticleReader.loadSource`
+ * calls it, and every decision below — which era a row is in, whether a dangling
+ * reference is an error, whether the bucket handed back the right bytes — is
+ * made here once. `pgSourceStore` makes the same decisions the same way for the
+ * route; tests/source-store.test.ts is where that is pinned against a real
+ * database, and the two must not drift.
  *
  * ## Why the interesting tests are here and not on the route
  *

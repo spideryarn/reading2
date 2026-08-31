@@ -13,7 +13,7 @@
  * 2026-08-28, choosing between saying nothing and this: *a one-time dismissible
  * hint on mobile.*
  *
- * docs/plans/mobile-screen-real-estate.md § 1.
+ * docs/plans/260828av-mobile-screen-real-estate.md § 1.
  *
  * ## Why the conditions live here rather than in the component
  *

@@ -13,7 +13,7 @@
  * **The rejected answer was a stripped-down importer.** It would be a second
  * implementation of files → Postgres, free to drift from the production write
  * path — and `db:import` is being deleted precisely because it is that
- * (docs/plans/delete-the-importer.md).
+ * (docs/plans/260827aa-delete-the-importer.md).
  *
  * ## It was a test helper until 2026-08-30
  *
@@ -96,7 +96,7 @@ export async function copyArtefacts(
        step's run row is exactly what `articleMetadata` trusts. `has` requires
        all-of-them for the same reason; a partial source is a broken article,
        and a loud refusal beats a copy that looks like it worked.
-       GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 5. */
+       GPT Sol, 2026-08-27; docs/plans/260827au-c1-c2-code-review-sol.md finding 5. */
     const wanted = STEPS[step].produces;
     if (Object.keys(parts).length !== wanted.length) {
       const missing = wanted.filter((kind) => !(kind in parts));
@@ -118,7 +118,7 @@ export async function copyArtefacts(
        it would fail for a reason that has nothing to do with the copy.
 
        GPT Sol found this against the first version of this file, which called
-       `write` only; docs/plans/delete-the-importer-review-2-sol.md finding 2.
+       `write` only; docs/plans/260827aa-delete-the-importer-review-2-sol.md finding 2.
        Running the same three calls in the same order as the runner is also the
        point of the helper — a copy that takes a shortcut through the seam is a
        copy that stops proving the seam works. */

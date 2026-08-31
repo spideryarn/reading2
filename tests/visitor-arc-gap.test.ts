@@ -25,7 +25,7 @@
  * If a later change gives visitors an arc, these tests should fail and be
  * deleted deliberately. That is the point of them.
  *
- * docs/plans/defer-arc-and-rename-hierarchy.md § 2.2.
+ * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -40,8 +40,8 @@ const NOTHING_BUILT: PublicArtefacts = {
   arc: false,
   tweets: false,
   glossary: false,
-  summary: false,
   ideas: false,
+  quotes: false,
 };
 
 describe("adding an article no longer writes an arc", () => {

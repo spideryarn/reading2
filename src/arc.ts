@@ -27,24 +27,24 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
+import type { Arc, ArcEntry, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
 import { withLedger } from "./cli-ledger.js";
-import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 
 /**
  * Exported since 2026-08-29 so that the pipeline's `stamp` can compare against it
@@ -226,42 +226,31 @@ export function buildArc(
  * `buildArcColumn` is by exact block range, and an entry matching no node is simply
  * not drawn.
  *
- * **Blocks and tree, for the reason `ideas` gives** (src/ideas.ts §
- * `inputFingerprint`): section boundaries move without a single block changing, and
- * this stage writes one sentence per *part*, so a re-cut article is a different
- * question against an input a blocks-only hash calls unchanged. `structureHash`
- * covers titles and gists too, which matters here because `renderParts` builds the
- * prompt out of them — a reworded gist is a different question at identical ranges.
+ * **Blocks, tree and metadata — and the definition now lives in
+ * src/source-hash.ts.** This was the first stage to get all three right, and on
+ * 2026-08-31 the other five article-reading stages were completed against it, so
+ * the body moved to `articleFingerprint` where all six can share one definition
+ * rather than six that are free to drift. The canonical string is unchanged, so
+ * every `arc.json` already on a shelf keeps its fingerprint. Why each third is
+ * there — and the one head line it knowingly does not cover — is written up
+ * there; this name stays because it is what the arc's own callers ask for.
  *
- * **And the metadata, which is this stage's own addition.** `generateArc` reads
- * `meta.json` and hands it to `articleText`, which puts `TITLE:`, `BY:` and
- * `PUBLISHED IN:` at the head of the prompt (src/article-prompt.ts). Only those
- * three: folding in `fetchedAt` would mark every arc stale on every re-fetch of an
- * unchanged page, a paid re-run bought for nothing. A *missing* `meta.json` is a
- * distinct input rather than an error, because `generateArc` tolerates one.
+ * A *missing* `meta.json` is a distinct input rather than an error, because
+ * `generateArc` tolerates one.
  *
- * GPT Sol raised the metadata half on 2026-08-29, having noticed that the reading
- * view renames articles in place (`useArticleRename`), so a title change is
- * reachable rather than theoretical.
- * docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+ * GPT Sol raised the metadata half on 2026-08-29. **The reason given at the time
+ * was wrong** and is corrected here: it cited the reading view's rename, which is
+ * a shelf override (`shelf.json`, `articles.title_override`) that no generator
+ * reads. What really moves this head is a re-extraction — the title, byline and
+ * site are stage 2's, and they change when the page does.
+ * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
   tree: Tree,
-  meta: Meta | null,
+  meta: MetaFingerprint | null,
 ): string {
-  /* JSON, not a delimiter join, and for the reason src/source-hash.ts sets out at
-     length: title, byline and siteName are the page's own text, so any unescaped
-     separator is a collision waiting for the page that contains it. `null` for an
-     absent meta is a different canonical string from a meta whose fields are all
-     empty, which is correct — they are different states. */
-  const head = meta
-    ? JSON.stringify([meta.title ?? "", meta.byline ?? "", meta.siteName ?? ""])
-    : "none";
-  return `${hashBlocks(blocks)}.${structureHash(tree)}.${createHash("sha256")
-    .update(`spya-arc-meta/1\n${head}`, "utf8")
-    .digest("hex")
-    .slice(0, 16)}`;
+  return articleFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -280,7 +269,7 @@ export function isStale(
   arc: Arc,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
-  meta: Meta | null,
+  meta: MetaFingerprint | null,
 ): boolean {
   if (!arc.sourceHash) return true;
   if (arc.version !== PROMPT_VERSION) return true;
@@ -302,7 +291,6 @@ function parseJson(raw: string): { arc: string[] } {
 
 export interface ArcRun {
   arc: Arc;
-  outFile: string;
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what an arc cost. */
   model: string;
   parts: TreeNode[];
@@ -319,14 +307,24 @@ export interface ArcRun {
 }
 
 /**
- * Stage 5b over a data directory: one model call, then `arc.json` beside the
- * tree it was written against.
+ * Stage 5b over one article: a single model call, and the arc it returns.
+ *
+ * **It writes nothing.** It used to drop `arc.json` next to the tree it was
+ * written against, which works on a laptop and cannot work through a store that
+ * puts the artefact in a Postgres column — so the caller writes now:
+ * src/pipeline.ts through the store, `main()` below to the directory it was
+ * given. docs/plans/260831b-finish-the-database-move.md § Stage 2.
+ *
+ * It no longer reads anything either. The three artefacts it is written from
+ * arrive together as one `Article` (src/article-input.ts), so the bytes it
+ * generates from are the same bytes its `stamp` fingerprinted — on a laptop
+ * those were the same file, and through a job-scoped `/tmp` they were not.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  */
 export async function generateArc(opts: {
-  dir: string;
+  article: Article;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -347,26 +345,13 @@ export async function generateArc(opts: {
   cacheArticle?: boolean;
 
 }): Promise<ArcRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  /* Loaded only so the cached article block reads the same here as it does in
-     the thread and the glossary — the three share one cache entry per article,
-     and a head that differs by a line is a prefix that does not match. Optional,
-     like it is there: a missing meta.json is not worth failing the stage over,
-     and its absence is the same absence for all three. */
-  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
+  /* `meta` is `null` when the article has no metadata, and that is a state
+     rather than a failure — the head of the prompt simply loses its lines, and
+     the fingerprint below is handed the same `null` the prompt was. Whoever
+     built the `Article` resolved it; nothing here re-reads it, because two
+     resolutions of "is there metadata" are two answers waiting to differ.
+     src/article-input.ts. */
+  const { blocks, tree, meta } = opts.article;
   /* **The argument, not the apparatus.** Applied here at the call site rather
      than inside `articleText`/`articleWithIds`, and that is the whole care in
      this line: the two builders look like the seam between automatic and asked
@@ -383,7 +368,7 @@ export async function generateArc(opts: {
      reads to write them, and the model's reasoning over it comes out of the
      same allowance as the answer. That is what the 16,000 typed here before
      could not survive: not a long arc, a long article. See src/token-budget.ts,
-     and docs/postmortems/toc-max-tokens.md for the run that found it. */
+     and docs/postmortems/260826a-toc-max-tokens.md for the run that found it. */
   const answerTokens = 300 + parts.length * 80;
   const maxTokens = budgetFor("arc", answerTokens);
 
@@ -407,7 +392,7 @@ export async function generateArc(opts: {
       output_config: { effort: effortFor("arc") },
       /* Article first, instructions second — the cache prefix starts at the top of
          the request, so anything stage-specific ahead of the article stops two
-         stages ever matching. docs/plans/prompt-caching.md. */
+         stages ever matching. docs/plans/260826g-prompt-caching.md. */
       system: [
         {
           type: "text" as const,
@@ -461,12 +446,9 @@ export async function generateArc(opts: {
     .join("");
 
   const arc = buildArc(parseJson(raw).arc, tree, tree.slug, inputFingerprint(blocks, tree, meta));
-  const outFile = path.join(opts.dir, "arc.json");
-  await writeFile(outFile, JSON.stringify(arc, null, 2), "utf-8");
 
   return {
     arc,
-    outFile,
     model: CAPABLE_MODEL,
     parts,
     blocks: blocks.length,
@@ -493,15 +475,25 @@ async function main(): Promise<void> {
      there in `.env.local`. */
   loadEnvLocal();
   console.log(`Writing the arc with ${CAPABLE_MODEL}\u2026`);
+  /* The command line has a folder and no store, so it reads the article itself
+     — `readArticleFromDir` is the one place left that opens these three files,
+     and it is deliberately not reachable from a request or a queued job. */
   const run = await generateArc({
-    dir,
+    article: await readArticleFromDir(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
+
+  /* And the command writes its own arc.json, in the same place the stage used
+     to. `npx tsx src/arc.ts <dir>` is unchanged from outside; what moved is
+     which layer does the writing, so the pipeline can write through the store
+     instead. */
+  const outFile = path.join(dir, "arc.json");
+  await writeFile(outFile, JSON.stringify(run.arc, null, 2), "utf-8");
 
   console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${CAPABLE_MODEL}`);
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
   run.arc.entries.forEach((e, i) => {
     console.log(`${String(i + 1).padStart(2)}. ${run.parts[i]?.title ?? ""}\n    ${e.text}\n`);
   });

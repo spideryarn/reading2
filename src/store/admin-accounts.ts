@@ -22,7 +22,7 @@
  * Locally the same query works, because `DATABASE_URL` on a laptop is the
  * `postgres` superuser — which is why the first version of this page shipped
  * broken and nobody saw it.
- * docs/postmortems/admin-id-was-the-local-one.md § Still broken.
+ * docs/postmortems/260828f-admin-id-was-the-local-one.md § Still broken.
  *
  * **This is the documented way.** Supabase's own guidance is that the Admin API
  * is how server-side code reads account facts, and that the `auth` schema is

@@ -8,7 +8,7 @@
  * src/explain.ts and src/converse.ts — and they had already drifted apart in
  * two ways, one of them fatal.
  *
- * See docs/plans/prompt-caching.md and docs/research/prompt-caching-callsites.md.
+ * See docs/plans/260826g-prompt-caching.md and docs/research/260826c-prompt-caching-callsites.md.
  *
  * ## The marker that was in the wrong place
  *
@@ -52,10 +52,10 @@ import type { Block, Meta } from "./types.js";
  * a short varying question, and only an explicit boundary puts the line in the
  * right place. **All three request-path builders now use it.** Converse used
  * OpenRouter's automatic top-level form until 2026-08-26, and that is the one
- * documented in docs/research/prompt-caching-openrouter.md — it marked the last
+ * documented in docs/research/260826d-prompt-caching-openrouter.md — it marked the last
  * cacheable block, which was the final user message, which carries the reader's
  * position and is therefore never replayed identically on the next turn. See
- * docs/postmortems/chat-cache-automatic-breakpoint.md.
+ * docs/postmortems/260826h-chat-cache-automatic-breakpoint.md.
  */
 export interface TextPart {
   type: "text";
@@ -161,7 +161,7 @@ export function estimateTokens(text: string): number {
  * marker is accepted and does nothing — no error, and zeros in both usage
  * fields. Opus 5 needs 512, Haiku 4.5 needs 4,096, and the progression is not
  * monotonic across generations, so anything that edits src/models.ts should
- * look here. See docs/research/prompt-caching-anthropic.md § 2.
+ * look here. See docs/research/260826b-prompt-caching-anthropic.md § 2.
  */
 export const CACHE_FLOOR_TOKENS = 1_024;
 

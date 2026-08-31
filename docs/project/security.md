@@ -534,7 +534,7 @@ escape, and say why — a short one would pass against the vulnerable code.
 or deep — is now an honest 404. What removed it was not this: it was the ToC moving off the critical
 path, which makes "blocks written, tree not" a normal few seconds of every ingest and would have had
 readers opening their own article onto the fixture's prose
-([faster-ingest-and-concurrency.md](../plans/faster-ingest-and-concurrency.md)). The security case
+([260830am-faster-ingest-and-concurrency.md](../plans/260830am-faster-ingest-and-concurrency.md)). The security case
 was already made and had been answered with a log line instead.
 
 That log line stays, as an assertion rather than a report: `loadArticle` still `warn`s — *"article
@@ -607,7 +607,7 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
   another path inherits the assumption without the screening. Found by cross-model review, 2026-08-26.
 - **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
   is not fine on the public internet — see
-  [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md), which has this going online.
+  [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md), which has this going online.
 
 ## The first untrusted party arrives in a second format: a PDF <a id="pdfs"></a>
 
@@ -628,12 +628,17 @@ list below.
 
 **We serve that file back, from our own origin.** `GET /api/source/:slug` hands the reader the PDF so
 they can check a transcription against the ink, which is the only real verification a scan can have
-([pdf-ingestion.md](../plans/pdf-ingestion.md)). Three things make that survivable, and all three are
+([260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)). Three things make that survivable, and all three are
 load-bearing: the slug goes through `slugPart`, the same validator that closed
-[the path traversal](#the-url-is-the-second-untrusted-party); the path comes from `fsLocations`
-rather than being built at the call site; and the response sets
+[the path traversal](#the-url-is-the-second-untrusted-party); the route never resolves the document
+itself — since 2026-08-31 it asks `sourceStore.readPdf(slug)`
+([`src/store/contracts.ts`](../../src/store/contracts.ts)), and the store is the layer that knows
+whether that means a path under `data/` or an object in the `sources` bucket; and the response sets
 `X-Content-Type-Options: nosniff` with an explicit `application/pdf`, because a stranger's file
-served from our origin with a sniffable type is how a PDF becomes script. It is served `inline`
+served from our origin with a sniffable type is how a PDF becomes script. The store method is
+`readPdf` and not "read the source document" for that last reason: the content type is the boundary,
+and a method that could hand back HTML would put the `Content-Type` decision at the call site, where
+the next person adding a kind makes it by accident. It is served `inline`
 deliberately — the browser's own viewer is the point — which does mean a malicious PDF is opened by
 the browser's PDF reader **on our origin rather than the publisher's**.
 
@@ -674,7 +679,7 @@ Three things bound it, and only the last is new:
 - **The bucket's own limits.** 50 MiB per object and a MIME allowlist, enforced by Storage at the
   moment of upload — **including against the service key**, which a comment in `supabase/config.toml`
   denied until 2026-08-28 on the strength of a measurement that never happened
-  ([the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md)). A
+  ([260828a-the-config-file-is-not-the-bucket.md](../postmortems/260828a-the-config-file-is-not-the-bucket.md)). A
   second line under our own checks, never a replacement: a bucket cannot tell a PDF from a file named
   one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, so the list is
   `application/pdf` and `text/html`.
@@ -695,7 +700,7 @@ than as design notes:
 > measured, replaying it while the object exists gives 409, and replaying it **after the object is
 > deleted succeeds**. So anything that deletes an object re-arms the grant over its key. Verified
 > bytes are copied to `sha256/<hash>.pdf` and the staging object is left alone; nothing sweeps it
-> inside the TTL. See [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md).
+> inside the TTL. See [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md).
 
 **What is genuinely open here.** Minting grants and spending model money from an endpoint whose
 gate admits [anyone Supabase will vouch for](#the-gate) is an open storage quota and an open wallet.
@@ -759,7 +764,7 @@ than none, because it stops anyone looking again. Tested in
 **A link the model writes into a chat answer becomes an `href`.** The newest of the three, and the
 only one where the model chooses both the address *and the words the reader sees over it*. Added
 2026-08-27 — [links.md § The links chat writes](links.md#the-links-chat-writes), and
-[chat-web-links.md](../plans/chat-web-links.md) for the reasoning. Four things hold it:
+[260827ao-chat-web-links.md](../plans/260827ao-chat-web-links.md) for the reasoning. Four things hold it:
 
 - **`isWebUrl` again**, inside `webLinks` in [`src/urls.ts`](../../src/urls.ts) — the same allowlist
   as the citation list, not a second one. A match that fails it stays as the characters the model
@@ -852,7 +857,7 @@ through an undici dispatcher, per hop, with the hostname left alone for `Host`, 
 validation ([fetching.md § Addresses we won't dial](fetching.md#addresses-we-wont-dial)).
 
 What forced it was scope, not a new bug: [hosting the article's own
-images](../plans/hosting-the-articles-images.md) makes the fetcher follow URLs *a publisher chose*,
+images](../plans/260829b-hosting-the-articles-images.md) makes the fetcher follow URLs *a publisher chose*,
 hundreds per article, and the standing justification for the gap was that an attacker needed Greg's
 clipboard. `tests/fetch-dns-pinning.test.ts` stages the rebind — a resolver whose answer changes
 after the guard has accepted it — and proves the pin holds against a real socket, with an unpinned
@@ -874,9 +879,10 @@ here because they are properties of this system rather than of that feature.
 
 **The gate admits anyone with a Google account.** There is no allowlist — `isAllowed` in
 [`src/auth.ts`](../../src/auth.ts) returns true — and that is Greg's explicit decision, made twice
-and in writing ([auth-supabase.md § Who gets in](../plans/auth-supabase.md#who-gets-in)). A security
+and in writing ([260826w-auth-supabase.md § Who gets in](../plans/260826w-auth-supabase.md#who-gets-in)). A security
 doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
-`ANTHROPIC_API_KEY` at two model calls per article; **the control that is actually missing is a
+`OPENROUTER_API_KEY` at two model calls per article — every paid call in the app is on that one key
+since 2026-08-27 ([ai-gateway.md](ai-gateway.md)); **the control that is actually missing is a
 spend limit**, and an allowlist of one never limited what Greg could spend either.
 
 **And until 2026-08-27 it did not say whose data is whose.** `currentOwnerId()` was process-wide and
@@ -950,7 +956,7 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
 - **A PDF is parsed in-process, unsandboxed.** pdf.js over a stranger's bytes, in the server, with
   no worker isolation, no memory cap and no time limit beyond the job's. The mitigation today is
   that we ask it only for text and coordinates. The plan says to bound pages, objects, time and
-  memory ([pdf-ingestion.md § Limits](../plans/pdf-ingestion.md)); only the page cap is built.
+  memory ([260826c-pdf-ingestion.md § Limits](../plans/260826c-pdf-ingestion.md)); only the page cap is built.
 
   ~~**And the page cap does not bound the parse.**~~ **Closed, 2026-08-26.** It did not: the check
   was `pass.pages.length > MAX_PAGES` in `readPdf`, which runs only after `pass0` has opened the
@@ -958,7 +964,7 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
   on models*, which is what it was written for, and limited nothing about what pdf.js did first — a
   small, valid file with a hundred thousand pages, or one page with an enormous text layer, was
   fully parsed before the cap fired. Found by the cross-family review of
-  [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md#build-order-revised-after-the-review),
+  [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md#build-order-revised-after-the-review),
   2026-08-26, and confirmed against the code.
 
   It is now a `doc.numPages` check **immediately after `getDocument`, before any page loop**, which

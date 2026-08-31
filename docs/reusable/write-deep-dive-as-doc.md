@@ -14,7 +14,9 @@ upfront). If you need more context from files, investigate for relevant code & d
 Before you start, run `date` to get today's date, in case you need to assess how recent the search
 results are.
 
-Then write this up as a detailed reference doc. Include URL links/references (as well as mentions of
+Then write this up as a detailed reference doc. Research docs live in `docs/research/` and take the
+same date-prefixed name as a planning doc — `npx tsx scripts/plan-name.ts --dir=research
+"<topic>"`, see [write-planning-doc.md](write-planning-doc.md). Include URL links/references (as well as mentions of
 your own code/docs etc), so you can track down the original sources later if you need to.
 
 ## Process Guidelines

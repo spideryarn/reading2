@@ -1,5 +1,5 @@
 /**
- * The scorer's own tests — docs/plans/pdf-ingestion.md#the-eval-evalspdf.
+ * The scorer's own tests — docs/plans/260826c-pdf-ingestion.md#the-eval-evalspdf.
  *
  * Every case is a *deliberately broken transcription* of a hand-written page
  * pair in evals/pdf/synthetic/faults.json, one per way a model gets a page

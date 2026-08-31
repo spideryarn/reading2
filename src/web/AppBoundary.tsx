@@ -27,7 +27,7 @@
  * Deliberately **not** shown: `error.message`. This is the same rule the rest
  * of the app keeps — an error's text can be a provider's error body, a model's
  * output or the article itself, and this component cannot know which. The
- * reader could not act on it anyway. See docs/plans/error-boundary.md.
+ * reader could not act on it anyway. See docs/plans/260826p-error-boundary.md.
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 

@@ -11,7 +11,7 @@ Code: [`src/chat-tools.ts`](../../src/chat-tools.ts) (what a tool is, and the on
 [`src/web/useChat.ts`](../../src/web/useChat.ts) (assigning by index),
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `ToolStrip`.
 Tests: [`tests/chat-tools.test.ts`](../../tests/chat-tools.test.ts).
-Built on top of [chat-mode.md](../plans/chat-mode.md), which is where the panel and the citation
+Built on top of [260826a-chat-mode.md](../plans/260826a-chat-mode.md), which is where the panel and the citation
 contract come from.
 
 ```
@@ -54,7 +54,7 @@ of this file rather than lost:
 > — Greg, 2026-08-26
 
 **One correction, stated plainly because it changes what `search_library` is.** The embeddings and
-hybrid search are *not built*. [semantic-search.md](../plans/semantic-search.md) is a plan — second
+hybrid search are *not built*. [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is a plan — second
 draft, past a GPT Sol review — and [`evals/embedding-retrieval.ts`](../../evals/embedding-retrieval.ts)
 measured four models over this project's own articles, but there is no `src/` code. What exists is
 `searchLibrary`, which matches literal words. So the tool uses that, and the tool's own description
@@ -183,7 +183,7 @@ then found three defects the plan review structurally could not — `urlKey` wro
 two dedup keys that merged genuinely different links, and a character cap that a single unbounded row
 walked straight through — and it reproduced each rather than describing it. That is the argument for
 weighting the second pass higher, in one worked example. Both are kept beside
-[chat-follow-links.md](../plans/chat-follow-links.md).
+[260827aj-chat-follow-links.md](../plans/260827aj-chat-follow-links.md).
 
 Every guard here was switched off in turn and the suite watched go red before being switched back —
 twelve mutations across the two rounds ([silent-success.md](../reusable/silent-success.md)).
@@ -208,7 +208,7 @@ one never happens.
 
 **It does not stop the model asking.** This paragraph used to end "the model cannot ask again, so the
 final round is always prose", and that sentence was wrong and cost a day —
-[the postmortem](../postmortems/chat-last-round-can-still-ask-for-tools.md) is about exactly it.
+[the postmortem](../postmortems/260826i-chat-last-round-can-still-ask-for-tools.md) is about exactly it.
 Taking the array away removes the schema, not the three of its own turns full of tool calls the model
 is looking at. So the withheld round is *told* it has no more of our tools, and asking anyway has its
 own guard and its own sentence.
@@ -247,7 +247,7 @@ Greg chose the more expensive of two options:
 So a `tools` array goes on the stored message. What it buys is that a reader coming back to a thread
 a month later can see **why an answer said what it said** — which page it read, which of their own
 articles it found — rather than taking a confident paragraph on trust. That is the same argument the
-block-id citations are built on ([chat-mode.md § The citation contract](../plans/chat-mode.md)),
+block-id citations are built on ([260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md)),
 pointed at the half of an answer that does *not* come from the article.
 
 Three details that are decisions rather than styling:
@@ -362,7 +362,7 @@ line the seven above deliberately do not cross — see the security section.
 |---|---|
 | **Plant a question on a section** — a comment waiting where the reader will hit it | **Do this one first.** It is the most Spideryarn-ish thing on the list: the model prepares the reading rather than replacing it, and it is the only one that acts *later*. Needs a `Comment` that is a question rather than an answer, which is a schema change — see [comments.md](comments.md) |
 | **Glossary add/update** | Worth it, and cheap to read (`article_glossary` already does). Writing means an entry arriving without the provenance the generated ones carry, so a hand-added entry needs to be visibly one. See [glossary.md](glossary.md) |
-| **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a page of its own ([tweet-thread-page.md](../plans/tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
+| **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a page of its own ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
 | **`add_to_library(url)`** — offered and not taken | Would want a confirm step rather than firing on the model's say-so: it spends money and changes state. [ingest-queue.md](ingest-queue.md) |
 
 ## What the browser pass found
@@ -383,7 +383,7 @@ Three things it could **not** confirm, recorded rather than rounded up to a pass
 - **Dark mode was not checked** — there is no theme toggle in the app to check it with.
 
 It also found the bug in the section below, and one that is not this feature's:
-[chat-mode.md § What is still open](../plans/chat-mode.md#what-is-still-open) now records a dropped
+[260826a-chat-mode.md § What is still open](../plans/260826a-chat-mode.md#what-is-still-open) now records a dropped
 SSE stream leaving the panel on "thinking…" for ever with no recovery.
 
 ## The model claimed a search it never ran
@@ -431,7 +431,7 @@ shown" when the only extra matches were in the article on the reader's screen.
 
 **This landed before the semantic matcher, and that reverses what this file recommended.** The
 argument for waiting was that `search_library` is literal, the literal matcher is being replaced by
-[semantic-search.md](../plans/semantic-search.md), and work on a thing that is about to be deleted is
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md), and work on a thing that is about to be deleted is
 usually wasted. Three things make it wrong here:
 
 - **`excludeSlug` is not matcher work.** It is one line in each adapter's filter, and it survives the
@@ -521,7 +521,7 @@ alone, in order.
     belief written into a comment does.
 
   Written up in
-  [chat-last-round-can-still-ask-for-tools.md](../postmortems/chat-last-round-can-still-ask-for-tools.md),
+  [260826i-chat-last-round-can-still-ask-for-tools.md](../postmortems/260826i-chat-last-round-can-still-ask-for-tools.md),
   which is also where the wider lesson lives: taking a capability away is a fact about our request,
   and "so it will therefore write prose" is a guess about a language model wearing the same clothes.
 
@@ -625,7 +625,7 @@ alone, in order.
   hands mid-way reports only where it ended. Nobody has seen this happen; it would be invisible if it
   did.
 - **`search_library` is literal.** See the top of this file; the fix is
-  [semantic-search.md](../plans/semantic-search.md) and it lands behind the store contract.
+  [260826n-semantic-search.md](../plans/260826n-semantic-search.md) and it lands behind the store contract.
 - **`read_web_page` can still be used to send a little.** The query cap above bounds it; it does not
   close it. The fix is an **allowlist**: fetch only URLs that are already in play — links in this
   article's blocks, URLs the reader typed into the conversation, and the citation URLs OpenRouter's

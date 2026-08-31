@@ -6,7 +6,7 @@
  *
  * Exits non-zero when it does not, so it can gate a deploy. Run it **after**
  * migrations and **before** shipping the code that needs them — that is the gap
- * this fills, and docs/plans/schema-drift-guard.md has the two incidents that
+ * this fills, and docs/plans/260827w-schema-drift-guard.md has the two incidents that
  * cut through it.
  *
  * Read-only: one `select` against `information_schema`, no DDL, no writes. So

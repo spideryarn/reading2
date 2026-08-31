@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * What the chat panel does when it loses the stream — see `recoverAnswer` in
- * src/web/useChat.ts and docs/plans/chat-mode.md.
+ * src/web/useChat.ts and docs/plans/260826a-chat-mode.md.
  *
  * The thing worth testing here is not the failure, it is the **recovery**. The
  * server deliberately does not stop working when a reader's connection dies

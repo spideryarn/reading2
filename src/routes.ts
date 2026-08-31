@@ -26,8 +26,9 @@
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
- *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
+ *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
+ *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
@@ -38,6 +39,11 @@
  *                                  { threadId, retry: messageId }   answer again
  *                                  { threadId, edit: messageId, question, at? }
  *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
+ *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
+ *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret,
+ *                                            the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
+ *                                          → { thread }, one exchange appended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
@@ -61,16 +67,17 @@
 import { randomUUID } from "node:crypto";
 /* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
    is worth keeping. The last reader of the disk in this file was `sendSource`,
-   which went to `data/<slug>/raw.pdf` — so the route worked on a laptop and 404d
-   on Vercel, which has no such disk, for as long as it existed. Every route now
-   reaches its bytes through a store, and a fresh `readFile` in this file is the
-   shape of that bug coming back. */
+   which went to `data/<slug>/raw.pdf` whatever `SPIDERYARN_STORE` said — so the
+   route worked on a laptop and 404d on Vercel, which has no such disk, for as
+   long as it existed. Every route now reaches its bytes through a store, and a
+   fresh `readFile` in this file is both that bug coming back and a route
+   ignoring the store switch. docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
    to know which store it is talking to. `files` is the default and is exactly
    src/api.ts, so nothing changes for anyone who has not opted in.
-   docs/plans/postgres-storage-implementation.md */
+   docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,
   chatStore,
@@ -85,9 +92,9 @@ import {
   lookUpTerm,
   loadArc,
   loadIdeas,
+  loadQuotes,
   loadSketch,
-  loadSource,
-  loadSummaries,
+  loadTimeline,
   loadTweets,
 } from "./store/index.js";
 /* **Pure functions only**, and that is the whole reason this import survived
@@ -112,14 +119,29 @@ import { isStorableColour } from "./searches.js";
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
 import { CONTENT_TYPE } from "./store/blobs.js";
-import { adminStore, commentStore, visibilityStore } from "./store/index.js";
+import { adminStore, commentStore, sourceStore, visibilityStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
-import type { ToolRun } from "./chat-tools.js";
+import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
 import { isSpideryarnId } from "./ids.js";
+/* **The one exception to "every paid call goes through OpenRouter"**, and it is
+   Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
+   all. src/live.ts holds the whole of it, including the only use of
+   OPENAI_API_KEY in the app. Nothing here touches that key — this file asks for
+   a session and gets back a short-lived secret for the browser. */
+import {
+  LIVE_MODEL,
+  LIVE_SERVER_TOOLS,
+  type LiveToken,
+  liveSeedItems,
+  liveSession,
+  mintLiveToken,
+  SHOW_PASSAGE_TOOL,
+} from "./live.js";
+import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
@@ -180,15 +202,19 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  QuotesResponse,
   SketchResponse,
   ReviewStance,
   ThreadKind,
-  SummariesResponse,
   ThreadResponse,
   ThreadSummary,
   SearchHit,
   SearchRun,
 } from "./types.js";
+/* Values, not types: the list a placement off the wire is checked against, and
+   the guard that does the checking. Both live in types.ts because the browser
+   needs the same union and cannot import src/live.ts. */
+import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
 /* A value, not a type — the one list the stance is validated against, shared
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REVIEW_STANCES. */
@@ -226,7 +252,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * carries its page number even though v1's reader does not show it, and the raw
  * file is kept, so handing the reader the original costs one route. A second
  * machine's opinion would have cost a page-reconstruction aligner and would
- * still not have been verification. docs/plans/pdf-ingestion.md.
+ * still not have been verification. docs/plans/260826c-pdf-ingestion.md.
  *
  * `inline`, not `attachment`: the browser's own PDF viewer is the point. And
  * `X-Content-Type-Options: nosniff` because this is a stranger's file being
@@ -248,38 +274,49 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      one is right whenever `ownedSlug` is right, which is the property worth
      having. The answer is discarded — it is asked as a question, not read.
 
-     **Kept even though `loadSource` is owner-filtered too** (the Postgres half
-     joins through `ownedSlug`). Two independent refusals on the one route that
+     **Kept even though `sourceStore.readPdf` is owner-filtered too** (the
+     Postgres half joins through `ownedSlug`). Two independent refusals on the one route that
      hands back somebody's private document is worth the round trip, and the
      filesystem store has no owner column at all — which is the hole
      src/store/index.ts refuses to boot into in production, and why it does. */
   await shelfStore.read(slug);
 
-  /* **Through the store, not off the disk**, since 2026-08-31. This used to be
-     `fsLocations(slug)` plus a `readFile`, which meant the whole feature worked
-     on a laptop and 404d on Vercel — which has no such disk — for as long as it
-     existed. Each adapter answers from where its own store keeps the bytes:
-     `data/<slug>/` for the filesystem one, the object store the revision names
-     for the Postgres one, falling back inside itself to the legacy `raw_bytes`
-     column. Neither reaches into the other.
+  /* **The store, not the disk** — and until 2026-08-31 this was the disk.
+
+     It read `fsLocations(slug)` and `data/<slug>/raw.pdf` whatever
+     `SPIDERYARN_STORE` said: the last unconditional filesystem read in this
+     file, found twice independently (docs/plans/260831b-finish-the-database-move.md
+     § What the inventory found). Under `postgres` that answered *"this article
+     did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
+     deployed it was the jobless `dataRoot()` caller that
+     src/store/data-root.ts names by route — where that function deliberately
+     throws, because both available answers are wrong. So the feature worked on
+     a laptop and 404d on every production request, for as long as it existed.
+
+     `readPdf`, not "read the source document", because the content type is the
+     boundary: an HTML source served from our own origin is stored XSS, so the
+     store hands back the one kind this route may set a type for.
+     src/store/contracts.ts § SourceStore.
 
      **`null` is the only "there is nothing here".** A revision that names a
-     stored object and cannot produce it throws `MissingRawObject`, and one whose
-     object hashes to something else throws `CorruptRawObject` — both carry
-     `status: 500`, so they arrive as server faults rather than as "this article
-     never had a source". Telling an owner their paper does not exist because a
-     bucket is misconfigured is the failure GPT Sol made a blocker of, 2026-08-31.
-     src/store/export.ts owns both. */
-  const source = await loadSource(slug);
+     stored object and cannot produce it, or whose object hashes to something
+     else, **throws** with `status: 500`, so it arrives as a server fault rather
+     than as "this article never had a source". Telling an owner their paper does
+     not exist because a bucket is misconfigured is the failure GPT Sol made a
+     blocker of, 2026-08-31. src/store/pg-source.ts owns both refusals; the same
+     rule and the same two error types live in src/store/raw-document.ts for
+     `db:export`. */
+  const source = await sourceStore.readPdf(slug);
   if (!source) throw httpError(404, "That article did not come from a PDF.");
-  if (source.kind !== "pdf") throw httpError(404, "That article did not come from a PDF.");
 
   res.statusCode = 200;
-  /* **From the recorded kind, never from `raw_content_type`.** That column is
-     the *origin's* header, and plenty of perfectly good PDFs arrive as
+  /* **A constant, never `raw_content_type`.** That column is the *origin's*
+     header, and plenty of perfectly good PDFs arrive as
      `application/octet-stream` — which, served back with `nosniff` below, is a
      document the browser will refuse to open and will not rescue. GPT Sol,
-     2026-08-31. */
+     2026-08-31. It is a constant rather than a decision because `readPdf` can
+     only hand back a PDF: the narrowness of the store method is what makes one
+     literal here correct. */
   res.setHeader("Content-Type", CONTENT_TYPE.pdf);
   res.setHeader("Content-Disposition", contentDisposition(source.filename ?? `${slug}.pdf`));
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -632,7 +669,7 @@ const MAX_BODY_CHARS = 4000;
  * bought an explanation, and this route was `answer` below; the two split
  * because a colliding id means opposite things to them (a retry to one,
  * somebody else's comment to the other) and one function could not safely be
- * both. docs/plans/comments-and-bookmarks.md.
+ * both. docs/plans/260828a-comments-and-bookmarks.md.
  *
  * ## The anchor is checked against the article, here
  *
@@ -836,7 +873,7 @@ async function answer(
 /* ----------------------------------------------------------------- chat --
    The one endpoint in this file that does not answer with JSON.
 
-   See docs/plans/chat-mode.md. Everything here mirrors the comment endpoints
+   See docs/plans/260826a-chat-mode.md. Everything here mirrors the comment endpoints
    above — a `pending` row written before the model call, an orphan sweep on
    read, a terminal state written before the reply — with the differences that
    streaming forces, each called out where it happens. */
@@ -928,7 +965,7 @@ const streaming = new Map<string, Live>();
  * thing the queue cannot do.
  *
  * Per process, like everything else here. Two servers on one `data/` directory
- * remains the unfixed problem in docs/plans/chat-mode.md § What is still open.
+ * remains the unfixed problem in docs/plans/260826a-chat-mode.md § What is still open.
  *
  * Exported for its tests and for nothing else. The wiring — that every write in
  * `streamChat` and the thread DELETE go through it — is checked by reading;
@@ -975,7 +1012,7 @@ export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise
  * message `error` while the reader is watching the words arrive.
  *
  * A grace period does not make that correct, and nothing short of a lock would:
- * see docs/plans/chat-mode.md § What is still open. What it does is make the
+ * see docs/plans/260826a-chat-mode.md § What is still open. What it does is make the
  * window small enough to matter rarely and recover cleanly — an answer younger
  * than this is assumed to be in flight *somewhere*, and if it really did die,
  * the next read after two minutes releases it. Longer than any answer the
@@ -1060,7 +1097,7 @@ if (SEARCH_ORPHAN_GRACE_MS <= SEARCH_TIMEOUT_MS) {
  *
  * Like `streaming` itself this only knows about **this process**; a second
  * server streaming into the same file is the unfixed problem recorded in
- * docs/plans/chat-mode.md § What is still open, and it is the same problem, not
+ * docs/plans/260826a-chat-mode.md § What is still open, and it is the same problem, not
  * a new one.
  */
 async function settleThread(slug: string, threadId: string): Promise<void> {
@@ -1206,7 +1243,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      could only mean "answer this stored question differently from how it was
      asked", which is a thing a reader might want and is not what a button
      labelled "have another go" does. If it arrives it will be an explicit
-     control with its own name. GPT Sol's review of docs/plans/review-mode.md,
+     control with its own name. GPT Sol's review of docs/plans/260827ah-review-mode.md,
      finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
     throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
@@ -1256,7 +1293,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the link can be written **server-side, with the real thread id** — the
      client mints an optimistic one and only finds out it was overruled if it
      was, so a client-side link is a race it cannot see it has lost.
-     docs/plans/comments-and-bookmarks.md § the Save & ask choreography. */
+     docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography. */
   if (sourceCommentId !== undefined && !isSpideryarnId(String(sourceCommentId))) {
     throw httpError(400, "sourceCommentId must be a comment id");
   }
@@ -1348,7 +1385,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        both of those call `settleThread`, which stops a live answer in this
        thread, and a request rejected *after* that has aborted the answer
        another tab's reader was watching and told them they stopped it. That
-       exact bug has been fixed here once already (docs/plans/chat-mode.md).
+       exact bug has been fixed here once already (docs/plans/260826a-chat-mode.md).
 
        `withTurn` refuses it again inside the store's transaction, because
        `inTurnOrder` is per-process and this one is not. Here for the status
@@ -1547,7 +1584,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          function the body has nothing to offer anyway — and for the third,
          `withTurn` has already refused a kind that contradicts the thread. The
          thread is the only thing here that is authoritative about what this
-         conversation is. GPT Sol's review of docs/plans/review-mode.md,
+         conversation is. GPT Sol's review of docs/plans/260827ah-review-mode.md,
          finding 5. */
       kind: thread.kind,
       /* And the stance from the reply row, for the same reason one step down:
@@ -1774,6 +1811,341 @@ async function cancelChat(
     log("store").info({ slug, threadId }, "chat cancelled and discarded");
     return { cancelled: true };
   });
+}
+
+/**
+ * **A finished spoken exchange, written into the thread.**
+ * `POST /api/chat/:slug/:threadId/spoken`.
+ *
+ * Live conversation's whole write path. The audio never comes near this
+ * server — the browser talks to OpenAI directly, because Vercel has no
+ * long-lived sockets (docs/project/live-conversation.md) — so by the time
+ * anything arrives here the exchange is over and both halves are known. That
+ * is why there is no `begin`/`finish` pair and no stream: one request, one
+ * transaction, two `done` rows.
+ *
+ * ## Everything here is a claim by the browser, and is treated as one
+ *
+ * A typed answer is written by this server from a model call this server made.
+ * A spoken answer is written from what a browser says happened. So each field
+ * is either validated or **replaced**:
+ *
+ * - `status` on a tool run is not read at all. It is set to `done`, because a
+ *   stored `running` row is a spinner nobody will ever end — src/types.ts
+ *   § `ToolRun.status` says so, and this is the one route that could put one on
+ *   disk.
+ * - `model` is not read either. It is `LIVE_MODEL`, so that the citation
+ *   instruments in src/converse.ts can tell a spoken answer from a typed one
+ *   that cited nothing. Having no citations is *normal* for a spoken answer —
+ *   it points with `show_passage` instead — so without an explicit mark the
+ *   `citedBlockIds` number drifts downwards for a reason that is not a
+ *   regression. docs/plans/260831l-live-conversation-in-chat.md § 1d.
+ * - every block id in `passages` is checked, because these become pressable
+ *   references in the reader's transcript and an id nothing resolves is a
+ *   reference that goes nowhere.
+ *
+ * ## `expectedTailId` is required, and it is the idempotency
+ *
+ * Not optional, unlike the same field on `/cancel`: there it is a safety net
+ * over a destructive operation, here it is the *only* thing between a replayed
+ * POST and a duplicated turn. A retry after a lost response presents a tail the
+ * first attempt has already moved and gets a 409 rather than appending twice —
+ * which is what lets the client retry a transport failure at all. `null` means
+ * "I believe this conversation is empty", which is a real state: a reader may
+ * press Live before typing anything. `SpokenTurn` in src/chat.ts.
+ */
+async function spokenChat(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ thread: ChatThread }> {
+  const { question, answer, passages, tools, interrupted, expectedTailId } = (body ??
+    {}) as Record<string, unknown>;
+  if (typeof question !== "string" || typeof answer !== "string") {
+    throw httpError(400, "Expected { question, answer, expectedTailId }");
+  }
+  /* **Absent is refused; `null` is accepted.** The two mean different things —
+     "I forgot to say" and "I think this conversation is empty" — and collapsing
+     them would let a caller skip the guard by omission. */
+  if (expectedTailId !== null && typeof expectedTailId !== "string") {
+    throw httpError(400, "expectedTailId is required, and is null for an empty conversation");
+  }
+  /* An empty question is ordinary — the transcriber fails — and so is an empty
+     answer, if the reader hung up mid-breath. Both empty is not a turn, and
+     writing it puts a nameless pair of rows in somebody's transcript. The
+     client's ledger drops these too; this is the half that does not trust it. */
+  if (question.trim() === "" && answer.trim() === "") {
+    throw httpError(400, "That exchange has nothing in it");
+  }
+  for (const [what, text] of [
+    ["question", question],
+    ["answer", answer],
+  ] as const) {
+    if (text.length > MAX_SPOKEN_CHARS) {
+      throw httpError(413, `That spoken ${what} is longer than ${MAX_SPOKEN_CHARS} characters`);
+    }
+  }
+
+  /* Loaded so the passage pointers can be checked against the real thing. It is
+     one read of an artefact this request already implies — a spoken exchange is
+     about this article — and it happens before the write so a bad pointer is an
+     ordinary 400 rather than a turn on disk with a dead reference in it. */
+  const known = new Set((await loadArticle(slug)).blocks.map((b) => b.id));
+
+  const thread = await inTurnOrder(`${slug}/${threadId}`, () =>
+    /* Under the conversation's turn order, like every other write to a thread.
+       An append is safe beside a stream — src/chat.ts serialises the store —
+       but a spoken append landing between a retry's check and its write would
+       put back the narrow version of the abort-then-refuse bug that
+       `inTurnOrder` exists to close. */
+    chatStore.appendSpoken(slug, {
+      threadId,
+      question,
+      answer,
+      expectedTailId,
+      ...(parseSpokenPassages(passages, known) ?? {}),
+      ...(parseSpokenTools(tools) ?? {}),
+      ...(interrupted === true ? { interrupted: true } : {}),
+      model: LIVE_MODEL,
+    }),
+  ).then((t) => t.thread);
+
+  log("store").info(
+    { slug, threadId: thread.id, turns: thread.messages.length },
+    "spoken turn appended",
+  );
+  return { thread };
+}
+
+/**
+ * How long either half of one spoken exchange may be.
+ *
+ * Its own number rather than `MAX_QUESTION_CHARS`, and for the same reason
+ * `MAX_REVIEW_CHARS` is: 4,000 is a considered cap on a sentence somebody
+ * *typed*, and speech runs three or four times longer than the same thought
+ * typed. It applies to the answer as well, which is the model's own speech and
+ * bounded by one realtime turn.
+ *
+ * A cap on a transcript is not really a product rule — nobody will hit it in a
+ * conversation — it is a bound on what a browser can push into a column.
+ */
+const MAX_SPOKEN_CHARS = 20_000;
+
+/** At most this many of either. A bound, not a rule anyone will meet. */
+const MAX_SPOKEN_ITEMS = 32;
+
+/**
+ * The longest a label on a pointer or a tool run may be.
+ *
+ * These are short by construction — `show_passage` asks for "a few words naming
+ * what is in the passage", and a tool's label is `searched your library for
+ * "predictive processing"`. The cap is not a product rule, it is a bound on
+ * what a browser can put in a column: everything on this route is a claim by
+ * the browser, and the two fields with no natural length were the two with no
+ * limit. Trimmed rather than refused, because a long label is a cosmetic
+ * problem and throwing the whole exchange away over one would lose the reader's
+ * words for it.
+ */
+const MAX_SPOKEN_LABEL = 400;
+
+/** Trim rather than refuse. See `MAX_SPOKEN_LABEL`. */
+function shortened(text: string): string {
+  return text.length > MAX_SPOKEN_LABEL ? text.slice(0, MAX_SPOKEN_LABEL) : text;
+}
+
+/**
+ * The passages a spoken answer pointed at, checked.
+ *
+ * Returns the field or **nothing**, so the caller spreads it: the two stores
+ * are compared field for field by tests/store-roundtrip.test.ts, where an
+ * absent key and an explicit `undefined` are not the same thing.
+ *
+ * Every id goes through `isSpideryarnId`. These are rendered as pressable
+ * references in the reader's own transcript, so an id from a browser that has
+ * gone wrong is a reference that resolves to nothing, stored for ever, in the
+ * one place the reader trusts.
+ */
+function parseSpokenPassages(
+  x: unknown,
+  known: Set<string>,
+): { passages: { blockIds: string[]; why: string }[] } | undefined {
+  if (x === undefined) return undefined;
+  if (!Array.isArray(x)) throw httpError(400, "passages must be a list");
+  if (x.length > MAX_SPOKEN_ITEMS) throw httpError(400, "too many passages in one exchange");
+  const passages = x.map((raw) => {
+    const { blockIds, why } = (raw ?? {}) as Record<string, unknown>;
+    if (!Array.isArray(blockIds) || blockIds.length === 0 || blockIds.length > MAX_SPOKEN_ITEMS) {
+      throw httpError(400, "each passage needs blockIds");
+    }
+    /* **Against the article, not against the shape.** `isSpideryarnId` alone
+       accepts `spya-zzzzzz`, which is well-formed and points at nothing — and
+       what gets stored is a pressable reference in the reader's own transcript
+       that scrolls nowhere for ever. A dead link that does nothing is worse
+       than a plain string: the reader presses it, the page does not move, and
+       there is no way to tell that from a bug in the scrolling. The typed path
+       has the same distinction and counts its misses (`unknownCitedIds` in
+       src/converse.ts); here we can simply refuse, because these ids came from
+       the article the browser is looking at. GPT Sol, reviewing the built code. */
+    const wrong = blockIds.find(
+      (id) => typeof id !== "string" || !isSpideryarnId(id) || !known.has(id),
+    );
+    if (wrong !== undefined) {
+      throw httpError(400, "a passage pointed at something that is not in this article");
+    }
+    return {
+      blockIds: blockIds as string[],
+      why: typeof why === "string" ? shortened(why) : "",
+    };
+  });
+  return passages.length > 0 ? { passages } : undefined;
+}
+
+/**
+ * The tools a spoken answer ran, checked — and **`status` is not read**.
+ *
+ * The browser runs these itself (the data channel relays the call and the
+ * result), so its idea of a run is a live one and may well say `running`. A
+ * `running` row on disk is a spinner with nothing left to end it, which is the
+ * failure src/types.ts § `ToolRun.status` names. So the status is set here
+ * rather than taken: by the time this request exists the run is over.
+ */
+function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
+  if (x === undefined) return undefined;
+  if (!Array.isArray(x)) throw httpError(400, "tools must be a list");
+  if (x.length > MAX_SPOKEN_ITEMS) throw httpError(400, "too many tool runs in one exchange");
+  const tools = x.map((raw) => {
+    const { name, label, detail } = (raw ?? {}) as Record<string, unknown>;
+    if (typeof name !== "string" || typeof label !== "string") {
+      throw httpError(400, "each tool run needs a name and a label");
+    }
+    /* **A receipt for something that could have happened.** The name is stored
+       and shown to the reader as a thing the companion did, and without this a
+       browser could file `delete_database` against its own transcript — a claim
+       the reader has no way to check and every reason to believe, since every
+       other row in that list is real. The set is the tools a live session is
+       actually given: `LIVE_SERVER_TOOLS` plus the one answered in the browser.
+       GPT Sol, reviewing the built code. */
+    if (!LIVE_SERVER_TOOLS.has(name) && name !== SHOW_PASSAGE_TOOL.name) {
+      throw httpError(400, "that is not a tool a live session runs");
+    }
+    return {
+      name,
+      label: shortened(label),
+      status: "done" as const,
+      ...(typeof detail === "string" && detail !== "" ? { detail: shortened(detail) } : {}),
+    };
+  });
+  return tools.length > 0 ? { tools } : undefined;
+}
+
+/**
+ * **A ticket for one live conversation.** `POST /api/chat/:slug/:threadId/live`.
+ *
+ * Hands the browser three things and no more: an ephemeral `ek_…` secret, the
+ * conversation so far as items to seed the session with, and the id of the row
+ * that is currently last.
+ *
+ * ## Why the seed is built here
+ *
+ * Because `recentHistory` in src/converse.ts is the one thing that decides what
+ * a model may see, and a second window in the browser would be a second set of
+ * rules about interrupted answers, failed turns and how far back to go — rules
+ * that have already been got wrong twice at the one end that has them. It is
+ * also where the block ids come *out*: seeding a voice model with typed history
+ * verbatim hands it examples of its own past speech containing `[spya-k3m9qt]`
+ * while its instructions forbid saying one aloud. `liveSeedItems` in
+ * src/live.ts, and Fable's finding in docs/plans/260831l-live-conversation-in-chat.md § 1d.
+ *
+ * ## `tailId` and the seed come from one read
+ *
+ * They have to: the tail is what the first spoken append will claim, and a tail
+ * read separately from the history it belongs to is a claim about a
+ * conversation that never existed. If somebody types a turn between this
+ * request and that append, the append is refused — which is exactly right, and
+ * is the barrier docs/plans/260831l-live-conversation-in-chat.md § 6 asks for.
+ *
+ * The instructions, the tool list and the article go to **OpenAI**, never to the
+ * browser: a client handed the prompt is a client that can be talked into
+ * sending a different one. src/live.ts § `mintLiveToken`.
+ */
+async function liveChatToken(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<LiveTicket> {
+  const { placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  /* **Validated against the shared union, never cast.** The two ends declare
+     `MicPlacement` once, in src/types.ts, and this is the gate that keeps a
+     string off the wire from becoming a `Record` lookup that quietly answers
+     `undefined` — which would spread into the session as a missing field and
+     turn noise reduction off without a word. */
+  if (placement !== undefined && !isMicPlacement(placement)) {
+    throw httpError(400, `placement must be one of: ${MIC_PLACEMENTS.join(", ")}`);
+  }
+  if (useProfile !== undefined && typeof useProfile !== "boolean") {
+    throw httpError(400, "useProfile must be true or false");
+  }
+
+  const article = await loadArticle(slug);
+  const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+
+  const session = liveSession({
+    meta: article.meta,
+    blocks: article.blocks,
+    profile: useProfile === false ? null : await resolveProfile(slug),
+    /* The same terms dictation primes its transcriber with, in the `keywords`
+       field rather than `prompt` — src/live.ts says at length why that
+       distinction is the whole difference between 4/4 and 2/4 on a block id. */
+    vocabulary: await vocabularyTermsFor({ kind: "article", slug }),
+    ...(placement === undefined ? {} : { placement }),
+  });
+
+  const minted = await mintLiveToken(session);
+  return {
+    ...minted,
+    seed: liveSeedItems(thread?.messages ?? []),
+    tailId: thread?.messages.at(-1)?.id ?? null,
+  };
+}
+
+/**
+ * **One chat tool, run for a live session.** `POST /api/chat/:slug/live-tool`.
+ *
+ * The one route where the *browser* names the tool. In typed chat the name
+ * comes off the model's own output on this server; in a live session the model
+ * is talking to the browser, so the call arrives here second-hand. That is one
+ * step further out, and it is why the name is checked against
+ * `LIVE_SERVER_TOOLS` rather than handed to `runTool` — which answers an
+ * unknown name with a friendly sentence listing the others, which is the right
+ * reply to a confused model and the wrong one to a caller that is not one.
+ *
+ * `show_passage` is deliberately not runnable here: it is answered in the
+ * browser, in the frame it arrives in, and that is the whole reason it exists.
+ *
+ * **The exposure is the same as typed chat's, not larger.** `read_web_page`
+ * fetches a URL this server chooses to fetch either way — a reader can already
+ * ask a typed conversation to read one — so the defence is the same one, in the
+ * same place. docs/project/security.md.
+ */
+async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
+  const { name, args } = (body ?? {}) as Record<string, unknown>;
+  if (typeof name !== "string" || !LIVE_SERVER_TOOLS.has(name)) {
+    throw httpError(400, "That is not a tool a live session may run");
+  }
+  const article = await loadArticle(slug);
+  return runTool(name, (args ?? {}) as Record<string, unknown>, {
+    slug,
+    meta: article.meta,
+    blocks: article.blocks,
+  });
+}
+
+/** What the browser is given to open one live session. See `liveChatToken`. */
+interface LiveTicket extends LiveToken {
+  /** The thread so far, windowed and with our block ids taken out. */
+  seed: { role: "user" | "assistant"; text: string }[];
+  /** The row the first spoken append must claim, or `null` for an empty thread. */
+  tailId: string | null;
 }
 
 /**
@@ -2123,7 +2495,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
 
    `slugPart` for every capture that becomes a **directory name**. That is
    `:slug` on /api/article, /api/metadata, /api/tweets, /api/glossary,
-   /api/summary and /api/comments.
+   /api/ideas and /api/comments.
 
    The next person to add a route will copy whichever line they happen to read
    first, so the rule is written here rather than left to be inferred: **if the
@@ -2152,13 +2524,19 @@ function part(m: RegExpExecArray, group: number): string {
  * reading it back through the endpoint: HTTP 200, with the planted text in the
  * body.
  *
- * **The thing that made it survive review is how a shallow attempt fails.**
- * `../../etc` finds no `blocks.json`, so `candidateDirs` falls through to
- * `example/` and serves the fixture — which looks exactly like a refusal. You
- * have to traverse all the way to a directory you control before anything
- * differs, and a test that stops short reports the endpoint safe. Textbook
+ * **The thing that made it survive review is how a shallow attempt failed.**
+ * `../../etc` finds no `blocks.json`, and `candidateDirs` used to fall through
+ * to `example/` and serve the fixture — which looks exactly like a refusal. You
+ * had to traverse all the way to a directory you control before anything
+ * differed, and a test that stopped short reported the endpoint safe. Textbook
  * docs/reusable/silent-success.md, and it is why this is written up in
  * docs/project/security.md rather than filed as a bug fix.
+ *
+ * That fallback is gone as of stage 1a: `candidateDirs` in src/api.ts offers
+ * `example/` for the fixture's own slug and for nothing else, so a slug with no
+ * artefacts now answers 404 whether it is a typo or a traversal. The history
+ * stays here because it is the reason this route validates the slug rather than
+ * trusting the filesystem to refuse.
  *
  * The knowledge was already in this file. `parseJobRequest` validates its slug
  * and says why: *"it is joined onto `data/` and `output/`, so an unchecked one
@@ -2230,7 +2608,7 @@ async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
  * `title: null` and `purpose: null` are both meaningful and NOT the same as
  * omitting the key: `title: null` clears the reader's override and restores
  * whatever the extractor last found; `purpose: null` clears "why you're
- * reading this one" (docs/plans/reader-profile.md). So this tests `in`, not
+ * reading this one" (docs/plans/260826t-reader-profile.md). So this tests `in`, not
  * truthiness.
  *
  * **Everything is validated before anything is written, and the write is one
@@ -2375,7 +2753,7 @@ function checkUploadOrigin(
  * document *down*, so accepting it would write a `true` into
  * `article_visibility_changes` for an act about which nobody confirmed
  * anything — and that column is precisely the one a rights complaint would ask
- * about. docs/plans/public-read-only-access.md § Rights and takedown.
+ * about. docs/plans/260827ai-public-read-only-access.md § Rights and takedown.
  *
  * **`=== true`, not truthiness.** `rightsConfirmed: "yes"` and
  * `rightsConfirmed: 1` are shapes a hand-written client produces, and reading
@@ -2469,9 +2847,10 @@ export function parseJobRequest(body: unknown): {
 
      **A `guidance` field used to be a fourth, and is now ignored rather than
      refused.** The summary steer it fed is gone
-     (docs/plans/steer-becomes-the-profile.md), and an old tab still sending one
-     should get its summaries written rather than a 400 about a box it can still
-     see. Nothing reads it. */
+     (docs/plans/260830o-steer-becomes-the-profile.md), and so is the stage it steered
+     (docs/plans/260831s-gist-only-summaries.md); an old tab still sending one should
+     get its job run rather than a 400 about a box it can still see. Nothing
+     reads it. */
   const rest = {
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
@@ -2537,7 +2916,7 @@ export function parseJobRequest(body: unknown): {
 }
 
 /* ------------------------------------------------------------- uploads --
-   docs/plans/pdf-upload-and-storage.md. Three small handlers, and between them
+   docs/plans/260826u-pdf-upload-and-storage.md. Three small handlers, and between them
    they move no file bytes at all — which is the entire design. Everything this
    server handles is a few hundred bytes of JSON, so the 4.5 MB Vercel body
    limit never applies to anything on the critical path and `MAX_BODY_BYTES`
@@ -2712,7 +3091,7 @@ async function jobForSlug(slug: string): Promise<Job | null> {
  * parameter would make the overlap a caller convention: every route could go on
  * writing `const found = await loadGlossary(at)` and hand over an
  * already-settled promise, and a test of this function would still pass. GPT
- * Sol's fifth finding on docs/plans/library-read-latency.md. Taking the thunk
+ * Sol's fifth finding on docs/plans/260828c-library-read-latency.md. Taking the thunk
  * moves the responsibility in here, where it can be proved.
  *
  * ## Why not `Promise.all`, and why not `allSettled` either
@@ -2767,7 +3146,7 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * A job as the client may see it — **without the reader's profile**.
  *
  * The frozen profile has to live on the job: that is what makes it survive a
- * restart and what stops a summary run split across two profiles
+ * restart and what stops a batched run split across two profiles
  * (`Job.profile`, src/types.ts). But the job record is also what
  * `GET /api/jobs` returns on **every poll**, every eight seconds, for the life
  * of the panel — and it is the reader's own description of themselves. There is
@@ -2888,7 +3267,7 @@ type ModelReport = {
  *
  * **Resolved here rather than inside the step that uses it**, and for a job the
  * result is then frozen onto the job. See `Job.profile` in src/types.ts: a
- * summary run is several batches at once, and a reader who edits their box
+ * step can be several batched calls at once, and a reader who edits their box
  * mid-run would otherwise get one artefact written from two profiles.
  *
  * Never reads the client's word for it. See `useProfile` above.
@@ -2902,7 +3281,7 @@ async function resolveProfile(slug: string): Promise<string | null> {
  * needs to show them to the person who wrote them.
  *
  * `GET /api/reader?slug=` answers the profile panel, which prints each box
- * separately with its own way in to edit it (docs/plans/profile-panel.md). It
+ * separately with its own way in to edit it (docs/plans/260830c-profile-panel.md). It
  * cannot use `resolveProfile` above, because the joined string is a prompt
  * fragment: it carries "About the reader:" / "Why they are reading this piece:"
  * prefixes that are ours rather than the reader's, and there is no honest way
@@ -3005,7 +3384,7 @@ interface ReaderState {
  * stored, so the rule has to hold for every writer rather than for this one
  * route. (The summary steer was the counter-example — validated at the boundary
  * because it went straight into a prompt and never landed anywhere — and it is
- * gone: docs/plans/steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * gone: docs/plans/260830o-steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<ReaderState> {
@@ -3343,7 +3722,7 @@ async function serveApi(
      * visibility change, and with a deployed test that warms the edge, turns the
      * document private, and proves the next anonymous request cannot get the body.
      * A manual global purge is not a privacy control.
-     * docs/plans/public-read-only-access.md.
+     * docs/plans/260827ai-public-read-only-access.md.
      */
     if (isPublicNamespace(path)) {
       res.setHeader("Cache-Control", "no-store");
@@ -3466,7 +3845,7 @@ interface ApiRequest {
  *
  * ## What the split buys, which a boolean parameter would not
  *
- * `docs/plans/public-read-only-access.md` asked for a check that the authenticated
+ * `docs/plans/260827ai-public-read-only-access.md` asked for a check that the authenticated
  * dispatcher cannot be reached without a user, and noted there is no route table to
  * enumerate — only an `if` chain. This is the structural version of that check:
  * the public dispatcher runs *before* `requireUser` and therefore cannot produce
@@ -3569,7 +3948,7 @@ export async function serveAuthenticatedApi(
    *
    * Not a new key on `PATCH /api/library/:slug`: that route edits *shelf state*
    * — the relationship between a reader and a document — and visibility is a
-   * property of *the work*. Stage 3 of docs/plans/public-read-only-access.md
+   * property of *the work*. Stage 3 of docs/plans/260827ai-public-read-only-access.md
    * splits `articles` from `shelf_entries` along exactly that line, so putting
    * them together now would mean moving the API twice. GPT Sol's reasoning.
    *
@@ -3593,7 +3972,7 @@ export async function serveAuthenticatedApi(
      payload would mean every reader of every article downloads a `null` for a
      page almost none of them open. GET only — *writing* a thread is a job, not
      a request, because it is a model call that takes half a minute
-     (docs/plans/tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
+     (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
      POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
   const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(url);
   /* Same shape and same reasoning as the thread's — most articles have no
@@ -3614,14 +3993,21 @@ export async function serveAuthenticatedApi(
      the better part of a minute if the model searches, so the client's fetch
      needs a patient deadline; `explain` has its own. */
   const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(url);
-  const summary = /^\/api\/summary\/([\w.%-]+)$/.exec(url);
-  /* Read only, and no DELETE beside it — for the same reason the summary has
-     none, plus one of its own: `ideas` replaces rather than appends, so
-     re-running the step already *is* "start again". The glossary needs a delete
-     precisely because running it again would add to the list it is trying to
-     throw away. Asking for these is
+  /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
+     so re-running the step already *is* "start again". The glossary needs a
+     delete precisely because running it again would add to the list it is
+     trying to throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
+  /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
+     the step replaces rather than appends, so re-running it already *is* "find
+     them again". POST /api/jobs { slug, steps: ["quotes"] }. */
+  const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(url);
+  /* The timeline — docs/project/timeline.md. GET only, and no DELETE, for the
+     reason `ideas` above has none: the step replaces rather than appends, so
+     rebuilding it is
+     POST /api/jobs { slug, steps: ["timeline"] }. */
+  const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(url);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -3631,7 +4017,7 @@ export async function serveAuthenticatedApi(
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
      collect it when the job lands. Refetching the whole article for that re-reads
-     every block and the whole tree; see docs/plans/glossary-read-latency.md for
+     every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
      what that costs on Postgres. */
   const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(url);
   /* Its own endpoint, and unlike every artefact route above it this one is not
@@ -3657,12 +4043,19 @@ export async function serveAuthenticatedApi(
      is the one thing a comment can do that spends money and streams. **There is
      deliberately no route for linking a comment to its conversation**: the only
      place that knows the real thread id is the chat stream itself, so the link
-     is written there. See docs/plans/comments-and-bookmarks.md. */
+     is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
   const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(url);
   const chatCancel = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/.exec(url);
+  /* Live conversation's two: a ticket to open one, and the write that lands a
+     finished exchange in the thread. Both are under the conversation rather
+     than under the article, because both need the thread — one to seed the
+     session with it, the other to append to it. */
+  const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(url);
+  const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(url);
+  const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(url);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
@@ -3754,7 +4147,7 @@ export async function serveAuthenticatedApi(
          request, right in every state, including the ones with no artefact to
          hang a flag on. GPT Sol's review, 2026-08-26. */
       /* **`purpose` is here for the profile panel**, which prints each box on
-         its own with its own way in to edit it (docs/plans/profile-panel.md).
+         its own with its own way in to edit it (docs/plans/260830c-profile-panel.md).
          It is the reader's own words being shown back to the reader, which is a
          different act from the `useProfile: boolean` a generate request sends —
          that one is still a boolean, because a client that could supply profile
@@ -3874,24 +4267,31 @@ export async function serveAuthenticatedApi(
       );
       return;
     }
-    /* Read only. There is no DELETE beside this one, unlike the glossary's:
-       running the step again replaces the artefact rather than appending to it,
-       so "start over" already has a spelling and a second one would only be a
-       way to lose the summaries without getting new ones. See `loadSummaries`
-       in src/api.ts. Asking for them is
-       POST /api/jobs { slug, steps: ["summary"] }. */
-    if (summary && req.method === "GET") {
-      {
-        const at = slugPart(summary, 1);
-        send(res, 200, await withProfileChanged<SummariesResponse>(at, () => loadSummaries(at), (found) => found.summaries));
-      }
-      return;
-    }
     if (ideas && req.method === "GET") {
       {
         const at = slugPart(ideas, 1);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
       }
+      return;
+    }
+    if (quotes && req.method === "GET") {
+      {
+        const at = slugPart(quotes, 1);
+        send(
+          res,
+          200,
+          await withProfileChanged<QuotesResponse>(at, () => loadQuotes(at), (found) => found.quotes),
+        );
+      }
+      return;
+    }
+    if (timeline && req.method === "GET") {
+      /* **No `withProfileChanged`**, unlike its five neighbours, and that is
+         the decision rather than an omission: this artefact was never written
+         for a profile, so there is no third staleness fact to add.
+         `TimelineResponse` in src/types.ts has two fields where the others have
+         three. docs/plans/260831i-timeline-mode.md § Freshness. */
+      send(res, 200, await loadTimeline(slugPart(timeline, 1)));
       return;
     }
     if (sketch && req.method === "GET") {
@@ -3913,7 +4313,7 @@ export async function serveAuthenticatedApi(
       }
       return;
     }
-    /* Read only, like the summary above and for the same reason: running the step
+    /* Read only, like the ideas above and for the same reason: running the step
        again replaces the artefact, so "start over" already has a spelling. Asking
        for one is POST /api/jobs { slug, steps: ["arc"] }.
 
@@ -4008,7 +4408,7 @@ export async function serveAuthenticatedApi(
          this path was `answer`, which spends a model call and streams; the two
          meanings now have two routes, because a colliding id means opposite
          things to them — a retry to one, somebody else's comment to the other.
-         docs/plans/comments-and-bookmarks.md § the store contract. */
+         docs/plans/260828a-comments-and-bookmarks.md § the store contract. */
       send(res, 201, { comment: await createFree(slugPart(comments, 1), await readBody(req)) });
       return;
     }
@@ -4051,7 +4451,7 @@ export async function serveAuthenticatedApi(
          state changes on every streamed token, so holding threads above
          `TableView` would re-render — and re-`annotateHtml` — every paragraph
          of the article, hundreds of times, while an answer arrives. Found by a
-         GPT-5.6 review, 2026-08-26; docs/plans/chat-as-gateway.md § summaries. */
+         GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md § summaries. */
       const url = new URL(req.url ?? "/", "http://localhost");
       if (url.searchParams.get("summary") === "1") {
         send(res, 200, { threads: threads.map(summarise) });
@@ -4080,6 +4480,40 @@ export async function serveAuthenticatedApi(
     if (chatCancel && req.method === "POST") {
       const [slug, id] = [slugPart(chatCancel, 1), part(chatCancel, 2)];
       send(res, 200, await cancelChat(slug, id, await readBody(req)));
+      return;
+    }
+    if (chatLiveTool && req.method === "POST") {
+      /* Attributed like every other paid call this article causes. A tool run
+         may embed or search, and "what has this piece cost me" should not stop
+         at the questions that were typed. */
+      const slug = slugPart(chatLiveTool, 1);
+      const toolBody = await readBody(req);
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: slug }, () => liveTool(slug, toolBody)),
+      );
+      return;
+    }
+    if (chatLive && req.method === "POST") {
+      const [slug, id] = [slugPart(chatLive, 1), part(chatLive, 2)];
+      send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+      return;
+    }
+    if (chatSpoken && req.method === "POST") {
+      /* **The spend attribution the streaming route has, for the half of a live
+         session this server can see.** It buys nothing today — no row is
+         written for realtime audio at all, and `npm run cost` says so by name
+         (scripts/ai-cost.ts § `liveConversationGap`) — but this is the only
+         request in a live conversation that knows which article it belongs to,
+         so it is where a meter would attach. */
+      const [slug, id] = [slugPart(chatSpoken, 1), part(chatSpoken, 2)];
+      const spokenBody = await readBody(req);
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: slug }, () => spokenChat(slug, id, spokenBody)),
+      );
       return;
     }
     if (chatStop && req.method === "POST") {
@@ -4195,7 +4629,7 @@ export async function serveAuthenticatedApi(
 
          Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
          at `arc`, and no step in it takes a profile. The reader asks for a
-         glossary or a summary later, by slug, and that request resolves
+         glossary or a set of ideas later, by slug, and that request resolves
          correctly. GPT Sol's review of the built code, 2026-08-26.
 
          `=== false`, so absent means yes: a client that has never heard of this
@@ -4232,7 +4666,7 @@ export async function serveAuthenticatedApi(
      * Its own branch rather than a third name in `jobAction` above, because it
      * is the one job action that does not answer with a bare `Job`: the caller
      * is a loop, and a loop needs to be told whether to come back — see
-     * `Advanced` in src/jobs.ts and docs/plans/job-queue-rethink.md.
+     * `Advanced` in src/jobs.ts and docs/plans/260826q-job-queue-rethink.md.
      *
      * **A long request on purpose.** One step can be a minute of model calls,
      * and that is the design: the browser holds the request open so the work

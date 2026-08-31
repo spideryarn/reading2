@@ -7,8 +7,8 @@
  *     GET /api/jobs 500   column "profile" does not exist   (42703)
  *
  * The cause each time was migrations not applied to the database the code was
- * about to talk to. See docs/plans/schema-drift-guard.md for the plan and
- * docs/postmortems/unguarded-job-store-and-the-migration-that-migrated-the-laptop.md
+ * about to talk to. See docs/plans/260827w-schema-drift-guard.md for the plan and
+ * docs/postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md
  * for the first incident.
  *
  * **Why columns rather than the migration ledger.** `spideryarn_app` — the role

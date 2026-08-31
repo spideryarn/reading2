@@ -126,26 +126,52 @@ tree — it is what stops a model quietly inventing a block id that doesn't exis
 A paid calibration of this stage on 2026-08-30 threw on **4 of 13** structure calls, and the
 failures were bimodal by kind rather than spread by size: two were partition gaps of **exactly one
 block**, and two were a `sourceHeading` claiming a heading outside its node's range. Every tiling
-failure ever recorded here — those two, plus the two in
-[the-article-with-one-heading.md](../postmortems/the-article-with-one-heading.md) — is off by one
-block. The structure call takes about 163 seconds and is 88% of the stage's wall clock, so a
-refusal costs the reader the whole article.
+failure recorded up to that day — those two, plus the two in
+[260830a-the-article-with-one-heading.md](../postmortems/260830a-the-article-with-one-heading.md) — was off by one
+block; the one that arrived that evening, from a PDF, was off by three (below). The structure call
+takes about 163 seconds and is 88% of the stage's wall clock, so a refusal costs the reader the whole
+article.
 
 So [`src/toc.ts`](../../src/toc.ts) mends both, on the model's proposal before anything is built:
 
-- **a boundary that misses by one block is snapped shut** — a gap, an overlap and a last child that
-  stops one short are the three shapes, and they are one fix;
+- **a misaligned boundary is snapped shut** — a gap, an overlap and a last child that stops short are
+  the three shapes, and they are one fix;
 - **a `sourceHeading` no heading in the node's range backs up is dropped.** It is provenance, not
   structure: its only consumer is the `§` badge meaning "the author wrote this". An unbacked claim
   is a badge that would lie; dropping it costs one mark, and throwing costs the article.
 
-**Both bounds are the argument, not the repair.** Two blocks out is not a slip but a different
-reading of the article, and it still throws — as do a backwards range, an invented id, and a root
-that misses the article's ends. And the budget is **one distinct boundary per answer**: several
-independent slips are a different event from the one we measured, and mending each separately would
-walk a misaligned tree past the check one block at a time with every step looking defensible. A
-cascade of the *same* boundary down through nested nodes is free, because it is one mistake seen at
-several depths.
+#### The size bound is gone, and it was overridden rather than refuted
+
+That first repair was bounded at **one block** until 2026-08-30, on the argument that two blocks out
+is not a slip but a different reading of the article. The bound was fitted to four observations, and
+all four were off by one **and from HTML articles with headings** — the half of the corpus where the
+model has the author's own structure to agree with. PDF ingest reached production that day, PDFs are
+headingless, and the first thing that happened was a 9-page arXiv paper losing its whole ToC to a gap
+of three: one completed call, $0.1617, nothing the reader could do. Greg, 2026-08-30:
+
+> I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
+> better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
+> we feed in the previous output, with information about the gaps and ask it to adjust. But that's
+> for later.
+
+**That re-ask is the proper fix and this is not it.** Snapping hands the orphaned blocks to the
+section beside them, which is a guess: a paragraph filed under a heading that may not describe it.
+What it buys is that every block stays reachable — a block in no node cannot be addressed by
+granularity zoom at all — and an article that opens rather than one that does not.
+
+**So what stands where the bound was is the reporting**: every repair's *size* is recorded, summed
+and maxed into `TocRun`, and the largest is the number to watch, because six one-block snaps and one
+six-block snap add up the same.
+
+**The other bound stays, and it is now the only one.** The budget is **one distinct boundary per
+answer**: several independent slips are a different event from the one we measured, and mending each
+separately would walk a misaligned tree past the check one block at a time with every step looking
+defensible. A cascade of the *same* boundary down through nested nodes is free, because it is one
+mistake seen at several depths. It is fitted to the same four observations the size bound was, so a
+headingless article with two independent slips **still loses its ToC** — a known gap, left open
+because moving both bounds on one new specimen is the mistake the old bound was fitted by. A
+backwards range, an invented id, a root that misses the article's ends and children that run past
+their parent all still throw.
 
 **Both are counted, every run, including at zero** — into `TocRun`, onto the CLI's `Repaired:` line
 and into the queue's log, the way `strandedSupplement` already is. A repair nobody is told about is
@@ -160,7 +186,7 @@ mistake scores `ok`, so the throw rate alone stopped meaning what it used to.
 blocks. No model, no network, milliseconds — against ~163 seconds and a real bill for the model's.
 
 Measured on 2026-08-30 over seven development documents and five held out
-([the research](../research/opening-an-article-before-the-toc.md)):
+([the research](../research/260830a-opening-an-article-before-the-toc.md)):
 
 - **6 of 7** have enough headings to carve at all;
 - **4 of 7** reproduce the model's depth-one carving *exactly*;
@@ -195,7 +221,7 @@ another, every number under `evals/results/` would describe something nobody rea
 builder, the marker, the exemption and the public boundary are in place, and the publication
 boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
 are not. Those are steps 2–4 in
-[the research](../research/opening-an-article-before-the-toc.md).
+[the research](../research/260830a-opening-an-article-before-the-toc.md).
 
 ## Entry length grows with depth <a id="granularity"></a>
 
@@ -264,7 +290,7 @@ duplicated.
 121 of wikipedia's 335, a third of the labelling bill spent writing navigation for rows nobody
 navigates to. `isStructural` is what refuses them. The tree's **shape** is unchanged: every block
 still gets a leaf, notes included, and the supplement node that gives the apparatus one visible row
-of its own is a later stage. [footnotes.md](../plans/footnotes.md).
+of its own is a later stage. [260828o-footnotes.md](../plans/260828o-footnotes.md).
 
 `validate-tree.ts` turns this into a hard error: a leaf carrying a `navLabel` while anchoring a
 block `isStructural` refuses fails the tree.
@@ -402,6 +428,16 @@ call. `planBatches` packs whole sibling sets until adding the next one would pas
 never splits one. Batching on a token window instead would break exactly that and nothing else,
 which is why it would be hard to notice.
 
+**There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
+`MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
+`MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
+than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
+backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
+case here — which is the same give the cap already has for an oversized sibling set. Measured before
+it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
+three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
+merge into. The residue is `acceptGap`'s to refuse.
+
 **A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
 exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
 differed — curly apostrophes flattened to straight, authored numbering ("2: Other Games In Town")
@@ -418,20 +454,79 @@ of the work where reasoning matters. And `COVERAGE_FLOOR` went from 0.95 to **1*
 asked for an exact set of numbered paragraphs and refuses any other set, so there is no longer a path
 by which a block is legitimately unlabelled.
 
-### Three files, and what survives a failed run
+### The path that turned out to exist anyway
 
-Stage 4 writes `tree.json`, `blocks.json` and `labels.json`, each beside its target and renamed into
-place, the tree last. Ordering alone was not enough: `writeFile` truncates before it has anything to
-put there, and *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is
-done", so a kill mid-write left a present, truncated tree that a retry skipped.
+`COVERAGE_FLOOR` is **0.95 again** since 2026-08-30, because that last sentence was wrong. A
+production ingest of a 244-block Wolfram article died twice on *"this call asked for 58 labels and
+got 57, missing paragraph 4"* — one label, on a lead-in fragment whose entire text is the word
+"or". Stage 3 had stripped the code cell the fragment pointed at, which leaves "6–20 words that are
+a CLAIM or a MOVE" and "never introduce a fact that is not in that paragraph" **jointly
+unsatisfiable**: skipping is the compliant answer, and no retry can change it. Third recorded
+instance of the shape — [`src/labels.ts`](../../src/labels.ts) documents 41-of-42, twice, before it.
 
-`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because
-atomic writes give us "whole or not there" and not "still true". A complete set of labels for an
-article that has since been re-extracted, or re-structured, looks exactly like a current one. The
-structure hash is the one that earns its place: boundaries can move without a single block changing,
-so it is taken over every node's range, parent, title and gist rather than over the outline the
-prompt shows the model, which is titles alone. **Nothing reads it yet** — the `toc` step still has no
-freshness check — so today it is evidence in the file rather than a guard.
+So the stage now does three things instead of dying, in rising order of risk:
+
+- **Says which paragraphs.** The old message read "missing 4" and cost a day, because 58 − 57 = 1
+  and the last number looked like a count. It is a paragraph number, and it says so.
+- **Re-asks for the gap alone.** The same prompt with one more part appended, naming the ordinals
+  that came back absent — so the neighbours a label has to be told apart from are still in view, and
+  the cached prefix still matches. What it saves is the answer, not the question: fifty-seven labels
+  already paid for are kept. Re-drawing the whole batch has now failed to help three times on record,
+  byte-identically, because `batchFingerprint` excludes `max_tokens` so the retry sends the same
+  bytes.
+- **Accepts the batch with the gap, bounded — and only on all four counts.** `droppedBudget` — 2% of
+  a batch, floor of one — after the re-ask has also failed. Three further conditions, all added
+  2026-08-31 after GPT Sol's review of the stage found each of them missing: the re-ask must itself
+  have come back *short* (a truncation or a 429 says nothing about the paragraph, so it is a
+  transient to retry rather than a fragment to forgive); a displacement found on the merged set is
+  rethrown rather than re-decided on the smaller partial set, which can sit one label under the
+  evidence `detectShift` needs; and a batch too small for that check to run at all is refused rather
+  than published unchecked — which is the backstop behind `MIN_BATCH` above, for the articles
+  merging cannot reach and for a batch whose labels turn out to carry no lexical signal.
+  `COVERAGE_FLOOR` is the article-level backstop behind the per-batch
+  bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
+  each spending their floor of one would stay inside budget and still cost the article a fifth of its
+  rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
+  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateToc`,
+  which made the backstop depend on which command you typed.
+
+**The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
+outline skips the row, the spine draws an empty string, and nothing is red. So every drop is named
+and counted: `LabelRun.dropped`, the `dropped` list in `labels.json`, `labelsDropped` on the step's
+log line and on the progress card, and `evals/toc-labels.ts` reads the artefact rather than inferring
+a fault from a coverage number it can no longer interpret alone. That last one is the *"the eval had
+to be told"* lesson from the R2/R3 build, applied in advance rather than afterwards. The upstream fix
+is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)
+— stage 3 promoting sentence fragments to blocks — and it is not this stage's to make.
+
+### Three artefacts, and what survives a failed run
+
+Stage 4 produces the tree, the blocks and the labels, and **hands all three back in one object**
+rather than writing them: `generateToc` returns `TocArtefacts`, and its caller stores them together
+in a single write ([`src/toc.ts`](../../src/toc.ts),
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
+required by the type, so a caller cannot store a tree and skip its labels.
+
+It used to write the three files itself, in a fixed order with the tree last. That ordering was
+about three *separate* writes: `writeFile` truncates before it has anything to put there, and
+*existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
+kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
+both halves of that, and the ordering survives only in `npm run toc`'s own `main()`, which really
+does write three files into a directory.
+
+`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
+whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
+for an article that has since been re-extracted, or re-structured, looks exactly like a current one.
+The structure hash is the one that earns its place: boundaries can move without a single block
+changing, so it is taken over every node's range, parent, title and gist rather than over the outline
+the prompt shows the model, which is titles alone. **Nothing reads the structure hash yet** — the
+`toc` step still has no freshness check — so today it is evidence in the file rather than a guard.
+
+`sourceHash` is not in that category. `STAMP_SOURCE` points stage 4's stamp at `labels.json` rather
+than at the tree, which carries no such field, so that hash is what the store compares a declared
+stamp against and what `generateToc` reports as the step's input hash. It has to be recorded: the
+publish guard compares it with the stored blocks and refuses to publish an article whose tree was
+built from something else.
 
 While the batches are running, each one's labels are appended to **`labels-progress.json`** as it
 lands. That is working state, not an artefact, which is why it is not `labels.json`: a partial
@@ -442,7 +537,7 @@ crumbs, gists, outline and boundaries around them may all have moved. The first 
 aborts every other batch rather than letting a doomed run keep buying answers.
 
 The whole design, the alternatives weighed against it, and what it does not yet do are in
-[docs/plans/toc-scaling.md](../plans/toc-scaling.md).
+[docs/plans/260826h-toc-scaling.md](../plans/260826h-toc-scaling.md).
 
 ## The budget <a id="the-budget"></a>
 
@@ -464,7 +559,7 @@ exactly, and a flat reservation for reasoning, which it cannot.
 77,100 and running it again failed *too*, with about 64,000 of thinking that time: adaptive thinking
 at `effort: "high"` expands into whatever room it is given, so raising the ceiling raises the
 thinking with it and the two never converge. `max_tokens` is a ceiling; `effort` is the leash.
-[docs/postmortems/toc-max-tokens.md](../postmortems/toc-max-tokens.md) has the whole account.
+[docs/postmortems/260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) has the whole account.
 
 **The reservation is per call, not per stage.** 40,000 was measured on a call that reads a whole
 article and thinks about its structure. A label batch reads one section and writes a dozen labels,
@@ -515,7 +610,7 @@ section is **not yet built**. The [budget](#the-budget) refuses those out loud r
 them.
 
 The shape it should take, from GPT-5.6-sol's review and written up in
-[toc-scaling.md § D](../plans/toc-scaling.md): build the authored-heading skeleton mechanically;
+[260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
 make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
 assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
 the whole global outline in front of it. Never blind subtree calls with independently invented

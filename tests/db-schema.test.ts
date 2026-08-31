@@ -7,7 +7,7 @@
  * a check constraint dropped because it was in the way. Prose cannot stop that;
  * a failing test can.
  *
- * See docs/plans/postgres-migration.md and docs/project/supabase-local.md.
+ * See docs/plans/260825f-postgres-migration.md and docs/project/supabase-local.md.
  *
  * **These skip when there is no database**, so `npm test` still passes on a
  * fresh clone with no Docker. That is a deliberate trade and it has a cost:
@@ -138,7 +138,7 @@ describe("the schema keeps the promises the plan makes", () => {
     await inRollback(async (c) => {
       await seed(c);
       // The whole reason the primary key is composite. `spya-` ids collide
-      // across a library at ~100 articles (postgres-migration.md), and every id
+      // across a library at ~100 articles (260825f-postgres-migration.md), and every id
       // is resolved inside one article, so this MUST be allowed.
       await c.query(
         `insert into spideryarn.block_identities (article_id, block_id)
@@ -277,22 +277,39 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("two jobs cannot be running at once", async () => {
+  /**
+   * **The schema no longer says how many jobs may run, and that is the change.**
+   *
+   * This case asserted that a second `running` insert violated
+   * `jobs_only_one_running` — a unique index on the constant `(true)`, which was
+   * global concurrency 1 across every owner. A unique index cannot express *at
+   * most N*, and N is what the cap became on 2026-08-30
+   * (drizzle/0032_jobs_concurrency_cap.sql), so the rule moved out of the schema
+   * and into a count taken inside the `queue_state` lock — src/store/pg-jobs.ts
+   * § `claim`, pinned by tests/store-jobs-parity.test.ts against both adapters.
+   *
+   * **So what is left here is the loss, said out loud.** Two running rows are
+   * now something the database will accept, and the only thing that stops a
+   * third, tenth or hundredth is application code taking a lock it could forget
+   * to take. Asserting that the insert *succeeds* is what keeps this file honest
+   * about that: a future change that quietly reinstates a schema-level cap would
+   * turn this red and have to say why, and nobody reading the table's
+   * constraints is left believing a guarantee that is not there.
+   */
+  dbIt("the schema allows two jobs to run at once — the cap is not in the database", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const running = (id: string) =>
         c.query(
           `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
            values ($1,$2,$3,'[]'::jsonb,'running','w',gen_random_uuid(), now() + interval '1 minute')`,
-          /* A slug each. `jobs_active_slug` reserves one per article, so two
-             running jobs on one slug would now be refused by *that* index and
-             this test would pass while saying nothing about the one it names. */
+          /* A slug each. `jobs_active_slug` still reserves one per article, so
+             two running rows on one slug would be refused by *that* index and
+             this would pass while saying nothing about the cap. */
           [id, OWNER, id],
         );
       await running("spya-aaaaaa");
-      // queue_state gives concurrency 1 only while every claimant follows the
-      // locking convention. This is the backstop for when one does not.
-      await expect(running("spya-bbbbbb")).rejects.toThrow(/jobs_only_one_running/);
+      await expect(running("spya-bbbbbb")).resolves.toBeDefined();
     });
   });
 
@@ -474,7 +491,7 @@ describe("the schema keeps the promises the plan makes", () => {
      * object name — so a row that is not a digest, or is half a pointer, names
      * an object that cannot exist, and nothing downstream would say so. It
      * would read as "this article has no source document", which is a thing
-     * that legitimately happens. docs/plans/raw-bytes-in-storage.md.
+     * that legitimately happens. docs/plans/260827o-raw-bytes-in-storage.md.
      */
     const SHA = "a".repeat(64);
 

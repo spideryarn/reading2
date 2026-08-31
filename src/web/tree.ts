@@ -13,9 +13,8 @@
  * automatically the same at every level of granularity, which is the invariant
  * the whole feature rests on.
  */
-import type { Arc, Block, BlockId, NodeId, SummaryEntry, Tree, TreeNode } from "../types.js";
+import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
-import type { Rung } from "./params.js";
 
 export interface Cell {
   node: TreeNode;
@@ -436,23 +435,18 @@ export function buildOutline(
     .filter((e): e is OutlineEntry => e !== null);
 }
 
-/* --------------------------------------------------------- the summaries --
-   What summary mode renders: the tree, indented, with each node carrying every
-   rung of the ladder it has. See docs/project/summaries.md, src/summarise.ts
-   for where the two generated rungs come from, and SummaryPanel.tsx for the
-   view.
+/* ------------------------------------------------------- the summary tree --
+   What summary mode renders: the tree, indented and numbered, with the
+   one-sentence gist stage 4 wrote onto every internal node. See
+   docs/project/summaries.md and SummaryPanel.tsx for the view.
 
-   This is the same join `buildArcColumn` above does, and it obeys the same
-   rule for the same reason: **entries are matched by block range, never by node
-   id.** Node ids are positional and a re-run of `npm run toc` renumbers them,
-   so an id join would hand each summary to its neighbour — and a plausible
-   paragraph against the wrong section is a lie the reader has no way to detect.
-   An entry whose range matches nothing is simply dropped.
-
-   Note what this function does *not* need: `summary.json`. Every node already
-   carries a `gist` from stage 4, so the panel has a usable shortest rung for
-   every article whether or not anybody has paid for the other two. That is the
-   whole reason `gist` is the default rung in params.ts. */
+   **This reads nothing but the tree**, which is the whole of what changed on
+   2026-08-31 when the generated length ladder was removed
+   (docs/plans/260831s-gist-only-summaries.md). It used to join `summary.json` in as
+   well — by block range and never by node id, the same rule `buildArcColumn`
+   above still obeys, because node ids are positional and a re-run of
+   `npm run toc` renumbers them. That join, and the two rungs it carried, are
+   gone; the gists were always the part nobody had to pay for. */
 
 export interface SummaryNode {
   node: TreeNode;
@@ -480,94 +474,22 @@ export interface SummaryNode {
   supplement?: true;
   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
   gist?: string;
-  /** A few sentences. Absent until `npm run summarise` has been run. */
-  short?: string;
-  /** A paragraph or more, sized by depth. Absent until then too. */
-  long?: string;
   children: SummaryNode[];
 }
 
 /**
- * The tree as the summary panel wants it: nested, numbered, and joined to
- * whatever summaries exist.
+ * The tree as the summary panel wants it: nested and numbered.
  *
  * `depthLimit` stops the walk. It is 2 by default because that is where
- * src/summarise.ts stops writing and where params.ts stops offering — below it
- * a node is one paragraph, and a summary must never stand where the paragraph
- * itself could (types.ts § TreeNode.gist).
+ * params.ts stops offering — below it a node is one paragraph, which the reader
+ * should be reading rather than being told about (types.ts § TreeNode.gist).
  */
 export function buildSummaryTree(
   tree: Tree,
   blocks: Block[],
-  /* The entries and nothing else, because that is all this reads — and because
-     a visitor's `PublicSummaries` is not a `Summaries` (no generator, no
-     timings, no steer). src/public-types.ts. */
-  summaries: { entries: SummaryEntry[] } | null,
   depthLimit = 2,
 ): SummaryNode | null {
   const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
-  const entries = summaries?.entries ?? [];
-  const byRange = new Map(entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e]));
-  /**
-   * **The root is matched by depth, not by range** — and this is the one thing
-   * appending a supplement node breaks.
-   *
-   * Every other join here is safe by construction: a supplement changes no body
-   * part's range, so part 3 still runs from the same first block id to the same
-   * last. Exactly one range moves — **the root's**, whose end goes from the last
-   * body block to the last note. Keyed by range, the whole-article summary's
-   * entry then misses and is dropped *without a word*, on every article
-   * summarised before 2026-08-28, with `sourceHash` still current because no
-   * block changed. Green suites, plausible output, and a reader who notices a
-   * missing paragraph months later.
-   *
-   * `SummaryEntry` already carries `depth`, and the root is unique, so keying it
-   * by its full range was precision it never needed. Everything below the root
-   * keeps range-matching, where the ambiguity that rule exists to prevent is
-   * real. docs/plans/footnotes.md § The invisible stage-4 failure.
-   *
-   * **The start block is still checked, and the plan said not to bother.** The
-   * plan's version — `depth === 0` alone — quietly gives up a guarantee that
-   * was already there and already tested: an entry written against a *different*
-   * article no longer matches anything and is dropped rather than shown
-   * (tests/summarise.test.ts, "drops an entry whose range matches no node").
-   * Only the root's **end** moves when a supplement is appended; its start is
-   * still the article's first block. So keying on `depth === 0` **and** the
-   * start id fixes the supplement case and keeps the stale case dropped, which
-   * is strictly better than either rule alone.
-   */
-  /**
-   * **And the end has to be accounted for, or the rule is looser than the one
-   * it replaced.** Start-plus-depth alone re-attaches a stored root summary
-   * after an ordinary body paragraph is appended: the start is unchanged, the
-   * end has moved for a reason that has nothing to do with the apparatus, and
-   * the summary is shown as current. The old range key dropped that entry.
-   * Losing it is not a fair trade for the supplement case, and the stale banner
-   * is a mitigation rather than an answer. GPT Sol's review of stage 4.
-   *
-   * So the stored end must be either the root's own end (nothing moved) or the
-   * last **body** block (a supplement was appended behind it, which is the one
-   * shift this exists to absorb). Any other end is a body edit, and drops.
-   */
-  const root = tree.nodes[tree.rootId];
-  const rootStart = root?.range[0];
-  /* The block before the apparatus begins. A supplement node's own range start
-     *is* the boundary, so there is nothing to scan for. */
-  const lastBody = ((): BlockId | undefined => {
-    if (!root) return undefined;
-    const supplement = root.children
-      .map((id) => tree.nodes[id])
-      .find((n): n is TreeNode => !!n && n.treatment === "supplement");
-    if (!supplement) return root.range[1];
-    const firstNote = order.get(supplement.range[0]);
-    return firstNote === undefined || firstNote === 0 ? undefined : blocks[firstNote - 1]?.id;
-  })();
-  const rootEntry = entries.find(
-    (e) =>
-      e.depth === 0 &&
-      e.range[0] === rootStart &&
-      (e.range[1] === root?.range[1] || e.range[1] === lastBody),
-  );
 
   const build = (node: TreeNode | undefined, number: string): SummaryNode | null => {
     if (!node) return null;
@@ -576,8 +498,6 @@ export function buildSummaryTree(
     const endRow = order.get(node.range[1]);
     if (startRow === undefined || endRow === undefined || startRow > endRow) return null;
 
-    const found =
-      node.depth === 0 ? rootEntry : byRange.get(`${node.range[0]}|${node.range[1]}`);
     /* **The apparatus is a leaf here, whatever the tree says.** Descending gave
        "Notes" one child per endnote — each with no title, no gist and no
        summary — and `SummaryPanel` drew six phantom rows under a numbered part
@@ -614,41 +534,11 @@ export function buildSummaryTree(
       blocks: endRow - startRow + 1,
       ...(apparatus && { supplement: true as const }),
       ...(node.gist !== undefined && { gist: node.gist }),
-      ...(found?.short !== undefined && { short: found.short }),
-      ...(found?.long !== undefined && { long: found.long }),
       children,
     };
   };
 
   return build(tree.nodes[tree.rootId], "");
-}
-
-/**
- * The text to show for one entry at the rung the reader chose, and what was
- * actually shown.
- *
- * **It falls back down the ladder, never up.** A section with no `long` shows
- * its `short`, and failing that its `gist`; a section with no `gist` shows
- * nothing at all. Falling *up* — showing a paragraph where a sentence was asked
- * for — would break the one promise the control makes, which is that everything
- * on screen is roughly the length you asked for.
- *
- * The returned `rung` is what the caller marks the entry with, so a reader on
- * `long` can see which entries did not have one rather than wondering why some
- * sections got so much less attention than others. That distinction is
- * invisible without it, which is what makes a partly-written artefact read as a
- * complete one — see src/summarise.ts § partial salvage.
- */
-export function rungText(
-  entry: SummaryNode,
-  want: Rung,
-): { text: string; rung: Rung } | null {
-  const ladder: Rung[] = ["long", "short", "gist"];
-  for (const rung of ladder.slice(ladder.indexOf(want))) {
-    const text = entry[rung];
-    if (text) return { text, rung };
-  }
-  return null;
 }
 
 /**

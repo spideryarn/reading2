@@ -79,7 +79,7 @@ anything.
 
 The principle did not lose an argument; it ran out of runway. A single writable disk is the thing
 serverless hosting does not have, so the choice is a database or no deploy. Planned in
-[postgres-migration.md](../plans/postgres-migration.md); until it lands, the filesystem layout in
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); until it lands, the filesystem layout in
 [database.md](database.md) is still what is true. "One server process" goes with it. Everything else
 in the bullet — TypeScript, ESM, `tsx`, no framework churn — is untouched.
 
@@ -92,9 +92,22 @@ Tailwind v4 and shadcn components went in at Greg's request:
 > — Greg, 2026-08-25
 
 That is framework churn, and it was weighed against this principle rather than slipped past it:
-[shadcn-migration.md § Honest assessment](../plans/shadcn-migration.md#honest-assessment) states the
+[260825a-shadcn-migration.md § Honest assessment](../plans/260825a-shadcn-migration.md#honest-assessment) states the
 cost in full and recommends only the cheap half of it. The principle was not forgotten; its owner
 overrode it.
+
+### Simpler first
+
+The same tiebreak applies to product decisions, not only to tools. When two versions of a feature
+would both work, build the simpler one first and let use, not foresight, decide whether the fuller
+one is needed. A plan says which simpler option it passed over, and why
+([AGENTS.md § Writing code](../../AGENTS.md#writing-code)).
+
+> prefer the simpler product decision first, get a v1 working and then gradually layer in
+> complexity/optimisations afterwards as needed, to highlight when a product decision will add
+> extra complexity or other tradeoffs
+>
+> — Greg, 2026-08-31
 
 It still governs how far shadcn is allowed to spread.
 [web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components) says what is
@@ -107,7 +120,7 @@ deliberately staying hand-written, and
   <br>*Greg asked for a chat on 2026-08-25 and it was built. The anti-goal stands as written — it is
   still the thing to avoid — and the argument that what was built is not it, along with the honest
   account of where that argument is weakest, is
-  [chat-mode.md § Say the awkward thing first](../plans/chat-mode.md#say-the-awkward-thing-first).
+  [260826a-chat-mode.md § Say the awkward thing first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first).
   In one line: the article never leaves the screen, and every claim carries a block id you can press
   to go and check it.*
 - "Read this in 2 minutes."

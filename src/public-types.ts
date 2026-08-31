@@ -10,7 +10,7 @@
  *
  * ## Why these are new types rather than the existing ones with fields removed
  *
- * The first draft of docs/plans/public-read-only-access.md proposed serving
+ * The first draft of docs/plans/260827ai-public-read-only-access.md proposed serving
  * today's responses through a recursive key *denylist*. GPT Sol refused it,
  * 2026-08-27:
  *
@@ -29,10 +29,13 @@
  * - **The owner's private rename.** `Article.meta.title` is run through
  *   `titleFor()` by both stores, which substitutes `articles.title_override`.
  *   The public reader never calls it and never selects the column.
- * - **`meta.url`.** That is `final_url`, the URL *after redirects*, and it can
- *   carry credentials or signed query parameters. Stage 2 needs a canonical
- *   link and will have to validate one through `isWebUrl` rather than reach
- *   for this.
+ * - **`meta.url` — no longer withheld, since 2026-08-30.** It was, and the
+ *   reason was that `final_url` is the URL *after redirects* and can carry
+ *   credentials or signed query parameters. Greg decided a public article
+ *   should show where it came from, so the reason is now enforced on the
+ *   *value* instead of on the key: `publicSourceUrl` (src/urls.ts) refuses a
+ *   credential, a query of any kind, a non-public host and a non-web scheme,
+ *   and what it returns is what `PublicMeta.url` carries. See the field.
  * - **`meta.fetchedAt`, `meta.note`, and the whole PDF provenance block**
  *   (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`,
  *   `pagesChecked`). Facts about our pipeline and about somebody's uploaded
@@ -44,7 +47,7 @@
  *   whole of `stages`. `PublicMetadata` says which artefacts exist and nothing
  *   whatever about how they were made.
  *
- * See docs/plans/public-read-only-access.md § The payload for the table these
+ * See docs/plans/260827ai-public-read-only-access.md § The payload for the table these
  * came from, and § What a public visitor gets for the product decisions behind
  * it.
  */
@@ -56,7 +59,8 @@ import type {
   BlockKind,
   GlossaryKind,
   Idea,
-  SummaryEntry,
+  Quote,
+  QuoteDrops,
   Tree,
   Tweet,
 } from "./types.js";
@@ -84,6 +88,23 @@ export interface PublicMeta {
   lang?: string;
   /** Readability's own one-or-two sentences, from the page. */
   excerpt?: string;
+  /**
+   * **Where the article came from, for whoever can read it.** Greg, 2026-08-30:
+   * *"I think Public-readable articles should show their provenance-url to all
+   * reader[s]."*
+   *
+   * **Not `articles.final_url`.** It is that column run through
+   * `publicSourceUrl` (src/urls.ts), which is the named field the
+   * `PUBLIC_PROJECTIONS` comment in src/store/public-reader.ts asked for when it
+   * held the column back — the policy, and what it refuses, are in that
+   * function's header.
+   *
+   * **Absent does not mean "uploaded".** It also means the address would not
+   * survive the policy, and a visitor cannot tell those apart; only a reader who
+   * owns the article may turn an absence into that sentence. `OriginMark` in
+   * src/web/Masthead.tsx is the one place that does, and says so.
+   */
+  url?: string;
 }
 
 /**
@@ -144,7 +165,7 @@ export interface PublicArticle extends PublicArtefactSet {
    *    loading for signed-out and non-owning readers, and those readers can
    *    never reach an authenticated route — so an owner-only design would leave
    *    every public article hot-linking while looking finished from the owner's
-   *    chair (docs/plans/hosting-the-articles-images.md#delivery).
+   *    chair (docs/plans/260829b-hosting-the-articles-images.md#delivery).
    * 2. The reading view takes an `Article`, and a public payload reaches it by
    *    being structurally one. An optional key here would not satisfy that
    *    required one, so this is also what keeps the two projections honest with
@@ -168,7 +189,7 @@ export interface PublicArticle extends PublicArtefactSet {
  * these are JSONB columns on the same `article_revisions` row
  * `GET /api/public/article/:slug` already fetches, so folding them into that one
  * payload removes the second request, the twelve wire states it could be in, and
- * every way the two answers could disagree. docs/plans/public-read-only-access.md
+ * every way the two answers could disagree. docs/plans/260827ai-public-read-only-access.md
  * § Slice 1b.
  *
  * **Absent is the only "no".** Not `null`, not an empty object, not a tagged
@@ -181,11 +202,11 @@ export interface PublicArticle extends PublicArtefactSet {
  * ## What is not here, and it is the most important paragraph in this file
  *
  * **No `stale`, no `outdated`.** Both are computed by `isStale` in
- * `src/glossary.ts`, `src/summarise.ts`, `src/tweets.ts` and `src/ideas.ts` —
+ * `src/glossary.ts`, `src/tweets.ts` and `src/ideas.ts` —
  * the writer modules, which tests/public-imports.test.ts forbids the public
  * graph from reaching because they pull in the model machinery. Carrying them
- * would mean extracting four freshness functions into import-free leaves across
- * four writer modules. And a visitor could not act on either: both mean *the
+ * would mean extracting three freshness functions into import-free leaves across
+ * three writer modules. And a visitor could not act on either: both mean *the
  * owner might want to regenerate this*, and the owner is the only person who
  * can.
  *
@@ -207,8 +228,8 @@ export interface PublicArticle extends PublicArtefactSet {
  */
 export interface PublicArtefactSet {
   glossary?: PublicGlossary;
-  summary?: PublicSummaries;
   ideas?: PublicIdeas;
+  quotes?: PublicQuotes;
   tweets?: PublicTweets;
 }
 
@@ -251,26 +272,39 @@ export interface PublicGlossary {
   entries: PublicGlossaryEntry[];
 }
 
-/**
- * The summary ladder.
- *
- * `SummaryEntry` is carried whole — `range`, `depth`, `short?`, `long?` is all
- * there is of it — and rebuilt field by field on the way out anyway, so a field
- * added to it next month is absent from a public response until somebody adds a
- * line to the projection.
- *
- * **`missing` crosses.** It is the reader's only sign that an apparently
- * complete summary is partial: some nodes' batches came back unusable and were
- * written without text. Withholding it would make a gap look like a whole.
- */
-export interface PublicSummaries {
-  entries: SummaryEntry[];
-  missing: number;
-}
-
 /** The propositions the piece assumes or introduces. `Idea` carries nothing about a person. */
 export interface PublicIdeas {
   ideas: Idea[];
+}
+
+/**
+ * The lines worth keeping. `Quote` carries nothing about a person.
+ *
+ * **The one artefact whose payload is the author's own prose**, which is why
+ * there is nothing to strip: a quote is `blockId`, `text`, `start`, a caption
+ * and two numbers, and every one of those is already on the page a visitor is
+ * reading. The projection exists so that the pipeline facts around it —
+ * `sourceHash`, `generator`, `version`, `profileHash` — do not travel.
+ */
+export interface PublicQuotes {
+  quotes: Quote[];
+  /**
+   * **What the stage refused to store — and it crosses, where every other
+   * pipeline fact in this file does not.**
+   *
+   * The rule this projection keeps is that facts about *our pipeline* stay
+   * behind: no `generator`, no `version`, no `sourceHash`, no timings. These
+   * counts look like one of those and are not. They are a fact about **the list
+   * on the screen** — that it is shorter than what was produced, and why — and
+   * the panel says so in a sentence. A visitor reading that list has exactly
+   * the same interest in knowing as its owner does, so stripping this would
+   * make the claim "the reader is told" true for half the readers and quietly
+   * false for the other half. GPT Sol asked the question, 2026-08-31; this is
+   * the answer.
+   *
+   * Optional because an artefact written before the field existed has none.
+   */
+  discarded?: QuoteDrops;
 }
 
 /**
@@ -292,8 +326,8 @@ export interface PublicTweets {
  * The owner's metadata page answers a different question: which pipeline stage
  * ran, when, into which column, over how many bytes, and whether we would write
  * it again today. None of that is a visitor's business and most of it is
- * internal paths and timings. This is the replacement Sol asked for: five
- * booleans.
+ * internal paths and timings. This is the replacement Sol asked for: a handful
+ * of booleans.
  *
  * A visitor pressing **Glossary** on an article with none gets *"nobody has
  * built a glossary for this piece yet"* — a real screen rather than a gap, and
@@ -303,8 +337,8 @@ export interface PublicArtefacts {
   arc: boolean;
   tweets: boolean;
   glossary: boolean;
-  summary: boolean;
   ideas: boolean;
+  quotes: boolean;
 }
 
 /** What `GET /api/public/metadata/:slug` returns. */

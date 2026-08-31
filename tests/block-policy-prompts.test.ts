@@ -3,7 +3,7 @@
  *
  * The policy is not "notes are hidden from models". It is: hidden from
  * **automatic** model work — the arc, the glossary, the ideas, the thread, the
- * summaries, which describe the argument — and visible to **asked** model work
+ * quotes, which describe the argument — and visible to **asked** model work
  * — explain, search and chat, where a reader has pointed at something and wants
  * an answer about it. Both halves in one file, because either alone passes on
  * code that does the wrong thing everywhere.
@@ -16,7 +16,7 @@
  * automatic **and** sends ids, so filtering in the builders is right three
  * times out of four and silently leaves the ideas stage reading the
  * bibliography — with a comment two lines above it explaining why it needs ids,
- * so the next person does not think to look. docs/plans/footnotes.md.
+ * so the next person does not think to look. docs/plans/260828o-footnotes.md.
  *
  * ## And why there is a second token
  *
@@ -91,8 +91,9 @@ beforeAll(async () => {
   blocks = parsed.blocks;
 
   /* The **last two** blocks become one note, so the root's range still ends on
-     it and `textOf` still slices over it — which is the case summarise.ts has
-     to filter for itself, and the one a prompt-builder filter would miss.
+     it and anything that slices `blocks` over that range still runs over the
+     apparatus — the case a stage has to filter for itself, and the one a
+     prompt-builder filter would miss.
 
      **Two rather than one, and that is the difference between this file testing
      the labels prompt and not testing it.** `renderBatch` prints a context
@@ -112,7 +113,7 @@ beforeAll(async () => {
     note.role = "footnote";
     note.treatment = "supplement";
     /* One `noteId` across both, because a note is a RANGE of blocks and not a
-       block — docs/plans/footnotes.md § A note is a range of blocks. */
+       block — docs/plans/260828o-footnotes.md § A note is a range of blocks. */
     note.noteId = "note-1";
   }
 
@@ -155,24 +156,47 @@ async function promptOf(run: () => Promise<unknown>): Promise<string> {
 describe("the automatic stages never see the note", () => {
   it("arc", async () => {
     const { generateArc } = await import("../src/arc.js");
-    const prompt = await promptOf(() => generateArc({ dir: DIR }));
+    const { readArticleFromDir } = await import("../src/article-input.js");
+    const article = await readArticleFromDir(DIR);
+    const prompt = await promptOf(() => generateArc({ article }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
 
   it("glossary", async () => {
     const { generateGlossary } = await import("../src/glossary.js");
+    const { readArticleFromDir } = await import("../src/article-input.js");
+    const article = await readArticleFromDir(DIR);
     /* `previous: null` — a first pass, which is what this fixture is. The
        argument is required so that landing D cannot drop it silently; here it
        is the honest value rather than a placeholder. src/glossary.ts. */
-    const prompt = await promptOf(() => generateGlossary({ dir: DIR, previous: null }));
+    const prompt = await promptOf(() => generateGlossary({ article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
 
   it("tweets", async () => {
     const { generateTweets } = await import("../src/tweets.js");
-    const prompt = await promptOf(() => generateTweets({ dir: DIR }));
+    const { readArticleFromDir } = await import("../src/article-input.js");
+    const article = await readArticleFromDir(DIR);
+    const prompt = await promptOf(() => generateTweets({ article }));
+    expect(prompt).toContain(BODY_WORD);
+    expect(prompt).not.toContain(NOTE_WORD);
+  });
+
+  it("quotes — where the note is a passage the reader could be offered", async () => {
+    /* Sharper here than for its neighbours. Everywhere else a note in the
+       prompt buys a slightly worse answer; here it is a line the model could
+       return, `locate` would verify against a real block, and the panel would
+       offer as one of the lines worth keeping from the piece — which is a
+       bibliography entry presented as the author's best sentence. The filter
+       has to be on both halves and it is one variable: `generateQuotes` passes
+       the same `evidence` list to `articleText` and to `buildQuotes`.
+       GPT Sol, 2026-08-31. */
+    const { generateQuotes } = await import("../src/quotes.js");
+    const { readArticleFromDir } = await import("../src/article-input.js");
+    const article = await readArticleFromDir(DIR);
+    const prompt = await promptOf(() => generateQuotes({ article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -183,7 +207,9 @@ describe("the automatic stages never see the note", () => {
        green on arc, glossary and tweets and would leave this one reading the
        bibliography. */
     const { generateIdeas } = await import("../src/ideas.js");
-    const prompt = await promptOf(() => generateIdeas({ dir: DIR, previous: null }));
+    const { readArticleFromDir } = await import("../src/article-input.js");
+    const article = await readArticleFromDir(DIR);
+    const prompt = await promptOf(() => generateIdeas({ article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -201,9 +227,7 @@ describe("the automatic stages never see the note", () => {
        the model is never handed a note at all. Handing it one with a label
        would not have been a fix. */
     const { generateToc } = await import("../src/toc.js");
-    const prompt = await promptOf(() =>
-      generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR }),
-    );
+    const prompt = await promptOf(() => generateToc({ blocks, slug: "block-policy-prompts" }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -216,36 +240,31 @@ describe("the automatic stages never see the note", () => {
        seven committed fixtures are that shape, so nothing would have caught
        this; `renderBlocks` withholds a supplement's prose itself, and this is
        the only input that exercises that line. */
-    const dir = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-stranded-"));
-    try {
-      await cp(path.join(ROOT, "example"), dir, { recursive: true });
-      const stranded = blocks.map((b) => ({ ...b }));
-      /* One note in the middle of the argument, which is what a sidenote whose
-         stamp landed mid-prose looks like. */
-      const mid = stranded[5]!;
-      mid.text = `A stranded note about ${NOTE_WORD}, mid-argument.`;
-      mid.words = mid.text.split(/\s+/).length;
-      mid.role = "footnote";
-      mid.treatment = "supplement";
-      mid.noteId = "note-2";
-      await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: stranded }));
+    /* No temp directory any more: the stage is handed the blocks and writes
+       nothing, so the doctored article is an array rather than a file. */
+    const stranded = blocks.map((b) => ({ ...b }));
+    /* One note in the middle of the argument, which is what a sidenote whose
+       stamp landed mid-prose looks like. */
+    const mid = stranded[5]!;
+    mid.text = `A stranded note about ${NOTE_WORD}, mid-argument.`;
+    mid.words = mid.text.split(/\s+/).length;
+    mid.role = "footnote";
+    mid.treatment = "supplement";
+    mid.noteId = "note-2";
 
-      const { splitBlocks } = await import("../src/supplement.js");
-      // The precondition, asserted rather than assumed: this really is the
-      // fallback path, or the test is about the ordinary one all over again.
-      expect(splitBlocks(stranded).groups).toEqual([]);
+    const { splitBlocks } = await import("../src/supplement.js");
+    // The precondition, asserted rather than assumed: this really is the
+    // fallback path, or the test is about the ordinary one all over again.
+    expect(splitBlocks(stranded).groups).toEqual([]);
 
-      const { generateToc } = await import("../src/toc.js");
-      const prompt = await promptOf(() =>
-        generateToc({ blocksPath: path.join(dir, "blocks.json"), outDir: dir }),
-      );
-      expect(prompt).toContain(BODY_WORD);
-      expect(prompt).not.toContain(NOTE_WORD);
-      // And the block is still nameable, or no node could cover it.
-      expect(prompt).toContain(mid.id);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const { generateToc } = await import("../src/toc.js");
+    const prompt = await promptOf(() =>
+      generateToc({ blocks: stranded, slug: "block-policy-prompts" }),
+    );
+    expect(prompt).toContain(BODY_WORD);
+    expect(prompt).not.toContain(NOTE_WORD);
+    // And the block is still nameable, or no node could cover it.
+    expect(prompt).toContain(mid.id);
   });
 
   it("the nav labels — every batch of them", async () => {
@@ -265,68 +284,6 @@ describe("the automatic stages never see the note", () => {
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
-  });
-
-  it("summaries — which build their text by slicing a range, not by calling a builder", async () => {
-    /* `textOf` slices `blocks` over a node's range and filtered only on
-       `b.text`, so the root — whose range ends at the last note — would carry
-       the whole apparatus into the whole-article summary whatever the four
-       stages above do. */
-    const { generateSummaries } = await import("../src/summarise.js");
-    const prompt = await promptOf(() => generateSummaries({ dir: DIR }));
-    expect(prompt).toContain(BODY_WORD);
-    expect(prompt).not.toContain(NOTE_WORD);
-  });
-
-  it("summaries — and the apparatus is not offered as a part of the argument", async () => {
-    /* **Withholding the prose was not enough, and the test above cannot see
-       it.** That one runs against the fixture's own *pre*-stage-4 tree, which
-       has no supplement node in it — so it says nothing about the shape stage 4
-       actually produces. With a supplement appended, `skeletonOf` walked
-       `root.children` and printed
-
-           PART 4: Notes
-             gist: (none)
-
-       into the whole-article prompt: the model is told the apparatus is a part
-       it must account for, and invited to explain the empty one. The note text
-       was absent the whole time, which is exactly why a NOTE_WORD assertion
-       stays green through it. GPT Sol's review of stage 4, 2026-08-28. */
-    const dir = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-skeleton-"));
-    try {
-      await cp(path.join(ROOT, "example"), dir, { recursive: true });
-      await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
-
-      const { splitBlocks, appendSupplement, isSupplementNode } = await import(
-        "../src/supplement.js"
-      );
-      const { groups } = splitBlocks(blocks);
-      /* The precondition, asserted rather than assumed: without a supplement
-         node in the tree this test is the one above wearing a second hat. */
-      expect(groups.length).toBe(1);
-      const base = JSON.parse(await readFile(path.join(dir, "tree.json"), "utf8")) as Tree;
-      const withNotes = appendSupplement(base, groups);
-      const supplement = Object.values(withNotes.nodes).find((n) => isSupplementNode(n));
-      expect(supplement).toBeDefined();
-      await writeFile(path.join(dir, "tree.json"), JSON.stringify(withNotes));
-
-      const { generateSummaries } = await import("../src/summarise.js");
-      const prompt = await promptOf(() => generateSummaries({ dir }));
-
-      expect(prompt).toContain(BODY_WORD);
-      expect(prompt).not.toContain(NOTE_WORD);
-      /* The node's own title, as the skeleton would print it. Matched with the
-         PART prefix rather than bare, because "Notes" is an ordinary word that
-         may legitimately appear in an article's prose. */
-      expect(prompt).not.toMatch(
-        new RegExp(`PART \\d+: ${supplement!.title!.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
-      );
-      // And no part is offered with an empty gist, which is the same fact from
-      // the other side and does not depend on the title.
-      expect(prompt).not.toContain("gist: (none)");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
   });
 });
 

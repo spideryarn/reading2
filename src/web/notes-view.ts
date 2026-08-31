@@ -27,7 +27,7 @@
  * really a note. Both maps are precomputed, so the check costs a lookup.
  *
  * **Never by being inside a `<sup>`.** Superscripts are also powers, ordinals
- * and trademarks (docs/plans/footnotes.md § Why both directions may already
+ * and trademarks (docs/plans/260828o-footnotes.md § Why both directions may already
  * work).
  *
  * ## A note is a range of blocks

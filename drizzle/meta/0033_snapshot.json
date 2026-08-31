@@ -1,6 +1,6 @@
 {
-  "id": "f2dffd8a-ba58-4978-a638-ee28bc330943",
-  "prevId": "4bc852dc-2e7e-4f0a-aa84-d811c489b31f",
+  "id": "0ad4a653-9a3b-4560-a2c2-cf29ecc6535e",
+  "prevId": "cbc9f702-0509-4b06-be42-0949622c59dd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -518,6 +518,12 @@
         },
         "ideas": {
           "name": "ideas",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quotes": {
+          "name": "quotes",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -1733,22 +1739,6 @@
         }
       },
       "indexes": {
-        "jobs_only_one_running": {
-          "name": "jobs_only_one_running",
-          "columns": [
-            {
-              "expression": "(true)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"jobs\".\"status\" = 'running'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "jobs_draft_revision_unique": {
           "name": "jobs_draft_revision_unique",
           "columns": [
@@ -1977,12 +1967,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "experimental_since": {
-          "name": "experimental_since",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
@@ -2182,7 +2166,7 @@
         },
         "revision_blocks_kind": {
           "name": "revision_blocks_kind",
-          "value": "\"spideryarn\".\"revision_blocks\".\"kind\" in ('heading','text','quote','callout','code','media','caption','other')"
+          "value": "\"spideryarn\".\"revision_blocks\".\"kind\" in ('heading','text','quote','code','media','caption','other')"
         },
         "revision_blocks_role": {
           "name": "revision_blocks_role",
@@ -2291,7 +2275,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','summary','ideas')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','sketch')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

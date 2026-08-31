@@ -126,7 +126,7 @@ describe("the caps", () => {
   it("keeps the per-article box to a sentence or two", () => {
     /* 600 was originally chosen to match `MAX_GUIDANCE_CHARS` on the summary
        steer, the two boxes sitting next to each other in the reader's head.
-       That steer is gone (docs/plans/steer-becomes-the-profile.md), so the
+       That steer is gone (docs/plans/260830o-steer-becomes-the-profile.md), so the
        number now stands on its own reasoning: a paragraph about who you are is
        a life, a paragraph about why you opened *this* is usually a sentence. */
     expect(MAX_PURPOSE_CHARS).toBe(600);

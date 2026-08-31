@@ -12,7 +12,7 @@
  * checks the list is complete. A table of facts is safe to share; the thing
  * that can spend money is not.
  *
- * Why any of this exists: docs/plans/ai-spend-outside-the-gateway.md.
+ * Why any of this exists: docs/plans/260828g-ai-spend-outside-the-gateway.md.
  */
 
 import type { ProviderAccount } from "./ai-spend.js";
@@ -76,6 +76,16 @@ export interface Declaration {
 
 export const DECLARATIONS: readonly Declaration[] = [
   {
+    /* **The only `account: "anthropic"` entry in the table, and the only reason
+       `ANTHROPIC_API_KEY` exists in this project at all.** Since 2026-08-31 that
+       is pinned rather than merely true — `tests/no-undeclared-spend.test.ts`
+       fails if a second one appears, because the whole app is on OpenRouter
+       (docs/project/ai-gateway.md) and a second Anthropic-direct caller would be
+       a second bill nobody is watching.
+
+       The key is not in `.env.local` by default. Only this bake-off's four
+       `transport: "anthropic"` arms need it, and the file skips them with a
+       message rather than failing when it is absent. */
     id: "bakeoff-anthropic-transport",
     kind: "bypass",
     since: "2026-08-28",
@@ -101,7 +111,14 @@ export const DECLARATIONS: readonly Declaration[] = [
     id: "embedding-eval-judge",
     kind: "bypass",
     since: "2026-08-28",
-    account: "anthropic",
+    /* **`openrouter` since 2026-08-31**, when the judge moved off
+       `api.anthropic.com` onto the Skin. It was `anthropic` because the bypass
+       was written the same week the pipeline migrated and the judge was left
+       where it was; nothing about the judge needed a second vendor. The bypass
+       itself did not go away — the reason below is unchanged — but the account
+       did, which is why this row now takes a settled `cost` from OpenRouter
+       instead of our arithmetic over `ANTHROPIC_PRICES`. */
+    account: "openrouter",
     file: "evals/embedding-retrieval.ts",
     job: "eval",
     wire: "messages",

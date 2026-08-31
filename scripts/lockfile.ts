@@ -44,7 +44,7 @@
  * then a human sees one clear line telling them what to delete.
  *
  * Used by the deploy gate, and by the database lease in
- * docs/plans/worktrees.md, where several worktrees share one Supabase stack.
+ * docs/plans/260828r-worktrees.md, where several worktrees share one Supabase stack.
  */
 import { randomUUID } from "node:crypto";
 import { closeSync, linkSync, openSync, readFileSync, rmSync, statSync, unlinkSync, writeSync } from "node:fs";

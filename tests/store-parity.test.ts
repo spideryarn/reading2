@@ -16,14 +16,14 @@
  * assertion here can tell them apart. `toEqual` already separates
  * `{ byline: null }` from `{}` without any help, so serialising adds nothing on
  * that front either. GPT Sol caught the overclaim in review, 2026-08-26;
- * docs/plans/postgres-storage-review-sol.md. The absent-versus-undefined
+ * docs/plans/260826j-postgres-storage-review-sol.md. The absent-versus-undefined
  * distinction is checked by `toStrictEqual` and by explicit `in` assertions,
  * not by this.
  *
  * ## The corpus is loaded through the real write path, from nothing
  *
  * This used to call `importArticle`, and `db:import` is being deleted
- * (docs/plans/delete-the-importer.md § C7). The replacement is not a smaller
+ * (docs/plans/260827aa-delete-the-importer.md § C7). The replacement is not a smaller
  * importer: `loadArticleIntoPg` drives the *production* seam — `storeRawSource`,
  * a fenced `jobs` row, `openOrBeginJobDraft`, `beginStep`/`write`/`finishStep`
  * per step, then `publishRevision` with its guards run rather than routed
@@ -337,14 +337,19 @@ when("the filesystem and Postgres stores agree", () => {
        four its staleness compares the *tree* as well as the blocks
        (src/ideas.ts § `inputFingerprint`), so it is the one a blocks-only
        change can break while the other three stay green. GPT Sol found the gap
-       while reviewing docs/plans/glossary-read-latency.md — which narrows what
+       while reviewing docs/plans/260827am-glossary-read-latency.md — which narrows what
        all four of them read — and it was right that the plan claimed a cover
        this file did not provide. */
     for (const [name, read] of [
       ["tweets", (r: typeof fsArticleReader) => r.loadTweets(slug)],
       ["glossary", (r: typeof fsArticleReader) => r.loadGlossary(slug)],
-      ["summaries", (r: typeof fsArticleReader) => r.loadSummaries(slug)],
       ["ideas", (r: typeof fsArticleReader) => r.loadIdeas(slug)],
+      /* Without this row the two adapters are never diffed for this artefact,
+         and `loadTimeline` is the one read whose staleness compares a fourth
+         value — the publication date — so a Postgres projection that forgot
+         `published_at` would report every dated timeline stale for ever while
+         the filesystem store called the same one current, with nothing red. */
+      ["timeline", (r: typeof fsArticleReader) => r.loadTimeline(slug)],
     ] as const) {
       it(`agrees about ${name}, present or absent`, async () => {
         const fromFiles = await read(fsArticleReader).catch((err: unknown) => err);
@@ -480,7 +485,7 @@ when("the filesystem and Postgres stores agree", () => {
     /* The committed `example/` fixture is the ONE known difference, and it is
        an open question rather than a bug: src/api.ts appends it to the shelf
        explicitly, and it does not live under `data/`, so nothing loaded it.
-       See docs/plans/postgres-migration.md open question 8. Asserting that it
+       See docs/plans/260825f-postgres-migration.md open question 8. Asserting that it
        is the *only* difference is what stops this exclusion quietly growing to
        cover a real one. */
     const realOnly = (entries: LibraryEntry[]) => entries.filter((e) => !e.fixture);
@@ -503,7 +508,7 @@ when("the filesystem and Postgres stores agree", () => {
        Nothing prunes: a `data/<slug>/` removed after a load leaves a row
        behind, with a current revision, and the Postgres library goes on listing
        an article the filesystem no longer has. It is a real gap — written up in
-       docs/plans/postgres-storage-implementation.md rather than papered over —
+       docs/plans/260826e-postgres-storage-implementation.md rather than papered over —
        and it is not a parity failure. Letting it read as one cost an afternoon:
        `labels-checkpoint-check` was left in the database by somebody else's
        checkpoint run, and this test failed in full runs and passed alone for a

@@ -160,7 +160,7 @@ describe("the stores selected outside src/store/index.ts", () => {
 
 describe("no Postgres store is selected without a guard", () => {
   /**
-   * The genre, not the list — docs/plans/simplification-audit.md, Rule 1.
+   * The genre, not the list — docs/plans/260826m-simplification-audit.md, Rule 1.
    *
    * ## What this checks, and what the first version pretended to check
    *
@@ -322,7 +322,7 @@ describe("the errors the guard must not eat", () => {
 
   /**
    * The fifth entry, added 2026-08-29 with the checkpoint store
-   * (docs/plans/delete-the-importer.md § B3). It is here for the reason the
+   * (docs/plans/260827aa-delete-the-importer.md § B3). It is here for the reason the
    * fourth one is: the only other coverage lives in a suite whose Postgres half
    * skips itself without a database, and a skipped test protects nothing. This
    * needs none.
@@ -345,7 +345,7 @@ describe("the errors the guard must not eat", () => {
 
   /**
    * The sixth entry, added 2026-08-30 with the transactional store session
-   * (docs/plans/delete-the-importer.md § D1b), and found the same way as the
+   * (docs/plans/260827aa-delete-the-importer.md § D1b), and found the same way as the
    * fifth: by asking a guarded store what message it actually produced.
    *
    * `checkProduct` (src/store/session.ts) refuses a step's product **before**

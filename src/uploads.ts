@@ -5,7 +5,7 @@
  * has to be the same in the browser and on the server**, and they are different
  * processes. Today only the file picker in src/web/AddArticle.tsx asks — the
  * rest of the upload path is planned and not built, see
- * docs/plans/pdf-upload-and-storage.md — but the picker refusing a file the
+ * docs/plans/260826u-pdf-upload-and-storage.md — but the picker refusing a file the
  * server would have accepted, or worse the other way round, is the kind of
  * disagreement that is invisible until somebody is holding a 60 MB scan.
  *

@@ -13,7 +13,7 @@
  *
  * The middle step carries **no credentials at all** — no bearer token, no API
  * key. The grant is in the URL, it is bound to one path that our server chose,
- * and it lasts two hours. See docs/plans/pdf-upload-and-storage.md § What was
+ * and it lasts two hours. See docs/plans/260826u-pdf-upload-and-storage.md § What was
  * measured, not read.
  *
  * ## Why `XMLHttpRequest` in 2026

@@ -1,0 +1,11 @@
+-- The index said "at most one running job in the whole table", across every
+-- owner, as a unique index on the constant `(true)`. A constant cannot express
+-- "at most N", and N is what this becomes: `queue_state` is locked FOR UPDATE
+-- and the running rows are counted inside that lock, which is what that table's
+-- own comment has claimed since it was written and what nothing did until now.
+-- See src/store/pg-jobs.ts § claim, and docs/plans/several-articles-at-once.md.
+--
+-- Nothing to backfill: the index constrained rows, it did not store anything.
+-- Going the other way is a plain CREATE UNIQUE INDEX, and it will fail while
+-- more than one job is running — which is the point of it.
+DROP INDEX "spideryarn"."jobs_only_one_running";

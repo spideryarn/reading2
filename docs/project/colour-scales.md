@@ -13,7 +13,7 @@ the reasoning, the sources, and the honest account of what each one gets wrong.
 One of them is in use today: the categorical set gives every saved search its own colour
 ([search.md](search.md)) — derived from a hash of the search's id, or, since 2026-08-27, chosen by
 the reader from a swatch popover on the row ([search.md § Changing a row's colour](search.md),
-[search-row-colour.md](../plans/search-row-colour.md)). **The picker is the one control in the app
+[260827l-search-row-colour.md](../plans/260827l-search-row-colour.md)). **The picker is the one control in the app
 that shows a reader this palette, and it still does not know what is in it**: a swatch is
 `var(--cat-N-rgb)` and a choice is the number `N`, so everything on this page stays one edit in one
 stylesheet. That is also why the survey of colour-picker libraries came back recommending none of

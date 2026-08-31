@@ -25,7 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
-import type { EmbeddingReason, StepName } from "./types.js";
+import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -170,7 +170,7 @@ export function kindOfMessage(message: string): FailureKind | null {
  * But the failure that most needs this still carries nothing.
  * `TooLongForOnePass` (src/token-budget.ts) is arithmetic: a second attempt
  * cannot succeed, and the button is offered anyway. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * The fix wants a structured `FailureKind` on the job rather than a code parsed
  * back out of a sentence. A job is a struct with room for a field; the stored
@@ -203,7 +203,7 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * A claimant takes a job for one step and its lease says how long that step may
  * take. A lease that runs out means the process holding it is gone — frozen by
  * the host, restarted, or killed — and the job would otherwise sit `running`
- * for ever, holding the one running slot with it.
+ * for ever, blocking its article and counting against the concurrency cap.
  *
  * The sentence says what happened and offers the retry, because this is the one
  * failure where retrying is not just permitted but likely to work: `stepIsDone`
@@ -211,7 +211,7 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * starting again. What it deliberately does not do is *take the job over* by
  * itself. A lease that has expired does not prove the old claimant has stopped
  * — only that it stopped saying so — and two runners writing one article is
- * worse than one click. docs/plans/durable-queue-and-uploads.md § 2.
+ * worse than one click. docs/plans/260827h-durable-queue-and-uploads.md § 2.
  */
 export const INTERRUPTED: ReaderFacingFailure = {
   kind: "retry",
@@ -488,14 +488,14 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, summarise, toc, glossary, tweets — each
+ * Six pipeline stages — arc, labels, toc, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress
  * card. So provider prose had a straight path to the screen through six doors,
  * found by review after seven other doors of the same shape had already been
  * closed. The lesson is the one that plan's Rule 1 already stated — **grep the
- * genre, not the list** (docs/plans/simplification-audit.md).
+ * genre, not the list** (docs/plans/260826m-simplification-audit.md).
  *
  * Be honest about the cost, as `ProviderRefused` is: something was lost.
  * `stop_details` is occasionally the fastest explanation of why a stage failed.
@@ -676,7 +676,7 @@ export const STORAGE_BUSY: ReaderFacingFailure = {
     "generally works. [db-busy]",
 };
 
-/* ---- uploading a file. docs/plans/pdf-upload-and-storage.md ------------- */
+/* ---- uploading a file. docs/plans/260826u-pdf-upload-and-storage.md ------------- */
 
 /**
  * Too big, refused before the upload starts rather than after it finishes.
@@ -725,7 +725,7 @@ export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
  * re-runs the steps that did not finish, and this step would read the same
  * damaged object out of the same staging key and refuse it again, for ever.
  *
- * The distinction is the whole of docs/postmortems/toc-max-tokens.md — a button
+ * The distinction is the whole of docs/postmortems/260826a-toc-max-tokens.md — a button
  * that cannot work — and it only became visible when the acquisition step was
  * built, because until then nothing could press it. So the sentence says what
  * to do instead, the way `UPLOAD_TOO_BIG` does: a *new upload*, not another go
@@ -830,7 +830,7 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
  *
  * ## A const, not a factory taking a noun
  *
- * The glossary, the summaries and the ideas all reload behind what is on
+ * The glossary, the quotes and the ideas all reload behind what is on
  * screen, so `recheckFailed(noun)` is the obvious shape. It is the wrong one:
  * two nouns are two different sentences sharing one code, and *that* is the one
  * thing tests/messages.test.ts forbids outright — a code names a branch, and a
@@ -1019,7 +1019,7 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
  * `{"msg":"Unsupported provider: provider is not enabled"}` as a bare page of
  * JSON, because `signInWithOAuth` navigates rather than requests and there was
  * nothing of ours left on screen. See `googleSignInAvailable` in
- * src/web/lib/supabase.ts and docs/plans/google-sign-in-production.md.
+ * src/web/lib/supabase.ts and docs/plans/260827i-google-sign-in-production.md.
  *
  * `ours`, not `retry`: pressing the button again will do exactly this again.
  * The sentence has to hand the reader the door that *is* open.
@@ -1112,12 +1112,12 @@ export function authConfirmationSent(email: string): string {
  * that get it right name the cause: Loom says *"Due to the privacy settings for
  * this video, it cannot be played here at this time"*, Google Docs pairs
  * *"View only"* with *"Request edit access"*.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  *
  * **"Visitor" means anyone who does not own the document** — signed out, or
  * signed in and reading somebody else's. They get the same sentences, which is
  * the point: the question is *is this mine*, never *am I signed in*.
- * docs/plans/public-read-only-access.md.
+ * docs/plans/260827ai-public-read-only-access.md.
  */
 
 /**
@@ -1194,7 +1194,7 @@ export function notBuiltYet(noun: string): string {
  * throws are one refactor away from being relaxed for an article that genuinely
  * has no jargon — and the failure mode if they are is the client calling the
  * owner a liar about their own pipeline.
- * docs/plans/public-read-only-access.md § The state that cannot happen.
+ * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
  *
  * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */
@@ -1276,7 +1276,7 @@ export const SHARING_WHAT_VISITORS_SEE =
  * describes revocation purely as the next request being refused. Saying it
  * plainly is going further than the precedent, deliberately, and it is recorded
  * as a decision rather than left to look like a default.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  */
 export const SHARING_CANNOT_UNRING =
   "Turning this off refuses the next request. It cannot take back a page somebody's browser already " +
@@ -1291,7 +1291,7 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  * They are all publishing **the owner's own document**. We are republishing
  * **somebody else's article**, extracted from a page they wrote, so the rights
  * question is ours and not theirs and the norm does not transfer.
- * docs/plans/public-read-only-access.md § Rights.
+ * docs/plans/260827ai-public-read-only-access.md § Rights.
  */
 export function sharingConfirmBody(title: string): string {
   return (
@@ -1335,7 +1335,7 @@ export function sharingConfirmBody(title: string): string {
  * somebody operating a build.
  */
 export const SHARING_PERSONALISED =
-  "The summaries, glossaries and ideas here may have been written for your reader profile, and they " +
+  "The glossaries, ideas and quotes here may have been written for your reader profile, and they " +
   "go out exactly as they are. None of them quotes it — but what a profile made them skip is still " +
   "visible in what they kept.";
 
@@ -1359,8 +1359,8 @@ export const SHARING_NOT_PERSONALISED =
 export const OWNED_ARTEFACT = {
   tweets: "your tweet thread",
   glossary: "your glossary",
-  summary: "your summary",
   ideas: "your list of ideas",
+  quotes: "your set of quotes",
   sketch: "your sketch diagram",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
@@ -1386,8 +1386,8 @@ export const OWNED_ARTEFACT = {
  * The dash after the list does the same job for the first half.
  *
  * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
- * rather than being dropped. Only five artefacts can carry a `profileHash` and
- * all five are in the table, so this is unreachable today — but a silently
+ * rather than being dropped. Only six artefacts can carry a `profileHash` and
+ * all six are in the table, so this is unreachable today — but a silently
  * shortened list is the failure that would matter here, since the whole point
  * of the sentence is that it is complete.
  */
@@ -1451,3 +1451,76 @@ export function sharingInFlight(to: "private" | "public"): string {
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
+
+/* ---------------------------------------------------------------- timeline --
+   What the reader is told when the piece dates something and we could not read
+   the date, and when the piece has no chronology in it at all.
+
+   Both are sentences about a **negative result rather than a failure**, which
+   is the reason they are here beside `builtButEmpty` rather than in the panel:
+   the mistake they exist to prevent is the panel drawing them like an error, or
+   drawing two of them the same. docs/plans/260831i-timeline-mode.md § Three outcomes.  */
+
+/**
+ * **The date column, when the piece dates an event and we could not read it.**
+ *
+ * Short because of where it sits: a column about twenty characters wide, in a
+ * list where — on an article with no publication date — **every** dated row is
+ * `noYearFrame`. A full sentence repeated down twenty rows is a wall, so the
+ * column carries a label and `dateRejectedWhy` carries the explanation on the
+ * row the reader opens.
+ *
+ * Lower case, and no full stop: these are labels standing where a date would
+ * be, not sentences. "26 May" has no full stop either.
+ *
+ * A total record rather than a function with a default, so a fourth refusal is
+ * a red compile rather than a silently reused sentence.
+ */
+export const DATE_REJECTED_SHORT: Record<DateRejection, string> = {
+  noYearFrame: "dated — but which year?",
+  phraseNotInOccurrence: "dated — not in this passage",
+  unparseablePhrase: "dated — we could not read it",
+};
+
+/**
+ * **The same three facts at length**, for the row the reader has opened.
+ *
+ * The distinction that matters, and the reason these are three sentences rather
+ * than one: `noYearFrame` is a fact about **us** — the article did its job and
+ * we have nothing to resolve it against — where `phraseNotInOccurrence` is a
+ * fact about the extraction, and the reader should read those differently. It
+ * is also the majority case on this shelf, because the publication date only
+ * arrives on re-extraction.
+ */
+export const DATE_REJECTED_WHY: Record<DateRejection, string> = {
+  noYearFrame:
+    "The piece gives a day and a month here but never the year, and we have no publication date " +
+    "for it to take the year from. Re-adding the article will usually fix it.",
+  phraseNotInOccurrence:
+    "The date this event was placed by is not in the passage below, so we did not use it. The " +
+    "event and the passage are the article's; the date was not.",
+  unparseablePhrase:
+    "The piece puts a time on this in words we could not read as a date. The passage below is " +
+    "where it says so.",
+};
+
+/**
+ * **The piece has no chronology in it, and that is a real answer.**
+ *
+ * Most articles do not tell a story in time, so this is the commonest outcome
+ * of the whole mode and it must not read as a failure or offer a retry —
+ * running it again would find the same nothing and cost another model call.
+ */
+export const TIMELINE_NO_CHRONOLOGY =
+  "This piece does not tell a story in time — nothing in it is placed in a sequence.";
+
+/**
+ * **Fewer events than make a chronology.**
+ *
+ * The rows still show; what is withdrawn is the claim. An article that mentions
+ * two dates in passing, presented under a heading as *a timeline*, is the panel
+ * overclaiming — and the reader cannot tell the difference from the rows alone.
+ * The threshold and the reasoning for it are in src/web/TimelinePanel.tsx.
+ */
+export const TIMELINE_THIN =
+  "This piece is not really telling a story in time. Here is everything it puts in a sequence.";

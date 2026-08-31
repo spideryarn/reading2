@@ -13,7 +13,7 @@
  * and the caller wrote one of two outcomes. **That is no longer true** —
  * explain.ts streams now too (`explainStream`), which is why the two files have
  * grown so alike and why they are scheduled to share a transport
- * (docs/plans/simplification-audit.md § 3.4). What follows is still the reason
+ * (docs/plans/260826m-simplification-audit.md § 3.4). What follows is still the reason
  * this file is an async generator; it just no longer distinguishes it from its
  * sibling.
  *
@@ -43,7 +43,7 @@
  *
  * A chat that must point at the passage it is talking about cannot become a
  * substitute for reading the passage; it is an index into the article that
- * happens to answer questions. See docs/plans/chat-mode.md § The citation
+ * happens to answer questions. See docs/plans/260826a-chat-mode.md § The citation
  * contract for what happens when the model cites an id that does not exist —
  * short version, the client renders it as plain text rather than a dead link,
  * and **that is a silent failure we chose deliberately**, so the rate is worth
@@ -278,7 +278,7 @@ not need a search behind it.`;
  * block id against the article and refuse an invented one; nothing on our side
  * can check a URL, so the only defences are this sentence, the `isWebUrl`
  * allowlist, and the host the panel prints beside the label
- * (src/web/Cited.tsx). docs/plans/chat-web-links.md.
+ * (src/web/Cited.tsx). docs/plans/260827ao-chat-web-links.md.
  */
 const WEB_LINKS = `LINKING TO THE WEB
 
@@ -394,12 +394,12 @@ ${PROFILE_RULES}`;
  *
  * The **stance** goes the other way: it is named in the final user message,
  * below the breakpoint, because switching stance mid-conversation is the
- * expected use and must not cost an article write. docs/plans/review-mode.md
+ * expected use and must not cost an article write. docs/plans/260827ah-review-mode.md
  * § Where the stance goes in the request.
  *
  * ## The three faults the first draft had
  *
- * Written, reviewed by GPT-5.6 Sol (`docs/plans/review-mode-review-sol.md`,
+ * Written, reviewed by GPT-5.6 Sol (`docs/plans/260827ah-review-mode-review-sol.md`,
  * 2026-08-27), and rejected. All three are worth knowing before editing it,
  * because all three are the obvious thing to write:
  *
@@ -880,7 +880,7 @@ export type ConverseEvent =
  * breakpoint is ever worth putting. The growing tail is uncached, and always
  * should have been: it changes every turn by construction.
  *
- * docs/postmortems/chat-cache-automatic-breakpoint.md.
+ * docs/postmortems/260826h-chat-cache-automatic-breakpoint.md.
  */
 export function buildConverseMessages(opts: {
   meta: Meta;
@@ -913,14 +913,14 @@ export function buildConverseMessages(opts: {
    *
    * So the structural anchor is what the model is told, and the text in the
    * first message is for the human reading the transcript back. Found by a
-   * GPT-5.6 review, 2026-08-26; docs/plans/chat-as-gateway.md.
+   * GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md.
    */
   anchor?: ChatAnchor | null;
   /**
    * Chat or review, which picks the system prompt — the ONE thing here that
    * lands above the `cache_control` breakpoint and therefore changes the cached
    * prefix. Two kinds means two prefixes per article, paid on entering the mode
-   * rather than per turn. docs/plans/review-mode.md § Where the stance goes.
+   * rather than per turn. docs/plans/260827ah-review-mode.md § Where the stance goes.
    */
   kind?: ThreadKind;
   /**
@@ -1031,8 +1031,24 @@ ${anchor.quote}
  * than nothing.
  */
 export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): ChatMessage[] {
+  /**
+   * **`interrupted` is excluded, and that is the opposite of what `stopped`
+   * gets.**
+   *
+   * A stopped answer's text is what the reader read, so it belongs in history.
+   * An interrupted one's is not: the realtime server truncates the audio the
+   * reader never heard and keeps the transcript whole, so its tail is words
+   * that were generated and never spoken to anybody.
+   *
+   * The pair is **dropped**, not transformed. A synthetic "the reader
+   * interrupted here" line would be assistant text the model never said, which
+   * is the fabrication `stopped`'s own rule exists to avoid — and the cost of
+   * dropping is small, because a reader interrupts precisely when an answer had
+   * stopped being useful to them. Recommended by Fable, 2026-08-31;
+   * `ChatMessage.interrupted` in src/types.ts.
+   */
   const usable = (m: ChatMessage | undefined): m is ChatMessage =>
-    m !== undefined && m.status === "done" && m.text.trim() !== "";
+    m !== undefined && m.status === "done" && m.text.trim() !== "" && m.interrupted !== true;
 
   const pairs: ChatMessage[][] = [];
   for (let i = 0; i < history.length; i++) {
@@ -1449,7 +1465,7 @@ export async function* converse({
          never replayed, so the marked block could not be matched on the next
          turn and every turn paid a cold write. The breakpoint is now explicit
          and sits on the article, in `buildConverseMessages`, where the varying
-         part begins. docs/postmortems/chat-cache-automatic-breakpoint.md. */
+         part begins. docs/postmortems/260826h-chat-cache-automatic-breakpoint.md. */
       /* **Four thousand, not two, and the reason is reasoning tokens.**
 
          `max_tokens` bounds everything the model emits, and on Sonnet 5 that
@@ -1636,12 +1652,12 @@ export async function* converse({
        file did not, which is worth being exact about: it was not missed. The plan
        behind that commit wrote it down —
        *"`src/converse.ts` has the same shape, guarded only for the reader's
-       signal"* (docs/plans/explain-deeper-answers.md § 2) — and then nothing
+       signal"* (docs/plans/260826l-explain-deeper-answers.md § 2) — and then nothing
        tracked it, for four months. A known gap with nowhere to live is a gap that
        stays open, which is the argument for
-       docs/plans/simplification-audit.md § 3.4: one transport both callers share,
+       docs/plans/260826m-simplification-audit.md § 3.4: one transport both callers share,
        rather than two copies of an invariant and a note in a plan. Full account:
-       docs/postmortems/converse-stall-misfiled-as-incomplete.md. */
+       docs/postmortems/260826e-converse-stall-misfiled-as-incomplete.md. */
     if (!stopped && (deadline.aborted || stall.signal.aborted)) {
       line.error(
         {

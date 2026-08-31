@@ -264,3 +264,52 @@ describe("the Force picture's five kinds of line", () => {
     expect(marker).toContain('orient="auto"');
   });
 });
+
+describe("the heading row that carries the caveat cannot grow a second line", () => {
+  /* The scatter's caveat is an icon in `.diag-head` rather than a strip of
+     prose above the picture, and the whole case for putting it there is that
+     the row costs no vertical space. That case was made three times and was
+     wrong twice — `margin-left: auto` right-aligns on whichever line the item
+     lands on, and `flex-wrap: nowrap` on a rebuilt `.diag-opts` only changed
+     *which* item took the new line. Both were true about the thing they named.
+     The third route is not a flex line at all: `.diag-head h2` is `flex: 1`,
+     and a flexible item that runs out of room wraps its own text, which makes
+     the row taller by exactly as much.
+
+     jsdom has no layout, so no rendering test can see any of this. What a test
+     can do is hold the row to the shape that makes the height argument true
+     without measuring anything. */
+  /* **Comments stripped first, and this is not fussiness.** The rule below
+     carries a comment that names `min-width: 0` in prose, so a regex over the
+     raw block matches the explanation whether or not the declaration is there.
+     Deleting the property and watching this file stay green is how that was
+     found — the test agreed with the bug because it was reading the sentence
+     about the bug. */
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const head = /\.diag-head h2\s*\{([\s\S]*?)\}/.exec(bare)?.[1];
+
+  it("declares the four properties that keep the heading on one line", () => {
+    expect(head, "`.diag-head h2` has no rule at all").toBeTruthy();
+    /* `min-width: 0` is listed first because it is the one whose absence does
+       nothing visible: without it the item's automatic minimum is its longest
+       word, `text-overflow` never gets to act, and the other three read as
+       present and working. */
+    for (const decl of [
+      /min-width:\s*0\b/,
+      /overflow:\s*hidden\b/,
+      /text-overflow:\s*ellipsis\b/,
+      /white-space:\s*nowrap\b/,
+    ]) {
+      expect(head, `\`.diag-head h2\` is missing ${decl.source}`).toMatch(decl);
+    }
+  });
+
+  it("still leaves the icon unshrinkable, or the row cuts the wrong thing", () => {
+    /* If the caveat button could shrink, the h2 would win the space and the
+       icon would collapse to nothing at exactly the widths this is all about —
+       the caveat would be gone rather than the heading being shortened. */
+    const about = /\.diag-about\s*\{([\s\S]*?)\}/.exec(bare)?.[1];
+    expect(about, "`.diag-about` has no rule at all").toBeTruthy();
+    expect(about).toMatch(/flex:\s*none\b/);
+  });
+});

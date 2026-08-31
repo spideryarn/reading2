@@ -242,7 +242,7 @@ export function useHoverCard<T>({
    * mark does nothing under a finger today, so a tap on one is free to mean
    * something; a hyperlink already navigates, and taking that over to show a
    * preview would replace a working affordance with a slower one. See
-   * docs/plans/touch-glossary-card.md.
+   * docs/plans/260827ak-touch-glossary-card.md.
    */
   tapSelector?: string;
   /**
@@ -425,7 +425,7 @@ export function useHoverCard<T>({
 
        A finger, which has no hover to rest and so gets the spine's rule
        instead: the first tap reveals the card, the second commits.
-       docs/plans/touch-glossary-card.md has the whole design.
+       docs/plans/260827ak-touch-glossary-card.md has the whole design.
 
        **Decided at `pointerup`, not at `click`**, and the reason is the
        swallow below rather than the tap. `mouseup` comes *before* `click` in

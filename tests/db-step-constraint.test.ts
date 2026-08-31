@@ -88,7 +88,13 @@ describe("the revision_step_runs step constraint", () => {
     /* Both directions, and the second one matters as much as the first. A step
        missing from the constraint kills a job at the insert; a name in the
        constraint that is no longer a step is a rule about something that does
-       not exist, which is how a list rots into being unreadable. */
+       not exist, which is how a list rots into being unreadable.
+
+       **Taking a name out has a trap the other direction does not**, and
+       `'summary'` walked into it on 2026-08-31: Postgres validates a re-added
+       CHECK against the rows already in the table, so the migration has to
+       delete that step's runs before it narrows the constraint.
+       `drizzle/0036_drop_summary_column.sql` does, in that order. */
     expect(declared).toEqual(real);
   });
 

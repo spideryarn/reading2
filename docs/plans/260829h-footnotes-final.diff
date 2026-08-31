@@ -1,0 +1,537 @@
+diff --git a/docs/plans/260829a-footnotes-finish-review-5-prompt.md b/docs/plans/260829a-footnotes-finish-review-5-prompt.md
+new file mode 100644
+index 0000000..87fb4f0
+--- /dev/null
++++ b/docs/plans/260829a-footnotes-finish-review-5-prompt.md
+@@ -0,0 +1,61 @@
++# Fifth pass: the eighth consumer and the diagram denominators, fixed and committed
++
++Your fourth review (`docs/plans/260829a-footnotes-finish-review-4-sol.md`) returned BLOCK on three
++things and gave the closed-consumer inventory I asked for. All three are fixed. This work is
++now committed as `6bc1021`; anything you find goes in a follow-up, so please be as hard on it
++as the previous four passes, all of which found something real.
++
++`git show 6bc1021` is the whole change (35 files). `docs/plans/260828o-footnotes.md` has the write-up.
++
++## The three
++
++**1. The eighth consumer — reader-facing counts.** `articleStats` (`src/web/stats.ts`) now
++skips `supplementIndex` members when counting parts, sections **and depth**, which is exactly
++what `deriveLibraryScalars` already did. Your probe's numbers reproduced: 3 parts and 2
++sections where the article argues 2 and 1. The test lives beside the existing shelf/masthead
++agreement test, since the two are one derivation with two implementations.
++
++**2. Diagram scale.** `wordsBefore` now adds `0` for a non-body block, so `totalWords` is the
++argument's length and Force divides body positions by a body total. In `scatter.ts`, Drift and
++Trail take `bodyRows(blocks)` instead of `blocks.length` — that one denominator was being read
++by three separate things, which is why your "paragraph 2 of 4" and the progress hue not
++reaching the final step were the same bug. Drift's `nowY` is `null` when the reader is in the
++apparatus rather than a line clamped to the bottom of the axis.
++
++**3. The stranded shape.** You were right that a contiguous rule cannot describe a hole.
++`bodyRowOf(blocks, at)` asks the block itself, and both Drift's `nowY` and Trail's `here` go
++through it. There is a test placing a note *between* body paragraphs — the fallback
++`splitBlocks` deliberately builds no supplement node for — and asserting Trail lights nothing.
++
++## One bug of my own, which the suite caught
++
++Putting `supplementIndex` on the masthead path put it on **every page load**, where a stored
++tree whose root has no `children` array threw `Cannot read properties of undefined` and took
++the reading view down. Twelve tests in `tests/article-rename.test.tsx` went red. `?? []` now,
++with tests, because the rule everywhere else here is that a malformed tree renders visibly
++short rather than throwing.
++
++## Evidence
++
++- Each of the three fixes was probed by reverting it alone; each reddened exactly its own test
++  and nothing else.
++- `npm run typecheck` at the commit, in a clean detached worktree: all three projects, 633
++  files, zero errors — and the two `output/**` complaints that appear in the shared tree are
++  absent there, confirming they are a working-tree artefact rather than a property of the
++  commit.
++- `npm test`: 5614 passing. Two files fail in the shared tree and both pass at the commit in a
++  clean worktree — peers hold uncommitted edits in them.
++
++## What I want
++
++1. **Is the inventory closed now?** You listed thirteen consumer families and marked two as
++   partial and one as unhandled. Please re-run that table against the commit and say whether
++   every row is now handled — or name what is not.
++2. **`bodyRows` as the denominator.** It is `lastBodyRow + 1`, so a stranded note in
++   mid-article is still counted in it. That is deliberate — the axis has to be monotonic in
++   row number — but tell me if it is wrong.
++3. **`articleStats.depth`.** I excluded supplement nodes from the deepest-node calculation as
++   well as from the counts, on the grounds that it answers "how many granularity columns can
++   this article offer". Check that is right, and that nothing reads `depth` expecting the
++   tree's true maximum.
++4. Anything else.
+diff --git a/docs/plans/260829a-footnotes-finish-review-5-sol.md b/docs/plans/260829a-footnotes-finish-review-5-sol.md
+new file mode 100644
+index 0000000..dc28aa1
+--- /dev/null
++++ b/docs/plans/260829a-footnotes-finish-review-5-sol.md
+@@ -0,0 +1,82 @@
++Verdict: **BLOCK**. The owner path is much closer, but the inventory is not closed.
++
++## Blockers
++
++1. **Public articles lose `TreeNode.treatment`.**
++
++[`publicTree`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/dto.ts:150) copies every tree field except `treatment`. The existing test explicitly asserts that it is dropped ([test](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-dto.test.ts:336)).
++
++My probe through the real DTO produced:
++
++```text
++owner:  supplement nodes 1, parts 1, sections 1
++public: supplement nodes 0, parts 2, sections 2
++```
++
++Consequently, for public readers:
++
++- Notes are numbered as an argument part.
++- Fisheye collapsing switches off.
++- Spine and Outline descend into individual note leaves.
++- Summary mode restores the phantom numbered rows.
++- Diagram Tree and Force include apparatus nodes.
++- Public metadata counts remain wrong.
++
++Block treatment does cross the DTO, so word counts and Drift/Trail membership remain correct. It is specifically the tree-side consumers that break.
++
++2. **The apparatus can still add a granularity column.**
++
++[`buildGeometry`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/tree.ts:90) computes `leafDepth` from every node, including supplement leaves.
++
++For a valid shallow body tree:
++
++```text
++body maximum depth:       1
++supplement leaf depth:    2
++articleStats.depth:       1
++geometry.leafDepth:       2
++gist depths offered:      [0, 1]
++```
++
++That creates an L1 gist column whose body cell is actually a leaf with no gist. It also contradicts the metadata’s claim about how many granularity levels the article offers. The ladder’s maximum must be derived from the body branches, while supplement continuations can still be projected into those columns.
++
++3. **`bodyRows` is correct for coordinates, but not for the spoken paragraph count.**
++
++Keeping `lastBodyRow + 1` is right for Drift’s raw-row axis and defensible for progress hue: positions stay monotonic and the last body row reaches the final step.
++
++But [`node()`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/scatter.ts:428) uses that extent as “paragraph N of M”. With one stranded note between two body paragraphs, the labels are:
++
++```text
++paragraph 1 of 3
++paragraph 3 of 3
++```
++
++It must use body ordinals for the spoken count. The coordinate extent and paragraph count are now two different quantities.
++
++## Consumer inventory
++
++| Consumer family | State at `6bc1021` |
++|---|---|
++| ToC generation, labels, validation, flat ToC | Handled |
++| Summary generation and root-summary reattachment | Handled |
++| Arc, glossary, ideas and tweets | Handled |
++| Embedding, similarity and projection membership | Handled |
++| Fisheye, `?at=`, keyboard navigation and arc cells | **Partial:** owner handled; public DTO breaks it; granularity depth remains wrong |
++| Spine | **Partial:** public DTO breaks supplement treatment |
++| Outline mode | **Partial:** public DTO restores note-leaf descent |
++| Summary mode | **Partial:** public DTO restores numbering and phantom rows |
++| Diagram Tree | **Partial:** public DTO makes Notes ordinary structure |
++| Diagram Force, Drift and Trail | **Partial:** public Force breaks; stranded spoken count is wrong |
++| Shelf words/parts/sections | Handled |
++| Reader/public metadata counts | **Partial:** owner handled; public counts remain wrong |
++| Search, chat, explain, prose and note previews | Handled as intentionally inclusive |
++
++There is also a previously missed fourteenth consumer: **the public tree projection itself**, currently unhandled.
++
++## `articleStats.depth`
++
++The exclusion is correct. The only reader is the Metadata “Levels” stat ([Metadata.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/Metadata.tsx:592)), whose copy explicitly defines it as the argument’s granularity ladder. Nothing reads it as the physical tree maximum.
++
++The problem is `buildGeometry`, not `articleStats`. Add a direct depth assertion, though: the current agreement test asserts only parts and sections ([block-policy.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/block-policy.test.ts:312)).
++
++One documentation nit: [`260828o-footnotes.md`](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/plans/260828o-footnotes.md:3) still says “plan, unbuilt,” and the public DTO test still describes this lane as uncommitted.
+\ No newline at end of file
+diff --git a/docs/plans/260828o-footnotes.md b/docs/plans/260828o-footnotes.md
+index 32c3659..973c26c 100644
+--- a/docs/plans/260828o-footnotes.md
++++ b/docs/plans/260828o-footnotes.md
+@@ -1,6 +1,13 @@
+ # Footnotes and bibliographies
+ 
+-**Status: plan, unbuilt, revised once.** Written 2026-08-28 after a GPT Sol design consultation
++**Status: built, 2026-08-29 — stages 2 to 5a, less stage 6 (PDFs), which Greg cut from v1.**
++Five rounds of GPT Sol review after it was built; every one found something real, and the last
++of them is the closed inventory of consumers in
++[260829a-footnotes-finish-review-5-sol.md](260829a-footnotes-finish-review-5-sol.md). Still open: **stage 3b**,
++the block-id carry-over key — until it lands, footnote identity does not survive re-extraction,
++so do not claim that it does.
++
++The plan below is kept as it was written. Written 2026-08-28 after a GPT Sol design consultation
+ ([260828o-footnotes-prompt.md](260828o-footnotes-prompt.md) → [260828o-footnotes-sol.md](260828o-footnotes-sol.md)), then reviewed
+ and revised ([260828o-footnotes-review-prompt.md](260828o-footnotes-review-prompt.md) →
+ [260828o-footnotes-review-sol.md](260828o-footnotes-review-sol.md), verdict **REVISE BEFORE IMPLEMENTATION**).
+@@ -1813,6 +1820,41 @@ too short to embed, where a blinking mark is worse than an approximate one; the
+ not that case, so the last dot's range now stops at the last body block and a reader inside
+ the notes gets no dot, which the caller already handles.
+ 
++### The eighth consumer, and the fourteenth — 2026-08-29
++
++Sol's fourth pass gave the closed inventory of consumers I had asked for and named an eighth:
++`articleStats` counted the supplement as a part and its endnotes as sections, so the masthead,
++the metadata page and the public page each advertised a seven-part article with endnotes as
++having eight parts. The shelf card already did not, with the reasoning written beside it —
++two implementations of one derivation and only one of them right. Diagram scale went the same
++way: the notes were out of the nodes and out of the terms but still in the denominators, which
++squeezed the argument into the top of the panel, stopped the last paragraph reaching the final
++progress step, and made a screen reader say "paragraph 2 of 4" about the last body paragraph
++of two.
++
++**And the fifth pass found the one that mattered most, which no amount of owner-side testing
++could have caught: `publicTree` dropped `treatment`.** Every fix above reads the apparatus off
++the node, so a visitor got all of it back exactly as it was — footnotes numbered as a part of
++the piece, a blank row per endnote in summary mode with "No summary for this section" on each,
++the spine and the outline descending into individual notes, the diagram drawing them as
++argument. Measured through the real DTO: 1 part and 1 section for the owner, 2 and 2 for a
++visitor of the same article.
++
++The test that guarded it had said, in as many words, *"whoever lands the footnotes lane's
++`TreeNode.treatment` meets this test and decides"*. That was me, and the decision is that it
++crosses: it says a node is apparatus, which is structure exactly as `depth` and `title` are,
++derived from the article's own markup rather than from anything the owner did. The
++exactly-these-keys guard in the same file caught the change on the way through, which is what
++it is for.
++
++Two smaller ones from the same pass. `buildGeometry` took `leafDepth` from every node, so an
++article whose body tree is only parts-deep gained a granularity column containing nothing but
++a note leaf with no gist — while the "Levels" stat beside it said one. The ladder comes from
++the body now; the apparatus still projects into the columns that do exist. And the spoken
++paragraph count is a *count* rather than a coordinate: `bodyRows` must stay monotonic in row
++number for the axis, so a stranded note sits inside it, and the label had to stop reading from
++it.
++
+ ## Still open
+ 
+ - Whether the marker carries the substantive-versus-citation distinction in v1, or stays
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index e41e71e..e93b2cc 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -161,6 +161,24 @@ function publicTree(tree: Tree): Tree {
+       ...(node.navLabel === undefined ? {} : { navLabel: node.navLabel }),
+       ...(node.summary === undefined ? {} : { summary: node.summary }),
+       ...(node.sourceHeading === undefined ? {} : { sourceHeading: node.sourceHeading }),
++      /* **`treatment` crosses, and that is a decision.** The safe default here
++         is to drop an optional field, and this one was dropped until 2026-08-29
++         — with the test below saying in as many words that whoever landed the
++         footnotes lane had to come here and choose.
++         It has to cross. Every consumer that tells the apparatus from the
++         argument reads it off the *node*: the fisheye collapses forty endnotes
++         into one "Notes" row, the spine dims it, outline and summary mode
++         refuse to descend into it or number it, and the diagram leaves it out
++         of the argument's picture. A public reader without it gets all of that
++         back as it was — footnotes numbered as a part of the piece, one blank
++         row per endnote, and "No summary for this section" on each. Measured
++         through the real DTO: 1 part and 1 section for the owner, 2 and 2 for
++         a visitor.
++         Nothing about it is private. It says a node is apparatus rather than
++         argument, which is structure exactly as `depth` and `title` are, and it
++         is derived from the article's own markup rather than from anything the
++         owner did. GPT Sol, fifth review. */
++      ...(node.treatment === undefined ? {} : { treatment: node.treatment }),
+     };
+   }
+   return {
+diff --git a/src/web/scatter.ts b/src/web/scatter.ts
+index c74d079..0e9f8a4 100644
+--- a/src/web/scatter.ts
++++ b/src/web/scatter.ts
+@@ -292,6 +292,26 @@ function bodyRows(blocks: readonly Block[]): number {
+   return Math.max(1, lastBodyRow(blocks) + 1);
+ }
+ 
++/**
++ * **Which paragraph of the argument each row is**, one-based, and how many
++ * there are.
++ *
++ * Separate from `bodyRows` on purpose, and they are two different quantities.
++ * `bodyRows` is a coordinate extent — it has to stay monotonic in row number,
++ * so a note stranded mid-article is still inside it. This is a *count*, spoken
++ * aloud in the label a screen reader reads, and a count that skipped the
++ * stranded note's number said "paragraph 1 of 3" and "paragraph 3 of 3" about
++ * an article with two paragraphs in it. GPT Sol, fifth review, 2026-08-29.
++ */
++function bodyOrdinals(blocks: readonly Block[]): { of: ReadonlyMap<number, number>; total: number } {
++  const of = new Map<number, number>();
++  let n = 0;
++  blocks.forEach((b, i) => {
++    if (isBody(b)) of.set(i, ++n);
++  });
++  return { of, total: n };
++}
++
+ /**
+  * The reader's row, or `null` when they are not in the argument.
+  *
+@@ -383,7 +403,15 @@ function slot(d: Dot, input: ScatterInput, rows: number): number {
+ }
+ 
+ /** The `DiagramNode` every scatter dot shares, before its position is decided. */
+-function node(d: Dot, input: ScatterInput, rows: number, cx: number, cy: number, r: number): DiagramNode {
++function node(
++  d: Dot,
++  input: ScatterInput,
++  rows: number,
++  cx: number,
++  cy: number,
++  r: number,
++  paragraphs: { of: ReadonlyMap<number, number>; total: number },
++): DiagramNode {
+   /* The hit target is a square around the dot, never the dot itself. At three
+      pixels across a circle is a target nobody can hit twice, and `arc` and
+      `cluster` already solve this the same way — `dot` for the mark, the box for
+@@ -425,7 +453,7 @@ function node(d: Dot, input: ScatterInput, rows: number, cx: number, cy: number,
+        lane, and a reader using a screen reader gets neither. So both are in
+        words. docs/project/colour-scales.md § Colour is never the only carrier
+        is the rule; this is where it lands for a scatter. */
+-    label: `${d.number ? `${d.number} ${d.title}, ` : ""}paragraph ${d.row + 1} of ${rows}${input.k > 1 ? `, topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
++    label: `${d.number ? `${d.number} ${d.title}, ` : ""}paragraph ${paragraphs.of.get(d.row) ?? d.row + 1} of ${paragraphs.total}${input.k > 1 ? `, topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
+   };
+ }
+ 
+@@ -466,6 +494,7 @@ export function layoutDrift(
+ ): DiagramLayout {
+   const kept = dots(root, blocks, input);
+   const rows = bodyRows(blocks);
++  const paragraphs = bodyOrdinals(blocks);
+   const height = Math.max(opts.height, 320, kept.length * ROW + PAD_Y * 2);
+   const top = PAD_Y;
+   const usableH = Math.max(1, height - PAD_Y * 2);
+@@ -485,7 +514,7 @@ export function layoutDrift(
+   const nodes = kept.map((d) => {
+     const r = radius(d.block.words, reference);
+     const cx = Math.min(right, Math.max(left, x(d)));
+-    return node(d, input, rows, cx, y(d.row), r);
++    return node(d, input, rows, cx, y(d.row), r, paragraphs);
+   });
+ 
+   return {
+@@ -590,6 +619,7 @@ export function layoutTrail(
+ ): DiagramLayout {
+   const kept = dots(root, blocks, input);
+   const rows = bodyRows(blocks);
++  const paragraphs = bodyOrdinals(blocks);
+   const height = Math.max(opts.height, TRAIL_MIN_H);
+   if (kept.length === 0) {
+     return { width: opts.width, height, nodes: [], links: [], axis: null, nowY: null };
+@@ -629,7 +659,7 @@ export function layoutTrail(
+     return { d, r, cx: x(d.point.x), cy: y(d.point.y) };
+   });
+ 
+-  const nodes = placed.map((p) => node(p.d, input, rows, p.cx, p.cy, p.r));
++  const nodes = placed.map((p) => node(p.d, input, rows, p.cx, p.cy, p.r, paragraphs));
+ 
+   /* Which dot the reader is standing on, so the chain can be bright where they
+      are. `-1` when the reader is above the article or `?at=` is unset. */
+diff --git a/src/web/tree.ts b/src/web/tree.ts
+index 1de94a5..d77ee2e 100644
+--- a/src/web/tree.ts
++++ b/src/web/tree.ts
+@@ -87,7 +87,21 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
+   // the parts list, and there is no single place that says what the piece is.
+   // The leaf column carries navLabels rather than gists, so it is only shown in
+   // outline mode — see TableView.
+-  const maxDepth = Math.max(...Object.values(tree.nodes).map((n) => n.depth));
++  /* **The ladder is the argument's, not the article's.** A supplement is depth
++     one with its leaves at depth two, so an article whose body tree is only
++     parts-deep gained a whole rung it does not have: an L2 gist column whose
++     only occupant was a note leaf with no gist and no navLabel — while the
++     metadata page's "Levels" stat, fed by `articleStats.depth`, said one. Two
++     answers to "how many levels does this piece have", both on screen.
++     The supplement is excluded from the *maximum* only. Its cells still project
++     into the columns that do exist, as continuations, which is what puts "Notes"
++     in the sections column at all — see `navigableItems` below.
++     GPT Sol, fifth review, 2026-08-29. */
++  const apparatus = supplementIndex(tree);
++  const bodyDepths = Object.values(tree.nodes)
++    .filter((n) => !apparatus.has(n.id))
++    .map((n) => n.depth);
++  const maxDepth = bodyDepths.length > 0 ? Math.max(...bodyDepths) : 0;
+   const columnDepths = Array.from({ length: maxDepth + 1 }, (_, i) => i);
+ 
+   const cells: Cell[][] = [];
+@@ -128,7 +142,7 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
+     cells,
+     cellAt,
+     chains,
+-    supplementOf: supplementIndex(tree),
++    supplementOf: apparatus,
+   };
+ }
+ 
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index f537617..c3d0e04 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -291,6 +291,10 @@ describe("the public article payload", () => {
+         "tree.nodes.n1.summary",
+         "tree.nodes.n1.sourceHeading",
+         "tree.nodes.n1.title",
++        /* Apparatus or argument, and it crosses on purpose since 2026-08-29 —
++           see the test below for the decision and what a visitor saw without
++           it. */
++        "tree.nodes.n1.treatment",
+         "tree.rootId",
+         "tree.slug",
+         "tree.version",
+@@ -327,16 +331,28 @@ describe("the public article payload", () => {
+    * **The field the `Required<TreeNode>` fixture exists for**, asserted rather
+    * than left to the key list above.
+    *
+-   * `treatment` is set on the fixture and dropped by `publicTree`. That is the
+-   * safe default doing its job — but *safe* and *correct* are different here,
+-   * and this is the case that shows it: a client that cannot tell apparatus
+-   * from argument numbers the footnotes as a part of the piece. Whoever lands
+-   * the footnotes lane's `TreeNode.treatment` meets this test and decides.
++   * `treatment` was dropped by `publicTree` — the safe default doing its job —
++   * and this test said in as many words that whoever landed the footnotes
++   * lane's `TreeNode.treatment` would meet it and decide.
++   *
++   * **The decision is that it crosses**, made 2026-08-29. *Safe* and *correct*
++   * were different here and this was the case that showed it: every consumer
++   * that tells the apparatus from the argument reads it off the node, so a
++   * visitor without it saw the footnotes numbered as a part of the piece, one
++   * blank row per endnote in summary mode with "No summary for this section" on
++   * each, the spine and the outline descending into individual notes, and the
++   * diagram drawing them as argument. Measured through this DTO before the
++   * change: 1 part and 1 section for the owner, 2 and 2 for a visitor.
++   *
++   * It is structure, not privacy: it says a node is apparatus, which is the
++   * same kind of fact as `depth` and `title`, and it is derived from the
++   * article's own markup rather than from anything the owner did. GPT Sol's
++   * fifth review of the footnotes lane.
+    */
+-  it("drops a tree node's treatment, which is a decision rather than an oversight", () => {
++  it("carries a tree node's treatment, so a visitor can tell apparatus from argument", () => {
+     expect(NODE_FIELDS.treatment).toBe("supplement");
+-    expect(keyPaths(built)).not.toContain("tree.nodes.n1.treatment");
+-    expect(JSON.stringify(built.tree)).not.toContain("supplement");
++    expect(keyPaths(built)).toContain("tree.nodes.n1.treatment");
++    expect(built.tree.nodes.n1?.treatment).toBe("supplement");
+   });
+ 
+   it("has none of the meta fields the payload table forbids", () => {
+diff --git a/tests/scatter.test.ts b/tests/scatter.test.ts
+index 5d68334..ebbb532 100644
+--- a/tests/scatter.test.ts
++++ b/tests/scatter.test.ts
+@@ -509,6 +509,30 @@ describe("a reader inside the apparatus", () => {
+     expect(inBody.nowY).not.toBeNull();
+   });
+ 
++  /* **The spoken count is a count, not a coordinate**, and with a stranded note
++     the two part company: `bodyRows` has to stay monotonic in row number so the
++     axis works, but the label a screen reader reads must not skip a number. It
++     said "paragraph 1 of 3" and "paragraph 3 of 3" about an article with two
++     paragraphs in it. GPT Sol, fifth review. */
++  it("drift: numbers the paragraphs of the argument consecutively, around a stranded note", () => {
++    const stranded = [...body.slice(0, 4), notes[0]!, ...body.slice(4)];
++    const strandedBody = stranded.filter((b) => b.treatment !== "supplement");
++    expect(stranded[4]!.treatment).toBe("supplement"); // precondition
++    const out = layoutDrift(
++      tree(strandedBody), stranded, opts(), input(points(strandedBody)),
++    );
++    const spoken = out.nodes
++      .map((n) => /paragraph (\d+) of (\d+)/.exec(n.label ?? ""))
++      .filter((m): m is RegExpExecArray => m !== null);
++    expect(spoken.length).toBeGreaterThan(0);
++    // Every label counts out of the body's length, and none exceeds it.
++    for (const m of spoken) {
++      expect(Number(m[2])).toBe(strandedBody.length);
++      expect(Number(m[1])).toBeLessThanOrEqual(strandedBody.length);
++      expect(Number(m[1])).toBeGreaterThanOrEqual(1);
++    }
++  });
++
+   /* **A note stranded mid-article**, which `splitBlocks` deliberately refuses
+      to build a supplement node for (src/supplement.ts) — so the apparatus is a
+      *hole* in the body rather than a tail, and no "up to the last body row"
+diff --git a/tests/supplement.test.ts b/tests/supplement.test.ts
+index a7059bc..c96d2f0 100644
+--- a/tests/supplement.test.ts
++++ b/tests/supplement.test.ts
+@@ -746,6 +746,72 @@ describe("the shelf card's counts", () => {
+   });
+ });
+ 
++/* --------------------------------------- the ladder the article offers -- */
++
++/**
++ * **The apparatus must not add a granularity column.**
++ *
++ * A supplement is depth 1 with its leaves at depth 2, so an article whose body
++ * tree is only parts-deep gains a whole rung it does not have: `buildGeometry`
++ * took `leafDepth` from every node, offered an L2 gist column, and the only
++ * thing in it was a note leaf with no gist and no navLabel. The metadata page's
++ * "Levels" stat, which `articleStats.depth` feeds, said 1 at the same moment.
++ * Two answers to "how many levels does this piece have", and the reader could
++ * see both. GPT Sol, fifth review, 2026-08-29.
++ */
++describe("a shallow article with an apparatus", () => {
++  const shallowBlocks: Block[] = [
++    { ...note(1), id: "spya-body01", text: "The first half.", role: undefined, treatment: undefined, noteId: undefined },
++    { ...note(2), id: "spya-body02", text: "The second half.", role: undefined, treatment: undefined, noteId: undefined },
++    note(3),
++  ].map((b) => {
++    const { role, treatment, noteId, ...rest } = b;
++    return role === undefined ? (rest as Block) : b;
++  });
++
++  const shallowTree = appendSupplement(
++    {
++      version: "1", generator: "t", slug: "s", rootId: "n0",
++      nodes: {
++        n0: { id: "n0", depth: 0, parent: null, children: ["n1", "n2"],
++          range: ["spya-body01", "spya-body02"], title: "All", gist: "g" },
++        n1: { id: "n1", depth: 1, parent: "n0", children: [],
++          range: ["spya-body01", "spya-body01"], title: "One" },
++        n2: { id: "n2", depth: 1, parent: "n0", children: [],
++          range: ["spya-body02", "spya-body02"], title: "Two" },
++      },
++    } as unknown as Tree,
++    splitBlocks(shallowBlocks).groups,
++  );
++
++  it("is a valid tree whose body is only one level deep", () => {
++    // The preconditions. Without them this is a test about some other article.
++    expect(checkTree(shallowBlocks, shallowTree).problems).toEqual([]);
++    expect(supplementNodes(shallowTree).length).toBe(1);
++    const supplement = supplementIndex(shallowTree);
++    const bodyDeepest = Math.max(
++      ...Object.values(shallowTree.nodes).filter((n) => !supplement.has(n.id)).map((n) => n.depth),
++    );
++    expect(bodyDeepest).toBe(1);
++  });
++
++  it("offers no column for a rung the argument does not have", () => {
++    const geo = buildGeometry(shallowTree, shallowBlocks);
++    expect(geo.leafDepth).toBe(1);
++    expect(geo.columnDepths).toEqual([0, 1]);
++  });
++
++  /* And the apparatus is still *in* the columns that do exist — the point is to
++     drop the phantom rung, not the notes. Without this the fix could be "stop
++     projecting the supplement" and every assertion above would still pass. */
++  it("still shows the apparatus in the column it does have", () => {
++    const geo = buildGeometry(shallowTree, shallowBlocks);
++    const items = navigableItems(geo.cells[1]!, geo.supplementOf).filter((i) => i.supplement);
++    expect(items.length).toBe(1);
++    expect(items[0]!.node.title).toBe("Notes");
++  });
++});
++
+ /* ------------------------------------------- a tree that is not a tree -- */
+ 
+ /**

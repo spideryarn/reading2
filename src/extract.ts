@@ -1,9 +1,12 @@
 /**
  * Stage 2 — Readability over a page somebody else fetched.
  *
- * Writes the standalone debug page (`output/<slug>.html`, which stage 3 reads)
- * and `data/<slug>/meta.json`, which is what everything downstream knows the
- * article *by* — its title, who wrote it, where it came from and when. See
+ * Produces two artefacts and **writes neither**: the standalone page that stage
+ * 3 reads and stamps ids into, and the metadata, which is what everything
+ * downstream knows the article *by* — its title, who wrote it, where it came
+ * from and when. Both are returned; the store puts them where that store keeps
+ * things (`output/<slug>.html` and `data/<slug>/meta.json` on a filesystem,
+ * columns on `article_revisions` in Postgres). See
  * docs/project/content-extraction.md and docs/project/library.md.
  *
  * Stage 1 is src/fetch.ts and is somebody else's problem, deliberately: getting
@@ -137,7 +140,7 @@ export function defaultOutFile(url: string): string {
 }
 
 /**
- * The slug an output filename implies.
+ * The slug an output filename implies. **Command line only.**
  *
  * Taken from the OUTPUT FILE rather than from the URL, which looks like the
  * long way round given `defaultOutFile` just derived the filename from the URL
@@ -149,6 +152,11 @@ export function defaultOutFile(url: string): string {
  * right-looking directory for `npm run extract <url>` and in the wrong one the
  * moment anybody passed an explicit filename — and the only symptom would be an
  * article with no byline.
+ *
+ * `runExtract` used to call this. It takes the slug directly now, because the
+ * queue has always known it and there is no filename in that path to read one
+ * off. The reasoning above still applies to `main()`, which is where an
+ * explicit filename can arrive.
  */
 export function slugForOutFile(outFile: string): string {
   return path.basename(outFile).replace(/\.[^.]+$/, "");
@@ -156,8 +164,20 @@ export function slugForOutFile(outFile: string): string {
 
 export interface ExtractResult {
   slug: string;
-  outFile: string;
   meta: Meta;
+  /**
+   * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
+   *
+   * Not Readability's `article.content` — the page `debugPage` builds around it,
+   * `<!doctype>`, `<head>`, styles and all. That is what this stage has always
+   * left at `output/<slug>.html`, and stage 3 reads that file and rewrites it
+   * with the block ids stamped in (src/blocks.ts). So the artefact and the
+   * thing a person opens to see what extraction did are one document, which is
+   * a slightly surprising fact worth stating rather than tidying: making the
+   * artefact the bare body would change every block stage 3 cuts, on every
+   * article, in the same commit that moved where it is stored.
+   */
+  extractedHtml: string;
   /** Readability's own character count, for the log line. */
   length: number | null;
   excerpt: string | null;
@@ -248,22 +268,147 @@ export function unhideCollapsedSections(doc: Document): void {
  * function of bytes we already hold: re-running it costs nothing and asks
  * nobody's server for anything. The queue relies on that.
  */
+/**
+ * **Everything stage 2 does to a page before anything is written down** — the
+ * DOM prep and the Readability call, with no filesystem, no metadata and no
+ * side effect.
+ *
+ * Split out of `runExtract` on 2026-08-31 because two eval instruments were
+ * re-deriving it and got it wrong. `evals/extraction/probe.mts` and
+ * `tidy.mts` each did `unhide → Readability → split`, missing
+ * `canonicaliseNotes` — and the cost of that omission was not theoretical:
+ * `acx_footnotes.html` reports **18 stranded footnote-marker blocks** through
+ * the instruments' version and **zero** through this one, because
+ * canonicalisation is precisely what turns those markers into notes. An
+ * instrument measuring a pipeline that does not exist reported a failure the
+ * real pipeline had already fixed, and nothing could have caught it except
+ * running the two side by side. Found by GPT Sol's review.
+ *
+ * So the order below is the contract, not an implementation detail, and it has
+ * exactly one home. `canonicaliseCallouts` joined it on 2026-08-31 for the same
+ * reason `canonicaliseNotes` is here: it has to run before Readability, which
+ * deletes the element a callout is named on (src/callouts.ts).
+ *
+ * `article` is `null` when Readability declines the page — the caller decides
+ * whether that is an error (`runExtract`: yes) or a row in a table (an eval:
+ * no). It is deliberately not thrown from here.
+ */
+export function readArticle(
+  html: string,
+  url: string,
+): { article: ReturnType<Readability["parse"]>; notes: NoteStats; callouts: CalloutStats } {
+  /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
+     JSDOM's default forwards its own errors straight to `console`, and one of
+     them quotes the page: a malformed `@import` produces `Could not parse CSS
+     @import URL "<whatever the page said>" relative to base URL "<the full
+     source URL, query string included>"`. That is fetched-page-controlled text
+     and a possibly private URL on the server's stderr, going round Pino,
+     `errorFields` and redaction alike — none of which can reach a string
+     somebody else's library printed.
+
+     Ordinary CSS parse failures print a fixed sentence and are harmless; it is
+     the `@import` branch that carries the page's own words. Dropping the lot is
+     right anyway: we are here for the article text, and JSDOM's opinion of a
+     stylesheet is not something anybody running this needs.
+
+     Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
+     of the same class, and the first one where the leak was a dependency's
+     rather than ours. See docs/project/logging.md. */
+  const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+  unhideCollapsedSections(dom.window.document);
+  /* Before Readability, and it has to be: Readability's `keepClasses: false`
+     takes the identifying classes off, and the sanitiser downstream of it
+     deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
+     3 there is nothing left to recognise a note by. See src/notes.ts. */
+  const notes = canonicaliseNotes(dom.window.document);
+  /* After the notes, and for the same reason as the notes: Readability deletes
+     the element a callout is named on. Order between the two does not matter —
+     neither reads what the other writes — so it is simply the later arrival.
+     src/callouts.ts. */
+  const callouts = canonicaliseCallouts(dom.window.document);
+  return { article: new Readability(dom.window.document).parse(), notes, callouts };
+}
+
+/**
+ * An ISO-8601 date, optionally with a time, optionally with a zone.
+ *
+ * Deliberately narrow. Readability's `publishedTime` comes off
+ * `<meta property="article:published_time">` or JSON-LD `datePublished`, both of
+ * which are ISO by convention — but it is whatever the page said, and a page can
+ * say `"Last updated Tuesday"`.
+ */
+const ISO_DATE =
+  /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * Readability's `publishedTime`, kept if it is a date and dropped if it is prose.
+ *
+ * **Kept in the publisher's own zone rather than converted to UTC**, which is
+ * the one decision in this function. `new Date(s).toISOString()` looks like the
+ * obvious normalisation and it moves the calendar day: a piece published at 8pm
+ * on 31 December in New York becomes 1 January, and the calendar day is exactly
+ * what this field is for — Timeline reads the year off the front of it to date
+ * every "on July 7" the article never gives a year for
+ * (docs/plans/260831i-timeline-mode.md § The reference frame). A day that shifts by
+ * zone is a year that shifts at the boundary. The only normalising done here is
+ * of spelling, never of instant: a space separator becomes `T`, and `+0000`
+ * becomes `+00:00`.
+ *
+ * **An unrecognised string is dropped, not guessed at.** `Date.parse` will
+ * happily take `"July 7, 2026"` and interpret it in the *server's* local zone,
+ * so a date we cannot read as ISO is worse than no date: the no-frame path is
+ * already the common one and is honest, where a silently wrong frame would
+ * misdate every year-less event in the piece and look like a fact.
+ *
+ * Whatever comes back is the publisher's claim, not a verified one.
+ */
+export function publicationDate(raw: Maybe): string | undefined {
+  const m = ISO_DATE.exec((raw ?? "").trim());
+  if (!m) return undefined;
+  const [, day, time, zone] = m;
+  /* A well-formed shape is not a real date — `2026-02-31` matches the pattern.
+     Round-tripping the day through Date is the cheap check, and it is done on
+     the day alone (which parses as UTC, per the ECMAScript date-only rule) so
+     that no zone arithmetic can move it. */
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || !parsed.toISOString().startsWith(`${day}T`)) {
+    return undefined;
+  }
+  if (!time) return day;
+  /* `+0000` and `+00:00` are the same offset in two of ISO 8601's spellings,
+     and two spellings of one fact is a fingerprint that changes when nothing
+     did. The extended form is what everything else here writes. */
+  const offset =
+    zone && zone !== "Z" && !zone.includes(":")
+      ? `${zone.slice(0, 3)}:${zone.slice(3)}`
+      : zone;
+  return `${day}T${time}${offset ?? ""}`;
+}
+
+/**
+ * Stage 2 over already-fetched HTML — **and it writes nothing.**
+ *
+ * It took `outFile` and `dataDir` until 2026-08-31 and wrote the page and
+ * `meta.json` itself. Both artefacts are returned now and the store decides
+ * where they land — `output/<slug>.html` plus `data/<slug>/meta.json` on the
+ * filesystem, columns on `article_revisions` in Postgres. The two write
+ * destinations were the last thing in this stage that assumed a disk.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2c.
+ *
+ * `slug` is passed in rather than derived, which is the one call-site change
+ * worth noticing. It used to come from the output filename via
+ * `slugForOutFile`, on the reasoning that the basename is what stages 3 and 4
+ * would name this article — true, and now moot: there is no filename here to
+ * derive it from, and every caller already knows the slug. The command line
+ * below still derives one that way, because an explicit `outFile` on the
+ * command line is the only place the two can differ.
+ */
 export async function runExtract(opts: {
   html: string;
   url: string;
-  outFile?: string;
-  /**
-   * Where `meta.json` goes. Passed in rather than assumed, because `data/…`
-   * relative to the process's cwd is only `<repo>/data/…` when you happen to
-   * have started in the repo root — and the queue checks for the file at an
-   * absolute path (src/pipeline.ts). A server started from anywhere else would
-   * write the metadata somewhere the pipeline never looks, and the step would
-   * still go green.
-   */
-  dataDir?: string;
+  slug: string;
 }): Promise<ExtractResult> {
-  const outFile = opts.outFile ?? defaultOutFile(opts.url);
-  const slug = slugForOutFile(outFile);
+  const { slug } = opts;
 
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -282,35 +427,20 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const dom = new JSDOM(opts.html, {
-    url: opts.url,
-    virtualConsole: new VirtualConsole(),
-  });
-  unhideCollapsedSections(dom.window.document);
-  /* Before Readability, and it has to be: Readability's `keepClasses: false`
-     takes the identifying classes off, and the sanitiser downstream of it
-     deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
-     3 there is nothing left to recognise a note by. See src/notes.ts. */
-  const notes = canonicaliseNotes(dom.window.document);
-  /* After the notes, and for the same reason as the notes: Readability deletes
-     the element a callout is named on. Order between the two does not matter —
-     neither reads what the other writes — so it is simply the later arrival.
-     src/callouts.ts. */
-  const callouts = canonicaliseCallouts(dom.window.document);
-  const article = new Readability(dom.window.document).parse();
+  const { article, notes, callouts } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new Error("Readability could not parse this page.");
   }
 
-  await mkdir(path.dirname(outFile), { recursive: true });
-  await writeFile(outFile, debugPage(article), "utf-8");
-
-  /* meta.json is the article's identity — the only place the source URL, the
-     byline and the fetch date survive past this stage. Written straight into
-     `data/<slug>/`, beside the artefacts the later stages put there, because it
-     is where the server looks (src/api.ts) and because a piece of provenance
-     left in `output/` would be scratch. Written on every run: re-extracting is
-     how you refresh a page, and the fetch date should follow. */
+  /* The metadata is the article's identity — the only place the source URL, the
+     byline and the fetch date survive past this stage (src/api.ts reads it).
+     Rebuilt on every run: re-extracting is how you refresh a page, and the
+     fetch date should follow. */
+  /* Readability has been handing `publishedTime` back all along and this stage
+     dropped it on the floor. It is the reference frame for every year-less date
+     in the piece — the field's note in src/types.ts says why it is not
+     `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
+  const publishedAt = publicationDate(article.publishedTime);
   const meta: Meta = {
     slug,
     title: article.title ?? slug,
@@ -319,16 +449,14 @@ export async function runExtract(opts: {
     ...(article.lang ? { lang: article.lang } : {}),
     url: opts.url,
     fetchedAt: new Date().toISOString(),
+    ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
   };
-  const metaFile = path.join(opts.dataDir ?? path.join("data", slug), "meta.json");
-  await mkdir(path.dirname(metaFile), { recursive: true });
-  await writeFile(metaFile, `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
 
   return {
     slug,
-    outFile,
     meta,
+    extractedHtml: debugPage(article),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,
@@ -336,6 +464,27 @@ export async function runExtract(opts: {
   };
 }
 
+/**
+ * `npm run extract -- <url> [outFile]`
+ *
+ * **The one place left that writes stage 2's artefacts to a disk**, and it does
+ * it here rather than inside `runExtract` because it is the only caller that
+ * wants files: it exists so a person can open the page and see what extraction
+ * did. The queue hands the same two artefacts to the store instead.
+ *
+ * It writes to exactly where it always did — `output/<slug>.html` and
+ * `data/<slug>/meta.json` — so the fixtures, the evals and anybody's muscle
+ * memory are unaffected. It fetches the page itself, as it always did, and does
+ * not read anything `npm run fetch` left behind — the two commands are separate
+ * one-shot tools and neither feeds the other.
+ *
+ * **Both paths below are relative to the process's cwd**, which is why they are
+ * here and not in the stage. `data/…` is `<repo>/data/…` only when you started
+ * in the repo root, and the queue used to pass `dataDir` in for exactly that
+ * reason: a server started elsewhere would have written the metadata somewhere
+ * the pipeline never looks, with the step still going green. A command line has
+ * no such problem — it prints the resolved paths, and a person is reading them.
+ */
 async function main(): Promise<void> {
   const url = process.argv[2];
   if (!url) {
@@ -345,7 +494,18 @@ async function main(): Promise<void> {
   const outFile = process.argv[3] ?? defaultOutFile(url);
 
   const html = await fetchHtml(url);
-  const result = await runExtract({ html, url, outFile });
+  /* `slugForOutFile`, not `slugFromUrl`: an explicit `outFile` on the command
+     line is what stages 3 and 4 will name this article after, and deriving the
+     slug from the URL a second time would put meta.json in the right-looking
+     directory for the default case and the wrong one the moment anybody passed
+     a filename. The only symptom would be an article with no byline. */
+  const result = await runExtract({ html, url, slug: slugForOutFile(outFile) });
+
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, result.extractedHtml, "utf-8");
+  const metaFile = path.join("data", result.slug, "meta.json");
+  await mkdir(path.dirname(metaFile), { recursive: true });
+  await writeFile(metaFile, `${JSON.stringify(result.meta, null, 2)}\n`, "utf-8");
 
   console.log(`Title: ${result.meta.title}`);
   console.log(`Byline: ${result.meta.byline}`);
@@ -360,8 +520,8 @@ async function main(): Promise<void> {
       `${result.callouts.skipped} skipped, ${JSON.stringify(result.callouts.shapes)})`,
   );
   console.log(`Excerpt: ${result.excerpt}`);
-  console.log(`\nWritten to: ${path.resolve(result.outFile)}`);
-  console.log(`            ${path.resolve("data", result.slug, "meta.json")}`);
+  console.log(`\nWritten to: ${path.resolve(outFile)}`);
+  console.log(`            ${path.resolve(metaFile)}`);
 }
 
 if (isMain(import.meta.url)) void main();

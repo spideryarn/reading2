@@ -143,7 +143,7 @@ every bound parameter into `Error.message`, and the bound parameters are the
 reader's quote and the model's answer. Rule 4 above, arriving from a direction
 nobody was watching — the provider whose words must not be repeated turned out
 to include the database. See
-[error-boundary.md](../plans/error-boundary.md) and
+[260826p-error-boundary.md](../plans/260826p-error-boundary.md) and
 [`src/store/db-errors.ts`](../../src/store/db-errors.ts).
 
 **A code names a branch, not a status.** 500, 502 and 503 all answer to

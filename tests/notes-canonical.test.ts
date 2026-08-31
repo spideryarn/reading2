@@ -1,6 +1,6 @@
 /**
  * Stage 2 canonicalises every footnote shape into one, before Readability —
- * src/notes.ts, and docs/plans/footnotes.md for the measurements it came from.
+ * src/notes.ts, and docs/plans/260828o-footnotes.md for the measurements it came from.
  *
  * **These run the real pipeline over the real fixtures.** `runExtract` (jsdom,
  * Readability, the sanitiser) and then `splitIntoBlocks`, over the committed
@@ -35,8 +35,7 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runExtract, unhideCollapsedSections } from "../src/extract.js";
 import { canonicaliseNotes, type NoteStats } from "../src/notes.js";
@@ -63,25 +62,18 @@ function pipeline(fixture: string): Promise<Run> {
   if (existing) return existing;
   const started = (async (): Promise<Run> => {
     const html = await readFile(path.join(FIXTURES, fixture), "utf-8");
-    const dir = await mkdtemp(path.join(tmpdir(), "notes-canonical-"));
-    try {
-      const outFile = path.join(dir, fixture);
-      const extract = await runExtract({
-        html,
-        url: `https://example.test/${fixture}`,
-        outFile,
-        dataDir: dir,
-      });
-      const split = splitIntoBlocks(await readFile(outFile, "utf-8"));
-      return {
-        blocks: split.blocks,
-        byId: new Map(split.blocks.map((b) => [b.id, b])),
-        doc: new JSDOM(split.html).window.document,
-        notes: extract.notes,
-      };
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const extract = await runExtract({
+      html,
+      url: `https://example.test/${fixture}`,
+      slug: fixture,
+    });
+    const split = splitIntoBlocks(extract.extractedHtml);
+    return {
+      blocks: split.blocks,
+      byId: new Map(split.blocks.map((b) => [b.id, b])),
+      doc: new JSDOM(split.html).window.document,
+      notes: extract.notes,
+    };
   })();
   runs.set(fixture, started);
   return started;

@@ -103,7 +103,7 @@ masthead, on citation chips and on this card's own buttons.
 
 It is also the only one a **finger** can open: a tap on a glossary mark reveals the card and a second
 tap commits, which is `bandPress`'s rule reached by a different route
-([touch.md](touch.md), [touch-glossary-card.md](../plans/touch-glossary-card.md)). The spine's
+([touch.md](touch.md), [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md)). The spine's
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 

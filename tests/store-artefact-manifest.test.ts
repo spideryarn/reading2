@@ -57,7 +57,7 @@ const HOMES: Record<string, string> = {
   /* A PDF, and the record of which of the two it is. Stage 1 writes exactly one
      of `raw.html` / `raw.pdf` plus `raw.json` naming it — a refresh can leave
      both raw files there, and "whichever exists" then picks the stale one
-     silently (docs/plans/pdf-ingestion.md). The bytes go in the same column
+     silently (docs/plans/260826c-pdf-ingestion.md). The bytes go in the same column
      either way; the manifest's fields are what the pipeline used to throw away,
      and `raw_content_type` and `raw_encoding` already exist for them. */
   "raw.pdf": "article_revisions.raw_bytes — the same column; raw.json says which arrived",
@@ -69,14 +69,38 @@ const HOMES: Record<string, string> = {
   /* The manifest is the column. The image bytes are content-addressed objects
      in the `sources` bucket and get no row of their own — an image is not the
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
-     docs/plans/hosting-the-articles-images.md. */
+     docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.json": "article_revisions.assets",
+  /* The label run's checkpoint, and the one entry here whose home is decided
+     but **not yet wired**. `src/db/schema.ts` § checkpoints says in as many
+     words that the table is "the Postgres home of `labels-progress.json`", and
+     `src/store/checkpoints.ts` exists — but `src/labels.ts` still reads and
+     writes the flat file directly against `opts.dir` (`CHECKPOINT_FILE`, line
+     877), so nothing puts one in Postgres today.
+
+     It belongs here rather than in `NOT_YET_WRITTEN` for a reason the two
+     lists' own headers settle: that one is for artefacts with **no example on
+     disk**, and it clears itself the moment one appears — so an entry there
+     would fail on the very file that prompted it. This list is a record of
+     where a thing goes, not a claim that it has got there.
+
+     What is genuinely unanswered is who *reclaims* a finished run's checkpoint
+     once it is in Postgres: on the filesystem `scripts/checkpoints-sweep.ts`
+     sweeps the `data/` root, which is a filesystem answer that does not carry
+     over. docs/plans/260827aa-delete-the-importer.md § D2 records it as open. */
+  "labels-progress.json": "checkpoints (namespace 'toc-labels') — decided, not yet wired",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
-  "summary.json": "article_revisions.summary",
   "ideas.json": "article_revisions.ideas",
+  "quotes.json": "article_revisions.quotes",
   "sketch.json": "article_revisions.sketch",
+  /* The column is declared and its migration is written — `drizzle/0035_timeline.sql`,
+     which also carries the `revision_step_runs_step` CHECK that drizzle-kit will
+     not write. **Whether it has been APPLIED is a separate question and Greg's
+     call every time**, so until he runs it this row says where the artefact goes
+     and the database does not yet have the column. */
+  "timeline.json": "article_revisions.timeline",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",
@@ -99,19 +123,41 @@ const HOMES: Record<string, string> = {
  */
 const NOT_MIGRATED: Record<string, string> = {
   ".DS_Store": "macOS. Not ours.",
-  /* A cache, and the only one an article directory holds. One file per page
+  /* **Deleted rather than unmigrated**, and the distinction is this list's
+     whole point. Stage 5e wrote the generated summary ladder here until
+     2026-08-31; the stage, the artefact kind, every reader of it and the
+     `article_revisions.summary` column are all gone
+     (docs/plans/260831s-gist-only-summaries.md, drizzle/0036). `data/` is gitignored, so
+     the files linger on whichever machine ran the stage — orphans that nothing
+     reads and nothing moves. */
+  "summary.json": "deleted with stage 5e; no home, because there is nothing to home",
+  /* **This entry said the opposite until 2026-08-31, and it was stale.** It read
+     "a decision not to migrate it, not an omission" — a cache, one file per page
      range, keyed on the PDF's bytes + the prompt version + the reader, holding
      the model's raw answer so that fixing the renderer or the checker costs
-     nothing (docs/plans/pdf-ingestion.md). Deleting it costs a re-transcription
-     and nothing else, and its key is derivable from what IS migrated — so it is
-     a decision not to migrate it, not an omission.
+     nothing (docs/plans/260826c-pdf-ingestion.md).
 
-     The one thing that decision gives up, and it is worth knowing before
-     agreeing with it: a witness pass built later for scans would be re-run over
-     these cached responses rather than paid for again. That is cheap to lose
-     today and would not be if the cache were the only copy of an expensive
-     reading of a document nobody can re-fetch. */
-  "pdf-chunks": "a cache, not an artefact — the model's raw answer per page range, replayable",
+     That decision was reversed and this list was never told. `src/db/schema.ts`
+     § checkpoints names **both** checkpoint forms as the table's Postgres home,
+     and `src/store/checkpoints.ts`'s namespace is a closed set containing
+     exactly `toc-labels` and `pdf-chunk`. So it is migrated in the only sense
+     this list asks about: it has a home, and the home was chosen deliberately.
+
+     It stays in this list rather than moving to `HOMES` for one reason — it is
+     a **directory**, not a file, and `HOMES` is keyed by filename. The entry
+     below says where it goes so that the two lists stop contradicting each
+     other. ⟨Sol⟩, 2026-08-31, on a review of `labels-progress.json`: PDF chunks
+     and label checkpoints are in the same state, and either both are exempt or
+     neither is.
+
+     Like `labels-progress.json`, the destination and both adapters exist and
+     **no caller is wired** — `src/pdf-read.ts` still reads and writes
+     `data/<slug>/pdf-chunks` directly. Nothing here expires when that changes,
+     which is the honest limit of this file: a name in any of these three lists
+     makes the canary green whether or not the value is true. Only a behavioural
+     test that runs a caller through a `CheckpointStore` and proves a second
+     store instance reuses the entry can redden on the wiring. */
+  "pdf-chunks": "checkpoints (namespace 'pdf-chunk') — decided, not yet wired",
   /* Not an artefact either, and not migrated *as a file* — but the thing it
      records is already in the schema. One marker per step that has started and
      not finished, which is what stops a step killed between two of its own
@@ -139,11 +185,18 @@ const NOT_MIGRATED: Record<string, string> = {
  * and an exemption with no expiry would reintroduce it by the back door.
  */
 const NOT_YET_WRITTEN: Record<string, string> = {
-  /* The `assets` step landed 2026-08-29 and needs the network to produce
-     anything, so no article in `data/` and no fixture in `example/` has one
-     yet. Delete this line the moment one does — the assertion below will make
-     you. docs/plans/hosting-the-articles-images.md, stage B. */
-  "assets.json": "the assets step is new and has not been run against a real article",
+  /* Empty, and that is the list working rather than the list being unused.
+     `assets.json` sat here from 2026-08-29 — "the assets step is new and has
+     not been run against a real article" — until a real run on 2026-08-30
+     produced one, and the assertion below duly failed and made somebody delete
+     the line. It has a home in `HOMES` and always did.
+     docs/plans/260829b-hosting-the-articles-images.md, stage B. */
+
+  /* `quotes.json` sat here for a few hours on 2026-08-31 and is gone again,
+     which is this pair of lists working exactly as `assets.json` did before it:
+     a real run against `data/openai-huggingface` produced one, the assertion
+     below duly failed, and the exemption had to be deleted rather than left to
+     go on excusing a name that had arrived. docs/project/quotes.md. */
 };
 
 describe("the artefact manifest", () => {

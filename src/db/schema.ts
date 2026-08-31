@@ -2,13 +2,13 @@
  * The Postgres schema, as TypeScript.
  *
  * Written ahead of the storage contracts (step 3 of
- * docs/plans/postgres-migration.md) because it is the artefact everything else
+ * docs/plans/260825f-postgres-migration.md) because it is the artefact everything else
  * is judged against. **These tables are now live for reads**: src/store/pg.ts
  * serves the reading view and the library out of them when
  * `SPIDERYARN_STORE=postgres`, and src/store/pg-comments.ts writes to them.
  * The pipeline still writes JSON files under `data/<slug>/`, and the two are
  * kept in step by src/store/import.ts. docs/project/database.md says which is
- * true of what today; docs/plans/postgres-storage-implementation.md tracks the
+ * true of what today; docs/plans/260826e-postgres-storage-implementation.md tracks the
  * rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
@@ -39,7 +39,7 @@
  * generated migration that drops and recreates one of these tables can lose the
  * Auth FK silently. The guard is tests/db-schema.test.ts, which queries
  * `pg_constraint` and asserts the FKs are still there. See
- * docs/plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth.
+ * docs/plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth.
  */
 
 import { sql, type SQL } from "drizzle-orm";
@@ -73,8 +73,9 @@ import type {
   Glossary,
   Ideas,
   JobStep,
+  Quotes,
   SearchHit,
-  Summaries,
+  Timeline,
   ToolRun,
   Tree,
   TweetThread,
@@ -135,7 +136,7 @@ const SPIDERYARN_ID_REGEX = ID_PATTERN.source;
  * because it points at a table declared below this one. It is deliberately NOT
  * deferrable: creation is insert article, insert revision, update pointer, and
  * no intermediate state violates anything. See
- * docs/plans/postgres-migration.md#the-deferrable-fk-we-talked-ourselves-out-of.
+ * docs/plans/260825f-postgres-migration.md#the-deferrable-fk-we-talked-ourselves-out-of.
  */
 export const articles = spideryarn.table("articles", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -157,7 +158,7 @@ export const articles = spideryarn.table("articles", {
    * fact about a string that anybody may later rename.
    *
    * Not null with a default, so every existing row and every future insert
-   * answers the question. Step 13 (docs/plans/postgres-storage-implementation.md)
+   * answers the question. Step 13 (docs/plans/260826e-postgres-storage-implementation.md)
    * is what sets it true for exactly one article.
    */
   fixture: boolean("fixture").notNull().default(false),
@@ -187,13 +188,13 @@ export const articles = spideryarn.table("articles", {
   lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
   /**
    * "Why you're reading this one" — the per-article half of
-   * docs/plans/reader-profile.md. The global half ("about you", true on every
+   * docs/plans/260826t-reader-profile.md. The global half ("about you", true on every
    * article) is `reader_profiles` below, keyed by owner rather than by
    * article, because it is not this article's state to lose.
    */
   purpose: text("purpose"),
 
-  /* ---- sharing: may a stranger read this? docs/plans/public-read-only-access.md --
+  /* ---- sharing: may a stranger read this? docs/plans/260827ai-public-read-only-access.md --
 
      On `articles` rather than on `article_revisions`, and that is a decision
      rather than the nearest column: sharing is about the *document*, not about
@@ -254,7 +255,7 @@ export const articles = spideryarn.table("articles", {
  * not history, so it would not be an audit substitute.
  *
  * What it is for is in
- * docs/plans/public-read-only-access.md § Rights and takedown: serving a third
+ * docs/plans/260827ai-public-read-only-access.md § Rights and takedown: serving a third
  * party's full text from our origin is reproduction, and if a complaint ever
  * arrives the question is *who turned this on, when, and did they confirm they
  * had the right*. `public_at` alone cannot answer it.
@@ -339,8 +340,8 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`,
- * `glossary` and `summary` write their own column onto the revision that is
+ * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`
+ * and `glossary` write their own column onto the revision that is
  * already published, in one `UPDATE`. That weakens the plain reading of
  * "immutable" and it belongs here rather than arriving as a surprise to
  * whoever reads this comment and then reads the code.
@@ -373,6 +374,28 @@ export const articleRevisions = spideryarn.table(
     siteName: text("site_name"),
     lang: text("lang"),
     excerpt: text("excerpt"),
+    /**
+     * **`Meta.publishedAt` — `text`, not `timestamp`, and that is the whole
+     * decision.**
+     *
+     * The publisher's own ISO string, verbatim, in the publisher's own frame.
+     * `timestamp with time zone` is the obvious choice and it is wrong here:
+     * Postgres would normalise it to UTC, and 8pm on 31 December in New York
+     * comes back as 1 January. **The calendar day is the entire content of this
+     * field** — it is the reference frame the timeline reads a year-less "on
+     * July 7" against — so a column that can move it by one is a column that
+     * silently mis-dates a row. Same rule as src/timeline-time.ts, which never
+     * builds a `Date` for the same reason.
+     *
+     * `fetched_at` above is a real `timestamp` because it is an instant we
+     * recorded; this is a claim somebody else published. The two look alike and
+     * are not the same kind of fact — docs/plans/260831i-timeline-mode.md
+     * § There is no publication date until stage 2 is taught to keep one.
+     *
+     * Null on every revision written before 2026-08-31, and it stays null until
+     * that article is re-extracted.
+     */
+    publishedAt: text("published_at"),
     /** `Meta.note`. Real articles carry one — the noema article's meta.json does. */
     note: text("note"),
 
@@ -406,7 +429,7 @@ export const articleRevisions = spideryarn.table(
      * of anything we kept.
      *
      * A column rather than `length(raw_bytes)`, because `raw_bytes` is dropped
-     * at the end of docs/plans/delete-the-importer.md and this number has to
+     * at the end of docs/plans/260827aa-delete-the-importer.md and this number has to
      * outlive it. `raw_sources.bytes` is not a substitute: that describes the
      * object at `raw_source_sha256`, which for any page that was not already
      * UTF-8 is a *different byte string* — `writeRaw` stores the decoded text,
@@ -426,7 +449,7 @@ export const articleRevisions = spideryarn.table(
      * it is reader-facing and there is nowhere else for it: `origin` is
      * derivable from the two URLs being null and `uploadId` is already on
      * `jobs.upload_id`, but this is homeless.
-     * docs/plans/delete-the-importer.md § The raw provenance has nowhere to go.
+     * docs/plans/260827aa-delete-the-importer.md § The raw provenance has nowhere to go.
      *
      * Null for a fetched document, which never had one.
      */
@@ -461,9 +484,9 @@ export const articleRevisions = spideryarn.table(
      *
      * Writing it down as a fact was the same mistake as the comment in
      * src/store/pg.ts that claimed the ToC guard checked what it did not —
-     * docs/postmortems/toc-status-never-checked.md, found the same day. The
+     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day. The
      * rule lands in `reasonsNotToPublish` with the live write path;
-     * docs/plans/delete-the-importer.md § The publication gate has the full
+     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the full
      * truth table, including the failed-fetch case this sentence omits.
      *
      * Note this is **not** `raw_sha256` above. That one is the hash of what the
@@ -479,7 +502,7 @@ export const articleRevisions = spideryarn.table(
      *
      * All six are null for a web page and that is the common case — they exist
      * because a PDF is read by a *model*, and a reader is owed the difference.
-     * docs/plans/pdf-ingestion.md.
+     * docs/plans/260826c-pdf-ingestion.md.
      *
      * `recall` and `pagesChecked` belong together and must be read together: a
      * mean over one page of seventeen is arithmetically fine and means nothing,
@@ -543,18 +566,6 @@ export const articleRevisions = spideryarn.table(
     glossary: jsonb("glossary").$type<Glossary>(),
 
     /**
-     * The article at whichever length you ask for — `Summaries`, stage 5e.
-     *
-     * The WHOLE artefact, like the three above. `missing` is exactly the
-     * provenance that must travel with it — it is what stops a half-empty
-     * artefact reading as a complete one. (`guidance` was a second such field,
-     * the reader's steer, kept so a steered summary could *say so*. It is gone
-     * with the box: docs/plans/steer-becomes-the-profile.md. Old rows may still
-     * carry one inside this JSON; nothing reads it.)
-     */
-    summary: jsonb("summary").$type<Summaries>(),
-
-    /**
      * The propositions a reader has to hold — `Ideas`, stage 5f.
      *
      * The WHOLE artefact, like the four above, and here the reason is the
@@ -572,6 +583,52 @@ export const articleRevisions = spideryarn.table(
      * article"* rather than take a delete with it or block one.
      */
     ideas: jsonb("ideas").$type<Ideas>(),
+
+    /**
+     * The lines worth keeping, in the article's own words — `Quotes`,
+     * src/types.ts, written by the `quotes` step. docs/project/quotes.md.
+     *
+     * The WHOLE artefact, like its neighbours, and here `sourceHash` earns its
+     * place twice over. Every quote carries a `blockId` **we** found rather than
+     * one the model named, and it carries `text` that was verified to be in the
+     * article at write time — so a re-extraction can invalidate a row in two
+     * ways at once: the block may be gone, and the words may no longer be in the
+     * piece. A column holding `quotes` without the hash could not answer either
+     * question, and the panel would go on offering the author's supposed
+     * sentences over an article that no longer contains them.
+     *
+     * **No foreign key from a quote's `blockId` to `revision_blocks`**, on the
+     * same argument the glossary, the ideas and the sketch make: a dropped
+     * paragraph should cost that quote its jump rather than take a delete with
+     * it or block one.
+     */
+    quotes: jsonb("quotes").$type<Quotes>(),
+
+    /**
+     * When the piece says things happened, in what order, and how sure it is —
+     * `Timeline`, src/types.ts, written by the `timeline` step.
+     * docs/project/timeline.md.
+     *
+     * The WHOLE artefact, like its neighbours, and here `sourceHash` is doing
+     * something none of theirs does: it covers the **publication date** as well
+     * as the blocks and the tree (`datedArticleFingerprint`, src/source-hash.ts,
+     * and this is the only stage that uses it). The date is the reference frame
+     * for nineteen of the twenty-four temporal expressions on the test article,
+     * so a publisher re-dating a post changes almost every row in this column
+     * and not one word in any other. A column holding `events` without the hash
+     * could not answer whether the dates in it were read against the date the
+     * article now claims.
+     *
+     * **No `profileHash`, unlike `ideas` and `sketch`** — and that is a decision
+     * rather than a gap. Who is reading changes what an *idea* is; it does not
+     * change when something happened.
+     *
+     * **No foreign key from an occurrence's `blockId` to `revision_blocks`**, on
+     * the same argument the glossary, the ideas, the quotes and the sketch make:
+     * a dropped paragraph should cost that event its jump rather than take a
+     * delete with it or block one.
+     */
+    timeline: jsonb("timeline").$type<Timeline>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -607,7 +664,7 @@ export const articleRevisions = spideryarn.table(
      * per-article folder Greg pictured: content addressing dedups a publisher's
      * logo across forty articles, and a name that IS the hash of its contents
      * can always be re-checked against them.
-     * docs/plans/hosting-the-articles-images.md § Where the bytes go.
+     * docs/plans/260829b-hosting-the-articles-images.md § Where the bytes go.
      *
      * **No foreign key to `raw_sources`, and no row there either**, which is
      * the decision most likely to be undone by somebody tidying. That table
@@ -741,7 +798,7 @@ export const revisionBlocks = spideryarn.table(
      * Only `'footnote'` is written today. The other four are in the constraint
      * because a stored role means *this revision classifies this content as X*,
      * and narrowing the set now would make widening it a migration
-     * (docs/plans/footnotes-stage345-upfront-sol.md, decision 2).
+     * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 2).
      */
     role: text("role"),
     treatment: text("treatment"),
@@ -874,7 +931,7 @@ export const comments = spideryarn.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }),
     /**
      * The conversation this comment started. **No foreign key, on purpose** —
-     * see docs/plans/comments-and-bookmarks.md § There is deliberately no
+     * see docs/plans/260828a-comments-and-bookmarks.md § There is deliberately no
      * foreign key. The short version: the link is advisory, a deleted thread
      * leaves a comment that is still the reader's mark, and a constraint
      * Postgres can keep and the filesystem store cannot is exactly what
@@ -1061,10 +1118,10 @@ export const jobs = spideryarn.table(
      * "the latest draft for this slug" would have picked up *another* job's
      * draft and resurrected exactly what copying-from-published exists to
      * prevent. GPT Sol's review of the step 11 design, 2026-08-26:
-     * docs/plans/postgres-storage-implementation.md § What the review found.
+     * docs/plans/260826e-postgres-storage-implementation.md § What the review found.
      *
      * It is the anchor for the browser-driven advance endpoint too
-     * (docs/plans/job-queue-rethink.md): one request runs one step, and the
+     * (docs/plans/260826q-job-queue-rethink.md): one request runs one step, and the
      * only way the next request knows where to write is this column.
      *
      * `on delete set null` rather than cascade — a draft swept away by
@@ -1098,7 +1155,7 @@ export const jobs = spideryarn.table(
      * closed union in src/messages.ts and it grows; a constraint here would turn
      * the next kind added to the type into a write that fails in production
      * rather than a test that fails on a laptop. Null means nobody said, and
-     * that offers the retry — docs/postmortems/toc-max-tokens.md.
+     * that offers the retry — docs/postmortems/260826a-toc-max-tokens.md.
      */
     failureKind: text("failure_kind"),
 
@@ -1150,13 +1207,27 @@ export const jobs = spideryarn.table(
       "jobs_running_is_fenced",
       sql`${t.status} <> 'running' or (${t.attemptId} is not null and ${t.leaseExpiresAt} is not null)`,
     ),
-    /**
-     * At most one running job, enforced by the database rather than by every
-     * claimant following the locking convention correctly. `queue_state` gives
-     * concurrency 1 only while they do; this is the backstop for when one does
-     * not. A unique index on a constant, restricted to running rows.
+    /*
+     * **`jobs_only_one_running` was here, and it is gone on purpose.**
+     *
+     * It was `uniqueIndex(...).on(sql`(true)`).where(status = 'running')` — at
+     * most one running row in the whole table, across every owner. A unique
+     * index on a constant cannot express *at most N*, and N is what this is now:
+     * `queue_state` is locked `FOR UPDATE` and the running rows are counted
+     * inside that lock — src/store/pg-jobs.ts § `claim`. Which is what
+     * `queue_state`'s own comment below has claimed since it was written, and
+     * was not true until 2026-08-30: nothing locked it and the index carried the
+     * whole guarantee.
+     *
+     * **So the backstop really is gone, and that is the cost.** Drop the index
+     * and forget the counted check and nothing fails — `violatesConstraint(err,
+     * "jobs_only_one_running")` simply never fires and every claim succeeds. The
+     * parity suite's cap case is what stands between that and a green run;
+     * docs/reusable/silent-success.md is why it is written to be seen red.
+     *
+     * The per-article rule is a different question and keeps an index of its
+     * own — see `jobs_active_slug` below.
      */
-    uniqueIndex("jobs_only_one_running").on(sql`(true)`).where(sql`${t.status} = 'running'`),
     /**
      * A draft has exactly one owner, enforced rather than assumed.
      *
@@ -1284,16 +1355,27 @@ export const revisionStepRuns = spideryarn.table(
     check(
       "revision_step_runs_step",
       /**
-       * Every name in `StepName` (src/types.ts), and `'summary'` was missing —
-       * it is a step, it writes `summary.json`, and a step run recorded for it
-       * would have been rejected by this CHECK.
+       * Every name in `StepName` (src/types.ts). `'summary'` was one until
+       * 2026-08-31 and came out with stage 5e
+       * (docs/plans/260831s-gist-only-summaries.md) — and taking a name *out* is the
+       * direction with a trap in it: Postgres validates a re-added CHECK
+       * against the rows already in the table, so the migration has to delete
+       * the `summary` step runs before it narrows the constraint. It does, in
+       * that order.
        *
        * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
        * step's OUTPUTS rather than a step of its own, so its currency rides
        * with the `toc` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','summary','ideas')`,
+      /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
+         to the database by drizzle/0031 and never got back into this literal,
+         because `drizzle-kit generate` diffs the schema and knows nothing about a
+         CHECK expression — so this one is hand-maintained and the migrations are
+         the truth. `tests/db-step-constraint.test.ts` compares the last
+         `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
+         directions, which is what makes there not be a third drift. */
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
     ),
     check(
       "revision_step_runs_status",
@@ -1323,7 +1405,7 @@ export const revisionStepRuns = spideryarn.table(
  * last reference" was *"maybe keep them indefinitely (at least for now)"*, and
  * that removes the question rather than answering it: an object nothing
  * references is a **kept** object, not a leak, so there is no sweeper to race
- * and nothing to recover from. docs/plans/raw-bytes-in-storage.md.
+ * and nothing to recover from. docs/plans/260827o-raw-bytes-in-storage.md.
  *
  * What survived is verification, which was never about deletion:
  * `storeRawSource` (src/store/blobs.ts) reads back and hashes a dedup hit
@@ -1382,7 +1464,7 @@ export const rawSources = spideryarn.table(
  *   row carries `generation_id` instead, which is the handle to ask OpenRouter
  *   about the call afterwards. GPT Sol's call, 2026-08-28, reversing Greg's
  *   earlier "always store, with pruning" — written up in
- *   docs/plans/ai-cost-tracking.md rather than merely done.
+ *   docs/plans/260827q-ai-cost-tracking.md rather than merely done.
  * - **`cost_micros` is gone**, in favour of nano-dollars in a `bigint`. A single
  *   query embedding costs about $0.0000006, which is **less than one
  *   micro-dollar** and rounded to zero — the row read as free.
@@ -1596,7 +1678,7 @@ export const chatThreads = spideryarn.table(
     /**
      * A question about the article, or the reader saying what they took from
      * it — which chooses the system prompt the whole conversation is answered
-     * with. See docs/plans/review-mode.md.
+     * with. See docs/plans/260827ah-review-mode.md.
      *
      * **Written on insert only**, and `upsertThread`'s conflict clause does not
      * name it, for a sharper version of the reason it does not name the anchor
@@ -1705,6 +1787,33 @@ export const chatMessages = spideryarn.table(
      * so, because an answer ending mid-sentence reads exactly like a bug.
      */
     stopped: boolean("stopped").notNull().default(false),
+    /**
+     * **Passages a spoken answer pointed at instead of citing in words.**
+     *
+     * `jsonb` and nullable, for exactly the reasons `tools` above gives at
+     * length: read only as the whole list for one message, never queried
+     * across messages, never joined to. Null — not `[]` — when the answer
+     * pointed at nothing, because the filesystem store omits the key and
+     * tests/store-roundtrip.test.ts compares the two byte for byte. That test
+     * is how `tools` was caught going missing, and this column is the same
+     * shape of thing arriving by the same door.
+     *
+     * See `ChatMessage.passages` in src/types.ts for why this is not folded
+     * into `citations` and not spliced into the text.
+     */
+    passages: jsonb("passages").$type<{ blockIds: string[]; why: string }[]>(),
+    /**
+     * **The reader talked over this answer, so it may contain words nobody
+     * heard.**
+     *
+     * Beside `stopped` and shaped like it — `notNull().default(false)`, so
+     * every existing row reads as "not interrupted", which is true of all of
+     * them. The two flags mean opposite things about history: a stopped
+     * answer's text is what the reader read and is kept; this one's tail is
+     * words the realtime server generated and then truncated out of the audio,
+     * so `recentHistory` in src/converse.ts drops the pair.
+     */
+    interrupted: boolean("interrupted").notNull().default(false),
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
     /**
@@ -1951,7 +2060,7 @@ export const glossaryLookups = spideryarn.table(
 /* -------------------------------------------------------- reader profile -- */
 
 /**
- * "About you" — the global half of docs/plans/reader-profile.md, true on
+ * "About you" — the global half of docs/plans/260826t-reader-profile.md, true on
  * every article rather than on one. `ShelfState.purpose` on `articles` above
  * is the other half; src/profile.ts joins the two into one string a prompt
  * can carry.
@@ -2001,7 +2110,7 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
 /**
  * **Work a failed attempt already paid for, so the next attempt does not buy it
  * again.** The Postgres home of `labels-progress.json` and `pdf-chunks/<key>.json`
- * — docs/plans/delete-the-importer.md § B3.
+ * — docs/plans/260827aa-delete-the-importer.md § B3.
  *
  * ## The key is the article and the question, never the revision
  *
@@ -2047,7 +2156,7 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  * `created_at` cannot tell a hot cache entry from a dead one — an article
  * re-read every week would be swept on its birthday. The sweep is
  * `scripts/checkpoints-sweep.ts`; nothing schedules it yet, and
- * docs/plans/delete-the-importer.md § B3 says why that is safe.
+ * docs/plans/260827aa-delete-the-importer.md § B3 says why that is safe.
  */
 export const checkpoints = spideryarn.table(
   "checkpoints",

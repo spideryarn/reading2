@@ -357,7 +357,7 @@ describe("decodeHtml", () => {
        The test that used to do that job asserted Node decoded windows-1252
        *wrongly*. Node fixed that in 24.13.1, so the assertion went red without
        anything here having changed, and the red looked like our bug. Never pin
-       somebody else's defect: docs/postmortems/windows-1252-node-caught-up.md.
+       somebody else's defect: docs/postmortems/260826b-windows-1252-node-caught-up.md.
 
        Node's single-byte decoders are conformant now, but its multi-byte legacy
        ones still go through ICU and are not. The spec says a Shift_JIS byte of

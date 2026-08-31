@@ -20,7 +20,7 @@
  *    whatever the build actually did with the code.
  *
  * A stamp compiled *into* the artefact can only be wrong by the artefact being
- * wrong. docs/plans/deploy-pipeline.md § The build stamp.
+ * wrong. docs/plans/260827v-deploy-pipeline.md § The build stamp.
  *
  * ## Why the commit is resolved twice rather than passed between the builds
  *

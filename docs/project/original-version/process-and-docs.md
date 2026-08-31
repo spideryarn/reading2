@@ -34,7 +34,7 @@ practice, with the reviews kept beside the plans they reviewed:
 We already have the machinery: [`scripts/run-codex.ts`](../../../scripts/run-codex.ts) and
 [codex-cli-as-subagent.md](../../reusable/codex-cli-as-subagent.md). What we don't consistently have
 is the habit of using it **before** building, and keeping the answer. `docs/plans/` is the right home
-— [shadcn-migration.md](../../plans/shadcn-migration.md) already does exactly this, including the
+— [260825a-shadcn-migration.md](../../plans/260825a-shadcn-migration.md) already does exactly this, including the
 honest account of what its own predictions got wrong.
 
 ## Their coding principles

@@ -7,7 +7,7 @@
  *     npm run deploy -- --force-gate=test  # named, loud, printed in the summary
  *
  * The plan, the measurements behind each step and the decisions Greg made are in
- * docs/plans/deploy-pipeline.md. The judgements live in scripts/deploy-checks.ts
+ * docs/plans/260827v-deploy-pipeline.md. The judgements live in scripts/deploy-checks.ts
  * so that each of them can be tested against the broken state rather than only
  * the working one.
  *
@@ -1363,7 +1363,7 @@ function summarise(previous: string | null): void {
        banner is that it can be believed when it appears in a real one. */
     const what = didDeploy ? "DEPLOYED" : "CHECKED";
     say(`${RED}${what} WITH ${forced.join(", ").toUpperCase()} GATE(S) FORCED${OFF}`);
-    say(`${DIM}An override is a debt entry, not a workflow. docs/plans/deploy-pipeline.md${OFF}`);
+    say(`${DIM}An override is a debt entry, not a workflow. docs/plans/260827v-deploy-pipeline.md${OFF}`);
     say();
   }
 

@@ -3,7 +3,7 @@
  * nothing here falls back into the authenticated table.
  *
  * That last clause is the whole point of the file. From
- * docs/plans/public-read-only-access.md:
+ * docs/plans/260827ai-public-read-only-access.md:
  *
  * > Once a request is inside `/api/public/`, an unknown path or a wrong method
  * > **terminates there**. It never falls through into the authenticated table.
@@ -270,7 +270,7 @@ function requirePostgres(): void {
   throw httpError(
     501,
     "Public reading needs Postgres — the filesystem store has no visibility column. " +
-      "Run with SPIDERYARN_STORE=postgres. See docs/plans/public-read-only-access.md.",
+      "Run with SPIDERYARN_STORE=postgres. See docs/plans/260827ai-public-read-only-access.md.",
   );
 }
 
@@ -338,7 +338,7 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
  * It refused everything but a literal `GET`, and a black-box spike caught it on
  * 2026-08-28. **A HEAD is not a write — it is a GET without a body**, and
  * link-preview unfurlers routinely HEAD a URL before they GET it. Stage 2 of
- * docs/plans/public-read-only-access.md is *entirely* about link previews, so a
+ * docs/plans/260827ai-public-read-only-access.md is *entirely* about link previews, so a
  * namespace that 405s the first request an unfurler makes is a trap we would
  * have set for ourselves and then walked into a fortnight later.
  *

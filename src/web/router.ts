@@ -17,8 +17,8 @@
  *
  * An article now has three views, and which one is a third path segment:
  * `/read/<slug>` is the reading view, `/read/<slug>/metadata` is everything we
- * know about it (docs/plans/metadata-page.md), `/read/<slug>/tweets` is the
- * article as a numbered thread (docs/plans/tweet-thread-page.md). They are the
+ * know about it (docs/plans/260825e-metadata-page.md), `/read/<slug>/tweets` is the
+ * article as a numbered thread (docs/plans/260825g-tweet-thread-page.md). They are the
  * same article seen differently, so they are the same route with a `view`
  * rather than three routes.
  *
@@ -154,7 +154,7 @@ export type Route =
    * `location.search` as part of an article's address — its whole job — so a
    * return to `/add/…?code=C` would encode our one-time authorisation code
    * inside a stranger's URL, which ingest then fetches. Their access log, our
-   * auth code. GPT Sol found it; docs/plans/auth-supabase.md has the diagram.
+   * auth code. GPT Sol found it; docs/plans/260826w-auth-supabase.md has the diagram.
    */
   | { kind: "callback" };
 

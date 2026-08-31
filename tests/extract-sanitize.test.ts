@@ -23,10 +23,7 @@
  */
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { runExtract } from "../src/extract.js";
 import { splitIntoBlocks } from "../src/blocks.js";
 import { sanitizeHtml } from "../src/sanitize.js";
@@ -84,20 +81,16 @@ const executableAttrs = (doc: Document): string[] =>
       .map((a) => `<${el.tagName.toLowerCase()} ${a.name}>`),
   );
 
-let dir: string;
 let page: string;
 let doc: Document;
 
 beforeAll(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), "spya-extract-"));
-  const outFile = path.join(dir, "hostile.html");
-  await runExtract({ html: PAGE, url: SOURCE, outFile, dataDir: dir });
-  page = await readFile(outFile, "utf8");
+  /* **`result.extractedHtml`, not a file.** Stage 2 returns the page now, so
+     there is no temp directory here at all — and the thing under test is the
+     same string either way: `debugPage`'s output IS the extractedHtml artefact
+     (src/extract.ts ExtractResult). */
+  page = (await runExtract({ html: PAGE, url: SOURCE, slug: "hostile" })).extractedHtml;
   doc = new JSDOM(page).window.document;
-});
-
-afterAll(async () => {
-  await rm(dir, { recursive: true, force: true });
 });
 
 describe("what still gets through Readability", () => {

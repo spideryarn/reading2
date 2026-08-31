@@ -3,7 +3,7 @@
  *
  * A paid calibration run of stage 4 on 2026-08-30 threw on 4 of 13 structure
  * calls (31%), and the failures were bimodal by *kind* rather than spread by
- * size — see docs/research/opening-an-article-before-the-toc.md § 7b:
+ * size — see docs/research/260830a-opening-an-article-before-the-toc.md § 7b:
  *
  * | family | count | shape |
  * |---|---|---|
@@ -11,7 +11,7 @@
  * | `sourceHeading` | 2 | a heading claimed outside the node's range |
  *
  * Every tiling failure anyone has observed — those two plus the two in
- * docs/postmortems/the-article-with-one-heading.md — is off by one block. So
+ * docs/postmortems/260830a-the-article-with-one-heading.md — is off by one block. So
  * the choice is not "trust the model" against "check the model"; it is whether
  * a two-and-a-half-minute call that got one boundary off by a single paragraph
  * should cost the reader the whole article. It should not.
@@ -29,7 +29,12 @@
  * `strandedSupplement` already follows, for the same reason.
  */
 import { describe, expect, it } from "vitest";
-import { buildTree, type BuildReport, type ModelNode } from "../src/toc.js";
+import {
+  buildTree,
+  repairedBlockCount,
+  type BuildReport,
+  type ModelNode,
+} from "../src/toc.js";
 import { checkTree } from "../src/tree-invariants.js";
 import type { Block } from "../src/types.js";
 
@@ -80,7 +85,7 @@ describe("an off-by-one partition is repaired, not refused", () => {
     const r = report();
     const tree = buildTree(gapped, {}, BLOCKS, "test", r);
     expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
-    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "gap", at: 2 }]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "gap", at: 2, size: 1 }]);
   });
 
   it("gives the orphaned block to the section that follows it", () => {
@@ -100,7 +105,7 @@ describe("an off-by-one partition is repaired, not refused", () => {
     const r = report();
     const tree = buildTree(overlapping, {}, BLOCKS, "test", r);
     expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
-    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "overlap", at: 3 }]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "overlap", at: 3, size: 1 }]);
   });
 
   it("extends a last child that stops one block before its parent ends", () => {
@@ -114,7 +119,7 @@ describe("an off-by-one partition is repaired, not refused", () => {
     const r = report();
     const tree = buildTree(short, {}, BLOCKS, "test", r);
     expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
-    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "short", at: 5 }]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "short", at: 5, size: 1 }]);
   });
 
   it("cascades into the repaired node's own children, which now start one block late", () => {
@@ -146,6 +151,15 @@ describe("an off-by-one partition is repaired, not refused", () => {
        the cascade would eat the whole answer's allowance at the first nested
        node and a repair that works today would start throwing. */
     expect(new Set(r.repairs.map((x) => x.at))).toEqual(new Set([2]));
+    /* **And the number the operator reads has to say one block moved, not two.**
+       `repairedBlocks` was `repairs.reduce((n, r) => n + r.size)`, which counts
+       a cascade once per depth — the same physical movement, reported as many
+       times as the tree is deep at that point. On a real answer that is a
+       boundary a paragraph out arriving in the pipeline log as three blocks
+       moved, or a section handed forty arriving as a hundred and twenty; the
+       one number that exists to say "go and look" reads as an emergency on the
+       ordinary case and nothing distinguishes the two. GPT Sol, finding 6. */
+    expect(repairedBlockCount(r.repairs)).toBe(1);
   });
 
   it("produces a tree the invariants accept, which is the only claim that matters", () => {
@@ -153,8 +167,37 @@ describe("an off-by-one partition is repaired, not refused", () => {
     expect(checkTree(BLOCKS, tree).problems).toEqual([]);
   });
 
-  describe("and the bound is one block, in every direction", () => {
-    it("still refuses a two-block gap", () => {
+  /**
+   * **The size bound is gone, and it was not refuted — it was overridden.**
+   *
+   * It said: one block is a slip, two is a different reading of the article, so
+   * two throws. That reasoning still holds; what changed is the price. A 9-page
+   * arXiv PDF failed on production on 2026-08-30 with a gap of **three**, one
+   * completed call and $0.1617 spent, and the article lost. The bound had been
+   * fitted to four observations that were all off by one and all from HTML
+   * articles *with headings* — the half of the corpus where the model has
+   * something to agree with. PDFs are headingless and reached production that
+   * day. Greg, 2026-08-30:
+   *
+   * > I think for now, we should allow gaps. It's not ideal, but it's not the
+   * > end of the world, and better than things failing fatally. Perhaps in
+   * > future, it should trigger a re-run of the LLM, where we feed in the
+   * > previous output, with information about the gaps and ask it to adjust.
+   * > But that's for later.
+   *
+   * So a gap of any size is snapped shut, the orphaned blocks are absorbed by
+   * the section beside them, and **the size of every repair is reported** — see
+   * `PartitionRepair` in src/toc.ts. That reporting is the whole of what is left
+   * standing where the bound was, which is why these tests assert the number
+   * rather than only the fact.
+   *
+   * What is still refused: an answer with two *independent* slipped boundaries
+   * (`MAX_REPAIRED_BOUNDARIES`, unchanged), a repair that would leave a node
+   * covering nothing, a backwards range, an invented id, and children that run
+   * past their parent's end.
+   */
+  describe("and the size of the slip is no longer the bound", () => {
+    it("snaps a gap of any size, and records how big it was", () => {
       const wide: ModelNode = {
         ...gapped,
         children: [
@@ -162,21 +205,31 @@ describe("an off-by-one partition is repaired, not refused", () => {
           { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-ffffff"] },
         ],
       };
-      expect(() => buildTree(wide, {}, BLOCKS, "test", report())).toThrow(/leaves a gap of 2 block/);
+      const r = report();
+      const tree = buildTree(wide, {}, BLOCKS, "test", r);
+      // The two orphans are reachable, which is the only thing the reader cares
+      // about: a block in no node cannot be addressed by granularity zoom.
+      expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+      expect(r.repairs).toEqual([{ where: "root > child 2", kind: "gap", at: 1, size: 2 }]);
+      expect(checkTree(BLOCKS, tree).problems).toEqual([]);
     });
 
-    it("still refuses a two-block overlap", () => {
+    it("snaps an overlap of any size", () => {
       const wide: ModelNode = {
         ...gapped,
         children: [
           { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-dddddd"] },
-          { title: "Second", gist: "It closes.", range: ["spya-cccccc", "spya-ffffff"] },
+          { title: "Second", gist: "It closes.", range: ["spya-bbbbbb", "spya-ffffff"] },
         ],
       };
-      expect(() => buildTree(wide, {}, BLOCKS, "test", report())).toThrow(/overlaps the one before/);
+      const r = report();
+      const tree = buildTree(wide, {}, BLOCKS, "test", r);
+      expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+      expect(r.repairs).toEqual([{ where: "root > child 2", kind: "overlap", at: 4, size: 3 }]);
+      expect(checkTree(BLOCKS, tree).problems).toEqual([]);
     });
 
-    it("still refuses a last child that stops two blocks short", () => {
+    it("extends a last child however far short of its parent it stops", () => {
       const wide: ModelNode = {
         ...gapped,
         children: [
@@ -184,7 +237,40 @@ describe("an off-by-one partition is repaired, not refused", () => {
           { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(wide, {}, BLOCKS, "test", report())).toThrow(/stop 2 block\(s\)/);
+      const r = report();
+      const tree = buildTree(wide, {}, BLOCKS, "test", r);
+      expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+      expect(r.repairs).toEqual([{ where: "root > child 2", kind: "short", at: 5, size: 2 }]);
+      expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    });
+
+    it("still refuses children that run past their parent's end", () => {
+      /* Not the same fault and not repaired. A gap leaves blocks with no home,
+         which snapping fixes; this claims blocks the parent does not have, and
+         the honest repairs for it — shrink the child, or grow the parent — are
+         two different readings of the answer with nothing to choose between
+         them. It was never in the size bound's scope either. */
+      /* The middle child's own children run one block past it, while the root's
+         three children tile the root exactly — so this is the overrun and
+         nothing else, with no gap anywhere for the repair to spend its budget
+         on first. */
+      const over: ModelNode = {
+        ...gapped,
+        children: [
+          { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-aaaaaa"] },
+          {
+            title: "Second",
+            gist: "A point.",
+            range: ["spya-bbbbbb", "spya-dddddd"],
+            children: [
+              { title: "Inner one", gist: "A point.", range: ["spya-bbbbbb", "spya-bbbbbb"] },
+              { title: "Inner two", gist: "Another.", range: ["spya-cccccc", "spya-eeeeee"] },
+            ],
+          },
+          { title: "Third", gist: "It closes.", range: ["spya-eeeeee", "spya-ffffff"] },
+        ],
+      };
+      expect(() => buildTree(over, {}, BLOCKS, "test", report())).toThrow(/past its end/);
     });
 
     it("does not repair an overlap that would leave the node covering nothing", () => {
@@ -294,7 +380,7 @@ describe("a sourceHeading no block backs up is dropped, not thrown on", () => {
   it("keeps a claim that differs only in punctuation, as the invariant does", () => {
     // `sameHeading` normalises curly quotes and dashes — a model quoting a
     // heading back with the wrong apostrophe broke this once already
-    // (docs/postmortems/toc-max-tokens.md).
+    // (docs/postmortems/260826a-toc-max-tokens.md).
     const tree = buildTree(claiming("The First Part"), {}, BLOCKS, "test", report());
     const first = Object.values(tree.nodes).find((n) => n.title === "First");
     expect(first?.sourceHeading).toBe("The First Part");

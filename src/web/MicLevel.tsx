@@ -3,7 +3,7 @@
  *
  * Five of them, and between them they answer the one question the microphone
  * button could not: *is anything getting in?* Everything about why is in
- * docs/plans/microphone-level-meter.md; this file is thirty lines of DOM.
+ * docs/plans/260827f-microphone-level-meter.md; this file is thirty lines of DOM.
  *
  * ## It does not re-render
  *

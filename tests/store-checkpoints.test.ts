@@ -1,7 +1,7 @@
 /**
  * **The checkpoint store: a retry must not buy the work twice.**
  *
- * docs/plans/delete-the-importer.md § B3. `labels-progress.json` and
+ * docs/plans/260827aa-delete-the-importer.md § B3. `labels-progress.json` and
  * `pdf-chunks/<key>.json` exist so a run that dies eight batches into a book
  * costs one batch rather than eight; landing D takes the directory they live in
  * away. src/store/checkpoints.ts is the seam that replaces it.
@@ -111,6 +111,7 @@ import {
   checkpointCutoff,
 } from "../src/store/checkpoints.js";
 import { createFsCheckpointStore, sweepFsCheckpoints } from "../src/store/checkpoints-fs.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 
 /* ------------------------------------------------------------ the fixture -- */
 
@@ -283,7 +284,7 @@ describe("the checkpoint store, on the filesystem", () => {
    * Every attempt paid again, for ever, and nothing errored.
    *
    * It is strictly worse than what it replaced.
-   * docs/postmortems/pdf-chunk-cache-corrupt-entry.md is about a corrupt entry
+   * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md is about a corrupt entry
    * that wedged an article **loudly**; that is a bug you find in an afternoon. A
    * quiet permanent charge is one you find in the billing.
    *
@@ -379,7 +380,7 @@ describe("the checkpoint store, on the filesystem", () => {
     /* Exactly what the postmortem found on disk: a process killed part-way
        through `writeFile`. Before the fix this threw a SyntaxError out of the
        whole extract step, on every later attempt, for ever —
-       docs/postmortems/pdf-chunk-cache-corrupt-entry.md. */
+       docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md. */
     await writeFile(path.join(at, `${key}.json`), '{"records": [{"page": 1', "utf-8");
     await expect(store().read(slug, "toc-labels", [key])).resolves.toEqual(new Map());
   });
@@ -561,6 +562,8 @@ loadEnvLocal();
  */
 let reachable = false;
 let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
+/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -568,6 +571,7 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.checkpoints') is not null as ready",
@@ -580,6 +584,7 @@ if (process.env.DATABASE_URL) {
     }
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
@@ -589,6 +594,8 @@ if (!reachable) {
     `\n  ⚠ the Postgres half of tests/store-checkpoints.test.ts is NOT RUNNING.\n` +
       `    These assertions have not executed: ${why}\n\n`,
   );
+  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
+  failIfPostgresRequired("tests/store-checkpoints.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
 

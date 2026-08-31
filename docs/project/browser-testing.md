@@ -8,7 +8,8 @@ writing down what to look at and where the eye lies to you.
 This doc is the how. What the client *is*: [web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
-[claude-in-chrome.md](claude-in-chrome.md).
+[claude-in-chrome.md](claude-in-chrome.md). And if you are not on Greg's laptop, most of this cannot
+apply: [browser-control.md](browser-control.md) is which mechanism goes with which machine.
 
 ## Before anything, check the server is actually up
 
@@ -102,6 +103,36 @@ Two habits that catch it:
 - **Run a control.** Set a made-up property (`--zz-control`) the same way you set the real one and
   read both back. If the control works and yours does not, it is your property; if neither works, it
   is your method. That one call is what turned "the CSS is broken" into "the browser is stale".
+
+### A preview page that never imported the stylesheet
+
+The sibling of the trap above, and worse, because nothing about it looks stale. On 2026-08-31 a
+throwaway page was built to check whether the chat composer's row still fits with three more
+controls in it — and `preview-composer.tsx` had no `import "./styles.css"`. It mounted the **real**
+component and rendered it as unstyled browser defaults: `display: block` instead of the flex row, no
+tokens, buttons at browser-default size.
+
+Every measurement was internally consistent. `scrollWidth === clientWidth` everywhere, nothing
+wrapped, nothing overflowed — and all of it was a fact about `display: block`, which cannot overflow
+the way a flex row can. Reported as "the layout holds", it would have been the exact opposite of the
+truth: the real row *was* crushing the textarea to 58px at 320px, which is what the page was built to
+find.
+
+**So before trusting a preview page, prove the stylesheet is there.** Not by looking — an unstyled
+page and a plainly-styled one are hard to tell apart in a screenshot when you have not seen the real
+thing:
+
+```js
+document.styleSheets.length;                       // 1 scaffold sheet ⇒ suspect
+[...document.styleSheets].map((s) => s.cssRules.length);  // [7] ⇒ certain
+getComputedStyle(document.documentElement).getPropertyValue("--rule-strong");  // "" ⇒ no tokens
+getComputedStyle(el).display;                      // "block" where the CSS says flex
+```
+
+`src/web/main.tsx` imports `./tailwind.css` alone and says why — it pulls `styles.css` in inside
+`@layer app`, and importing the two side by side leaves `styles.css` unlayered where it silently
+outranks every Tailwind utility. The preview pages import **both**, in that order, matching
+`preview-profile.tsx`. Copy an existing preview entry rather than writing a new one from scratch.
 
 ### A hidden tab does not animate, and half this app is animated
 
@@ -262,6 +293,43 @@ Two consequences for a run:
 - **`localStorage` is per origin, and the port is part of the origin.** A session on `:5273` is not
   a session on `:5275`. If several agents are running `npm run dev` in this one tree, you may be
   signed in on one port and out on another, which reads as flakiness.
+
+### And a raw `fetch` is not a sign-in check — it 401s while you are signed in
+
+The obvious probe is wrong, and it fails in the expensive direction: it reports **not signed in** on
+a tab that is perfectly signed in.
+
+```js
+await fetch('/api/library', { credentials: 'same-origin' })   // 401, always
+```
+
+The session is a Supabase token in `localStorage`, and it reaches the API as an `Authorization`
+header that **the app's own client code attaches**. A `fetch` you type into the console is not the
+app, so it carries no header, so it is refused — `credentials: 'same-origin'` does not help, because
+there is no cookie to send. The 401 says "this request was unauthenticated", which is true, and says
+nothing whatever about the browser.
+
+Measured 2026-08-30, and it cost two agent runs and a wrong conclusion reported to Greg. One agent
+ran exactly the probe above in three tabs, got 401 in all three, and correctly followed its
+instructions to stop rather than attempt a sign-in. The instructions were the bug: **I had written
+that probe into the task prompt.** Meanwhile the same 401 in the server log led me to conclude a
+different agent had been blocked by its permission classifier — it had not; it never got that far.
+Then navigating one of those "not signed in" tabs to `/add/<url>` created a job immediately, which
+is what settled it.
+
+**What to use instead**, in rough order of preference:
+
+- **Ask the page, not the API.** Load the shelf and look: real article titles and an "Add an
+  article" box mean signed in; a sign-in screen means signed out. `get_page_text` is enough.
+- **Do the thing.** If the point of the run is an import, navigate to `/add/<url>` and watch. A job
+  id appearing is proof; there is no reason to test the precondition separately.
+- **Read the server log** ([vercel-hosting-deployment.md](vercel-hosting-deployment.md)), where a
+  real `POST /api/jobs` and its status are unambiguous.
+
+The general shape is the one [silent-success.md](../reusable/silent-success.md) is about, arriving
+from the other side: a check that returns the *same answer whatever the truth is* is not a check.
+This one always says 401. Before trusting a probe, ask what it would print if the thing you are
+testing were fine — and if the answer is "the same", do not write it into anybody's instructions.
 
 To sign in without a Google round trip, use email and password — the local stack has
 `mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
@@ -875,7 +943,7 @@ watched — and "it did not move" is what both a broken animation and a sleeping
 
 **The 2026-08-27 version of that cost half an hour**, and is worth reading as a warning about how
 convincing the wrong diagnosis can get. The profile microphone's level meter
-([microphone-level-meter.md](../plans/microphone-level-meter.md)) read a flat zero from an automation
+([260827f-microphone-level-meter.md](../plans/260827f-microphone-level-meter.md)) read a flat zero from an automation
 tab, and every check on the way down came back clean: the `AnalyserNode` existed, the `AudioContext`
 was `running`, the `MediaStreamTrack` was `live`, unmuted and enabled, and the CSS resolved to the
 right resting transform. On that evidence a whole false theory got built — that Chrome's

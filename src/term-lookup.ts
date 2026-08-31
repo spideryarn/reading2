@@ -14,7 +14,7 @@
  *
  * So the orchestration moved here, store-independent, and takes what it needs
  * as arguments. `src/store/index.ts` builds one with whichever adapters are
- * live. See docs/plans/postgres-storage-implementation.md
+ * live. See docs/plans/260826e-postgres-storage-implementation.md
  * § `lookUpTerm` has to move out of `api.ts`.
  *
  * **The file is `term-lookup.ts`, not `glossary-lookup.ts`**, which is what the

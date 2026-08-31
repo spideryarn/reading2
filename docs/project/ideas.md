@@ -12,7 +12,7 @@ Built 2026-08-27. Greg asked for it on 2026-08-26:
 > that the text requires the user to understand.
 
 The design, the alternatives weighed, and the cross-family review that rewrote half of it before a
-line was written are in [ideas-mode.md](../plans/ideas-mode.md). **Read that before changing
+line was written are in [260826ac-ideas-mode.md](../plans/260826ac-ideas-mode.md). **Read that before changing
 anything here** — several things this feature does look like fussiness until you know what they are
 answers to.
 
@@ -99,7 +99,7 @@ is the other axis.
 **The test that separates the rows: can you say it as a proposition?** A term is a noun phrase and
 the answer to it is a definition. An idea has a claim shape, and the answer is a sentence you could
 carry to a different article and use. That test is in the prompt, and it is also the answer to *why
-not just widen the glossary* — [the plan](../plans/ideas-mode.md#why-this-is-not-a-wider-glossary)
+not just widen the glossary* — [the plan](../plans/260826ac-ideas-mode.md#why-this-is-not-a-wider-glossary)
 has the three things that break if you do.
 
 ## The occurrence is where you NEED it, not where it is said
@@ -188,8 +188,8 @@ nothing else would report it.
 
 ## Freshness: the two holes this stage does not inherit
 
-Every other stamped step compares three values — the blocks, the prompt version, the model. This one
-compares four, and both differences close gaps the others still have.
+Most stamped steps compare three values — the input fingerprint, the prompt version, the model. This
+one compares four, and the fourth still closes a gap the others have.
 
 **The tree, as well as the blocks.** `StepStamp` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts) has said since it was written that the late
@@ -197,9 +197,24 @@ stages read both, and that `inputHashFor` hashing only the blocks would bite. It
 the prompt shows the model the **skeleton before the article**, precisely so it judges what the
 argument rests on rather than what the piece says most often. Re-cut the sections and that judgment
 was made against a different question, while every block is byte-identical.
-`inputFingerprint` is `hashBlocks` + `structureHash`, and `structureHash` moved into
-[`src/source-hash.ts`](../../src/source-hash.ts) to sit beside its sibling — the same move
-`hashBlocks` made out of `tweets.ts`, for the same reason.
+
+This stage was the first to fold the tree in, and on 2026-08-31 the whole family caught up:
+`inputFingerprint` here is now `articleWithIdsFingerprint` in
+[`src/source-hash.ts`](../../src/source-hash.ts) — blocks, tree **and** the head, which is the part
+this stage was itself missing.
+
+**A different function from the other four, and the difference is real.** `articleWithIds` writes
+`TITLE:`, `BY:`, `PUBLISHED IN:` **and `URL:`** above the prose, where `articleText` writes only the
+first three; and when there is no `meta.json` this stage does not drop the head, it synthesises
+`TITLE: <tree.slug>`. `structureHash` does not hash `tree.slug`, so re-slugging a metadata-less
+article changed the prompt and left the fingerprint standing still — GPT Sol's probe returned
+`{"hashEqual":true,"promptEqual":false}`. Both are covered now, through the shared
+`fallbackHeadTitle` so the stage and its fingerprint cannot spell the fallback differently.
+
+Those fields are stage 2's, so a re-extraction moves them. (An earlier version of this line blamed
+the reading view's rename. That is a shelf override no generator reads; GPT Sol corrected it on
+2026-08-31.)
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
 **The profile, in the stamp rather than merely recorded.** Other artefacts record a `profileHash` and
 the read path shows a banner; nothing makes the step re-run. For a glossary that is arguable — a
@@ -407,7 +422,7 @@ on the re-run — which is the right answer.
   once is there — real slots, packed lanes, per-source keys — so it is one control away.
 - **It does not stream.** It goes through the job queue with `JobProgress`, exactly as glossary and
   summary do. Not a new exception; it joins an existing one, tracked in
-  [streaming-the-slow-two.md](../plans/streaming-the-slow-two.md).
+  [260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
 - **No cross-artefact dedup against the glossary.** Feeding the glossary's terms into this prompt
   would make `ideas.json` depend on `glossary.json`, and **the staleness check cannot see that** —
   a hidden input staleness cannot see is a bug nobody can diagnose. The two are kept apart by the
@@ -419,7 +434,7 @@ on the re-run — which is the right answer.
   `data/writes` (561 words) the split is **1 assumed to 2 introduced**; on the 8,283-word noema piece
   it is **1 to 9**. So the longer the article, the more this looks like a list of takeaways with one
   prerequisite attached — which is the outcome
-  [the plan](../plans/ideas-mode.md#say-the-awkward-thing-first) named as the thing to watch for, and
+  [the plan](../plans/260826ac-ideas-mode.md#say-the-awkward-thing-first) named as the thing to watch for, and
   it is showing up on the second article tried.
 
   Worth being precise about which way that cuts. `introduced` is the **redundant** half — Summary
@@ -427,7 +442,7 @@ on the re-run — which is the right answer.
   decide. `assumed` is the **distinctive** half and the **weakly falsifiable** one. So a 1:9 split is
   not "mostly working"; it is mostly the half that has a competitor.
 - **No eval file yet.** The judging so far is two articles read by hand, written up in
-  [the plan](../plans/ideas-mode.md). A scored pass under [`evals/`](../../evals/README.md) is what
+  [the plan](../plans/260826ac-ideas-mode.md). A scored pass under [`evals/`](../../evals/README.md) is what
   would turn that into a number the next prompt change is compared against.
 - **Nothing generates ideas for the committed `example/` fixture**, so the panel there offers a
   button that writes into `data/`. The same gap the glossary and the thread page have, and equally
@@ -453,4 +468,4 @@ on the re-run — which is the right answer.
 - [block-ids.md](block-ids.md) — why an occurrence is a block id and never an offset
 - [url-state.md](url-state.md) — `?mode=ideas`, `?idea=`
 - [architecture.md](architecture.md#pipeline) — where stage 5f sits
-- [ideas-mode.md](../plans/ideas-mode.md) — the plan, the alternatives, and the review
+- [260826ac-ideas-mode.md](../plans/260826ac-ideas-mode.md) — the plan, the alternatives, and the review

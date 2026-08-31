@@ -339,7 +339,7 @@ export async function seedGlossaryLookupsFromFiles(slug: string): Promise<number
  * **Chat before comments**, because `Comment.threadId` names a conversation and
  * an archive's comments can only be read against threads that are already in.
  * There is deliberately no foreign key on that column
- * (docs/plans/comments-and-bookmarks.md), so nothing *fails* if the order is
+ * (docs/plans/260828a-comments-and-bookmarks.md), so nothing *fails* if the order is
  * wrong — which is exactly why it is written down here rather than left to a
  * constraint to enforce. GPT Sol found the same two blocks the wrong way round
  * in `db:import`, 2026-08-28.

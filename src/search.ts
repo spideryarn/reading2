@@ -21,7 +21,7 @@
  * **The answer is data, not prose**, so this call is the one that has to be
  * validated rather than merely displayed. A hallucinated block id in a chat
  * answer renders as plain text and costs the reader a link
- * (docs/plans/chat-mode.md § The citation contract); a hallucinated block id
+ * (docs/plans/260826a-chat-mode.md § The citation contract); a hallucinated block id
  * *here* would be a highlight over the wrong paragraph, which is worse — it
  * would look like the model's considered judgment about a passage it never
  * read. So every hit is checked against the article before it is stored, and

@@ -6,7 +6,7 @@
  * Reads artefacts that already exist and calls no model, so it is cheap to
  * re-run and can be pointed at an old tree as easily as a new one. See
  * evals/README.md for what each measure is a proxy for, and
- * docs/plans/toc-scaling.md for the design it exists to judge.
+ * docs/plans/260826h-toc-scaling.md for the design it exists to judge.
  *
  * Everything here is mechanical. None of it decides whether a label is *good*;
  * each one is a proxy for a specific way the split could go wrong. The direct
@@ -63,8 +63,48 @@ export interface EvalReport {
   blocks: number;
   gistable: number;
   labelled: number;
-  /** labelled / gistable. Anything below 1 is a bug, not a quality signal. */
+  /**
+   * labelled / gistable. Below 1 is a bug **unless `dropped` accounts for it**.
+   *
+   * It used to be a bug full stop, and that stopped being true on 2026-08-30
+   * when src/labels.ts gained a bounded partial accept. A repair inside the code
+   * under measurement silently redefines the measurement, so the measurement was
+   * told: the stage records which blocks it gave up on, and this eval reads
+   * them rather than inferring a fault from a number it can no longer interpret
+   * on its own. See `LabelRun.dropped` and
+   * docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b.
+   */
   coverage: number;
+  /**
+   * Blocks the label pass gave up on, as `labels.json` records them.
+   *
+   * `null` for a file written before the field existed — which is not the same
+   * as zero, and the print below says so rather than reporting an old article as
+   * having dropped nothing.
+   */
+  dropped: number | null;
+  /**
+   * Gistable blocks with no label that `labels.json` does **not** account for —
+   * the ids, not a count, and that is the whole of this field.
+   *
+   * It was `gistable - labelled - dropped.length`, which asks whether the two
+   * numbers add up and never whether they are about the same blocks. A `dropped`
+   * list of the right length naming the wrong ids — a stale file, a run whose
+   * drops were recorded from the wrong batch, an id that got sorted into the
+   * list twice — reported everything accounted for while the reader was missing
+   * a row somewhere else entirely. The producer's count was being trusted to
+   * measure the producer. GPT Sol's review of stage 1, 2026-08-31, finding 8.
+   */
+  unexplained: string[];
+  /**
+   * Blocks `labels.json` says were dropped which **do** have a label.
+   *
+   * The other half of the same set comparison, and it costs nothing to compute.
+   * A drop that is not a drop means the list and the labels were written from
+   * different states — the subtraction above could not see it either, because
+   * one phantom drop and one genuinely missing block cancel exactly.
+   */
+  phantomDrops: string[];
   batched: boolean;
   batches: number;
   length: { mean: number; min: number; max: number; outsideRange: number };
@@ -199,6 +239,12 @@ export function evaluate(
   const items = collect(tree, blocks, labelsFile);
   const gistable = blocks.filter((b) => b.gistable).length;
 
+  /* Which blocks are missing a label, by id, and which ones the stage says it
+     dropped — compared as sets rather than as two counts. See `unexplained`. */
+  const labelledIds = new Set(items.map((i) => i.blockId));
+  const missingIds = blocks.filter((b) => b.gistable && !labelledIds.has(b.id)).map((b) => b.id);
+  const reportedDrops = new Set(labelsFile?.dropped ?? []);
+
   /* Headings are excluded from length and vocabulary, and this is not tidying —
      it is the difference between a measure and noise. The prompt *requires* a
      heading's label to be its heading copied exactly, which is typically two to
@@ -231,6 +277,10 @@ export function evaluate(
     gistable,
     labelled: items.length,
     coverage: gistable === 0 ? 1 : items.length / gistable,
+    dropped: labelsFile?.dropped?.length ?? null,
+    /* The set, both ways round — see `unexplained` and `phantomDrops`. */
+    unexplained: missingIds.filter((id) => !reportedDrops.has(id)),
+    phantomDrops: [...reportedDrops].filter((id) => labelledIds.has(id)),
     batched: labelsFile?.batches != null,
     batches: labelsFile?.batches?.length ?? 0,
     /* The tree is what the reader sees; labels.json is what the stage says it
@@ -273,10 +323,32 @@ const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
 function print(report: EvalReport): void {
   console.log(`\n${report.slug}`);
   console.log("─".repeat(Math.max(8, report.slug.length)));
+  /* Three readings of one number, and they need different responses. Complete;
+     short by exactly what the stage says it dropped, which is the bounded
+     partial accept working as designed; or short by more than that, which is
+     the fault the INCOMPLETE flag was put there for. Collapsing the middle case
+     into the last one would have this eval cry wolf on every article with a
+     stripped code cell in it.
+     **By id rather than by subtraction** — a `dropped` list of the right length
+     naming the wrong blocks made the arithmetic balance while a row was missing
+     somewhere else. See `EvalReport.unexplained`. */
   console.log(
     `  labels        ${report.labelled} / ${report.gistable} gistable  (${pct(report.coverage)})` +
-      `${report.coverage < 1 ? "   ← INCOMPLETE" : ""}`,
+      (report.dropped ? `   ${report.dropped} dropped by the stage` : "") +
+      (report.unexplained.length > 0
+        ? `   ← INCOMPLETE, ${report.unexplained.length} unaccounted for ` +
+          `(${report.unexplained.slice(0, 3).join(", ")})`
+        : ""),
   );
+  /* Its own line, because it means something different: the stage named a block
+     that does have a label, so its record and its output were written from
+     different states. Silent when there are none, like the repair lines. */
+  if (report.phantomDrops.length > 0) {
+    console.log(
+      `                ← ${report.phantomDrops.length} block(s) labels.json calls dropped are ` +
+        `labelled after all (${report.phantomDrops.slice(0, 3).join(", ")})`,
+    );
+  }
   console.log(
     `  generation    ${report.batched ? `${report.batches} batched calls` : "one whole pass (incumbent)"}`,
   );

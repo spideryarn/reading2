@@ -5,7 +5,7 @@
  * comment in it is load-bearing: each of the three notes on `sseChunks` records
  * a bug that actually happened, and the abort helpers exist because three
  * different causes all throw the same `AbortError`. It moved out unchanged when
- * `explain` became a stream too — see docs/plans/explain-deeper-answers.md § 2.
+ * `explain` became a stream too — see docs/plans/260826l-explain-deeper-answers.md § 2.
  *
  * **It no longer opens a call.** It grew a second job for a while — the routing
  * preference and the error mapping the three streaming callers had to agree on —

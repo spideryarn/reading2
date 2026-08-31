@@ -1,0 +1,152 @@
+#cloud-config
+# Runs once, on first boot. Must be safe to run again on a rebuilt server whose
+# volume already holds a populated /home.
+#
+# ESCAPING: this file is rendered by Terraform's templatefile(), which consumes
+# dollar-brace interpolation ANYWHERE in the file, comments included. Terraform
+# variables are written unescaped; every SHELL brace must be doubled. A missed
+# one is a plan-time error, not a silent substitution — which is the good case.
+# The first version of this file got that wrong in this very comment.
+
+locale: en_GB.UTF-8      # mosh refuses to run without a UTF-8 locale.
+timezone: ${timezone}
+package_update: true
+package_upgrade: true
+ssh_pwauth: false        # belt to the braces of the sshd drop-in below.
+
+users:
+  - name: ${username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+packages:
+  - bubblewrap
+  - build-essential
+  - ca-certificates
+  - curl
+  - fail2ban
+  - git
+  - gnupg
+  - htop
+  - jq
+  - mosh
+  - novnc
+  - rsync
+  - ripgrep
+  - socat
+  - tmux
+  - unattended-upgrades
+  - unzip
+  - websockify
+  - x11vnc
+  - xvfb
+
+write_files:
+  # 00-, not 99-. OpenSSH takes the FIRST value it sees for most directives and
+  # Ubuntu reads sshd_config.d lexically, so a 99- file loses to the 50-cloud-init
+  # one that ships with the image.
+  - path: /etc/ssh/sshd_config.d/00-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  - path: /usr/local/bin/start-vnc
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      export DISPLAY=:99
+      pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1920x1080x24 >/dev/null 2>&1 &)
+      sleep 1
+      pgrep -f "x11vnc .*:99" >/dev/null || (x11vnc -display :99 -localhost -nopw -forever -shared -quiet >/dev/null 2>&1 &)
+      pgrep -f "websockify" >/dev/null || (websockify --web=/usr/share/novnc 127.0.0.1:6080 localhost:5900 >/dev/null 2>&1 &)
+      sleep 1
+      # Backgrounding something successfully is not the same as it running.
+      for check in "Xvfb :99" "x11vnc .*:99" websockify; do
+        pgrep -f "$check" >/dev/null || { echo "FAILED to start: $check" >&2; exit 1; }
+      done
+      echo "Tunnel:  ssh -L 6080:localhost:6080 ${username}@<ip>"
+      echo "Open:    http://localhost:6080/vnc.html"
+
+  - path: /etc/profile.d/display.sh
+    content: |
+      export DISPLAY=:99
+
+  # Ubuntu 24.04+ ships an AppArmor policy that stops bubblewrap creating the
+  # user namespaces it needs, so Claude Code's sandbox runtime fails to start
+  # and says nothing useful about why. Written now so the option is there the
+  # day we decide to isolate sessions; harmless until then.
+  - path: /etc/apparmor.d/bwrap
+    content: |
+      abi <abi/4.0>,
+      include <tunables/global>
+      profile bwrap /usr/bin/bwrap flags=(unconfined) {
+        userns,
+        include if exists <local/bwrap>
+      }
+
+  # One script, fail-fast, verified at the end. The previous version was twelve
+  # loose runcmd entries with no `set -e` and several `|| true`, so a failed npm
+  # install was followed by a successful sshd restart and cloud-init reported
+  # success. That is the failure mode this repo has a doc about.
+  # Terraform's four values, and ONLY those, reach the script through this file.
+  # The script itself is injected literally (see below), so nothing in it is ever
+  # parsed by Terraform, so a dollar-brace in the script is unambiguously bash's.
+  - path: /etc/gjd-provision.env
+    permissions: "0644"
+    content: |
+      GJD_USERNAME=${username}
+      GJD_VOLUME_ID=${volume_id}
+      GJD_NODE_MAJOR=${node_major}
+      GJD_SWAP_GB=${swap_gb}
+
+  # provision.sh lives at infra/hetzner/provision.sh and is injected here base64
+  # encoded, via filebase64() -- NOT templatefile(). Terraform therefore never
+  # parses it, so a dollar sign or a dollar-brace in the shell script means what
+  # bash says it means. A previous build died because an unescaped dollar-brace
+  # in a *comment* was interpreted by Terraform; that whole class is gone now --
+  # and this very comment had to be reworded for the same reason, which tells you
+  # how easy the mistake is to make.
+  # Same literal-injection trick as provision.sh below: base64 via filebase64(),
+  # so Terraform never parses the shell. The tokens it reads are NOT here and
+  # never will be -- they are pasted by hand into /etc/github-tokens/, which is
+  # the one step of this box's setup that a human has to do.
+  - path: /usr/local/bin/github-owner-credential-helper.sh
+    permissions: "0755"
+    encoding: b64
+    content: ${helper_b64}
+
+  - path: /usr/local/sbin/provision.sh
+    permissions: "0700"
+    encoding: b64
+    content: ${provision_b64}
+runcmd:
+  # `bash -o pipefail -c`, not a bare pipeline. A string runcmd entry is
+  # interpreted by sh, so the pipeline's status is TEE's -- always zero. That is
+  # exactly why the first build reported `cloud-init: done` after provisioning
+  # had already died at line 55. The failure was never hidden in the log; it was
+  # hidden from cloud-init.
+  - bash -o pipefail -c 'bash /usr/local/sbin/provision.sh 2>&1 | tee /var/log/provision.log'
+
+final_message: |
+  Box up after $UPTIME s.
+  Check provisioning actually succeeded:  sudo tail -20 /var/log/provision.log
+  It must end with PROVISION OK. Then run `claude` and log in with /login.

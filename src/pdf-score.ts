@@ -4,7 +4,7 @@
  * paragraph and a reader reading an article with a paragraph missing.
  *
  * Deterministic. No model, no network. See
- * docs/plans/pdf-ingestion.md#v1-the-cheap-pass-checked.
+ * docs/plans/260826c-pdf-ingestion.md#v1-the-cheap-pass-checked.
  *
  * Three steps, in this order, and the order is the design:
  *

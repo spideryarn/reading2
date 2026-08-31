@@ -2,7 +2,7 @@
  * The second place a publication failure can put article prose in a log.
  *
  * GPT Sol's critical 1 named two statements, not one
- * (docs/plans/v1-publish-finalizer-review-sol.md). The first is the `reason`
+ * (docs/plans/260830ad-v1-publish-finalizer-review-sol.md). The first is the `reason`
  * `failRevision` logs verbatim, and it is covered end-to-end, against a real
  * database and a real driver error, by *keeps publication and the job's finish
  * in one transaction* in tests/jobs-publish-finalizer.test.ts.

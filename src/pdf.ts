@@ -1,6 +1,6 @@
 /**
  * Pipeline stage 2, for a PDF — **pass 0: everything the file will tell us for
- * free.** See docs/plans/pdf-ingestion.md.
+ * free.** See docs/plans/260826c-pdf-ingestion.md.
  *
  *   npx tsx src/pdf.ts evals/pdf/easy/source.pdf
  *
@@ -20,7 +20,7 @@
  *     what is on the page can tell.
  *
  * A scan has none of this, which is exactly why a scan is the hard case —
- * see docs/plans/pdf-ingestion.md#a-scan-with-no-text-layer.
+ * see docs/plans/260826c-pdf-ingestion.md#a-scan-with-no-text-layer.
  */
 
 import { readFile } from "node:fs/promises";
@@ -46,7 +46,7 @@ import { isMain } from "./is-main.js";
  * on every request, to every route, PDF or not — and never on a laptop, where
  * `@napi-rs/canvas-darwin-arm64` is sitting in node_modules and supplies
  * `DOMMatrix` happily. A green build, a green deploy, and a dead API.
- * docs/postmortems/pdfjs-dommatrix-serverless.md.
+ * docs/postmortems/260827a-pdfjs-dommatrix-serverless.md.
  *
  * Deferring the import means a route that never opens a PDF never loads pdf.js,
  * so the API comes up whether or not the canvas binary made it into the bundle.
@@ -435,7 +435,7 @@ export async function pass0(
    * That gap was survivable while the only way to reach this parser was a URL
    * we had chosen to fetch. **An upload hands it to a stranger**, which is why
    * this moved rather than being left as a note — see
-   * docs/plans/pdf-upload-and-storage.md and docs/project/security.md.
+   * docs/plans/260826u-pdf-upload-and-storage.md and docs/project/security.md.
    *
    * The limit is passed in rather than imported: this module has no opinion
    * about cost, and `MAX_PAGES` belongs to the stage that pays.
@@ -566,11 +566,21 @@ function isSideways(transform: number[]): boolean {
  * the scorer wants tokens, a human reading a failure wants lines.
  */
 export function baselineFor(pass: Pass0, page: number): string[] {
+  return mendHyphens(pageLines(pass, page));
+}
+
+/**
+ * The same lines `baselineFor` works from, **before** the hyphen mending.
+ *
+ * Split out because the seam repair in src/pdf-read.ts needs to see the break
+ * itself — a word cut in half at the foot of a page is evidence there, and
+ * `mendHyphens` exists to make it disappear. One source of the lines, two
+ * readings of them.
+ */
+export function pageLines(pass: Pass0, page: number): string[] {
   const found = pass.pages.find((p) => p.page === page);
   if (!found) return [];
-  return mendHyphens(
-    found.text.split("\n").filter((line) => line.trim() && !pass.furniture.has(foldLine(line))),
-  );
+  return found.text.split("\n").filter((line) => line.trim() && !pass.furniture.has(foldLine(line)));
 }
 
 /**
@@ -589,13 +599,46 @@ export function baselineFor(pass: Pass0, page: number): string[] {
  * produces one wrong token in the baseline rather than two, which is the
  * cheaper of the two mistakes, and it is rare in a way that hyphenation at a
  * line break is not.
+ *
+ * **The next line has to start with a letter**, and that clause is not
+ * defensive tidying — it is the whole of a bug that was in the baseline until
+ * 2026-08-31. When a word breaks across a *page*, its other half is on the next
+ * page and the line after it is whatever the page prints at the bottom. A page
+ * number is not furniture (`repeatedLines` needs the line repeated, and 439 and
+ * 447 are each printed once), so it survives the filter and arrives here as the
+ * next line. Nagel's "What Is It Like to Be a Bat?", page 6:
+ *
+ *     ...there is conscious life else-
+ *     439
+ *
+ * which joined to `else439`. That token matches nothing a model can produce, so
+ * a correct transcription lost recall, and the *evidence* that the word had
+ * been broken at all was destroyed — which is what the seam repair in
+ * src/pdf-read.ts needs to read. Same file, page 14: `some-` + `447`. Two
+ * instances in one seventeen-page essay.
+ *
+ * An ordinary prose continuation begins with a letter. So: join only to a line
+ * that begins with one, and otherwise leave `else-` standing, where the
+ * scorer's fold drops the hyphen and the token matches after all.
+ *
+ * The cost of *that*, in turn: a broken token whose second half starts with a
+ * digit or a symbol — `H-` / `2O`, a split identifier, a URL — is left in two
+ * pieces where it used to be joined. GPT Sol raised it; the trade is right way
+ * round, because the failure is a false negative that costs a little recall,
+ * where the one above was a false positive that put a word in the baseline
+ * that is on no page of the document.
  */
 function mendHyphens(lines: string[]): string[] {
   const out: string[] = [];
   for (const line of lines) {
     const previous = out.at(-1);
-    if (previous !== undefined && /(\p{L})[-\u2010\u00ad]$/u.test(previous)) {
-      out[out.length - 1] = previous.replace(/[-\u2010\u00ad]$/u, "") + line.trimStart();
+    const rest = line.trimStart();
+    if (
+      previous !== undefined &&
+      /(\p{L})[-\u2010\u00ad]$/u.test(previous) &&
+      /^\p{L}/u.test(rest)
+    ) {
+      out[out.length - 1] = previous.replace(/[-\u2010\u00ad]$/u, "") + rest;
       continue;
     }
     out.push(line);

@@ -4,7 +4,7 @@
  *
  *   npx tsx src/pdf-read.ts evals/pdf/easy/source.pdf
  *
- * See docs/plans/pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
+ * See docs/plans/260826c-pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
  * pages there are, what the text layer holds, which lines are furniture and
  * whether this is a scan. This file cuts the file into page-aligned chunks,
  * asks a model to transcribe each one into records, checks every chunk against
@@ -50,17 +50,22 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import PQueue from "p-queue";
 import { PDFDocument } from "pdf-lib";
 import { stageCli } from "./cli-ledger.js";
+import { allOrStop } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
+import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
+import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
   foldLine,
   type Pass0,
   pass0,
+  pageLines,
   type PdfRecord,
   RENDERED,
   type RecordType,
@@ -110,6 +115,52 @@ const MAX_TOKENS = 16_000;
 
 /** How many times a chunk that fails its check is asked again. See the loop in `runPdfExtract`. */
 const ATTEMPTS = 2;
+
+/**
+ * How many chunks are transcribed at once.
+ *
+ * **This is the number that decides how long a PDF may be.** Chunks used to be
+ * read one after another, and the arithmetic that follows from that is why this
+ * constant exists. The first PDF through the deployed pipeline took 135s for 9
+ * pages in 2 chunks — about 45s a call — and a step is killed by its own
+ * deadline at `LEASE_MS - DEADLINE_MARGIN_MS`, 740s (src/jobs.ts). Sequentially
+ * that is roughly sixteen calls, so somewhere around fifty to seventy-five
+ * pages the stage stopped being able to finish at all, while `MAX_PAGES` went
+ * on accepting a hundred. The cap was about double the reachable length, and
+ * nothing said so: a long PDF ran for twelve minutes, died, and offered a Retry
+ * that would do the same thing again.
+ *
+ * **Why a number rather than "all of them".** Unbounded was the ask and it is
+ * the wrong shape for three reasons, none of them provider rate limits:
+ *
+ * - **A fatal chunk costs the whole document.** The run stops on the first
+ *   truncated or filtered answer, and everything already in the air has been
+ *   paid for. Sequentially the loss was one chunk; at full width it is every
+ *   chunk. `allOrStop` cancels what it can, but a request that has already been
+ *   answered is already billable.
+ * - **Memory.** `cutPages` builds a fresh PDF per chunk and a request may carry
+ *   up to `MAX_ENCODED_BYTES`. Thirty of those in flight is not a serverless
+ *   function's idea of a good time.
+ * - **Width past the point the deadline is met buys latency nobody is waiting
+ *   on**, and costs the two risks above.
+ *
+ * **Eight, and it is not a guarantee — an earlier draft of this comment said
+ * six made `MAX_PAGES` "comfortably reachable" and that was false.** GPT Sol
+ * did the worst case: `planChunks` will make a one-page chunk out of a page
+ * dense enough, so a hundred pages can be a hundred chunks, and at six wide
+ * that is `ceil(100/6) × 45s = 765s` — already past the 740s deadline before a
+ * single retry. Eight gives `ceil(100/8) × 45s = 585s`, which has margin at the
+ * *mean* call duration and would still fail at a bad enough p95. Note the
+ * arithmetic rather than the number: 45s is one measurement from one paper.
+ *
+ * **The real fix is not a bigger number here.** Admission should be decided on
+ * the planned chunk count against a measured p95, refusing up front like
+ * `TooLongForOnePass` does, instead of accepting a document and discovering at
+ * minute twelve that it cannot finish. That is not built. Until it is, a
+ * pathologically dense hundred-page PDF can still run out of time — it will now
+ * take rather more than a hundred dense pages to do it.
+ */
+export const CHUNK_CONCURRENCY = 8;
 
 /** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
@@ -601,8 +652,173 @@ const escapeHtml = (s: string) =>
  * a sentence broken across a page break comes back whole. And a record the
  * model marked `uncertain` keeps its ⟦illegible⟧ markers and gets a class, so
  * the reader can see where the machine could not read the ink rather than
- * having to trust that it could — docs/plans/pdf-ingestion.md § the scan.
+ * having to trust that it could — docs/plans/260826c-pdf-ingestion.md § the scan.
  */
+/** A line that breaks a word: a letter, then a hyphen, then the line ends. */
+const BREAKS_A_WORD = /\p{L}[-‐­]$/u;
+/** The first run of letters in a string — a word, ignoring anything around it. */
+const FIRST_WORD = /\p{L}+/u;
+const HAS_LETTER = /\p{L}/u;
+
+/** Letters only, case folded — for comparing a model's word with the text layer's. */
+const letters = (s: string) => s.normalize("NFKC").replace(/[^\p{L}]/gu, "").toLowerCase();
+
+/**
+ * Does the earlier page break a word after `before`, ending in `tail`?
+ *
+ * The anchor is both words folded together, matched as a suffix of the line, so
+ * `...and then passed the dis-` answers a record ending "the dis" and `An in-`
+ * does not answer one ending "arrived in".
+ *
+ * `before` folding to nothing — a dash, a bracket, a bare footnote marker —
+ * collapses the anchor back to the bare stem it exists to replace, so that
+ * declines too.
+ */
+function brokeAfter(pass: Pass0, page: number, before: string, tail: string): boolean {
+  const anchor = letters(before);
+  if (!anchor) return false;
+  const wanted = anchor + letters(tail);
+  return pageLines(pass, page).some((line) => {
+    const trimmed = line.trimEnd();
+    return BREAKS_A_WORD.test(trimmed) && letters(trimmed).endsWith(wanted);
+  });
+}
+
+/**
+ * Does the later page's first letter-bearing line open with exactly this word?
+ *
+ * The whole word, not a prefix of it: `startsWith` on the folded line would
+ * accept the model's `patch` where the page says `patcher`, and glue
+ * `dispatch` — a plausible word that is on no page of the document, which is
+ * the one thing this function must never produce.
+ */
+function opensWith(pass: Pass0, page: number, head: string): boolean {
+  const opening = pageLines(pass, page).find((l) => HAS_LETTER.test(l)) ?? "";
+  return letters(FIRST_WORD.exec(opening)?.[0] ?? "") === letters(head);
+}
+
+/**
+ * Glue back a word the page break cut in half — `dis` + `patcher` → `dispatcher`
+ * — using pass 0's text layer as the evidence, and no model call at all.
+ *
+ * **Why there is anything left to do here.** The model is told to mend
+ * hyphenation itself, and it does, wherever it can see both halves. `planChunks`
+ * sends the previous page as read-only context precisely so it usually can. But
+ * at a *chunk seam* it cannot: the earlier chunk's last page has no successor in
+ * its own call, and the later chunk is forbidden from emitting records for its
+ * context page. So the two halves are read by two different calls, neither of
+ * which knows the word is broken. `renderHtml` then joins the records with a
+ * space, and the reader gets **"passed the dis patcher"**. That exact string is
+ * in committed output: data/ball-lightning, pages 3 and 4.
+ *
+ * **Why this is deterministic rather than a second model pass.** A Sonnet
+ * subagent read every seam in the corpus on 2026-08-30: five of seven were
+ * ordinary sentence continuations, which `continues` already handles correctly,
+ * and the other two were this. One defect, and the text layer already holds the
+ * answer — page 3 ends `dis-` and page 4 begins `patcher`. Asking a model to
+ * re-read the whole document to recover a hyphen would be paying for judgment
+ * where there is none to exercise. GPT Sol reached the same conclusion
+ * independently and proposed this repair.
+ *
+ * **What it will not touch, and that is the point.** Both sides have to agree.
+ * Some line on the earlier page must break a word *and* end with the last two
+ * words the model emitted — `...passed the dis-` answers a record ending
+ * "passed the dis". And the first letter-bearing line of the later page must
+ * open with exactly the word the model emitted next. Where the model already
+ * mended the word — anywhere inside a chunk — its last word is `dispatcher`,
+ * no line ends `the dispatcher-`, and nothing happens. Where the page's reading
+ * order is not the text layer's, the second half does the work: ball-lightning
+ * page 5 ends `thun-`, but page 6's text layer opens with "Figure 2. Sketch
+ * 1997 by…" rather than "derstorm", so this declines. That seam stays broken,
+ * and declining is right — gluing `thunFigure` would be worse than the space.
+ *
+ * **The word before the stem is the whole of the evidence, and the first
+ * version did not have it.** It asked only that some line on the page break a
+ * word with that stem, which sounds specific and is not: page 3 of the
+ * ball-lightning fixture ends *twenty-three* lines with a hyphen — `motion-`,
+ * `Land-`, `dif-`, `thunder-`, `as-`, `os-`. And the later-page check cannot
+ * make up the difference, because it is not independent: a paragraph that
+ * continues across a page break always opens with that page's first words. GPT
+ * Sol built the counter-example — a page holding `An in-` and, elsewhere, a
+ * sentence ending `arrived in`, with the next page opening `time to hear the
+ * verdict` — and the first version produced **"arrived intime"**.
+ *
+ * **The false negatives that buys, listed rather than discovered later.** The
+ * stem alone on its line, with the word before it wrapped onto the line above;
+ * a one-word record; a preceding word that is only punctuation; a later page
+ * whose first letters are a header, a caption or a drop cap. All of these
+ * decline, and the word stays broken with a space in it. That is the right way
+ * round for a function whose other failure mode is inventing plausible prose.
+ *
+ * **Order matters: this runs after scoring, never before.** Recall is measured
+ * against the baseline, where the word is still two halves (`else-` on one page,
+ * `where` on the next). Repairing first would make a correct transcription look
+ * like an invented word on one page and a missing one on the other.
+ */
+export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] {
+  const out = records.map((r) => ({ ...r }));
+  /* Mirrors renderHtml's own cursor, so this only ever repairs a boundary
+     renderHtml is actually going to join: reset by a record it does not render,
+     and skipping one with no text. All three of renderHtml's join conditions —
+     `continues`, the same type, and nothing unrendered in between — are checked
+     below, each with a test that fires when it is removed. */
+  let previous: PdfRecord | null = null;
+
+  for (const record of out) {
+    if (!RENDERED.has(record.type)) {
+      previous = null;
+      continue;
+    }
+    if (!record.text.trim()) continue;
+    const prev: PdfRecord | null = previous;
+    previous = record;
+    if (!prev) continue;
+    if (!record.continues || record.type !== prev.type) continue;
+    if (record.page !== prev.page + 1) continue;
+
+    /* The model is told to mend hyphenation, but it is not always obeyed, and a
+       record ending "dis-" is the same break with the hyphen still on it. Both
+       spellings are accepted; the hyphen comes off in the glue below. Anything
+       else at the end — a full stop, a comma, a bracket — means the flow ended
+       there and any matching break on the page is a coincidence. */
+    const words = prev.text.trimEnd().split(/\s+/);
+    const tail = /^(\p{L}+)[-‐­]?$/u.exec(words.at(-1) ?? "")?.[1];
+    const before = words.at(-2);
+    if (tail === undefined || before === undefined) continue;
+
+    /**
+     * **The stem alone is not evidence, and this is where the first version was
+     * wrong.** Page 3 of the ball-lightning fixture ends twenty-three lines with
+     * a hyphen — `motion-`, `Land-`, `dif-`, `thunder-`, `as-`, `os-`. A rule of
+     * "some line on this page breaks a word whose stem is `in`" matches on
+     * almost any academic page, and the later-page check cannot make up the
+     * difference because it is not independent: a paragraph that continues
+     * across a page break *always* opens with that page's first words.
+     *
+     * GPT Sol found it and built the case: a page holding `An in-` / `ternal
+     * distinction matters.` and later `They finally arrived in`, with the next
+     * page opening `time to hear the verdict.`, produced **"arrived intime"**.
+     *
+     * So the line has to carry the word before it too. `...passed the dis-`
+     * anchors on `the dis`, and `An in-` does not offer `arrived in`.
+     */
+    if (!brokeAfter(pass, prev.page, before, tail)) continue;
+
+    const token = record.text.trimStart().split(/\s+/)[0] ?? "";
+    const head = FIRST_WORD.exec(token)?.[0];
+    if (head === undefined || !token.startsWith(head)) continue;
+    if (!opensWith(pass, record.page, head)) continue;
+
+    prev.text = prev.text.trimEnd().replace(/[-‐­]$/u, "") + token;
+    /* A one-word continuation is left empty. That is fine, and deliberately not
+       special-cased: renderHtml skips an empty record, and an empty record can
+       never anchor a later repair anyway, because its last word is the empty
+       string and fails the all-letters test above. */
+    record.text = record.text.trimStart().slice(token.length).trimStart();
+  }
+  return out;
+}
+
 export function renderHtml(records: PdfRecord[], title: string): string {
   const parts: string[] = [];
   let list: "ul" | null = null;
@@ -670,7 +886,17 @@ ${parts.join("\n")}
  */
 export interface PdfExtractResult {
   slug: string;
-  outFile: string;
+  /**
+   * The transcribed article as a standalone page — **the `extractedHtml`
+   * artefact**, exactly as `runExtract` returns one for a web page.
+   *
+   * The convergence is the whole design of the two extractors: stage 3 onwards
+   * cannot tell which of them made a given article
+   * (docs/project/content-extraction.md § Two extractors, one artefact). This
+   * used to be written to `outFile` from inside the stage, which is the half of
+   * that convergence the filesystem was holding up.
+   */
+  extractedHtml: string;
   meta: Meta;
   pages: number;
   /** How many model calls it took. One per page range. */
@@ -692,7 +918,7 @@ export interface PdfExtractOptions {
   bytes: Uint8Array;
   /**
    * Where this PDF was fetched from. **Absent for one the reader uploaded**,
-   * which has no address at all — see docs/plans/pdf-upload-and-storage.md.
+   * which has no address at all — see docs/plans/260826u-pdf-upload-and-storage.md.
    *
    * Only two things here use it, and neither is the transcription: the last
    * rung of the title ladder, and the `raw.json` this writes when nothing else
@@ -701,7 +927,18 @@ export interface PdfExtractOptions {
   url?: string;
   /** The reader's own name for an uploaded file. The title ladder's last rung prefers it. */
   filename?: string;
-  outFile: string;
+  /**
+   * **Where the per-chunk checkpoints live, and nothing else.**
+   *
+   * It was where the article and its metadata went too, until 2026-08-31; those
+   * are returned now. What is left is `<dataDir>/pdf-chunks/`, one file per
+   * model call, and that is deliberately still a directory: a checkpoint is not
+   * an artefact — it is money already spent, written *during* a step so a later
+   * attempt does not re-buy it, which is the opposite of something committed
+   * when a step succeeds. Converting these is somebody else's landing
+   * (docs/plans/260831b-finish-the-database-move.md § Stage 2b), and the atomic-write
+   * recipe below is left exactly as it was.
+   */
   dataDir: string;
   slug: string;
   reader?: PdfReader;
@@ -730,7 +967,7 @@ export interface PdfExtractOptions {
  * every later attempt computed the same key, found the same broken file, and
  * threw the same `SyntaxError` out of the whole extract step. Nothing here ever
  * deletes these files, so Retry could not clear it and the message never said
- * which file to delete. docs/postmortems/pdf-chunk-cache-corrupt-entry.md.
+ * which file to delete. docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md.
  *
  * **A miss re-buys a vision-model call**, so this is deliberately the most
  * tolerant test that still means anything: parses, and has the `records` array
@@ -817,13 +1054,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       throw stageFailure(
         "blocked",
         `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
-          `not a technical one — see docs/plans/pdf-ingestion.md.`,
+          `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
       );
     }
     throw err;
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
-  await keepTheOriginal(opts, rawSha256);
   const chunks = planChunks(pass);
   const cacheDir = path.join(opts.dataDir, "pdf-chunks");
   await mkdir(cacheDir, { recursive: true });
@@ -847,103 +1083,219 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      a retry nobody counts is a cost nobody sees. */
   const retries: string[] = [];
 
-  for (const [i, chunk] of chunks.entries()) {
-    const key = createHash("sha256")
-      .update(
-        JSON.stringify({
-          rawSha256,
-          pages: chunk.pages,
-          context: chunk.context ?? null,
-          prompt: promptFingerprint(),
-          reader: reader.id,
-          maxTokens: MAX_TOKENS,
-        }),
-      )
-      .digest("hex")
-      .slice(0, 16);
-    const cacheFile = path.join(cacheDir, `${key}.json`);
+  /**
+   * **The chunks are read concurrently, and then folded together in order.**
+   *
+   * Two phases, and the split is the whole design. Reading a chunk is a slow
+   * paid call that depends on nothing but the chunk; folding one in depends on
+   * every chunk before it, because `seen` carries the running dedup. Doing both
+   * in one loop is what forced the calls to be sequential — see
+   * `CHUNK_CONCURRENCY` for what that cost.
+   *
+   * **Phase 1's check is chunk-local, and the honest reason is not the one
+   * written here first.** The original comment claimed the explicit empty set
+   * was preventing a race — that `checkChunk` reading the shared `seen` would
+   * otherwise make retry decisions depend on who finished first. GPT Sol
+   * pointed out that this is false: phase 1 runs to completion before phase 2
+   * begins, so `seen` is empty throughout phase 1 anyway, and passing it would
+   * be identical. The splitting of the phases is what removes the shared state;
+   * the empty set does not remove anything.
+   *
+   * It is still passed explicitly, and now for a reason that is true: it says
+   * at the call site that this check does not see other chunks, so nobody has
+   * to reason about the temporal accident to know what it scores. The guard
+   * against the divergence that *does* matter — a chunk certified on text the
+   * fold then deletes — is the second check in phase 2, not this one.
+   *
+   * The two rules that matter still apply within the chunk: context-page
+   * records are removed by page number, and `isContextPage` catches a
+   * re-emitted context page even when chopped below the twenty-word floor,
+   * which is the attack Sol found. Cross-chunk dedup of the *output* is
+   * unaffected — phase 2 folds through the one shared `seen`, in page order.
+   */
+  const fatal = new AbortController();
+  /* Linked to the caller's signal rather than replacing it, so a cancelled
+     ingest (src/jobs.ts) still cancels the calls in flight. */
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, fatal.signal])
+    : fatal.signal;
+  const queue = new PQueue({ concurrency: CHUNK_CONCURRENCY });
+  let completed = 0;
 
-    /**
-     * **One retry of a chunk that fails its check, and it is not the fallback
-     * the plan forbids.**
-     *
-     * The distinction matters. What the plan rules out is escalating a failing
-     * page to a stronger model, because that quietly costs four times as much
-     * and hides the fault. This is the *same* call again, and its output has to
-     * pass the *same* check — so it cannot launder a bad reading, it can only
-     * survive a transient one.
-     *
-     * And transient is what these are. The `easy` fixture passed twice and then
-     * dropped thirteen words — "in an interview Derrida speaks again of this
-     * specter of the future" — from a page it had transcribed perfectly an hour
-     * earlier. A gate that fails an eight-page paper one run in three, on a
-     * fault that is gone when you ask again, is a gate somebody turns off.
-     *
-     * Two runs, then it fails with the page numbers in the message. The failure
-     * is still visible and still hard.
-     */
-    let reading: ChunkReading;
-    let result: Check;
-    const cached = await readCachedChunk(cacheFile, {
-      slug: opts.slug,
-      chunk: key,
-      pages: chunk.pages,
-    });
-    if (cached) {
-      reading = cached;
-      result = checkChunk(reading, chunk, pass, seen);
-    } else {
-      for (let attempt = 1; ; attempt++) {
-        const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-        reading = await reader.read(
-          await cutPages(opts.bytes, sent),
-          instructionFor(chunk),
-          opts.signal,
-        );
-        usage.input += reading.usage.input;
-        usage.output += reading.usage.output;
-        /* `length` is a truncated answer, and a truncated answer is a lost page —
-           the previous version's own bug, shipped as a shorter article. Say which
-           it was before the scoring says "the model lost content", because that
-           is the right symptom and the wrong diagnosis. */
-        if (reading.finish === "length") {
-          throw new Error(
-            `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
-          );
-        }
-        if (reading.finish === "content_filter") {
-          throw new Error(
-            `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
-              `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
-              ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
-          );
-        }
-        result = checkChunk(reading, chunk, pass, seen);
-        if (result.ok || attempt >= ATTEMPTS) break;
-        retries.push(`pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`);
-      }
-      /* Only a reading that passed is cached. A failed one is not worth
-         replaying, and caching it would make the retry above read back the
-         answer it is retrying. */
-      if (result.ok) await writeAtomic(cacheFile, reading);
-    }
+  const readings = await allOrStop(
+    chunks.map((chunk) =>
+      /* The signal goes to `add` as well as into the request. Without it a chunk
+         still queued when a fatal one aborts would never run and never settle,
+         and the `Promise.all` inside `allOrStop` would wait on it forever. */
+      queue.add(
+        async () => {
+          const key = createHash("sha256")
+            .update(
+              JSON.stringify({
+                rawSha256,
+                pages: chunk.pages,
+                context: chunk.context ?? null,
+                prompt: promptFingerprint(),
+                reader: reader.id,
+                maxTokens: MAX_TOKENS,
+              }),
+            )
+            .digest("hex")
+            .slice(0, 16);
+          const cacheFile = path.join(cacheDir, `${key}.json`);
 
+          /**
+           * **One retry of a chunk that fails its check, and it is not the
+           * fallback the plan forbids.**
+           *
+           * The distinction matters. What the plan rules out is escalating a
+           * failing page to a stronger model, because that quietly costs four
+           * times as much and hides the fault. This is the *same* call again,
+           * and its output has to pass the *same* check — so it cannot launder
+           * a bad reading, it can only survive a transient one.
+           *
+           * And transient is what these are. The `easy` fixture passed twice
+           * and then dropped thirteen words — "in an interview Derrida speaks
+           * again of this specter of the future" — from a page it had
+           * transcribed perfectly an hour earlier. A gate that fails an
+           * eight-page paper one run in three, on a fault that is gone when you
+           * ask again, is a gate somebody turns off.
+           *
+           * Two runs, then it fails with the page numbers in the message. The
+           * failure is still visible and still hard.
+           */
+          let reading: ChunkReading;
+          let result: Check;
+          /* Empty, and deliberately not `seen` — see the note above this block. */
+          const alone = new Set<string>();
+          const asked: string[] = [];
+          const cached = await readCachedChunk(cacheFile, {
+            slug: opts.slug,
+            chunk: key,
+            pages: chunk.pages,
+          });
+          if (cached) {
+            reading = cached;
+            result = checkChunk(reading, chunk, pass, alone);
+          } else {
+            for (let attempt = 1; ; attempt++) {
+              const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
+              reading = await reader.read(
+                await cutPages(opts.bytes, sent),
+                instructionFor(chunk),
+                signal,
+              );
+              usage.input += reading.usage.input;
+              usage.output += reading.usage.output;
+              /* `length` is a truncated answer, and a truncated answer is a lost page —
+                 the previous version's own bug, shipped as a shorter article. Say which
+                 it was before the scoring says "the model lost content", because that
+                 is the right symptom and the wrong diagnosis. */
+              if (reading.finish === "length") {
+                throw new Error(
+                  `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
+                );
+              }
+              if (reading.finish === "content_filter") {
+                throw new Error(
+                  `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
+                    `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
+                    ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
+                );
+              }
+              result = checkChunk(reading, chunk, pass, alone);
+              if (result.ok || attempt >= ATTEMPTS) break;
+              asked.push(
+                `pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`,
+              );
+            }
+            /* Only a reading that passed is cached. A failed one is not worth
+               replaying, and caching it would make the retry above read back the
+               answer it is retrying. */
+            if (result.ok) await writeAtomic(cacheFile, reading);
+          }
+
+          /* Counted as chunks land rather than in page order, because this is
+             the one number a reader is watching and "4 of 17" should move when
+             a call returns, not when its turn comes round. `chunk.pages` says
+             which one it was, so out-of-order progress still reads sensibly. */
+          completed += 1;
+          opts.onProgress?.(completed, chunks.length, chunk.pages, result);
+          return { chunk, reading, result, asked };
+        },
+        { signal },
+      ),
+    ),
+    () => {
+      /**
+       * One failed chunk ends the run, so stop the rest before they cost
+       * anything more.
+       *
+       * **`abort` is the one that does the work, and `clear` is a guard against
+       * a future edit — which is not what the equivalent comment in
+       * src/labels.ts says.** That one claims both are needed because "neither
+       * reaches the other's batches". Measured here, that is not true: deleting
+       * `clear()` leaves all three tests green, because the `{ signal }` passed
+       * to `queue.add` already makes a task that has not started settle as
+       * aborted rather than sit there. Deleting `abort()` instead turns the
+       * cancellation test red at once — nothing in flight is ever signalled.
+       *
+       * `clear()` stays anyway, and deliberately: it is free, and it is the
+       * thing that stops a hang if someone later drops `{ signal }` from the
+       * `add` above. But it is documented as the belt and not the braces, so
+       * nobody reads a redundant line as a load-bearing one.
+       */
+      fatal.abort();
+      queue.clear();
+    },
+  );
+
+  /**
+   * Phase 2, in page order rather than completion order — `readings` follows
+   * `chunks`, so this is deterministic however the calls raced.
+   *
+   * **The score recorded here is of what is PUBLISHED, not of what the chunk
+   * returned, and those are two different sets.** Phase 1 scores a chunk on its
+   * own reading, before the cross-chunk dedup has run; this fold then removes
+   * records that repeat twenty or more words seen in an earlier chunk. So a
+   * chunk can pass phase 1 on the strength of text that phase 2 deletes.
+   *
+   * That is not hypothetical. GPT Sol built the probe: a reading scoring recall
+   * 1.0 and precision 1.0, from which removing one 20-word record duplicated
+   * out of an earlier chunk left a 20-word missing run and failed. The repeated
+   * paragraph was supplying the word evidence that covered an omission
+   * elsewhere on the page, and then it disappeared. Scoring only in phase 1
+   * would report 1.0 for an article with a hole in it — the exact shape of
+   * failure pass 0 exists to catch.
+   *
+   * So the chunk is checked twice, and the two checks answer different
+   * questions. Phase 1's decides whether to spend money asking again, and has
+   * to happen there because that is where the retry is. This one decides what
+   * `recall` and `quality` say about the article, and has to happen here
+   * because this is where the records are final. Only local CPU, no second call.
+   */
+  for (const { chunk, reading, result, asked } of readings) {
+    retries.push(...asked);
     const emitted = withoutRepeats(
       reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
       seen,
       chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
       wordsOf(pass, chunk.pages),
     );
+    /* `result` is phase 1's verdict and is deliberately not reused for the
+       numbers below — it is kept only for `onProgress`, which has already
+       fired. */
+    const published = checkEmitted(emitted, chunk, pass);
     stripped += reading.stripped ?? 0;
-    if (!result.ok) failures.push(...result.failures);
-    notes.push(...result.notes);
-    if (result.overall.recall !== null) {
-      baselineTokens += result.overall.base;
-      matchedTokens += result.overall.recall * result.overall.base;
-      pagesChecked += result.scored.length;
+    if (!published.ok) failures.push(...published.failures);
+    notes.push(...published.notes);
+    if (published.overall.recall !== null) {
+      baselineTokens += published.overall.base;
+      matchedTokens += published.overall.recall * published.overall.base;
+      pagesChecked += published.scored.length;
     }
     all.push(...emitted);
-    opts.onProgress?.(i + 1, chunks.length, chunk.pages, result);
+    void result;
   }
 
   /**
@@ -959,7 +1311,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * and both were refused. The nine-page one was refused over the arXiv margin
    * stamp alone (now handled in `isSideways`); the fourteen-page one over that
    * plus chart axis tick labels and mathematical notation — figure internals
-   * that v1 deliberately does not transcribe (docs/plans/pdf-ingestion.md), and
+   * that v1 deliberately does not transcribe (docs/plans/260826c-pdf-ingestion.md), and
    * maths that the text layer and the model spell differently. So the gate's
    * observed behaviour on real papers was to refuse good work, and a reader who
    * asked for a paper got nothing at all.
@@ -985,15 +1337,17 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
 
   all.sort((a, b) => a.page - b.page);
+  /* After the scoring loop above, and it has to be: the baseline still has the
+     word in two halves, so repairing before measuring would read as an invented
+     word on one page and a missing one on the next. See mendSeamHyphens. */
+  const mended = mendSeamHyphens(all, pass);
   /* Rung 4 of the ladder wants **a name**, and the two origins spell one
      differently: an uploaded file has the reader's own filename, and a fetched
      one has the last segment of its URL. Worked out here rather than inside
      `titleFrom`, so that function keeps taking one string and stays testable
      without a URL. `decodeURIComponent` can throw on a hand-mangled escape,
      which used to take the whole stage with it. */
-  const title = titleFrom(all, pass, lastName(opts));
-  await mkdir(path.dirname(opts.outFile), { recursive: true });
-  await writeFile(opts.outFile, renderHtml(all, title), "utf-8");
+  const title = titleFrom(mended, pass, lastName(opts));
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the
@@ -1026,15 +1380,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     ...(recall === null ? {} : { recall }),
     ...(failures.length ? { quality: failures } : {}),
   };
-  await writeFile(
-    path.join(opts.dataDir, "meta.json"),
-    `${JSON.stringify(meta, null, 2)}\n`,
-    "utf-8",
-  );
 
   return {
     slug: opts.slug,
-    outFile: opts.outFile,
+    extractedHtml: renderHtml(mended, title),
     meta,
     pages: pass.pages.length,
     chunks: chunks.length,
@@ -1049,43 +1398,65 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 }
 
 /**
- * **Make sure the PDF itself is beside the article, whatever route got us here.**
+ * **Make sure the PDF itself is beside the article** — for `npm run pdf --
+ * <file.pdf>`, which is the only route that gets here without a stage 1.
  *
- * The ingest queue has already done this — stage 1 wrote `raw.pdf` and
- * `raw.json` before stage 2 ran, and this leaves both alone. `npm run pdf --
- * <file.pdf>` has not, and without this the article it produces claims
- * `source: "pdf"` while `GET /api/source/:slug` returns 404 and the reader's
- * "view the scanned pages" link goes nowhere.
+ * Without it the article that command produces claims `source: "pdf"` while
+ * `GET /api/source/:slug` returns 404 and the reader's "view the scanned pages"
+ * link goes nowhere. That link is not decoration: on a scan it is the *only*
+ * verification there is — a person looking at the ink — so an article that
+ * offers it and cannot honour it is worse than one that never offered.
  *
- * That link is not decoration. On a scan it is the *only* verification there
- * is — a person looking at the ink — so an article that offers it and cannot
- * honour it is worse than one that never offered.
+ * **It moved out of `runPdfExtract` on 2026-08-31**, which is the change that
+ * makes the rest of this stage a function of bytes rather than of a directory.
+ * It was called from inside, guarded by *"has stage 1 already written a
+ * raw.json?"*, and that guard is a filesystem question the queue path can no
+ * longer ask. The queue never needed the call — stage 1 acquires the document,
+ * both halves of it — so the only caller left is the command line, and it is
+ * where the call now lives. The guard survives, because re-running the command
+ * on a slug that a real fetch produced should not replace that fetch's final
+ * URL, content type and redirect chain with what a local file can know.
  *
- * Only when absent, and that matters: the queue's manifest carries the final
- * URL, the content type and the redirect chain, and overwriting it from here
- * would replace real provenance with what a local file can know, which is
- * almost nothing.
+ * **It stores the object as well as writing the files, and did not until now.**
+ * `storeRawSource` is what puts the bytes under their own hash and what
+ * `storedSha256`/`storedBytes` come from; leaving them out produced a manifest
+ * that `src/store/artifacts-pg.ts` refuses outright (`NoStoredDocument`), so
+ * every article made by this command was un-ingestable into Postgres and
+ * nothing said so until the write failed. The same shape as the two bugs
+ * src/store/blobs.ts records — a path that wrote the manifest by hand instead
+ * of going through the shared helper.
  */
-async function keepTheOriginal(opts: PdfExtractOptions, sha256: string): Promise<void> {
+export async function keepTheOriginal(
+  opts: Pick<PdfExtractOptions, "bytes" | "url" | "dataDir">,
+  sha256: string,
+  /* Injected so a test can watch the object land somewhere it can look, rather
+     than in whatever bucket `.env.local` selects. That is not a convenience:
+     the bug this function had was that it never stored the object at all, and a
+     test that cannot see the store cannot tell that apart from success. */
+  store?: RawSourceStore,
+): Promise<void> {
   if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+  const stored = await storeRawSource(opts.bytes, "pdf", store ?? blobStore());
   await mkdir(opts.dataDir, { recursive: true });
   await writeFile(path.join(opts.dataDir, "raw.pdf"), opts.bytes);
+  const manifest: RawManifest = {
+    kind: "pdf",
+    file: "raw.pdf",
+    ...(opts.url ? { requestedUrl: opts.url, url: opts.url } : { origin: "upload" as const }),
+    contentType: "application/pdf",
+    encoding: null,
+    bytes: opts.bytes.byteLength,
+    sha256,
+    storedSha256: stored.sha256,
+    /* Equal to `bytes` above for a PDF, because the stored bytes *are* the
+       bytes — unlike HTML, where `writeRaw` stores the decoded string. Taken
+       from what we actually stored anyway rather than assumed. */
+    storedBytes: opts.bytes.byteLength,
+    fetchedAt: new Date().toISOString(),
+  };
   await writeFile(
     path.join(opts.dataDir, "raw.json"),
-    `${JSON.stringify(
-      {
-        kind: "pdf",
-        file: "raw.pdf",
-        ...(opts.url ? { requestedUrl: opts.url, url: opts.url } : { origin: "upload" }),
-        contentType: "application/pdf",
-        encoding: null,
-        bytes: opts.bytes.byteLength,
-        sha256,
-        fetchedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(manifest, null, 2)}\n`,
     "utf-8",
   );
 }
@@ -1101,6 +1472,17 @@ function checkChunk(reading: ChunkReading, chunk: Chunk, pass: Pass0, seen: Set<
     chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
     wordsOf(pass, chunk.pages),
   );
+  return checkEmitted(emitted, chunk, pass);
+}
+
+/**
+ * The check for records that have already been through the dedup.
+ *
+ * Split out of `checkChunk` so the *published* records can be scored, which is
+ * the thing the two-phase read has to be careful about. See the note at the
+ * fold in `runPdfExtract`.
+ */
+function checkEmitted(emitted: PdfRecord[], chunk: Chunk, pass: Pass0): Check {
   return check(emitted, chunk.pages, pass, {
     context: chunk.context,
     unchecked: bibliographyPages(emitted, chunk.pages, pass),
@@ -1348,13 +1730,20 @@ async function main() {
   const outFile = path.join("output", `${slug}.html`);
   const dataDir = path.join("data", slug);
   await mkdir(dataDir, { recursive: true });
+  const url = `file://${path.resolve(input)}`;
+  /* **Before the model calls, not after**, which is where it was when it ran
+     from inside the stage. The stage can fail on a page it cannot read, and the
+     original is exactly what somebody wants to look at when it does. */
+  await keepTheOriginal(
+    { bytes, url, dataDir },
+    createHash("sha256").update(bytes).digest("hex"),
+  );
   const pass = await pass0(bytes);
   console.log(`Pages:  ${pass.pages.length}${pass.isScan ? " (a scan — no text layer)" : ""}`);
   console.log(`Chunks: ${planChunks(pass).map((c) => c.pages.join("–")).join(", ")}`);
   const result = await runPdfExtract({
     bytes,
-    url: `file://${path.resolve(input)}`,
-    outFile,
+    url,
     dataDir,
     slug,
     onProgress: (done, total, pages, checked) => {
@@ -1367,6 +1756,18 @@ async function main() {
       );
     },
   });
+  /* The two artefacts, written here rather than inside the stage — the same
+     move `main()` in src/extract.ts makes, and for the same reason: the command
+     line is the one caller that wants files, and it is the reader looking at
+     `output/<slug>.html` that the whole thing is for. */
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, result.extractedHtml, "utf-8");
+  await writeFile(
+    path.join(dataDir, "meta.json"),
+    `${JSON.stringify(result.meta, null, 2)}\n`,
+    "utf-8",
+  );
+
   console.log(`\nTitle:   ${result.meta.title}`);
   console.log(
     `Records: ${result.records}, mean recall ${result.recall ?? "— (nothing to check it against)"}` +
@@ -1377,7 +1778,7 @@ async function main() {
       `${result.usage.input === 0 ? "   (every chunk came from the cache)" : ""}` +
       `${result.retries.length ? `, ${result.retries.length} chunk(s) asked twice` : ""}`,
   );
-  console.log(`Written: ${path.resolve(result.outFile)}`);
+  console.log(`Written: ${path.resolve(outFile)}`);
 
 }
 

@@ -167,11 +167,11 @@ export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * Which drawer panel is open, or nothing — see Dock.tsx and
- * docs/plans/bottom-bar.md.
+ * docs/plans/260825c-bottom-bar.md.
  *
  * **One value, where there were two.** `about` is gone: the article's details
  * outgrew a drawer and became a page, `/read/<slug>/metadata`
- * (docs/plans/metadata-page.md). So this parameter now has exactly one legal
+ * (docs/plans/260825e-metadata-page.md). So this parameter now has exactly one legal
  * value, and it stays a parameter rather than becoming a flag because the next
  * panel will want the same shape.
  *
@@ -324,6 +324,113 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * Which quote is selected, and therefore which passage is marked in the prose
+ * and painted down the rail.
+ *
+ * A quote's id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it for free — and the same "a mangled link degrades
+ * to nothing" behaviour falls out, which here means the list with nothing
+ * selected.
+ *
+ * `replace`, exactly like `?term=` and `?idea=` beside it: stepping between
+ * quotes while you read is browsing rather than navigating, and `mode` already
+ * put one entry on the stack for the trip into the mode, which is the entry
+ * Back should use.
+ */
+export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * Which timeline event is open, and therefore which passages are marked in the
+ * prose.
+ *
+ * An event's id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it for free — and a mangled link degrades to the
+ * list with nothing selected, like the three above.
+ *
+ * **The id survives a re-run, which is what makes this link worth having.** It
+ * is inherited on the cited block set plus the date rather than on the label —
+ * measured, because the labels paraphrase on every regeneration: 26 of 27 ids
+ * survived a re-run where only 7 of 26 labels did, so a label-keyed link would
+ * have died nineteen times over. src/timeline.ts § `evidenceKey`.
+ *
+ * `replace`, exactly like `?term=`, `?idea=` and `?quote=` beside it: stepping
+ * between events while you read is browsing rather than navigating, and `mode`
+ * already put one entry on the stack for the trip into the mode.
+ */
+export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * How the quote list is ordered.
+ *
+ * **`document` is the default, and that is Greg's own instruction rather than
+ * an inherited convention.** He asked for this mode in one sentence — *"By
+ * default, display them in order. But also have a sub-mode for ordering them by
+ * importance, and a sub-mode for ordering by how memorable/interesting/striking
+ * /lyrical/etc. And add a threshold UI bar, and a Prioritised mode"* — and the
+ * first clause settles it. The glossary defaults to `prioritised`, and copying
+ * that here was the first version of this parameter; a cross-family review
+ * pointed out that the glossary's later override is not permission to override
+ * an explicit decision about a different feature. GPT Sol, 2026-08-31.
+ *
+ * So the ranked orders are all things the reader asks for. `importance` and
+ * `striking` are the model's two judgments straight; `prioritised` is the
+ * gentler shape the glossary arrived at — the two scores decide only which of
+ * two groups a quote is in, and inside a group the order is first appearance,
+ * so the model chooses nothing there.
+ *
+ * **Not called `sort`.** That name is the glossary's and `order` is the search
+ * results', both on `/read/<slug>`, and url-state.md § The library's own five
+ * records what distinct names are worth: a link should be readable without
+ * knowing which mode it is for.
+ *
+ * `push`, like `sort` and `order`: changing the order of a list is a deliberate
+ * act on the view, and Back should undo it.
+ *
+ * An unknown value parses to the default, so a link written by a version with
+ * more orders still shows a list.
+ */
+export const RANKS = ["document", "prioritised", "importance", "striking"] as const;
+export type QuoteRank = (typeof RANKS)[number];
+
+export const rankParam = createParser<QuoteRank>({
+  parse: (v) => (RANKS.includes(v as QuoteRank) ? (v as QuoteRank) : null),
+  serialize: (v) => v,
+})
+  .withDefault("document")
+  .withOptions({ history: "push" });
+
+/**
+ * How high the bar is for the prioritised order's top group — the reader's hand
+ * on the threshold, which is the second thing Greg asked for by name.
+ *
+ * The number is `max(importance, striking)`, the same value `priorityOf` in
+ * QuotesPanel.tsx computes, so `?bar=0.75` says *promote the quotes the model
+ * called at least 0.75 on one of the two axes*.
+ *
+ * **`max`, where the glossary's `?gate=` is a product**, and Greg chose it:
+ * the glossary's two scores are factors of one quantity (the cost of not
+ * knowing a term), where these two are separate reasons to keep a line. A
+ * product would push the essay's thesis sentence below the fold for being
+ * plainly written. docs/plans/260831j-quotes-mode.md § Two scores.
+ *
+ * **No default, deliberately** — the same call `gateParam` and `confParam` make
+ * above, for the same reason. Absent means *nobody has touched this*, and the
+ * panel resolves it to `PROMOTE_BAR`.
+ *
+ * `replace` and debounced, exactly as `?gate=` is: a range input fires on every
+ * pixel of a drag, browsers rate-limit history writes, and a Back button that
+ * walked back through a drag one step at a time would be useless. Back should
+ * undo the *decision*, which is the `?rank=` push that got you here.
+ */
+export const barParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
  * How the glossary list is ordered.
  *
  * `document` — first use in the article first — is what the **artefact** stores
@@ -340,7 +447,7 @@ export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
  * build: the two scores only decide which of two groups an entry is in, and
  * *inside* a group the order is still first use, so the model chooses nothing
  * there. The divider names the rule and both scores are shown on every row —
- * see docs/plans/glossary-prioritised-order.md for the four designs and
+ * see docs/plans/260826b-glossary-prioritised-order.md for the four designs and
  * `groupEntries` in GlossaryPanel.tsx for what it actually does.
  *
  * It is also **self-cancelling**: when the gate does not split the list (no
@@ -680,9 +787,10 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   Two controls, and they are the two axes of the same thing: how much summary
-   you want. `len` says how long each entry is, `deep` says how many entries
-   there are. See docs/project/summaries.md and SummaryPanel.tsx.
+   One control now: `deep`, how far down the tree the panel goes. There was a
+   second, `len`, which chose between three generated lengths — it went on
+   2026-08-31 along with the stage that wrote the two paid ones
+   (docs/plans/260831s-gist-only-summaries.md). What is left is free and on the tree.
 
    **What is NOT in the URL, and why.** The panel also lets you open and close
    individual sections — including opening one part's sections *past* the depth
@@ -697,33 +805,6 @@ export const confParam = createParser<number>({
    it would open a set of sections that are no longer the ones you opened. What
    *is* stable is the depth, so the depth is what a link carries. Their point
    still stands and this is the honest version of it. */
-
-/**
- * Which rung of the ladder every entry in the summary panel is shown at.
- *
- * Named rather than numbered, all the way down to the URL, because that is the
- * whole finding this feature is built on: *"sentence or two" is a thing a
- * writer can aim at and a reader can recognise; "level 4" is not*
- * (docs/project/original-version/summaries.md). `?len=long` says what it will
- * show you; `?len=2` would not.
- *
- * `gist` is the default and never appears in a URL. It is the rung that costs
- * nothing — one sentence per node, already on the tree — so an article with no
- * `summary.json` at all still has a usable panel, and the two generated rungs
- * are an upgrade rather than a precondition.
- *
- * `push`, like `cols` and `text`: changing how much summary you are reading is
- * a deliberate act on the view, and Back should undo it.
- */
-export const RUNGS = ["gist", "short", "long"] as const;
-export type Rung = (typeof RUNGS)[number];
-
-export const rungParam = createParser<Rung>({
-  parse: (v) => (RUNGS.includes(v as Rung) ? (v as Rung) : null),
-  serialize: (v) => v,
-})
-  .withDefault("gist")
-  .withOptions({ history: "push" });
 
 /**
  * Which picture the Diagram mode is drawing.
@@ -744,7 +825,7 @@ export const rungParam = createParser<Rung>({
  * Trail have nothing at all without the projection, and now say so with a
  * spinner rather than borrowing another picture.
  *
- * `push`, like `?rung=` and `?cols=`. Switching picture is a deliberate act on
+ * `push`, like `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *
@@ -817,10 +898,9 @@ export const diagramHueParam = createParser<ScatterHue>({
  * cut-off, which is the one control that view had and the one thing it proved:
  * *one control, whole-document granularity* is usable.
  *
- * 1 is the parts, 2 is the sections. It stops at 2 because that is where the
- * summaries stop being written (src/summarise.ts § MAX_DEPTH) and because below
- * it a node is a single paragraph, which the reader should be reading rather
- * than being told about.
+ * 1 is the parts, 2 is the sections. It stops at 2 because below it a node is a
+ * single paragraph, which the reader should be reading rather than being told
+ * about.
  *
  * Note that this and a node's own open/closed state are **different ways to be
  * hidden**, and they compose rather than sharing a variable — their version got

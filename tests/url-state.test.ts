@@ -238,7 +238,7 @@ describe("glossary mode parameters", () => {
        nothing about it is visible in a URL: the parameter that used to be
        absent because the list was in document order is now absent because it is
        in the prioritised one. Old links say what they want and are unaffected.
-       See docs/plans/glossary-prioritised-order.md. */
+       See docs/plans/260826b-glossary-prioritised-order.md. */
     expect(sortParam.defaultValue).toBe("prioritised");
     expect(TERM_SORTS).toContain("prioritised");
   });

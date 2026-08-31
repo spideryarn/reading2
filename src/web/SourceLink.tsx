@@ -34,9 +34,11 @@
  * `sendSource` in src/routes.ts read the file off the local filesystem, which
  * Vercel does not have — so this control worked on a laptop and 404d on every
  * production request, for as long as it existed. It goes through the store now
- * (`ArticleReader.loadSource`), which on Postgres reads the object the revision
- * names out of Supabase Storage. Fixed 2026-08-31,
- * docs/plans/plain-mode-and-the-way-out.md § 5.
+ * (`SourceStore.readPdf`), which on Postgres reads the object the revision names
+ * out of Supabase Storage. Fixed 2026-08-31,
+ * docs/plans/plain-mode-and-the-way-out.md § 5 and
+ * docs/plans/260831b-finish-the-database-move.md § stage 1b, which arrived at
+ * the same fix from two directions on the same day.
  *
  */
 import { useState } from "react";
@@ -45,6 +47,44 @@ import { Download, ExternalLink } from "lucide-react";
 import { hostOf, isWebUrl } from "../urls.js";
 import type { Meta } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+
+/**
+ * **The article's own web address, or `null` when it has none.**
+ *
+ * Two callers ask this — the masthead and the metadata page — and they must
+ * agree, because between them they decide whether the reader is offered a way
+ * out to the publisher or told the article was uploaded. Two spellings of the
+ * question is how those two answers come to disagree on the same article.
+ *
+ * It is stricter than `meta.url` in one way that matters. `npm run pdf --
+ * <file.pdf>` records `url: "file:///Users/…/thing.pdf"` (src/pdf-read.ts §
+ * `main`), which is not an address anybody can follow and *is* somebody's
+ * home directory printed on the page. Rendered as a link it looked like a
+ * source and did nothing; here it is a file, which is what it is.
+ *
+ * **It is also the URL sink's allowlist**, and that is not a second job so much
+ * as the same one seen from the security side. `meta.url` is the revision's
+ * `final_url`, which the fetcher validates — but an *imported* article's
+ * metadata is written straight into the row, so a `javascript:` or `data:`
+ * value is reachable and an unchecked `href` here would be an active sink. The
+ * `https?` test refuses those for the same reason `isWebUrl` does (src/urls.ts,
+ * docs/project/security.md); GPT Sol found three sinks on this field on
+ * 2026-08-31 and this is what closes the two in the reading view.
+ *
+ * **Absence does not mean "uploaded" on its own**, and no caller may read it
+ * that way. A visitor's `PublicMeta.url` is `articles.final_url` put through
+ * `publicSourceUrl` (src/urls.ts), which withholds an address carrying a
+ * credential — so for a visitor a `null` here is *either* an upload *or* an
+ * address we would not publish, and nothing on this side can tell them apart.
+ * Whoever turns a `null` into the sentence "this was uploaded" has to establish
+ * the reader owns the article first; `OriginMark` in Masthead.tsx is the one
+ * place that does.
+ */
+export function webSource(meta: Meta): string | null {
+  const url = meta.url?.trim();
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? url : null;
+}
 
 export function SourceLink({
   slug,

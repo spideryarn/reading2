@@ -12,29 +12,28 @@
  *
  * > Follow the approach the old-version took.
  *
- * So this is their approach, and their approach is a **named length ladder**.
- * What is hierarchical about it is where the ladder is wired: theirs generated
- * nine granularities of the whole document and showed one hardcoded rung in one
- * heading tooltip — *"Nine granularities generated, one shown where it mattered
- * most. Nobody ever wired the ladder to the place a reader actually meets it"*
- * (docs/project/original-version/summaries.md). Here the article, every part
- * and every section carries the same three rungs, and one control moves all of
- * them at once.
+ * Their approach was a **named length ladder**, and it was built here and then
+ * taken out again on 2026-08-31. Greg: *"I think we can get rid of the Length
+ * functionality. I think for now just keeping 'Gist' only is sufficient."*
+ * What is left is the half that was never paid for — the **tree**, with the
+ * one-sentence gist stage 4 already writes onto every internal node — and one
+ * control, Depth, which is how many of those rows you want. See
+ * docs/plans/260831s-gist-only-summaries.md for what went and why.
  *
  * ```
  *  ┌── spine ──┬────── SUMMARY (this panel) ──────┬──── the article ────┐
  *  │           │  SUMMARY                         │                     │
- *  │  ▇▇▇▇▇▇▇  │  Length  gist · short · long     │  Being You opens    │
- *  │  ▇▇▇▇     │  Depth   parts · sections        │  with a story about │
- *  │  ▇▇▇      │ ──────────────────────────────── │  waking from        │
- *  │  ▇▇▇▇▇▇   │  Consciousness is what it is     │  anaesthesia…       │
- *  │  ▇▇       │  like to be a living body.       │                     │
- *  │  ▇▇▇▇     │                                  │  Every paragraph    │
- *  │  ▇▇▇      │  ▾ 1  What feeling is for   18¶  │  stays exactly      │
- *  │  ▇▇▇▇▇    │      Perception is a controlled  │  where it was.      │
- *  │  ▇▇       │      hallucination, not a…      │                     │
- *  │           │    ▸ 1.1 The body as a model  6¶ │  Clicking a title   │
- *  │           │  ▸ 2  The hard problem      +4  │  scrolls it here.   │
+ *  │  ▇▇▇▇▇▇▇  │  Depth   article · parts · secs  │  Being You opens    │
+ *  │  ▇▇▇▇     │ ──────────────────────────────── │  with a story about │
+ *  │  ▇▇▇      │  Consciousness is what it is     │  waking from        │
+ *  │  ▇▇▇▇▇▇   │  like to be a living body.       │  anaesthesia…       │
+ *  │  ▇▇       │                                  │                     │
+ *  │  ▇▇▇▇     │  ▾ 1  What feeling is for   18¶  │  Every paragraph    │
+ *  │  ▇▇▇      │      Perception is a controlled  │  stays exactly      │
+ *  │  ▇▇▇▇▇    │      hallucination, not a…      │  where it was.      │
+ *  │  ▇▇       │    ▸ 1.1 The body as a model  6¶ │                     │
+ *  │           │  ▸ 2  The hard problem      +4  │  Clicking a title   │
+ *  │           │                                  │  scrolls it here.   │
  *  └───────────┴──────────────────────────────────┴─────────────────────┘
  * ```
  *
@@ -62,87 +61,36 @@
  * cut-off. The one rule all three feed is `showsChildren` in tree.ts, which is
  * where they are written down once for both the panel and the follow.
  *
- * The root is the one row where that badge stays a fact, because it draws no
- * title row and so has no twist to undo an override with — see the badge
- * itself for why that is the right answer rather than a missing feature.
+ * The root was the one row where that badge stayed a dead fact, because it
+ * draws no title row and so has no twist to undo an override with. Greg,
+ * 2026-08-31: *"in Article sub-mode, I can't click on `+N parts` to expand"*.
+ * So the root's badge is a control too, and it is its own twist — it flips to
+ * `−N parts` once the parts are open. That collapse clears the override and
+ * never writes the root into `closed`, which would otherwise outlive the Depth
+ * buttons and leave `parts` drawing an empty outline; see `clearOverride`.
  *
- * ## What is on screen and not generated
+ * ## Nothing here is generated on demand
  *
- * The shortest rung is the **gist**, which stage 4 already wrote onto every
- * internal node. So this panel is useful on an article nobody has paid a model
- * call for, and the button below is an upgrade rather than a precondition. That
- * is also why an entry says which rung it is actually showing when it could not
- * give you the one you asked for: a partly-written artefact must not read as a
- * complete one (src/summarise.ts § partial salvage).
+ * Every line of prose in this panel is a **gist**, written by stage 4 as part
+ * of building the tree (src/toc.ts). So this panel costs nothing, is never
+ * empty on an article that has a tree, and has no run button, no job, no
+ * staleness and no reader-profile provenance — the three things a panel that
+ * spends has to carry, and the reason `GlossaryPanel` and `IdeasPanel` are
+ * three times the size of this one.
  */
 import { type MouseEvent, useRef, useState } from "react";
-import { ChevronRight, Layers, RotateCcw, TriangleAlert } from "lucide-react";
-import type { BlockId, Job, SummaryEntry } from "../types.js";
-import { builtButEmpty } from "../messages.js";
+import { ChevronRight, Layers } from "lucide-react";
+import type { BlockId } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
-import { CitedText } from "./Cited.js";
 import { TooltipGroup } from "./Tooltip.js";
-import type { Rung } from "./params.js";
-import { MAX_SUMMARY_DEPTH, RUNGS } from "./params.js";
+import { MAX_SUMMARY_DEPTH } from "./params.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
-import { currentEntryId, rungText, showsChildren, type SummaryNode } from "./tree.js";
-import type { UseSummaries } from "./useSummaries.js";
-import { JobProgress } from "./JobProgress.js";
-import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { currentEntryId, showsChildren, type SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
 
-/**
- * **The owner's half of this panel** — the read's status, the job writing the
- * two longer rungs, and the button that spends.
- *
- * Absent for a visitor — see `SummariesAccess` below. Since slice 1b the
- * summaries arrive inside
- * `GET /api/public/article/:slug`, so the ladder below is the same ladder drawn
- * by the same components; what a visitor has no equivalent of is everything
- * here. One panel with its data injected rather than an owner's panel and a
- * visitor's panel — see GlossaryPanel.tsx § GlossaryOwner for why that matters
- * more than the duplication it saves.
- *
- * **`owner.summaries` is the artefact and `summaries` is the ladder to draw.**
- * Nothing here reads the artefact any more: the one thing that did was
- * `guidance`, the owner's own steer, and it is gone with the box
- * (docs/plans/steer-becomes-the-profile.md).
- */
-export type SummariesOwner = UseSummaries;
-
-/**
- * **Who is reading, and the ladder they get — one prop, so the two cannot
- * disagree.** The argument is in GlossaryPanel.tsx § GlossaryAccess.
- *
- * The ladder is typed as what it is read for rather than as `Summaries`: a
- * visitor's `PublicSummaries` is exactly these two fields
- * (src/public-types.ts). It is nullable on the owner's arm and not on the
- * visitor's — an owner looking at a piece with no ladder is an ordinary state
- * rather than a fault, because every internal tree node already carries a
- * one-sentence gist and the panel works without any of this.
- */
-export type SummariesAccess =
-  | {
-      kind: "owner";
-      owner: SummariesOwner;
-      summaries: { entries: SummaryEntry[]; missing: number } | null;
-    }
-  | { kind: "visitor"; summaries: { entries: SummaryEntry[]; missing: number }; owner?: never };
-
 interface Props {
-  access: SummariesAccess;
-  /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
+  /** The tree, nested and numbered. Null if the tree is unusable. */
   root: SummaryNode | null;
-  /**
-   * Every block this article has, id to plain text.
-   *
-   * Two jobs, both belonging to the citations in the summary prose: it is the
-   * "does this id exist" check, and it is what a chip's hover card shows. Same
-   * map chat is handed, for the same reason (src/web/Cited.tsx).
-   */
-  blocks: Map<string, string>;
-  rung: Rung;
-  onRung(rung: Rung): void;
   deep: number;
   onDeep(deep: number): void;
   /** Where the reader is, as a row index into `blocks`. Null above the first section. */
@@ -151,32 +99,10 @@ interface Props {
   onJump(id: BlockId): void;
 }
 
-/** What each rung is called where the reader meets it, and what it promises. */
-const RUNG_LABELS: Record<Rung, { label: string; blurb: string }> = {
-  gist: { label: "gist", blurb: "One sentence each — the tree's own, and always there" },
-  short: { label: "short", blurb: "A few sentences each" },
-  long: {
-    label: "long",
-    blurb: "A paragraph for a section, a couple for a part, about a page for the article",
-  },
-};
-
 const DEPTH_LABELS = ["article", "parts", "sections"];
 
-export function SummaryPanel({
-  access,
-  root,
-  blocks,
-  rung,
-  onRung,
-  deep,
-  onDeep,
-  atRow,
-  onJump,
-}: Props) {
+export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
   useRenderCount("SummaryPanel");
-  const owner = access.kind === "owner" ? access.owner : null;
-  const summaries = access.summaries;
   /**
    * Which sections the reader has closed.
    *
@@ -218,6 +144,20 @@ export function SummaryPanel({
   };
 
   /**
+   * Take an override off again, and **do not write the node into `closed`** —
+   * the root's collapse, and the reason it is not simply `toggle`.
+   *
+   * Everywhere else a collapse means "shut this, and keep it shut when the
+   * cut-off moves", which is what `closed` is for. On the root that sentence is
+   * a trap: `closed` beats the cut-off, so a shut root would still be shut at
+   * `parts`, and the Depth button that says `parts` would draw an empty
+   * outline. The root is offered a collapse only while the override is the one
+   * thing holding its children open, so clearing the override is the whole of
+   * it.
+   */
+  const clearOverride = (id: string) => setOpened((prev) => withoutId(prev, id));
+
+  /**
    * The one row the reader is actually on, and the row the panel follows.
    *
    * Computed here rather than decided by each `Entry`, because two things need
@@ -233,89 +173,20 @@ export function SummaryPanel({
      otherwise. The four extras are re-run triggers rather than reasons to move —
      each reflows the list without necessarily changing which row is current, and
      a re-run with the row in view moves nothing. `root` is the one that is easy
-     to leave out and was: it changes when the summaries finish loading or a
-     rewrite lands, which can turn every one-sentence gist into a paragraph and
-     push the current row off the bottom without any id changing. follow.ts has
-     the argument. */
+     to leave out and was: it changes when the article's tree is rebuilt, which
+     reflows every row below and can push the current one off the bottom without
+     any id changing. follow.ts has the argument. */
   const scroll = useRef<HTMLDivElement>(null);
-  useFollow(scroll, current, [rung, deep, closed, opened, root]);
-
-  /**
-   * What the reader wants these summaries to lean towards.
-  /* Seeded from what the artefact on screen was written with, so nothing has to
-     remember the reader's last choice between visits — the file does. */
-  const [withProfile, setWithProfile] = useState(() =>
-    summaries ? (owner?.profiled ?? false) : true,
-  );
-
-  /* Whether the two longer rungs exist at all. Not `status === "ready"`: an
-     artefact can be present and still have holes in it, and what decides
-     whether the ladder is worth offering is whether anything on the tree
-     actually carries a longer rung. */
-  const hasLadder = summaries !== null && summaries.entries.length > 0;
+  useFollow(scroll, current, [deep, closed, opened, root]);
 
   return (
     <aside className="mode-band summ" aria-label="Summary">
       <div className="summ-head">
         <Layers size={14} className="summ-head-icon" />
         <h2>Summary</h2>
-        {/* Provenance, on the head line. A label rather than a control for the
-            reason src/web/WrittenForYou.tsx gives. */}
-        {/* Provenance about the owner's own run: `profileHash` never leaves the
-            server, so a visitor sees none of it. src/public-types.ts. */}
-        {summaries && owner && (
-          <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
-            slug={owner.slug}
-          />
-        )}
       </div>
 
       <div className="summ-controls">
-        {/* The ladder. Named, not numbered — which is the whole finding this
-            feature rests on, and the reason these are words rather than a
-            slider with three notches. */}
-        {/* A real `<fieldset>` and `<legend>`, not a div with `role="group"`.
-            The legend is the group's accessible name for free, and it puts the
-            word "Length" and the buttons in one relationship rather than two
-            things that happen to sit next to each other. What makes it usable
-            is that `.summ-row` is `display: flex`: a legend only gets its odd
-            notched-into-the-border rendering while the fieldset is a block
-            box, and inside a flex container it is an ordinary flex item. */}
-        <fieldset className="summ-row">
-          <legend className="summ-label">Length</legend>
-          {RUNGS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`summ-pill${r === rung ? " on" : ""}`}
-              aria-pressed={r === rung}
-              // Offered even before the artefact exists, and disabled rather
-              // than hidden: a control that appears once you have paid for it
-              // gives no clue that paying is what the button below is for.
-              disabled={r !== "gist" && !hasLadder}
-              title={
-                r === "gist" || hasLadder
-                  ? RUNG_LABELS[r].blurb
-                  : /* Two reasons a rung can be dark, and they are different
-                       sentences. `summaries` present means somebody ran the
-                       step and it produced no ladder; absent means nobody has
-                       run it. Saying the second about the first is the bug
-                       this branch exists to stop. */
-                    `${RUNG_LABELS[r].blurb} — ${
-                      summaries === null
-                        ? "not written for this article yet"
-                        : "not in what was written for this article"
-                    }`
-              }
-              onClick={() => onRung(r)}
-            >
-              {RUNG_LABELS[r].label}
-            </button>
-          ))}
-        </fieldset>
-
         {/* Their structure panel's one control, and the one thing it proved:
             a single depth cut-off over a whole document is usable. */}
         <fieldset className="summ-row">
@@ -340,54 +211,27 @@ export function SummaryPanel({
         </fieldset>
       </div>
 
-      {/* **Run, and it came back with nothing** — the one state that absence
-          cannot express, said for the summary as `GlossaryPanel` and
-          `IdeasPanel` say it for theirs. `hasLadder` alone used to leave this
-          silent while the disabled rungs below claimed the summary had never
-          been written, about an artefact the payload was carrying. GPT Sol,
-          2026-08-29. src/messages.ts § builtButEmpty.
-
-          `summaries !== null` is what separates it from *nobody built one*,
-          which never mounts this panel at all — `visitorGap` answers
-          *not-built* and the band says so instead (src/web/visitor.ts). */}
-      {!owner && summaries !== null && !hasLadder && (
-        <p className="summ-hint">{builtButEmpty("A summary")}</p>
-      )}
-
-      {owner?.error && <p className="summ-error">{owner.error}</p>}
-
-      {owner?.stale && (
-        <div className="summ-stale">
-          <p>
-            <TriangleAlert size={13} />
-            These summaries describe an older version of the article.
-          </p>
-          {/* Beside the button, because both describe the same forthcoming
-              run. It is the only thing here that says what the summaries will
-              be written for: the per-rewrite steer box that used to sit above
-              it asked the same question the profile already asks, and was
-              deleted (docs/plans/steer-becomes-the-profile.md). */}
-          <UseProfile
-            checked={withProfile}
-            onChange={setWithProfile}
-            hasProfile={owner.hasProfile}
-            slug={owner.slug}
-            disabled={owner.job !== null}
-          />
-          {/* No `force` needed: the step's own freshness check already knows
-              this artefact is out of date, so an ordinary run rewrites it. */}
-          <Progress
-            job={owner.job}
-            failed={owner.failed}
-            onRun={() => owner.write(false, withProfile)}
-            onCancel={owner.cancel}
-            label="Rewrite them"
-          />
-        </div>
-      )}
-
       <div className="summ-scroll" ref={scroll}>
-        {root ? (
+        {/* **Nothing to outline, which is not the same as nothing to read.**
+            `tree-invariants.ts` permits a root that is a leaf — one block, and
+            no gist, because a summary must never stand where the real prose
+            could — so a one-passage article arrives here with a perfectly good
+            tree and nothing this panel can draw from it. The same holds for a
+            provisional heading tree whose gists were never written.
+
+            Without this the reader got the heading, the Depth pills and a blank
+            band: no title row on the root, no range, no missing-summary line
+            and no `+N` badge, because there are no children to have one. GPT
+            Sol's review of the built code, 2026-08-31. It matters more since
+            the mode stopped being gated — a visitor used to be told nobody had
+            built a summary, and now opens the band unconditionally
+            (src/web/visitor.ts).
+
+            A separate sentence from the one below, and deliberately: *no usable
+            tree* reports a fault, and this tree is fine. */}
+        {root && !root.gist && root.children.length === 0 ? (
+          <p className="summ-quiet">This article has no parts, so there is nothing to outline.</p>
+        ) : root ? (
           /* One group for the whole outline, so running the pointer down a
              column of block ids shows each card immediately rather than
              waiting out the open delay again at every one. Chat's answers do
@@ -396,7 +240,6 @@ export function SummaryPanel({
             <ol className="summ-list">
               <Entry
                 entry={root}
-                rung={rung}
                 deep={deep}
                 closed={closed}
                 opened={opened}
@@ -404,7 +247,7 @@ export function SummaryPanel({
                 atRow={atRow}
                 current={current}
                 onJump={onJump}
-                blocks={blocks}
+                onClearOverride={clearOverride}
                 root
               />
             </ol>
@@ -414,98 +257,6 @@ export function SummaryPanel({
         )}
       </div>
 
-      {/* The offer, at the bottom rather than in place of the outline: there is
-          always something to read here, so this is never an empty state.
-
-          **The `missing` count is above the offer and outside it**, because it
-          is a fact about the ladder rather than an invitation to rewrite one —
-          and a visitor gets it too. It is the reader's only sign that an
-          apparently complete summary is partial, which is why `missing` is one
-          of the two fields that cross in `PublicSummaries`. */}
-      {/* A visitor's foot is the `missing` line or nothing at all — no empty
-          bordered strip under the ladder when there is nothing to put in it. */}
-      {(owner
-        ? owner.status !== "loading" && !owner.stale
-        : hasLadder && summaries.missing > 0) && (
-        <div className="summ-foot">
-          {/* Written down rather than smoothed over. A section that got nothing
-              back falls all the way to its gist, which looks exactly like a
-              section the model had less to say about — the number is what tells
-              the two apart.
-
-              Note what `missing` counts, precisely: sections with **no entry at
-              all**, not sections that got a `short` and no `long`. Those are
-              marked individually on the row instead, which is the more useful
-              place for a fact about one row. */}
-          {hasLadder && summaries.missing > 0 && (
-            <p className="summ-hint">
-              {summaries.missing} {summaries.missing === 1 ? "section" : "sections"} got nothing
-              back and fall back to their one-sentence gist.
-            </p>
-          )}
-          {/* And this half is the owner's: a profile tick and a button that
-              spends. A visitor has neither, and the band they can open instead
-              is the same band with this part absent rather than a second design
-              for one panel. */}
-          {owner &&
-            (owner.status === "none" ? (
-              <>
-                <p className="summ-hint">
-                  Only the one-sentence gists so far. Writing the longer two rungs is a few model
-                  calls over the whole article and takes a minute or two — done once and kept.
-                </p>
-                {/* Beside the button, because both describe the same
-                    forthcoming run. docs/project/reader-profile.md. */}
-                <UseProfile
-                  checked={withProfile}
-                  onChange={setWithProfile}
-                  hasProfile={owner.hasProfile}
-                  slug={owner.slug}
-                  disabled={owner.job !== null}
-                />
-                <Progress
-                  job={owner.job}
-                  failed={owner.failed}
-                  onRun={() => owner.write(false, withProfile)}
-                  onCancel={owner.cancel}
-                  label="Write the summaries"
-                />
-              </>
-            ) : (
-              hasLadder && (
-                <>
-                  <UseProfile
-                    checked={withProfile}
-                    onChange={setWithProfile}
-                    hasProfile={owner.hasProfile}
-                    slug={owner.slug}
-                    disabled={owner.job !== null}
-                  />
-                  <Progress
-                    job={owner.job}
-                    failed={owner.failed}
-                    /* Forced: the step believes this artefact is current, and
-                       it is right — the reader is asking for it anyway.
-
-                       **`withProfile` is passed, and until 2026-08-30 it was
-                       not.** This call read `write(true, guidance)` and the
-                       third argument defaulted, so the "Use your profile" tick
-                       directly above it did nothing here: unticking it and
-                       pressing "Write them again" wrote a profiled artefact
-                       anyway, stamped with a `profileHash` the reader had just
-                       asked not to use. Found while deleting the steer, which
-                       is what had been sitting in the argument position that
-                       hid it. */
-                    onRun={() => owner.write(true, withProfile)}
-                    onCancel={owner.cancel}
-                    label="Write them again"
-                    icon="redo"
-                  />
-                </>
-              )
-            ))}
-        </div>
-      )}
     </aside>
   );
 }
@@ -515,7 +266,8 @@ export function SummaryPanel({
  *
  * The root renders without a title row — it *is* the article, and the masthead
  * two inches to the right already says its name. What it contributes is the
- * top-level summary, which is the one the previous version actually shipped.
+ * article's own gist, which is the one summary the previous version actually
+ * shipped.
  *
  * ## The whole entry is the click target
  *
@@ -542,7 +294,6 @@ export function SummaryPanel({
  */
 function Entry({
   entry,
-  rung,
   deep,
   closed,
   opened,
@@ -550,11 +301,10 @@ function Entry({
   atRow,
   current,
   onJump,
-  blocks,
+  onClearOverride,
   root = false,
 }: {
   entry: SummaryNode;
-  rung: Rung;
   deep: number;
   closed: ReadonlySet<string>;
   opened: ReadonlySet<string>;
@@ -563,10 +313,13 @@ function Entry({
   /** The one entry the reader is on — see SummaryPanel § current. */
   current: string | null;
   onJump(id: BlockId): void;
-  blocks: Map<string, string>;
+  /**
+   * Undo this node's `+N` override. Passed to the root and to nothing else:
+   * every other row collapses from its twist, and the root has none.
+   */
+  onClearOverride?(id: string): void;
   root?: boolean;
 }) {
-  const shown = rungText(entry, rung);
   /* The three ways to be hidden, kept apart on purpose — see the file header.
      `beyond` is the cut-off, `closed` is the reader shutting it, `opened` is
      the reader opening it past the cut-off. None of them changes another, and
@@ -681,25 +434,8 @@ function Entry({
           </div>
         )}
 
-        {shown ? (
-          <p className={`summ-text${shown.rung !== rung ? " fell-back" : ""}`}>
-            {/* The rung actually shown, when it is not the one asked for. Silent
-                fallback is what makes a half-written artefact read as a whole
-                one. */}
-            {shown.rung !== rung && (
-              <span className="summ-rung-tag" title={`No ${rung} summary for this one`}>
-                {shown.rung}
-              </span>
-            )}
-            {/* The block ids the model cited, as chips you can press, with the
-                paragraph itself on hover. A summary is a door into the passage
-                and this is the handle — same component chat draws its
-                citations with (Cited.tsx), so the two cannot mean different
-                things. A `gist` carries none: it is written by stage 4, which
-                knows nothing about this, and the text simply comes through
-                unchanged. */}
-            <CitedText text={shown.text} blocks={blocks} onJump={onJump} />
-          </p>
+        {entry.gist ? (
+          <p className="summ-text">{entry.gist}</p>
         ) : (
           /* **Nor is the apparatus missing a summary.** A supplement node has
              no gist on purpose — the notes are shown as written and never
@@ -723,27 +459,25 @@ function Entry({
         <button
           type="button"
           className="summ-more"
-          /* A control since 2026-08-27, and on every row but the root. It used
-             to be a fact whenever the cut-off was what hid these — pressing it
-             would have had to overrule the Depth buttons above. It does not
-             overrule them: it writes this one node into `opened`, the Depth
+          /* A control since 2026-08-27, and on every row — the root included
+             since 2026-08-31. It writes this one node into `opened`, the Depth
              buttons stay where the reader put them, and every other part stays
              shut. See the file header for Greg's ask.
 
-             **The root is the exception, and it has to be.** It draws no title
-             row, so it has no twist, so an override written there could never
-             be taken off again — the `article` button would stop meaning "the
-             whole article, and nothing under it" for the rest of the session,
-             with no control anywhere on screen to put it back. Found by GPT
-             Sol's review, 2026-08-27.
+             **The root was the exception until Greg pressed it.** The
+             reasoning for making it a dead fact was sound as far as it went:
+             the root draws no title row, so it has no twist, and an override
+             written there could never be taken off again — the `article`
+             button would stop meaning "the whole article, and nothing under
+             it" for the rest of the session (GPT Sol's review, 2026-08-27).
+             What that argued for was a way to undo it, and instead it argued
+             the press away. Greg, 2026-08-31: *"in Article sub-mode, I can't
+             click on `+N parts` to expand"*.
 
-             That is not a special case grudgingly carved out, either. What the
-             badge is *for* is picking one node out of several without moving
-             the cut-off for the rest. At the root there are no others: the only
-             thing it could do is exactly what the `parts` button one inch above
-             it does, reversibly. So on the root it goes back to being a fact,
-             pointing at the control that does the job. */
-          disabled={root}
+             So the root now gets the twist it was missing, in the only place
+             it has: this badge, which flips to `−N parts` once the parts are
+             open. See `Collapse` below, and the header on why that press must
+             not go through `closed`. */
           onClick={() => {
             /* Move the keyboard along with the state. This button is about to
                unmount — its job is done the moment the children are open — and
@@ -759,8 +493,11 @@ function Entry({
                ring paints there, because `:focus-visible` is false for a
                mouse-originated focus; the browser draws that line better than
                we can. What the check prevents is dragging focus off something
-               the reader was actually using. */
-            const takeFocus = document.activeElement === badgeRef.current;
+               the reader was actually using.
+
+               The root keeps the focus instead, because its badge does not
+               unmount: it becomes the collapse. */
+            const takeFocus = !root && document.activeElement === badgeRef.current;
             onToggle(entry.node.id, false, beyond);
             if (takeFocus) twistRef.current?.focus();
           }}
@@ -773,16 +510,36 @@ function Entry({
             entry.node.title
           }`}
           title={
-            root
-              ? `Press ${DEPTH_LABELS[entry.node.depth + 1] ?? "a deeper level"} above to see these`
-              : beyond
-                ? `Open just this one's ${childLabel(entry.node.depth, hidden)} — Depth stays on ${
-                    DEPTH_LABELS[deep] ?? "where it is"
-                  }`
-                : "Open these"
+            beyond
+              ? `Open just this one's ${childLabel(entry.node.depth, hidden)} — Depth stays on ${
+                  DEPTH_LABELS[deep] ?? "where it is"
+                }`
+              : "Open these"
           }
         >
           +{cap(hidden)} {childLabel(entry.node.depth, hidden)}
+        </button>
+      )}
+
+      {/* And the other half of the root's twist. It appears only while the
+          override is the one thing holding these open — at `parts` the Depth
+          button above is the honest control and this would be a second, worse
+          one — which is also what makes clearing the override the whole of the
+          collapse. SummaryPanel § clearOverride has the trap it avoids. */}
+      {root && onClearOverride && showChildren && beyond && (
+        <button
+          type="button"
+          className="summ-more"
+          onClick={() => onClearOverride(entry.node.id)}
+          aria-label={`Close the ${entry.children.length} ${childLabel(
+            entry.node.depth,
+            entry.children.length,
+          )} of ${entry.node.title}`}
+          title={`Back to the article on its own — Depth stays on ${
+            DEPTH_LABELS[deep] ?? "where it is"
+          }`}
+        >
+          −{cap(entry.children.length)} {childLabel(entry.node.depth, entry.children.length)}
         </button>
       )}
 
@@ -792,7 +549,6 @@ function Entry({
             <Entry
               key={child.node.id}
               entry={child}
-              rung={rung}
               deep={deep}
               closed={closed}
               opened={opened}
@@ -800,7 +556,6 @@ function Entry({
               atRow={atRow}
               current={current}
               onJump={onJump}
-              blocks={blocks}
             />
           ))}
         </ol>
@@ -843,30 +598,4 @@ function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
   const next = new Set(set);
   next.delete(id);
   return next;
-}
-
-/**
- * The summary panel's run button. `icon` is the one thing that varies here:
- * "write these" and "write them again" are the same action with different
- * intent, and the glyph is what says which.
- */
-function Progress({
-  icon = "write",
-  ...props
-}: {
-  job: Job | null;
-  failed: string | null;
-  onRun(): Promise<void>;
-  onCancel(id: string): void;
-  label: string;
-  icon?: "write" | "redo";
-}) {
-  return (
-    <JobProgress
-      {...props}
-      step="summary"
-      icon={icon === "redo" ? <RotateCcw size={13} /> : <Layers size={13} />}
-      runningLabel="Writing…"
-    />
-  );
 }

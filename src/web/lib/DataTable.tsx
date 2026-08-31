@@ -17,7 +17,7 @@
  * drawn. So it decides what a click means (including shift-click for a second
  * key, and which end a column starts at), and every `<th>`, `<td>` and chip
  * below is ours. That split is the reason it was worth adopting — see
- * docs/plans/library-sorting.md § Why TanStack in the end.
+ * docs/plans/260826y-library-sorting.md § Why TanStack in the end.
  *
  * Three of its options are load-bearing and are set in `useSortedTable`:
  *
@@ -209,7 +209,7 @@ export function useSortedTable<T>({
      * That is not hypothetical. On 2026-08-27 the homepage was doing about 470
      * renders a second while sitting still, and one character typed into the
      * add box locked the tab up outright —
-     * docs/postmortems/shelf-render-loop.md has the measurement.
+     * docs/postmortems/260827e-shelf-render-loop.md has the measurement.
      * `Library.tsx`'s `dir` was the unstable array, and it is fixed; this line
      * is the reason the *next* one cannot do the same thing.
      *
@@ -224,7 +224,7 @@ export function useSortedTable<T>({
     enableSortingRemoval: false,
     // Off, and `table-sort.ts` § numberOrMissing has the measurement that says why.
     // Module scope so it is not a fresh object handed to TanStack every render —
-    // GPT Sol, 2026-08-27, while reviewing docs/postmortems/shelf-render-loop.md.
+    // GPT Sol, 2026-08-27, while reviewing docs/postmortems/260827e-shelf-render-loop.md.
     defaultColumn: DEFAULT_COLUMN,
   });
 }

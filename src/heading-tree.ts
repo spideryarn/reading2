@@ -11,7 +11,7 @@
  * reads.
  *
  * What it is worth, measured on 2026-08-30 over seven development documents and
- * five held out (docs/research/opening-an-article-before-the-toc.md § 2, § 7b):
+ * five held out (docs/research/260830a-opening-an-article-before-the-toc.md § 2, § 7b):
  *
  * - **6 of 7** have enough headings to carve at all;
  * - **4 of 7** reproduce the model's depth-one carving exactly;
@@ -316,7 +316,7 @@ export function buildHeadingTree(
        per-node because the whole tree is replaced at once and no node of it
        becomes final on its own; explicit rather than inferred from the missing
        gists for the same reason `treatment` exists at all. See
-       src/tree-invariants.ts and docs/research/opening-an-article-before-the-toc.md § 2. */
+       src/tree-invariants.ts and docs/research/260830a-opening-an-article-before-the-toc.md § 2. */
     provisional: "headings",
   };
 

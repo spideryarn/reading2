@@ -3,7 +3,7 @@
  *
  * The glossary next door answers *what does this word mean*. This answers *what
  * do I have to understand*, and the unit is a proposition rather than a noun.
- * Full design in docs/plans/ideas-mode.md; the two things to know before
+ * Full design in docs/plans/260826ac-ideas-mode.md; the two things to know before
  * changing anything here are both about honesty rather than layout.
  *
  * ## An assumed idea is a hypothesis, and the heading has to say so

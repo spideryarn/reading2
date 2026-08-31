@@ -2,7 +2,7 @@
  * **Where a raw document's bytes live** — the seam, and the two things you may
  * do at it.
  *
- * Step 3 of docs/plans/pdf-upload-and-storage.md § Build order, revised. The
+ * Step 3 of docs/plans/260826u-pdf-upload-and-storage.md § Build order, revised. The
  * shape here is deliberately **two interfaces rather than one**, and that is
  * the review's correction rather than my first draft:
  *
@@ -108,9 +108,9 @@ export interface UploadGrants {
  * list is a property of the live bucket rather than of `config.toml` — Storage
  * enforces it against the service key, and adding a type to the declaration
  * without PATCHing the bucket buys a measured `415 InvalidMimeType` and seven
- * hours (docs/postmortems/the-config-file-is-not-the-bucket.md). The three
+ * hours (docs/postmortems/260828a-the-config-file-is-not-the-bucket.md). The three
  * image types were added to the local bucket by hand in stage 3 of
- * docs/plans/hosting-the-articles-images.md; `scripts/check-buckets.ts` reads
+ * docs/plans/260829b-hosting-the-articles-images.md; `scripts/check-buckets.ts` reads
  * the bucket's real state.
  *
  * The type stored is the one the **bytes** earned from `sniffImage`
@@ -133,7 +133,7 @@ export const CONTENT_TYPE: Record<StoredKind, string> = {
  * `DATABASE_URL` picks the database and the presence of a service key picks the
  * blob store, and until 2026-08-27 nothing checked they agreed. Once a revision
  * row holds an object key, that is the dangling reference every draft of
- * docs/plans/raw-bytes-in-storage.md has tried to make impossible — arriving
+ * docs/plans/260827o-raw-bytes-in-storage.md has tried to make impossible — arriving
  * with nobody having deleted anything. Put the object in project B, commit the
  * reference in project A, and every correctly-configured reader of A finds
  * nothing. GPT Sol, 2026-08-27.
@@ -292,7 +292,7 @@ export function blobStore(): RawSourceStore {
  * documents missing: a backup that looks complete and is not
  * ([silent-success.md](../../docs/reusable/silent-success.md)), in the one tool
  * anybody reaches for after losing something.
- * docs/plans/delete-the-importer.md § `db:export` must fail closed.
+ * docs/plans/260827aa-delete-the-importer.md § `db:export` must fail closed.
  *
  * @param who what is asking, as the first clause of the sentence — e.g.
  *   `'SPIDERYARN_STORE is "postgres"'`. The two callers fail for the same
@@ -346,7 +346,7 @@ export interface StoredRawSource {
  *
  * One function because both ways a document arrives — a fetch and an upload —
  * need exactly this, and two copies of it would drift. See
- * docs/plans/raw-bytes-in-storage.md.
+ * docs/plans/260827o-raw-bytes-in-storage.md.
  *
  * ## Why `already-there` is not enough on its own
  *
@@ -358,7 +358,7 @@ export interface StoredRawSource {
  *   then wrote the bytes, so a process killed in between left a short file at
  *   the right name (fixed there too, but the record of it can outlive the fix);
  * - a **failed backfill**, which is the case
- *   docs/plans/raw-bytes-in-storage.md § The backfill can put the wrong bytes
+ *   docs/plans/260827o-raw-bytes-in-storage.md § The backfill can put the wrong bytes
  *   under a hash is entirely about;
  * - anybody with the service key.
  *

@@ -268,6 +268,23 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
+  it("does not let an article forge a search or quote highlight", () => {
+    /* The fourth `MarkKind`, and the one nobody had claimed. Search, ideas and
+       quotes all draw `hit` marks, and `data-hues` drives the paragraph bar's
+       colour count (src/web/annotate.ts) — so a forged pair reads as *the app
+       having selected these words for you* and paints our rail from a
+       stranger's document. `data-hit-open` had been forbidden all along, which
+       is the asymmetry that gave the gap away. GPT Sol, 2026-08-31, reviewing
+       docs/plans/260831j-quotes-mode.md. */
+    const out = sanitizeHtml(
+      `<p><mark class="hit" data-hit="q1" data-hues="3">forged</mark></p>`,
+    );
+    expect(out).not.toContain("data-hit");
+    expect(out).not.toContain("data-hues");
+    expect(out).not.toMatch(/\bhit\b/);
+    expect(out).toContain("forged"); // the words are still the author's
+  });
+
   it("does not let an article forge any of the four pressed-mark attributes", () => {
     // One per kind since 2026-08-26 — annotate.ts says why. Each is as
     // forgeable as `data-open` was, so each has to be forbidden.

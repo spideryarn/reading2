@@ -6,7 +6,7 @@
  * inserts one note near the top shifts every later marker `7 → 8`, so **every
  * paragraph below it keys differently while its prose is unchanged**, gets a
  * fresh id on the next re-extraction, and takes every comment anchored to it
- * with it. docs/plans/footnotes.md, "The trap that would cost the most".
+ * with it. docs/plans/260828o-footnotes.md, "The trap that would cost the most".
  *
  * The fix strips the **recognised marker and back-link nodes** — never a text
  * pattern, because markers are also letters, stars and Roman numerals and a
@@ -25,8 +25,7 @@
  * and orphans every comment in the database.
  */
 import { JSDOM } from "jsdom";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -310,7 +309,7 @@ describe("a note whose wording was corrected", () => {
  * That is the same bug this stage exists to fix, one level down — and the first
  * version of this key named the note by its *whole* id, so it propagated the
  * rotation into every citing passage. GPT Sol reproduced it
- * (footnotes-stage3b-review-sol.md, blocker 1). The counter is a **position**,
+ * (260829g-footnotes-stage3b-review-sol.md, blocker 1). The counter is a **position**,
  * and a position is not an identity: two notes saying the same words are the
  * same note as far as a citing passage is concerned. So the key names the
  * content digest and drops the counter, and the first test below is that fix.
@@ -333,7 +332,7 @@ describe("a note whose wording was corrected", () => {
  * are stable (Wikipedia's `cite_note-lstm1997-2`) and not where they are
  * positional (pandoc's `fn1`). Deliberately not built here: a second mechanism
  * for a pre-existing fault, inside a change already carrying two integrity
- * fixes. See docs/plans/footnotes.md.
+ * fixes. See docs/plans/260828o-footnotes.md.
  */
 describe('three notes that all read "Ibid."', () => {
   const IBID = "Ibid., 43.";
@@ -670,14 +669,12 @@ describe("a no-op re-ingest of a real article", () => {
   beforeAll(async () => {
     for (const fixture of PAGES) {
       const html = await readFile(path.join(FIXTURES, fixture), "utf-8");
-      const dir = await mkdtemp(path.join(tmpdir(), "note-carry-over-"));
-      try {
-        const outFile = path.join(dir, fixture);
-        await runExtract({ html, url: `https://example.test/${fixture}`, outFile, dataDir: dir });
-        extracted.set(fixture, await readFile(outFile, "utf-8"));
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
+      const result = await runExtract({
+        html,
+        url: `https://example.test/${fixture}`,
+        slug: fixture,
+      });
+      extracted.set(fixture, result.extractedHtml);
     }
   }, SLOW);
 

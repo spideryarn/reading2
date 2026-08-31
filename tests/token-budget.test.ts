@@ -6,7 +6,7 @@
  * with a message telling the reader to raise a number they cannot see. Nothing
  * in the suite could have caught it, because nothing tested the one thing that
  * was wrong — that the number did not depend on the article. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * So the tests below are not really about arithmetic. They are about the two
  * ways this can be wrong again: an estimate that is under what real trees cost,

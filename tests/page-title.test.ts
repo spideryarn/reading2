@@ -94,10 +94,12 @@ describe("an article", () => {
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",
+      quotes: "Quotes",
       search: "Search",
       diagram: "Diagram",
       chat: "Chat",
       review: "Review",
+      timeline: "Timeline",
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });

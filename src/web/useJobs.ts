@@ -90,7 +90,7 @@ async function send<T>(url: string, init?: RequestInit): Promise<T> {
 
    The browser is what moves a job along. `POST /api/jobs/:id/advance` runs one
    step and returns; this calls it again until there is nothing left. The design
-   and the reasons are docs/plans/job-queue-rethink.md § Decided; the short
+   and the reasons are docs/plans/260826q-job-queue-rethink.md § Decided; the short
    version is that a serverless host has no long-running process, so each step
    has to fit inside a request somebody is waiting on.
 
@@ -365,7 +365,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
           /* **Including on the first poll**, unlike `onFinished` above. A job
              left unfinished by a closed tab or a restarted server is exactly
              what a fresh page load should pick up — that is the "something has
-             to notice you came back" of docs/plans/ingest-resume.md, and here
+             to notice you came back" of docs/plans/260826s-ingest-resume.md, and here
              coming back *is* the trigger. `drive` returns immediately if this
              tab already has a loop on that id. */
           if (job.status === "queued" || job.status === "running") {

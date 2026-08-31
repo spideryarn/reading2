@@ -190,13 +190,39 @@ describe("the other places an article's URL becomes a link", () => {
        the module URL does not resolve to a real path and every read is an
        ENOENT that reads like a missing component. */
     const files = ["Masthead.tsx", "Metadata.tsx", "ShelfEntry.tsx", "SourceLink.tsx"];
+    /* **Two spellings of one allowlist, and the test below proves they agree.**
+       `isWebUrl` is the predicate; `webSource(meta)` is `meta.url` put through
+       the same `http(s)` test and handed back or refused, which is what the
+       masthead and the metadata page both ask now. Accepting either is a
+       widening of the grep and not of the policy — the assertion after this loop
+       is what keeps that true, and it would go red the day `webSource` let a
+       scheme through that `isWebUrl` does not. */
     for (const name of files) {
       const src = await readFile(path.join(process.cwd(), "src", "web", name), "utf8");
       /* Each of these renders one such anchor, and each must name the guard.
          Crude and deliberately so: it cannot prove the guard wraps the right
          element, and it does catch a fifth sink arriving with no guard at all,
          which is how the third and fourth got in. */
-      expect({ name, guarded: src.includes("isWebUrl(") }).toEqual({ name, guarded: true });
+      const guarded = src.includes("isWebUrl(") || src.includes("webSource(");
+      expect({ name, guarded }).toEqual({ name, guarded: true });
+    }
+
+    /* The two predicates on the same values, so "named a guard" means "named
+       *the* guard". */
+    const { isWebUrl } = await import("../src/urls.js");
+    const { webSource } = await import("../src/web/SourceLink.js");
+    for (const url of [
+      "javascript:alert(1)",
+      "data:text/html,x",
+      "file:///etc/passwd",
+      "vbscript:x",
+      "https://example.com/a",
+      "http://example.com/a",
+    ]) {
+      expect({ url, allowed: webSource({ ...meta({}), url }) !== null }).toEqual({
+        url,
+        allowed: isWebUrl(url),
+      });
     }
   });
 });

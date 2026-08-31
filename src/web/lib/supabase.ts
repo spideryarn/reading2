@@ -26,7 +26,7 @@
  * So it throws, by name, at module load. A blank page with one line in the
  * console beats a page that looks fine and cannot sign anybody in.
  *
- * docs/plans/auth-ui-and-production.md § The environment variables
+ * docs/plans/260826ae-auth-ui-and-production.md § The environment variables
  */
 import { createClient } from "@supabase/supabase-js";
 
@@ -36,7 +36,7 @@ function required(name: "VITE_SUPABASE_URL" | "VITE_SUPABASE_PUBLISHABLE_KEY"): 
   throw new Error(
     `${name} is not set. It is compiled into the bundle at build time, so set it ` +
       `before building — in .env.local locally, on the Vercel project for a deploy. ` +
-      `See docs/plans/auth-ui-and-production.md.`,
+      `See docs/plans/260826ae-auth-ui-and-production.md.`,
   );
 }
 
@@ -75,7 +75,7 @@ export function callbackUrl(): string {
  * `supabase.co` looking at
  * `{"code":400,…,"msg":"Unsupported provider: provider is not enabled"}` —
  * no page, no back, nothing of ours anywhere on screen. See
- * docs/plans/google-sign-in-production.md.
+ * docs/plans/260827i-google-sign-in-production.md.
  *
  * A `try`/`catch` around `signInWithOAuth` cannot help with that. It does not
  * make a request: it builds an authorize URL and assigns `location`, so by the

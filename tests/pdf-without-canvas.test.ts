@@ -3,7 +3,7 @@
  *
  * This is the guard for the bug that took the whole API down on 2026-08-27 and
  * then, after that fix, quietly took only PDFs down until 2026-08-30 — see
- * docs/postmortems/pdfjs-dommatrix-serverless.md and the note above
+ * docs/postmortems/260827a-pdfjs-dommatrix-serverless.md and the note above
  * `ensureDomMatrix` in src/pdf.ts.
  *
  * pdf.js needs a `DOMMatrix`, which Node does not have. It tries to borrow one
@@ -60,7 +60,7 @@ const SCRIPT = path.join(ROOT, "tests/helpers/pass0-without-canvas.ts");
  * still reads identically, which is the regression that matters — and the
  * arithmetic is asserted directly in its own test below instead of being
  * inferred from a page count that cannot see it. A Type 3 fixture would close
- * the last of it; docs/plans/pdf-ingestion.md is where that belongs.
+ * the last of it; docs/plans/260826c-pdf-ingestion.md is where that belongs.
  */
 const BASELINE = { pages: 8, words: 3522 };
 

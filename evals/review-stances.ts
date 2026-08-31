@@ -15,7 +15,7 @@
  *
  * They are not a spread of inputs. Each one is a way the **first draft** of the
  * prompt would have misbehaved, taken from GPT Sol's review of
- * docs/plans/review-mode.md — see the header on `REVIEW_SYSTEM` in
+ * docs/plans/260827ah-review-mode.md — see the header on `REVIEW_SYSTEM` in
  * src/converse.ts for the three faults, and the table in the plan for the rest.
  * A case is here because there is a specific wrong answer it invites:
  *

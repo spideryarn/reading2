@@ -186,7 +186,7 @@ the test never mentioned. **Assert what you require, never somebody else's defec
 tests assert only that `decodeHtml` is right — including on the four Shift_JIS bytes Node currently
 gets wrong, which still catches the import being swapped for the global, and which will keep passing
 rather than going red if Node ever catches up there too.
-[docs/postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md).
+[docs/postmortems/260826b-windows-1252-node-caught-up.md](../postmortems/260826b-windows-1252-node-caught-up.md).
 
 ### What kind of document it is
 
@@ -288,6 +288,52 @@ Two to three attempts, because a person is waiting. 429 (honouring `Retry-After`
 will fail identically. Backoff uses **full jitter**, a delay drawn uniformly from zero to the
 ceiling.
 
+## What stage 1 leaves behind, since 2026-08-31: nothing on disk
+
+**`writeRaw` writes no files.** It used to write `data/<slug>/raw.html` (or `raw.pdf`) and a
+`raw.json` manifest beside it; it now returns the manifest and the *store* decides where that goes —
+`raw.json` on the filesystem, columns on `article_revisions` in Postgres. The bytes go where they
+were already going: the content-addressed `sources` bucket, under `canonicalKey(storedSha256, kind)`,
+through [`src/store/blobs.ts`](../../src/store/blobs.ts), which is itself selected (`blobs-fs.ts`
+locally, `blobs-supabase.ts` deployed).
+
+Stage 2 gets them back with **`readRawBytes(manifest)`** in [`src/fetch.ts`](../../src/fetch.ts),
+which follows the content address and checks the object hashes to its own name before handing it
+over. That is deliberately *not* a second method on `SourceStore`: `readPdf` there looks an article
+up by slug through `articles.currentRevisionId` and `ownedSlug`, and stage 2 runs against a **draft**
+revision inside a job — on a fresh ingest there is no current revision at all, so a sibling method
+there would answer `null` on the ordinary path.
+
+Three things follow, and all three are refusals rather than fallbacks:
+
+- **A manifest with no `storedSha256` is refused.** Those are manifests written before 2026-08-27,
+  and the answer is a re-fetch (Greg, 2026-08-30: the corpus is expendable).
+- **`readRaw(dir)` returning `null` no longer means "assume HTML".** It meant that until this change
+  and stage 2 fell back to reading `raw.html`; nothing writes `raw.html` now, so the fallback had
+  nothing to fall back to. Two articles in the local corpus were relying on it — `data/constitution`
+  and `data/noema-mythology-of-conscious-ai`. The function survives for one caller,
+  `slugIsSpokenFor` in [`src/jobs.ts`](../../src/jobs.ts), which reads a candidate slug's manifest
+  during enqueue.
+- **An object that is absent, corrupt, or longer than the manifest says, throws** —
+  `RawDocumentUnavailable`, with the reason as a field.
+
+**One thing measured on the day, worth knowing before the first run.** `blobStore()` follows the
+credentials: with `SUPABASE_URL` and a service key in `.env.local` it is the container's bucket, and
+without them it is `data/_blobs/`. The local corpus was written by processes of both kinds, so nine
+of its eighteen manifests name an object the other store holds. Nothing noticed while nothing read
+them back. They now fail loudly, with a sentence naming the article, the key, the mechanism and the
+fix — which is a re-fetch. The measurement, the two probes that produced it and the counts are in
+[260831e-a-write-path-with-no-reader.md](../postmortems/260831e-a-write-path-with-no-reader.md).
+
+**`npm run fetch -- <url> [dir]` still writes its files**, and that is deliberate rather than
+left over. The rule the conversion follows is *the generator stops writing and the caller writes*,
+and for a command line the caller is `main()` — every other stage CLI in this repo leaves the file
+it always left, and a `fetch` that printed a digest instead would be the one that broke the pattern.
+It also keeps a property people use: running it by hand under `SPIDERYARN_STORE=files` satisfies the
+queue's fetch step, because `writeRawFiles` writes `raw.json` at exactly the path
+`PATHS.fetch.raw` reads. It now prints the **object key** as well, which is how the split above
+stops being invisible. All of it dies at stage 4 with the filesystem store.
+
 ## Not everything gets fetched: `RawManifest` has an origin
 
 Since 2026-08-27 an article's raw document can also come off a **reader's own disk**
@@ -306,7 +352,7 @@ changed in three ways worth knowing before you read one:
   kept to show them and to feed the last rung of the PDF title ladder; nothing derives a key or a
   path from it.
 
-Both origins write the same `raw.json` with the same `sha256` over the same bytes, which is what
+Both origins produce the same manifest with the same `sha256` over the same bytes, which is what
 lets stage 2 onwards stay ignorant of which ran. See
 [content-extraction.md](content-extraction.md).
 
@@ -348,7 +394,7 @@ too, not just the first.
 **DNS rebinding is closed, since 2026-08-29.** It was the known gap here for months, and the
 argument for leaving it open was that the URL comes from Greg's own text box, so an attacker would
 need a domain's DNS *and* his clipboard. [Hosting the article's own
-images](../plans/hosting-the-articles-images.md) ends that argument — those URLs come from the page,
+images](../plans/260829b-hosting-the-articles-images.md) ends that argument — those URLs come from the page,
 so a publisher picks them, and there can be hundreds per article.
 
 So `guardAddress` now **returns** the addresses it approved, and the connection is pinned to them
@@ -413,12 +459,13 @@ Honest list, none of it blocking:
    ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
    deliberately rather than quietly.
 2. ~~**The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.~~
-   **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which writes the bytes for
-   a PDF, the decoded string for HTML, and **`raw.json` beside either** — the manifest recording
-   `kind`, the file, the requested and final URLs, the content type, the encoding, the byte count and
-   the SHA-256. HTML is still written decoded, deliberately, since every later stage wants text; the
-   manifest is what stops that being a silent loss. See `RawManifest` in
-   [`src/fetch.ts`](../../src/fetch.ts).
+   **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which stores the bytes for
+   a PDF and the decoded string for HTML, and returns the manifest recording `kind`, the requested
+   and final URLs, the content type, the encoding, the byte count, the SHA-256 of what arrived and
+   the SHA-256 of what was kept. HTML is still stored decoded, deliberately, since every later stage
+   wants text; the manifest is what stops that being a silent loss — the two hashes are different
+   numbers for any page that was not already UTF-8, and that is the point of there being two. See
+   `RawManifest` in [`src/fetch.ts`](../../src/fetch.ts).
 3. ~~**PDFs are fetched and stored and nothing reads them.**~~ **Closed, 2026-08-26.** Paste a PDF
    URL into the add box and it becomes an article. Stage 2 branches on the manifest — never on the
    URL, because a `.pdf` address that served a Cloudflare page is HTML — and a PDF goes to
@@ -426,7 +473,7 @@ Honest list, none of it blocking:
    `article.html` + `meta.json`. What the previous version learned still held:
    [original-version/extraction.md](original-version/extraction.md#pdfs-out-of-scope-but-the-lesson-transfers)
    says *don't parse structurally when a multimodal model will read the bytes*, and that is what was
-   built. [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
+   built. [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
 4. **A JS-rendered page returns its shell**, and we report success. `x.com` gives 193 KB of HTML
    with no post text in it. Detecting this needs the two-sided extraction ratio check, which belongs
    to stage 2 and is [on the borrow list](original-version/borrow-list.md).
@@ -434,9 +481,9 @@ Honest list, none of it blocking:
 6. **Nothing pins the Node version.** No `engines` field, no `.nvmrc`, no CI. Which Node this runs on
    is whatever Homebrew installed locally and whatever the Vercel project settings say remotely, and
    the two have already diverged by six major versions. It has cost one confusing red build so far
-   ([the postmortem](../postmortems/windows-1252-node-caught-up.md)) and nothing worse, because the
+   ([the postmortem](../postmortems/260826b-windows-1252-node-caught-up.md)) and nothing worse, because the
    decoder is a dependency rather than a built-in. Pinning it belongs with the deploy work
-   ([deploy-and-repo-move.md](../plans/deploy-and-repo-move.md)) rather than with stage 1.
+   ([260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md)) rather than with stage 1.
 
 ## See also
 
@@ -448,6 +495,6 @@ Honest list, none of it blocking:
   here, what it got right, and the fix of theirs that has since rotted
 - [../reusable/silent-success.md](../reusable/silent-success.md) — the failure family the decoder
   bug belongs to
-- [../postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md) —
+- [../postmortems/260826b-windows-1252-node-caught-up.md](../postmortems/260826b-windows-1252-node-caught-up.md) —
   Node fixed the bug this stage's decoder was chosen over, the test that pinned it went red, and why
   believing the test would have deleted something still load-bearing

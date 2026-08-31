@@ -2,7 +2,7 @@
  * The seam between a stage and the store: a stage returns a product, and a
  * short commit afterwards writes it, checks it, and finishes the step.
  *
- * docs/plans/delete-the-importer.md § D1 splits in two — this is D1a, the shape
+ * docs/plans/260827aa-delete-the-importer.md § D1 splits in two — this is D1a, the shape
  * on the filesystem, where there is no transaction to hold.
  *
  * ## The bug these were written against
@@ -16,7 +16,7 @@
  * For `blocks` that commits new stamped HTML beside old block rows, which is
  * the identity loss the whole migration exists to prevent, arriving through the
  * coordinator meant to prevent it. Found by GPT Sol reviewing the D1 design,
- * 2026-08-29 (docs/plans/delete-the-importer-d1-design-sol.md, finding 2).
+ * 2026-08-29 (docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 2).
  *
  * So `commit` takes the **product**, not a closure, and validates before any
  * write. The test that matters is `refuses over an artefact carried from a
@@ -86,7 +86,19 @@ function stepProducing(name: StepName, produces: PipelineStep["produces"]): Pipe
     label: "Testing the seam",
     outputs: () => [],
     produces,
-    run: async () => ({ detail: "never called" }),
+    /* **It throws rather than returning something, and that is the honest
+       shape.** These cases hand `checkProduct` and `commit` a product directly —
+       the subject is the rule that decides what a `run` may return, so nothing
+       here runs one. It used to answer `{ detail: "never called" }`, which
+       stopped compiling when `LEGACY_UNCONVERTED_STEPS` emptied on 2026-08-31
+       and every step's `run` came to require a `ConvertedProduct`. Inventing a
+       `parts` to satisfy the signature would put a fiction in the one fixture
+       whose whole subject is what counts as a real product, and a cast would
+       hide it. A throw satisfies the type, says what it means, and turns a
+       future caller into an immediate error instead of a plausible answer. */
+    run: async () => {
+      throw new Error("stepProducing().run is never called — see the note beside it");
+    },
   };
 }
 

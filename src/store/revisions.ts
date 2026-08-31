@@ -10,7 +10,7 @@
  *
  * Written 2026-08-26 because the adapter existed and *nothing called it*, which
  * is the most dangerous state in the migration plan: the work looks done from
- * the file list. docs/plans/postgres-storage-implementation.md § Step 11 half A.
+ * the file list. docs/plans/260826e-postgres-storage-implementation.md § Step 11 half A.
  *
  * ## Why the filesystem implementation does nothing at all
  *
@@ -50,7 +50,7 @@
  * `jobs.draft_revision_id`, a scheduled `sweep()`, and a test that drives a
  * *refused* and a *failed* draft through that sweep, all have to land together.
  * Recorded as an acceptance condition on step 11, not as a separate fix. See
- * docs/plans/simplification-wave-2.md § 0.6.
+ * docs/plans/260828aj-simplification-wave-2.md § 0.6.
  *
  * ## What the artefact half would still need
  *

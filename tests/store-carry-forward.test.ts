@@ -68,8 +68,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { mintUniqueId } from "../src/ids.js";
 import { CAPABLE_MODEL } from "../src/models.js";
-import { hashBlocks } from "../src/source-hash.js";
-import { PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "../src/summarise.js";
+import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import {
@@ -83,7 +82,6 @@ import type {
   Block,
   Glossary,
   StepName,
-  Summaries,
   Tree,
   TweetThread,
 } from "../src/types.js";
@@ -159,6 +157,19 @@ const HASH1 = hashBlocks(B1);
 const HASH2 = hashBlocks(B2);
 
 /**
+ * The **article** fingerprint of each publication — blocks, tree and metadata
+ * head, which is what `tweets` and `glossary` stamp
+ * (src/source-hash.ts § `articleFingerprint`).
+ *
+ * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
+ * two answer different questions and two steps still ask the narrow one:
+ * `toc.input_hash` is compared against the stored blocks by
+ * `reasonsNotToPublish`, and `assets` really is built from the blocks alone.
+ * Declared below `treeFor` — see the note there.
+ */
+let FINGERPRINT1 = "";
+
+/**
  * A tree of one root over one leaf per block — the smallest shape `checkTree`
  * accepts, and it has to really pass: `publishRevision` runs the full
  * structural check rather than "every id in a range exists".
@@ -197,6 +208,13 @@ function treeFor(blocks: Block[]): Tree {
     },
   } as Tree;
 }
+
+/* Assigned once `treeFor` exists, because a `const` initialiser that called it
+   from above would read the function before its declaration. The metadata is
+   the three fields the prompt head carries and nothing else — the same three
+   `metaFingerprintOf` rebuilds from the revision's columns on the Postgres
+   side, so both stores hash the identical input. */
+FINGERPRINT1 = articleFingerprint(B1, treeFor(B1), { title: "A fixture article" });
 
 const assetsFor = (sourceHash: string): Assets => ({
   version: "assets/1",
@@ -264,33 +282,6 @@ const tweetsFor = (hash: string): TweetThread => ({
   sourceHash: hash,
   limit: 280,
   tweets: [{ text: "A fixture thread of exactly one post.", chars: 36 }],
-  generatedAt: "2026-08-26T00:00:00.000Z",
-  elapsedMs: 1,
-});
-
-/**
- * A `SummaryEntry` is a **block range and a depth**, not a node id and a rung.
- *
- * This fixture said `{ nodeId, level, text }`, which is the shape the type had
- * before summaries were re-anchored onto ranges — a summary keyed by node id
- * moves sideways onto a different section the moment the tree is rebuilt, which
- * is precisely what a re-extraction does. See `SummaryEntry` in src/types.ts and
- * `assemble` in src/summarise.ts, which is what really writes these. The range
- * is B1's, because this artefact is stamped against B1 by definition.
- */
-const summaryFor = (hash: string): Summaries => ({
-  version: SUMMARY_PROMPT_VERSION,
-  generator: CAPABLE_MODEL,
-  slug: SLUG,
-  sourceHash: hash,
-  entries: [
-    {
-      range: [B1[0]?.id ?? "", B1[B1.length - 1]?.id ?? ""],
-      depth: 0,
-      short: "A fixture, summarised.",
-    },
-  ],
-  missing: 0,
   generatedAt: "2026-08-26T00:00:00.000Z",
   elapsedMs: 1,
 });
@@ -395,9 +386,8 @@ async function writeTheFiles(): Promise<void> {
   /* Stamped against B1, like the three below it: the blocks moved and this
      manifest did not, so both stores have to say the images want re-fetching. */
   await writeFileJson("assets.json", assetsFor(HASH1));
-  await writeFileJson("glossary.json", glossaryFor(HASH1));
-  await writeFileJson("tweets.json", tweetsFor(HASH1));
-  await writeFileJson("summary.json", summaryFor(HASH1));
+  await writeFileJson("glossary.json", glossaryFor(FINGERPRINT1));
+  await writeFileJson("tweets.json", tweetsFor(FINGERPRINT1));
   await writeFileJson("meta.json", {
     slug: SLUG,
     title: "A fixture article",
@@ -443,9 +433,8 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
         tree: treeFor(B1),
         arc: arcFor(B1),
         assets: assetsFor(HASH1),
-        tweets: tweetsFor(HASH1),
-        glossary: glossaryFor(HASH1),
-        summary: summaryFor(HASH1),
+        tweets: tweetsFor(FINGERPRINT1),
+        glossary: glossaryFor(FINGERPRINT1),
       })
       .where(eq(articleRevisions.id, firstRevision));
 
@@ -465,18 +454,13 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     });
     await step(firstRevision, "arc", { inputHash: HASH1 });
     await step(firstRevision, "tweets", {
-      inputHash: HASH1,
+      inputHash: FINGERPRINT1,
       promptVersion: TWEETS_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
     await step(firstRevision, "glossary", {
-      inputHash: HASH1,
+      inputHash: FINGERPRINT1,
       promptVersion: GLOSSARY_PROMPT_VERSION,
-      model: CAPABLE_MODEL,
-    });
-    await step(firstRevision, "summary", {
-      inputHash: HASH1,
-      promptVersion: SUMMARY_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
 
@@ -520,7 +504,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        paragraphs; without the step runs the metadata page reports a stage that
        never ran while the column beside it holds a thread. */
     expect(begun.blocksCopied).toBe(3);
-    expect(begun.stepRunsCopied).toBe(9);
+    expect(begun.stepRunsCopied).toBe(8);
 
     const draft = await revisionRow(secondRevision);
     expect(draft?.status).toBe("draft");
@@ -529,7 +513,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        to point at bytes that have gone — and NOT carrying it would leave an
        article hot-linking every image again after an unrelated `{steps:
        ["blocks"]}` run, with nothing anywhere saying so. */
-    for (const column of ["tree", "arc", "assets", "tweets", "glossary", "summary"] as const) {
+    for (const column of ["tree", "arc", "assets", "tweets", "glossary"] as const) {
       expect(draft?.[column], `${column} should have been carried`).not.toBeNull();
     }
 
@@ -573,19 +557,17 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
   }, 30_000);
 
   it("survives a re-extraction, stale rather than gone", async () => {
-    const [glossary, tweets, summaries] = await Promise.all([
+    const [glossary, tweets] = await Promise.all([
       pgArticleReader.loadGlossary(SLUG),
       pgArticleReader.loadTweets(SLUG),
-      pgArticleReader.loadSummaries(SLUG),
     ]);
 
     expect(glossary.glossary.entries).toHaveLength(1);
     expect(glossary.stale, "written against B1, published beside B2").toBe(true);
     expect(tweets.stale).toBe(true);
-    expect(summaries.stale).toBe(true);
     // The one thing that must not have happened: the artefact reading as
     // "nobody has found the terms for this one yet" under a green tick.
-    expect(glossary.glossary.sourceHash).toBe(HASH1);
+    expect(glossary.glossary.sourceHash).toBe(FINGERPRINT1);
   }, 30_000);
 
   it("still says what the carried artefacts ran against", async () => {
@@ -593,9 +575,8 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     /* `input_hash` unchanged by the copy, which is the whole point of it: the
        row says *tweets ran against B1* while the blocks hash B2, and that
        comparison is what yields "present but not current". */
-    expect(runs.get("tweets")?.inputHash).toBe(HASH1);
-    expect(runs.get("glossary")?.inputHash).toBe(HASH1);
-    expect(runs.get("summary")?.inputHash).toBe(HASH1);
+    expect(runs.get("tweets")?.inputHash).toBe(FINGERPRINT1);
+    expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("toc")?.inputHash, "toc was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,
@@ -619,7 +600,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        article. Delete `case "assets"` from src/store/pg.ts and the `pg` half of
        this goes red while the `files` half stays green — which is exactly the
        divergence a parity test is for. */
-    for (const name of ["assets", "glossary", "tweets", "summary"] as StepName[]) {
+    for (const name of ["assets", "glossary", "tweets"] as StepName[]) {
       expect(pg[name], `Postgres should offer to regenerate ${name}`).toBe(false);
       expect(files[name], `the files should offer to regenerate ${name}`).toBe(false);
     }

@@ -15,7 +15,7 @@
  * copy in a `catch`. The two guards this file's ancestor lost had both been
  * missing from exactly such a second copy.
  *
- * Lifted out of useChat.ts by docs/plans/chat-operation-model.md's stage 2. The
+ * Lifted out of useChat.ts by docs/plans/260828v-chat-operation-model.md's stage 2. The
  * hook cannot keep them: the controller runs the turn now, the controller is
  * imported *by* the hook, and a module that imports the module importing it is
  * a cycle — `npm run cycles` would have caught it.
@@ -206,6 +206,133 @@ export async function runTurn(
 }
 
 /**
+ * How many times one spoken exchange is offered to the server.
+ *
+ * **Safe to repeat, and that is a property of the endpoint rather than a hope.**
+ * `POST …/spoken` is guarded by `expectedTailId`: an attempt replayed after it
+ * succeeded presents a tail the first one has already moved and is answered
+ * with a 409, which the caller reads as "go and look" rather than "write it
+ * again". So a retry can never duplicate a turn — the worst it can do is turn a
+ * lost response into a conflict, which is exactly the outcome that recovers the
+ * reader's words.
+ *
+ * Worth having because the alternative is losing them. A spoken exchange exists
+ * only in this tab until it is written, there is no `pending` row for a recovery
+ * to adopt, and the reader watched those words happen.
+ */
+const SPOKEN_ATTEMPTS = 3;
+
+/** Between attempts. Short: somebody is waiting to say the next thing. */
+const SPOKEN_GAP_MS = 600;
+
+/**
+ * How long one attempt at writing an exchange may take before it is abandoned.
+ *
+ * Short by the standards of this file — `runTurn`'s is three minutes — because
+ * nothing is streaming and nothing is being generated: the server takes a lock,
+ * checks a tail and inserts two rows. Anything past a few seconds is a hung
+ * socket rather than a busy server, and the hang-up is waiting on it.
+ */
+const SPOKEN_TIMEOUT_MS = 10_000;
+
+/** Either the exchange is on disk, or why it is not — and whether to look. */
+export type SpokenOutcome =
+  | { ok: true; thread: ChatThread }
+  /**
+   * `conflict` is the 409, and it is a different instruction from a failure:
+   * the exchange may well be on disk (this request may have already succeeded
+   * once), so the answer is to go and look rather than to tell the reader it
+   * was lost.
+   */
+  | { ok: false; conflict: boolean; error: string };
+
+/**
+ * **Write one finished spoken exchange.** One request, no stream, no frames.
+ *
+ * The whole of live conversation's write path. Nothing here is streamed because
+ * nothing is arriving: the browser held the conversation with OpenAI directly
+ * and both halves of the exchange were known before this function was called.
+ *
+ * Like everything else in this file it **does not throw** and it does not
+ * decide. A 409, a 500, a dead network and a body that will not parse all come
+ * back as one `SpokenOutcome`, so the question of whether this answer is still
+ * wanted is asked once, at the gate, rather than a second time in a `catch`.
+ */
+export async function appendSpoken(
+  slug: string,
+  threadId: string,
+  body: Record<string, unknown>,
+  gapMs = SPOKEN_GAP_MS,
+): Promise<SpokenOutcome> {
+  let last = "";
+  for (let attempt = 0; attempt < SPOKEN_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, gapMs));
+    /**
+     * **A deadline on every attempt, and a live session cannot ship without
+     * one.**
+     *
+     * `fetch` has no timeout of its own, so a request that hangs before its
+     * headers arrive is neither a transport rejection nor a 5xx — the retry
+     * loop below never advances, and this promise never settles. The hang-up
+     * waits on exactly this promise (`await writing.current` in
+     * `useLiveConversation`), so the microphone's owner would sit in `closing`
+     * for ever and the reader's typed turn, which awaits the hang-up, would
+     * never be sent. One hung socket, and the composer stops working with
+     * nothing on screen to say why. GPT Sol, reviewing the built code.
+     */
+    const late = new AbortController();
+    const by = setTimeout(() => late.abort(new Error("the server did not answer")), SPOKEN_TIMEOUT_MS);
+    try {
+      const res = await apiFetch(
+        `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/spoken`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: late.signal,
+        },
+      );
+      /* **Returned rather than retried.** A conflict is an answer, and asking
+         again would get the same one — with the added cost that the caller's
+         repair is delayed by every pointless attempt. */
+      if (res.status === 409) {
+        return { ok: false, conflict: true, error: (await failure(res)).message };
+      }
+      if (!res.ok) {
+        /* A 4xx that is not a 409 is a bad request and will be bad again. Only
+           a 5xx is worth another go: it is the server having a moment, and this
+           request is safe to repeat. */
+        const why = (await failure(res)).message;
+        if (res.status < 500) return { ok: false, conflict: false, error: why };
+        last = why;
+        continue;
+      }
+      const parsed = await readJson<{ thread?: ChatThread; error?: string }>(res);
+      /* A 200 whose body has no thread in it is not a success, and taking it
+         for one would retire the operation with nothing to commit — the drawn
+         rows would vanish and nothing would replace them. */
+      if (!parsed.thread) {
+        last = parsed.error ?? "The server saved that but did not say where.";
+        continue;
+      }
+      return { ok: true, thread: parsed.thread };
+    } catch (e) {
+      /* Asked of the controller rather than of the rejection: what `fetch`
+         rejects with when its signal fires is an `AbortError` whose wording
+         varies by engine, and reading a reader-facing sentence off it would be
+         reading whichever one this browser happens to use. `runTurn` above
+         does the same. */
+      last = late.signal.aborted
+        ? "The server did not answer in time."
+        : describeFetchFailure(e as Error);
+    } finally {
+      clearTimeout(by);
+    }
+  }
+  return { ok: false, conflict: false, error: last };
+}
+
+/**
  * The server's copy of one answer, but only once it has stopped moving.
  *
  * `null` covers four different things on purpose — the request failed, it timed
@@ -343,7 +470,7 @@ export function stopAnswer(
  * `expectedTailId` is the client naming the answer it believes is last, so the
  * server can refuse if the conversation has moved on since. That refusal is
  * meaningful only because this request is never sent with a name the server
- * invented nothing for — docs/postmortems/cancel-before-begin.md.
+ * invented nothing for — docs/postmortems/260828b-cancel-before-begin.md.
  */
 export function cancelThread(
   slug: string,

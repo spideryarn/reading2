@@ -5,7 +5,7 @@
  * A level meter is a machine for being believed: bars that wobble prettily
  * while reading nothing look exactly like bars reading a microphone, and the
  * entire reason this feature exists is that the reader cannot otherwise tell
- * whether anything is getting in (docs/plans/microphone-level-meter.md). That
+ * whether anything is getting in (docs/plans/260827f-microphone-level-meter.md). That
  * is [silent-success](../../docs/reusable/silent-success.md) with a picture on
  * it, so the arithmetic that matters lives here with tests round it rather than
  * inside a `requestAnimationFrame` callback where nothing can see it.

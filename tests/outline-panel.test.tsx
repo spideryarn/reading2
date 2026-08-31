@@ -104,7 +104,7 @@ function fixture(): { tree: Tree; blocks: Block[] } {
 
 const { tree, blocks } = fixture();
 const geometry = buildGeometry(tree, blocks);
-const root = buildSummaryTree(tree, blocks, null, geometry.leafDepth);
+const root = buildSummaryTree(tree, blocks, geometry.leafDepth);
 
 /* Without this React does not flush state updates inside `act`, so a keydown
    dispatched below would change nothing and the focus assertions would pass or

@@ -8,7 +8,7 @@
  * ## Semantic equality, not byte equality, and why that is the right bar
  *
  * The files do NOT come back byte-identical, and they cannot. `tree`, `arc`,
- * `tweets`, `glossary`, `summary` and `labels` are stored as **JSONB**, and
+ * `tweets`, `glossary` and `labels` are stored as **JSONB**, and
  * JSONB does not preserve key order — it is a parsed representation, not the
  * text you handed it. So a round trip reorders keys inside objects while
  * changing nothing about what they mean.
@@ -64,8 +64,14 @@ const ARTEFACTS = [
   "arc.json",
   "tweets.json",
   "glossary.json",
-  "summary.json",
+  /* **No `summary.json`.** The `summary` artefact kind went with stage 5e on
+     2026-08-31 (docs/plans/260831s-gist-only-summaries.md): the store does not own the
+     file, so neither half of this round trip can move it. The column was kept
+     and is carried between revisions — tests/store-carry-forward.ts asserts
+     that — but it does not come back out as a file. */
   "ideas.json",
+  "quotes.json",
+  "timeline.json",
   "sketch.json",
   "labels.json",
   "comments.json",
@@ -298,7 +304,7 @@ when("a round trip through Postgres", () => {
     for (const slug of slugs) {
       /* **The artefact half goes through the production write path**, and the
          reader's own state is seeded beside it. `db:import` did both in one
-         call and is being deleted (docs/plans/delete-the-importer.md § C7);
+         call and is being deleted (docs/plans/260827aa-delete-the-importer.md § C7);
          `ArtifactStore` owns artefacts and deliberately owns nothing a reader
          made, so the round trip's two claims are now made by two things.
 
@@ -401,7 +407,7 @@ when("a round trip through Postgres", () => {
    * has — so nothing caught it going missing.**
    *
    * `ShelfState.purpose` is the per-article half of the reader profile
-   * (docs/plans/reader-profile.md) and lives on `articles.purpose`, deliberately
+   * (docs/plans/260826t-reader-profile.md) and lives on `articles.purpose`, deliberately
    * off the revision so a re-extraction cannot undo it. `db:export` wrote four
    * of the five shelf columns and not that one, and decided *whether to write
    * the file at all* from the same four — so an article whose only shelf state
@@ -482,7 +488,7 @@ when("a round trip through Postgres", () => {
      * omission reads as a decision rather than as the gap it is. The
      * consequence is the alarming part: **losing the entire source document
      * passes this file today**, because nothing here ever looks at one. Found
-     * by GPT Sol reviewing docs/plans/raw-bytes-in-storage.md, 2026-08-27.
+     * by GPT Sol reviewing docs/plans/260827o-raw-bytes-in-storage.md, 2026-08-27.
      *
      * It is not the loss that is happening, though. It is worse and quieter:
      * `src/store/export.ts` writes `revision.rawBytes` to **`raw.html`
@@ -638,7 +644,7 @@ when("a round trip through Postgres", () => {
 
   it("puts the id-stamped HTML back in output/, not beside the article", async () => {
     // Stage 3 reads and writes ids into `output/<slug>.html`, NOT into
-    // `data/<slug>/` — docs/plans/postgres-migration.md § Stage 3 recovers ids
+    // `data/<slug>/` — docs/plans/260825f-postgres-migration.md § Stage 3 recovers ids
     // from output/. Exporting it beside the article would put it somewhere
     // nothing reads, and the next `npm run blocks` would re-mint every id.
     const beside = await readJsonIfPresent(path.join(out, "data", slugs[0] ?? "", "stamped.html"));

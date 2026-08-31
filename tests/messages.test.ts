@@ -268,7 +268,7 @@ describe("naming what was written for your reader profile", () => {
    * exactly why this is worth pinning: a table quietly falling behind is
    * invisible when the fallback is plausible. `personalisedSteps` fell behind
    * the same way and its sentence was not plausible, it was wrong —
-   * docs/postmortems/the-dialog-said-nothing-was-personalised.md.
+   * docs/postmortems/260830c-the-dialog-said-nothing-was-personalised.md.
    */
   const _ownedNamesEveryProfiledArtefact: Record<ProfileCarrying, string> = OWNED_ARTEFACT;
   void _ownedNamesEveryProfiledArtefact;

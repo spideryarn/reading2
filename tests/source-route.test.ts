@@ -16,11 +16,26 @@
  * plumbing, what headers go out, and that the body's length is the body's
  * length.
  *
- * **The store is faked, not the route.** `loadSource` is the one call being
- * varied; `shelfStore.read` is the authorisation and is left real enough to
- * record that it happened, and happened first. Everything else in
+ * **The store is faked, not the route.** `sourceStore.readPdf` is the one call
+ * being varied; `shelfStore.read` is the authorisation and is left real enough
+ * to record that it happened, and happened first. Everything else in
  * `src/store/index.js` is passed through, so this cannot pass because the module
  * failed to load.
+ *
+ * ## The seam moved on the day this was written, and these tests followed it
+ *
+ * Two sessions fixed the same production bug — *view the original* reading the
+ * local filesystem, so it worked on a laptop and 404d on Vercel — on 2026-08-31,
+ * and they landed different seams. `ArticleReader.loadSource` answers the whole
+ * document question (both kinds, plus the manifest's own answer for which) and
+ * still exists for `db:export`; `SourceStore.readPdf`
+ * (docs/plans/260831b-finish-the-database-move.md § stage 1b) is deliberately
+ * narrower, because an HTML source served from our own origin is stored XSS, so
+ * the store hands back the one kind a route may set a content type for. The
+ * route took the narrow one. These tests were rewritten onto it rather than
+ * deleted: every outcome below is still an outcome, and the *kind* check simply
+ * moved from the route into the store, where tests/source-store.test.ts pins it
+ * for both adapters.
  *
  * No database. See docs/plans/plain-mode-and-the-way-out.md § 5.
  */
@@ -34,7 +49,7 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 const seen = vi.hoisted(() => ({
   /** In call order, so "did it authorise before it fetched" is answerable. */
   calls: [] as string[],
-  /** What `loadSource` should do this time. Set by each test. */
+  /** What `sourceStore.readPdf` should do this time. Set by each test. */
   source: null as null | (() => Promise<unknown>),
 }));
 
@@ -53,10 +68,13 @@ vi.mock("../src/store/index.js", async () => {
         return { slug, title: "A piece" } as never;
       },
     },
-    loadSource: async (slug: string) => {
-      seen.calls.push(`loadSource(${slug})`);
-      if (!seen.source) throw new Error("the test did not say what loadSource should do");
-      return seen.source();
+    sourceStore: {
+      ...actual.sourceStore,
+      readPdf: async (slug: string) => {
+        seen.calls.push(`sourceStore.readPdf(${slug})`);
+        if (!seen.source) throw new Error("the test did not say what readPdf should do");
+        return seen.source();
+      },
     },
   };
 });
@@ -128,7 +146,7 @@ afterEach(() => {
 
 describe("serving an article's original document", () => {
   it("sends the bytes, with the length of the bytes it sends", async () => {
-    seen.source = async () => ({ bytes: new Uint8Array(PDF), kind: "pdf", filename: "paper.pdf" });
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: "paper.pdf" });
     const sent = await get("a-piece");
 
     expect(sent.status).toBe(200);
@@ -145,7 +163,7 @@ describe("serving an article's original document", () => {
   it("falls back to the slug when the document has no filename of its own", async () => {
     /* Anything we fetched rather than took an upload of. `<slug>.pdf` is a name
        a reader can find again on their own disk. */
-    seen.source = async () => ({ bytes: new Uint8Array(PDF), kind: "pdf", filename: null });
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: null });
     const sent = await get("a-piece");
     expect(sent.headers["content-disposition"]).toContain('filename="a-piece.pdf"');
   });
@@ -159,9 +177,9 @@ describe("serving an article's original document", () => {
    * here: that it happens, and that it happens first.
    */
   it("asks whose article it is before it fetches anything", async () => {
-    seen.source = async () => ({ bytes: new Uint8Array(PDF), kind: "pdf", filename: null });
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: null });
     await get("a-piece");
-    expect(seen.calls).toEqual(["shelfStore.read(a-piece)", "loadSource(a-piece)"]);
+    expect(seen.calls).toEqual(["shelfStore.read(a-piece)", "sourceStore.readPdf(a-piece)"]);
   });
 
   it("404s an article that kept no source document", async () => {
@@ -172,9 +190,28 @@ describe("serving an article's original document", () => {
     expect(sent.status).toBe(404);
   });
 
-  it("404s an article whose source is not a PDF", async () => {
-    seen.source = async () => ({ bytes: new Uint8Array(PDF), kind: "html", filename: null });
-    expect((await get("a-piece")).status).toBe(404);
+  /**
+   * **A web page's source is the same 404, and the route no longer decides it.**
+   *
+   * It used to: the route asked for the document, read `kind`, and refused
+   * anything that was not a PDF. `SourceStore.readPdf` answers `null` for an
+   * HTML source instead, so the refusal moved into the store — which is the
+   * safer place for it, because the route can then set one content-type literal
+   * rather than deriving one. What is asserted here is that the route still says
+   * the same sentence about it, with the same status, and does not somehow treat
+   * "not a PDF" as a fault.
+   *
+   * That the two adapters really do answer `null` for HTML — referenced *and*
+   * legacy, with the object genuinely present in the bucket — is
+   * tests/source-store.test.ts, which exists because GPT Sol pointed out that
+   * every Postgres fixture there was a PDF and an implementation serving HTML
+   * would have passed.
+   */
+  it("404s an article whose source is not a PDF, as the store reports it", async () => {
+    seen.source = async () => null;
+    const sent = await get("a-piece");
+    expect(sent.status).toBe(404);
+    expect(sent.headers["content-type"]).not.toBe("application/pdf");
   });
 
   /**
@@ -225,7 +262,7 @@ describe("serving an article's original document", () => {
     const failed = await get("a-piece");
     expect(failed.headers["content-type"]).not.toBe("application/pdf");
 
-    seen.source = async () => ({ bytes: new Uint8Array(PDF), kind: "pdf", filename: null });
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: null });
     const ok = await get("a-piece");
     expect(ok.headersAtFirstWrite).toEqual(
       expect.arrayContaining(["content-type", "content-length", "content-disposition"]),

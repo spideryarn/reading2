@@ -13,7 +13,7 @@
  *
  * They are independent, so a reader waiting on a panel was waiting for both in
  * series for no reason. `withProfileChanged` now takes a **thunk** and starts
- * both. docs/plans/library-read-latency.md § 8.
+ * both. docs/plans/260828c-library-read-latency.md § 8.
  *
  * ## The four things that can go wrong, and they are what this file is
  *
@@ -59,13 +59,12 @@ function held<T>() {
 }
 
 /**
- * The four routes that answer `profileChanged`, each with the field its stamp
+ * The routes that answer `profileChanged`, each with the field its stamp
  * lives under. Every test below runs once per row.
  */
 const ROUTES = [
   { name: "tweets", url: "/api/tweets/anything", stamp: "thread" },
   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
-  { name: "summary", url: "/api/summary/anything", stamp: "summaries" },
   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
 ] as const;
 
@@ -109,7 +108,6 @@ vi.mock("../src/store/index.js", async (importActual) => {
   const loaders = {
     loadTweets: "tweets",
     loadGlossary: "glossary",
-    loadSummaries: "summary",
     loadIdeas: "ideas",
   } as const;
   const mocked: Record<string, unknown> = {};

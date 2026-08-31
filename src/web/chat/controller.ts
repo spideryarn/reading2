@@ -9,7 +9,7 @@
  * match — and it is also what removed `onScreen`, `latest` and `showing` from
  * the hook, three refs that existed only to read current state from outside a
  * render. GPT Sol's third blocker, 2026-08-28;
- * docs/plans/chat-operation-model.md.
+ * docs/plans/260828v-chat-operation-model.md.
  *
  * React sees it through `useSyncExternalStore`, so both derived things are
  * cached: `getSnapshot` is called on every render and must hand back the same
@@ -28,11 +28,13 @@ import type {
   ChatInput,
   ChatState,
   OpId,
+  Registering,
+  SpokenOperation,
   ThreadsOutcome,
   WriteOutcome,
 } from "./model.js";
 import { asOpId, initialState, recoveringIds } from "./model.js";
-import type { TurnSink } from "./effects.js";
+import type { SpokenOutcome, TurnSink } from "./effects.js";
 import { project } from "./project.js";
 import { reduce } from "./reduce.js";
 
@@ -123,6 +125,12 @@ export interface ChatEffects {
     payload: Record<string, unknown>,
     sink: TurnSink,
   ): Promise<void>;
+  /** Write one finished spoken exchange. One request, no stream. */
+  appendSpoken(
+    slug: string,
+    threadId: string,
+    body: Record<string, unknown>,
+  ): Promise<SpokenOutcome>;
   /** The server's copy of one answer, once it has stopped moving. */
   settledAnswer(slug: string, threadId: string, messageId: string): Promise<ChatMessage | null>;
   /** Stop one answer. `{ stopped: false }` is a success — see the note there. */
@@ -140,6 +148,23 @@ export interface ChatEffects {
     attempt: string | null,
   ): Promise<WriteOutcome>;
 }
+
+/**
+ * Where a spoken exchange ended up, told to whoever wrote it.
+ *
+ * `tailId` is the whole reason this type exists: it is the id the **next**
+ * exchange must claim, and it is the server's, so nothing but the answer to
+ * this write can supply it.
+ *
+ * `conflict` is kept separate from an ordinary failure because it means
+ * something different to the caller. A failure is "those words are not saved";
+ * a conflict is "they may well be saved, and the conversation on screen is
+ * about to be re-read" — so a live session ends rather than retrying, and the
+ * repair the reducer started is what puts the reader's transcript right.
+ */
+export type SpokenLanded =
+  | { ok: true; threadId: string; tailId: string }
+  | { ok: false; conflict: boolean; error: string };
 
 /** What React reads: the state, and the two things derived from it. */
 export interface ChatSnapshot {
@@ -163,6 +188,23 @@ export class ChatController {
    * compare. Pruned when its operation retires.
    */
   #onThreadId = new Map<OpId, (id: string) => void>();
+  /**
+   * What each spoken append has promised its caller.
+   *
+   * Beside the state for the same reason `#onThreadId` is: it is a callback,
+   * and a function in the state is something a test comparing two states cannot
+   * compare.
+   *
+   * It exists because live conversation needs one thing the panel does not —
+   * **the tail the next exchange must claim**. Exchanges are ordered: the
+   * second one's `expectedTailId` is the first one's *stored* answer id, which
+   * does not exist until the first has landed. So the session has to wait, and
+   * the promise is what it waits on. It is also what makes the Send handoff
+   * awaitable, which docs/plans/260831l-live-conversation-in-chat.md § 1d asks for by
+   * name: an unawaited flush racing the typed POST turns the tail guard into a
+   * 409 we inflicted on ourselves.
+   */
+  #spokenWaiters = new Map<OpId, (landed: SpokenLanded) => void>();
 
   /** No side effects here — the hook builds one during a render. */
   constructor(slug: string, effects: ChatEffects) {
@@ -201,6 +243,42 @@ export class ChatController {
   startTurn(event: Extract<ChatInput, { type: "turn.started" }>, onThreadId?: (id: string) => void): void {
     if (onThreadId) this.#onThreadId.set(event.op.id, onThreadId);
     this.dispatch(event);
+  }
+
+  /**
+   * Write one finished spoken exchange, and **say where it landed**.
+   *
+   * The one operation that hands its caller a promise. Everything else in this
+   * class is fire-and-forget because nothing outside needs to know when it
+   * finished; a live session does, twice over — it cannot start the next
+   * exchange until it knows the stored id of this one's answer, and the Send
+   * button cannot hand over to the typed path until the queue is empty.
+   *
+   * **It resolves rather than rejects, and it resolves even when the result is
+   * refused at the gate.** A superseded operation — the reader deleted the
+   * conversation mid-sentence — has nothing to draw and says nothing to the
+   * state, but the session still has to be told, or it waits for ever holding a
+   * microphone. The promise is a fact about the *request*, not about whether
+   * the answer was still wanted.
+   */
+  appendSpoken(
+    op: Registering<SpokenOperation>,
+    onThreadId?: (id: string) => void,
+  ): Promise<SpokenLanded> {
+    if (onThreadId) this.#onThreadId.set(op.id, onThreadId);
+    const landed = new Promise<SpokenLanded>((resolve) => {
+      this.#spokenWaiters.set(op.id, resolve);
+    });
+    this.dispatch({ type: "spoken.started", op });
+    return landed;
+  }
+
+  /** Tell whoever is waiting on this append, once and once only. */
+  #landed(opId: OpId, result: SpokenLanded): void {
+    const waiting = this.#spokenWaiters.get(opId);
+    if (!waiting) return;
+    this.#spokenWaiters.delete(opId);
+    waiting(result);
   }
 
   /**
@@ -265,6 +343,16 @@ export class ChatController {
     }
   }
 
+  /**
+   * **`#spokenWaiters` is deliberately not pruned here, and not cleared by
+   * `detach`.** A waiter is not a callback into the screen — it is the answer to
+   * "did that get written down?", which the live session needs whatever the
+   * panel is doing, and which arrives *after* the operation has retired. Pruning
+   * it on retirement would drop it in the one moment it exists to be used.
+   * `#landed` deletes each one as it fires, and `#write` fires exactly one per
+   * append on every path including a throw, so the map cannot grow.
+   */
+
   #perform(command: ChatCommand): void {
     switch (command.type) {
       case "load":
@@ -299,6 +387,9 @@ export class ChatController {
         return;
       case "turn":
         this.#stream(command.opId, command.slug, command.threadId, command.payload);
+        return;
+      case "spoken":
+        this.#write(command);
         return;
       case "repair":
         /* One conversation, because the screen is wrong about that one. The
@@ -362,6 +453,75 @@ export class ChatController {
         }
         return;
     }
+  }
+
+  /**
+   * One spoken exchange, written — and the waiter told, **after** the event.
+   *
+   * Deliberately not `#settle`. Two things have to happen in order: the state
+   * has to see the result (so the reader's rows are the server's, or gone), and
+   * only then may the session be told where the conversation now ends. Told
+   * first, it could start the next exchange against a projection that has not
+   * caught up — and every exchange after that would be claiming a tail from a
+   * screen this tab had not finished updating.
+   */
+  #write(command: Extract<ChatCommand, { type: "spoken" }>): void {
+    const opId = command.opId;
+    void this.#effects
+      .appendSpoken(command.slug, command.threadId, {
+        question: command.question,
+        answer: command.answer,
+        /* **Sent even when it is `null`, and that is the point.** `null` means
+           "I believe this conversation is empty" and the server refuses a body
+           with no `expectedTailId` at all — the two are different claims and
+           the endpoint keeps them different, so a spread that dropped the key
+           would turn a guard into a 400. */
+        expectedTailId: command.expectedTailId,
+        ...(command.passages ? { passages: command.passages } : {}),
+        ...(command.tools ? { tools: command.tools } : {}),
+        ...(command.interrupted ? { interrupted: true } : {}),
+      })
+      .then(
+        (outcome) => {
+          if (outcome.ok) {
+            this.dispatch({ type: "spoken.succeeded", opId, thread: outcome.thread });
+            const tail = outcome.thread.messages.at(-1);
+            /* A thread with no messages in it cannot come back from a
+               successful append — the write puts two there — so this is an
+               impossible shape rather than an empty one, and treating it as a
+               failure is what stops the next exchange claiming `null` and
+               conflicting for a reason nobody could read. */
+            this.#landed(
+              opId,
+              tail
+                ? { ok: true, threadId: outcome.thread.id, tailId: tail.id }
+                : { ok: false, conflict: false, error: "That exchange was saved to nowhere." },
+            );
+            return;
+          }
+          this.dispatch(
+            outcome.conflict
+              ? {
+                  type: "spoken.refused",
+                  opId,
+                  error: outcome.error,
+                  repair: { id: asOpId(mintId()) },
+                }
+              : { type: "spoken.failed", opId, error: outcome.error },
+          );
+          this.#landed(opId, { ok: false, conflict: outcome.conflict, error: outcome.error });
+        },
+        (e: Error) => {
+          /* `appendSpoken` catches its own failures, so this cannot fire
+             against the effect in effects.ts — it is here so that one later
+             changed into a function that throws joins the same path rather than
+             becoming a second one, and above all so the waiter is still told.
+             A promise nobody resolves is a live session holding a microphone
+             for ever. */
+          this.dispatch({ type: "spoken.failed", opId, error: e.message });
+          this.#landed(opId, { ok: false, conflict: false, error: e.message });
+        },
+      );
   }
 
   /** One turn's stream, every frame of it an event carrying this turn's id. */

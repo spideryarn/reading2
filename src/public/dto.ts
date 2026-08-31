@@ -3,7 +3,7 @@
  * this file, once.
  *
  * The alternative — take today's response and delete the fields that look
- * private — was the first draft of docs/plans/public-read-only-access.md, and
+ * private — was the first draft of docs/plans/260827ai-public-read-only-access.md, and
  * GPT Sol refused it on 2026-08-27:
  *
  * > A recursive key denylist is insufficient: it misses innocently named fields
@@ -20,9 +20,17 @@
  *
  * Belt and braces, and the braces are the stronger half:
  * [public-reader.ts](../store/public-reader.ts) never fetches `note`,
- * `final_url`, `fetched_at` or the PDF provenance at all. A projection here is
- * one careless `...spread` away from being widened; a column that was never
- * selected has to be put back on purpose, in SQL, where a reviewer sees it.
+ * `fetched_at` or the PDF provenance at all. A projection here is one careless
+ * `...spread` away from being widened; a column that was never selected has to
+ * be put back on purpose, in SQL, where a reviewer sees it.
+ *
+ * **`final_url` is the exception, and it is fetched.** It has been since
+ * 2026-08-30, when a public article started showing where it came from — so for
+ * that one column the braces are off and this file is the only thing between it
+ * and a stranger. `publicMeta` runs it through `publicSourceUrl` (../urls.ts)
+ * and publishes the answer; the column itself never crosses. That is a heavier
+ * responsibility than any other line here carries, which is why it is written
+ * down twice — again at the field.
  *
  * ## Only two of these are exported, deliberately
  *
@@ -51,9 +59,9 @@ import type {
   Glossary,
   Idea,
   Ideas,
+  Quote,
+  Quotes,
   NodeId,
-  SummaryEntry,
-  Summaries,
   Tree,
   TreeNode,
   Tweet,
@@ -66,11 +74,12 @@ import type {
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
+  PublicQuotes,
   PublicMeta,
   PublicMetadata,
-  PublicSummaries,
   PublicTweets,
 } from "../public-types.js";
+import { publicSourceUrl } from "../urls.js";
 
 /**
  * The masthead.
@@ -92,7 +101,21 @@ function publicMeta(row: {
   lang: string | null;
   excerpt: string | null;
   headingTitle: string | null;
+  /**
+   * Stage 1's post-redirect address, **still not the thing that goes out**.
+   *
+   * Named for the column so the reader below can hand its projection straight
+   * over, and converted here rather than there for the reason this whole file
+   * exists: the decision about what a stranger receives is made in one place,
+   * in code a reviewer reads. `publicSourceUrl` is the policy.
+   */
+  finalUrl: string | null;
 }): PublicMeta {
+  /* A named const rather than the expression inline, so the shorthand `{ url }`
+     below ties the published key to it. `opt()` cannot be used here — it copies
+     a field, and this computes one — and the spread it saves you from is the one
+     that compiles clean with the key misspelled. */
+  const url = row.finalUrl === null ? null : publicSourceUrl(row.finalUrl);
   return {
     slug: row.slug,
     title: row.title ?? row.headingTitle ?? row.slug,
@@ -103,6 +126,12 @@ function publicMeta(row: {
     ...(row.siteName === null ? {} : { siteName: row.siteName }),
     ...(row.lang === null ? {} : { lang: row.lang }),
     ...(row.excerpt === null ? {} : { excerpt: row.excerpt }),
+    /* **Two ways to get no key**, and they collapse on purpose: no address at
+       all, and an address the policy will not publish. A visitor is told the
+       same thing by both — nothing — because there is nothing they could do
+       differently, and a "we have one but will not show you" would be a fact
+       about us rather than about the piece. src/urls.ts § `publicSourceUrl`. */
+    ...(url === null ? {} : { url }),
   };
 }
 
@@ -289,33 +318,47 @@ function publicGlossary(glossary: Glossary): PublicGlossary {
 }
 
 /**
- * The summaries — **and `guidance` is not among the fields.**
+ * The quotes, rebuilt quote by quote.
  *
- * That is the owner's free-text steer: what *they* asked these summaries to
- * lean towards. Sol's payload table put it in bold and the plan repeats it,
- * because it is the one field here that is a sentence somebody wrote about
- * themselves rather than about the article.
+ * Field by field like its neighbours rather than passed through whole, for the
+ * reason this whole file exists: a projection that spreads is a projection that
+ * publishes whatever the artefact gains next. What is deliberately left behind
+ * is every pipeline fact around the list — `sourceHash`, `version`,
+ * `generator`, `profileHash`, `generatedAt`, `elapsedMs`.
  *
- * The honest limit, stated where somebody might otherwise think this closed it:
- * the summary *text* is derived from the steer, so dropping the field stops
- * direct disclosure and cannot make the prose neutral. That is Greg's settled
- * stage-1 position — publish the artefact the owner has — and it is
- * docs/plans/public-read-only-access.md § The leak that no projection fixes.
- *
- * `missing` crosses: it is the reader's only sign that an apparently complete
- * ladder is partial.
+ * `start` is kept. It is an offset into a block of the article the visitor is
+ * already reading, and without it a quote that appears twice in one paragraph
+ * marks the wrong occurrence — src/quote-match.ts § `findQuote`.
  */
-function publicSummaries(summaries: Summaries): PublicSummaries {
+function publicQuotes(quotes: Quotes): PublicQuotes {
   return {
-    entries: summaries.entries.map(
-      (entry): SummaryEntry => ({
-        range: [entry.range[0], entry.range[1]],
-        depth: entry.depth,
-        ...opt(entry, "short"),
-        ...opt(entry, "long"),
+    /* Rebuilt field by field like the list itself, rather than passed through:
+       a projection that spreads is one that publishes whatever the artefact
+       gains next. See the field's note in src/public-types.ts for why this one
+       crosses at all when no other pipeline fact does. */
+    ...(quotes.discarded === undefined
+      ? {}
+      : {
+          discarded: {
+            unfound: quotes.discarded.unfound,
+            otherVoice: quotes.discarded.otherVoice,
+            wrongLength: quotes.discarded.wrongLength,
+            overlapping: quotes.discarded.overlapping,
+            overCap: quotes.discarded.overCap,
+            malformed: quotes.discarded.malformed,
+          },
+        }),
+    quotes: quotes.quotes.map(
+      (quote): Quote => ({
+        id: quote.id,
+        blockId: quote.blockId,
+        text: quote.text,
+        ...opt(quote, "start"),
+        ...opt(quote, "reason"),
+        ...opt(quote, "importance"),
+        ...opt(quote, "striking"),
       }),
     ),
-    missing: summaries.missing,
   };
 }
 
@@ -358,7 +401,7 @@ function publicTweets(thread: TweetThread): PublicTweets {
  * tagged wire result saying whether the artefact exists; folding them in here
  * makes existence a property of the payload — a key that is present exists —
  * with no second request to be in flight, to fail, or to disagree with the
- * first. docs/plans/public-read-only-access.md § Slice 1b.
+ * first. docs/plans/260827ai-public-read-only-access.md § Slice 1b.
  *
  * `null` in, absent out. The reader hands `null` for a column Postgres had
  * nothing in, and an absent key is what the client reads as *nobody built one*.
@@ -374,13 +417,15 @@ export function publicArticle(row: {
   lang: string | null;
   excerpt: string | null;
   headingTitle: string | null;
+  /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
+  finalUrl: string | null;
   blocks: (Block | PublicBlock)[];
   tree: Tree;
   arc: Arc | null;
   assets: Assets | null;
   glossary: Glossary | null;
-  summary: Summaries | null;
   ideas: Ideas | null;
+  quotes: Quotes | null;
   tweets: TweetThread | null;
 }): PublicArticle {
   return {
@@ -406,8 +451,8 @@ export function publicArticle(row: {
        reports it as never built. The distinction this payload rests on is
        present-versus-absent, and the test is written to say so. */
     ...(row.glossary !== null ? { glossary: publicGlossary(row.glossary) } : {}),
-    ...(row.summary !== null ? { summary: publicSummaries(row.summary) } : {}),
     ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
+    ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
   };
 }
@@ -415,7 +460,7 @@ export function publicArticle(row: {
 /**
  * `GET /api/public/metadata/:slug`, assembled.
  *
- * Five booleans and a title. The owner's metadata page answers *which stage
+ * A handful of booleans and a title. The owner's metadata page answers *which stage
  * ran, when, into which column, over how many bytes, and would we write it
  * again today*; none of that is a visitor's business, and `stages` in
  * particular is internal paths and column names. Sol asked for this shape by
@@ -434,8 +479,8 @@ export function publicMetadata(row: {
       arc: row.available.arc,
       tweets: row.available.tweets,
       glossary: row.available.glossary,
-      summary: row.available.summary,
       ideas: row.available.ideas,
+      quotes: row.available.quotes,
     },
   };
 }

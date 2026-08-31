@@ -16,7 +16,7 @@
  * 2. Errors carry a `status`, or routes.ts turns "no such article" into a 500.
  * 3. **No fallback to the filesystem, ever.** Not even for "the article is only
  *    on disk". A silent fallback hides the divergence the parity test exists to
- *    find. See docs/plans/postgres-storage-implementation.md § Rules.
+ *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
 import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
@@ -224,7 +224,7 @@ export const pgLibrarySearch: LibrarySearch = {
              is library full-text search, and `isSearchable` in
              src/block-policy.ts is the one predicate of the five that includes
              supplements: a note is often the best sentence in a piece, and a
-             reader who searches for it has to find it. docs/plans/footnotes.md
+             reader who searches for it has to find it. docs/plans/260828o-footnotes.md
              recorded the opposite as work to do and was wrong; GPT Sol's
              decision 4. tests/library-search.test.ts holds the filesystem half
              to the same rule, and tests/block-policy.test.ts guards this line. */

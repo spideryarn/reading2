@@ -18,7 +18,7 @@
  *  - and the attribute itself, in jsdom, because "we set `rel`" is exactly the
  *    kind of claim that is true in the source and false in the DOM.
  *
- * docs/plans/chat-web-links.md.
+ * docs/plans/260827ao-chat-web-links.md.
  */
 import { describe, expect, it } from "vitest";
 import { splitCitations, splitLinks } from "../src/web/citations.js";

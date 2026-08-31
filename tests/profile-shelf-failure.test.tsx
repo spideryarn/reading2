@@ -58,7 +58,7 @@ const ARTICLE: LibraryEntry = {
   sections: 9,
   comments: 0,
   opens: 2,
-  has: { arc: false, tweets: false, glossary: false, summary: false },
+  has: { arc: false, tweets: false, glossary: false },
 };
 
 let host: HTMLDivElement;

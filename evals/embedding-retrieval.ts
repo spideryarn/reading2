@@ -17,7 +17,7 @@
  *
  * The verdict and its caveats are written up in
  * evals/results/embedding-retrieval-2026-08-26.md; docs/project/search.md § the
- * whole library at once records the decision, and docs/research/postgres-search.md
+ * whole library at once records the decision, and docs/research/260826e-postgres-search.md
  * is why library-wide meaning search was deferred in the first place.
  *
  * ## What it does
@@ -68,17 +68,18 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 /* **`import type`, so this file cannot construct a client at all.** It is used
    only for `Anthropic` and `Anthropic.TextBlock` in signatures now; the one
-   client here comes from `anthropicForDeclared()`. A value import would leave
-   `new Anthropic()` one keystroke away and the scan unable to tell the
+   client here comes from `messagesSkinForDeclared()`. A value import would
+   leave `new Anthropic()` one keystroke away and the scan unable to tell the
    difference. */
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { loadEnvLocal } from "../src/env.js";
-import { CAPABLE_MODEL } from "../src/models.js";
+import { CAPABLE_MODEL, CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
+import { MESSAGES_PROVIDER } from "../src/messages-stream.js";
 import { cosine, type EmbeddingUsage, type EmbedResult, embedAll } from "../src/embeddings.js";
 import type { Block } from "../src/types.js";
 import {
-  anthropicForDeclared,
+  messagesSkinForDeclared,
   withDeclaredExternalCall,
 } from "./declared-spend.js";
 import { withLedger } from "../src/cli-ledger.js";
@@ -100,6 +101,69 @@ const RESULTS = path.join(ROOT, "evals", "results");
  */
 const judgementsFile = (judgeModel: string): string =>
   path.join(RESULTS, `embedding-retrieval-judgements-${judgeModel}.json`);
+
+/**
+ * **The judges this eval knows, each with both of its spellings written out.**
+ *
+ * A model id is two different things (docs/project/ai-gateway.md § *Two
+ * spellings of one model*): a **name**, which is what `judgementsFile` is called
+ * after and what a results file records, and an **address**, which is what goes
+ * on the wire. Moving the judge onto OpenRouter changed the address and changed
+ * nothing about which model answers, so the name had to stay put — the cached
+ * verdicts on disk are `…-claude-sonnet-5.json` and `…-claude-opus-5.json`, and
+ * renaming them would have orphaned every one and re-judged the lot at full
+ * price, for a change whose point was to stop having a second bill.
+ *
+ * **A table rather than `\`anthropic/${name}\``**, which is what the first
+ * version of this did and which [`src/models.ts`](../src/models.ts) forbids in
+ * as many words: *"Do not derive one spelling from the other."* It works for
+ * exactly the current pair, and it did not work for the pair before it —
+ * Anthropic wrote `claude-sonnet-4-5` where OpenRouter wrote
+ * `anthropic/claude-sonnet-4.5`, dashes against a dot. GPT Sol found two further
+ * consequences of deriving: a fully-qualified `SPIDERYARN_JUDGE_MODEL` would
+ * have put a `/` inside `judgementsFile`'s filename — so the eval would read a
+ * cold cache, buy every judgement, and then fail to save them into a directory
+ * that does not exist — and a *non-Anthropic* id would have been sent anyway,
+ * under `MESSAGES_PROVIDER`'s Anthropic pin and with adaptive thinking.
+ *
+ * Both addresses were checked against OpenRouter's live model list
+ * (`GET /api/v1/models`) on 2026-08-31. Adding a judge means adding a row here
+ * and checking its slug the same way; an unknown one is refused rather than
+ * guessed at, before any money is spent.
+ */
+const JUDGES: Readonly<Record<string, string>> = {
+  [CAPABLE_MODEL]: CAPABLE_MODEL_OPENROUTER,
+  /* The documented second opinion — see `judgementsFile` above on why a
+     different judge must not read the first judge's cache. */
+  "claude-opus-5": "anthropic/claude-opus-5",
+};
+
+/**
+ * The judge's name, from whatever `SPIDERYARN_JUDGE_MODEL` was given.
+ *
+ * An **address** is accepted and canonicalised back to its name, so that
+ * `SPIDERYARN_JUDGE_MODEL=anthropic/claude-sonnet-5` reads and writes the same
+ * cache file as the bare spelling rather than a second one under a directory
+ * that does not exist.
+ */
+function judgeNameFor(given: string): string {
+  if (JUDGES[given]) return given;
+  const byAddress = Object.entries(JUDGES).find(([, address]) => address === given);
+  if (byAddress) return byAddress[0];
+  throw new Error(
+    `SPIDERYARN_JUDGE_MODEL=${given} is not a judge this eval knows. Add it to JUDGES in ` +
+      "evals/embedding-retrieval.ts with BOTH spellings — its own name, which is what the " +
+      "judgement cache is filed under, and its OpenRouter address, checked against " +
+      `GET /api/v1/models. Known: ${Object.keys(JUDGES).join(", ")}.`,
+  );
+}
+
+/** The address to put on the wire, for a name `judgeNameFor` has already accepted. */
+function judgeAddress(judgeModel: string): string {
+  const address = JUDGES[judgeModel];
+  if (!address) throw new Error(`no OpenRouter address for judge ${judgeModel}`);
+  return address;
+}
 
 /**
  * One thing being compared: a model, and how it is asked.
@@ -468,16 +532,33 @@ async function judgeQuery(
 
   /* **A declared bypass, not an oversight.** The judge speaks the Messages
      shape and chooses its own model per run, and `streamMessage` owns the model
-     on purpose — see `embedding-eval-judge` in evals/declared-spend.ts for why
-     it is not simply moved onto the seam. The wrapper is what makes the money
-     appear in `npm run cost` anyway, priced from ANTHROPIC_PRICES because this
-     call does not go through OpenRouter and so has nobody to ask. */
+     on purpose — see `embedding-eval-judge` in src/spend-declarations.ts for why
+     it is not simply moved onto the seam. It goes to OpenRouter's Anthropic Skin
+     all the same, on the same key and the same provider pin as the seam, so the
+     row carries OpenRouter's own settled `cost` rather than our arithmetic. */
   const response = await withDeclaredExternalCall(
     "embedding-eval-judge",
     { model: judgeModel },
     async ({ observe }) => {
-      const message = await client.messages.create({
-        model: judgeModel,
+      /* **Streamed, and nobody is watching it** — for the cost. The SDK's stream
+         accumulator rebuilds the message from named fields and drops the Skin's
+         `cost` (`accumulateMessage` in @anthropic-ai/sdk/lib/MessageStream), so
+         the raw events are subscribed exactly as `meterStream` does it
+         (src/messages-stream.ts § the three things that fail silently here;
+         tests/messages-stream.test.ts is what pins that it arrives).
+
+         **A non-streaming `messages.create` would in fact have kept it** — the
+         SDK returns `response.json()` unfiltered on that path, which GPT Sol
+         checked in the installed source and against a stub, correcting an
+         earlier version of this comment that claimed otherwise. Streaming is
+         kept anyway, because it is the shape `tests/messages-stream.test.ts`
+         holds and the shape the other Messages-wire bypass uses, and one way of
+         reading a cost is easier to keep true than two. Had the field gone
+         missing the row would say `cost_source: "none"` rather than free —
+         short by an unknown amount, which is the honest failure. */
+      let streamCostUsd: number | null = null;
+      const stream = client.messages.stream({
+        model: judgeAddress(judgeModel),
         max_tokens: 4000,
         thinking: { type: "adaptive" },
         system: JUDGE_SYSTEM,
@@ -487,8 +568,23 @@ async function judgeQuery(
             content: `Reader's question: ${query.text}\n\n${body}`,
           },
         ],
+        provider: MESSAGES_PROVIDER,
+      } as unknown as Anthropic.MessageStreamParams);
+      stream.on("streamEvent", (event) => {
+        const raw = event as unknown as { usage?: { cost?: unknown } };
+        if (typeof raw.usage?.cost === "number") streamCostUsd = raw.usage.cost;
       });
-      observe.anthropic(message);
+      const message = await stream.finalMessage();
+      /* **`messagesViaOpenRouter`, not `openRouter`.** The usage here is the
+         additive Anthropic shape, so mapping it onto the chat wire's
+         `prompt_tokens`/`completion_tokens` — which the first version of this did
+         — put the money on the row and silently dropped the cache split, the
+         thinking count, the service tier and the inference geography. GPT Sol,
+         2026-08-31; `evals/declared-spend.ts` § `Observer` has the reasoning. */
+      observe.messagesViaOpenRouter(message, {
+        costUsd: streamCostUsd,
+        upstream: (message as unknown as { provider?: string | null }).provider ?? null,
+      });
       return message;
     },
   );
@@ -954,10 +1050,10 @@ async function judgeAll(
   );
   if (needed.length > 0) {
     console.log(`\nJudging ${needed.length} queries (cached: ${QUERIES.length - needed.length})…`);
-    /* `maxRetries: 0` and a guarded `fetch` — a default client turns one call
-       into up to three billable attempts and the row would then understate the
-       spend by a factor. See evals/declared-spend.ts. */
-    const client = anthropicForDeclared();
+    /* OpenRouter's Skin, `maxRetries: 0`, and a guarded `fetch` — a default
+       client turns one call into up to three billable attempts and the row would
+       then understate the spend by a factor. See evals/declared-spend.ts. */
+    const client = messagesSkinForDeclared();
     const queue = new PQueue({ concurrency: 4 });
     await Promise.all(
       needed.map((q) =>
@@ -1182,7 +1278,10 @@ async function main(): Promise<void> {
   if (arms.length === 0) {
     throw new Error(`--arms matched nothing. Known: ${DEFAULT_ARMS.map((a) => a.id).join(", ")}`);
   }
-  const judgeModel = process.env.SPIDERYARN_JUDGE_MODEL ?? CAPABLE_MODEL;
+  /* Refused here, at the edge, rather than at the first judged query — an
+     unknown judge that got as far as `judgeAll` would have embedded the whole
+     corpus first, which is the expensive half of a run nobody can use. */
+  const judgeModel = judgeNameFor(process.env.SPIDERYARN_JUDGE_MODEL ?? CAPABLE_MODEL);
 
   const { passages, duplicates } = await loadCorpus();
   console.log(

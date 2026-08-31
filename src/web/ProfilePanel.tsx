@@ -4,7 +4,7 @@
  * A small popover, raised from beside the *Use your profile* checkbox and from
  * the *written for you* badge, that says what a profile does, shows both boxes
  * as the reader currently has them, and carries a working link to each editor.
- * docs/plans/profile-panel.md, docs/project/reader-profile.md.
+ * docs/plans/260830c-profile-panel.md, docs/project/reader-profile.md.
  *
  * ## Why this is not a `<Tooltip>`
  *
@@ -247,7 +247,7 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
           prompt rather than here (src/profile.ts § PROFILE_RULES). It is what
           makes a personalised glossary safe to read. */}
       <p className="prof-panel-lede">
-        What the glossary, the summaries, chat and explanations are written for. It changes what
+        What the glossary, the ideas, chat and explanations are written for. It changes what
         gets explained and how much — never what the article says.
       </p>
       <Box

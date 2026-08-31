@@ -232,9 +232,22 @@ function ownedBy(id: string, owner: OwnerId): Job | undefined {
   return job && job.ownerId === owner ? job : undefined;
 }
 
-/** The one job this process has running, if any. `jobs_only_one_running`, locally. */
-function runningNow(): Job | undefined {
-  return [...index.values()].find((j) => j.status === "running");
+/**
+ * How many jobs this process has running, **excluding** `mine`.
+ *
+ * The cap, locally. It was `runningNow()`, returning the one running job there
+ * could be, because `jobs_only_one_running` allowed exactly one; with a
+ * configurable N what the caller needs is a count.
+ *
+ * `mine` is left out so that re-claiming a job that is already running is
+ * classified as *another request is inside this job* rather than as the cap.
+ * The status check above refuses it either way — this only keeps the reason
+ * honest, which is the same care src/store/pg-jobs.ts § `claim` takes.
+ */
+function runningCount(mine: string): number {
+  let running = 0;
+  for (const job of index.values()) if (job.status === "running" && job.id !== mine) running += 1;
+  return running;
 }
 
 export const fsJobStore: JobStore = {
@@ -268,7 +281,14 @@ export const fsJobStore: JobStore = {
     if (held) {
       return { job: structuredClone(held), created: false, sameWork: keys.get(held.id) === workKey };
     }
-    index.set(job.id, job);
+    /* **Queued, always, whatever the caller handed us.** `enqueueOrGet` takes a
+       whole `Job`, and keeping its `status` let a caller insert a `running` row
+       that never passed the cap check and carries no attempt token — one more
+       running job than the machine agreed to, arriving through the door marked
+       "enqueue", and `runningCount` would then count it against everybody else.
+       Nothing does that today; the contract simply should not allow it. The
+       Postgres adapter is sealed the same way. GPT Sol, reviewing stage 1. */
+    index.set(job.id, { ...job, status: "queued" });
     keys.set(job.id, workKey);
     await persist(job);
     return { job: structuredClone(job), created: true, sameWork: true };
@@ -279,6 +299,7 @@ export const fsJobStore: JobStore = {
     owner: OwnerId,
     attempt: string,
     leaseMs: number,
+    maxRunning: number,
   ): Promise<ClaimOutcome> {
     await ready();
     const job = ownedBy(id, owner);
@@ -286,8 +307,10 @@ export const fsJobStore: JobStore = {
     if (TERMINAL.has(job.status)) return { kind: "finished", job: structuredClone(job) };
     if (job.cancelling === true) return { kind: "stopping", job: structuredClone(job) };
     if (job.status === "running") return { kind: "busy", why: "another request is inside this job" };
-    const busy = runningNow();
-    if (busy) return { kind: "busy", why: "another job is running" };
+    const running = runningCount(id);
+    if (running >= maxRunning) {
+      return { kind: "busy", why: `already running ${running} of ${maxRunning} jobs` };
+    }
 
     job.status = "running";
     // A resumed job started once already, and the card's "how long has this been

@@ -1,0 +1,2626 @@
+[
+  {
+    "fixture": "pg-greatwork",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 326,
+    "markers": 87,
+    "markersCaught": 87,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 185
+  },
+  {
+    "fixture": "man-open",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 28,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "rfc9110",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 2415,
+    "markers": 127,
+    "markersCaught": 127,
+    "beyondTheRule": [
+      {
+        "id": "spya-c33bdf",
+        "tag": "li",
+        "chars": 5,
+        "text": "Index",
+        "full": "Index",
+        "marker": false
+      },
+      {
+        "id": "spya-efajur",
+        "tag": "p",
+        "chars": 5,
+        "text": "and:¶",
+        "full": "and:¶",
+        "marker": false
+      },
+      {
+        "id": "spya-m774ev",
+        "tag": "p",
+        "chars": 3,
+        "text": "or¶",
+        "full": "or¶",
+        "marker": false
+      },
+      {
+        "id": "spya-fc92x0",
+        "tag": "p",
+        "chars": 3,
+        "text": "or¶",
+        "full": "or¶",
+        "marker": false
+      },
+      {
+        "id": "spya-hwm2eq",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-thj6mp",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-jzkn50",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-x2zsjy",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-ab9a5x",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-n3pzq5",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-z2frc7",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-uhgkvb",
+        "tag": "dd",
+        "chars": 4,
+        "text": "N/A¶",
+        "full": "N/A¶",
+        "marker": false
+      },
+      {
+        "id": "spya-n3385v",
+        "tag": "dd",
+        "chars": 5,
+        "text": "IESG¶",
+        "full": "IESG¶",
+        "marker": false
+      },
+      {
+        "id": "spya-bvc93q",
+        "tag": "li",
+        "chars": 5,
+        "text": "Name¶",
+        "full": "Name¶",
+        "marker": false
+      },
+      {
+        "id": "spya-shkxeb",
+        "tag": "li",
+        "chars": 5,
+        "text": "Name¶",
+        "full": "Name¶",
+        "marker": false
+      },
+      {
+        "id": "spya-yvmch5",
+        "tag": "dt",
+        "chars": 5,
+        "text": "[TCP]",
+        "full": "[TCP]",
+        "marker": false
+      },
+      {
+        "id": "spya-g52pn7",
+        "tag": "dt",
+        "chars": 5,
+        "text": "[URI]",
+        "full": "[URI]",
+        "marker": false
+      },
+      {
+        "id": "spya-xh649w",
+        "tag": "dt",
+        "chars": 6,
+        "text": "[REST]",
+        "full": "[REST]",
+        "marker": false
+      },
+      {
+        "id": "spya-bd4pw8",
+        "tag": "h2",
+        "chars": 5,
+        "text": "Index",
+        "full": "Index",
+        "marker": false
+      },
+      {
+        "id": "spya-uu23nb",
+        "tag": "p",
+        "chars": 5,
+        "text": "Adobe",
+        "full": "Adobe",
+        "marker": false
+      },
+      {
+        "id": "spya-bkf69b",
+        "tag": "p",
+        "chars": 6,
+        "text": "Fastly",
+        "full": "Fastly",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 225
+  },
+  {
+    "fixture": "whatwg-parsing",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 2986,
+    "markers": 4,
+    "markersCaught": 4,
+    "beyondTheRule": [
+      {
+        "id": "spya-smptwd",
+        "tag": "dt",
+        "chars": 6,
+        "text": "Normal",
+        "full": "Normal",
+        "marker": false
+      },
+      {
+        "id": "spya-pb8su7",
+        "tag": "dt",
+        "chars": 5,
+        "text": "Inert",
+        "full": "Inert",
+        "marker": false
+      },
+      {
+        "id": "spya-sqzahy",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-gcx5gu",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-j3zzpw",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-ktwk44",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-qct9vb",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-z2bhen",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-jmjvc4",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-d2gshv",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vsnm9e",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-hy42hw",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vnpyha",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-pnm9je",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-f2f5gr",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-j9t2a2",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-f909z6",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-th8ngd",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-zhgjf2",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vwmgfr",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-rcwt48",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vqnyqy",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-sbsknt",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-zhhbhm",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-zxv754",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-rmb0t5",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-mbk206",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-uc0yz3",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-hs5yg3",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-fhk7yy",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vvqexn",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-w9stug",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-y8xd06",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-cqj5rq",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-pygan0",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vnkja8",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-xd9k64",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-n6sj60",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-vethbc",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-f6pznn",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-g5f2u8",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-bd8w50",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-b3kxvs",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-pkjf3y",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-t9yrky",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-ecvy0x",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-x57kkj",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-qmwty5",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-hr3xtq",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-cadhbh",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-ufjr6z",
+        "tag": "dt",
+        "chars": 3,
+        "text": "EOF",
+        "full": "EOF",
+        "marker": false
+      },
+      {
+        "id": "spya-y82h8u",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-pmepne",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-wzt2p9",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-meukfs",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-bb3nfk",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-xgugzx",
+        "tag": "li",
+        "chars": 1,
+        "text": "i",
+        "full": "i",
+        "marker": false
+      },
+      {
+        "id": "spya-thhtxb",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-f6qmyj",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-z439c3",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-vtex5y",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-q0b2ej",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-dfhxsg",
+        "tag": "li",
+        "chars": 1,
+        "text": "i",
+        "full": "i",
+        "marker": false
+      },
+      {
+        "id": "spya-szg4nd",
+        "tag": "li",
+        "chars": 1,
+        "text": "i",
+        "full": "i",
+        "marker": false
+      },
+      {
+        "id": "spya-pagav8",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-tse8gm",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-vrzk6s",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-wcmnav",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-fpbvyw",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-kf7nsj",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-ak3d8m",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-ej3fkh",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-vz3vax",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-ax20gk",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-uc9c0j",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-btvdn9",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-pzjt9w",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-pk5w53",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-fk9ke0",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-kmnm96",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-prfk8n",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-pyes8g",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-ty34ra",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-a98aw5",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-dfy3z3",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-x4hw5b",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-zf5v30",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-ntcqv7",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-ubt5sr",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-qn92mr",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-cj6h3w",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-xc7283",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-spgb9z",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-q48q3h",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-sdcw88",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-dy0a6h",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-vvxtkn",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-hpupkk",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-v33nm2",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-fwfj7e",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-y3j7cv",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-eqhgpd",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-wa30wx",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-bbwqnv",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-gx5vud",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-kpqj8q",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-wq8bde",
+        "tag": "li",
+        "chars": 5,
+        "text": "tbody",
+        "full": "tbody",
+        "marker": false
+      },
+      {
+        "id": "spya-b2pxdg",
+        "tag": "li",
+        "chars": 2,
+        "text": "tr",
+        "full": "tr",
+        "marker": false
+      },
+      {
+        "id": "spya-ew629u",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-zprxrz",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-t8nx3b",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-y8589n",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-vyyafb",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-y8wv4p",
+        "tag": "li",
+        "chars": 5,
+        "text": "tbody",
+        "full": "tbody",
+        "marker": false
+      },
+      {
+        "id": "spya-mjv6vr",
+        "tag": "li",
+        "chars": 2,
+        "text": "tr",
+        "full": "tr",
+        "marker": false
+      },
+      {
+        "id": "spya-aykm6a",
+        "tag": "li",
+        "chars": 2,
+        "text": "td",
+        "full": "td",
+        "marker": false
+      },
+      {
+        "id": "spya-kr2pvs",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-zpgxbf",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-n7963j",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-ya0ats",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-atjewz",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-evhx5t",
+        "tag": "li",
+        "chars": 5,
+        "text": "tbody",
+        "full": "tbody",
+        "marker": false
+      },
+      {
+        "id": "spya-r8n72p",
+        "tag": "li",
+        "chars": 2,
+        "text": "tr",
+        "full": "tr",
+        "marker": false
+      },
+      {
+        "id": "spya-wwutx3",
+        "tag": "li",
+        "chars": 2,
+        "text": "td",
+        "full": "td",
+        "marker": false
+      },
+      {
+        "id": "spya-dthhn9",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-qjt6u0",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-mm8j8n",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-n0cg6z",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-ta0svf",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-d786rr",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-f9ddym",
+        "tag": "li",
+        "chars": 5,
+        "text": "tbody",
+        "full": "tbody",
+        "marker": false
+      },
+      {
+        "id": "spya-xv28f5",
+        "tag": "li",
+        "chars": 2,
+        "text": "tr",
+        "full": "tr",
+        "marker": false
+      },
+      {
+        "id": "spya-kt2fvz",
+        "tag": "li",
+        "chars": 2,
+        "text": "td",
+        "full": "td",
+        "marker": false
+      },
+      {
+        "id": "spya-v55rww",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-u8e8t2",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-uhps3p",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-urf5qa",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-zc8q4q",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-b0wt3v",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-bg0hx3",
+        "tag": "li",
+        "chars": 5,
+        "text": "tbody",
+        "full": "tbody",
+        "marker": false
+      },
+      {
+        "id": "spya-jxmh6t",
+        "tag": "li",
+        "chars": 2,
+        "text": "tr",
+        "full": "tr",
+        "marker": false
+      },
+      {
+        "id": "spya-fyv2gc",
+        "tag": "li",
+        "chars": 2,
+        "text": "td",
+        "full": "td",
+        "marker": false
+      },
+      {
+        "id": "spya-rnsz05",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-dcajqt",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-mehh6e",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-xzkvt8",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-g4m3kf",
+        "tag": "li",
+        "chars": 6,
+        "text": "#text:",
+        "full": "#text:",
+        "marker": false
+      },
+      {
+        "id": "spya-w38n6b",
+        "tag": "li",
+        "chars": 6,
+        "text": "script",
+        "full": "script",
+        "marker": false
+      },
+      {
+        "id": "spya-uv0a90",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-teqkqh",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-qr45bg",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-hghsjq",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-pvqru3",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-nvwqcc",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-xwx58y",
+        "tag": "li",
+        "chars": 6,
+        "text": "script",
+        "full": "script",
+        "marker": false
+      },
+      {
+        "id": "spya-expans",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-ws8a0m",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-t5505s",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-wrm3bd",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-kbkcwy",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-hpvhb6",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-ahdagp",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-m6tg07",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-qehc2h",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-atyx4w",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-ugkwxm",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-bat2cy",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-j34jmp",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-qx2f47",
+        "tag": "li",
+        "chars": 1,
+        "text": "b",
+        "full": "b",
+        "marker": false
+      },
+      {
+        "id": "spya-rhhxtu",
+        "tag": "li",
+        "chars": 1,
+        "text": "p",
+        "full": "p",
+        "marker": false
+      },
+      {
+        "id": "spya-eyuxgt",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-j6c6t2",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-ebkuwp",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-mvu3d2",
+        "tag": "li",
+        "chars": 3,
+        "text": "div",
+        "full": "div",
+        "marker": false
+      },
+      {
+        "id": "spya-ssvg9v",
+        "tag": "li",
+        "chars": 5,
+        "text": "input",
+        "full": "input",
+        "marker": false
+      },
+      {
+        "id": "spya-zatskn",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-jjxh06",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-t5tbz7",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-mb7bz8",
+        "tag": "li",
+        "chars": 3,
+        "text": "div",
+        "full": "div",
+        "marker": false
+      },
+      {
+        "id": "spya-dttgfk",
+        "tag": "li",
+        "chars": 5,
+        "text": "input",
+        "full": "input",
+        "marker": false
+      },
+      {
+        "id": "spya-e7f9dz",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-rjrk0u",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-p3aqq8",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-hnpf9v",
+        "tag": "li",
+        "chars": 1,
+        "text": "a",
+        "full": "a",
+        "marker": false
+      },
+      {
+        "id": "spya-q4vx63",
+        "tag": "li",
+        "chars": 1,
+        "text": "a",
+        "full": "a",
+        "marker": false
+      },
+      {
+        "id": "spya-b9tghp",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      },
+      {
+        "id": "spya-rmtrep",
+        "tag": "li",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-g6rpcu",
+        "tag": "li",
+        "chars": 4,
+        "text": "head",
+        "full": "head",
+        "marker": false
+      },
+      {
+        "id": "spya-gexshx",
+        "tag": "li",
+        "chars": 4,
+        "text": "body",
+        "full": "body",
+        "marker": false
+      },
+      {
+        "id": "spya-t80zxu",
+        "tag": "li",
+        "chars": 1,
+        "text": "a",
+        "full": "a",
+        "marker": false
+      },
+      {
+        "id": "spya-w0xthz",
+        "tag": "li",
+        "chars": 1,
+        "text": "a",
+        "full": "a",
+        "marker": false
+      },
+      {
+        "id": "spya-hu2hkf",
+        "tag": "li",
+        "chars": 5,
+        "text": "table",
+        "full": "table",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 593
+  },
+  {
+    "fixture": "wikipedia-transformer",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 335,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-crz9b0",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-et28z0",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-kg9req",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-hvrmuf",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-cumcdn",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-eruubp",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-czupvd",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-hqbymr",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-r54u3z",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-b0em7c",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-twzgm3",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-e7cwpt",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-dkj378",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-wpts72",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-qyu5cb",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-cmxpus",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-yejyah",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-qsax2d",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-h89wy6",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "full": "[edit]",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 114
+  },
+  {
+    "fixture": "ar5iv-attention",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 139,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "arxiv-abs",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 5,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "aaronson",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 102,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "acx",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 513,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "gwern-scaling",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 175,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "tufte-css",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 63,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-b5ggra",
+        "tag": "h3",
+        "chars": 4,
+        "text": "Text",
+        "full": "Text",
+        "marker": false
+      },
+      {
+        "id": "spya-q9x65k",
+        "tag": "h2",
+        "chars": 4,
+        "text": "Code",
+        "full": "Code",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 8
+  },
+  {
+    "fixture": "mdn-cache-control",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 209,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-ghdcp7",
+        "tag": "h2",
+        "chars": 6,
+        "text": "Syntax",
+        "full": "Syntax",
+        "marker": false
+      },
+      {
+        "id": "spya-y7pnk6",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-cz7wav",
+        "tag": "dt",
+        "chars": 3,
+        "text": "Age",
+        "full": "Age",
+        "marker": false
+      },
+      {
+        "id": "spya-wzbsx5",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-jys5g6",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-w6jqkx",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-nqd3sj",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-gepnyj",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-pu6kxv",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-espcgn",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-dndwde",
+        "tag": "h4",
+        "chars": 6,
+        "text": "public",
+        "full": "public",
+        "marker": false
+      },
+      {
+        "id": "spya-jkke57",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-w5r3dv",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-rcamqc",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-hfdea4",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-vza0ka",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-dqzt9y",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-h653qy",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-p4vfyw",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-pffdk6",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-s7kmex",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-u3avmw",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-e6jfke",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-q2xx3p",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-t43h20",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-esfdqu",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-zzg2na",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-znv9pw",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-atuwze",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "full": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-cdskr2",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-utwwdq",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-enu33f",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-p8wd4k",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "full": "http",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 135
+  },
+  {
+    "fixture": "gutenberg-pride",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 2208,
+    "markers": 8,
+    "markersCaught": 8,
+    "beyondTheRule": [
+      {
+        "id": "spya-fj7q25",
+        "tag": "p",
+        "chars": 3,
+        "text": "{v}",
+        "full": "{v}",
+        "marker": false
+      },
+      {
+        "id": "spya-ueezn5",
+        "tag": "h2",
+        "chars": 4,
+        "text": "{ix}",
+        "full": "{ix}",
+        "marker": false
+      },
+      {
+        "id": "spya-xguynx",
+        "tag": "h2",
+        "chars": 5,
+        "text": "{xxv}",
+        "full": "{xxv}",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 46
+  },
+  {
+    "fixture": "cornell-17-107",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 108,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "constitution",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 454,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "mkdocs-tabs",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 49,
+    "markers": 2,
+    "markersCaught": 2,
+    "beyondTheRule": [
+      {
+        "id": "spya-pw8xe8",
+        "tag": "li",
+        "chars": 6,
+        "text": "Tabbed",
+        "full": "Tabbed",
+        "marker": false
+      },
+      {
+        "id": "spya-bfbj5j",
+        "tag": "h2",
+        "chars": 6,
+        "text": "Usage¶",
+        "full": "Usage¶",
+        "marker": false
+      },
+      {
+        "id": "spya-mj40n0",
+        "tag": "p",
+        "chars": 4,
+        "text": "CC++",
+        "full": "CC++",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 26
+  },
+  {
+    "fixture": "whitman-leaves",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 818,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-eddv0y",
+        "tag": "h2",
+        "chars": 6,
+        "text": "To You",
+        "full": "To You",
+        "marker": false
+      },
+      {
+        "id": "spya-p0gb9r",
+        "tag": "h2",
+        "chars": 6,
+        "text": "BOOK X",
+        "full": "BOOK X",
+        "marker": false
+      },
+      {
+        "id": "spya-qjf05h",
+        "tag": "h2",
+        "chars": 6,
+        "text": "To You",
+        "full": "To You",
+        "marker": false
+      },
+      {
+        "id": "spya-xrtqv2",
+        "tag": "h2",
+        "chars": 5,
+        "text": "Tears",
+        "full": "Tears",
+        "marker": false
+      },
+      {
+        "id": "spya-gurfsb",
+        "tag": "h2",
+        "chars": 4,
+        "text": "Gods",
+        "full": "Gods",
+        "marker": false
+      },
+      {
+        "id": "spya-v23fuj",
+        "tag": "h2",
+        "chars": 5,
+        "text": "Germs",
+        "full": "Germs",
+        "marker": false
+      },
+      {
+        "id": "spya-efpft6",
+        "tag": "h2",
+        "chars": 6,
+        "text": "Kosmos",
+        "full": "Kosmos",
+        "marker": false
+      },
+      {
+        "id": "spya-gsy8gm",
+        "tag": "h2",
+        "chars": 5,
+        "text": "Tests",
+        "full": "Tests",
+        "marker": false
+      },
+      {
+        "id": "spya-wrerne",
+        "tag": "h2",
+        "chars": 5,
+        "text": "Faces",
+        "full": "Faces",
+        "marker": false
+      },
+      {
+        "id": "spya-ex2nx5",
+        "tag": "h2",
+        "chars": 4,
+        "text": "Life",
+        "full": "Life",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 52
+  },
+  {
+    "fixture": "hacker-howto",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 162,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "mactutor-turing",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 135,
+    "markers": 18,
+    "markersCaught": 18,
+    "beyondTheRule": [
+      {
+        "id": "spya-sqaqy2",
+        "tag": "dt",
+        "chars": 4,
+        "text": "Born",
+        "full": "Born",
+        "marker": false
+      },
+      {
+        "id": "spya-v6pkf6",
+        "tag": "dt",
+        "chars": 4,
+        "text": "Died",
+        "full": "Died",
+        "marker": false
+      },
+      {
+        "id": "spya-rs2har",
+        "tag": "p",
+        "chars": 2,
+        "text": "in",
+        "full": "in",
+        "marker": false
+      },
+      {
+        "id": "spya-p25wk3",
+        "tag": "p",
+        "chars": 2,
+        "text": "'s",
+        "full": "'s",
+        "marker": false
+      },
+      {
+        "id": "spya-spp5s5",
+        "tag": "p",
+        "chars": 2,
+        "text": "'s",
+        "full": "'s",
+        "marker": false
+      },
+      {
+        "id": "spya-ctg3ky",
+        "tag": "p",
+        "chars": 2,
+        "text": "in",
+        "full": "in",
+        "marker": false
+      },
+      {
+        "id": "spya-h2typz",
+        "tag": "p",
+        "chars": 2,
+        "text": "'s",
+        "full": "'s",
+        "marker": false
+      },
+      {
+        "id": "spya-pxzdfj",
+        "tag": "a",
+        "chars": 6,
+        "text": "groups",
+        "full": "groups",
+        "marker": false
+      },
+      {
+        "id": "spya-m55gaz",
+        "tag": "em",
+        "chars": 5,
+        "text": "Bombe",
+        "full": "Bombe",
+        "marker": false
+      },
+      {
+        "id": "spya-f3k7z0",
+        "tag": "p",
+        "chars": 2,
+        "text": "In",
+        "full": "In",
+        "marker": false
+      },
+      {
+        "id": "spya-a2ck7a",
+        "tag": "p",
+        "chars": 2,
+        "text": "in",
+        "full": "in",
+        "marker": false
+      },
+      {
+        "id": "spya-kbbmby",
+        "tag": "em",
+        "chars": 4,
+        "text": "Mind",
+        "full": "Mind",
+        "marker": false
+      },
+      {
+        "id": "spya-u5qehm",
+        "tag": "a",
+        "chars": 4,
+        "text": "Post",
+        "full": "Post",
+        "marker": false
+      },
+      {
+        "id": "spya-e9d3da",
+        "tag": "a",
+        "chars": 5,
+        "text": "Boone",
+        "full": "Boone",
+        "marker": false
+      },
+      {
+        "id": "spya-zehfg7",
+        "tag": "li",
+        "chars": 4,
+        "text": "NNDB",
+        "full": "NNDB",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 104
+  },
+  {
+    "fixture": "shakespeare-hamlet",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 52,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  },
+  {
+    "fixture": "acx-footnotes",
+    "model": "openai/gpt-5.6-luna",
+    "blocks": 96,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0
+  }
+]

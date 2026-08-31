@@ -272,9 +272,9 @@ export function LandingPage() {
           web when it needs to. The answer starts arriving in a second or two, and the article never
           leaves the screen.
         </Feature>
-        <Feature name="Summaries at the length you pick.">
-          The whole piece, or any section of it, at any rung of the ladder. The shortest is already
-          on the page before anybody has paid for a model call.
+        <Feature name="A sentence on every part of it.">
+          The whole piece, each of its parts and each of its sections, one line each, as deep into
+          the article as you ask. It is on the page before anybody has paid for a model call.
         </Feature>
         <Feature name="A chat that cites.">
           Ask a question and every claim in the answer links back into the article. It can search

@@ -67,7 +67,7 @@
  * await stageCli(import.meta.url, main);     // the new one, three files
  * ```
  *
- * The second is docs/plans/simplification-wave-2.md §2.5: one line that folds
+ * The second is docs/plans/260828aj-simplification-wave-2.md §2.5: one line that folds
  * the guard, `.env.local` and the ledger together, so §0.1's leak — a copied
  * tail with a line missing — stops being a thing to remember. The migration is
  * partial because five of the eight files were dirty with other agents' work on
@@ -117,7 +117,7 @@
  *
  * Four tests, and each is narrower than the sentence people will remember:
  *
- * - **`wraps every listed stage CLI entrypoint`** checks the eight modules in
+ * - **`wraps every listed stage CLI entrypoint`** checks the nine modules in
  *   `PAID_CLIS`, and nothing else. It says nothing about evals, which open the
  *   ledger with the `"eval"` scope.
  * - **`names every package.json entry module that imports a provider seam`**
@@ -165,7 +165,8 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
   "src/ideas.ts": "npm run ideas — streamMessage",
   "src/labels.ts": "npm run labels — streamMessage per batch",
   "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
-  "src/summarise.ts": "npm run summarise — streamMessage per granularity",
+  "src/quotes.ts": "npm run quotes — streamMessage",
+  "src/timeline.ts": "npm run timeline — streamMessage",
   "src/toc.ts": "npm run toc — streamMessage",
   "src/tweets.ts": "npm run tweets — streamMessage",
 };
@@ -802,7 +803,7 @@ export function ledgerOffence(file: string, source: string): string | null {
  * **The one-line tail, checked as a whole line rather than as a mention.**
  *
  * A CLI on `stageCli` has no guard and no `withLedger` of its own to inspect —
- * that is the point of docs/plans/simplification-wave-2.md §2.5, and it is also
+ * that is the point of docs/plans/260828aj-simplification-wave-2.md §2.5, and it is also
  * the obvious way to make this gate stop meaning anything. The temptation is to
  * relax the rule to "a `stageCli` call appears somewhere". That is the proximity
  * grep GPT Sol already refused once, wearing a different name.
@@ -1633,7 +1634,7 @@ describe("the listed stage CLIs open the ledger", () => {
  *
  * Three of the eight CLIs no longer say any of this for themselves — they say
  * `await stageCli(import.meta.url, main)` and nothing else, which is the point
- * of docs/plans/simplification-wave-2.md §2.5. That moves every guarantee into
+ * of docs/plans/260828aj-simplification-wave-2.md §2.5. That moves every guarantee into
  * `stageCli`, so `stageCli` gets the treatment the eight tails used to get:
  * checked structurally, and watched failing first.
  *
@@ -1786,7 +1787,7 @@ describe("stageCli itself opens the ledger", () => {
 });
 
 /**
- * **The same eight CLIs read `.env.local` before they spend.**
+ * **The same nine CLIs read `.env.local` before they spend.**
  *
  * A sibling rule rather than part of the one above, because it is about a
  * different failure. The ledger rule is about money going missing; this one is
@@ -1798,7 +1799,7 @@ describe("stageCli itself opens the ledger", () => {
  * lives here. `PAID_CLIS` is already the set of modules that spend, and a CLI
  * that spends is exactly a CLI that needs a key.
  *
- * **The edge of this, in the same spirit as the header.** It checks the eight
+ * **The edge of this, in the same spirit as the header.** It checks the nine
  * named above and nothing else — `src/embeddings.ts`, `src/converse.ts` and
  * `src/explain.ts` also call `loadEnvLocal()` and are outside the list because
  * they are outside `PAID_CLIS`. And it cannot see a CLI that reads a key some

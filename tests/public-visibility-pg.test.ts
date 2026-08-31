@@ -46,11 +46,12 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Glossary, Ideas, Summaries, TweetThread } from "../src/types.js";
+import type { Glossary, Ideas, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -94,33 +95,26 @@ const EXTRACTED_TITLE = "A piece somebody shared";
  * comes across the wire from Postgres whatever the table guard says, and only
  * the projection in src/public/dto.ts drops it.
  */
-/* A steer, on an artefact written before the box was deleted on 2026-08-30
-   (docs/plans/steer-becomes-the-profile.md). Nothing writes one now; every
-   summary stored before then still carries one inside its JSON, so the
-   projection still has to drop it and this still has to prove that. */
-const PRIVATE_GUIDANCE = "I am reading this to argue with a colleague, skip the history";
 const PRIVATE_LOOKUP = "what the owner asked the web and what it said back";
 const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
 /** And what a visitor *must* see, so the absences above are not absence of everything. */
 const PUBLIC_TERM = "Integrated information theory";
-const PUBLIC_SUMMARY = "The whole piece, in a paragraph.";
 const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure.";
 const PUBLIC_TWEET = "The first post of the thread.";
 
 /**
- * **The four artefacts slice 1b carries**, each stuffed with the provenance it
+ * **The artefacts slice 1b carries**, each stuffed with the provenance it
  * must not carry.
  *
  * A module constant rather than an object literal in `beforeAll`, because one
- * case below deliberately replaces all four to test `personalised` and has to
+ * case below deliberately replaces them all to test `personalised` and has to
  * put them back afterwards. Restoring them to `null` — which is what it did
- * when there were three of them and nothing read them — leaves every later case
+ * when nothing read them — leaves every later case
  * in this file reading an article with no artefacts on it, and the failure
  * lands wherever vitest happens to order things rather than here.
  */
 const ARTEFACTS: {
   glossary: Glossary;
-  summary: Summaries;
   ideas: Ideas;
   tweets: TweetThread;
 } = {
@@ -150,21 +144,6 @@ const ARTEFACTS: {
         },
       },
     ],
-  },
-  summary: {
-    version: "summary/1",
-    generator: "test",
-    slug: SLUG,
-    sourceHash: "abc",
-    profileHash: PRIVATE_PROFILE_HASH,
-    /* `Summaries` no longer declares this, so it is spread in rather than
-       written as a key — see PRIVATE_GUIDANCE above for why an artefact that
-       cannot be written any more still has to be *read* safely. */
-    ...({ guidance: PRIVATE_GUIDANCE } as Record<string, string>),
-    missing: 0,
-    generatedAt: "2026-02-02T00:00:00.000Z",
-    elapsedMs: 1,
-    entries: [{ range: [HEADING_ID, BLOCK_ID], depth: 0, long: PUBLIC_SUMMARY }],
   },
   ideas: {
     version: "ideas/1",
@@ -218,6 +197,9 @@ const OWNER = currentOwnerId();
  * 42703 instead of saying what to run.
  */
 let reachable = false;
+/** What is missing and which fix it needs, for `REQUIRE_POSTGRES=1`. */
+let why = "DATABASE_URL is not set — run npm run db:start";
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -225,7 +207,8 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
-  let why = "";
+  why = "";
+  kind = "migration";
   try {
     const probe = await pool.query(
       `select exists (
@@ -239,11 +222,16 @@ if (process.env.DATABASE_URL) {
     if (!reachable) why = "spideryarn.articles.visibility is missing — run npm run db:migrate";
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
   if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
 }
+
+/* A skip is the right default and the wrong answer for a run that exists to
+   prove a machine has a database. tests/helpers/pg-ready.ts. */
+if (!reachable) failIfPostgresRequired("tests/public-visibility-pg.test.ts", why, kind);
 
 const when = reachable ? describe : describe.skip;
 
@@ -474,9 +462,9 @@ when("sharing one article", { timeout: 60_000 }, () => {
        slice 1b's exposure. They are on this row *now* — the fixture wrote them
        before this case ran — so a public read that fetched the columns without
        the visibility predicate would put a private article's glossary,
-       summaries, ideas and thread at a public URL, and the assertions further
+       ideas and thread at a public URL, and the assertions further
        down would not notice, because they all run after publication. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_SUMMARY, PUBLIC_IDEA, PUBLIC_TWEET]) {
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -674,36 +662,33 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.text).not.toContain(PRIVATE_PURPOSE);
     expect(r.text).not.toContain(PRIVATE_NOTE);
     expect(r.text).not.toContain("SECRETSIGNATURE");
-    /* And the four inside the artefacts, which slice 1b put on the wire. */
+    /* And the ones inside the artefacts, which slice 1b put on the wire. */
     expect(r.text).not.toContain(PRIVATE_LOOKUP);
-    expect(r.text).not.toContain(PRIVATE_GUIDANCE);
     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
     expect(r.text).not.toContain("a-search-model");
-    /* And the extracted title *is* there — otherwise the four lines above would
+    /* And the extracted title *is* there — otherwise the lines above would
        pass on an empty response. */
     expect(r.text).toContain(EXTRACTED_TITLE);
   });
 
   /**
-   * **The four artefacts really are served**, which is what slice 1b is for and
+   * **The artefacts really are served**, which is what slice 1b is for and
    * what makes the absences above absences of something rather than of
    * everything.
    *
    * Every canary line in the case above passes just as happily against a
-   * response that dropped all four columns — the exact failure this repo keeps
-   * writing up. So the same response is read for the four things a visitor came
+   * response that dropped every column — the exact failure this repo keeps
+   * writing up. So the same response is read for the things a visitor came
    * here to get.
    */
-  it("serves the glossary, the summaries, the ideas and the thread", async () => {
+  it("serves the glossary, the ideas and the thread", async () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     const body = r.body as {
       glossary?: { entries: { name: string }[] };
-      summary?: { entries: { long?: string }[]; missing: number };
       ideas?: { ideas: { statement: string }[] };
       tweets?: { limit: number; tweets: { text: string }[] };
     };
     expect(body.glossary?.entries[0]?.name).toBe(PUBLIC_TERM);
-    expect(body.summary?.entries[0]?.long).toBe(PUBLIC_SUMMARY);
     expect(body.ideas?.ideas[0]?.statement).toBe(PUBLIC_IDEA);
     expect(body.tweets?.tweets[0]?.text).toBe(PUBLIC_TWEET);
     expect(body.tweets?.limit).toBe(280);
@@ -715,7 +700,13 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.body).toEqual({
       slug: SLUG,
       title: EXTRACTED_TITLE,
-      available: { arc: false, tweets: true, glossary: true, summary: true, ideas: true },
+      available: {
+        arc: false,
+        tweets: true,
+        glossary: true,
+        ideas: true,
+        quotes: false,
+      },
     });
   });
 
@@ -828,13 +819,13 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.body.sharing).toEqual({
       visibility: "public",
       publicAt: (await articleRow())?.publicAt?.toISOString(),
-      /* All four, because slice 1b's fixture plants a `profileHash` on every
+      /* All of them, because slice 1b's fixture plants a `profileHash` on every
          artefact — it is the canary for the field that must not reach a
-         visitor, so it has to be on all four to prove none of them carries it.
+         visitor, so it has to be on all of them to prove none carries it.
          The order is `STEP_ORDER`'s, which is what the store walks.
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
-      personalised: ["tweets", "glossary", "summary", "ideas"],
+      personalised: ["tweets", "glossary", "ideas"],
     });
   });
 
@@ -883,13 +874,13 @@ when("sharing one article", { timeout: 60_000 }, () => {
    * rather than three:
    *
    * - a **glossary with a `profileHash`** — must be listed;
-   * - a **summary with `profileHash: null`**, which means *written deliberately
-   *   without a profile* (src/types.ts) and is a different thing from
-   *   personalised — must NOT be listed, and is what a truthy test or a
+   * - a **list of ideas with `profileHash: null`**, which means *written
+   *   deliberately without a profile* (src/types.ts) and is a different thing
+   *   from personalised — must NOT be listed, and is what a truthy test or a
    *   `!== undefined` test would get wrong;
-   * - **`ideas` absent entirely** — must not be listed, which is the "only
+   * - **`tweets` absent entirely** — must not be listed, which is the "only
    *   artefacts that exist" guarantee. An artefact never generated cannot have
-   *   been personalised, and listing one would have the dialog name a glossary
+   *   been personalised, and listing one would have the dialog name a thread
    *   that is not there.
    */
   it("names the personalised artefacts, and only ones that were really built", async () => {
@@ -897,11 +888,11 @@ when("sharing one article", { timeout: 60_000 }, () => {
     /* **Empty first, and it is a real answer rather than a gap** — the field
        being present and empty is the store saying it looked and found none.
        This reading used to come free from a fixture with no `profileHash` on
-       it anywhere; slice 1b's fixture plants one on all four artefacts as a
+       it anywhere; slice 1b's fixture plants one on every artefact as a
        canary, so it is asserted deliberately here instead of being lost. */
     await db
       .update(articleRevisions)
-      .set({ glossary: null, summary: null, ideas: null, tweets: null })
+      .set({ glossary: null, ideas: null, tweets: null })
       .where(eq(articleRevisions.id, REVISION_ID));
     const none = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
     expect((none.body.sharing as { personalised: string[] }).personalised).toEqual([]);
@@ -923,13 +914,12 @@ when("sharing one article", { timeout: 60_000 }, () => {
           elapsedMs: 1,
           profileHash: "abc123",
         },
-        summary: {
+        ideas: {
           version: "1",
           generator: "test",
           slug: SLUG,
           sourceHash: "s1",
-          entries: [],
-          missing: 0,
+          ideas: [],
           generatedAt: "2026-08-28T00:00:00.000Z",
           elapsedMs: 1,
           /* **Null, not absent**, and that is the case this fixture exists for:
@@ -937,10 +927,9 @@ when("sharing one article", { timeout: 60_000 }, () => {
              different thing from personalised. */
           profileHash: null,
         },
-        ideas: null,
-        /* Nulled with the other three: this case's whole claim is about which
+        /* Nulled with the rest: this case's whole claim is about which
            artefacts are listed, and a thread left over from the fixture — which
-           carries a `profileHash` — would put a fourth name in the list. */
+           carries a `profileHash` — would put another name in the list. */
         tweets: null,
       })
       .where(eq(articleRevisions.id, REVISION_ID));
@@ -950,8 +939,8 @@ when("sharing one article", { timeout: 60_000 }, () => {
       expect(sharing.personalised).toEqual(["glossary"]);
       /* Said separately, because `toEqual` above would pass a list that happened
          to be right for the wrong reason if the ordering ever changed. */
-      expect(sharing.personalised).not.toContain("summary");
       expect(sharing.personalised).not.toContain("ideas");
+      expect(sharing.personalised).not.toContain("tweets");
       /* And never a step that has no model call to personalise. */
       for (const step of ["fetch", "extract", "blocks", "toc", "arc"]) {
         expect(sharing.personalised, step).not.toContain(step);

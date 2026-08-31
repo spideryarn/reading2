@@ -8,7 +8,7 @@
  * The claim: on a laptop with the flag unset, a job behaves exactly as it did
  * before the finalizer landed. No draft, no publication, no database, nothing
  * new. That is what local development runs, and it must not change under people
- * (docs/plans/v1-imports-on-vercel.md).
+ * (docs/plans/260830d-v1-imports-on-vercel.md).
  *
  * ## How this proves it without a database, and why that matters
  *
@@ -138,7 +138,17 @@ const LABELS: LabelsFile = {
   batches: null,
 };
 
-/** The same shape as the real unconverted stages: write inside `run`, return a detail. */
+/**
+ * The same shape as the real stages: **return** the artefacts and let the
+ * session's commit write them.
+ *
+ * It wrote them itself with `fsArtifacts.write` and returned a bare detail
+ * until 2026-08-31, which matched the stages while they were unconverted. Now
+ * only `fetch` and `extract` do that (`LEGACY_UNCONVERTED_STEPS`), and a
+ * fixture that went on writing inside `run` would be testing a shape the
+ * pipeline no longer has — `checkProduct` refuses it, which is how this file
+ * found out.
+ */
 function writingStep(name: StepName, parts: Partial<Record<ArtifactKind, unknown>>): PipelineStep {
   return {
     name,
@@ -146,8 +156,7 @@ function writingStep(name: StepName, parts: Partial<Record<ArtifactKind, unknown
     outputs: () => [],
     produces: STEPS[name].produces,
     async run(): Promise<StepProduct> {
-      await fsArtifacts.write(SLUG, name, parts as never, {});
-      return { detail: `${name} ran` };
+      return { parts: parts as never, detail: `${name} ran` };
     },
   } as PipelineStep;
 }

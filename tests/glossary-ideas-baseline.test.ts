@@ -3,7 +3,7 @@
  * path** — and the four states they have to tell apart.
  *
  * This is the sibling of tests/blocks-baseline.test.ts, for the other two of the
- * three stages docs/plans/delete-the-importer.md § *Three stages carry identity
+ * three stages docs/plans/260827aa-delete-the-importer.md § *Three stages carry identity
  * in a file* names. The glossary reads `glossary.json` to decide whether to
  * **append** to the list and to **inherit** its entry ids; `ideas` reads
  * `ideas.json` for ids alone. Landing D takes the files away, and after it both
@@ -75,6 +75,7 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import { mintId } from "../src/ids.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
@@ -137,6 +138,16 @@ async function anArticle(prefix: string): Promise<{ root: string; dir: string; b
   };
   return { root, dir, blocks };
 }
+
+/**
+ * The three files a stage is handed instead of a path — src/article-input.ts.
+ *
+ * Imported here rather than at the top because everything else in this file
+ * that touches `src/` is, and the reason is `vi.mock` above: one import style
+ * throughout is one fewer thing to reason about when a stub does not take.
+ */
+const articleIn = async (dir: string) =>
+  (await import("../src/article-input.js")).readArticleFromDir(dir);
 
 /**
  * A glossary answer naming these terms.
@@ -345,14 +356,54 @@ describe("the previous artefact, over the filesystem store", () => {
     };
   }
 
+  /**
+   * The stage, and then the write the stage no longer does itself.
+   *
+   * `generateGlossary` hands its glossary back and writes nothing — the caller
+   * stores it, through the artefact store in the pipeline and to a file at the
+   * command line (docs/plans/260831b-finish-the-database-move.md § stage 2). Over the
+   * filesystem store those are the same bytes in the same place, so everything
+   * below that reads `glossary.json` back is still reading what a real caller
+   * put there rather than a fixture this file invented for itself.
+   */
+  async function glossaryInto(
+    dir: string,
+    opts: { previous: Glossary | null; profile?: string | null },
+  ) {
+    const { generateGlossary } = await import("../src/glossary.js");
+    const run = await generateGlossary({ article: await articleIn(dir), ...opts });
+    await writeFile(
+      path.join(dir, "glossary.json"),
+      JSON.stringify(run.glossary, null, 2),
+      "utf-8",
+    );
+    return run;
+  }
+
+  /**
+   * The same for the ideas, and it is a *new* write rather than a moved one.
+   *
+   * `generateIdeas` wrote `<dir>/ideas.json` itself until stage 2 took the
+   * directory away from it — there is no path inside a stage any more, so the
+   * caller stores the artefact, through the artefact store in the pipeline and
+   * to a file at the command line. Everything below that reads `ideas.json`
+   * back is therefore still reading what a real caller put there.
+   */
+  async function ideasInto(dir: string, opts: { previous: Ideas | null }) {
+    const { generateIdeas } = await import("../src/ideas.js");
+    const run = await generateIdeas({ article: await articleIn(dir), ...opts });
+    await writeFile(path.join(dir, "ideas.json"), JSON.stringify(run.ideas, null, 2), "utf-8");
+    return run;
+  }
+
   /* ------------------------------------------------------------- glossary -- */
 
   it("keeps every entry id across a re-run the article's text has not changed under", async () => {
     const { dir, store } = await workspace("spya-gloss-carry-");
-    const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
+    const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = await generateGlossary({ dir, previous: null });
+    const first = await glossaryInto(dir, { previous: null });
     expect(first.glossary.passes).toBe(1);
     const before = first.glossary.entries.map((e) => `${e.name}=${e.id}`).sort();
 
@@ -364,7 +415,7 @@ describe("the previous artefact, over the filesystem store", () => {
     const previous = await previousGlossaryFrom(store, "a");
     expect(previous?.entries).toHaveLength(2);
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const second = await generateGlossary({ dir, previous, profile: "a physicist" });
+    const second = await glossaryInto(dir, { previous, profile: "a physicist" });
 
     expect(second.glossary.passes).toBe(1);
     /* The exact ids against the exact names, not a count of survivors: two runs
@@ -374,18 +425,17 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("appends to the list a second time, rather than replacing it", async () => {
     const { dir, store } = await workspace("spya-gloss-append-");
-    const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
+    const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await generateGlossary({ dir, previous: null });
+    const first = await glossaryInto(dir, { previous: null });
 
     /* The second half of the file's job, and the one every id assertion above
        is blind to. "Find more terms" is a re-run of this step, and a change
        that kept the ids while quietly turning it into "replace the glossary"
        would pass all of them. docs/project/glossary.md § Finding more. */
     answers.push(glossaryAnswer("Noema"));
-    const second = await generateGlossary({
-      dir,
+    const second = await glossaryInto(dir, {
       previous: await previousGlossaryFrom(store, "a"),
     });
 
@@ -402,12 +452,12 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("refuses when the previous glossary is there and cannot be read", async () => {
     const { dir, store } = await workspace("spya-gloss-corrupt-");
-    const { GlossaryBaselineUnusable, generateGlossary, previousGlossaryFrom } = await import(
+    const { GlossaryBaselineUnusable, previousGlossaryFrom } = await import(
       "../src/glossary.js"
     );
 
     answers.push(glossaryAnswer("Corrigibility"));
-    await generateGlossary({ dir, previous: null });
+    await glossaryInto(dir, { previous: null });
 
     /* Cut off halfway, which is what a `writeFile` killed in the middle leaves.
        Every entry id the reader's `?term=` links name is still in those bytes —
@@ -438,10 +488,10 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("mints quietly when the article's text has moved under the glossary", async () => {
     const { dir, store } = await workspace("spya-gloss-moved-");
-    const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
+    const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await generateGlossary({ dir, previous: null });
+    const first = await glossaryInto(dir, { previous: null });
 
     /* A `sourceHash` from a different article. The entries describe text that
        is no longer there, so refusing to inherit is **correct** — and it must
@@ -457,7 +507,7 @@ describe("the previous artefact, over the filesystem store", () => {
     expect(previous?.sourceHash).toBe("a-hash-from-somewhere-else");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const second = await generateGlossary({ dir, previous });
+    const second = await glossaryInto(dir, { previous });
     // A fresh list: not appended to, and not inheriting the old identity.
     expect(second.glossary.passes).toBe(1);
     expect(idOf(second.glossary, "Corrigibility")).not.toBe(
@@ -483,10 +533,10 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("asks the store, and does not fall back to reading the file itself", async () => {
     const { dir, store } = await workspace("spya-gloss-seam-");
-    const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
+    const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    await generateGlossary({ dir, previous: null });
+    await glossaryInto(dir, { previous: null });
 
     /* The glossary is sitting on disk exactly where the old code read it from.
        A store that says there is none must win, or the seam is decorative and
@@ -503,11 +553,11 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("keeps every idea id across a re-run the article's text has not changed under", async () => {
     const { dir, blocks, store } = await workspace("spya-ideas-carry-");
-    const { generateIdeas, previousIdeasFrom } = await import("../src/ideas.js");
+    const { previousIdeasFrom } = await import("../src/ideas.js");
     const block = quotable(blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await generateIdeas({ dir, previous: null });
+    const first = await ideasInto(dir, { previous: null });
     const before = first.ideas.ideas[0]?.id;
     expect(before).toBeTruthy();
 
@@ -515,7 +565,7 @@ describe("the previous artefact, over the filesystem store", () => {
     expect(previous?.ideas).toHaveLength(1);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const second = await generateIdeas({ dir, previous });
+    const second = await ideasInto(dir, { previous });
     /* The same name, so `idsByName` can match it — which is exactly as far as
        this stage's promise goes, and src/ideas.ts § `idsByName` says why it
        deliberately goes no further. */
@@ -524,12 +574,12 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("refuses when the previous ideas are there and cannot be read", async () => {
     const { dir, blocks, store } = await workspace("spya-ideas-corrupt-");
-    const { IdeasBaselineUnusable, generateIdeas, previousIdeasFrom } = await import(
+    const { IdeasBaselineUnusable, previousIdeasFrom } = await import(
       "../src/ideas.js"
     );
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought"));
-    await generateIdeas({ dir, previous: null });
+    await ideasInto(dir, { previous: null });
 
     const file = path.join(dir, "ideas.json");
     const whole = await readFile(file, "utf-8");
@@ -547,11 +597,11 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("mints quietly when the article's text has moved under the ideas", async () => {
     const { dir, blocks, store } = await workspace("spya-ideas-moved-");
-    const { generateIdeas, previousIdeasFrom } = await import("../src/ideas.js");
+    const { previousIdeasFrom } = await import("../src/ideas.js");
     const block = quotable(blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await generateIdeas({ dir, previous: null });
+    const first = await ideasInto(dir, { previous: null });
 
     const stale = JSON.parse(await readFile(path.join(dir, "ideas.json"), "utf-8")) as Ideas;
     await writeFile(
@@ -564,7 +614,7 @@ describe("the previous artefact, over the filesystem store", () => {
     expect(previous?.sourceHash).toBe("a-hash-from-somewhere-else");
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const second = await generateIdeas({ dir, previous });
+    const second = await ideasInto(dir, { previous });
     expect(second.ideas.ideas[0]?.id).not.toBe(first.ideas.ideas[0]?.id);
   });
 
@@ -600,13 +650,13 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("refuses a glossary that cannot answer either question it is read for", async () => {
     const { dir, store } = await workspace("spya-gloss-carries-");
-    const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
+    const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     /* Built by the stage, then broken one field at a time — so the control is a
        real artefact rather than one hand-written to satisfy the reader, and
        every row differs from a passing case by exactly the thing named. */
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await generateGlossary({ dir, previous: null })).glossary;
+    const real = (await glossaryInto(dir, { previous: null })).glossary;
 
     expect(
       await refusals(dir, store, "glossary.json", "entries", { ...real }, previousGlossaryFrom),
@@ -615,10 +665,10 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("refuses ideas that cannot answer the question they are read for", async () => {
     const { dir, blocks, store } = await workspace("spya-ideas-carries-");
-    const { generateIdeas, previousIdeasFrom } = await import("../src/ideas.js");
+    const { previousIdeasFrom } = await import("../src/ideas.js");
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought", "Prose is a tool"));
-    const real = (await generateIdeas({ dir, previous: null })).ideas;
+    const real = (await ideasInto(dir, { previous: null })).ideas;
     expect(real.ideas).toHaveLength(2);
 
     expect(
@@ -638,12 +688,12 @@ describe("the previous artefact, over the filesystem store", () => {
    */
   it("refuses a broken glossary before the model call and before the write", async () => {
     const { dir, store } = await workspace("spya-gloss-before-");
-    const { GlossaryBaselineUnusable, generateGlossary, previousGlossaryFrom } = await import(
+    const { GlossaryBaselineUnusable, previousGlossaryFrom } = await import(
       "../src/glossary.js"
     );
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await generateGlossary({ dir, previous: null })).glossary;
+    const real = (await glossaryInto(dir, { previous: null })).glossary;
 
     const file = path.join(dir, "glossary.json");
     await writeFile(file, JSON.stringify(without({ ...real }, "sourceHash")), "utf-8");
@@ -663,12 +713,12 @@ describe("the previous artefact, over the filesystem store", () => {
 
   it("refuses broken ideas before the model call and before the write", async () => {
     const { dir, blocks, store } = await workspace("spya-ideas-before-");
-    const { IdeasBaselineUnusable, generateIdeas, previousIdeasFrom } = await import(
+    const { IdeasBaselineUnusable, previousIdeasFrom } = await import(
       "../src/ideas.js"
     );
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought", "Prose is a tool"));
-    const real = (await generateIdeas({ dir, previous: null })).ideas;
+    const real = (await ideasInto(dir, { previous: null })).ideas;
 
     const file = path.join(dir, "ideas.json");
     const artefact: Record<string, unknown> = { ...real };
@@ -743,6 +793,8 @@ loadEnvLocal();
  */
 let reachable = false;
 let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
+/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -750,6 +802,7 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.article_revisions') is not null as ready",
@@ -773,6 +826,7 @@ if (process.env.DATABASE_URL) {
     }
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
@@ -782,6 +836,8 @@ if (!reachable) {
     `\n  ⚠ the Postgres half of tests/glossary-ideas-baseline.test.ts is NOT RUNNING.\n` +
       `    These assertions have not executed: ${why}\n\n`,
   );
+  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
+  failIfPostgresRequired("tests/glossary-ideas-baseline.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
 
@@ -945,7 +1001,7 @@ when("the previous artefact, over the Postgres store", () => {
        one this code actually produces rather than a hand-built object that
        happens to satisfy the reader. */
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = await generateGlossary({ dir: a.dir, previous: null });
+    const first = await generateGlossary({ article: await articleIn(a.dir), previous: null });
     await publishColumn("glossary", first.glossary);
 
     await withStore(SLUG, async (store) => {
@@ -954,7 +1010,7 @@ when("the previous artefact, over the Postgres store", () => {
 
       answers.push(glossaryAnswer("Corrigibility", "Noema"));
       const second = await generateGlossary({
-        dir: a.dir,
+        article: await articleIn(a.dir),
         previous,
         profile: "a physicist",
       });
@@ -973,13 +1029,13 @@ when("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await generateGlossary({ dir: a.dir, previous: null });
+    const first = await generateGlossary({ article: await articleIn(a.dir), previous: null });
     await publishColumn("glossary", first.glossary);
 
     await withStore(SLUG, async (store) => {
       answers.push(glossaryAnswer("Noema"));
       const second = await generateGlossary({
-        dir: a.dir,
+        article: await articleIn(a.dir),
         previous: await previousGlossaryFrom(store, SLUG),
       });
       expect(second.glossary.passes).toBe(2);
@@ -1019,7 +1075,7 @@ when("the previous artefact, over the Postgres store", () => {
     const block = quotable(a.blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await generateIdeas({ dir: a.dir, previous: null });
+    const first = await generateIdeas({ article: await articleIn(a.dir), previous: null });
     await publishColumn("ideas", first.ideas);
 
     await withStore(SLUG, async (store) => {
@@ -1027,7 +1083,7 @@ when("the previous artefact, over the Postgres store", () => {
       expect(previous?.ideas).toHaveLength(1);
 
       answers.push(ideasAnswer(block, "Writing is a test of thought"));
-      const second = await generateIdeas({ dir: a.dir, previous });
+      const second = await generateIdeas({ article: await articleIn(a.dir), previous });
       expect(second.ideas.ideas[0]?.id).toBe(first.ideas.ideas[0]?.id);
     });
   }, 60_000);
@@ -1089,7 +1145,7 @@ when("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await generateGlossary({ dir: a.dir, previous: null })).glossary;
+    const real = (await generateGlossary({ article: await articleIn(a.dir), previous: null })).glossary;
 
     expect(
       await pgRefusals("glossary", "entries", { ...real }, previousGlossaryFrom),
@@ -1104,7 +1160,7 @@ when("the previous artefact, over the Postgres store", () => {
     answers.push(
       ideasAnswer(quotable(a.blocks), "Writing is a test of thought", "Prose is a tool"),
     );
-    const real = (await generateIdeas({ dir: a.dir, previous: null })).ideas;
+    const real = (await generateIdeas({ article: await articleIn(a.dir), previous: null })).ideas;
     expect(real.ideas).toHaveLength(2);
 
     expect(await pgRefusals("ideas", "ideas", { ...real }, previousIdeasFrom)).toEqual(
@@ -1137,7 +1193,7 @@ when("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = (await generateGlossary({ dir: a.dir, previous: null })).glossary;
+    const first = (await generateGlossary({ article: await articleIn(a.dir), previous: null })).glossary;
     await publishColumn("glossary", first);
 
     const begun = await owner.runAsOwner(admin.ADMIN_USER_ID_LOCAL as OwnerId, () =>
@@ -1171,7 +1227,7 @@ when("the previous artefact, over the Postgres store", () => {
           answers.push(glossaryAnswer("Corrigibility", "Noema"));
           const previous = await previousGlossaryFrom(store, SLUG);
           const second = await generateGlossary({
-            dir: a.dir,
+            article: await articleIn(a.dir),
             previous,
             profile: "a physicist",
           });

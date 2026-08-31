@@ -7,7 +7,7 @@
  * ([`src/store/admin-accounts.ts`](../src/store/admin-accounts.ts)), because
  * the role the deployed server connects as has no grants into the `auth` schema
  * and the query could never have worked in production —
- * docs/postmortems/admin-id-was-the-local-one.md.
+ * docs/postmortems/260828f-admin-id-was-the-local-one.md.
  *
  * So the strongest assertion available got stronger: the fence is no longer
  * "the one declaration we have lists only safe columns", it is **"there is no

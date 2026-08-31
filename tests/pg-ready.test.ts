@@ -16,10 +16,16 @@
  * The happy path needs a real database and skips (loudly, through the helper
  * itself) without one.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
-import { pgReady } from "./helpers/pg-ready.js";
+import {
+  failIfPostgresRequired,
+  type MissingKind,
+  pgReady,
+  postgresRequired,
+  requiredFailureMessage,
+} from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -57,6 +63,21 @@ async function warningsDuring(fn: () => Promise<unknown>): Promise<string> {
   }
   return said.join("\n");
 }
+
+/**
+ * **Every probe below is deliberately unreachable, so this file must run with
+ * `REQUIRE_POSTGRES` off** — including when the run that invoked it set it.
+ *
+ * Under `REQUIRE_POSTGRES=1` a failed probe registers a failing test, and vitest
+ * refuses to register a suite from inside a running test, so each of these calls
+ * would throw instead of returning its verdict. That is the helper working as
+ * designed; it just makes this file, whose whole subject is the *skip* branch,
+ * the one place that has to say "not here". The required branch has its own
+ * tests further down, which stub it back on one call at a time.
+ */
+beforeEach(() => {
+  vi.stubEnv("REQUIRE_POSTGRES", "");
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -112,10 +133,78 @@ describe("pgReady, when the database cannot answer", () => {
   });
 });
 
+/**
+ * `REQUIRE_POSTGRES=1`: the skip becomes a failure.
+ *
+ * The registration itself — the `describe`/`it` the helper adds to a suite that
+ * is about to skip — cannot be asserted from in here, because that is exactly
+ * the call vitest refuses from inside a running test. What *can* be asserted is
+ * everything either side of it: the env reading, the four messages, and the
+ * refusal itself, which is a real branch of the helper and not a stand-in for
+ * one. The registration is proved end to end by running the whole Postgres half
+ * against a database that cannot answer, which takes more than an environment
+ * variable to arrange: docs/project/testing.md § When a skip is not acceptable
+ * says why, and how.
+ */
+describe("REQUIRE_POSTGRES", () => {
+  it("is off unless it is exactly 1, because 0 must not mean yes", () => {
+    vi.stubEnv("REQUIRE_POSTGRES", "");
+    expect(postgresRequired()).toBe(false);
+    vi.stubEnv("REQUIRE_POSTGRES", "0");
+    expect(postgresRequired()).toBe(false);
+    vi.stubEnv("REQUIRE_POSTGRES", "1");
+    expect(postgresRequired()).toBe(true);
+  });
+
+  it("does nothing at all when it is not set — the default must not move", () => {
+    vi.stubEnv("REQUIRE_POSTGRES", "");
+    expect(() => failIfPostgresRequired("a suite", "nothing is listening", "unreachable")).not.toThrow();
+  });
+
+  /* The four fixes are different commands, which is the whole reason the kind is
+     carried around rather than inferred from the sentence. */
+  const fixes: [MissingKind, RegExp][] = [
+    ["no-url", /npm run db:start/],
+    ["unreachable", /npm run db:start/],
+    ["migration", /npm run db:migrate/],
+    ["grant", /grant, not a migration/],
+  ];
+  it.each(fixes)("names the fix for a %s", (kind, fix) => {
+    const message = requiredFailureMessage("tests/example.test.ts", "the thing is missing", kind);
+    expect(message).toContain("tests/example.test.ts");
+    expect(message).toContain("the thing is missing");
+    expect(message).toMatch(fix);
+  });
+
+  it("does not confuse a missing migration with a missing database", () => {
+    const migration = requiredFailureMessage("s", "spideryarn.jobs is not there", "migration");
+    /* The one wrong turn this whole mechanism can take: telling somebody whose
+       database is up but a migration behind to start their database. */
+    expect(migration).not.toContain("db:start");
+    const dead = requiredFailureMessage("s", "could not reach it", "unreachable");
+    expect(dead).not.toContain("db:migrate");
+  });
+
+  it("refuses, loudly, when called from inside a test instead of at module scope", () => {
+    vi.stubEnv("REQUIRE_POSTGRES", "1");
+    /* Not a curiosity: registering nothing here would be a silent success — a
+       required run that skipped anyway and said so nowhere. */
+    expect(() => failIfPostgresRequired("a suite", "no schema", "migration")).toThrow(
+      /could not be reported as a test failure/,
+    );
+    expect(() => failIfPostgresRequired("a suite", "no schema", "migration")).toThrow(
+      /npm run db:migrate/,
+    );
+  });
+});
+
 const when = LIVE_URL ? describe : describe.skip;
 if (!LIVE_URL) {
   /* stderr, not console.warn, for the reason the helper's header gives. */
   process.stderr.write("\n  ⚠ tests/pg-ready.test.ts: no DATABASE_URL, so the live half is skipping\n");
+  /* And under REQUIRE_POSTGRES=1, a failure: the helper cannot be allowed to
+     opt its own live tests out of the run that exists to prove it works. */
+  failIfPostgresRequired("tests/pg-ready.test.ts (the live half)", "DATABASE_URL is not set", "no-url");
 }
 
 when("pgReady, against the real database", () => {

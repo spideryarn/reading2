@@ -10,7 +10,7 @@
  * paths, and existence is not the question.
  *
  * So a step declares `produces: ArtifactKind[]`, and a *store* answers the two
- * questions separately (docs/plans/postgres-storage-implementation.md § Step 11,
+ * questions separately (docs/plans/260826e-postgres-storage-implementation.md § Step 11,
  * half B):
  *
  * 1. **Present** — does the store hold every kind this step produces? The store
@@ -18,10 +18,10 @@
  * 2. **Current** — was it made from this article, by this prompt, by this
  *    model? A comparison of the recorded `StepStamp` against the stamp the step
  *    would produce now. That comparison is `sameStamp`, once, rather than the
- *    `glossaryIsCurrent` / `threadIsCurrent` / `summariesAreCurrent` that used
- *    to sit beside each other — the same three lines written three times. All
- *    three are gone: `glossaryIsCurrent` on 2026-08-28, the other two in D0 on
- *    2026-08-29 (docs/plans/delete-the-importer.md).
+ *    `glossaryIsCurrent` / `threadIsCurrent` that used to sit beside each
+ *    other — the same three lines written twice over. Both are gone:
+ *    `glossaryIsCurrent` on 2026-08-28, `threadIsCurrent` in D0 on 2026-08-29
+ *    (docs/plans/260827aa-delete-the-importer.md).
  *
  * This file is types and one pure function. The file-backed adapter is
  * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
@@ -46,8 +46,9 @@ import type {
   Glossary,
   Ideas,
   Meta,
+  Quotes,
   StepName,
-  Summaries,
+  Timeline,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -82,8 +83,9 @@ export type ArtifactKind =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summary"
   | "ideas"
+  | "quotes"
+  | "timeline"
   | "sketch";
 
 /**
@@ -108,7 +110,7 @@ export interface ArtifactMap {
    * `undefined`. No error anywhere: [silent success](docs/reusable/silent-success.md).
    *
    * **This is not the whole fix**, and the honest note matters more than the
-   * type. GPT Sol's review of docs/plans/transactional-stage-runner.md: a
+   * type. GPT Sol's review of docs/plans/260827j-transactional-stage-runner.md: a
    * manifest names a *file*, and `article_revisions.raw_bytes` needs the bytes
    * themselves, so a Postgres adapter cannot fill that column from this. What
    * `fetch` eventually returns has to carry provenance **and** payload. That is
@@ -127,15 +129,20 @@ export interface ArtifactMap {
    * The **manifest**, never the bytes: those are content-addressed objects in
    * the `sources` bucket, written through `storeRawSource`, and this is the
    * list saying which of them are this article's. That is deliberately not a
-   * folder per article — docs/plans/hosting-the-articles-images.md § Where the
+   * folder per article — docs/plans/260829b-hosting-the-articles-images.md § Where the
    * bytes go.
    */
   assets: Assets;
   arc: Arc;
   tweets: TweetThread;
   glossary: Glossary;
-  summary: Summaries;
   ideas: Ideas;
+  quotes: Quotes;
+  /**
+   * When the piece says things happened, and how sure it is — `Timeline`,
+   * src/types.ts, written by the `timeline` step. docs/project/timeline.md.
+   */
+  timeline: Timeline;
   sketch: Sketch;
 }
 
@@ -239,7 +246,21 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   tweets: { field: "tweets", ok: isArray },
   glossary: { field: "entries", ok: isArray },
   ideas: { field: "ideas", ok: isArray },
-  summary: { field: "entries", ok: isArray },
+  /* A `quotes` array. An EMPTY one is not usable, like the sketch below and
+     unlike the assets manifest: `buildQuotes` throws rather than write one,
+     because a quote list with nothing in it is a model call that produced
+     nothing and storing it would make the step report done for ever. */
+  quotes: { field: "quotes", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  /* An `events` array, and **an EMPTY one is usable** — the opposite call from
+     `quotes` directly above and from `sketch` below, so it is worth saying why.
+     Most articles are not chronological: an essay about a concept may hold two
+     incidental dates and narrate nothing, and a timeline with no events is the
+     correct, expected answer for it (docs/plans/260831i-timeline-mode.md § Most
+     articles are not chronological). `buildTimeline` writes one rather than
+     throwing, and the panel has a sentence for it. Refusing it here would make
+     the commonest correct outcome unstorable, so the step would re-run and pay
+     for the same empty answer on every open. */
+  timeline: { field: "events", ok: isArray },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
      picture with no scenes is not a picture, and `accept` in
@@ -329,15 +350,28 @@ export interface BaselineRule {
   readonly idField: string;
   /**
    * The field each element is looked up *by* when identity is inherited —
-   * `idsByTerm` and `idsByName` both key on `name`.
+   * `idsByTerm` and `idsByName` both key on `name` — or `null` for a stage
+   * whose key is not a field.
    *
    * Included because an element with an id and no key cannot lend that id to
    * anything, and because both of those functions call `normalise…(entry.name)`
    * on it, which throws on an absent one. Loud rather than silent, so this is
    * not the data-loss class — it is a `TypeError` from inside a matcher turned
    * into a sentence that says which artefact to restore.
+   *
+   * **`null` is `timeline`, and it is a real case rather than an escape hatch.**
+   * That stage cannot key on a name: it was measured, and only 7 of 26 labels
+   * survived a regeneration of the same article by the same prompt, so keying on
+   * one would have orphaned nineteen `?event=` links in a single re-run. It keys
+   * on the two things that were actually *validated* — the cited block ids and
+   * the parsed date — which is `evidenceKey` in src/timeline.ts and is two
+   * fields rather than one. A row naming `label` here would compile, pass, and
+   * be a lie about which field carries identity. What `null` costs is the check
+   * below, and it costs nothing this stage needs: `idsByEvidence` skips an event
+   * it cannot key instead of throwing, because the artefact it is reading was
+   * written by whatever version of that file was current at the time.
    */
-  readonly keyField: string;
+  readonly keyField: string | null;
 }
 
 /**
@@ -365,6 +399,17 @@ export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
     keyField: "name",
   },
   ideas: { hashField: "sourceHash", itemsField: "ideas", idField: "id", keyField: "name" },
+  /* `keyField: "text"` because a quote HAS no name — its identity is the
+     author's own words, which is also why this key is the most reliable of the
+     three: unlike a term's gloss or an idea's statement, the prose does not get
+     rewritten between runs. src/quotes.ts § `idsByText`. */
+  quotes: { hashField: "sourceHash", itemsField: "quotes", idField: "id", keyField: "text" },
+  /* `keyField: null` — the only one, and `BaselineRule.keyField` has the
+     measurement that made it null rather than `"label"`. The other three fields
+     are the ordinary ones: ids must be present and unique, or an id handed out
+     twice sends a reader's `?event=` link to the wrong event, which is worse
+     than sending it nowhere. */
+  timeline: { hashField: "sourceHash", itemsField: "events", idField: "id", keyField: null },
 };
 
 /** A hash we could compare — see `BaselineRule` for why the test is this weak. */
@@ -423,9 +468,11 @@ export function whyUnusableAsBaseline(kind: ArtifactKind, value: unknown): strin
        than one that lands on nothing. */
     if (seen.has(id)) return `two ${rule.itemsField} share one "${rule.idField}"`;
     seen.add(id);
-    const key = row[rule.keyField];
-    if (typeof key !== "string" || key.trim().length === 0) {
-      return `${rule.itemsField}[${i}] has no "${rule.keyField}" to be matched by`;
+    if (rule.keyField !== null) {
+      const key = row[rule.keyField];
+      if (typeof key !== "string" || key.trim().length === 0) {
+        return `${rule.itemsField}[${i}] has no "${rule.keyField}" to be matched by`;
+      }
     }
   }
   return null;
@@ -502,7 +549,7 @@ export const NO_INPUT_HASH = "unstamped";
  *
  * Every field is optional and that is the honest shape, not a convenience:
  * `tree.json` and `arc.json` carry no `sourceHash` at all (verified — see
- * docs/plans/postgres-storage-implementation.md § Staleness stays computable),
+ * docs/plans/260826e-postgres-storage-implementation.md § Staleness stays computable),
  * so a stamp read off an arc can only ever answer two of the three questions.
  * Pretending otherwise by giving the field a default would make a stale arc
  * report itself current, which is exactly the
@@ -513,15 +560,28 @@ export const NO_INPUT_HASH = "unstamped";
  */
 export interface StepStamp {
   /**
-   * A fingerprint of what went in — `hashBlocks` today (src/source-hash.ts),
-   * stored on disk as `sourceHash`.
+   * A fingerprint of what went in, stored on disk as `sourceHash`.
    *
-   * **One hash is not right for every step**, and this field is where that will
-   * bite. `arc`, `tweets`, `glossary` and `summary` all read the *tree* as well
-   * as the blocks, and src/labels.ts already keeps a separate `structureHash`
-   * precisely because section boundaries can move without a single block
-   * changing. Making the input hash step-specific is a stage-5 job for each
-   * step's owner; this type does not stand in the way of it.
+   * **One hash is not right for every step**, and this field said so as a
+   * warning until 2026-08-31. It is now a fact about two groups rather than a
+   * hazard:
+   *
+   * - `assets` hashes the blocks alone (`hashBlocks`, src/source-hash.ts),
+   *   because a list of images to fetch is all it is built from.
+   * - Every stage whose prompt reads the article hashes the blocks, the tree
+   *   **and its own prompt head** — and there are two heads, so there are two
+   *   functions (src/source-hash.ts). `arc`, `tweets`, `glossary` and
+   *   `quotes` send `articleText` and use `articleFingerprint`; `ideas` and
+   *   `sketch` send `articleWithIds`, whose head also prints a `URL:` line and
+   *   falls back to a synthetic title, and use `articleWithIdsFingerprint`.
+   *   Most of them hashed the blocks alone, and the ones that did not still
+   *   missed the head — so the sections could be re-cut, or the page
+   *   re-extracted under a different headline, and every one of them reported
+   *   itself current.
+   *
+   * Harmless only while the pipeline's artefact reads answer `null` and the
+   * stage re-runs regardless — which is what made it invisible.
+   * docs/plans/260831b-finish-the-database-move.md § stage 1.
    */
   inputHash?: string;
   /**
@@ -594,8 +654,9 @@ export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   arc: "arc",
   tweets: "tweets",
   glossary: "glossary",
-  summary: "summary",
   ideas: "ideas",
+  quotes: "quotes",
+  timeline: "timeline",
   sketch: "sketch",
 };
 
@@ -813,7 +874,7 @@ export interface ArtifactStore {
    * one of them with a perfectly valid new one and then dies leaves every path
    * present, parsing, and describing two different generations — and `has`
    * cannot tell, because each artefact is individually fine. A review found
-   * exactly that (docs/plans/postgres-storage-implementation.md § What the
+   * exactly that (docs/plans/260826e-postgres-storage-implementation.md § What the
    * review of the *built* seam found).
    *
    * So the store records the *attempt*, not just the output. A marker that is
@@ -831,13 +892,13 @@ export interface ArtifactStore {
    * second's*, the second then dies half-way through its writes, and the step
    * reports done holding two generations with no marker to say so. Ownership is
    * what closes that. It is the same token
-   * `docs/plans/postgres-migration.md#the-traps` fences the Postgres output
+   * `docs/plans/260825f-postgres-migration.md#the-traps` fences the Postgres output
    * write with, and it should end up being literally the same value.
    *
    * **This is not a lock, and must not be read as one.** It does not stop a
-   * second runner starting — that is the queue's job, and in Postgres the
-   * `jobs_only_one_running` index's. What it stops is one runner's `finishStep`
-   * speaking for another runner's attempt.
+   * second runner starting — that is the queue's job, and in Postgres
+   * `jobs_active_slug`'s and the counted cap in `claim`. What it stops is one
+   * runner's `finishStep` speaking for another runner's attempt.
    */
   beginStep(slug: string, step: StepName): Promise<string>;
   /**

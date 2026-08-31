@@ -62,7 +62,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
-import { titleFrom, withEdit, withRetry, withTurn } from "../chat.js";
+import { titleFrom, withEdit, withRetry, withSpokenTurn, withTurn } from "../chat.js";
 import { getDb } from "../db/client.js";
 import { articles, chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
@@ -127,6 +127,20 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     ...(row.model === null ? {} : { model: row.model }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
+    /* **Both of these must be named here or they do not exist.** This mapping
+       enumerates fields, so a column the reader half of the store does not
+       mention is written, stored, and then silently dropped on the way out —
+       and every consumer sees an answer that pointed at nothing and was never
+       interrupted. Same rule as `citations` and `tools` above. */
+    /* Cast to the ARRAY, not to `ChatMessage["passages"]`. That alias includes
+       `undefined`, and under `exactOptionalPropertyTypes` spreading a
+       possibly-undefined value into an optional property is exactly the thing
+       the flag is on to forbid — the key would be present and undefined, which
+       the filesystem store never produces. */
+    ...(row.passages === null
+      ? {}
+      : { passages: row.passages as { blockIds: string[]; why: string }[] }),
+    ...(row.interrupted ? { interrupted: true } : {}),
     ...(row.editedAt === null ? {} : { editedAt: row.editedAt.toISOString() }),
     /* Absent, never `stance: undefined` — the filesystem store simply has no
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
@@ -251,6 +265,14 @@ function messageRow(
     model: message.model ?? null,
     error: message.error ?? null,
     stopped: message.stopped ?? false,
+    /* **The write half of the mapping, and it has to be listed here too.**
+       `toMessage` above names these on the way out; without them here they are
+       never written in the first place, and nothing complains — both are
+       optional on `ChatMessage`, so the type system is happy and every spoken
+       answer simply loses its pointers on the way to the database. Same class
+       of silent loss as `tools`, which is how that column came to exist. */
+    passages: message.passages ?? null,
+    interrupted: message.interrupted ?? false,
     editedAt: message.editedAt ? new Date(message.editedAt) : null,
     /* Written with the row, which for an assistant reply is the **pending**
        row — see `ChatMessage.stance`. `finish` never touches it: an answer that
@@ -294,7 +316,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          new cache prefix appears, and the transcript reads as one conversation
          throughout. `withTurn` refuses a contradicting kind before we are
          reached; this is why it would not have mattered if it had not.
-         docs/plans/review-mode.md § `kind` belongs to the thread. */
+         docs/plans/260827ah-review-mode.md § `kind` belongs to the thread. */
       set: { title: thread.title, updatedAt: new Date(thread.updatedAt) },
     });
 }
@@ -334,6 +356,55 @@ export const pgChatStore: ChatStore = {
     logger.info(
       { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
       "chat turn started",
+    );
+    return out;
+  },
+
+  /**
+   * A finished exchange, both rows, one transaction.
+   *
+   * The same shape as `begin` above and for the same reasons — the article is
+   * locked, the pure function decides what the threads become, and the two new
+   * messages are the last two of the array it produced so their ordinals are
+   * its last two indices.
+   *
+   * **No attempt token.** An attempt exists so that a late answer from a call
+   * another process declared dead cannot land on top of the retry a reader is
+   * watching. Nothing is in flight here: both halves arrived together and there
+   * is no second writer to fence out. The tail check in `withSpokenTurn` is
+   * what fences this path, and it fences the thing that can actually go wrong —
+   * a session appending to a conversation that has moved underneath it.
+   */
+  async appendSpoken(slug, spoken, now = () => new Date().toISOString()) {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    const at = now();
+
+    const out = await db.transaction(async (tx) => {
+      await lockArticle(tx, articleId);
+      const threads = await threadsFor(articleId, tx);
+      const { thread, user, reply } = withSpokenTurn(threads, spoken, at);
+
+      await upsertThread(tx, articleId, thread);
+      const base = thread.messages.length - 2;
+      await tx
+        .insert(chatMessages)
+        .values([
+          messageRow(articleId, thread.id, user, base),
+          messageRow(articleId, thread.id, reply, base + 1),
+        ]);
+      return { thread, user, reply, attempt: undefined };
+    });
+
+    logger.info(
+      {
+        slug,
+        threadId: out.thread.id,
+        messageId: out.reply.id,
+        turns: out.thread.messages.length,
+        interrupted: spoken.interrupted === true,
+      },
+      "spoken turn appended",
     );
     return out;
   },
@@ -445,6 +516,11 @@ export const pgChatStore: ChatStore = {
           model: null,
           error: null,
           stopped: false,
+          /* A retry answers the same question afresh, so last attempt's
+             pointers are as stale as its tool strip — and an `interrupted`
+             carried over would label an answer nobody has interrupted yet. */
+          passages: null,
+          interrupted: false,
           // A new attempt on the same row. This is what stops the previous
           // one's late answer landing here.
           attemptId: attempt,

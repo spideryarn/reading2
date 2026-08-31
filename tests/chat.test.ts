@@ -7,7 +7,7 @@
  * deterministic and whose quality is a reading judgement — the same line
  * testing.md draws everywhere else.
  *
- * See docs/plans/chat-mode.md.
+ * See docs/plans/260826a-chat-mode.md.
  */
 import { describe, expect, it } from "vitest";
 import { ChatConflict, titleFrom, withEdit, withRetry } from "../src/chat.js";
@@ -94,6 +94,47 @@ describe("recentHistory — what goes back to the model", () => {
       ],
     ].flat();
     expect(recentHistory(history).map((m) => m.text)).toEqual(["kept", "answered"]);
+  });
+
+  /**
+   * **An interrupted answer is dropped; a stopped one is kept.** The two flags
+   * look alike and mean opposite things about history.
+   *
+   * `stopped` says the reader had read enough — the stored text is exactly what
+   * they read, so it is real conversation and belongs here. `interrupted` says
+   * the reader talked over a spoken answer: the realtime server truncates the
+   * audio they never heard and hands back the transcript whole, so the tail of
+   * that string is words that were generated and spoken to nobody.
+   *
+   * Sending it anyway is the failure worth a test. The next typed turn would be
+   * answered as though the reader had heard a paragraph they interrupted three
+   * words into — confidently, with nothing anywhere disagreeing.
+   */
+  it("drops an interrupted answer but keeps a stopped one", () => {
+    const history = [
+      [
+        message({ id: "spya-111111", text: "stopped question" }),
+        message({
+          id: "spya-222222",
+          role: "assistant",
+          text: "what they actually read",
+          stopped: true,
+        }),
+      ],
+      [
+        message({ id: "spya-333333", text: "interrupted question" }),
+        message({
+          id: "spya-444444",
+          role: "assistant",
+          text: "words nobody heard the end of",
+          interrupted: true,
+        }),
+      ],
+    ].flat();
+    expect(recentHistory(history).map((m) => m.text)).toEqual([
+      "stopped question",
+      "what they actually read",
+    ]);
   });
 
   it("never sends two questions in a row", () => {

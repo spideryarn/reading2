@@ -106,7 +106,7 @@ describe("the shell that is not touched", () => {
     expect(above(composed)).toBe(above(SHELL));
     /* Named individually as well, because "the prefix is unchanged" is true of
        a prefix that got shorter too. The referrer policy is the one that would
-       actually hurt: docs/plans/public-read-only-access.md § Stage 1. */
+       actually hurt: docs/plans/260827ai-public-read-only-access.md § Stage 1. */
     expect(metaContent(doc(composed), 'meta[name="referrer"]')).toBe("no-referrer");
     expect(composed).toContain('<script type="module" src="/src/web/boot.tsx"></script>');
   });
@@ -506,8 +506,10 @@ describe("the one title rule, applied by both sides", () => {
    * `MODES` is read from src/modes.ts rather than listed here, so an eleventh
    * mode arrives in this loop without anybody remembering to add it.
    */
-  it("agrees with the client in every one of the ten modes", () => {
-    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(10);
+  it("agrees with the client in every one of the twelve modes", () => {
+    /* Ten on one side of the 2026-08-31 merge and eleven on the other, because
+       `plain` and `quotes`/`timeline` were added in parallel. Twelve is both. */
+    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(12);
     for (const mode of MODES) {
       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });

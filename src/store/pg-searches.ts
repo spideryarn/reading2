@@ -4,7 +4,7 @@
  * The decision about *which* run a request produces is not here. It is
  * `withRun` in src/searches.ts, which both stores call, because it holds the
  * three-condition retry rule this repo carries a postmortem for
- * (docs/postmortems/search-retry-remints-instead-of-resetting.md) and a rule
+ * (docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md) and a rule
  * with two implementations is a rule with two behaviours. What is here is
  * persistence, plus the one thing the filesystem cannot express: **which
  * attempt is speaking**.
@@ -298,7 +298,7 @@ export const pgSearchStore: SearchStore = {
          into a row that is already gone and they get a 404 for a search they
          are watching. Full behavioural parity needs an insertion ordinal, which
          is a column and has not been paid for. Recorded in
-         docs/plans/postgres-storage-implementation.md. */
+         docs/plans/260826e-postgres-storage-implementation.md. */
       const others = await tx
         .select({ id: searchRuns.id })
         .from(searchRuns)

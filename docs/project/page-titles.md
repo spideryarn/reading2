@@ -128,7 +128,7 @@ learned it in both.
 ### What is deliberately *not* in the title
 
 The middle band's own state — which term is selected, which saved search is open, which rung of the
-length ladder, how deep the summary goes. All of it is in the URL (url-state.md) and none of it is in
+how deep the summary goes. All of it is in the URL (url-state.md) and none of it is in
 the title.
 
 The line is: **the title says which page and which mode; it does not narrate what you are doing
@@ -294,7 +294,7 @@ Since 2026-08-29 a shared `/read/<slug>` is not served as the bare shell. A smal
 the `<head>` — `<title>`, `og:`, `twitter:` — from the database before the bundle loads, for public
 articles only, so that a pasted link previews as something. That closed the "no `og:` tags" question
 this page carried for two days. [`src/public/page-head.ts`](../../src/public/page-head.ts), and
-[public-read-only-access.md](../plans/public-read-only-access.md) § Stage 2.
+[260827ai-public-read-only-access.md](../plans/260827ai-public-read-only-access.md) § Stage 2.
 
 It also created a new way to be quietly wrong. React still mounts and still assigns
 `document.title`, **over the top of a title that was already there and already right**. So whatever

@@ -12,7 +12,7 @@
  * is why the block is a shared constant and why this file exists rather than a
  * comment saying "remember to update both".
  *
- * docs/plans/chat-web-links.md.
+ * docs/plans/260827ao-chat-web-links.md.
  */
 import { describe, expect, it } from "vitest";
 import { buildConverseMessages } from "../src/converse.js";

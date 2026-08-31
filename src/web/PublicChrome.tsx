@@ -22,7 +22,7 @@
  * explanation at all. For a signed-in reader meeting *not built yet* a tooltip
  * is a supplement to something they already understand; for a stranger meeting
  * *not yours yet* it is the entire message.
- * docs/research/public-access-how-others-do-it.md § 2.
+ * docs/research/260828a-public-access-how-others-do-it.md § 2.
  *
  * So a marked mode here is still **pressable**, and pressing it opens a band
  * carrying the sentence in visible text. That is what makes the reason

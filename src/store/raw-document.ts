@@ -72,7 +72,7 @@ export class CorruptRawObject extends Error {
  * The document itself, from wherever this revision keeps it.
  *
  * **Two eras, and the newer one is authoritative where both answer.** Until
- * docs/plans/delete-the-importer.md § C6 the payload was `article_revisions.raw_bytes`,
+ * docs/plans/260827aa-delete-the-importer.md § C6 the payload was `article_revisions.raw_bytes`,
  * an 11 MiB `bytea`; now it is a *reference* — `raw_source_sha256` plus
  * `raw_source_kind` — with the bytes in the `sources` bucket. The column is
  * dropped at the demolition, so the reference branch is the one with a future

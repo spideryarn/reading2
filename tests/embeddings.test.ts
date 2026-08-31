@@ -159,7 +159,7 @@ describe("embedBatch", () => {
  * as the wording and was not good enough. Nothing tested it, because a test for
  * "does this string begin with this string" reads like a test of nothing.
  *
- * docs/plans/embedding-endpoints-refused.md.
+ * docs/plans/260828z-embedding-endpoints-refused.md.
  */
 describe("what an embedding failure says about itself", () => {
   const failureOf = async (n = 1): Promise<EmbeddingFailure> => {

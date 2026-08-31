@@ -10,7 +10,7 @@
  * for this article*. The day the pipeline's artefacts move to Postgres that read
  * fails on every run, every article silently becomes a first ingest, and every
  * comment, saved search and ToC row in the database stops naming anything.
- * Nothing throws. See docs/plans/delete-the-importer.md § Three stages carry
+ * Nothing throws. See docs/plans/260827aa-delete-the-importer.md § Three stages carry
  * identity in a file.
  *
  * ## Each of these was watched failing, and against what
@@ -48,11 +48,13 @@ import { eq, sql } from "drizzle-orm";
 import {
   BLOCKS_INPUT_HTML,
   BaselineMissing,
+  type BlocksRun,
   IdsNotCarried,
   NoBlocksProduced,
   blocksArtefact,
   previousBlocksFrom,
   runBlocks,
+  splitIntoBlocks,
 } from "../src/blocks.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
@@ -60,6 +62,7 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
+import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 import type { Block, OwnerId } from "../src/types.js";
@@ -122,6 +125,42 @@ async function aWorkspace(): Promise<Workspace> {
 
 const idsIn = (blocks: readonly Block[]): string[] => blocks.map((b) => b.id);
 
+/**
+ * What a caller does *around* `runBlocks`, which since 2026-08-31 reads nothing
+ * and writes nothing: hand it the HTML, write back the stamped document and the
+ * blocks. This is `main()`'s shape (src/blocks.ts); the pipeline's is the same
+ * three moves with the artefact store where the disk is.
+ *
+ * **Here rather than exported from `src/`, on purpose.** Production has no file
+ * paths left in this stage and must not grow one back. What the tests below
+ * need it for is the half of the refusals that is about *absence*: "nothing was
+ * written" cannot be observed of a pure function, so they observe it of the
+ * thinnest possible caller that would have written something.
+ *
+ * The signature is the one `runBlocks` itself had until today, so a call site
+ * that changed nothing but the name is doing the same thing it did before.
+ */
+async function runBlocksOverFile(opts: {
+  htmlFile: string;
+  jsonFile?: string;
+  previous: Block[] | undefined;
+}): Promise<BlocksRun & { jsonFile: string }> {
+  const { htmlFile, previous } = opts;
+  const jsonFile = opts.jsonFile ?? `${htmlFile.replace(/\.html$/, "")}.blocks.json`;
+
+  const run = runBlocks({
+    slug: path.basename(htmlFile).replace(/\.html$/, ""),
+    extractedHtml: await readFile(htmlFile, "utf-8"),
+    previous,
+  });
+
+  /* Both artefacts, and the HTML first — the order stage 3 wrote them in, and
+     the one `blocksMatchTheirHtml` reasons about (src/pipeline.ts). */
+  await writeFile(htmlFile, run.html, "utf-8");
+  await writeFile(jsonFile, JSON.stringify(blocksArtefact(run.blocks), null, 2), "utf-8");
+  return { ...run, jsonFile };
+}
+
 describe("the baseline, over the filesystem store", () => {
   const cleanUp: string[] = [];
   afterAll(async () => {
@@ -139,7 +178,7 @@ describe("the baseline, over the filesystem store", () => {
 
     // Run one: a genuine first ingest. Nothing to carry, so everything mints.
     await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
     expect(first.stats.minted).toBe(3);
     expect(first.stats.carried).toBe(0);
     /* Stage 4's copy, which is what `hasEarlierBlocks` reads on this store. It
@@ -157,7 +196,7 @@ describe("the baseline, over the filesystem store", () => {
     const previous = await previousBlocksFrom(store, "a");
     expect(idsIn(previous ?? [])).toEqual(idsIn(first.blocks));
 
-    const second = await runBlocks({ htmlFile, previous });
+    const second = await runBlocksOverFile({ htmlFile, previous });
     expect(second.stats.carried).toBe(3);
     expect(second.stats.minted).toBe(0);
     /* The exact ids, in order — not a count of survivors. Two runs that each
@@ -168,7 +207,7 @@ describe("the baseline, over the filesystem store", () => {
   it("refuses to mint when a baseline it should have had is missing", async () => {
     const { dir, htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
     /* Stage 4's copy still lists every id this article ever had; stage 3's own
        copy — the baseline — has gone. block-ids.md calls that file a source
@@ -201,7 +240,7 @@ describe("the baseline, over the filesystem store", () => {
   it("refuses when stage 4's copy is there but will not parse", async () => {
     const { dir, htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
     /* Cut off halfway, which is what a `writeFile` killed in the middle leaves.
        Every id this article has ever had is still in those bytes — that is the
@@ -216,7 +255,7 @@ describe("the baseline, over the filesystem store", () => {
   it("refuses when stage 4's copy is over the size this store can read", async () => {
     const { dir, htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
     /* Valid JSON, listing the real ids, and one byte past the 32 MiB ceiling in
        `DECODERS` — so the only thing wrong with it is that this store will not
@@ -258,7 +297,7 @@ describe("the baseline, over the filesystem store", () => {
   it("asks the store, and does not fall back to reading the file itself", async () => {
     const { htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
     /* The baseline is sitting on disk exactly where the old code read it from.
        A store that says there is none must win, or the seam is decorative and
@@ -298,11 +337,28 @@ describe("the runtime guard", () => {
     /* A non-empty baseline and a non-empty output that share nothing. Every
        anchor into this article would be pointing at a block that no longer
        exists, and the step would have reported success. */
-    await expect(runBlocks({ htmlFile: w.htmlFile, previous: strangers })).rejects.toBeInstanceOf(
-      IdsNotCarried,
-    );
+    await expect(
+      runBlocksOverFile({ htmlFile: w.htmlFile, previous: strangers }),
+    ).rejects.toBeInstanceOf(IdsNotCarried);
+
+    /* **And it names the article.** The slug used to be
+       `path.basename(htmlFile)`; with the path gone it is a parameter, and a
+       parameter is exactly the kind of thing a conversion fills in with
+       something plausible and constant. A refusal that says "blocks" and not
+       which one is a log line nobody can act on. */
+    await expect(
+      runBlocksOverFile({ htmlFile: w.htmlFile, previous: strangers }),
+    ).rejects.toThrow(/blocks "a":/);
   });
 
+  /**
+   * **What "before it writes" means now that stage 3 does not write.** The
+   * guards used to stand between `splitIntoBlocks` and two `writeFile`s inside
+   * `runBlocks`; they now stand between it and the single `return`, so a refused
+   * run hands its caller nothing to store. This exercises that through the
+   * thinnest caller there is — one that writes exactly what it is given — which
+   * is the shape of both real ones (`main()`, and the step through the store).
+   */
   it("refuses before it writes, so the previous artefacts survive the refusal", async () => {
     const w = await aWorkspace();
     cleanUp.push(w.root);
@@ -310,7 +366,7 @@ describe("the runtime guard", () => {
     const jsonFile = w.htmlFile.replace(/\.html$/, ".blocks.json");
     await writeFile(jsonFile, JSON.stringify(blocksArtefact(strangers)), "utf-8");
 
-    await expect(runBlocks({ htmlFile: w.htmlFile, previous: strangers })).rejects.toThrow();
+    await expect(runBlocksOverFile({ htmlFile: w.htmlFile, previous: strangers })).rejects.toThrow();
 
     /* Still the baseline, not half of a run that was refused. A guard that
        destroys what it is protecting is worse than no guard. */
@@ -332,12 +388,12 @@ describe("the runtime guard", () => {
     cleanUp.push(w.root);
     const jsonFile = w.htmlFile.replace(/\.html$/, ".blocks.json");
     await writeFile(w.htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile: w.htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile: w.htmlFile, previous: undefined });
 
     // What a paywall or an error page extracts to: a document with no prose.
     await writeFile(w.htmlFile, "<!doctype html><html><body></body></html>", "utf-8");
     await expect(
-      runBlocks({ htmlFile: w.htmlFile, previous: first.blocks }),
+      runBlocksOverFile({ htmlFile: w.htmlFile, previous: first.blocks }),
     ).rejects.toBeInstanceOf(IdsNotCarried);
 
     /* And it refused before writing, so the article is still the article. */
@@ -354,10 +410,10 @@ describe("the runtime guard", () => {
    * blocks in it. Nothing threw, every path existed and parsed, and the store's
    * shape check takes any array (`SHAPE` in src/store/artifacts.ts).
    *
-   * The read-side half of this — `htmlCarriesItsIds` in src/pipeline.ts —
-   * noticed only at the *next* skip check, and only for a `blocks.json` it
-   * happened to read. This one refuses at write time, which is the moment the
-   * empty artefact would otherwise be created.
+   * The read-side half of this — `blocksMatchTheirHtml` in src/pipeline.ts —
+   * notices only at the *next* skip check, by which time the empty artefact has
+   * been the article for however long. This one refuses before `runBlocks`
+   * returns, so the empty artefact is never handed to anybody to write.
    */
   it("refuses a first ingest that produced no blocks at all", async () => {
     const w = await aWorkspace();
@@ -366,7 +422,7 @@ describe("the runtime guard", () => {
     await writeFile(w.htmlFile, SHELL, "utf-8");
 
     await expect(
-      runBlocks({ htmlFile: w.htmlFile, previous: undefined }),
+      runBlocksOverFile({ htmlFile: w.htmlFile, previous: undefined }),
     ).rejects.toBeInstanceOf(NoBlocksProduced);
 
     /* Refused *before* writing, like the baseline guard beside it: no empty
@@ -381,7 +437,7 @@ describe("the runtime guard", () => {
     const w = await aWorkspace();
     cleanUp.push(w.root);
     await writeFile(w.htmlFile, EXTRACTED, "utf-8");
-    const run = await runBlocks({ htmlFile: w.htmlFile, previous: undefined });
+    const run = await runBlocksOverFile({ htmlFile: w.htmlFile, previous: undefined });
     expect(run.stats.minted).toBe(3);
   });
 
@@ -389,19 +445,171 @@ describe("the runtime guard", () => {
     const w = await aWorkspace();
     cleanUp.push(w.root);
     await writeFile(w.htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocks({ htmlFile: w.htmlFile, previous: undefined });
+    const first = await runBlocksOverFile({ htmlFile: w.htmlFile, previous: undefined });
 
     /* One paragraph unchanged, the rest of the baseline unrecognisable. A real
        partial loss, deliberately not an error — the numbers are in the step's
        log line instead. */
     const survivor = first.blocks[1]!;
     await writeFile(w.htmlFile, EXTRACTED, "utf-8");
-    const run = await runBlocks({
+    const run = await runBlocksOverFile({
       htmlFile: w.htmlFile,
       previous: [...strangers, survivor],
     });
     expect(idsIn(run.blocks)).toContain(survivor.id);
   });
+});
+
+/* ------------------------------------------------- what stage 3 hands back -- */
+
+/**
+ * **The two artefacts are one artefact, and nothing else can tell.**
+ *
+ * Since 2026-08-31 `runBlocks` returns the stamped HTML and the blocks instead
+ * of writing them, and the step gives both to the store as
+ * `parts: { stampedHtml, blocks }`. That makes a new way to be silently wrong
+ * available for the first time: return the right blocks beside the *input*
+ * document, and every id is in the database and none of them is in the HTML.
+ * Nothing throws, the blocks are perfect, the article renders, and every
+ * `#spya-…` anchor in it points at nothing.
+ *
+ * Nothing else in the repo catches it at the moment it happens.
+ * `blocksMatchTheirHtml` (src/pipeline.ts) would notice — it compares
+ * `splitIntoBlocks(extracted).html` against the stored `stampedHtml` — but only
+ * at the *next* skip check, and its answer is "not current", so the step re-runs
+ * and writes the same wrong pair again for ever. So this is the check at the
+ * seam, and both halves below were watched red: returning `extractedHtml`
+ * unchanged fails the first, and a `SplitResult.html` copied from the input
+ * fails the second.
+ */
+describe("the stamped HTML stage 3 returns", () => {
+  it("is the document the ids are actually in, not the one that came in", () => {
+    const run = runBlocks({ slug: "a", extractedHtml: EXTRACTED, previous: undefined });
+
+    expect(run.blocks).toHaveLength(3);
+    /* Every id it claims, in the document it hands back. This is the assertion
+       that would fail if the input were returned instead: `EXTRACTED` carries no
+       ids at all, which is the whole point of the fixture. */
+    for (const id of idsIn(run.blocks)) expect(run.html).toContain(`id="${id}"`);
+    expect(run.html).not.toBe(EXTRACTED);
+  });
+
+  /**
+   * The control, and it is not decoration. The assertion above passes just as
+   * well against a `splitIntoBlocks` that stamps ids into a document nobody
+   * keeps — so this pins that the returned HTML is *usable as stage 3's output*:
+   * feed it back in and it is recognised, ids reused rather than re-minted.
+   */
+  it("is a document stage 3 recognises as already stamped", () => {
+    const first = runBlocks({ slug: "a", extractedHtml: EXTRACTED, previous: undefined });
+    const again = runBlocks({ slug: "a", extractedHtml: first.html, previous: first.blocks });
+
+    expect(again.stats.reused).toBe(3);
+    expect(again.stats.minted).toBe(0);
+    expect(idsIn(again.blocks)).toEqual(idsIn(first.blocks));
+  });
+
+  /**
+   * **The ids are not the pair.** The two above ask about ids, and every
+   * assertion in them survives a `runBlocks` that keeps each id exactly where it
+   * was and hands back a document whose *paragraphs say something else*: the ids
+   * exist, they are in the HTML, all three are reused on a second pass, none is
+   * minted. GPT Sol found that mutation on 2026-08-31 and it passed the whole
+   * file. What it produces is a Postgres commit — one transaction, so genuinely
+   * atomic — of a `stampedHtml` and a `blocks` that describe different text, and
+   * then the stage re-runs on every job for ever, because `blocksMatchTheirHtml`
+   * refuses it at each following skip check and its answer is *not current*
+   * rather than *broken*.
+   *
+   * So the pair is asked about twice here, and the two questions are not the
+   * same one:
+   *
+   * 1. **The replay**, which is `blocksMatchTheirHtml`'s own question
+   *    (src/pipeline.ts § 2 and 3) asked at the seam where the answer still
+   *    means something: stage 3 run again over stage 2's document, with these
+   *    blocks as its baseline, must give this document and these blocks.
+   * 2. **The re-read**, which the replay cannot ask. A replay runs
+   *    `splitIntoBlocks` a second time, so anything wrong *inside*
+   *    `splitIntoBlocks` is wrong identically on both sides and the comparison
+   *    agrees with it — and that is not only a hole in this test, it is the same
+   *    hole in `blocksMatchTheirHtml`, which would go on calling the step done.
+   *    Parsing the returned HTML back out shares no such assumption: whatever
+   *    the document actually says is what comes back.
+   *
+   * Both were watched red; the messages are in the review write-up.
+   */
+  it("describes the same text the blocks beside it claim", () => {
+    const run = runBlocks({ slug: "a", extractedHtml: EXTRACTED, previous: undefined });
+
+    const replay = splitIntoBlocks(EXTRACTED, run.blocks);
+    expect(replay.html).toBe(run.html);
+    expect(replay.blocks).toEqual(run.blocks);
+
+    /* No baseline, deliberately. Handing `run.blocks` in would let
+       `carryOverIds` put an id back onto a paragraph by matching its words, so a
+       document that had lost its ids would still come back looking right; with
+       nothing to help it, every id has to be in the bytes and every word beside
+       it has to be the word the block claims. */
+    const reread = splitIntoBlocks(run.html);
+    expect(reread.blocks).toEqual(run.blocks);
+  });
+});
+
+/* ------------------------------------------------------------ the command -- */
+
+/**
+ * `npm run blocks` still reads a file and writes two, and after today it is the
+ * only thing in the repo that does. `runBlocks` cannot tell you whether `main()`
+ * still opens and saves what it used to, because `main()` is now where all of
+ * that lives — so this runs the real command, in a subprocess, the way
+ * tests/validate-tree.test.ts runs its own.
+ */
+describe("the command line", () => {
+  const cleanUp: string[] = [];
+  afterAll(async () => {
+    for (const root of cleanUp) await rm(root, { recursive: true, force: true });
+  });
+
+  const runCli = async (args: string[]) => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    return promisify(execFile)("npx", ["tsx", "src/blocks.ts", ...args]);
+  };
+
+  it("writes the stamped HTML over its input and the blocks beside it", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-cli-"));
+    cleanUp.push(root);
+    const htmlFile = path.join(root, "a.html");
+    await writeFile(htmlFile, EXTRACTED, "utf-8");
+
+    await runCli([htmlFile]);
+
+    const written = JSON.parse(await readFile(`${root}/a.blocks.json`, "utf-8"));
+    const html = await readFile(htmlFile, "utf-8");
+    expect(written.blocks).toHaveLength(3);
+    /* The pair, again, and through the writer this time: the ids in the file are
+       the ids in the document beside it. */
+    for (const block of written.blocks as Block[]) expect(html).toContain(`id="${block.id}"`);
+    /* And the second run carries them, which is what makes `npm run blocks`
+       safe to type twice — the baseline it reads is the file it just wrote. */
+    await runCli([htmlFile]);
+    const second = JSON.parse(await readFile(`${root}/a.blocks.json`, "utf-8"));
+    expect(idsIn(second.blocks)).toEqual(idsIn(written.blocks));
+  }, 60_000);
+
+  it("refuses a page with no prose in it, and writes nothing at all", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-cli-"));
+    cleanUp.push(root);
+    const htmlFile = path.join(root, "a.html");
+    await writeFile(htmlFile, SHELL, "utf-8");
+
+    await expect(runCli([htmlFile])).rejects.toThrow(/produced no blocks at all/);
+
+    /* No artefact, and stage 2's document untouched — the same property the
+       guards give the pipeline, observed through the caller that has files. */
+    await expect(readFile(`${root}/a.blocks.json`, "utf-8")).rejects.toThrow(/ENOENT/);
+    expect(await readFile(htmlFile, "utf-8")).toBe(SHELL);
+  }, 60_000);
 });
 
 /* --------------------------------------------------- which HTML stage 3 eats -- */
@@ -729,6 +937,8 @@ loadEnvLocal();
  */
 let reachable = false;
 let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
+/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
+let kind: MissingKind = "no-url";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -736,6 +946,7 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
+  kind = "migration";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.revision_blocks') is not null as ready",
@@ -759,6 +970,7 @@ if (process.env.DATABASE_URL) {
     }
   } catch (err) {
     reachable = false;
+    kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
@@ -801,13 +1013,16 @@ if (process.env.DATABASE_URL) {
  *
  * Not a failing test, deliberately: a missing database is a fact about a laptop
  * rather than a defect, and reddening `npm test` for everyone without a local
- * Postgres is not what a skip is for.
+ * Postgres is not what a skip is for. **Unless the run has said otherwise** —
+ * `REQUIRE_POSTGRES=1` is for a run whose whole point is to prove a machine has
+ * a working database, and there a skip is the wrong answer.
  */
 if (!reachable) {
   process.stderr.write(
     `\n  ⚠ the Postgres half of tests/blocks-baseline.test.ts is NOT RUNNING.\n` +
       `    These four assertions have not executed: ${why}\n\n`,
   );
+  failIfPostgresRequired("tests/blocks-baseline.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
 
@@ -844,7 +1059,6 @@ when("the baseline, over the Postgres store", () => {
 
   let articleId = "";
   let publishedId = "";
-  const roots: string[] = [];
 
   async function wipe(slug: string): Promise<void> {
     const { schema } = mod;
@@ -920,7 +1134,6 @@ when("the baseline, over the Postgres store", () => {
       await wipe(FRESH_SLUG);
       await mod.client.closeDb();
     }
-    for (const root of roots) await rm(root, { recursive: true, force: true });
   });
 
   /**
@@ -955,10 +1168,12 @@ when("the baseline, over the Postgres store", () => {
    * That is the check doing its job, and it is exactly why the store cannot be
    * hand-built here.
    *
-   * `jobs_only_one_running` is a unique index over the whole table, so at most
-   * one `running` row exists anywhere — including another `npm test` on the same
-   * laptop. `insertWhenSlotFree` waits for it instead of failing with a
-   * duplicate-key error that points at the wrong suite.
+   * `jobs_active_slug` allows one job in flight per article, and another
+   * `npm test` on the same laptop is running these same fixture slugs.
+   * `insertWhenSlotFree` waits instead of failing with a duplicate-key error
+   * that points at the wrong suite. It used to be waiting for something wider —
+   * `jobs_only_one_running`, one running row in the whole table — which was
+   * dropped on 2026-08-30.
    */
   async function withClaim(
     slug: string,
@@ -999,19 +1214,16 @@ when("the baseline, over the Postgres store", () => {
        the number that says so. */
     expect(begun.blocksCopied).toBe(3);
 
-    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-pg-"));
-    roots.push(root);
-    const htmlFile = path.join(root, "a.html");
-    /* Stage 2's output: the same words, no ids anywhere. */
-    await writeFile(htmlFile, EXTRACTED, "utf-8");
-
     await withClaim(SLUG, revisionId, articleId, async (tx, ref) => {
       const store = mod.pg.pgArtifactsIn(ref, tx);
 
       const previous = await previousBlocksFrom(store, SLUG);
       expect(previous?.map((b) => b.id)).toEqual([H, P1, P2]);
 
-      const run = await runBlocks({ htmlFile, previous });
+      /* Stage 2's output: the same words, no ids anywhere — as a string, which
+         is how the step gets it now. There is no file in this test any more,
+         and there is none in the path it models either. */
+      const run = runBlocks({ slug: SLUG, extractedHtml: EXTRACTED, previous });
       expect(run.stats.minted).toBe(0);
       expect(run.blocks.map((b) => b.id)).toEqual([H, P1, P2]);
 
@@ -1038,23 +1250,37 @@ when("the baseline, over the Postgres store", () => {
        time". This runs the stage a second time against unchanged text and
        asserts the same exact ids, not merely that some were carried. */
     const { revisionId, articleId } = await aDraft(SLUG);
-    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-pg2-"));
-    roots.push(root);
-    const htmlFile = path.join(root, "a.html");
 
     await withClaim(SLUG, revisionId, articleId, async (tx, ref) => {
       const store = mod.pg.pgArtifactsIn(ref, tx);
       await store.beginStep(SLUG, "blocks");
 
-      await writeFile(htmlFile, EXTRACTED, "utf-8");
-      const first = await runBlocks({ htmlFile, previous: await previousBlocksFrom(store, SLUG) });
-      await store.write(SLUG, "blocks", { blocks: { blocks: first.blocks }, stampedHtml: first.html }, {});
+      const first = runBlocks({
+        slug: SLUG,
+        extractedHtml: EXTRACTED,
+        previous: await previousBlocksFrom(store, SLUG),
+      });
+      await store.write(
+        SLUG,
+        "blocks",
+        { blocks: { blocks: first.blocks }, stampedHtml: first.html },
+        {},
+      );
 
       /* Stage 2 runs again and hands over an id-free document, exactly as
-         Readability does. The only way the ids can come back is the baseline. */
-      await writeFile(htmlFile, EXTRACTED, "utf-8");
-      const second = await runBlocks({ htmlFile, previous: await previousBlocksFrom(store, SLUG) });
-      await store.write(SLUG, "blocks", { blocks: { blocks: second.blocks }, stampedHtml: second.html }, {});
+         Readability does — the same `EXTRACTED` string, with nothing of stage
+         3's in it. The only way the ids can come back is the baseline. */
+      const second = runBlocks({
+        slug: SLUG,
+        extractedHtml: EXTRACTED,
+        previous: await previousBlocksFrom(store, SLUG),
+      });
+      await store.write(
+        SLUG,
+        "blocks",
+        { blocks: { blocks: second.blocks }, stampedHtml: second.html },
+        {},
+      );
 
       expect(second.stats.minted).toBe(0);
       const readBack = await store.read(SLUG, "blocks", "blocks");

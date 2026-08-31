@@ -1,5 +1,5 @@
 /**
- * The client half of chat — see docs/plans/chat-mode.md.
+ * The client half of chat — see docs/plans/260826a-chat-mode.md.
  *
  * The sibling of useComments.ts, with one difference that shapes the whole
  * thing: **the POST is a stream, not an answer.** A comment's POST returns the
@@ -13,7 +13,7 @@
  * every access log between here and the server.
  *
  * **The state lives in src/web/chat/, and this file is a façade over it** —
- * docs/plans/chat-operation-model.md. Every asynchronous thing chat does is an
+ * docs/plans/260828v-chat-operation-model.md. Every asynchronous thing chat does is an
  * operation with an id of its own, and every answer to one comes back carrying
  * that id and is admitted or refused at one gate, rather than by a guard
  * written out again at each of ten `await`s from four different vocabularies.
@@ -41,10 +41,18 @@ import type {
   ChatThread,
   ReviewStance,
   ThreadKind,
+  ToolRun,
 } from "../types.js";
 import { mintId } from "../ids.js";
-import { ChatController, recoverUntil, type ChatEffects } from "./chat/controller.js";
 import {
+  ChatController,
+  recoverUntil,
+  type ChatEffects,
+  type SpokenLanded,
+} from "./chat/controller.js";
+export type { SpokenLanded } from "./chat/controller.js";
+import {
+  appendSpoken,
   askForThreads,
   cancelThread,
   deleteThread,
@@ -66,6 +74,28 @@ export type { Begun } from "./chat/model.js";
    checks the two copied server constants against the server's own. */
 export { SERVER_TURN_MS, RECOVER_MARGIN_MS } from "./chat/controller.js";
 export { OPEN_TIMEOUT_MS } from "./chat/effects.js";
+
+/**
+ * One finished spoken exchange, as the live session hands it over.
+ *
+ * Deliberately the same field names as `SpokenTurn` in src/chat.ts, which is
+ * what the server's store takes: the request body, the store's argument and
+ * this object are one vocabulary rather than three that have to be translated
+ * between. The only field that is not the ledger's is `expectedTailId`, which
+ * belongs to the *session* — see `SpokenOperation`.
+ */
+export interface SpokenExchange {
+  threadId: string;
+  /** What the reader said. Empty when the transcription failed — a real state. */
+  question: string;
+  answer: string;
+  /** The row this append claims is last, or `null` for "this thread is empty". */
+  expectedTailId: string | null;
+  passages?: { blockIds: string[]; why: string }[];
+  tools?: ToolRun[];
+  /** The reader talked over it, so the text may run past what they heard. */
+  interrupted?: boolean;
+}
 
 export interface ChatApi {
   threads: ChatThread[];
@@ -167,7 +197,7 @@ export interface ChatApi {
      * The link is written *there*, once the real thread id exists, because the
      * id this function returns is minted optimistically and the client only
      * hears about an overrule when there is one. See
-     * docs/plans/comments-and-bookmarks.md § the Save & ask choreography.
+     * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
      */
     sourceCommentId?: string,
   ): string;
@@ -210,6 +240,20 @@ export interface ChatApi {
    * arriving in the gap — see `cancelChat` in src/routes.ts.
    */
   cancelAndDiscard(threadId: string, messageId: string): void;
+  /**
+   * **Write one finished spoken exchange into the conversation.**
+   *
+   * Live conversation's only way in, and it goes through the same controller as
+   * every typed turn — an operation with an id, a projection it alone may
+   * update, a 409 that repairs, not a second writer beside the first. The whole
+   * point of putting spoken turns in the thread is that the typed turn after
+   * them can see what was said, and that only works if there is one thread and
+   * one set of rules about writing to it.
+   *
+   * Returns where it landed, because the caller needs the stored id of the
+   * answer to claim as the *next* exchange's tail. See `SpokenLanded`.
+   */
+  speak(spoken: SpokenExchange, onThreadId?: (id: string) => void): Promise<SpokenLanded>;
   /** Start an empty conversation locally. Nothing is stored until you send. */
   begin(kind?: ThreadKind): string;
   /**
@@ -235,6 +279,7 @@ const chatEffects: ChatEffects = {
   renameThread,
   deleteThread,
   runTurn,
+  appendSpoken,
   settledAnswer,
   stopAnswer,
   cancelThread,
@@ -303,6 +348,58 @@ export function useChat(slug: string): ChatApi {
       controller.detach();
     };
   }, [controller]);
+
+  /**
+   * Hand one finished spoken exchange to the controller.
+   *
+   * **The rows are minted here and are provisional**, exactly as a send's are:
+   * the server writes its own ids and hands back the conversation, and the
+   * drawn pair is replaced by the stored pair in one transition. Unlike a
+   * send's they are not written into `base` — a spoken append is the one write
+   * the server can refuse outright, and drawing them is what lets the refusal
+   * be a dropped map entry rather than a repair race. `SpokenOperation`.
+   *
+   * Both rows are `done` on arrival. There is nothing pending: the conversation
+   * happened, and this is the transcript of it.
+   */
+  const speak = useCallback(
+    (spoken: SpokenExchange, onThreadId?: (id: string) => void): Promise<SpokenLanded> => {
+      const now = new Date().toISOString();
+      const question: ChatMessage = {
+        id: mintId(),
+        role: "user",
+        text: spoken.question,
+        createdAt: now,
+        status: "done",
+      };
+      const reply: ChatMessage = {
+        id: mintId(),
+        role: "assistant",
+        text: spoken.answer,
+        createdAt: now,
+        status: "done",
+        /* Conditional throughout, never `x: undefined` — the same rule
+           `withSpokenTurn` follows on the server, and for the same reason:
+           these two rows are compared against the stored ones. */
+        ...(spoken.passages && spoken.passages.length > 0 ? { passages: spoken.passages } : {}),
+        ...(spoken.tools && spoken.tools.length > 0 ? { tools: spoken.tools } : {}),
+        ...(spoken.interrupted ? { interrupted: true } : {}),
+      };
+      return controller.appendSpoken(
+        {
+          id: asOpId(mintId()),
+          kind: "spoken",
+          threadId: spoken.threadId,
+          question,
+          reply,
+          expectedTailId: spoken.expectedTailId,
+          at: now,
+        },
+        onThreadId,
+      );
+    },
+    [controller],
+  );
 
   /**
    * The reader pressed stop.
@@ -732,6 +829,7 @@ export function useChat(slug: string): ChatApi {
     loadFailed: state.loadPhase === "failed",
     recovering,
     send,
+    speak,
     cancelAndDiscard,
     retry,
     edit,

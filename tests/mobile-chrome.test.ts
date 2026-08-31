@@ -3,7 +3,7 @@
  * **The two numbers that go wrong when a bar moves without shrinking.**
  *
  * The bottom bar learnt to slide out of the way on a small device
- * (docs/plans/mobile-screen-real-estate.md § 3), by `transform` — which moves
+ * (docs/plans/260828av-mobile-screen-real-estate.md § 3), by `transform` — which moves
  * where an element is drawn and does not change its height. Every measurement
  * taken with `.height` therefore goes on reporting a confident number for a bar
  * that is entirely off screen, and nothing errors: a screenful step simply

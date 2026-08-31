@@ -60,7 +60,7 @@
  *   use** and the control is not offered.
  *
  * The four designs this was chosen from, and the two things it is a bet on, are
- * in docs/plans/glossary-prioritised-order.md.
+ * in docs/plans/260826b-glossary-prioritised-order.md.
  */
 import { useState } from "react";
 import {
@@ -76,6 +76,7 @@ import {
 import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
+import { ScoreBars } from "./ScoreBars.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
@@ -495,7 +496,7 @@ export function sortEntries(
 
    > Add a small threshold-slider to the Glossary UI (set to a sensible default)
 
-   The whole design is in docs/plans/glossary-prioritised-order.md. The four
+   The whole design is in docs/plans/260826b-glossary-prioritised-order.md. The four
    things worth having in front of you while reading this code:
 
    1. **The two scores multiply, they do not add.** What the reader wants
@@ -750,6 +751,19 @@ export interface RowScore {
  * reader can neither interpret nor check — and an entry missing either score
  * shows neither, which is what "this one could not be gated" looks like.
  */
+/**
+ * What each score measures, in the words the reader gets — in the tooltip, and
+ * in the sentence a screen reader reads out of the bars' label.
+ *
+ * The wording is the same shape as the sort buttons' own titles, deliberately:
+ * a reader who pressed *hardest* and then points at a bar should meet the same
+ * sentence twice rather than two descriptions of one thing.
+ */
+const SCORE_LABEL: Record<RowScore["key"], string> = {
+  difficulty: "Difficulty — how likely this term is to stop a reader",
+  centrality: "Centrality — how much of the argument rests on it",
+};
+
 export function rowScores(entry: GlossaryEntry, sort: TermSort | null): RowScore[] {
   const d = entry.difficulty;
   const c = entry.centrality;
@@ -776,7 +790,7 @@ export function rowScores(entry: GlossaryEntry, sort: TermSort | null): RowScore
    > itself clearly […] which bits are/not from the article.
 
    Both halves of that have the same answer, and it is a field split rather
-   than a better badge. See docs/plans/glossary-entries-worth-reading.md. */
+   than a better badge. See docs/plans/260826d-glossary-entries-worth-reading.md. */
 
 /** One labelled section of an open entry. The label IS the provenance. */
 export interface ProseSection {
@@ -1060,19 +1074,23 @@ function Term({
               our arithmetic, not the model's judgment, and a number the reader
               can neither interpret nor check is the thing the condition on
               keeping these scores was written against. */}
-          {scores.length > 0 && (
-            <span
-              className="gloss-score"
-              title={scores.map((s) => `${s.key}: ${s.value.toFixed(2)}`).join(" · ")}
-            >
-              {scores.map((s) => (
-                <span key={s.key} className="gloss-score-part">
-                  <span className="gloss-score-key">{s.key[0]}</span>
-                  {s.value.toFixed(2)}
-                </span>
-              ))}
-            </span>
-          )}
+          {/* **Drawn, not printed, since 2026-08-31** — Greg: *"Prefer to use UI
+              (e.g. a little sparkline/bar rather than numbers) plus tooltip
+              instead of numbers ... Same goes for Glossary etc."*
+
+              `d·72 c·85` was read rather than skimmed, and it was competing for
+              an 18rem row with the term and its gloss. A bar is a length, and
+              lengths compare down a column without being parsed. The numbers
+              are in the tooltip and in the bars' `aria-label`, so nothing is
+              lost — and the rule this panel is built around still holds
+              exactly: a row shows the scores its position was decided on, and
+              never the product it was gated on. src/web/ScoreBars.tsx, shared
+              with QuotesPanel so the two cannot drift into two treatments of
+              one idea. */}
+          <ScoreBars
+            className="gloss-score"
+            scores={scores.map((s) => ({ key: s.key, label: SCORE_LABEL[s.key], value: s.value }))}
+          />
         </span>
         {/* Hidden while the entry is open, because the open state shows the
             same words again with a label on them. One line closed, the labelled
@@ -1320,7 +1338,7 @@ function Looked({
 
             Unlike chat and explain, no words arrive while this runs: the answer
             appears whole. Making it stream is worth doing and is written up in
-            docs/plans/streaming-the-slow-two.md — it needs a storage seam that
+            docs/plans/260826o-streaming-the-slow-two.md — it needs a storage seam that
             was being rebuilt on the day this was written. */}
         {looking && (
           <p className="gloss-look-wait">

@@ -31,7 +31,7 @@
  * that is not hypothetical here: a killed process left one, every later attempt
  * computed the same key, found the same broken file, threw the same
  * `SyntaxError` out of the whole extract step, and nothing could clear it —
- * ../../docs/postmortems/pdf-chunk-cache-corrupt-entry.md. So a write goes to a
+ * ../../docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md. So a write goes to a
  * temp file first, and a read that cannot parse is a **miss** rather than a
  * throw. It says so in the log, because a discarded entry is the only surviving
  * trace that a run was killed mid-write.

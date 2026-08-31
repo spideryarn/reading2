@@ -6,7 +6,7 @@
  * error, so `reader.read()` neither resolves nor rejects and a `for await` over
  * it waits for ever. There is no event to hang a failure on, which is why the
  * panel spun on "thinking…" until the tab was closed. Found in a browser pass
- * on 2026-08-26; see docs/plans/chat-mode.md.
+ * on 2026-08-26; see docs/plans/260826a-chat-mode.md.
  *
  * Real timers and tiny numbers throughout, deliberately. The thing under test
  * is a race between a read and a timeout, and fake timers replace exactly the

@@ -16,7 +16,7 @@
  * the question it used to ask: **a key that is present exists, and a key that
  * is absent was never built.** The request goes, its swallowed `catch` goes,
  * and the state that hedged it goes with them.
- * docs/plans/public-read-only-access.md § The second request disappears.
+ * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
  *
  * **`GET /api/public/metadata/:slug` itself stays.** It is tested, it is in the
  * route inventory, and it is the honest small answer to *what does this article
@@ -39,7 +39,7 @@
  * about the contents that happens to have the same answer while a throw four
  * files away holds. If that throw is ever relaxed, presence keeps telling the
  * truth and a length test starts reporting a built artefact as never built.
- * docs/plans/public-read-only-access.md § The state that cannot happen.
+ * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
  */
 import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../public-types.js";
 
@@ -59,14 +59,14 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     /* Conditional spreads, because absent is the answer that means *never
        built* — see the note above on `in` rather than truthiness. */
     ...(article.glossary === undefined ? {} : { glossary: article.glossary }),
-    ...(article.summary === undefined ? {} : { summary: article.summary }),
     ...(article.ideas === undefined ? {} : { ideas: article.ideas }),
+    ...(article.quotes === undefined ? {} : { quotes: article.quotes }),
     ...(article.tweets === undefined ? {} : { tweets: article.tweets }),
   };
 }
 
 /**
- * The five booleans, from the payload the page is already rendering.
+ * The booleans, from the payload the page is already rendering.
  *
  * `arc` is read off the article rather than out of the artefact set, because it
  * has ridden along inside the article payload since slice 1a — it is the L0
@@ -77,7 +77,7 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     arc: article.arc !== undefined,
     tweets: article.tweets !== undefined,
     glossary: article.glossary !== undefined,
-    summary: article.summary !== undefined,
     ideas: article.ideas !== undefined,
+    quotes: article.quotes !== undefined,
   };
 }

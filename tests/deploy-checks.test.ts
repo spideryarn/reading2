@@ -7,7 +7,7 @@
  * docs/reusable/silent-success.md). So nearly every `describe` here leads with
  * the broken input and only then asserts the happy one.
  *
- * See scripts/deploy-checks.ts and docs/plans/deploy-pipeline.md.
+ * See scripts/deploy-checks.ts and docs/plans/260827v-deploy-pipeline.md.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -570,7 +570,7 @@ describe("findSecretsInBundle, against the real thing", () => {
 
 describe("a bucket that has drifted from the file describing it", () => {
   /* **This is the check that would have caught
-     docs/postmortems/the-config-file-is-not-the-bucket.md**, where
+     docs/postmortems/260828a-the-config-file-is-not-the-bucket.md**, where
      `supabase/config.toml` was edited to add `text/html`, the running bucket
      kept saying `{application/pdf}`, and every HTML fetch threw a 415 for seven
      hours. Nothing reconciles the file with a bucket that already exists — not
@@ -834,7 +834,6 @@ describe("the fixtures the gate worktree needs before its tests mean anything", 
       "data/writes/arc.json",
       "data/writes/tweets.json",
       "data/writes/glossary.json",
-      "data/writes/summary.json",
       "data/writes/ideas.json",
       "data/constitution/labels.json",
     ]);

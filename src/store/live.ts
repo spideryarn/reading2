@@ -75,7 +75,7 @@ export const STORE: StoreName = storeFromEnv(process.env.SPIDERYARN_STORE);
  * than written out twice.
  *
  * **This is scaffolding, and it is meant to be deleted.** The end state is step
- * 10 of docs/plans/postgres-storage-implementation.md: `pgChatStore` and
+ * 10 of docs/plans/260826e-postgres-storage-implementation.md: `pgChatStore` and
  * `pgSearchStore` are built and reviewed, and wiring them through `index.ts`
  * and `src/routes.ts` removes the need for any of this. Refusing now is the
  * honest interim, because the alternative is not "it works" — it is a write
@@ -86,7 +86,7 @@ export function notMigratedError(what: string): Error {
     new Error(
       `${what} has no Postgres implementation yet, and SPIDERYARN_STORE=postgres. ` +
         "Refusing rather than writing a file nothing will read back. " +
-        "See docs/plans/postgres-storage-implementation.md.",
+        "See docs/plans/260826e-postgres-storage-implementation.md.",
     ),
     { status: 501 },
   );

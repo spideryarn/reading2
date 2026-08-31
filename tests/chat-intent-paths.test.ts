@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
  * The stop/cancel-before-`begin` window, a refused cancel, and `onThreadId` —
- * the last four items on docs/plans/chat-operation-model-acceptance.md, and
+ * the last four items on docs/plans/260828aa-chat-operation-model-acceptance.md, and
  * named by Sol as the ones that must be pinned before the stage that rewrites
  * `turn.began` and moves command delivery, because that stage *is* the
  * machinery holding these wishes.
  *
  * **The first two of these changed on 2026-08-28, deliberately, in stage 2 of
- * docs/plans/chat-operation-model.md.** They were written the day before as
+ * docs/plans/260828v-chat-operation-model.md.** They were written the day before as
  * characterisation tests, and what they characterised was two requests for one
  * stop — the first carrying an id the server had never heard of — and one for a
  * cancel, likewise doomed, never corrected. Stage 2 represents the turn, so the
@@ -15,7 +15,7 @@
  * this row have a server name yet?* The rule now is **send once, when there is
  * an id the server can match**, and both assertions moved with it. What the old
  * ones said, and why the old behaviour was worse than a wasted request, is in
- * docs/postmortems/cancel-before-begin.md and in the note on each test below.
+ * docs/postmortems/260828b-cancel-before-begin.md and in the note on each test below.
  *
  * The other two pin what the code does and did not change.
  *
@@ -229,7 +229,7 @@ describe("a stop pressed before the begin frame", () => {
 describe("a cancel pressed before the begin frame", () => {
   /* The name used to say "and again after begin", which was the opposite of
      what the body asserted: there was no second cancel, and that was the
-     finding — docs/postmortems/cancel-before-begin.md. Stage 2 makes there be
+     finding — docs/postmortems/260828b-cancel-before-begin.md. Stage 2 makes there be
      exactly one, and puts it on the far side of the frame. */
   it("sends nothing until the row has a server name, and then exactly one /cancel and no /stop", async () => {
     const turn = controllableStream();
@@ -298,7 +298,7 @@ describe("a cancel pressed before the begin frame", () => {
 
 /**
  * **`began` is not a sound predicate for a retry**, which is GPT Sol's finding 2
- * on stage 2 (docs/plans/chat-operation-model-stage2-review-sol.md).
+ * on stage 2 (docs/plans/260828v-chat-operation-model-stage2-review-sol.md).
  *
  * A retry writes into the answer row it is replacing, and that row already has
  * the server's own name — it came back in a load. But the retry's *operation*
@@ -473,7 +473,7 @@ describe("a refused cancel", () => {
  *
  * Deletions are supposed to win over every projection; here one lost to an
  * unrelated request failing. Found written down in
- * docs/plans/chat-operation-model.md's stage 2, and fixed there by giving each
+ * docs/plans/260828v-chat-operation-model.md's stage 2, and fixed there by giving each
  * tombstone the name of who put it down and a `final` flag the delete sets.
  */
 describe("a cancel that fails after the reader has deleted the conversation", () => {

@@ -15,7 +15,7 @@
  *
  * It was fixed twice, and the second fix deleted the first. The interim was a
  * 501 from each module's own `save()`; the real answer is step 10 of
- * docs/plans/postgres-storage-implementation.md — `chatStore` and `searchStore`
+ * docs/plans/260826e-postgres-storage-implementation.md — `chatStore` and `searchStore`
  * in `src/store/index.ts`, which routes.ts now calls.
  *
  * **This file survived that change on purpose, and its predecessor did not.**

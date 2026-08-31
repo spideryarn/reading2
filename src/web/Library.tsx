@@ -42,8 +42,8 @@
  * stays hand-written, because its geometry is not something utilities can say.
  * Note the `tw:` prefix on every class — unprefixed names do nothing here.
  *
- * See docs/plans/library-shelf-actions-and-search.md and
- * docs/plans/library-sorting.md.
+ * See docs/plans/260826k-library-shelf-actions-and-search.md and
+ * docs/plans/260826y-library-sorting.md.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { throttle, useQueryState } from "nuqs";
@@ -145,7 +145,7 @@ export function Library() {
      used to read `rawDir ?? []` above the memo — a fresh array every render,
      which made this memo re-run every render, which made TanStack recompute and
      queue a page-index reset, which set state and rendered again, for ever:
-     docs/postmortems/shelf-render-loop.md. */
+     docs/postmortems/260827e-shelf-render-loop.md. */
   const sorting = useMemo(
     () => sortingFromUrl(by, rawDir, natural, DEFAULT_BY),
     [by, rawDir, natural],

@@ -5,7 +5,7 @@
  * same questions, and the answers come from `article_revisions`,
  * `revision_blocks` and `revision_step_runs` instead of from `data/<slug>/`.
  *
- * This file is landing C of docs/plans/delete-the-importer.md, and it is what
+ * This file is landing C of docs/plans/260827aa-delete-the-importer.md, and it is what
  * replaces `db:import` — not by being a better importer, but by being the thing
  * the pipeline writes through, so that there stops being a second path into the
  * database that only tests exercise.
@@ -18,7 +18,7 @@
  * job. That must happen **once per advance**, in the coordinator, not lazily
  * behind whichever store method the caller happened to reach first. So the
  * store is constructed from a `JobDraftRef` that has already been resolved.
- * GPT Sol, 2026-08-27; docs/plans/artifacts-pg-shape-sol.md.
+ * GPT Sol, 2026-08-27; docs/plans/260827ac-artifacts-pg-shape-sol.md.
  *
  * `slug` still travels in every method signature, and it is not decoration: it
  * is asserted against the bound reference **before anything is read or
@@ -162,8 +162,9 @@ type WholeColumn =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summary"
   | "ideas"
+  | "quotes"
+  | "timeline"
   | "sketch";
 
 /**
@@ -228,13 +229,14 @@ export const STORAGE: {
      names live in the `sources` bucket rather than in a table. There is
      deliberately no `raw_sources` row per image: that table exists so
      `article_revisions` can foreign-key to *the document*, and an image is not
-     the document. docs/plans/hosting-the-articles-images.md § Where the bytes go. */
+     the document. docs/plans/260829b-hosting-the-articles-images.md § Where the bytes go. */
   assets: { assets: { at: "column", column: "assets" } },
   arc: { arc: { at: "column", column: "arc" } },
   tweets: { tweets: { at: "column", column: "tweets" } },
   glossary: { glossary: { at: "column", column: "glossary" } },
-  summary: { summary: { at: "column", column: "summary" } },
   ideas: { ideas: { at: "column", column: "ideas" } },
+  quotes: { quotes: { at: "column", column: "quotes" } },
+  timeline: { timeline: { at: "column", column: "timeline" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
 };
 
@@ -296,6 +298,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     url: row.finalUrl,
     fetchedAt: row.fetchedAt?.toISOString(),
     excerpt: row.excerpt,
+    publishedAt: row.publishedAt,
     note: row.note,
     source: row.source as Meta["source"],
     method: row.extractMethod,
@@ -671,10 +674,9 @@ async function runRowFor(
  * the stored blocks. It is wrong twice. It is a freshness rule, in the one
  * function that must not have one. And it re-runs `toc` whenever stage 3 has
  * run since — which moves the tree's boundaries, which silently drops every
- * `arc` and `summary` entry whose block range no longer matches a node
- * (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
+ * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
  * reached by a different door. GPT Sol, 2026-08-28;
- * docs/plans/artifacts-pg-has-sol.md.
+ * docs/plans/260828b-artifacts-pg-has-sol.md.
  *
  * The gap it was trying to close is real — neither store can tell a carried
  * tree from a freshly built one — and it belongs to the runner, which knows at
@@ -881,6 +883,7 @@ const META_COLUMNS = [
   "siteName",
   "lang",
   "excerpt",
+  "publishedAt",
   "note",
   "source",
   "extractMethod",
@@ -902,6 +905,18 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,
     excerpt: meta.excerpt ?? null,
+    /* **The publisher's own string, verbatim** — never re-parsed, never passed
+       through `Date`, and the column is `text` for that reason
+       (src/db/schema.ts). Normalising it to UTC moves the calendar day, and the
+       calendar day is what the timeline reads a year-less date against.
+
+       `?? null` matters more here than for its neighbours: this field is absent
+       on every article extracted before 2026-08-31, and it must also be able to
+       go BACK to absent — a publisher who removes the date from a page has to
+       clear the column, not leave the old one sitting beside the new
+       extraction, or the timeline would go on filling in a year the article no
+       longer claims. */
+    publishedAt: meta.publishedAt ?? null,
     note: meta.note ?? null,
     source: meta.source ?? null,
     extractMethod: meta.method ?? null,

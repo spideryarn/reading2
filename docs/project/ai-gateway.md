@@ -1,8 +1,42 @@
 # The AI gateway: one vendor, two wires
 
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
-*recorded*. Since 2026-08-27 there are no exceptions — not the pipeline, not chat, not embeddings,
-not dictation, not the PDF reader.
+*recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation and the PDF
+reader alike.
+
+**There is one exception, and it arrived on 2026-08-31.** Live conversation mode talks to OpenAI
+directly, because OpenRouter has no realtime API to route to — its audio endpoints are batch speech
+and batch transcription, and there is no duplex speech-to-speech. It is not a routing preference; it
+was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a single
+`OPENROUTER_API_KEY`*") is answered at length in
+[live-conversation.md](live-conversation.md).
+
+Two things about it belong here rather than there, because they are properties of *this* claim.
+**The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
+and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
+And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
+a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
+`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead.
+
+**Widening those two unions is not the fix, though, and reading this paragraph as if it were is the
+mistake to avoid.** Every method on the declared-bypass `Observer` takes a response body *this
+process received*. Nobody here receives one — the usage exists only in the reader's browser tab — so
+metering this needs a way for a tab to report what it spent and a reason for the server to believe
+it, which is a larger question than the register answers today. That is a hole with a name rather
+than a to-do:
+[live-conversation.md § What is not built](live-conversation.md#what-is-not-built).
+
+**Greg decided to ship with it open**, 2026-08-31: *"make a comment in `npm run cost` and
+cost-tracking docs re this gap, and let's accept it for now."* This paragraph used to say the hole
+must be closed before readers saw the feature, and that sentence is now out of date rather than
+merely unmet — recording the decision matters more than keeping the stronger wording, because the
+next reader will otherwise treat a shipped feature as a violation.
+
+What *was* closed instead is the part that costs money rather than visibility: a live session now
+ends itself after five minutes of quiet or twenty minutes in total
+([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) § the caps), so a forgotten
+tab bills minutes rather than the hour OpenAI would allow. The meter is still missing; the runaway
+is not.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
@@ -29,7 +63,7 @@ fail without saying so.
 
 Until that day there were two vendors. The seven pipeline stages — [`toc`](../../src/toc.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
-[`glossary`](../../src/glossary.ts), [`summarise`](../../src/summarise.ts),
+[`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
 to `api.anthropic.com`. Everything a reader waits on went to OpenRouter.
 
@@ -140,7 +174,7 @@ feature rather than a policy applying to everything.
 
 Both OpenAI embedding models pass ZDR, so a project that must have ZDR everywhere has a way out
 that costs nothing measurable — see
-[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) for the eval's numbers and
+[260828z-embedding-endpoints-refused.md](../plans/260828z-embedding-endpoints-refused.md) for the eval's numbers and
 the billing catch.
 
 This is not hypothetical. **Drift, Trail and Force were dead in production from the day they shipped
@@ -152,8 +186,8 @@ and it has to be asked from inside the deployment, because a probe run on a lapt
 `.env.local` and tests the key that works.
 
 The full account, the fix, and the probe that would have caught it:
-[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) and
-[the-deployed-key-was-never-asked-to-do-anything.md](../postmortems/the-deployed-key-was-never-asked-to-do-anything.md).
+[260828z-embedding-endpoints-refused.md](../plans/260828z-embedding-endpoints-refused.md) and
+[260828d-the-deployed-key-was-never-asked-to-do-anything.md](../postmortems/260828d-the-deployed-key-was-never-asked-to-do-anything.md).
 
 `ProviderRefused.kind === "no-endpoints"` in [`src/ai-call.ts`](../../src/ai-call.ts) classifies it
 at the boundary by matching that fixed string, so the classification survives without the provider's
@@ -195,7 +229,7 @@ Its `usage` object carries Anthropic's own counters **and** OpenRouter's cost, t
  "cost":0.00608, "is_byok":false, "cost_details":{…}}
 ```
 
-[The cost-tracking plan](../plans/ai-cost-tracking.md) opens by arguing that the two transports
+[The cost-tracking plan](../plans/260827q-ai-cost-tracking.md) opens by arguing that the two transports
 disagree about what an input token *is* — Anthropic's `input_tokens` **excludes** the cache fields,
 OpenRouter's `prompt_tokens` **includes** them — and that we must therefore choose between a
 provider-reported cost and a token breakdown. On this endpoint that choice does not arise. Both
@@ -258,7 +292,7 @@ somebody else's question, which is what a per-user spend limit is about.
 **And the collector is not a spend limit.** It is accounting — it says what a request spent *after*
 the request. A cap needs a reservation taken before each call and reconciled after, because final
 usage arrives when the money has already gone and two simultaneous requests both pass a `SUM(cost)`
-check. [The plan](../plans/ai-cost-tracking.md) says so at length; it is repeated here because the
+check. [The plan](../plans/260827q-ai-cost-tracking.md) says so at length; it is repeated here because the
 per-request total looks like the harder half and is not.
 
 And the rule that found the first three, worth holding before adding a fourth field to a request:
@@ -306,7 +340,7 @@ Since 2026-08-28 a finished call is not only reported, it is **kept**: one row i
 (Postgres) or one line of `data/_ai-calls.jsonl` (`files` mode), written by an injected sink and
 awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) picks the
 adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
-in Greg's absence are in [ai-cost-tracking.md](../plans/ai-cost-tracking.md).
+in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
 ### `durationMs` is per **call**, and three different ways of adding it up are wrong
 
@@ -386,7 +420,7 @@ test, red, alongside the real files with the wrapper taken back out.
 new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
 `loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
 has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
-docs/plans/simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
+docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
 the old pair, because they were dirty with other agents' work on the day.
 
 The tempting way to accept two tails is to ask something weaker of each, which is the failure this
@@ -441,11 +475,26 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
+**And there is now one call that does neither**, which is the live-conversation spike at the top of
+this doc. It is the case the register cannot yet hold: its money is spent on a wire this server never
+sees, and a `Declaration` for it cannot be typed until `ProviderAccount` and `Wire` widen. So it is
+in the scan's `ALLOWED` list, where a reason is written down but no row is ever produced — which is
+weaker than every other entry here and is exactly why it is named in the opening paragraphs rather
+than left for somebody to find at the bottom of a table.
+
 - [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register. One entry per
   bypass: which account it bills, which file may use it, why the seam is wrong for it, and whether it
   actually writes a row yet. `npm run cost` prints every `metered: false` entry **by name, every
   run**, which is what makes the list finishable — the sentence it replaced ("*not counted here:
   anything evals/ spends*") named nothing and so never could be.
+- [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) `liveConversationGap()` — **the live-conversation
+  hole, printed on every run even though it is not in the register.** It has to be printed separately
+  because `undeclared()` reads `DECLARATIONS`, so on the day the last `metered: false` entry is wired
+  up this report would otherwise have announced that everything writes a row — while a reader could
+  be holding a live conversation billing audio by the minute into no total at all. Greg accepted the
+  gap knowingly on 2026-08-31; what it would take to close is in
+  [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing). The
+  completeness line now says "every **declared** way", which is the true claim.
 - [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
   nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
   a declaration, and counts attempts: a default Anthropic client retries twice, so one call can be
@@ -459,12 +508,40 @@ wrong.
   tripwire — its list of paid CLIs is kept honest only for an entry module that imports a seam
   *directly*, and one reaching a paid call transitively would need real dataflow to see.
 
-A declared bypass cannot be priced by OpenRouter, so its row carries `cost_source: "computed"` and a
-`price_version`, and `credits_used_nanos` stays null. That column means one thing — what OpenRouter
-deducted — and it is what `--reconcile` compares against their own running total, so an estimate must
-never land in it. The report keeps the two apart and says which half it has never checked.
+**A bypass is not the same thing as a second vendor**, and conflating the two is what
+`account: "anthropic"` on a declaration used to mean by accident. A bypass exists because
+`streamMessage` owns the model and the effort on purpose and an eval varies them per arm; that is a
+reason to go round the *seam*, not a reason to go round *OpenRouter*. So the wrapper offers two
+clients: `messagesSkinForDeclared()`, the SDK pointed at the Skin on `OPENROUTER_API_KEY`, which is
+what a bypass wants almost every time — and `anthropicDirectForDeclared()`, which is
+`api.anthropic.com` on `ANTHROPIC_API_KEY`.
 
-Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md).
+**There is one caller of the second, and `tests/no-undeclared-spend.test.ts` fails if a second
+appears.** It is the PDF bake-off's `transport: "anthropic"` arms, for the reason quoted above, and
+that is the whole of why the key exists in this project. It is not in `.env.local`, not on Vercel and
+not in `/api/health` — without it the bake-off skips those four arms and names them, and nothing else
+in the repo notices. The judge in [`evals/embedding-retrieval.ts`](../../evals/embedding-retrieval.ts)
+was the other caller until 2026-08-31; it had no such reason and moved onto the Skin, which also
+turned its row from our arithmetic into OpenRouter's own settled figure.
+
+**The same distinction had to be made a second time, in the observer**, and getting it wrong was
+invisible because the money stayed right. `account` decides which cost figure is authoritative;
+`wire` decides what shape the usage arrived in, and the two wires disagree about what an input token
+*is*. There were two observers, named after the accounts, so a bypass speaking the *Messages* shape
+to *OpenRouter* had only the chat-shaped one available — whose body has nowhere to put a cache split,
+a thinking count, a service tier or an inference geography. Both Messages-wire bypasses were doing
+that, and their rows carried the right cost and had quietly stopped explaining it. There is now a
+third, `messagesViaOpenRouter`, and handing either of the other two the wrong wire throws. GPT Sol,
+2026-08-31.
+
+Which is the difference the row carries. A bypass on the **openrouter** account is priced by
+OpenRouter like any other call — `usage.cost`, in band. Only an **anthropic**-account bypass has
+nobody to ask, so its row carries `cost_source: "computed"` and a `price_version`, and
+`credits_used_nanos` stays null. That column means one thing — what OpenRouter deducted — and it is
+what `--reconcile` compares against their own running total, so an estimate must never land in it.
+The report keeps the two apart and says which half it has never checked.
+
+Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md).
 
 ## The exception that is coming, and what it costs the rule
 
@@ -494,7 +571,7 @@ Two things about it are worth knowing before you touch this file's claims:
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
 `stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. All seven stages branch on
 `message.stop_reason === "refusal"`, and if that branch stops firing each one tries to parse a
-refusal sentence as JSON — [`summarise.ts`](../../src/summarise.ts) worst of all, treating it as a
+refusal sentence as JSON — `summarise.ts` worst of all, treating it as a
 repairable parse error, buying a second call, and then salvaging the batch as merely missing
 summaries.
 
@@ -515,11 +592,11 @@ clause.
 - [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) — `npm run cost`
 - [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the calls allowed round the
   outside, and why each one is
-- [ai-cost-tracking.md](../plans/ai-cost-tracking.md) — the plan this came out of, including the
+- [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md) — the plan this came out of, including the
   three probes that changed its mind
-- [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md) — the eight sites that
+- [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md) — the eight sites that
   were spending into no total, and the scan that stops a ninth
-- [openrouter-as-sole-gateway.md](../research/openrouter-as-sole-gateway.md) — the research, with the
+- [260827f-openrouter-as-sole-gateway.md](../research/260827f-openrouter-as-sole-gateway.md) — the research, with the
   catalogue of ways caching breaks silently in other people's projects
 - [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the one paid call
   that will not fit through OpenRouter, and how it is accounted for instead

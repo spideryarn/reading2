@@ -1,13 +1,18 @@
 /**
- * One suite at a time may hold the database's single `running` job slot.
+ * One suite at a time may run a job against the shared test database.
  *
  * ## Why this exists
  *
- * `jobs_only_one_running` is a unique index on the constant `(true)`, so at most
- * one row in the whole `spideryarn.jobs` table may be `running` — global
- * concurrency 1, on purpose. It is not scoped to an owner, a slug or a process,
- * so **every suite that starts a job is racing every other one**, including a
+ * **Every suite that starts a job is racing every other one**, including a
  * peer's `npm test` in another process and a dev server mid-ingest.
+ *
+ * It used to be racing on a global slot: `jobs_only_one_running` was a unique
+ * index on the constant `(true)`, so one row in the whole `spideryarn.jobs`
+ * table could be `running`, scoped to no owner, slug or process. That index went
+ * on 2026-08-30, replaced by a counted cap. The race did not go with it. What is
+ * left is `jobs_active_slug` — one job in flight per article — and, bigger,
+ * cause (2) below: these suites share fixed fixture slugs and a fixed owner, so
+ * two copies of one file are reading and deleting the same rows.
  *
  * Vitest runs test *files* concurrently, in separate forks. Before this helper
  * there were two answers to that in the repo and neither covered the case:
@@ -25,7 +30,7 @@
  *   still failed `expected 'busy' to be 'claimed'`, because the file it was
  *   racing had never heard of the key.
  *
- * So: one key, taken by everybody who needs the slot.
+ * So: one key, taken by everybody who runs a job.
  *
  * ## What the lock covers that the constraint does not
  *
@@ -43,15 +48,18 @@
  *
  * Two distinct causes, and the lock is the only thing that answers both:
  *
- * 1. **The slot.** `duplicate key … jobs_only_one_running`, `jobs_active_slug`,
- *    and `claim` answering `busy` where the test wanted `claimed`.
+ * 1. **Two jobs at once.** `duplicate key … jobs_active_slug`, and `claim`
+ *    answering `busy` where the test wanted `claimed`. The measurement above was
+ *    taken while `jobs_only_one_running` still existed, so its
+ *    `duplicate key … jobs_only_one_running` failures are the dropped index's
+ *    and would not recur; the other two would.
  * 2. **Fixed fixture identity.** Most of these files use a constant slug —
  *    `articles_slug_unique` on `test-artefacts-pg` — and a constant owner, so
  *    two copies of one file share rows: one copy's cleanup deletes the other's
  *    `article_revisions` mid-flight and the reader sees `23503` foreign-key
- *    violations against a revision that existed a moment ago. Waiting on the
- *    running-slot constraint cannot help with that at all, because the window
- *    that matters is the whole suite, not the insert.
+ *    violations against a revision that existed a moment ago. The per-insert
+ *    retry in `./running-slot.ts` cannot help with that at all, because the
+ *    window that matters is the whole suite, not the insert.
  *
  * Serialising whole *files* is what covers (2), which is why this is taken at
  * module load and held to teardown rather than around each insert.
@@ -114,7 +122,7 @@
  * length of one fixture load rather than one suite. Same key, same exclusion,
  * a hold measured in hundreds of milliseconds.
  *
- * That is the rule for anything added later: **take this if you hold the slot;
+ * That is the rule for anything added later: **take this if you run a job;
  * take it by the file if your fixtures are named the same on every run, and by
  * the window if holding it for your whole file would dominate the budget.**
  *
@@ -188,7 +196,7 @@ const POLL_MS = 200;
  * each other's. It exists only to answer "have *I* already got it".
  *
  * `withRunLock` needs it because the twelve file-scope holders also call
- * `loadArticleIntoPg`, which takes the lock for its slot window. Without the
+ * `loadArticleIntoPg`, which takes the lock for its load window. Without the
  * flag that is a second connection asking for a key the first connection holds
  * — Postgres advisory locks are re-entrant within a *session* and these are two
  * sessions — so it would poll until the deadline and then throw, in every one
@@ -261,8 +269,8 @@ export async function takeRunLock(
       client.release();
       await pool.end();
       throw new Error(
-        `Waited ${waitMs}ms for advisory lock ${RUN_LOCK}: ${suite} could not get the ` +
-          "single running job slot. Another suite that takes this lock is still running against " +
+        `Waited ${waitMs}ms for advisory lock ${RUN_LOCK}: ${suite} could not get its turn ` +
+          "at running a job. Another suite that takes this lock is still running against " +
           "this database — a second `npm test`, or a copy of one of those files. If nothing is " +
           "actually running, a connection is wedged holding the lock; it goes when that process " +
           "does.",
@@ -299,7 +307,7 @@ export async function takeRunLock(
 /**
  * Hold the run lock for the length of `body`, unless this process already has it.
  *
- * **The window-scoped take**, for code that needs the running slot briefly
+ * **The window-scoped take**, for code that needs to run a job briefly
  * rather than for a whole file — `loadArticleIntoPg` in `./load-article.ts` is
  * the caller it was written for. A fixture load is one insert, some artefact
  * writes and a delete; serialising *that* costs nothing, where serialising the
@@ -311,7 +319,7 @@ export async function takeRunLock(
  * for a key the first connection holds; advisory locks are re-entrant within a
  * session and these are two sessions, so it would poll to the deadline and then
  * throw — in five files at once, blaming a sibling that does not exist. The
- * flag says "I already have it", which is true, and the body runs with the slot
+ * flag says "I already have it", which is true, and the body runs with the lock
  * genuinely held. `tests/run-lock.test.ts` drives exactly that path.
  *
  * **Lock ordering.** This one is always the *inner* lock. `store-parity` and

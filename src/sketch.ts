@@ -9,7 +9,7 @@
  * with satellites, a ladder, a funnel, two columns compared — the model decides
  * which the article *is*, and lays it out itself. The whole design and the
  * reasoning are in docs/project/diagram.md § Sketch and
- * docs/plans/sketch-diagram.md.
+ * docs/plans/260830j-sketch-diagram.md.
  *
  * What it does **not** do is emit SVG. It writes a scene in the five primitives
  * of src/sketch-scene.ts, which `readSketch` then checks against the article
@@ -19,11 +19,12 @@
  * Shaped on src/ideas.ts, which is the nearest neighbour: article-reading,
  * on-demand, and it names block ids so it sends `articleWithIds`.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { anthropicCallFailed } from "./anthropic-call.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { stageCli } from "./cli-ledger.js";
@@ -45,9 +46,14 @@ import {
   type SketchScore,
   SKETCH_VERSION,
 } from "./sketch-scene.js";
-import { type BlockFingerprint, hashBlocks, structureHash } from "./source-hash.js";
+import {
+  articleWithIdsFingerprint,
+  type BlockFingerprint,
+  fallbackHeadTitle,
+  type MetaFingerprintWithUrl,
+} from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { Block, Meta, Tree, TreeNode } from "./types.js";
+import type { Meta, Tree, TreeNode } from "./types.js";
 
 /** Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked. */
 export const PROMPT_VERSION = "sketch/1";
@@ -64,15 +70,27 @@ export const OVERVIEW_MIN = 6;
 export const OVERVIEW_MAX = 16;
 
 /**
- * **The blocks and the section boundaries this was drawn against, together.**
+ * **The blocks, the section boundaries and the head this was drawn against, all
+ * three** — `articleFingerprint` in src/source-hash.ts.
  *
- * Both halves, for the reason `inputFingerprint` in src/ideas.ts gives at
- * length: the prompt shows the model the outline *before* the article, so
- * re-cutting the sections changes the question being asked while every block
- * stays byte-identical, and a blocks-only hash would report no change at all.
+ * The tree, for the reason `inputFingerprint` in src/ideas.ts gives at length:
+ * the prompt shows the model the outline *before* the article, so re-cutting
+ * the sections changes the question being asked while every block stays
+ * byte-identical, and a blocks-only hash would report no change at all.
+ *
+ * **The metadata joined on 2026-08-31.** `generateSketch` hands `meta` to
+ * `articleWithIds`, which writes `TITLE:`, `BY:` and `PUBLISHED IN:` at the
+ * head of the prompt. Those are stage 2's fields and a re-extraction moves
+ * them, so a change there is reachable rather than theoretical — a reader's own
+ * rename is a shelf override the generators never see.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
-export function inputFingerprint(blocks: readonly BlockFingerprint[], tree: Tree): string {
-  return `${hashBlocks(blocks)}.${structureHash(tree)}`;
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): string {
+  return articleWithIdsFingerprint(blocks, tree, meta);
 }
 
 /** Has the article moved underneath this picture? */
@@ -80,8 +98,9 @@ export function isStale(
   sketch: Sketch,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
 ): boolean {
-  return sketch.sourceHash !== inputFingerprint(blocks, tree);
+  return sketch.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -450,7 +469,13 @@ function parseJson(raw: string): unknown {
 /* ------------------------------------------------------------------ the run */
 
 export async function generateSketch(opts: {
-  dir: string;
+  /**
+   * The article, read once by whoever has a store or a directory —
+   * src/article-input.ts. This stage no longer knows where one comes from, and
+   * its `slug` is why that type carries one: `path.basename(opts.dir)` used to
+   * be how the picture got stamped with the article it is of.
+   */
+  article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   cacheArticle?: boolean;
@@ -458,18 +483,22 @@ export async function generateSketch(opts: {
   /** Overrides SYSTEM, for the prompt harness only. Never set in the app. */
   systemOverride?: string;
 }): Promise<SketchRun> {
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  const meta: Meta =
-    (await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-      .then((raw) => JSON.parse(raw) as Meta)
-      .catch(() => null)) ?? ({ title: tree.slug } as Meta);
+  const { blocks, tree } = opts.article;
+  const realMeta: Meta | null = opts.article.meta;
+  /* A stub with the slug in it when there is none — `articleWithIds` needs a
+     head, and a stage that silently rendered a different head would silently
+     send uncacheable bytes.
+
+     **Nothing may go on this stub that the fingerprint does not represent.**
+     One field is safe because `articleWithIdsFingerprint` resolves
+     `fallbackHeadTitle` itself for a `null` meta; a second — a byline, a site
+     name — would put a line in the prompt that no hash anywhere describes, and
+     then this stage is stale for ever while looking healthy. The fingerprint
+     below is handed `realMeta` rather than the stub, which is not itself the
+     protection: the two hash identically today, and src/ideas.ts § `realMeta`
+     has the measurement and the whole argument.
+     tests/meta-fallback-fingerprint.test.ts pins the property. */
+  const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
 
   /* The argument, not the apparatus — the same filter and the same reason as
      src/ideas.ts. A picture of an article's shape that gives a third of the
@@ -544,15 +573,16 @@ export async function generateSketch(opts: {
   const blockOrder = blocks.map((b) => b.id);
   const { sketch, report } = readSketch(parseJson(raw), { blockOrder });
   sketch.generator = CAPABLE_MODEL;
-  /* **The directory, not `tree.slug`.** They are usually the same and on
-     `data/constitution` they are not: that tree says `"slug": "blocks"`,
+  /* **The article's own slug, not `tree.slug`.** They are usually the same and
+     on `data/constitution` they are not: that tree says `"slug": "blocks"`,
      left over from whatever it was called when stage 4 ran. Copying it forward
      writes a fresh artefact that names an article which does not exist, and
-     everything downstream that looks the article up by it fails on a file path
-     nobody can trace back to a stale field in a different file. The directory
-     is the article's identity here; a field inside something it wrote earlier
-     is a claim about it. */
-  sketch.slug = path.basename(opts.dir);
+     everything downstream that looks the article up by it fails on a path
+     nobody can trace back to a stale field in a different file. The slug the
+     caller was holding is the article's identity here; a field inside something
+     it wrote earlier is a claim about it. It used to be `path.basename(dir)`,
+     which is exactly why `Article` carries one. */
+  sketch.slug = opts.article.slug;
   /* **Provenance, so a later read can tell current from stale.** Without these
      two a sketch is a picture with no idea which article or which reader it was
      drawn for: a re-ingest moves every block id and the artefact goes on
@@ -560,8 +590,13 @@ export async function generateSketch(opts: {
      `readSketch` fails to resolve them. The structure half matters as much as
      the blocks half here — the prompt shows the model the tree, so re-cutting
      the sections changes the question while every block stays byte-identical
-     (the reasoning is in src/ideas.ts § inputFingerprint). GPT Sol, 2026-08-30. */
-  sketch.sourceHash = `${hashBlocks(blocks)}.${structureHash(tree)}`;
+     (the reasoning is in src/ideas.ts § inputFingerprint). GPT Sol, 2026-08-30.
+
+     **Through `inputFingerprint`, not spelled out again.** These two lines were
+     a second copy of that function's body — the same formula, free to drift,
+     and the drift would show as a picture that never regenerates or never stops.
+     They drifted the day the metadata joined the fingerprint (2026-08-31). */
+  sketch.sourceHash = inputFingerprint(blocks, tree, realMeta);
   sketch.profileHash = profile ? hashProfile(profile) : null;
   const score = scoreSketch(sketch, report, { blockOrder });
 
@@ -634,7 +669,10 @@ async function main(): Promise<void> {
   loadEnvLocal();
   console.log(`Drawing the argument with ${CAPABLE_MODEL}…`);
   const run = await generateSketch({
-    dir,
+    /* The command line has a folder and no store — src/article-input.ts §
+       `readArticleFromDir`, which is deliberately the only filesystem read left
+       in this half of the pipeline. */
+    article: await readArticleFromDir(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
   const outFile = path.join(dir, "sketch.json");

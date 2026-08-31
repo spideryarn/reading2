@@ -5,10 +5,10 @@
  * `tests/jobs.test.ts` owns the queue's arithmetic and the advance endpoint's
  * older properties; this file is about the claims the **walk** adds, and every
  * one of them is a statement about the loop in `advanceJobWith` rather than
- * about a store. Written for docs/plans/v1-imports-on-vercel.md § Stage 3, whose
+ * about a store. Written for docs/plans/260830d-v1-imports-on-vercel.md § Stage 3, whose
  * one-sentence version is GPT Sol's: *"claim once, keep the same attempt while
  * walking the real steps, release only on intentional handoff or terminal
- * settlement"* (docs/plans/v1-imports-review-sol.md critical 3).
+ * settlement"* (docs/plans/260830a-v1-imports-review-sol.md critical 3).
  *
  * ## Why it drives `advanceJobWith` with a fake artefact store
  *
@@ -47,7 +47,7 @@
  *   `transitionAfter`, so every non-final step keeps.
  * - **`runInJob` is in effect**: call `walkClaim` directly rather than through
  *   `runInJob` — which is the state production actually shipped in, and nothing
- *   caught it (docs/plans/v1-stages01-review-sol.md critical 1).
+ *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
  */
 import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -58,7 +58,12 @@ import { currentJobId } from "../src/job-scope.js";
 import { advanceJobWith, LEASE_MS, STEP_BUDGET_MS, type AdvanceParts } from "../src/jobs.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import type { ArtifactKind, ArtifactMap, ArtifactStore } from "../src/store/artifacts.js";
+import type {
+  ArtifactKind,
+  ArtifactMap,
+  ArtifactParts,
+  ArtifactStore,
+} from "../src/store/artifacts.js";
 import { fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { fsStoreSession } from "../src/store/session.js";
@@ -132,9 +137,18 @@ interface Ran {
 }
 
 /**
- * A step that writes its own artefacts inside `run` and returns a bare detail,
- * which is what all ten real steps still do (`LEGACY_UNCONVERTED_STEPS`) — so
- * the filesystem session accepts it by the same rule it accepts them.
+ * A **converted** step: it writes nothing itself and returns everything it
+ * declares, which is what all but `fetch` and `extract` now do
+ * (`LEGACY_UNCONVERTED_STEPS`). The session's commit is what puts the artefacts
+ * in the store, so `assertProduced` reads back what this returned.
+ *
+ * **It wrote them inside `run` and returned a bare detail until 2026-08-31**,
+ * which was the honest fixture while every real step did that. It stopped being
+ * honest the moment they were converted, and it stopped *compiling as a
+ * fixture* the moment `checkProduct` was asked with no exemption for those
+ * names — which is the guard working, not the fixture breaking.
+ *
+ * A step that returns nothing at all is a different case with its own tests.
  *
  * `body` is where a case puts what it wants to happen *while a step is running*:
  * throw, look at the job row, press Stop from somewhere else.
@@ -142,8 +156,6 @@ interface Ran {
 function fakeStep(
   name: StepName,
   ran: Ran & { names: StepName[] },
-  artifacts: FakeArtifacts,
-  slug: string,
   body: () => Promise<void> | void = () => {},
 ): PipelineStep {
   return {
@@ -154,10 +166,14 @@ function fakeStep(
     async run(): Promise<StepProduct> {
       ran.names.push(name);
       await body();
-      /* Everything it declares, so `assertProduced` reads it back. A step that
-         wrote nothing is a different case with its own tests. */
-      for (const kind of STEPS[name].produces) artifacts.put(slug, name, kind, { made: name });
-      return { detail: `${name} ran` };
+      /* Everything it declares, so `checkProduct` accepts it and
+         `assertProduced` reads it back. The cases that want an artefact
+         *already* present — a step that should skip — put it there with `put`
+         before the walk starts, which is why this no longer takes the store. */
+      const parts = Object.fromEntries(
+        STEPS[name].produces.map((kind) => [kind, { made: name }]),
+      ) as ArtifactParts;
+      return { parts, detail: `${name} ran` };
     },
   } as PipelineStep;
 }
@@ -205,7 +221,7 @@ async function fixture(
   const artifacts = memoryArtifacts();
   const ran: Ran & { names: StepName[] } = { names: [] };
   const steps = Object.fromEntries(
-    names.map((name) => [name, fakeStep(name, ran, artifacts, slug, bodies[name])]),
+    names.map((name) => [name, fakeStep(name, ran, bodies[name])]),
   ) as Partial<Record<StepName, PipelineStep>>;
   const job = await queueJob(slug, names);
   return { artifacts, ran, job, parts: partsFor(artifacts, steps) };
@@ -269,7 +285,8 @@ describe("one claim walks the whole job", () => {
     const { ran, job, parts } = await fixture("test-walk-holds-claim", names, {
       extract: async () => {
         probe.attempted = true;
-        const outcome = await fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS);
+        /* A cap high enough to be beside the point: this case is not about it. */
+        const outcome = await fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS, 4);
         probe.refused = outcome.kind;
         probe.status = (await fsJobStore.get(job.id, OWNER))?.status;
       },
@@ -402,7 +419,7 @@ describe("one claim walks the whole job", () => {
      * `AsyncLocalStorage` and a `currentJobId()` with no way to fill it, so on a
      * deployed instance `dataRoot()` was asked for a directory with no job in
      * scope and threw before the first step started — every import on production
-     * failing in 16ms. GPT Sol, docs/plans/v1-stages01-review-sol.md critical 1.
+     * failing in 16ms. GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
      *
      * Asserted from **inside** a step and after an `await`, because that is the
      * property: an `AsyncLocalStorage` that survives the awaits between the

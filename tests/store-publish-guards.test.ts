@@ -11,7 +11,7 @@
  * `input_hash`, and stopped (src/store/pg-revisions.ts). So a `toc` that errored
  * — or one still going — published, as long as the hash beside it matched.
  *
- * Found by GPT Sol while reviewing docs/plans/delete-the-importer.md, which
+ * Found by GPT Sol while reviewing docs/plans/260827aa-delete-the-importer.md, which
  * proposes a *second* guard of exactly this shape for the raw source reference.
  * That is why this is fixed first and on its own: writing the new guard on top
  * of the same mistake would have doubled it.

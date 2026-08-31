@@ -133,7 +133,7 @@ describe("not on a laptop", () => {
    * and that was true locally purely because nobody had put one in
    * `.env.local`. Copy `.env.prod` across — or add one to debug the
    * integration — and a laptop starts reporting into the production project.
-   * docs/plans/worktrees.md makes it worse, copying `.env.local` into every
+   * docs/plans/260828r-worktrees.md makes it worse, copying `.env.local` into every
    * worktree.
    */
   /**

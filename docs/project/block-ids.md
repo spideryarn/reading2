@@ -89,7 +89,7 @@ Until 2026-08-28 the read was a `readFile` inside a `try/catch` whose `catch` sa
 this article"*. That is one branch doing two jobs, and the moment the pipeline's artefacts leave the
 filesystem it takes the second one for every article at once: the read fails, every article looks
 new, every id is re-minted, and the step reports success
-([delete-the-importer.md](../plans/delete-the-importer.md)). So the three cases are now separate and
+([260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)). So the three cases are now separate and
 only one of them mints:
 
 | | what it means | what happens |
@@ -135,11 +135,69 @@ The `blocks` step turns that one into a `blocked` stage failure, so the job card
 stage 3 the same prose-free HTML and stop in the same place — which is what the error already tells
 the reader, and for a while it said so above a button that contradicted it.
 
-The read side keeps its own copy of that question — `htmlCarriesItsIds` in
+The read side keeps its own copy of that question — `blocksMatchTheirHtml` in
 [`src/pipeline.ts`](../../src/pipeline.ts) refuses to call the step done when `blocks.json` lists
 nothing. Belt and braces on purpose: the write-time guard stops new empties being created, and the
 read-time one still has work to do, because `blocks.json` files already on disk can be empty and
 nothing will rewrite them.
+
+### The freshness guard, and the two ways it was wrong
+
+`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) asks two things.
+
+1. **Every id in the blocks artefact is in the stamped HTML.** Cheap, and it settles the commonest
+   failure — stage 2 re-ran and wiped the ids — before anything is parsed.
+2. **Re-derive the blocks from the extracted HTML and compare**, through `splitIntoBlocks`: the same
+   splitter, the same sanitiser, the same everything except which ids were handed out.
+   `blockIdentityFree` is the projection that takes the ids out — every field of a `Block` except
+   `id`, with `spya-` id attributes and `#spya-…` fragments normalised out of the stored `html`.
+
+Question 1 alone was enough **by accident** until 2026-08-31. On disk `extract.extractedHtml` and
+`blocks.stampedHtml` are the same path (`PATHS` in
+[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), so a re-extraction overwrites the
+very file question 1 reads and the missing ids give it away. Split into the two Postgres columns the
+alias goes, question 1 compares stage 3's own output against stage 3's own blocks, and it returns
+**true always**.
+
+**Question 2 was a comparison of the two documents' parsed text first, and that was wrong in both
+directions.** Worth keeping, because it looked well-measured and was not:
+
+- **It under-fires.** `<p>Alpha</p><p>Beta</p>` re-extracted as `<p>AlphaBeta</p>` has identical text
+  and genuinely different blocks — and so does a heading demoted to a paragraph, a repointed `href`,
+  a changed `src` or `alt`, and whitespace inside a `<pre>`.
+- **It over-fires, and that half cannot cure.** Stage 3 sanitises what it is handed, and `FORBID_TAGS`
+  in [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) removes `style` and friends, so a
+  healthy stamped HTML legitimately says less than the extraction it came from. Under Postgres
+  `extracted_html` stays unsanitised while `stamped_html` stays sanitised, so stage 3 would re-run for
+  ever and never report itself done.
+
+The comparison had been measured against one real article and found sound. **One healthy pair says
+nothing about the unhealthy ones, and nothing at all about the pairs that ought to be healthy and are
+not** — [silent-success.md](../reusable/silent-success.md). Deriving the candidates through the same
+code the stage uses removes both halves at once: both sides are sanitised, so there is nothing to
+over-fire on, and both keep their boundaries, tags and attributes, so there is nothing left to
+under-fire through. GPT Sol found both, 2026-08-31.
+
+**What it costs.** A full jsdom parse, a DOMPurify pass and a document walk, on every skip check for
+this one step: 16 ms for a 19 KB article, 169 ms for 77 KB, 687 ms for the 676 KB `consciousness`,
+which is the worst case in `output/`. It is not short-circuited on the filesystem, where the two
+reads return the same string — a guard that knows which store it is in is a guard with an untested
+half.
+
+**What it rests on.** On the filesystem the candidates come from stage 3's *own* output, because
+there is only one document; that is sound only if the splitter is idempotent. Measured across ten
+real articles, twice over each (94 to 669 blocks): identical every time. If it ever stops being true,
+every filesystem article reports this step not-done at once rather than quietly — the right way round
+for it to break.
+
+**What it still does not prove.** Question 1 is membership, not binding: two ids swapped between
+elements, or one parked on an unrelated wrapper, both pass. Question 2 says stage 3 would produce the
+same blocks, not that these blocks carry the ids a reader's comments name — `assertIdsCarried` is
+what holds that, at write time. The end state is a generation token stage 3 writes into both
+artefacts, and it has nowhere to live yet: in Postgres the blocks artefact is rows, and
+`STAMP_SOURCE` in [`src/store/artifacts.ts`](../../src/store/artifacts.ts) lists no entry for
+`blocks`, so a `stamp` for this step reads back `null`. **That absence is a reason to do the storage
+work before the flip, not a reason to keep a cheaper heuristic.**
 
 Stage 3's input is **stage 2's HTML** (`extractedHtml`), never its own previous output
 (`stampedHtml`) — `BLOCKS_INPUT_HTML` in [`src/blocks.ts`](../../src/blocks.ts). On disk the two are
@@ -180,7 +238,7 @@ to a different claim.
 **What this still does not promise.** NFKC folds compatibility characters, so an edit from `x²` to
 `x2` carries the old id onto changed text. That is the trade for folding `ﬁ` to `fi`, which is real
 extraction drift and about to be much more common — see
-[pdf-ingestion.md](../plans/pdf-ingestion.md). And an id already in the document is trusted, except
+[260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md). And an id already in the document is trusted, except
 that a *duplicate* of one is not: the second element carrying it mints, because two blocks with one
 id corrupts every artefact keyed on it.
 
@@ -188,7 +246,7 @@ Until 2026-08-26 there was one pass, the fold deleted every character outside `a
 ambiguous bucket was handed out first-come. In English that stripped punctuation; in Cyrillic, Greek,
 Chinese, Arabic or Devanagari it stripped the paragraph, and two of its five failure modes dropped
 paragraphs from the article outright while reporting success. The cause, the measured blast radius
-and the fix are in [the postmortem](../postmortems/block-id-matching-non-latin.md).
+and the fix are in [the postmortem](../postmortems/260826d-block-id-matching-non-latin.md).
 
 Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
@@ -200,7 +258,7 @@ the *same PDF with the same model and the same prompt*, then stage 3, keeps **32
 the same page produces one more record than last time and a comma in a different place. The matcher
 is doing exactly what it says here — refusing to guess when the words have changed — and the cost is
 real. What to do about it is being decided in
-[pdf-ingestion.md § What a re-read costs](../plans/pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
+[260826c-pdf-ingestion.md § What a re-read costs](../plans/260826c-pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
 and it wants deciding before anything a reader owns is anchored to an id.
 
 Two honest limits:
@@ -245,7 +303,7 @@ phantom rows quoting text it had already listed.
 ### A bare `<svg>` gets no id, and the ToC cannot point at a diagram
 
 **Known hole, found 2026-08-28** while measuring extraction
-([readability-repair-pass.md](../plans/readability-repair-pass.md)). The sentence above says the ToC
+([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says the ToC
 may well want to point at a diagram. For a `<figure>`-wrapped one it can. For a bare inline `<svg>`
 it cannot, and nothing says so:
 
@@ -347,7 +405,7 @@ Two things it deliberately leaves alone, and one it cannot reach:
 - And the one it cannot: **a page that links to itself the long way round**,
   `href="https://this.article/#section"` or `/article#section`. Those still point at the overwritten
   name. Stage 3 is not told the article's own address, and no page we have ingested does this — see
-  [internal-anchor-links.md](../plans/internal-anchor-links.md).
+  [260826af-internal-anchor-links.md](../plans/260826af-internal-anchor-links.md).
 
 On a re-run there is nothing to do: every href already says `#spya-…`, no stamp is written for an id
 of ours, and the map comes out empty. It survives a re-extraction too, where the author's ids come

@@ -8,7 +8,7 @@
  * The write half is src/tweets.ts, the read half is `GET /api/tweets/:slug`,
  * and the whole argument for the feature existing at all — including the two
  * vision.md anti-goals it sits next to, and what this page has to do about them
- * — is docs/plans/tweet-thread-page.md. Read that before changing what is on
+ * — is docs/plans/260825g-tweet-thread-page.md. Read that before changing what is on
  * screen here; several of the things this page does *not* do were decided
  * rather than skipped.
  *
@@ -43,7 +43,7 @@
  *
  *  - **A thread that can be rewritten when it is fine.** Theirs had a "Reset"
  *    button at all times; ours had one only when the thread had gone stale, and
- *    docs/plans/tweet-thread-page.md#what-is-still-open left the rest open on
+ *    docs/plans/260825g-tweet-thread-page.md#what-is-still-open left the rest open on
  *    the grounds that a model call should not be one click away. It is now two
  *    clicks away instead — see `Rewrite` — which answers the objection rather
  *    than living with the gap.
@@ -125,7 +125,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 
   /**
    * Fetch the thread. Its own endpoint rather than a field on the article — see
-   * docs/plans/tweet-thread-page.md#as-built-where-this-plan-met-the-code: most
+   * docs/plans/260825g-tweet-thread-page.md#as-built-where-this-plan-met-the-code: most
    * articles have no thread, so carrying one on the article payload would make
    * every reader of every article download a `null`.
    */
@@ -583,7 +583,7 @@ export function ThreadPosts({ thread }: { thread: PublicTweets }) {
  *
  * Theirs had this as a "Reset" button beside the title, one click, always
  * there. The plan left it out for a stated reason —
- * docs/plans/tweet-thread-page.md#what-is-still-open: *"it is a model call one
+ * docs/plans/260825g-tweet-thread-page.md#what-is-still-open: *"it is a model call one
  * click away, and nothing else in the app spends money that easily"* — and then
  * the gap became its own problem, because the only way to replace a thread you
  * did not like was to change the article underneath it.

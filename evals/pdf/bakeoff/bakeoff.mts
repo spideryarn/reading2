@@ -13,6 +13,11 @@
  *   RUN=label ...                                    # keep this run's files apart
  *   READERS=gpt-luna,gemini-flash-native ...         # a subset of the table below
  *
+ * Needs `OPENROUTER_API_KEY`. `ANTHROPIC_API_KEY` is optional and is not in
+ * `.env.local` — this file is the only thing in the repo that still wants one,
+ * and without it the four `transport: "anthropic"` arms are skipped with a
+ * message naming them. See README.md and src/spend-declarations.ts.
+ *
  * **The readers are a table, not a function each.** They were a function each
  * until adding a fourth model meant writing a fourth near-copy of the same
  * request — which is how a bake-off quietly stops being able to add candidates.
@@ -22,7 +27,7 @@
 import "../../../src/env.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import {
-  anthropicForDeclared,
+  anthropicDirectForDeclared,
   declaredFetch,
   withDeclaredExternalCall,
 } from "../../declared-spend.js";
@@ -227,11 +232,20 @@ const READERS: Reader[] = [
    talks to `api.anthropic.com` on purpose: `transport: "anthropic"` versus
    `transport: "openrouter"` is the comparison, and forcing both onto one
    transport would leave it reporting a winner between OpenRouter and itself.
-   `anthropicForDeclared()` keeps the money visible anyway — `maxRetries: 0`, a
-   guarded `fetch`, and a row per attempt priced from ANTHROPIC_PRICES, because
-   a call that skips OpenRouter has nobody to ask what it cost.
-   See evals/declared-spend.ts. */
-const anthropic = anthropicForDeclared();
+   `anthropicDirectForDeclared()` keeps the money visible anyway —
+   `maxRetries: 0`, a guarded `fetch`, and a row per attempt priced from
+   ANTHROPIC_PRICES, because a call that skips OpenRouter has nobody to ask what
+   it cost. See evals/declared-spend.ts.
+
+   **Built on first use, not at import**, since 2026-08-31. `ANTHROPIC_API_KEY`
+   is no longer in `.env.local` — nothing else in the repo has needed it since
+   the pipeline moved to OpenRouter (docs/project/ai-gateway.md) — and the SDK
+   throws from its constructor when it cannot resolve a key. At module scope
+   that took the whole file down at import, so `READERS=gpt-luna` could not run
+   the seven arms that need no Anthropic key at all. The four that do are now
+   filtered out with a message in `run()` below. */
+let anthropicClient: ReturnType<typeof anthropicDirectForDeclared> | null = null;
+const anthropicDirect = () => (anthropicClient ??= anthropicDirectForDeclared());
 
 async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageText[]): Promise<Result> {
   const chunk = doc.chunks[i]!;
@@ -260,7 +274,7 @@ async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageT
       "bakeoff-anthropic-transport",
       { model: reader.model },
       async ({ observe }) => {
-        const stream = anthropic.messages.stream({
+        const stream = anthropicDirect().messages.stream({
           model: reader.model,
           max_tokens: MAX_TOKENS,
           system: reader.noCover ? SYSTEM_NO_COVER : SYSTEM,
@@ -434,6 +448,55 @@ function safeRecords(text: string): unknown[] | undefined {
 
 // ────────────────────────────────────────────────────────────── the run
 
+/**
+ * **Whether the Anthropic-direct arms can run, said out loud when they cannot.**
+ *
+ * `ANTHROPIC_API_KEY` is not in `.env.local` any more — nothing else in the repo
+ * has needed it since the pipeline moved to OpenRouter — and these four arms are
+ * the only thing left that does. Skipping them *silently* would be the worse
+ * failure: the results file would come back four readers short, the transport
+ * comparison this bake-off exists for would be missing one of its two sides, and
+ * nothing would say so (docs/reusable/silent-success.md).
+ *
+ * So there are three answers, not two: run them, skip them and name them, or —
+ * when they are the only thing this run was asked for — refuse, because a run
+ * that can produce no rows at all should not exit 0 with an empty results file.
+ */
+function announceAnthropicArms(onlyReaders: string[] | undefined): boolean {
+  const wanted = READERS.filter((r) => !onlyReaders || onlyReaders.includes(r.label));
+  /* Not about the key at all, and here because it is the same failure: a typo in
+     `READERS` used to run the whole harness and write `[]`. */
+  if (onlyReaders && wanted.length === 0) {
+    throw new Error(
+      `READERS=${onlyReaders.join(",")} matched no reader. Known: ${READERS.map((r) => r.label).join(", ")}`,
+    );
+  }
+  if (process.env.ANTHROPIC_API_KEY) return true;
+  const skipped = wanted.filter((r) => r.transport === "anthropic").map((r) => r.label);
+  const put = "Put ANTHROPIC_API_KEY in .env.local to run them (evals/pdf/bakeoff/README.md).";
+
+  /* **A run that was asked for nothing but these must fail, not succeed with an
+     empty results file.** GPT Sol caught it: `READERS=haiku-native` with no key
+     did pass 0, wrote `results.json` as `[]`, printed `0 results` and exited 0 —
+     which is what somebody would quote as "the arm produced nothing".
+     docs/reusable/silent-success.md. Skipping is only right when there is
+     something left to compare them against. */
+  if (skipped.length > 0 && skipped.length === wanted.length) {
+    throw new Error(
+      `ANTHROPIC_API_KEY is not set, and every reader you asked for needs it: ${skipped.join(", ")}. ${put}`,
+    );
+  }
+  if (skipped.length > 0) {
+    console.log(
+      `ANTHROPIC_API_KEY is not set, so ${skipped.length} arms are SKIPPED: ${skipped.join(", ")}.
+  These talk to api.anthropic.com on purpose — they are the transport half of the comparison
+  (bakeoff-anthropic-transport, src/spend-declarations.ts). ${put}
+`,
+    );
+  }
+  return false;
+}
+
 const only = process.argv[2];
 const onlyChunk = process.argv[3] === undefined ? undefined : Number(process.argv[3]);
 const onlyReaders = process.env.READERS?.split(",").map((s) => s.trim());
@@ -446,6 +509,7 @@ const results: Result[] = [];
    `npm run cost` can see it. */
 async function run(): Promise<void> {
 await mkdir(OUT, { recursive: true });
+const anthropicDirectAvailable = announceAnthropicArms(onlyReaders);
 
 for (const doc of DOCS.filter((d) => !only || d.name === only)) {
   const { pages: baseline, isScan } = await pass0(doc.file);
@@ -458,7 +522,8 @@ for (const doc of DOCS.filter((d) => !only || d.name === only)) {
     (r) =>
       (!onlyReaders || onlyReaders.includes(r.label)) &&
       (!r.scanOnly || isScan) &&
-      (!r.bornDigitalOnly || !isScan),
+      (!r.bornDigitalOnly || !isScan) &&
+      (r.transport !== "anthropic" || anthropicDirectAvailable),
   );
 
   for (let i = 0; i < doc.chunks.length; i++) {

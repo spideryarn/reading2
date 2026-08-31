@@ -182,14 +182,21 @@ const EXPECTED: readonly Expected[] = [
      version of this comment claimed that warning covered the production case;
      it cannot. GPT Sol's review, 2026-08-27. */
   { name: "SPIDERYARN_STORE", breaks: null },
-  /* **Reported, not warned about, since 2026-08-27** — and the pair below is
-     the worked example of why the `breaks` clause has to be maintained rather
-     than written once. Nothing in `src/` reads this key any more: the seven
-     pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint
-     (docs/project/ai-gateway.md), so a deployment missing it loses nothing.
-     Left in the table because it is still worth *seeing* in the report while
-     `.env.example` carries it — `breaks: null` is exactly that distinction. */
-  { name: "ANTHROPIC_API_KEY", breaks: null },
+  /* **`ANTHROPIC_API_KEY` was here until 2026-08-31, and it is gone rather than
+     demoted.** It went `breaks: null` on 2026-08-27, when the seven pipeline
+     stages moved onto OpenRouter's Anthropic-compatible endpoint
+     (docs/project/ai-gateway.md), and the comment then said it was still worth
+     *seeing* in the report while `.env.example` carried it.
+
+     That is no longer true of a *deployment*. The last thing in the repo that
+     wants the key is one eval — the PDF bake-off's transport arms, which
+     compare Anthropic-direct against OpenRouter and are the reason the key
+     exists at all — and an eval runs on a laptop. So the report was offering a
+     production operator a name they cannot use and cannot need, one line above
+     the key that really does break everything, which is the mistake this list's
+     own header is about. The pair below is still the worked example of why a
+     `breaks` clause goes stale silently; the fix the second time was to stop
+     making the claim. `tests/health.test.ts` pins the absence. */
   {
     name: "OPENROUTER_API_KEY",
     breaks:

@@ -7,7 +7,7 @@
  * are now unreachable: since 2026-08-26 the conversation floats over the
  * article, so the dialog hands its follow-up across as a prop and there is
  * nothing in flight to scope, expire or double-read. See
- * docs/plans/chat-as-gateway.md and the header of src/web/chat-handoff.ts.
+ * docs/plans/260826ab-chat-as-gateway.md and the header of src/web/chat-handoff.ts.
  *
  * What is left is the text itself, which the reader sees and edits before they
  * send it — so it is worth getting right for their sake rather than the model's.

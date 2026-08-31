@@ -91,7 +91,7 @@ The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-clien
 
 Everything else on this page is a defence in front of a gate. `/api/public/` is the one surface
 **dispatched before the gate**, so a stranger reaches it with no token at all
-([public-read-only-access.md](../plans/public-read-only-access.md) is the plan; the code documents
+([260827ai-public-read-only-access.md](../plans/260827ai-public-read-only-access.md) is the plan; the code documents
 itself thoroughly and is worth reading before touching). Four things keep it a closed room, and each
 was checked against the source rather than taken on trust:
 

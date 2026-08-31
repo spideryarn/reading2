@@ -5,7 +5,7 @@
  * ones that are arithmetic. `TooLongForOnePass` (src/token-budget.ts) is the
  * clearest: the article needs more output tokens than one response holds, and
  * pressing Retry makes the identical call and fails identically. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * ## Why a `FailureKind` and not a `permanent` flag
  *

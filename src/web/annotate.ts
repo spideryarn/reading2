@@ -43,7 +43,7 @@ import type { Block, BlockId } from "../types.js";
  * `cmt` is a comment: a persistent artefact the reader made, clickable, and it
  * carries the ✳ marker at its end. `chat` is a conversation started from that
  * selection — persistent and clickable in the same way, and since 2026-08-26 it
- * is the one a fresh selection makes (docs/plans/chat-as-gateway.md); comments
+ * is the one a fresh selection makes (docs/plans/260826ab-chat-as-gateway.md); comments
  * are closed to new arrivals, so a `cmt` mark is now always an older one.
  * `term` is a glossary occurrence: standing —
  * every term in the list is drawn, in every mode, since 2026-08-26 — and inert

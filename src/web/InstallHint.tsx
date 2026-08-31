@@ -11,7 +11,7 @@
  * new window and this component mounts again anyway. A `matchMedia` listener
  * here would be machinery for a case that cannot arrive.
  *
- * docs/plans/mobile-screen-real-estate.md § 1.
+ * docs/plans/260828av-mobile-screen-real-estate.md § 1.
  */
 import { useState } from "react";
 import { Share, X } from "lucide-react";

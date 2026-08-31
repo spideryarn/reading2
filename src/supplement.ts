@@ -32,7 +32,7 @@
  * `TreeNode.treatment` mirrors `Block.treatment` and deliberately does **not**
  * reuse `role`, which on a block means *what kind of content this is* and would
  * come to mean *what the structure excludes* on a node. GPT Sol's decision 11
- * (docs/plans/footnotes-stage345-upfront-sol.md).
+ * (docs/plans/260828o-footnotes-stage345-upfront-sol.md).
  *
  * ## Built from the body only, then appended
  *

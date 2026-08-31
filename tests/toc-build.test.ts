@@ -137,7 +137,35 @@ describe("buildTree", () => {
    * but that is a CLI somebody runs by hand, and the ingest queue never does.
    */
   describe("the partition the prompt asks for", () => {
-    it("refuses children that overlap, which would grow two leaves for one block", () => {
+    /**
+     * **What these three assert changed on 2026-08-30, and the invariant did
+     * not.** They used to assert that a misaligned partition is *refused*; a
+     * misaligned partition is now *snapped shut* at any size, because a
+     * headingless PDF lost its whole ToC to a gap of three
+     * (src/toc.ts § `repairedChildRanges`, and Greg's ruling quoted there).
+     *
+     * The thing worth testing was never the refusal. It is that no block ends up
+     * with two leaves and none with zero — the fault the adversarial review
+     * found, where `checkCoverage` divided one count by the other and reported
+     * exactly 1.0 while two paragraphs had no row and two were rendered twice.
+     * So these now assert the outcome directly, which is a stronger claim than
+     * "it threw" and survives the next change to how it is achieved.
+     */
+    const leafCount = (tree: ReturnType<typeof buildTree>): Map<string, number> => {
+      const seen = new Map<string, number>();
+      for (const node of Object.values(tree.nodes)) {
+        if (node.children.length > 0) continue;
+        seen.set(node.range[0], (seen.get(node.range[0]) ?? 0) + 1);
+      }
+      return seen;
+    };
+    const exactlyOneLeafEach = (tree: ReturnType<typeof buildTree>): void => {
+      const seen = leafCount(tree);
+      expect([...seen.values()].every((n) => n === 1)).toBe(true);
+      expect([...seen.keys()].sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+    };
+
+    it("snaps children that overlap, which would otherwise grow two leaves for one block", () => {
       // The worked example from the review: 12 blocks, children [0..6] and
       // [5..9]. Two blocks got two leaves, two got none, and `checkCoverage`
       // divided one count by the other and reported exactly 1.0.
@@ -148,17 +176,10 @@ describe("buildTree", () => {
           { title: "Second", range: ["spya-bbbbbb", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(overlapping, NAV, BLOCKS, "test")).toThrow(/overlaps the one before/);
+      exactlyOneLeafEach(buildTree(overlapping, NAV, BLOCKS, "test"));
     });
 
-    /* **Two blocks, not one.** A gap of exactly one block is now snapped shut
-       rather than refused — every tiling failure ever recorded here was off by
-       one, and a model that put a single boundary a paragraph out was costing
-       the reader the whole article. The repair, its bound and the measurement
-       behind it are in tests/toc-repairs.test.ts. What this case still asserts
-       is the other side of that bound: two blocks out is not a slip, it is a
-       different reading of the article, and it is still a refusal. */
-    it("refuses children that leave a gap wider than the repair, growing no leaf at all", () => {
+    it("snaps a gap of more than one block, which would otherwise grow no leaf at all", () => {
       const gapped: ModelNode = {
         ...ROOT,
         children: [
@@ -166,15 +187,15 @@ describe("buildTree", () => {
           { title: "Second", range: ["spya-dddddd", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(gapped, NAV, BLOCKS, "test")).toThrow(/leaves a gap of 2 block/);
+      exactlyOneLeafEach(buildTree(gapped, NAV, BLOCKS, "test"));
     });
 
-    it("refuses children that stop before their parent ends", () => {
+    it("extends children that stop before their parent ends", () => {
       const short: ModelNode = {
         ...ROOT,
         children: [{ title: "Only", range: ["spya-aaaaaa", "spya-bbbbbb"] }],
       };
-      expect(() => buildTree(short, NAV, BLOCKS, "test")).toThrow(/stop 2 block\(s\) before it ends/);
+      exactlyOneLeafEach(buildTree(short, NAV, BLOCKS, "test"));
     });
 
     it("refuses a range that runs backwards instead of silently covering nothing", () => {
@@ -250,7 +271,7 @@ describe("buildTree", () => {
  *
  * These are the tests for the guard between the loud failure this stage now has
  * and the quiet one that would replace it. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  */
 describe("checkCoverage", () => {
   /** Twenty gistable blocks, tiled by one internal node. */
@@ -296,16 +317,27 @@ describe("checkCoverage", () => {
     expect(() => check(short, withNotes)).toThrow(/have no row/);
   });
 
-  it("refuses even a single missing label, now that there is no honest way to skip one", () => {
-    // This used to pass. The 95% floor existed because one model call wrote the
-    // whole tree and was allowed to skip a trivial transition sentence — an
-    // unlabelled gistable leaf is still only a *warning* in validate-tree.ts for
-    // that reason. The split removed the ambiguity: src/labels.ts asks for an
-    // exact set of paragraph numbers and refuses any other set, and planBatches
-    // puts every gistable block in exactly one batch. So a gap is a batching
-    // bug, and a floor that tolerated one would hide the only failure this
-    // design has. See docs/plans/toc-scaling.md.
-    expect(() => check(labelsFor(twenty.slice(1).map((b) => b.id)))).toThrow(/19 of 20/);
+  /**
+   * **This test has been both ways round, and the reason is in the code.**
+   *
+   * It used to assert that 19 of 20 was a refusal, on the argument that after
+   * the label split there was no longer any honest way for a block to be
+   * unlabelled. There is one now: src/labels.ts may accept a batch that came
+   * back short after a re-ask for the gap alone also failed, within a per-batch
+   * budget, and it names every block it dropped. That path is
+   * docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b, and this floor is
+   * its article-level backstop rather than its bound.
+   */
+  it("tolerates the bounded gap the label pass is now allowed to leave", () => {
+    expect(() => check(labelsFor(twenty.slice(1).map((b) => b.id)))).not.toThrow();
+  });
+
+  it("refuses a gap wider than the per-batch budget could ever add up to", () => {
+    // The control, and the whole reason the floor is not simply removed: the
+    // batching is invisible from here, so this is what catches an article whose
+    // batches each stayed inside their own budget and which still lost a tenth
+    // of its labels between them.
+    expect(() => check(labelsFor(twenty.slice(2).map((b) => b.id)))).toThrow(/18 of 20/);
   });
 
   it("refuses a tree that quietly describes half the article", () => {

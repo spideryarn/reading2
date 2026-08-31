@@ -25,7 +25,7 @@
  * in the suite gives its entries `children: []`, so the list was never rendered
  * once — a corpus that cannot exercise its arm. GPT Sol found the premise false
  * while reviewing a plan that was about to add a second blank line under each
- * row. docs/plans/spine-rail.md § 3.
+ * row. docs/plans/260828ay-spine-rail.md § 3.
  *
  * Hence the fixture below: **children shaped like the real ones**, with a
  * `navLabel` and no title, plus one that has neither, because that is what four
@@ -109,7 +109,7 @@ function section(
  *
  * The second is not padding: a part with no children is the case where
  * `measure` makes the *part itself* the hit target, so its card has no crumb
- * and no `n of m` — the degrade path in docs/plans/spine-rail.md § Degrading.
+ * and no `n of m` — the degrade path in docs/plans/260828ay-spine-rail.md § Degrading.
  */
 const OUTLINE: OutlineEntry[] = [
   {

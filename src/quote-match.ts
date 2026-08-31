@@ -30,6 +30,18 @@
  * the whole paragraph gets washed instead of the sentence — a visible loss of
  * precision with no visible cause. Hence two increasingly forgiving passes.
  *
+ * ## The second pass is a drawing aid, not a verifier
+ *
+ * Added 2026-08-31, after GPT Sol pointed out that a forgiving *equivalence*
+ * had been read as a claim of *identity*. Pass two deletes whitespace, so
+ * `fall a part` matches `fall apart` — harmless when the answer is "which
+ * characters do I wash", and a false claim about a real person when the answer
+ * is "did the model copy this". The `passes` argument on `findQuote` is that
+ * distinction, and `"spaced"` is the setting for anything that will be shown
+ * as a quotation. The other half of the same fix lives at the call site:
+ * **store the slice of the article, never the model's string** —
+ * src/quotes.ts § `place`.
+ *
  * ## Why not a regex
  *
  * Because the needle is a sentence of the author's prose, and a sentence
@@ -89,7 +101,30 @@ const isSpace = (ch: string) => /\s/.test(ch);
  */
 interface Reduced {
   value: string;
-  map: number[];
+  /** `starts[i]` — where in the original string the character that produced `value[i]` begins. */
+  starts: number[];
+  /**
+   * `ends[i]` — where that character **ends**, exclusive.
+   *
+   * **A second array rather than `starts[i] + 1`**, and it is the fix for a bug
+   * that silently truncated quotes to one character. Two things break the
+   * arithmetic version:
+   *
+   *  - **one source character can emit several.** `"İ".toLowerCase()` is two
+   *    code units, so a per-code-unit map that pushed one entry per *input*
+   *    unit drifted out of step with `value` from that character onward. On
+   *    `"This sufficiently long sentence ends in İstanbul"` the match came back
+   *    as `{start: 0, end: 1}` and `src/quotes.ts` stored `"T"` — a
+   *    47-character sentence reduced to a letter, with no error and no drop
+   *    counted. GPT Sol, 2026-08-31.
+   *  - **one source character can be two code units.** An astral character is a
+   *    surrogate pair, so its end is `i + 2`.
+   *
+   * Recording where each character ends removes both, and it removes the class
+   * rather than the two instances: nothing downstream now assumes a character
+   * is one unit wide on either side of the fold.
+   */
+  ends: number[];
 }
 
 /**
@@ -111,40 +146,64 @@ interface Reduced {
  */
 function reduce(text: string, keepSpaces: boolean): Reduced {
   const out: string[] = [];
-  const map: number[] = [];
+  const starts: number[] = [];
+  const ends: number[] = [];
   let lastWasSpace = true; // so leading whitespace is dropped, not kept as one space
-  for (let i = 0; i < text.length; i++) {
-    const raw = text[i] ?? "";
-    const ch = fold(raw);
+  /* **By code point, and one map entry per EMITTED code unit.** Both halves of
+     that are the fix described on `Reduced.ends` above. Iterating with
+     `for...of` walks code points, so an astral character is one step rather
+     than two halves of one; pushing an entry per emitted unit keeps `starts`
+     and `ends` the same length as `value`, which is the invariant every offset
+     below depends on and which a one-entry-per-input-unit loop broke the moment
+     a character lowercased to more than itself. */
+  let i = 0;
+  for (const cp of text) {
+    const at = i;
+    i += cp.length;
+    const ch = fold(cp);
     if (isSpace(ch)) {
       if (!keepSpaces || lastWasSpace) continue;
       out.push(" ");
-      map.push(i);
+      starts.push(at);
+      ends.push(i);
       lastWasSpace = true;
       continue;
     }
-    out.push(ch.toLowerCase());
-    map.push(i);
+    const lower = ch.toLowerCase();
+    out.push(lower);
+    /* Every unit the fold emitted points back at the whole source character.
+       A match that lands part-way through an expansion therefore still spans
+       the real character rather than half of it — which is the conservative
+       direction, and the only one that can be right when one character has
+       become two. */
+    for (let n = 0; n < lower.length; n++) {
+      starts.push(at);
+      ends.push(i);
+    }
     lastWasSpace = false;
   }
   // A trailing single space would make an otherwise-exact needle miss.
   while (out.length > 0 && out[out.length - 1] === " ") {
     out.pop();
-    map.pop();
+    starts.pop();
+    ends.pop();
   }
-  return { value: out.join(""), map };
+  return { value: out.join(""), starts, ends };
 }
 
 /**
  * The end offset of the match, in the original string.
  *
- * `map` holds the *start* of each surviving character, so the last one's start
- * plus one is the exclusive end — except that a run of whitespace collapsed to
- * one space would end the span at the first space of the run, which is right:
- * the trailing whitespace is not part of the quote.
+ * A lookup rather than arithmetic since 2026-08-31 — `Reduced.ends` says why,
+ * and the short version is that `start + 1` is wrong for a character that
+ * lowercases to two and for any character outside the BMP.
+ *
+ * A run of whitespace collapsed to one space still ends the span at the first
+ * space of the run, which is right: the trailing whitespace is not part of the
+ * quote.
  */
-function endOf(map: number[], index: number): number {
-  return (map[index] ?? 0) + 1;
+function endOf(reduced: Reduced, index: number): number {
+  return reduced.ends[index] ?? 0;
 }
 
 /**
@@ -162,21 +221,55 @@ function endOf(map: number[], index: number): number {
  * about `block.text` and the client asks about the rendered text, and a
  * function that quietly preferred one of them would be wrong half the time.
  */
-export function findQuote(text: string, quote: string, near?: number): Span | null {
+export function findQuote(
+  text: string,
+  quote: string,
+  near?: number,
+  /**
+   * **Which passes to run**, and it is a safety switch rather than a tuning
+   * knob. Default `"forgiving"` — both passes, which is what every caller
+   * wanted until 2026-08-31.
+   *
+   * `"spaced"` runs **only** the whitespace-preserving pass. Use it wherever a
+   * match is being read as a claim that the model copied the text rather than
+   * as a best effort at drawing a mark, because pass two deletes whitespace
+   * entirely and therefore accepts a word the model split in two: an article
+   * saying *fall apart* matches a model saying *fall a part*.
+   *
+   * The split is really between the two ends of this file's job:
+   *
+   * - **The browser** compares a stored quote against the *rendered* text,
+   *   which genuinely lacks spaces `extractText` invented at a nested block
+   *   boundary. Pass two exists for that and must stay.
+   * - **The server** compares the model's typing against `block.text` — the
+   *   exact string the model was shown. There is no whitespace discrepancy to
+   *   forgive, so the forgiving pass buys nothing and costs the guarantee.
+   *
+   * Found by GPT Sol's review of docs/plans/260831j-quotes-mode.md, 2026-08-31, with a
+   * worked case from `data/noema-mythology-of-conscious-ai`.
+   *
+   * **`validateHits` (src/search.ts) and `validateOccurrences` (src/ideas.ts)
+   * still pass the default**, and that is a known gap rather than a decision —
+   * both store the model's string too. Changing them is a separate landing with
+   * its own artefacts to think about; src/quotes.ts § `place` is where the
+   * shape they should take is written down.
+   */
+  passes: "forgiving" | "spaced" = "forgiving",
+): Span | null {
   if (quote.trim() === "" || text === "") return null;
   // Pass one keeps whitespace as single spaces; pass two drops it. Two passes
   // rather than one forgiving one, because the second is genuinely more likely
   // to find a false positive — "in the end" would match "inthe end" — and it
   // should only ever run when the careful pass has already failed.
-  for (const keepSpaces of [true, false]) {
+  for (const keepSpaces of passes === "spaced" ? [true] : [true, false]) {
     const hay = reduce(text, keepSpaces);
     const needle = reduce(quote, keepSpaces);
     if (needle.value === "") continue;
-    const at = nearestIndex(hay.value, needle.value, near, hay.map);
+    const at = nearestIndex(hay.value, needle.value, near, hay.starts);
     if (at === -1) continue;
-    const start = hay.map[at];
+    const start = hay.starts[at];
     if (start === undefined) continue;
-    return { start, end: endOf(hay.map, at + needle.value.length - 1) };
+    return { start, end: endOf(hay, at + needle.value.length - 1) };
   }
   return null;
 }
@@ -189,6 +282,14 @@ export function findQuote(text: string, quote: string, near?: number): Span | nu
  * `near` is an offset into the original string and the two spaces drift apart
  * by however much whitespace has been collapsed. Comparing a reduced index
  * against an original offset is the silent-wrongness this file exists to avoid.
+ *
+ * **`near` must be an offset into the same string as `hay`.** That is not a
+ * nicety and it has been got wrong: `resolveOne` in src/web/search-hits.ts
+ * passes an offset measured in `block.text` while searching the *rendered*
+ * text, which are different strings of different lengths — so the hint points
+ * somewhere arbitrary and picks the wrong repeat. There is nothing this
+ * function can do about that; the caller has to hold the two spaces apart.
+ * GPT Sol, 2026-08-31.
  */
 function nearestIndex(hay: string, needle: string, near: number | undefined, map: number[]): number {
   const first = hay.indexOf(needle);

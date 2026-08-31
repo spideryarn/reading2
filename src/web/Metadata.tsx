@@ -13,7 +13,7 @@
  * So this is not an addition alongside the About panel — it *is* that panel,
  * grown into the room it needed, and Dock.tsx no longer has one. The reason a
  * page rather than a column or a drawer: this view's hard problem is horizontal
- * (docs/plans/bottom-bar.md#why-the-bottom), and a page has no such problem
+ * (docs/plans/260825c-bottom-bar.md#why-the-bottom), and a page has no such problem
  * because it is not beside anything.
  *
  * **Nothing here is generated and nothing here is a model call.** This is the
@@ -147,6 +147,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FileQuestion,
   FileType,
   Fingerprint,
   Image,
@@ -162,7 +163,9 @@ import {
   Trash2,
   TriangleAlert,
   Undo2,
+  Upload,
   Waypoints,
+  Quote,
 } from "lucide-react";
 import type {
   Article,
@@ -180,6 +183,7 @@ import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
 import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
+import { SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -231,8 +235,11 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   arc: Waypoints,
   tweets: ListOrdered,
   glossary: BookA,
-  summary: Layers,
   ideas: Lightbulb,
+  quotes: Quote,
+  /* The same clock the Dock puts on the Timeline button, so the stage row and
+     the mode button a reader has already met say the same thing. */
+  timeline: Clock,
   sketch: PenLine,
 };
 
@@ -406,6 +413,22 @@ export function Metadata({
    * only fail is worse than no button, because pressing it is how you find out.
    * Found by a cross-model review. One derivation, used twice, rather than the
    * same three terms written out again.
+   *
+   * **Dead since 2026-08-30, and kept only until someone unpicks it.** The
+   * state it describes — this page showing `example/`'s files under somebody
+   * else's slug — cannot happen any more: `candidateDirs` offers the fixture to
+   * its own slug and to no other, so `articleMetadata` 404s where it used to
+   * answer with a foreign `dir` (src/api.ts § `candidateDirs`, and the commit
+   * that closed it). The right half of the `&&` was always what made it
+   * *false* for `example` itself, so removing the whole thing changes nothing
+   * a reader can see.
+   *
+   * It is left in place rather than pulled out because it is threaded through a
+   * dozen sites here, and this file was being edited by other sessions on the
+   * day the fallback went. The reason to say so *here* is that the paragraph
+   * above now describes a hazard that no longer exists, and a comment arguing
+   * for a state the code can no longer reach is how the next person learns
+   * something untrue. docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1.
    */
   const showingFixture = provenance?.dir === "example" && slug !== "example";
   /**
@@ -460,7 +483,7 @@ export function Metadata({
           back link at y=56 — 35px of overlap, on every page that is not the
           reader. The reader shell got a top-inset audit and these pages did not.
           GPT Sol, second pass, 2026-08-28.
-          docs/plans/mobile-screen-real-estate.md § 2. */}
+          docs/plans/260828av-mobile-screen-real-estate.md § 2. */}
       <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
@@ -515,32 +538,11 @@ export function Metadata({
               timestamp is what you want when the answer is surprising. */}
           <Fetched iso={meta.fetchedAt} lead={facts.length > 0} />
         </p>
-        {/* **`isWebUrl`, and the address stays visible either way.** `meta.url` is
-            the revision's `final_url`; the fetcher validates one on the way in,
-            but an *imported* article's metadata is written straight into the
-            row, so a `javascript:` or `data:` value is reachable and an
-            unchecked anchor here is an active URL sink. This page is the one
-            that shows the whole address as text, so a refused scheme still gets
-            printed — the reader is entitled to see what we hold — it just does
-            not become a link. Third of three sinks on this field; GPT Sol found
-            the first two on 2026-08-31 and this one on the second pass.
-            src/urls.ts, docs/project/security.md. */}
-        {meta.url && !isWebUrl(meta.url) && (
-          <p className="tw:mt-1 tw:mb-0 tw:break-all tw:text-xs tw:text-ink-faint">{meta.url}</p>
-        )}
-        {meta.url && isWebUrl(meta.url) && (
-          <p className="tw:mt-1 tw:mb-0 tw:text-xs">
-            <a
-              href={meta.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
-            >
-              {meta.url}
-              <ExternalLink size={12} className="tw:shrink-0" />
-            </a>
-          </p>
-        )}
+        {/* Where it came from, and the way back to it — `Origin` below. `owner`
+            is `hasShelfRow` rather than a fresh test, because the link it gates
+            is the same private `GET /api/source/:slug` the masthead gates, and
+            this page already has one answer to *is this yours*. */}
+        <Origin meta={meta} slug={slug} owner={hasShelfRow} />
         <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:font-mono tw:text-xs tw:text-ink-faint">
           <span className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5">{slug}</span>
           {provenance && (
@@ -723,7 +725,7 @@ export function Metadata({
               id="article-purpose"
               label="Why you're reading this one"
               placeholder="e.g. I want the evidence, not the history"
-              hint="Changes what the glossary, the summaries, chat and explanations put first — for this article only. Never what the article says."
+              hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
               value={purposeDraft ?? ""}
               onChange={setPurposeDraft}
               onCommit={savePurpose}
@@ -984,6 +986,108 @@ function Questions({
 }
 
 /**
+ * **Where the article came from: a web address, or a file the reader uploaded.**
+ *
+ * This line was the source URL and nothing else, `{meta.url && …}`, so an
+ * uploaded article got no line at all — and the page whose entire job is
+ * answering "where did this come from?" simply did not answer. Greg,
+ * 2026-08-30, having opened one and gone looking for the address:
+ *
+ * > Ah, maybe I'm being dense - I forgot that I uploaded it, so that would
+ * > explain why it doesn't have the original url where I got the article from!
+ * > In that case, make it clear that it was uploaded!
+ *
+ * **The absence had to be said out loud**, and that is the whole change: a
+ * missing row reads as a page that forgot, and the reader spends their
+ * attention deciding which. One line either way costs nothing and closes it.
+ *
+ * ## Saying "uploaded" is safe *here* and is not safe in general
+ *
+ * There is no field for it — the inference is *no web address, therefore a
+ * file* — and it holds only for a reader who owns the article. This page is
+ * unreachable for a visitor (`PublicMetadataPage` replaces it, App.tsx) and
+ * `/api/metadata/:slug` behind it is owner-only, so it holds here. The masthead
+ * is mounted for both and has to gate the same sentence on ownership;
+ * `OriginMark` there says what a visitor's absent `url` can also mean.
+ *
+ * ## Why the file link is on the uploaded branch only
+ *
+ * A fetched PDF has its address right here, which is the better answer to
+ * "where is this from" and the one a reader can share. An uploaded one has
+ * nowhere else to point, so the file is the only original there is — and it is
+ * also the only verification a scan ever gets (Masthead.tsx § `SeeTheOriginal`).
+ * Owner-gated because the route is: `GET /api/source/:slug` serves a stranger's
+ * bytes and refuses everyone else, so an ungated control could only ever open a
+ * blank tab and fail.
+ */
+function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolean }) {
+  const source = webSource(meta);
+  if (source) {
+    return (
+      <p className="tw:mt-1 tw:mb-0 tw:text-xs">
+        <a
+          href={source}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+        >
+          {source}
+          <ExternalLink size={12} className="tw:shrink-0" />
+        </a>
+      </p>
+    );
+  }
+  /* **`meta.source` is the evidence, not the absent URL.** A missing `meta.json`
+     is tolerated (src/api.ts) and `src/store/import.ts` takes a revision with no
+     URL in either the metadata or the manifest, so an owner can hold an ordinary
+     web article with no address — and "you uploaded this" is a claim about what
+     they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
+     other branch says what is actually true: we have no record of one. */
+  const uploaded = meta.source === "pdf";
+  /* **We hold an address, and it is not one anybody can follow.** `webSource`
+     refuses anything that is not `http(s)`, because an imported article's
+     metadata goes straight into the row, so a `javascript:` or `data:` value is
+     reachable and an anchor here would be an active URL sink (src/urls.ts,
+     docs/project/security.md; GPT Sol, 2026-08-31, the third of three sinks on
+     this field). A `file://` from `npm run pdf` lands here too.
+
+     **Only the sentence changes; the address itself is never printed.** An
+     earlier version of this line showed the refused value as inert text, on the
+     argument that this is the page whose job is saying what we hold. It is not
+     worth it: the commonest such value is `file:///Users/<somebody>/…`, which is
+     a home directory on a page, and tests/metadata-origin.test.tsx pins that it
+     stays off. What *is* worth keeping is not saying something false — "no web
+     address was recorded" about a row that recorded one. */
+  const unfollowable = Boolean(meta.url && !isWebUrl(meta.url));
+  return (
+    <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      {uploaded ? (
+        <Upload size={12} className="tw:shrink-0" aria-hidden="true" />
+      ) : (
+        <FileQuestion size={12} className="tw:shrink-0" aria-hidden="true" />
+      )}
+      <span>
+        {uploaded
+          ? "Uploaded from a file — there is no web address to go back to."
+          : unfollowable
+            ? "The address recorded for this article is not one a browser can follow."
+            : "No web address was recorded for this article."}
+      </span>
+      {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
+          and an uploaded HTML document has nothing a reader would want opened
+          as a document. `slug` is the route's, never `meta.slug` — an address
+          with no article of its own is answered with the fixture's meta, and
+          this link must be about the address the reader is standing on. */}
+      {uploaded && owner && (
+        <span className="tw:text-highlight">
+          <SourceLink slug={slug}>View the original</SourceLink>
+        </span>
+      )}
+    </p>
+  );
+}
+
+/**
  * A PDF's provenance: what it was made from, by what, and how well that was checked.
  *
  * **Renders nothing for a web page**, deliberately. Their Document Information
@@ -995,7 +1099,7 @@ function Questions({
  * The masthead already tells the *reader* the shape of this, in a sentence,
  * because they are entitled to know before they trust a line of it
  * (Masthead.tsx). This is the same fact with the numbers attached, on the page
- * you open when you want numbers. docs/plans/pdf-ingestion.md.
+ * you open when you want numbers. docs/plans/260826c-pdf-ingestion.md.
  */
 function CameFrom({ meta }: { meta: Meta }) {
   if (meta.source !== "pdf") return null;
@@ -1016,7 +1120,7 @@ function CameFrom({ meta }: { meta: Meta }) {
               /* Not a number, because there is no number: a scan has no
                  text layer, so nothing compared anything. The sentence is
                  the honest form and a "0%" would be a lie in the other
-                 direction. docs/plans/pdf-ingestion.md § A scan with no
+                 direction. docs/plans/260826c-pdf-ingestion.md § A scan with no
                  text layer. */
               <span>Nothing checked it — a scan, with no text in the file to check against</span>
             ) : meta.recall === undefined ? (

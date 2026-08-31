@@ -35,7 +35,7 @@ deliberately does not. Point it at the **app's** credential rather than an admin
 what the connecting role can see, and `information_schema` hides columns the role has no privilege
 on, so a superuser seeing everything proves nothing about what Vercel can select. It is the answer
 to "have the migrations reached the database this code is about to talk to?", which cost production
-two outages on 2026-08-27 — [schema-drift-guard.md](../plans/schema-drift-guard.md).
+two outages on 2026-08-27 — [260827w-schema-drift-guard.md](../plans/260827w-schema-drift-guard.md).
 
 The gate/advisory split is a deliberate design, written up at the top of
 [`scripts/check.ts`](../../scripts/check.ts): a check that always fails is a check nobody runs, so a
@@ -65,6 +65,9 @@ you read those two *before* you measure something, not after.
   settings.
 - **[static-analysis.md](static-analysis.md)** — Knip, cycles, complexity, dupes; the gate/advisory
   split; and the tools that look perfect for this repo and are quietly wrong about it.
+- **[browser-control.md](browser-control.md)** — two ways to drive a browser, and the machine you
+  are on decides which. The extension on the laptop; Playwright on the remote box, where it cannot
+  follow. Open this before either of the two below.
 - **[browser-testing.md](browser-testing.md)** — driving the reading view in a real browser, and the
   ways it lies to you: colour in a screenshot, a hidden tab that fires no scroll events, hovering by
   pixel rather than by element. Open this before any UI check.

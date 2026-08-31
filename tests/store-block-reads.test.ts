@@ -11,7 +11,7 @@
  * Until 2026-08-27 there was one, and all four fingerprint reads went through
  * it: every block row including `html` and the generated `fts` vector, roughly
  * 370 KB on a 360-block article, put through an 80–180ms jsdom parse, to
- * compute one boolean. docs/plans/glossary-read-latency.md.
+ * compute one boolean. docs/plans/260827am-glossary-read-latency.md.
  *
  * ## Why this reads the generated SQL
  *
@@ -190,6 +190,9 @@ describe("what the two columns cannot see", () => {
        (An earlier line here asserted `hashBlocks(blocks) === hashBlocks(blocks)`
        to make that point, which proves nothing at all — GPT Sol's fifth
        tautology, and the last of one per review round.) */
-    expect(inputFingerprint(blocks, whole)).not.toEqual(inputFingerprint(blocks, split));
+    const meta = { title: "All", byline: "Somebody", siteName: "Somewhere" };
+    expect(inputFingerprint(blocks, whole, meta)).not.toEqual(
+      inputFingerprint(blocks, split, meta),
+    );
   });
 });

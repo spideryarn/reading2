@@ -20,7 +20,7 @@
  * `scripts/db-export.ts` used to import `src/store/export.js` directly, so the
  * boot-time refusals in `src/store/index.ts` never ran: that file is only
  * imported by the server. Belief 13 of
- * docs/plans/delete-the-importer.md § What has to be true before this is
+ * docs/plans/260827aa-delete-the-importer.md § What has to be true before this is
  * believable.
  *
  * ## Why a child process, and why the environment is built the way it is

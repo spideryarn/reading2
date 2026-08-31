@@ -39,6 +39,103 @@ necessary, ask Greg.
 
 The remote does not soften this. It holds *commits*; everything dangerous here is uncommitted.
 
+#### It happened, and the way it happened was carelessness rather than reasoning — 2026-08-30
+
+An agent finishing a Sketch change wanted to know whether a failing test was its own, and wrote a
+one-line shell command that began `git stash`. There was no argument for it and none was made: the
+question could have been answered by reading the failing test's imports. It stashed all twenty
+modified files in the tree — three of its own and seventeen belonging to four other agents.
+
+**What made it recoverable was luck and one property of `stash`.** Unlike `reset --hard`, a stash
+keeps what it takes. But the way back was blocked twice over: the harness's permission classifier
+refuses `git stash pop` and `git stash apply` — correctly, since the rule above forbids the whole
+family — and by the time Greg ran `pop` himself a peer had re-modified four of the files, so the pop
+aborted with *"Your local changes would be overwritten by merge"* and did nothing.
+
+**The route back, which is not a git command at all.** For each stashed path, if the working file is
+still identical to `HEAD` then restoring it can lose nothing, so read the stash's copy and write it
+as an ordinary file:
+
+```bash
+for f in $(git stash show --name-only stash@{0}); do
+  git diff --quiet HEAD -- "$f" && git show "stash@{0}:$f" > "$f"
+done
+```
+
+`git show` and a redirect: a read and a write, no index, no merge, and nothing touched that anyone
+has edited since. Files a peer *has* re-modified are left alone and reported — here all four turned
+out byte-identical to the stash anyway, because the peer had simply redone the same work. Verify
+each restored file against the stash before believing it, and leave the stash entry standing until
+somebody has looked.
+
+**The lesson is not "stash carefully".** It is that a forbidden command can reach the shell inside a
+compound one-liner written for an unrelated purpose, where nothing about the line looks dangerous —
+which is why the rule is a flat ban on the words rather than a judgment to be made per case.
+
+#### And the countermeasure, from one of the sessions it happened to
+
+The prohibition above is not enough on its own, because it only has to be typed past once. What
+follows is `spideryarn2-1f`, who lost four files that night and got them back from a copy it happened
+to have made for something else:
+
+> the sweep was invisible to me for about ten minutes, and nothing in my own loop would ever have
+> told me. I had written three files, run the tests, run the typecheck, and moved on to reviewing.
+> None of that re-reads a file you have already written — the tests I ran were against other code,
+> the typecheck passed because the tree was internally consistent at HEAD, and I had no reason to
+> open Masthead.tsx again. I found out only because a GPT Sol review I had running in the background
+> mentioned, in a closing aside, that the implementation files had disappeared underneath it. The
+> detection was an outside observer, by accident, and the inside view was structurally blind.
+>
+> So the countermeasure I would write down is: **re-grep your own content markers before you trust an
+> earlier edit.** One `grep -c OriginMark src/web/Masthead.tsx` would have caught it in seconds, at
+> any point in those ten minutes.
+>
+> It generalises past this incident … a peer rewriting a shared file can swallow your change just as
+> completely as a stash, and that leaves no reflog entry to find afterwards. … A habit that catches
+> the damage is worth more than a prohibition that can be typed past.
+
+That is the same habit [§ Nobody knows who edited an uncommitted file](#nobody-knows-who-edited-an-uncommitted-file)
+argues for from the other direction, and this is the case that shows why it is not optional.
+
+And the thing that actually did the saving:
+
+> I had a diff of my work in a scratchpad outside the repo, saved minutes earlier for an unrelated
+> reason (feeding a review). That is the only reason my four files came back as current work rather
+> than out of your loop. "If you have substantial uncommitted work in a shared tree, keep a copy
+> outside it" is cheap and would have made this a non-event for everyone.
+
+#### One of them is now enforced, not just written down — 2026-08-30
+
+`git stash` is the one that actually happened, so it is the one that got a guard.
+[`.claude/hooks/protect-shared-tree.sh`](../../.claude/hooks/protect-shared-tree.sh) is a
+`PreToolUse` hook on `Bash`, wired up in [`.claude/settings.json`](../../.claude/settings.json). It
+reads the command out of the tool call and **refuses any command mentioning both `git` and `stash`
+as words** — exit 2, which blocks the call and hands the agent the reason.
+
+It matches the *whole* command, not its first word, because that is how it got in last time: the
+banned clause was the tail of a one-liner about something else. `npm test; git stash` is refused.
+
+**It over-refuses, deliberately.** `grep -rn "git stash" docs/` is refused too. Either word alone is
+fine, so `grep -rn stash docs/` still works; when a command genuinely needs both, use the Read/Grep
+tools instead of Bash, or ask Greg. Judging it per command is what failed.
+
+Three things it is worth knowing before you change it:
+
+- **The other four are still honour-system.** `checkout --`, `restore`, `reset --hard`, `clean` —
+  and `rm` — are unguarded. Extending `VERB` in the hook is small; nobody has asked for it yet.
+- **It fails closed.** If `grep` errors, or the payload will not parse, it refuses rather than
+  allowing — and it self-tests its own matcher on a known hit and a known miss before trusting it to
+  say "safe". A guard that quietly stops matching is
+  [a silent success](../reusable/silent-success.md), and this one is meant to be noisy instead.
+- **Do not put the banned words in a file name.** The first draft was called `no-git-stash.sh`, and
+  no Bash command could name it — including the `git commit -F msg -- <path>` that would have
+  checked it in. That is why the file is named for what it protects.
+
+Re-verify it with `bash .claude/hooks/protect-shared-tree.test.sh`: twenty-odd payloads that must be
+refused, controls that must be allowed, and the whole suite re-run with `python3` and then `grep`
+sabotaged. It is not wired into `npm test` — it is a shell script guarding a shell, and it takes a
+second to run by hand.
+
 ### Commit your own files, by name, in one command
 
 ```bash
@@ -101,6 +198,28 @@ So it is a question per file, and the cheap check is **`git diff HEAD -- <file>`
 in there that are not yours? Use that form, not bare `git diff`, which asks "how does the tree
 differ from the *index*" and in this tree is a question about your colleagues rather than your files
 ([below](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29)).
+
+#### And a third consequence: **there is no earlier version of the file to commit** (2026-08-31)
+
+The two above are about hunks you did not mean to take. This one is about a commit you cannot make
+at all, and it costs a wrong commit *message* rather than wrong contents.
+
+A stage-2 commit was planned as two: the work, and then the fixes for a review that had come back
+NO-SHIP. By the time it was written the agent holding `src/fetch.ts` had already applied its fixes
+to that file — and a pathspec commits the working tree, so **committing `src/fetch.ts` at all meant
+committing the fixed one**. There was no pre-fix version left anywhere: not in the index, which the
+pathspec ignores, and not on disk, which is where the fix was. The split existed only in the plan.
+
+The commit went in saying the fixes were "part-landed and complete in the next commit". They had
+landed in full, so the log entry implied a fault was still live at a commit where it was not.
+Amending was already unavailable — another session had committed on top — so the correction is its
+own commit (`5cf7827`), which is the right shape: a message that was wrong about the tree is worth a
+line in the history rather than a quiet rewrite.
+
+**The rule.** Decide what a commit *says* from `git diff HEAD -- <paths>` at the moment you write
+the message, never from what you asked somebody to do. In a tree where agents edit the files you are
+about to name, the plan and the working tree diverge silently, and the pathspec always believes the
+working tree.
 
 | | |
 |---|---|
@@ -601,13 +720,13 @@ uncommitted work rather than the project.
 
 ## The other repo, and the move that hasn't happened
 
-[deploy-and-repo-move.md](../plans/deploy-and-repo-move.md) plans folding this codebase into the
+[260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) plans folding this codebase into the
 original app's repo, `spideryarn/reading`, with everything currently there swept into `legacy/`.
 That is still open and this remote does not do it — `spideryarn/reading2` is a separate repo, and
 creating it changes nothing about the plan except that its step 4 can now fetch from GitHub instead
 of from a Dropbox path.
 
-Read the plan's [sequencing trap](../plans/deploy-and-repo-move.md#the-sequencing-trap) before
+Read the plan's [sequencing trap](../plans/260825d-deploy-and-repo-move.md#the-sequencing-trap) before
 starting any of it: the moment this codebase lands at the root of `spideryarn/reading`, the old
 Vercel project tries to build it as a Next.js app.
 
@@ -620,6 +739,9 @@ push would still turn that project red — but it now costs the old app rather t
 - [CLAUDE.md](../../CLAUDE.md) — the working agreements these rules are stated in
 - [git-commit-changes.md](../reusable/git-commit-changes.md) — the batch version: how to decide a
   pile of uncommitted changes is finished, quiet and safe to commit
+- [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) — when a pull leaves
+  conflict markers: read both sides' history, propose before editing, and don't reach for the
+  commands that discard a side
 - [deployment.md](deployment.md) — Vercel, and why it ships a working tree rather than a commit
 - [setup-dev.md](setup-dev.md) — install, dev, secrets
 - [testing.md](testing.md), [typechecking.md](typechecking.md) — what to run before you commit

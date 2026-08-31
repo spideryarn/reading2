@@ -13,8 +13,8 @@
  * The model call stays outside, permanently. `run` happens between `beginStep`
  * and `commit`, and neither of those two is inside the other's transaction.
  *
- * docs/plans/delete-the-importer.md § D1b, and the design review that rewrote
- * half of it: docs/plans/delete-the-importer-d1b-design-sol.md.
+ * docs/plans/260827aa-delete-the-importer.md § D1b, and the design review that rewrote
+ * half of it: docs/plans/260827aa-delete-the-importer-d1b-design-sol.md.
  *
  * ## The settlement state machine — five cases, not two
  *
@@ -52,7 +52,7 @@
  * the next request. The two endings that happen to a job *nobody is inside* —
  * `failExpired` and a queued `requestCancel` — clear it themselves, since no
  * session will ever run for them (src/store/pg-jobs.ts; GPT Sol, 2026-08-30,
- * docs/plans/delete-the-importer-d1b-sol.md finding 1).
+ * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1).
  *
  * ## The lock order: article, then job, always
  *
@@ -228,7 +228,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * and to "one statement earlier", which was false for any caller that had not
    * written artefacts first — so `settleJob` no longer accepts a `release` at
    * all (`JobEndTransition` in src/store/session.ts). GPT Sol, 2026-08-30,
-   * docs/plans/delete-the-importer-d1b-sol.md finding 4.
+   * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 4.
    *
    * The pointer update names the revision it expects as well, so it cannot
    * clear somebody else's.
@@ -367,7 +367,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          the job still be `running` and still point at this revision;
          `failRevisionIn` clears the pointer and `finishIn` changes the status,
          so either of them going first makes this refuse. GPT Sol, 2026-08-30,
-         docs/plans/delete-the-importer-d1b-sol.md finding 2. */
+         docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 2. */
       if (unfinished) {
         await finishStepRun(
           { revisionId: ref.revisionId, stepName: unfinished, job, status: "error" },

@@ -14,7 +14,7 @@
  *    one — following tests/db-schema.test.ts, which explains why the probe runs
  *    at module load rather than in `beforeAll`.
  *
- * See docs/plans/schema-drift-guard.md.
+ * See docs/plans/260827w-schema-drift-guard.md.
  */
 
 import type { PoolClient } from "pg";
@@ -197,11 +197,11 @@ describe("declaredTables", () => {
        somebody should be made to look. GPT Sol's second review, finding 4.
 
        `article_visibility_changes` arrived 2026-08-28 with the sharing switch
-       (drizzle/0024, docs/plans/public-read-only-access.md) — and this line
+       (drizzle/0024, docs/plans/260827ai-public-read-only-access.md) — and this line
        going red is the mechanism working rather than a chore: a table added to
        the schema and not to a migration is exactly what the drift guard exists
        to make somebody look at. `checkpoints` arrived 2026-08-29 (drizzle/0028,
-       docs/plans/delete-the-importer.md § B3) and did exactly that: it went red
+       docs/plans/260827aa-delete-the-importer.md § B3) and did exactly that: it went red
        here, and red in `is green on a fully migrated database`, before the
        migration had been applied anywhere. */
     expect(declared.map((d) => d.table)).toEqual([

@@ -37,9 +37,13 @@ listed here; the names under each are files in `docs/project/`.
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
   `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
-  `ideas.md` (the propositions the piece assumes) · `search.md` · `diagram.md` ·
+  `ideas.md` (the propositions the piece assumes) ·
+  `quotes.md` (the lines worth keeping) ·
+  `timeline.md` (when the piece says these things happened) ·
+  `search.md` · `diagram.md` ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
+  `live-conversation.md` (talking to the article out loud) ·
   `review-mode.md` (say what you took from it, and find out) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
@@ -56,13 +60,15 @@ listed here; the names under each are files in `docs/project/`.
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
-  `browser-testing.md` · `claude-in-chrome.md` (nothing connected? start here) · `performance.md` ·
+  `browser-control.md` (laptop or remote box? start here) · `browser-testing.md` ·
+  `claude-in-chrome.md` (nothing connected?) · `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
   <br>↳ `debugging.md` (start here when something is broken) · `setup-dev.md` (including which model
   each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
-  `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md`
+  `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
+  `remote-box.md` (the always-on box, and `gjd-remote`)
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
@@ -74,7 +80,7 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 ### The other folders
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
-  the reasoning and the evidence survive.
+  the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
 - **`docs/postmortems/`** — one file per bug worth understanding: the real root cause, the commit
   that introduced it, the fix that's right for the long term, and what would have caught the class.
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
@@ -91,7 +97,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 None of those first three is indexed here — there are a lot of files and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
-the file says the rest.
+the file says the rest. They are named `yyMMdd<letter>-kebab-description.md`, so they sort by the day
+the work started; a plan and its reviews share one letter. Get the name from
+`npx tsx scripts/plan-name.ts` — [write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters
 
@@ -124,7 +132,11 @@ the other docs and to the code. Not descriptions of code, which the code already
   carries intent that a paraphrase loses. If you find you've flattened a quote into your own voice,
   put his back.
 - **Signpost heavily**, both directions, deep-linking to sections, and out to the code
-  (e.g. [`src/blocks.ts`](src/blocks.ts)).
+  (e.g. [`src/blocks.ts`](src/blocks.ts)). **One source of truth.** Where a fact lives in the code —
+  a constant, a setting, what another module does — name the file and let the reader look, rather
+  than restating the value. A restatement is a second copy that nothing keeps in step, and it goes
+  wrong by waiting: a comment in [`src/token-budget.ts`](src/token-budget.ts) said `src/toc.ts` had
+  moved to `"medium"` when it had not, and two agents believed it.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
   and delete the question. That file should shrink.
@@ -192,6 +204,9 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
   `update-ref`) was removed on 2026-08-30 after it silently staged a revert of other people's work
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
+- **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
+  the best of both, and show Greg the proposal before you change anything —
+  [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked.
 
 ### Before you call it finished
@@ -222,6 +237,9 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
   rather than the line that broke, which commit introduced it, the fix that's right for the long
   term, and what would have caught the whole class of it.
+- **"Close this tab if successful" means exactly that** — close it with the recipe in
+  [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
+  and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
 
 ### Delegating
 
@@ -247,6 +265,18 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
   its own; easy just means quick to write. Reuse the machinery that's already here rather than adding
   a second way to do the same thing, and when two designs work, take the one with fewer parts
   touching each other.
+- **Simplest version first.** Take the simpler product decision, get a v1 working end to end, and
+  add the complexity or the optimisation later, once something shows it is needed. When a choice
+  would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan
+  and in chat — so Greg decides it rather than inherits it.
+  [vision.md § Simpler first](docs/project/vision.md#simpler-first).
+- **Let the types catch it.** Make a wrong state something the compiler refuses, not something a
+  test finds later: a discriminated union rather than a bag of optionals, a `never` check where a
+  `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`
+  are on for exactly this —
+  [typechecking.md § The flags, and why](docs/project/typechecking.md#the-flags-and-why). Run
+  `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
+  ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash — two stages of seven do; copy *their* choice
   of hash input rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).

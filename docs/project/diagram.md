@@ -21,7 +21,7 @@ not the same shape for every article.
   [`src/projection.ts`](../../src/projection.ts) over
   [`src/article-vectors.ts`](../../src/article-vectors.ts).
 - **Why nothing was installed for the hand-rolled outline** —
-  [diagram-mode.md](../plans/diagram-mode.md), which has the whole library
+  [260826ah-diagram-mode.md](../plans/260826ah-diagram-mode.md), which has the whole library
   survey and the answers on Mermaid and on generated images. The outline itself
   is gone; the survey is the reasoning behind the one rule none of the survivors
   gave up. What changed when the data got richer is in
@@ -37,7 +37,7 @@ Greg, 2026-08-26:
 > article's ordering as top to bottom.
 
 It is a **mode**, in the sense [url-state.md](url-state.md) and
-[chat-mode.md](../plans/chat-mode.md) use: it takes the band between the spine
+[260826a-chat-mode.md](../plans/260826a-chat-mode.md) use: it takes the band between the spine
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
@@ -468,8 +468,8 @@ that looks the same and is not:
 
 **Four defects came out of the review of this, and they are the interesting
 part.** GPT Sol read the built code on 2026-08-30
-([prompt](../plans/v1-diagram-chain-ramp-review-prompt.md),
-[answer](../plans/v1-diagram-chain-ramp-review-sol.md)); each of these draws
+([prompt](../plans/260830ag-v1-diagram-chain-ramp-review-prompt.md),
+[answer](../plans/260830ae-v1-diagram-chain-ramp-review-sol.md)); each of these draws
 perfectly well when wrong.
 
 - **Trail's ramp ended in the cliff it was designed to remove.** Its chain
@@ -590,7 +590,7 @@ lookup as row 0 would draw a confident line to the first section of the article.
 [`embeddings.ts`](../../src/embeddings.ts). The model is `voyageai/voyage-4`,
 chosen by [the eval](../../evals/results/embedding-retrieval-2026-08-26.md)
 rather than by argument, and the reasoning is in
-[semantic-search.md](../plans/semantic-search.md).
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md).
 
 Four decisions worth knowing:
 
@@ -662,7 +662,7 @@ by slug and by what the blocks say, and a cold process re-embeds one article for
 about $0.002 and a second or two — which on Vercel is the normal case rather
 than the unlucky one. Persisting them needs pgvector, a migration and a
 re-embed-on-change rule, and that is the substance of
-[semantic-search.md](../plans/semantic-search.md). A diagram toggle wanting a
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md). A diagram toggle wanting a
 cache is not a good enough reason to settle it early.
 
 ### Vocabulary
@@ -963,7 +963,7 @@ Two things follow, and neither of them is in this file:
   GPT Sol found that one in review of the fix, before it shipped.
 
 The whole write-up, with the commit that made the assumption false and the four removal probes, is
-[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
+[260830b-the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/260830b-the-spy-wrote-a-section-over-the-paragraph.md).
 
 And one that is: `DiagramBand` took `?at=` by reading `location.search` at render time, which the
 other bands can afford and this one cannot. `jumpTo` writes the URL on the next task, so a second
@@ -994,7 +994,7 @@ the article, a band laid out past the right edge, a column that loses one row pe
 section — all of them render, and all of them look like a design choice. That is
 why every number is computed by pure functions in a module of its own with
 tests, and why three of those tests exist because they caught live bugs. The list
-is in [the plan](../plans/diagram-mode.md#what-the-tests-caught).
+is in [the plan](../plans/260826ah-diagram-mode.md#what-the-tests-caught).
 
 **Text is wrapped by counting characters.** SVG will not wrap, and the honest
 alternative is render-measure-relayout, which is two passes, a `ResizeObserver`
@@ -1024,7 +1024,7 @@ saturated fill at 20px tall is a shout and thirty of them is a mess.
 **structure** at all. One dot per paragraph, placed by an embedding of what that paragraph says —
 [`src/projection.ts`](../../src/projection.ts) does the arithmetic on the
 server, [`src/web/scatter.ts`](../../src/web/scatter.ts) turns two numbers into
-pixels, and [embedding-scatter-diagrams.md](../plans/embedding-scatter-diagrams.md)
+pixels, and [260827g-embedding-scatter-diagrams.md](../plans/260827g-embedding-scatter-diagrams.md)
 is the design and the review it survived.
 
 ```
@@ -1063,9 +1063,10 @@ projection can only ever **shorten** a distance, so:
   one of the 1,022 directions this threw away.
 
 No percentage rescues the second half: a figure for the whole article says
-nothing about any particular pair. So the strip above the picture says it in
-words, not only as a number. GPT Sol's finding on the plan, and the most
-important one of the round.
+nothing about any particular pair. So the picture says it in words, not only as a
+number — GPT Sol's finding on the plan, and the most important one of the round.
+Where those words live is
+[the icon on the control row](#the-caveat-is-an-icon-not-a-strip).
 
 Measured on this corpus, 2026-08-27: **the two axes hold about a fifth of the
 variation** — 14.6% and 6.4% on `constitution`, 12.3% and 8.2% on the Noema
@@ -1088,14 +1089,109 @@ headings and one-line list items.
 A three-word heading embeds perfectly well and then sits at cosine 0.8 from
 every other three-word heading, because what they have in common is being short.
 
-**The strip says how many were left out**, because a picture that quietly drops
-a fifth of the article looks exactly like a picture of all of it. One
+**The picture says how many were left out**, because one that quietly drops a
+fifth of the article looks exactly like a picture of all of it — in the icon's
+card, and in an `.sr-only` live region that announces when the projection lands
+([below](#the-caveat-is-an-icon-not-a-strip)). One
 consequence to own rather than hide: **Trail's chain joins consecutive *dots*,
 not consecutive paragraphs**, so a segment can silently bridge a run of list
 items nobody drew. What *does*
 tile is each dot's row **range**: a dot answers for everything from itself to
 just before the next one, so the you-are-here mark never falls in a gap even
 though the dots do.
+
+### The caveat is an icon, not a strip
+
+It was a `<p class="diag-note">` above the picture — four lines of 10.5px prose,
+about fifty pixels of a 400px band, saying the same thing every time.
+
+> It uses up valuable vertical real estate. Hide it behind a tooltip or warning
+> icon or something.
+>
+> — Greg, 2026-08-30
+
+So it is an `Info` icon at the end of the panel's heading row, carrying the same
+words in the panel's own hover card (`ScatterNote` in
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
+
+Two things make that a move rather than a deletion, and each is the half a
+tooltip on its own would lose:
+
+- **The sentence is still announced.** An `.sr-only` `role="status"` carries the
+  whole of it, so a reader who cannot see the picture still learns when the
+  projection lands that a fifth of the article is not in it. A card is reached by
+  pointing or by Tab; it announces nothing.
+- **The counts are in the control's own name**, not only inside the card. "Info"
+  is a noun, and a control whose whole accessible name is a noun is one a screen
+  reader cannot skim.
+
+`Info` rather than a warning triangle: paragraphs going unplaced is the ordinary
+case, and an alarm on the ordinary case is an alarm nobody reads by the second
+article.
+
+#### Why the heading row and not the control row
+
+The icon went on `.diag-opts` — the Sideways/Colour strip — first, on the
+reasoning that a row already drawn costs nothing to add to. That was wrong, and
+it is worth the paragraph because **two separate checks confirmed the absence of
+the old wording rather than the truth of the new one**, and both passed.
+
+`.diag-opts` wraps. An auto margin right-aligns an item on the line it lands on;
+it does not stop it starting a new one — so the first version's "costs no
+height" was simply false. Nesting the chips in an inner wrapping box fixed
+*which* item wrapped and not *whether* a line was spent, because the binding
+constraint is **total intrinsic width**, not alignment: at the ideal band width
+Drift's two chip groups and the icon do not fit on one line, so one of them wraps
+however the alignment is written.
+
+The browser sweep that found it (2026-08-31) also shows why the checks missed it.
+Drift was measured at its narrowest, where the chips already wrap and the icon
+rides free; Trail at its widest, where there is only one chip group and
+everything fits. The costly combination — Drift at the ideal width — was in
+neither.
+
+`.diag-head` has no `flex-wrap`, so it cannot gain a flex line at any width: it
+shrinks its heading instead.
+
+**And that argument had the same shape as the two before it — true about the
+thing it named, and not the whole story.** A row that cannot gain a flex line
+can still get taller, because the flexible item inside it wraps its own text
+once it has been shrunk far enough. The only thing stopping that here was that
+`.diag-head`'s heading is the single unbreakable word "Diagram" — a fact about
+today's copy, which would stop being true the moment the heading became two
+words. `.diag-head h2` now declares `min-width: 0`, `overflow: hidden`,
+`text-overflow: ellipsis` and `white-space: nowrap`, the same four
+`.chat-head h2` has carried all along, and
+[`tests/diagram-css.test.ts`](../../tests/diagram-css.test.ts) holds them there.
+`min-width: 0` is the load-bearing one: without it a flex item's automatic
+minimum is its longest word, so it never shrinks far enough for
+`text-overflow` to do anything, and the other three read as present and working.
+
+**Then measured, at last** — 2026-08-31, on a throwaway preview page since
+deleted, 96 widths from 180px to 560px in 4px steps. The icon costs no height at any of them, in either
+row: `.diag-head` is 40.91px shown or hidden, at 288px and at 400px alike, and
+`.diag-opts` is 53.77px at 288 and 29.78px at 400 either way — the difference
+between those two being the chip groups wrapping on their own, which is what
+tells you the icon has genuinely left that row. The heading stays on one line at
+every width, and `scrollWidth === clientWidth` throughout, so the ellipsis never
+engages: at the narrowest band it wants 57.77px and has 217.4px. The icon takes
+24.99px of *width* from it and no height, and cannot raise the row because its
+box is 16.19px against the h2's 22.32px line box. That last part is why the
+arrangement is robust rather than lucky.
+
+Worth stating which of the four this is: **the first whose claim survives a
+sweep**, rather than holding at the widths somebody happened to look at. That is
+the whole difference the thread was about.
+
+Three routes to the same extra line, then, found one at a time by three
+different people looking at the same claim. The claim is now a property of the
+markup rather than a measurement that happened to hold, which is the difference
+between fixing this and re-wording it —
+[silent-success.md](../reusable/silent-success.md) applies to a *claim in a
+comment* exactly as it applies to code. The test written to hold it down
+demonstrated the point once more on its way in: it matched the word
+`min-width: 0` in the rule's own explanatory comment, so deleting the
+declaration left it green.
 
 ### Sideways on Drift: lanes or spread
 
@@ -1302,7 +1398,7 @@ reading a word. Nothing else here could have found that.
 
 The whole design, the measurements, the review it survived and what a reader who
 had not read the articles made of the pictures are in
-[sketch-diagram.md](../plans/sketch-diagram.md). What follows is what the reader
+[260830j-sketch-diagram.md](../plans/260830j-sketch-diagram.md). What follows is what the reader
 touches.
 
 ### It does not emit SVG, and that is the design
@@ -1404,11 +1500,12 @@ glossary, and three consequences follow from it rather than from taste:
   would run the invocation out of time — and that fails as a platform kill that
   takes the whole job rather than as a recorded failure.
 
-**The first converted step.** Its nine neighbours all write their own file inside
-`run()`, which works on a laptop and cannot work through a store that puts the
-artefact in a Postgres column. `generateSketch` writes nothing and hands the
-scene back; the step returns it as `parts`, the CLI writes `sketch.json`, the
-harness writes into a results directory.
+**The first converted step, and for a while the only one.** Writing a file inside
+`run()` works on a laptop and cannot work through a store that puts the artefact
+in a Postgres column. `generateSketch` writes nothing and hands the scene back;
+the step returns it as `parts`, the CLI writes `sketch.json`, the harness writes
+into a results directory. Every other article-reading stage followed on
+2026-08-31 — [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ### 288px is not a size a diagram fits in, and zooming inside it does not help
 
@@ -1450,6 +1547,21 @@ that file protects first. A modal takes it from nothing.
   sometimes scrolled the article would be a control nobody can predict. The jump
   is still there, from the card, where it is labelled — available and never a
   surprise.
+- **A part that opens says so, and shows what is inside it.** A zoomable region
+  is drawn *hotter* than one that is not — a brighter edge, a stronger wash, on
+  its own panel. Contrast rather than a second shape, because the band scales
+  760 units into under 400 pixels and every **distance** halves with it: the
+  first version was a second panel offset five units behind the first, which is
+  two and a half pixels, and a browser pass could not see it at all. Beside the
+  name there is an "expand" corner mark, held at a constant stroke weight so it
+  is the same line in the band as at full screen. Hover or focus the name and
+  the scene it opens is
+  drawn *inside that region*, small, over a scrim — the real scene, painted by
+  `paintScene` into a nested viewport, with only the words dropped. Press it and
+  the new scene grows out of the box you pressed; Back reverses the same motion.
+  All of it is [260830ap-sketch-zoomable-subsections.md](../plans/260830ap-sketch-zoomable-subsections.md),
+  including why the ghost is not a simplified redraw and why the swap happens
+  before the animation rather than after it.
 - **Click a region's name** — "WHY WE'RE TEMPTED TO SEE IT" — and the picture
   opens the zoom scene for that part. Greg asked for it by example, and it is the
   most natural handle there is: a region is the overview's own statement that
@@ -1543,7 +1655,7 @@ that prompt.
 - **Trail draws neither the anchor nor the semantic edges** that Force now has.
   The chain is already the densest thing in the band.
 - **No persistence of the vectors.** Memory only, keyed by slug, source hash and
-  the recipe that made them. When [semantic-search.md](../plans/semantic-search.md)
+  the recipe that made them. When [260826n-semantic-search.md](../plans/260826n-semantic-search.md)
   lands, [`src/article-vectors.ts`](../../src/article-vectors.ts) is the one file
   that changes.
 - **No search hits on the picture.** The spine paints them

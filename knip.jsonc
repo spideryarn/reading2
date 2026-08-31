@@ -79,5 +79,14 @@
   // rather than as dependencies. Both are genuinely expected to be on PATH:
   // `supabase` is the CLI from docs/project/supabase-local.md, and `openssl` is
   // used by tests/db-tls.test.ts to inspect the remote's certificate.
-  "ignoreBinaries": ["supabase", "openssl"]
+  "ignoreBinaries": ["supabase", "openssl"],
+
+  // playwright-core is loaded by scripts/remote-smoke-browser.mjs through
+  // createRequire() against a path computed at runtime, because that script
+  // runs on the remote box and has to find whichever copy is there. Knip
+  // resolves static imports, so it cannot see that and reports the dependency
+  // as unused. It is not: dropping it puts the box back on borrowing a
+  // playwright-core from the npx cache at whatever version the MCPs bundled.
+  // See docs/project/browser-control.md.
+  "ignoreDependencies": ["playwright-core"]
 }

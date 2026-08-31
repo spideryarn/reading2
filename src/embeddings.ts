@@ -20,7 +20,7 @@
  * OpenAI account — which is the tie-break, and the reason the arm with the best
  * point estimates is not the one used.
  * [evals/results/embedding-retrieval-2026-08-26.md](../evals/results/embedding-retrieval-2026-08-26.md)
- * has the tables; docs/plans/semantic-search.md has the argument.
+ * has the tables; docs/plans/260826n-semantic-search.md has the argument.
  *
  * ## `input_type` is not optional, and withholding it is not neutral
  *
@@ -36,7 +36,7 @@
  *
  * Store anything. Persisting vectors needs pgvector, a migration, and a rule
  * about re-embedding when an article changes; that is the substance of
- * docs/plans/semantic-search.md and it should not be settled by whichever
+ * docs/plans/260826n-semantic-search.md and it should not be settled by whichever
  * feature happens to want a cache first. Callers that want one keep it
  * themselves — src/similar.ts is the current example, and says so.
  */
@@ -285,7 +285,7 @@ export async function embedBatch(
      * 2026-08-28 — every request 404ing here in under a second, reported to the
      * reader as a model that "could not be reached". Nothing in the deploy
      * pipeline ever asks the production key to make a call, so nothing noticed.
-     * docs/plans/embedding-endpoints-refused.md, and it is the reason this
+     * docs/plans/260828z-embedding-endpoints-refused.md, and it is the reason this
      * failure now has a `reason` a route can act on rather than a sentence.
      *
      * Retrying cannot help — it is a setting, not a queue — so this fails fast

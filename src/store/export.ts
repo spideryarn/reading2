@@ -5,7 +5,7 @@
  *     npm run db:export -- --out data              # over the real thing
  *
  * The importer is only half a door. Until this exists, moving to Postgres is a
- * decision nobody can undo — and docs/plans/postgres-migration.md § The order of
+ * decision nobody can undo — and docs/plans/260825f-postgres-migration.md § The order of
  * work is explicit that the filesystem adapter, the importer and the exporter
  * are all kept for one release after cutover *and then* deleted. This is the
  * third of the three.
@@ -104,7 +104,7 @@ export interface ExportResult {
  * [`scripts/db-export.ts`](../../scripts/db-export.ts) has to call it **before**
  * the first article is written. A default parameter fires on the first
  * `exportArticle`, by which time an earlier slug's directory is already on disk.
- * docs/plans/delete-the-importer.md § `db:export` must fail closed.
+ * docs/plans/260827aa-delete-the-importer.md § `db:export` must fail closed.
  */
 export function exportBlobStore(): RawSourceStore {
   return postgresBlobStore("db:export reads article rows out of Postgres");
@@ -268,7 +268,7 @@ async function writeRawDocument(
  *
  * Only the CURRENT revision. Older revisions are history, and a rollback wants
  * the article as it is being served, not an archive — see open question 4 in
- * docs/plans/postgres-migration.md about how many revisions to keep.
+ * docs/plans/260825f-postgres-migration.md about how many revisions to keep.
  */
 export async function exportArticle(
   slug: string,
@@ -312,6 +312,12 @@ export async function exportArticle(
     url: revision.finalUrl,
     fetchedAt: revision.fetchedAt?.toISOString() ?? null,
     excerpt: revision.excerpt,
+    /* **Verbatim, never re-parsed** — the column is `text` holding the
+       publisher's own ISO string in their own frame, and putting it through a
+       `Date` here would move the calendar day, which is the whole content of
+       the field. Placed where stage 2 writes it, so the round trip is
+       byte-identical. src/db/schema.ts § `publishedAt`. */
+    publishedAt: revision.publishedAt,
     note: revision.note,
     source: revision.source,
     method: revision.extractMethod,
@@ -363,12 +369,15 @@ export async function exportArticle(
      document's own bytes come back through `writeRawDocument` below and nothing
      else does. An exported article therefore names objects it can only fetch
      from the bucket it came from, which is the same contract `raw_source_sha256`
-     already has. docs/plans/hosting-the-articles-images.md. */
+     already has. docs/plans/260829b-hosting-the-articles-images.md. */
   if (revision.assets) await put("assets.json", revision.assets);
   if (revision.tweets) await put("tweets.json", revision.tweets);
   if (revision.glossary) await put("glossary.json", revision.glossary);
-  if (revision.summary) await put("summary.json", revision.summary);
+  /* No `summary.json`: stage 5e, the `summary` artefact kind and the column
+     that held it all went on 2026-08-31 (docs/plans/260831s-gist-only-summaries.md). */
   if (revision.ideas) await put("ideas.json", revision.ideas);
+  if (revision.quotes) await put("quotes.json", revision.quotes);
+  if (revision.timeline) await put("timeline.json", revision.timeline);
   if (revision.sketch) await put("sketch.json", revision.sketch);
   if (revision.labels) await put("labels.json", revision.labels);
 
@@ -376,7 +385,7 @@ export async function exportArticle(
 
   if (revision.stampedHtml) {
     /* stage 3's artefact lives in `output/`, not in `data/` — see
-       docs/plans/postgres-migration.md § Stage 3 recovers ids from output/.
+       docs/plans/260825f-postgres-migration.md § Stage 3 recovers ids from output/.
        Exporting it beside the article would put it somewhere nothing reads, and
        the next `npm run blocks` would re-mint every id. */
     await mkdir(target.outputRoot, { recursive: true });
@@ -392,7 +401,7 @@ export async function exportArticle(
 
      **`purpose` was missing from both halves of this until 2026-08-28**, and it
      is the reader's own words — "why you're reading this one", the per-article
-     half of docs/plans/reader-profile.md. It was absent from the object, so an
+     half of docs/plans/260826t-reader-profile.md. It was absent from the object, so an
      article with other shelf state exported a file with the purpose quietly
      gone; and absent from the condition, so an article whose *only* state was a
      purpose exported no shelf file at all. Nothing caught it because no
@@ -543,7 +552,7 @@ export async function exportArticle(
                is easy not to add. A review thread exported without its stances
                and imported back is a conversation whose every answer has lost
                the instruction that produced it, and nothing reports an error.
-               GPT Sol's review of docs/plans/review-mode.md, finding 6. */
+               GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */
             stance: row.stance,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,

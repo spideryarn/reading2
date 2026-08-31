@@ -8,7 +8,7 @@
  * Since 2026-08-29 `runStep` does not call `write`, `assertProduced`,
  * `finishStep` and the job's own release itself; it hands the step's product and
  * the job transition to `session.commit`, which does all four
- * (docs/plans/delete-the-importer.md § D1a, src/store/session.ts). D1b turns
+ * (docs/plans/260827aa-delete-the-importer.md § D1a, src/store/session.ts). D1b turns
  * that one call into a transaction, so it is worth knowing how much of the suite
  * is watching it.
  *

@@ -394,7 +394,7 @@ log("model").info(`fetching ${url}`);          // can never be redacted
 ```
 
 It will not notice an API key inside an error message, a token in a URL's query string, or — once
-[Drizzle](../plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth) lands — a
+[Drizzle](../plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth) lands — a
 bound query parameter at `params[3]`, which has no key name to match on at all. That last one is why
 `params` is redacted wholesale rather than by field; it is the only thing a path-based redactor can
 do about a positional array.
@@ -466,7 +466,7 @@ Three things follow from that, and the third is the one that matters:
    had spotted: `search.ts` rethrew `response.json()`'s `SyntaxError`, and V8 quotes the first
    characters of the offending input in that message. What the reader sees did change, and the
    interim wording is flagged for Greg in
-   [simplification-audit.md § A.5](../plans/simplification-audit.md). The rule below still stands
+   [260826m-simplification-audit.md § A.5](../plans/260826m-simplification-audit.md). The rule below still stands
    for every file that stores such a message: **never
    log a stored `error` string, however sure you are of what is in it.**
 
@@ -496,7 +496,7 @@ sibling branch commented *"Shape, not value"*, and `vercel.ts`'s last-resort cat
 the next one possible was changing what was being looked *for*: first "OpenRouter's HTTP error
 bodies", then "Anthropic's refusal payloads", then "any moment where a provider's own text becomes
 an `Error`". A list of sites is a snapshot; the genre is the thing. This is written down as Rule 1
-in [simplification-audit.md](../plans/simplification-audit.md) — *grep the genre, not the list* —
+in [260826m-simplification-audit.md](../plans/260826m-simplification-audit.md) — *grep the genre, not the list* —
 and it was written after an earlier undercount, by the person who then went on to sweep by list
 twice more.
 
@@ -513,7 +513,7 @@ on it. The SDK is still the SDK, so `ANTHROPIC_LOG=debug` would still print whol
 if that setting were dropped; there is simply one place left to drop it from.
 
 The honest status: **four declarations that this class was closed, four of them wrong.** The fifth
-round was the one written up in [error-boundary.md](../plans/error-boundary.md) — Drizzle puts every
+round was the one written up in [260826p-error-boundary.md](../plans/260826p-error-boundary.md) — Drizzle puts every
 bound parameter into `Error.message`, so a failed comment write puts the reader's quote, and then
 the model's answer, into an error that is returned, logged, streamed and stored. **That one was
 live, not latent**: production sets `SPIDERYARN_STORE=postgres`
@@ -579,7 +579,7 @@ logged, whatever the file it was thrown from thought it was doing.
 The `db-errors.ts` seam above wraps a store **on its way out**. So it protects everything that reads
 the error *after* the store returns — and nothing that reads it *inside*, before the rethrow. That
 gap is where the sixth instance of this class lived, found by GPT Sol reviewing the publish
-finalizer on 2026-08-30 ([the review](../plans/v1-publish-finalizer-review-sol.md), critical 1).
+finalizer on 2026-08-30 ([the review](../plans/260830ad-v1-publish-finalizer-review-sol.md), critical 1).
 
 [`finishIn`](../../src/store/pg-jobs.ts) binds a job's whole `steps` array and its title — a step's
 `detail` may be article prose and the title *is* the article's. When it failed,
@@ -770,7 +770,7 @@ The rest of this file is *why the lines are shaped the way they are*.
 
 From [Vercel's runtime logs documentation](https://vercel.com/docs/logs/runtime), page dated
 2026-08-03. This project is heading for Vercel Pro with Fluid Compute
-([deploy-and-repo-move.md](../plans/deploy-and-repo-move.md#two-facts-that-make-the-rest-easier)).
+([260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md#two-facts-that-make-the-rest-easier)).
 
 **Capture is just stdout and stderr.** No agent, no SDK, no integration — which is the whole reason
 this design is nothing more than "write JSON to stdout".
@@ -930,7 +930,7 @@ Its Logs Explorer covers Supabase's own stack — `postgres_logs`, `auth_logs`, 
 There is no supported path for pushing an app's logs into it. Two things it is still good for:
 `postgres_logs` will show slow queries and connection-pool trouble that our logs never will, and now
 that [Drizzle owns the data and Supabase is Auth
-alone](../plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth), `auth_logs` is
+alone](../plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth), `auth_logs` is
 the **only** place the login side is visible. Do not go hunting for it in Vercel.
 
 ## What we took from theirs, and what we left
@@ -1109,7 +1109,7 @@ from a grep, which is the mistake that section is about.
 - [block-ids.md](block-ids.md) — why re-minted ids are worth a warning
 - [testing.md](testing.md) — and `tests/log.test.ts`, which proves the redaction rather than
   restating the config
-- [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md) — Vercel Pro, Fluid Compute, and the
+- [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — Vercel Pro, Fluid Compute, and the
   single-process assumptions this all has to survive
 - [silent-success.md](../reusable/silent-success.md) — the pattern this document is mostly about
 

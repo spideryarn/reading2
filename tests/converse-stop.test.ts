@@ -3,7 +3,7 @@
  * model call.
  *
  * `fetch` is stubbed, so this is deterministic and costs nothing. What is under
- * test is the thing docs/plans/chat-mode.md § "A stop is not a failure" asserts
+ * test is the thing docs/plans/260826a-chat-mode.md § "A stop is not a failure" asserts
  * and that nothing else can check: **the reader pressing stop must end in a
  * `done` event with `stopped: true`, never in a throw.** Every path that can
  * throw instead is a red row and an apology for a button they pressed on
@@ -560,7 +560,7 @@ describe("failures are loud", () => {
        threw the generic "before it was finished" and logged `ended without
        finishing` where it should have said `stalled: true` — the one line
        somebody reads to decide whether to blame the network or the provider.
-       docs/postmortems/converse-stall-misfiled-as-incomplete.md. */
+       docs/postmortems/260826e-converse-stall-misfiled-as-incomplete.md. */
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({

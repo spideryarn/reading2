@@ -38,6 +38,7 @@ import {
   STEPS,
   stepIsDone,
 } from "../src/pipeline.js";
+import type { RawManifest } from "../src/fetch.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import {
@@ -95,7 +96,7 @@ describe("the pipeline", () => {
   it("accepts `tweets` as a step name, so the button can ask for one", () => {
     // Missing from STEP_ORDER, this is rejected as a bad name and
     // POST /api/jobs { steps: ["tweets"] } never works — see
-    // docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely.
+    // docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely.
     expect(isStepName("tweets")).toBe(true);
     expect(STEP_ORDER).toContain("tweets");
   });
@@ -254,7 +255,7 @@ describe("cascadeForce", () => {
        `cascadeForce` only names steps already in the job, so a forced
        `{ steps: ["toc"] }` never reached `arc` even then, and the stale arc that
        resulted lost entries in silence. The stamp is what actually closed that.
-       docs/plans/defer-arc-and-rename-hierarchy.md § 2.1. */
+       docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1. */
     expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(true);
     /* `assets` is in the cascade too, and for a third reason again: it *can*
        check itself — it has a stamp over the blocks hash — but a forced
@@ -332,7 +333,7 @@ describe("what a step counts as done", () => {
     // its output — and the stage after it would then consume the missing half.
     //
     // `toc` went from two files to three when the nav labels became a second
-    // model pass (docs/plans/toc-scaling.md). A tree with no labels.json beside
+    // model pass (docs/plans/260826h-toc-scaling.md). A tree with no labels.json beside
     // it is a half-run step, not a finished one, which is also why src/toc.ts
     // writes tree.json last of the three.
     expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
@@ -370,7 +371,7 @@ describe("sweepStopped", () => {
      mark an interrupted job `error` — which was right while one long-lived
      process was the only thing that could run a job, and became wrong the
      moment `advanceJob` could pick one back up. A closed tab is a pause, not a
-     failure. See docs/plans/ingest-resume.md § 2. */
+     failure. See docs/plans/260826s-ingest-resume.md § 2. */
 
   it("leaves a job the server died under waiting, not failed", () => {
     const j = job("running", [
@@ -494,7 +495,7 @@ describe("parseJobRequest", () => {
    * else's tokens by the megabyte. The box that fed it was deleted on
    * 2026-08-30 — it asked the same question the reader profile already asks,
    * and the profile reaches the same prompt
-   * (docs/plans/steer-becomes-the-profile.md).
+   * (docs/plans/260830o-steer-becomes-the-profile.md).
    *
    * So the field is **ignored, not refused**: a tab open since before the
    * deploy should get its summaries written rather than a 400 about a box it
@@ -718,9 +719,9 @@ describe("the work key", () => {
      panel with something stamped from the profile the reader just declined.
      GPT Sol's review of the built code, 2026-08-30. */
   it("counts two different profiles as two different pieces of work", () => {
-    const physicist = workKeyFor(["summary"], new Set(), "a physicist");
-    const historian = workKeyFor(["summary"], new Set(), "a historian");
-    const none = workKeyFor(["summary"], new Set());
+    const physicist = workKeyFor(["glossary"], new Set(), "a physicist");
+    const historian = workKeyFor(["glossary"], new Set(), "a historian");
+    const none = workKeyFor(["glossary"], new Set());
     expect(physicist).not.toBe(historian);
     expect(physicist).not.toBe(none);
     expect(historian).not.toBe(none);
@@ -813,10 +814,15 @@ describe("running a job", () => {
     const seen: string[] = [];
     const claim = vi.spyOn(fsJobStore, "claim");
     try {
-      claim.mockImplementation(async (id, owner, attempt, lease) => {
+      /* **Every argument forwarded, `max` included.** A spy that drops one does
+         not fail — `maxRunning` arrives `undefined`, `running >= undefined` is
+         false, and the cap is silently off for whatever this wraps. That is the
+         shape docs/reusable/silent-success.md is about, and the typecheck is
+         what catches it: tests are a project of their own. */
+      claim.mockImplementation(async (id, owner, attempt, lease, max) => {
         seen.push(attempt);
         claim.mockRestore();
-        return fsJobStore.claim(id, owner, attempt, lease);
+        return fsJobStore.claim(id, owner, attempt, lease, max);
       });
       await advanceJob(job.id);
       claim.mockRestore();
@@ -857,7 +863,8 @@ describe("running a job", () => {
        Its lease is already in the past, which is the state `advanceJob` has to
        notice without anybody sweeping on its behalf. */
     const orphan = mintAttempt();
-    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000)).kind).toBe("claimed");
+    /* A cap high enough to be beside the point: this case is not about it. */
+    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000, 4)).kind).toBe("claimed");
     expireLeaseForTests(job.id);
 
     try {
@@ -873,18 +880,51 @@ describe("running a job", () => {
     }
   });
 
-  it("refuses rather than renames when a late step lands on a busy article", async () => {
+  /**
+   * **Queues rather than refuses when a late step lands on a busy article.**
+   *
+   * This test used to assert the opposite, and the sentence it asserted is the
+   * one Greg hit: *"That article already has a job running. Wait for it, or stop
+   * it first."* — pressing Tweets on an article whose ingest had not finished.
+   * The 409 was right about the danger and wrong about the remedy: two jobs must
+   * not *run* on one article, because publication is last-writer-wins
+   * (src/store/pg-revisions.ts § `publishRevisionIn`), but that is a reason to
+   * make the second one **wait**, not to throw it away. The refusal moved to the
+   * claim, where it is a `busy` — docs/plans/260830ar-several-articles-at-once.md.
+   *
+   * **The half that did not change is the half worth keeping.** Renaming was
+   * never the alternative: `{slug, steps}` *names* an article, so stepping aside
+   * to `${slug}-2` would summarise a different, already-finished article
+   * perfectly successfully. So the assertion that nothing was created under a
+   * suffixed slug stays exactly as it was.
+   */
+  /* **Stage 2, and it is skipped rather than absent.** This is the behaviour
+     Greg asked for and it is not built yet: it must not ship before late steps
+     read the published store, because a job queued behind an ingest claims on
+     some other instance and opens `blocks.json` in its own empty scratch
+     directory — docs/plans/260830ar-several-articles-at-once.md § The prerequisite, and
+     docs/plans/260830aq-late-steps-read-the-store.md, which is another session's.
+     Written and watched red first, so that turning it on is a one-word change
+     to something already known to fail for the right reason. */
+  it.skip("queues rather than renames when a late step lands on a busy article", async () => {
     const slug = "test-enqueue-busy-article";
     /* A job holding the slug, doing different work from the one below. It never
        runs to completion here — `fetch` has no URL — which is exactly the
        window a reader hits by pressing two buttons in quick succession. */
     const held = await enqueue({ slug, steps: ["fetch"] });
+    let late: Awaited<ReturnType<typeof enqueue>> | undefined;
     try {
-      await expect(enqueue({ slug, steps: ["summary"] })).rejects.toMatchObject({ status: 409 });
-      /* And the article it named is still the article it named — nothing was
+      late = await enqueue({ slug, steps: ["glossary"] });
+      /* A second job, not the first one handed back: different work, so this is
+         not the de-duplication path. */
+      expect(late.id).not.toBe(held.id);
+      expect(late.status).toBe("queued");
+      /* And both of them name the article the reader named — nothing was
          quietly created under `${slug}-2`. */
+      expect(late.slug).toBe(slug);
       expect((await getJob(held.id))?.slug).toBe(slug);
     } finally {
+      if (late) await forgetJob(late.id).catch(() => undefined);
       await settle(held.id);
       await forgetJob(held.id);
     }
@@ -1019,8 +1059,8 @@ describe("freeSlug", () => {
    `POST /api/jobs/:id/advance` — one step per request, derived from the
    artefacts.
 
-   The browser-driven half of the queue: docs/plans/job-queue-rethink.md
-   § Decided, and docs/plans/ingest-resume.md for the resume it delivers.
+   The browser-driven half of the queue: docs/plans/260826q-job-queue-rethink.md
+   § Decided, and docs/plans/260826s-ingest-resume.md for the resume it delivers.
 
    These run the real runner, so they are built the same way as the suite above
    — around a slug nothing can be fetched for, so a step that gets as far as the
@@ -1035,8 +1075,19 @@ async function fixtureWithRawJson(slug: string): Promise<void> {
   // `{ file }` with a non-empty string is what the store's `raw` decoder asks
   // of it — src/store/artifacts-fs.ts § DECODERS. Nothing reads the file it
   // names, because `extract` never gets that far without a URL.
-  await writeFile(path.join(dir, "raw.json"), JSON.stringify({ file: "raw.html" }), "utf8");
+  await writeFile(path.join(dir, "raw.json"), JSON.stringify(RAW_MANIFEST), "utf8");
 }
+
+/**
+ * The same manifest as a value, for the stubs that have to **return** it.
+ *
+ * `fetch` came off `LEGACY_UNCONVERTED_STEPS` on 2026-08-31, so a stub that
+ * writes the artefact itself and returns a bare `{ detail }` is refused by
+ * `checkProduct` before anything is written — which is the guard doing its job,
+ * and is how these two cases found out. A stub of a converted step returns what
+ * the real one returns.
+ */
+const RAW_MANIFEST = { file: "raw.html" } as unknown as RawManifest;
 
 /**
  * Put a settled job back into the state a stopped server leaves behind.
@@ -1118,7 +1169,7 @@ describe("advancing a job one step at a time", () => {
      * again — and two tabs alternating make that a loop. One claim now walks the
      * whole job, inside one invocation, and what bounds it is the claimant's own
      * deadline (`LEASE_MS`) plus `STEP_BUDGET_MS` before each step.
-     * docs/plans/v1-imports-on-vercel.md § Stage 3.
+     * docs/plans/260830d-v1-imports-on-vercel.md § Stage 3.
      */
     const slug = "test-advance-one-step";
     const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
@@ -1130,7 +1181,7 @@ describe("advancing a job one step at a time", () => {
        happily having written nothing is caught, and should be. */
     const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
       await fixtureWithRawJson(slug);
-      return { detail: "stubbed" };
+      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
     });
     await pause(job, 0);
 
@@ -1178,7 +1229,7 @@ describe("advancing a job one step at a time", () => {
   it("turns the second of two simultaneous callers away rather than running twice", async () => {
     /* Two tabs. Both may ask; one must win. Running the step twice would have
        two runners writing one article's files, which is the fault this whole
-       design is shaped around — docs/plans/job-queue-rethink.md. */
+       design is shaped around — docs/plans/260826q-job-queue-rethink.md. */
     const slug = "test-advance-concurrent";
     const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
     await settle(queued.id);
@@ -1192,7 +1243,7 @@ describe("advancing a job one step at a time", () => {
       await new Promise((r) => setTimeout(r, 30));
       running--;
       await fixtureWithRawJson(slug);
-      return { detail: "stubbed" };
+      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
     });
     await pause(job, 0);
 
@@ -1236,7 +1287,8 @@ describe("advancing a job one step at a time", () => {
      * observing a scheduler. */
     const slug = "test-advance-queue-owns";
     const queued = await enqueue({ slug, steps: ["fetch"] });
-    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000);
+    /* A cap high enough to be beside the point: this case is not about it. */
+    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000, 4);
     /* The pump may have got there first, and that is fine — either way somebody
        holds it and the assertions below are about what advance says to whoever
        does not. */

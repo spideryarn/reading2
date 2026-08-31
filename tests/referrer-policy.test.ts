@@ -1,7 +1,7 @@
 /**
  * **No referrer leaves this app, and it is said in two places on purpose.**
  *
- * Settled in docs/plans/public-read-only-access.md § Stage 1 — *"Also stage 1:
+ * Settled in docs/plans/260827ai-public-read-only-access.md § Stage 1 — *"Also stage 1:
  * an explicit `Referrer-Policy`. The public slug is not a secret, but the page
  * URL carries reading state, and the original source URL can carry query data
  * of its own"* — and then not built. GPT Sol's second pass found it missing,

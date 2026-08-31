@@ -2,7 +2,7 @@
 
 > **Cashed, 2026-08-26.** Built here as
 > [prompt-caching.md](../prompt-caching.md), planned in
-> [docs/plans/prompt-caching.md](../../plans/prompt-caching.md). Their prerequisite — the one this
+> [docs/plans/260826g-prompt-caching.md](../../plans/260826g-prompt-caching.md). Their prerequisite — the one this
 > page says killed it, five prompts each wrapping the article differently — turned out to be real in
 > this repo too, and worse: two prompts were writing the reader's position *into the article body*,
 > so those calls could never have hit a cache at all. One renderer now

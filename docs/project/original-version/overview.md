@@ -88,7 +88,7 @@ under [§ Deliberately not lifted](#deliberately-not-lifted) with the line *"Ado
 is fine; inheriting a component library now is not."* Greg asked for both on 2026-08-25 — *"Let's
 switch to using Shadcn."* The Tailwind half was the "later" clause being cashed in. The
 component-library half is a straight reversal, made deliberately with the cost written down:
-[shadcn-migration.md § Honest assessment](../../plans/shadcn-migration.md#honest-assessment).
+[260825a-shadcn-migration.md § Honest assessment](../../plans/260825a-shadcn-migration.md#honest-assessment).
 
 **The tokens made it almost free, and not by our doing.** `app/globals.css` over there *was* a shadcn
 project, so `tokens.css` already carried shadcn's default dark values under shadcn's exact names, in

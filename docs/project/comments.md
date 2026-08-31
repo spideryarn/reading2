@@ -13,7 +13,7 @@ answer from the model only if you ask for one. Saving costs nothing.
 > Chat)."*
 >
 > So a comment is now the **free** thing and the model is a tick-box.
-> [comments-and-bookmarks.md](../plans/comments-and-bookmarks.md) is the plan, and its GPT Sol
+> [260828a-comments-and-bookmarks.md](../plans/260828a-comments-and-bookmarks.md) is the plan, and its GPT Sol
 > review is beside it.
 >
 > **Read the rest of this file with that in mind.** Everything it says about *anchoring*,
@@ -63,7 +63,7 @@ was what let the one remaining writer reach the anchor and the reader's words.
 ### Asking the model, and the link back
 
 Ticking **Also ask the AI about it** saves the comment *first* — free, and on disk — and then opens
-the anchored chat that [chat-as-gateway.md](../plans/chat-as-gateway.md) built, pre-filled with
+the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built, pre-filled with
 whatever was written. If the chat call fails, the reader still has their words.
 
 The link between the two is written **on the server**, from inside the chat stream, because that is
@@ -172,7 +172,7 @@ Three rules carry it:
 > line, to one search and *"Ben Miller, by contrast, isn't a public figure in the same way"*.
 > Selecting `Robert Morris` in the same sentence runs **no** searches and still answers properly —
 > which is the result that says this is a fix rather than a bigger hammer. Full before/after in
-> [explain-deeper-answers.md](../plans/explain-deeper-answers.md#measured-not-assumed).
+> [260826l-explain-deeper-answers.md](../plans/260826l-explain-deeper-answers.md#measured-not-assumed).
 
 ### Decision: the model decides whether to search <a id="decision-web-research"></a>
 
@@ -273,7 +273,7 @@ comes in from outside — `/read/<slug>?note=<id>` — has only an id, and until
 connected it to the article: the dialog opened, and the paragraph it was explaining could be anywhere.
 That is the ordinary shape of a link you *send someone*, because the `?at=` that would have saved it
 is only in the URL if the sender had scrolled. It was found while building the metadata page and left
-open there ([metadata-page.md](../plans/metadata-page.md)); it is fixed now.
+open there ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)); it is fixed now.
 
 The rule when a URL carries both: **the note wins.** `?at=` is written by scrolling and says where the
 sender's eye happened to be; `?note=` is only in a URL because somebody opened a dialog. The argument
@@ -359,7 +359,7 @@ project:
 drains it. The glossary's per-term lookup still uses the waiting version — not because streaming it
 is impossible, but because the answer has to be persisted through a store contract that was being
 rebuilt for Postgres when the question came up. What it would take is written down in
-[streaming-the-slow-two.md](../plans/streaming-the-slow-two.md).
+[260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
 
 > [!WARNING]
 > **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
@@ -386,7 +386,7 @@ and the `for await` over it waits for ever — the dialog spins, and nothing wil
 
 So `readEvents` is given `stallMs` here, the same 60-second clock chat uses, and `sse(res)` beats a
 `: ping` comment down this route every 15 seconds so that silence means something. Both are
-described in [sse-stall-recovery.md](../plans/sse-stall-recovery.md); the short version is that the
+described in [260826r-sse-stall-recovery.md](../plans/260826r-sse-stall-recovery.md); the short version is that the
 clock is on **bytes** rather than on frames, because a heartbeat is deliberately not a frame.
 
 Chat responds to a stall by going and looking for the answer, which the server usually finished
@@ -647,7 +647,7 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 ## The other way to ask
 
 Since 2026-08-25 there are two. This one is scoped to a passage you selected and answers in a
-dialog anchored to it. The other is **chat** ([chat-mode.md](../plans/chat-mode.md)): you type a
+dialog anchored to it. The other is **chat** ([260826a-chat-mode.md](../plans/260826a-chat-mode.md)): you type a
 question about the article and the answer cites block ids back.
 
 They are not competing, and the division is worth keeping straight when deciding where a new idea
@@ -663,7 +663,7 @@ belongs:
 
 **Comments are the narrower and safer feature**, and the one whose scoping vision.md's anti-goals
 actually argue for. Chat is the one that had to earn its place; the argument is in
-[chat-mode.md § Say the awkward thing first](../plans/chat-mode.md#say-the-awkward-thing-first).
+[260826a-chat-mode.md § Say the awkward thing first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first).
 
 ### And since 2026-08-26, a third caller of this same call
 

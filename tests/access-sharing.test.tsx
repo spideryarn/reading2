@@ -294,9 +294,9 @@ describe("what the dialog says about the reader's profile", () => {
   });
 
   it("names them when some were", async () => {
-    await openDialog(withKinds(["glossary", "summary"]));
+    await openDialog(withKinds(["glossary", "ideas"]));
 
-    expect(host.textContent).toContain("your glossary and your summary");
+    expect(host.textContent).toContain("your glossary and your list of ideas");
     expect(host.textContent).not.toContain("may have been written");
     expect(host.textContent).not.toContain("Nothing here was written");
   });

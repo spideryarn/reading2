@@ -1,7 +1,7 @@
 # `evals/pdf/` — three PDFs, and what "read correctly" means
 
 Run by hand, not by `npm test`. See [testing.md § evals](../../docs/project/testing.md) for the
-difference and [pdf-ingestion.md § The eval](../../docs/plans/pdf-ingestion.md#the-eval-evalspdf)
+difference and [260826c-pdf-ingestion.md § The eval](../../docs/plans/260826c-pdf-ingestion.md#the-eval-evalspdf)
 for the design this implements.
 
 **What exists, and what does not.** The scorer is built and tested —
@@ -10,7 +10,7 @@ transcriptions under [`synthetic/`](synthetic/). The three source PDFs are commi
 and all three now ingest end to end. **The golds do not exist**, and until they do the numbers below
 are a smoke test rather than a gate: three inputs that a reviewer constructed pass it and should
 not, and they are listed in
-[the plan](../../docs/plans/pdf-ingestion.md#gpt-sols-review-of-the-built-code-2026-08-26-and-the-four-inputs-that-defeat-it).
+[the plan](../../docs/plans/260826c-pdf-ingestion.md#gpt-sols-review-of-the-built-code-2026-08-26-and-the-four-inputs-that-defeat-it).
 `npm run eval:pdf` is not written either; the bake-off harness in [`bakeoff/`](bakeoff/README.md) is
 what runs today.
 
@@ -76,6 +76,6 @@ Three ways the choosing could have gone quietly wrong, all of which nearly did:
 
 ## See also
 
-- [pdf-ingestion.md](../../docs/plans/pdf-ingestion.md) — the plan, the build order, and the bake-off these three were chosen for
-- [pdf-parsing-options.md](../../docs/research/pdf-parsing-options.md) — what else we could have used to read them
+- [260826c-pdf-ingestion.md](../../docs/plans/260826c-pdf-ingestion.md) — the plan, the build order, and the bake-off these three were chosen for
+- [260826a-pdf-parsing-options.md](../../docs/research/260826a-pdf-parsing-options.md) — what else we could have used to read them
 - [evals/README.md](../README.md) — what an eval is here, and why it is not a test

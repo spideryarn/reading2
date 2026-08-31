@@ -378,7 +378,7 @@ describe("the reader routes", () => {
        responses and absent on others is the one a boundary drops silently, and
        the panel would then read "no purpose written" off a question nobody
        asked. There is no slug here, so there is no article to have one.
-       docs/plans/profile-panel.md. */
+       docs/plans/260830c-profile-panel.md. */
     expect(r.body).toEqual({
       profile: null,
       purpose: null,
@@ -453,7 +453,7 @@ describe("the reader routes", () => {
          own words rather than as a flag, because the panel prints each box
          separately with its own way in to edit it — the joined string
          `renderProfile` builds carries our prefixes and there is no honest way
-         back from it to the two boxes. docs/plans/profile-panel.md. */
+         back from it to the two boxes. docs/plans/260830c-profile-panel.md. */
       const r = await call("GET", `/api/reader?slug=${SLUG}`);
       expect(r.body).toEqual({
         profile: null,
@@ -614,7 +614,7 @@ describe("the reader routes", () => {
        `renderProfile`'s output — "About the reader: …\nWhy they are reading
        this piece: …" — whose prefixes are ours and which cannot be taken back
        apart into two boxes. This asserts the shape stays split.
-       docs/plans/profile-panel.md. */
+       docs/plans/260830c-profile-panel.md. */
     const SLUG = "test-routes-both-halves";
     const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
     await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
@@ -1253,7 +1253,7 @@ describe("PATCH /api/search/:slug/:id", () => {
  * `handleApi` rather than round it.
  *
  * The mutation test that makes them mean something is in
- * docs/plans/auth-ui-and-production.md and has to be done by hand once: comment
+ * docs/plans/260826ae-auth-ui-and-production.md and has to be done by hand once: comment
  * out the `await requireUser(...)` line, watch the first of these go red, put
  * it back. A gate test that has never been seen to fail proves nothing —
  * docs/reusable/silent-success.md, and the memory with my name on it.

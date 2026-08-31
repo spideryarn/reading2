@@ -6,7 +6,7 @@
  * [`audio-level.ts`](./audio-level.ts); this file is the plumbing and the
  * lifecycle, which is where all the traps are.
  *
- * Why it exists is docs/plans/microphone-level-meter.md: pressing the
+ * Why it exists is docs/plans/260827f-microphone-level-meter.md: pressing the
  * microphone produced, for the first several seconds, no observable change
  * anywhere the reader was looking. This is the instrument that separates the
  * states they could not otherwise tell apart — *not open yet*, *working, the

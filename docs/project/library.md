@@ -22,8 +22,8 @@ disk but is shaped like rows**, so the day it becomes Postgres is a change to on
 |---|---|
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
-| `/read/<slug>/metadata` | everything we know about the article — [metadata-page.md](../plans/metadata-page.md) |
-| `/read/<slug>/tweets` | the article as a numbered thread — [tweet-thread-page.md](../plans/tweet-thread-page.md) |
+| `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
+| `/read/<slug>/tweets` | the article as a numbered thread — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
@@ -84,7 +84,7 @@ as a property of nuqs. It is not: in nuqs 2.10 it takes a call to `enableHistory
 [`main.tsx`](../../src/web/main.tsx) made one, every `useQueryState` went on serving the previous
 page's query string after one of our navigations, and nothing cancelled the debounced `?at=` queue
 when the reading view unmounted. Caught by a cross-model review on 2026-08-25, and written up in
-[metadata-page.md § What the plan got wrong](../plans/metadata-page.md#found-by-the-cross-model-review).
+[260825e-metadata-page.md § What the plan got wrong](../plans/260825e-metadata-page.md#found-by-the-cross-model-review).
 The argument for hand-rolling the router depends on that one call; if it goes, this section goes
 with it.
 
@@ -116,7 +116,7 @@ original**, **Copy link**, **Delete**. Re-run is not new machinery — it is
 the queue skips every step whose artefact is on disk, which is every step.
 
 The plan, the decisions and what was deliberately left out are in
-[library-shelf-actions-and-search.md](../plans/library-shelf-actions-and-search.md).
+[260826k-library-shelf-actions-and-search.md](../plans/260826k-library-shelf-actions-and-search.md).
 
 ### The card is no longer one big link
 
@@ -154,7 +154,7 @@ reads as a ghost.
 
 #### The same act on the article's own page, where the undo never expires
 
-Since 2026-08-27 the [metadata page](../plans/metadata-page.md) has the third Delete — same
+Since 2026-08-27 the [metadata page](../plans/260825e-metadata-page.md) has the third Delete — same
 `PATCH /api/library/<slug>` with `{ archived }`, so there is one archive and not two that could
 drift, and the button had been a dimmed placeholder there for exactly two days.
 
@@ -290,7 +290,7 @@ that has *not* moved to Postgres — [`src/chat.ts`](../../src/chat.ts) and
 [`src/searches.ts`](../../src/searches.ts) write files in both modes, and the `chat_threads` /
 `search_runs` tables exist but nothing touches them. A count that reads 7 on the filesystem and 0 in
 Postgres is worse than no count at all, because it looks like an answer. They go in when step 10 of
-[postgres-storage-implementation.md](../plans/postgres-storage-implementation.md) lands.
+[260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md) lands.
 
 ## Finding an article, and finding a passage in one
 
@@ -343,7 +343,7 @@ which characters, so it would either return the whole thing anyway or call `ts_h
 back a second flavour of highlighting to reconcile with the client's own. One highlighter.
 
 What was considered and deferred, with the research behind it in
-[postgres-search.md](../research/postgres-search.md): **BM25** (`pg_search`/ParadeDB is not available
+[260826e-postgres-search.md](../research/260826e-postgres-search.md): **BM25** (`pg_search`/ParadeDB is not available
 on Supabase at all, hosted or local — what you actually get is `ts_rank`), **`pg_trgm`** for
 typo-tolerant titles (available, useful, but matcher one already handles titles in the browser), and
 **pgvector + embeddings** for meaning-based search — `vector 0.8.2` is available locally but not
@@ -478,7 +478,7 @@ the data arrived in*, so the data is sorted by slug before it is handed over. An
 so the title column keeps an `Intl.Collator`. Both looked like straight swaps.
 
 The full comparison, the honest cost, and what is still deliberately hand-written are in
-[library-sorting.md](../plans/library-sorting.md).
+[260826y-library-sorting.md](../plans/260826y-library-sorting.md).
 
 ## What a card says, and why
 
@@ -555,7 +555,7 @@ describe. If a third writer ever touches `tree` or `revision_blocks` without rec
 shelf starts printing last week's numbers with nothing to say so;
 [`tests/store-import-convergence.test.ts`](../../tests/store-import-convergence.test.ts) pins the
 importer's half of it. The whole thing is written up in
-[library-read-latency.md](../plans/library-read-latency.md).
+[260828c-library-read-latency.md](../plans/260828c-library-read-latency.md).
 
 ### The title fallback exists in four places, and that is on purpose
 
@@ -635,7 +635,7 @@ the date to the mtime of `blocks.json`. It just has no byline and no source link
 ## When this becomes Postgres
 
 See [database.md](database.md) for the store as a whole, and
-[postgres-migration.md](../plans/postgres-migration.md) for the schema and the risks.
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
 [`src/api.ts`](../../src/api.ts) is the seam, and it is the only file that knows there are
 directories. Above it the client sees two types, both already shaped as rows:
@@ -718,7 +718,7 @@ collide with the real thing. `loadArticle("example")` resolves by falling throug
 ## See also
 
 - [url-state.md](url-state.md) — the query string half of a link, and why position replaces history
-- [library-sorting.md](../plans/library-sorting.md) — the plan behind the sort, the chips and the table
+- [260826y-library-sorting.md](../plans/260826y-library-sorting.md) — the plan behind the sort, the chips and the table
 - [web-client.md](web-client.md) — the page the cards lead to
 - [architecture.md](architecture.md) — the pipeline that fills the shelf, and the storage layout
 - [ingest-queue.md](ingest-queue.md) — what happens after you press Add

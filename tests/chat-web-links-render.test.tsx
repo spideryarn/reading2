@@ -15,7 +15,7 @@
  *  - a rejected scheme produces **no anchor at all** — the model's characters,
  *    as text.
  *
- * docs/plans/chat-web-links.md.
+ * docs/plans/260827ao-chat-web-links.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -78,12 +78,34 @@ export function isLocalDatabaseUrl(url: string): boolean {
 
      Fail closed on anything that will not parse: "I cannot tell what this is"
      must never come out as "yes, it is the throwaway container". */
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(url).hostname;
+    parsed = new URL(url);
   } catch {
     return false;
   }
+
+  /* A connection string can name one host in its authority and connect to
+     another. `pg` parses with `pg-connection-string`, which honours libpq's
+     `host` and `hostaddr` keywords as QUERY PARAMETERS and lets them override
+     the authority — so
+
+         postgres://u:p@127.0.0.1:54362/db?host=remote.example.com
+
+     parses to { host: "remote.example.com" } while `new URL(...).hostname`
+     says 127.0.0.1. Reading only the hostname made this function answer "yes,
+     the throwaway container" about a remote database, which let it past
+     db-migrate's guard AND turned TLS off for the trip. Verified against the
+     installed pg-connection-string, not argued about. GPT Sol, 2026-08-31.
+
+     Refused rather than resolved: we could read the override and test THAT,
+     but then two spellings of the host would both have to stay right forever.
+     Nothing we run needs a host override, so a URL carrying one is not
+     answering the question this function asks, and fails closed like anything
+     else it cannot read. */
+  if (parsed.searchParams.has("host") || parsed.searchParams.has("hostaddr")) return false;
+
+  const host = parsed.hostname;
   return host === "127.0.0.1" || host === "localhost";
 }
 

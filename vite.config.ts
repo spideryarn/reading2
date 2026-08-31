@@ -103,7 +103,7 @@ export default defineConfig(() => {
          * nothing serving this then.
          *
          * See scripts/build-stamp.ts for where the commit comes from, and
-         * docs/plans/deploy-pipeline.md § The build stamp.
+         * docs/plans/260827v-deploy-pipeline.md § The build stamp.
          */
         name: "spideryarn-build-stamp",
         apply: "build",

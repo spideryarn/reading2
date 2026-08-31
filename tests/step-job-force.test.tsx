@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
- * **What the three surfaces actually post when a reader presses their button.**
+ * **What each surface actually posts when a reader presses its button.**
  *
- * `useGlossary`, `useIdeas` and `useSummaries` share one job hook now
+ * `useGlossary` and `useIdeas` share one job hook now
  * (src/web/useStepJob.ts), and the thing most easily lost in a lift-and-shift
  * like that is `force`. It has to be **`force: [step]`, naming the step** —
  * never a bare boolean, never a positional force on something earlier in the
  * pipeline — and both halves of that are silent when they are wrong:
  *
- *  - All four of these steps are in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts),
+ *  - Both of these steps are in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts),
  *    which means the force-cascade is explicitly *not* allowed to speak for
  *    them. A force that does not name the step leaves it unforced, the step's
  *    own freshness check says "already done", and the reader watches a job
@@ -17,7 +17,7 @@
  *    src/jobs.ts), so naming something earlier would quietly buy extra model
  *    calls on steps whose inputs never moved.
  *
- * Nothing else in the suite asserts the request body of these three buttons, so
+ * Nothing else in the suite asserts the request body of these buttons, so
  * before this file the whole rule was carried by a comment.
  *
  * **The last assertion in each case runs the real `cascadeForce`** over what
@@ -77,7 +77,6 @@ vi.mock("../src/web/useJobs.js", () => ({
 vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { useSummaries } = await import("../src/web/useSummaries.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 
 /** What `Reader` hands the band. Posed rather than run — see refused-writes. */
@@ -96,12 +95,10 @@ const READ: GlossaryRead = {
 };
 
 let ideas: ReturnType<typeof useIdeas> | null = null;
-let summaries: ReturnType<typeof useSummaries> | null = null;
 let glossary: ReturnType<typeof useGlossary> | null = null;
 
 function Surfaces(): ReactElement {
   ideas = useIdeas("constitution");
-  summaries = useSummaries("constitution");
   glossary = useGlossary("constitution", READ);
   return createElement("div");
 }
@@ -163,80 +160,6 @@ describe("ideas", () => {
       await ideas?.find(false);
     });
     expect(only().useProfile).toBe(false);
-  });
-});
-
-describe("summaries", () => {
-  it("posts no force at all for an ordinary write", async () => {
-    await act(async () => {
-      await summaries?.write();
-    });
-    const request = only();
-    expect(request.steps).toEqual(["summary"]);
-    expect(request).not.toHaveProperty("force");
-    /* And the pipeline agrees it is not forced — the other direction of the
-       same rule, so a hook that forced unconditionally would be caught here
-       rather than by nobody. */
-    expect(forcedByPipeline(request).size).toBe(0);
-  });
-
-  it("names its own step when the reader asks for a rewrite", async () => {
-    await act(async () => {
-      await summaries?.write(true);
-    });
-    const request = only();
-    expect(request.force).toEqual(["summary"]);
-    expect(forcedByPipeline(request).has("summary")).toBe(true);
-  });
-
-  /**
-   * **`write` lost its middle argument, and this is the test for the hazard
-   * that creates.**
-   *
-   * It was `write(force?, guidance?, useProfile?)` and is now
-   * `write(force?, useProfile?)` — the steer is gone
-   * (docs/plans/steer-becomes-the-profile.md). `guidance` was a `string` and
-   * `useProfile` is a `boolean`, so `tsc` catches a call site left with three
-   * arguments; what it cannot catch is a call site that always passed two and
-   * now means something different by the second, or one inside this hook that
-   * forwards the wrong one.
-   *
-   * `SummaryPanel` had exactly that fault in the other direction and it had
-   * shipped: `write(true, guidance)` never passed `useProfile` at all, so
-   * unticking "Use your profile" and pressing "Write them again" wrote a
-   * profiled artefact anyway. Nothing said so — the artefact came back stamped
-   * with a `profileHash` the reader had just declined.
-   *
-   * So: the boolean has to reach the request, and its absence has to stay
-   * absent (the server reads a missing `useProfile` as yes).
-   */
-  it("carries the profile tick into the request, and omits it when unset", async () => {
-    await act(async () => {
-      await summaries?.write();
-    });
-    expect(only()).not.toHaveProperty("useProfile");
-    posted.length = 0;
-    await act(async () => {
-      await summaries?.write(false, false);
-    });
-    expect(only().useProfile).toBe(false);
-    posted.length = 0;
-    /* And with `force`, which is the call that was wrong. */
-    await act(async () => {
-      await summaries?.write(true, false);
-    });
-    expect(only().useProfile).toBe(false);
-    expect(only().force).toEqual(["summary"]);
-  });
-
-  /* Nothing may carry a steer any more. The box is gone, so a `guidance` on the
-     wire would be a hook still sending a field the server has stopped reading —
-     the quiet half of a removal. */
-  it("sends no steer at all", async () => {
-    await act(async () => {
-      await summaries?.write(true, true);
-    });
-    expect(only()).not.toHaveProperty("guidance");
   });
 });
 

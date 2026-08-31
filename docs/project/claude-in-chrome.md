@@ -2,6 +2,8 @@
 
 Getting the extension to talk to Claude Code at all. Once it does,
 [browser-testing.md](browser-testing.md) is what to do with it — this doc stops at the handshake.
+On the remote box there is no extension to connect and there cannot be one, so none of this applies
+there; [browser-control.md](browser-control.md) is the fork in the road.
 
 > **This is a fluid situation.** The extension, the pairing flow and the transport are all moving,
 > and the version numbers below (extension 1.0.85, Claude Code 2.1.251, 2026-08-30) are the ones

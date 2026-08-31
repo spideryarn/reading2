@@ -8,7 +8,7 @@
  * through a *variable* — which was still broken after the first fix and was
  * found by review rather than by anything running, because the first bug threw
  * at module scope before pdf.js ever got as far as wanting a worker.
- * docs/postmortems/pdfjs-dommatrix-serverless.md.
+ * docs/postmortems/260827a-pdfjs-dommatrix-serverless.md.
  *
  * Every other test in this repo runs where `node_modules` is complete, so every
  * other test is blind to this by construction. The build is green, the deploy
@@ -60,16 +60,44 @@ describe("what @vercel/nft collects for the API function", () => {
   it.skipIf(!built)(
     "ships every file pdf.js loads through an untraceable specifier",
     async () => {
-      const { fileList, warnings } = await nodeFileTrace([BUNDLE], { base: ROOT });
+      /* `base: "/"`, and suffix matching rather than `fileList.has()`.
+         `npm run deploy` runs the gates in a git worktree whose `node_modules`
+         is a *symlink* back to the main tree (scripts/deploy.ts), and nft
+         resolves symlinks to their realpath — which then lies outside a `base`
+         of that worktree, so everything reached through it is dropped without
+         a warning. Measured on 2026-08-31, one unchanged bundle traced 2472
+         files against a real directory and 2 against the symlink. This test
+         therefore could not pass in the gate from the day it was written, and
+         `--force-gate=test` was the only way anybody deployed.
+
+         Rooting `base` at `/` removes the question, because nothing can fall
+         outside it. The only cost is that paths arrive absolute, so the names
+         below are matched as path-anchored suffixes. Both arrangements now
+         trace 2470 files and agree about all three. */
+      const { fileList, warnings } = await nodeFileTrace([BUNDLE], { base: "/" });
+
+      /* That failure read as "pdf.mjs is missing from the bundle" while it
+         actually meant "the trace collected nothing at all", and those two want
+         opposite responses. So this says which one it is before anything else
+         gets the chance to mislead. */
+      expect(
+        fileList.size,
+        "the trace collected almost nothing — that is a broken trace, not a missing file",
+      ).toBeGreaterThan(100);
+
+      /* Anchored at a path boundary, so a `.../not-node_modules/pdfjs-dist/…`
+         cannot satisfy it. */
+      const traced = (file: string): boolean =>
+        [...fileList].some((p) => p === file || p.endsWith(`/${file}`));
 
       for (const file of MUST_SHIP) {
         /* Named one at a time so a failure says which file, rather than
            printing a set of several hundred and leaving you to diff it. */
-        expect(fileList.has(file), `${file} was not traced into the function`).toBe(true);
+        expect(traced(file), `${file} was not traced into the function`).toBe(true);
       }
 
       for (const file of MUST_NOT_SHIP) {
-        expect(fileList.has(file), `${file} should not be in the function`).toBe(false);
+        expect(traced(file), `${file} should not be in the function`).toBe(false);
       }
 
       /* No platform-specific binary, by extension rather than by name — the

@@ -7,7 +7,7 @@
  * visitor learns nothing. The products that get it right name the cause — Loom
  * says *"Due to the privacy settings for this video, it cannot be played here
  * at this time"*; Google Docs pairs *"View only"* with *"Request edit access"*.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  *
  * They live in the reading view, in the comments drawer and on a page of their
  * own, so no single component renders them all and could be tested for telling
@@ -51,15 +51,15 @@ const NOTHING_BUILT: PublicArtefacts = {
   arc: false,
   tweets: false,
   glossary: false,
-  summary: false,
   ideas: false,
+  quotes: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
   tweets: true,
   glossary: true,
-  summary: true,
   ideas: true,
+  quotes: true,
 };
 
 /**
@@ -69,11 +69,11 @@ const EVERYTHING_BUILT: PublicArtefacts = {
  * The two fixtures above correlate everything — all `false` or all `true` — so
  * a mode reading the *wrong* flag gives the identical answer for both and every
  * test in this file stays green. GPT Sol named that mutation exactly:
- * *"map `ideas.has` to `summary`"*.
+ * *"map `ideas.has` to `quotes`"*.
  *
  * A single mixed fixture is not enough either, and I wrote one before checking:
  * the flags are booleans, so any two artefacts that happen to share a value are
- * still freely swappable. `summary` and `ideas` were both `false` in it, which
+ * still freely swappable. Two of them were both `false` in it, which
  * is precisely the pair Sol named — the control passed, and the comment
  * claiming *"no single swap produces the same table"* was simply false.
  *
@@ -85,8 +85,8 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
   return {
     arc: built === "arc",
     tweets: built === "tweets",
+    quotes: built === "quotes",
     glossary: built === "glossary",
-    summary: built === "summary",
     ideas: built === "ideas",
   };
 }
@@ -112,8 +112,24 @@ describe("what a visitor is told, mode by mode", () => {
     });
   });
 
+  /**
+   * **`timeline` is in this list deliberately, not by falling through.**
+   *
+   * `visitorGap`'s fall-through is fail-closed, so a mode nobody names is
+   * owners-only anyway — which is exactly why naming it matters: *private
+   * because somebody decided* and *private because somebody forgot* are
+   * indistinguishable in the code, and this is the first. Greg, 2026-08-31:
+   * making it public-readable "could be a follow-up", and wants a general
+   * design for every mode rather than a fifth hand-written table.
+   * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
+   *
+   * Note it is here rather than under the artefact sweep below: there is no
+   * `PublicArtefacts` flag for a timeline, so the honest sentence is *this
+   * belongs to whoever added the article*, never *nobody built one* — which we
+   * could not know from a payload that carries no timeline either way.
+   */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "review", "diagram"] as const) {
+    for (const mode of ["chat", "search", "review", "diagram", "timeline"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -136,11 +152,11 @@ describe("what a visitor is told, mode by mode", () => {
    * for `X` must be free and every other artefact mode must say *nobody built
    * one*. A crossed wire fails on at least one row whichever pair was crossed.
    */
-  it.each(["glossary", "summary", "ideas"] as const)(
+  it.each(["glossary", "quotes", "ideas"] as const)(
     "reads its own flag when only %s is built",
     (built) => {
       const flags = only(built);
-      for (const mode of ["glossary", "summary", "ideas"] as const) {
+      for (const mode of ["glossary", "quotes", "ideas"] as const) {
         expect(visitorGap(mode, flags)?.kind ?? null, `${mode} when only ${built} is built`).toBe(
           mode === built ? null : "not-built",
         );
@@ -149,7 +165,7 @@ describe("what a visitor is told, mode by mode", () => {
   );
 
   it("does not let the tweets flag stand in for a mode's", () => {
-    for (const mode of ["glossary", "summary", "ideas"] as const) {
+    for (const mode of ["glossary", "quotes", "ideas"] as const) {
       expect(visitorGap(mode, only("tweets"))?.kind).toBe("not-built");
     }
   });
@@ -185,27 +201,34 @@ describe("what a visitor is told, mode by mode", () => {
   it("marks only what a visitor cannot have, and derives that from MODES", () => {
     /* Nothing built: everything but the table of contents is marked, which is
        the old behaviour and still right for an article with no artefacts. */
-    /* `outline` joins the hierarchy as a mode a visitor always gets: like the
+    /* `outline` joins `hierarchy` as a mode a visitor always gets: like the
        table of contents it is drawn from the tree in the payload they already
-       hold and reaches no artefact at all. docs/plans/outline-mode.md.
+       hold and reaches no artefact at all. docs/plans/260828aw-outline-mode.md.
 
-       `plain` is the third, and the least expensive of the three: it reaches no
+       **And `summary` joined them on 2026-08-31.** It used to be gated on a
+       `summary.json`; the generated ladder is gone and the panel draws the
+       tree's own gists, so there is nothing left for a visitor to be missing.
+       docs/plans/260831s-gist-only-summaries.md.
+
+       `plain` is the fourth, and the least expensive of them: it reaches no
        artefact *and* renders no band — it is the article and nothing else, so
        there is nothing a visitor could be short of.
        docs/plans/plain-mode-and-the-way-out.md. */
-    const FREE = ["plain", "hierarchy", "outline"];
+    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
-      MODES.filter((m: Mode) => !FREE.includes(m))
+      MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
         .slice()
         .sort(),
     );
-    /* Everything built: the three artefact modes drop out, and what is left is
-       the four that spend a model call. */
+    /* Everything built: the artefact modes drop out, and what is left is
+       the five that spend a model call. `timeline` is the fifth since
+       2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
+       marked however much has been built. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "review", "search"].sort(),
+      ["chat", "diagram", "review", "search", "timeline"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "summary", "ideas"] as const) {
+    for (const built of ["glossary", "ideas", "quotes"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -219,7 +242,8 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "outline" ||
         mode === "glossary" ||
         mode === "summary" ||
-        mode === "ideas"
+        mode === "ideas" ||
+        mode === "quotes"
       ) {
         expect(gap, mode).toBeNull();
       } else {
@@ -269,7 +293,7 @@ describe("the sentences themselves", () => {
    * different things rather than one thing said four times.
    */
   it("names each artefact distinctly", () => {
-    const nouns = (["tweets", "glossary", "summary", "ideas"] as const).map(
+    const nouns = (["tweets", "glossary", "quotes", "ideas"] as const).map(
       (what) => (notBuiltGap(what) as { noun: string }).noun,
     );
     expect(new Set(nouns).size).toBe(nouns.length);
@@ -279,7 +303,7 @@ describe("the sentences themselves", () => {
    * **The offer is withheld where it would not be kept.**
    *
    * Comments belong to whoever added the article, and an account does not
-   * change that until docs/plans/public-read-only-access.md § Stage 3. The two
+   * change that until docs/plans/260827ai-public-read-only-access.md § Stage 3. The two
    * entries that used to be withheld for the other reason — *we are the ones
    * who have not shipped it* — went with their union members in slice 1b, which
    * is why there is one `false` here and there were three.
@@ -314,15 +338,15 @@ describe("what the payload says it has", () => {
       arc: false,
       tweets: false,
       glossary: false,
-      summary: false,
       ideas: false,
+      quotes: false,
     });
     expect(
       artefactsIn({
         ...BARE,
         glossary: { entries: [{ id: "t", name: "T", kind: "concept", aliases: [], blocks: [] }] },
       }),
-    ).toMatchObject({ glossary: true, summary: false });
+    ).toMatchObject({ glossary: true, quotes: false });
   });
 
   /**
@@ -339,7 +363,7 @@ describe("what the payload says it has", () => {
    * pins behaviour that is insurance against those throws being relaxed, not
    * behaviour any reader reaches — said here because a test whose fixture the
    * pipeline forbids will otherwise read as proof that the state occurs.
-   * docs/plans/public-read-only-access.md § The state that cannot happen.
+   * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
    */
   it("counts an empty artefact as built", () => {
     const empty: PublicArticle = { ...BARE, glossary: { entries: [] }, ideas: { ideas: [] } };
@@ -347,7 +371,7 @@ describe("what the payload says it has", () => {
     /* And the gap that follows from it: nothing stands in the way, so the band
        opens and says the list is empty rather than that nobody built one. */
     expect(visitorGap("glossary", artefactsIn(empty))).toBeNull();
-    expect(visitorGap("summary", artefactsIn(empty))?.kind).toBe("not-built");
+    expect(visitorGap("quotes", artefactsIn(empty))?.kind).toBe("not-built");
   });
 
   /**

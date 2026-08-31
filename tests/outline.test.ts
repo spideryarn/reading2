@@ -24,7 +24,7 @@ import {
 const blocks: Block[] = JSON.parse(readFileSync("example/blocks.json", "utf8")).blocks;
 const tree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
 const geometry = buildGeometry(tree, blocks);
-const root = buildSummaryTree(tree, blocks, null, geometry.leafDepth);
+const root = buildSummaryTree(tree, blocks, geometry.leafDepth);
 
 const project = (rung: Rung, focusRow: number, allowParagraphs = true) =>
   outlineProjection({
@@ -87,7 +87,7 @@ describe("the ladder expands only the branch the reader is in", () => {
   it("adds nothing at rung 3 that rung 2 did not already draw", () => {
     /* The sentence is a property of a row, not a new row — so the skeleton is
        unchanged and only one line grows. That is the churn argument in
-       docs/plans/outline-mode.md, asserted rather than claimed. */
+       docs/plans/260828aw-outline-mode.md, asserted rather than claimed. */
     expect(project(3, 10).rows.map((r) => r.node.id)).toEqual(
       project(2, 10).rows.map((r) => r.node.id),
     );
@@ -212,7 +212,7 @@ const projectHand = (
   const { tree, blocks } = handTree(spec);
   const g = buildGeometry(tree, blocks);
   return outlineProjection({
-    root: buildSummaryTree(tree, blocks, null, g.leafDepth),
+    root: buildSummaryTree(tree, blocks, g.leafDepth),
     supplementOf: g.supplementOf,
     arcByRow: null,
     focusRow,
@@ -326,7 +326,7 @@ describe("the apparatus", () => {
     tree.nodes["n-root"]!.range = [tree.nodes["n-root"]!.range[0], notesBlock];
     const g = buildGeometry(tree, blocks);
     return outlineProjection({
-      root: buildSummaryTree(tree, blocks, null, g.leafDepth),
+      root: buildSummaryTree(tree, blocks, g.leafDepth),
       supplementOf: g.supplementOf,
       arcByRow: null,
       focusRow,

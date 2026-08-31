@@ -10,7 +10,7 @@
  * with no error, no missing image, and a feature that appears to do nothing.
  * Five of the thirteen images in the real corpus are like that.
  *
- * docs/plans/hosting-the-articles-images.md § trap 3.
+ * docs/plans/260829b-hosting-the-articles-images.md § trap 3.
  */
 import { describe, expect, it } from "vitest";
 

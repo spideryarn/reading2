@@ -1,9 +1,9 @@
 /**
  * The fifth egress. Errors leave this machine here, and nowhere else.
  *
- * Read docs/plans/error-monitoring-sentry.md for why this exists,
- * docs/plans/error-monitoring-sentry-review-sol.md for the four blockers that
- * shaped it, and docs/plans/error-boundary.md for the rule it implements. The
+ * Read docs/plans/260827y-error-monitoring-sentry.md for why this exists,
+ * docs/plans/260827y-error-monitoring-sentry-review-sol.md for the four blockers that
+ * shaped it, and docs/plans/260826p-error-boundary.md for the rule it implements. The
  * short version of all three:
  *
  * Vercel Pro keeps runtime logs for **one day**, so a 500 on Tuesday is
@@ -13,7 +13,7 @@
  * > No arbitrary `Error`, and no arbitrary string, may cross an HTTP, SSE, log,
  * > or persisted-error boundary.
  * >
- * > — GPT Sol, docs/plans/error-boundary.md
+ * > — GPT Sol, docs/plans/260826p-error-boundary.md
  *
  * **Sentry is a fifth boundary and the worst of the four before it**, because
  * those all end on a machine we control and this one ends at a third party who
@@ -33,7 +33,7 @@
  *    But it held only because nobody had put a DSN in `.env.local` yet. The day
  *    somebody copies `.env.prod` across, or adds one to debug the integration,
  *    a laptop starts reporting into the **production** Sentry project — and
- *    under docs/plans/worktrees.md that `.env.local` is copied into every
+ *    under docs/plans/260828r-worktrees.md that `.env.local` is copied into every
  *    worktree, so it would be ten laptops at once.
  *
  *    So the DSN is no longer trusted to imply "deployed". `VERCEL` is set on

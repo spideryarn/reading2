@@ -145,7 +145,7 @@ describe("an article with no headings", () => {
      per block rather than inventing structure. Measured on 2026-08-30, the
      model is *least* stable on exactly these documents — 8, 7, 8 and 3 parts
      from identical input — so a flat tree is not obviously the worse of the
-     two answers. docs/research/opening-an-article-before-the-toc.md § 7b. */
+     two answers. docs/research/260830a-opening-an-article-before-the-toc.md § 7b. */
   it("falls back to flat rather than inventing sections", () => {
     expect(built.flat).toBe(true);
     expect(built.parts).toBe(0);

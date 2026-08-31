@@ -176,7 +176,7 @@ import { EMBEDDING_MODEL } from "./embeddings.js";
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
  * (src/toc.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
- * src/summarise.ts) pass this straight to `messages.create`.
+ * src/glossary.ts) pass this straight to `messages.create`.
  *
  * They all ask for `thinking: { type: "adaptive" }`, which is the only on-mode
  * Sonnet 5 accepts, so moving down from Opus needed no other change. The
@@ -192,7 +192,7 @@ export const CAPABLE_MODEL = "claude-sonnet-5";
    On the wire, a model id is an **address**: it has to say which gateway, so it
    carries `anthropic/`. In a stored artefact's `generator` field it is a
    **name**: it says which model wrote this, and that is what every staleness
-   check compares against — `glossary.ts`, `summarise.ts` and `tweets.ts` each
+   check compares against — `glossary.ts` and `tweets.ts` each
    have a `generator !== CAPABLE_MODEL` line that marks work stale and pays to
    redo it.
 
@@ -237,7 +237,7 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
  * gist, a thread, a glossary. This one is about *reading*, and the two do not
  * predict each other. It was chosen by measurement rather than by argument —
  * ninety-odd calls over three fixture PDFs, in evals/pdf/, with the result and
- * the caveats in docs/plans/pdf-ingestion.md. It is deliberately not
+ * the caveats in docs/plans/260826c-pdf-ingestion.md. It is deliberately not
  * `QUICK_MODEL_OPENROUTER` even though it is currently the same string: they
  * are the same by coincidence, and a future switch of the quick tier must not
  * silently re-decide which model reads PDFs.
@@ -262,7 +262,7 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  *
  * A *chat* model rather than one of OpenRouter's nineteen dedicated
  * speech-to-text models, and that is the whole finding of
- * docs/plans/dictation-two-pass.md. Measured on 2026-08-27, one 22-second
+ * docs/plans/260827x-dictation-two-pass.md. Measured on 2026-08-27, one 22-second
  * sample, three runs each:
  *
  * | | latency | word errors |
@@ -303,13 +303,24 @@ export type Task =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summarise"
   | "ideas"
+  /* The lines worth keeping, in the article's own words —
+     docs/project/quotes.md. Article-reading like `glossary`, and like
+     `glossary` it never names a block id: the model returns the words and
+     `locate` in src/quotes.ts finds the block, so it renders with
+     `articleText` and shares its cached prefix. */
+  | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
      § Sketch. Article-reading like `ideas`, and like `ideas` it names block
      ids, so it renders with `articleWithIds` and shares no cached prefix with
      arc, tweets or glossary. */
   | "sketch"
+  /* When the piece says things happened, and how sure it is —
+     docs/plans/260831i-timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
+     names block ids, so it renders with `articleWithIds` and shares its cached
+     prefix rather than arc's. It is the one stage that never asks the model for
+     a date: src/timeline.ts § the header. */
+  | "timeline"
   | "explain"
   | "chat"
   | "search";
@@ -391,7 +402,7 @@ export type AiJob = Task | NonTaskAiJob | EvalAiJob;
  *   gistable block, every article — so it is where the tenth-of-the-price would
  *   actually be felt. It is also the core of the product: the gist columns *are*
  *   granularity zoom. Cheapest to move, most expensive to get wrong.
- * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `summarise`, `toc`** all
+ * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `toc`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
  */
@@ -401,9 +412,10 @@ export const TASK_TIER: Record<Task, Tier> = {
   arc: "capable",
   tweets: "capable",
   glossary: "capable",
-  summarise: "capable",
   ideas: "capable",
+  quotes: "capable",
   sketch: "capable",
+  timeline: "capable",
   explain: "capable",
   chat: "capable",
   search: "capable",
@@ -433,7 +445,7 @@ function openRouterIdForTier(tier: Tier): string {
  * the seven pipeline stages moved off the Anthropic SDK's own endpoint and onto
  * OpenRouter's Anthropic-compatible one. One member is not a mistake: it is the
  * decision, written where a future reader will trip over it. See
- * docs/plans/ai-cost-tracking.md and src/messages-stream.ts.
+ * docs/plans/260827q-ai-cost-tracking.md and src/messages-stream.ts.
  */
 export type Provider = "openrouter";
 
@@ -485,9 +497,10 @@ export const TASK_WIRE: Record<Task, Wire> = {
   arc: "messages",
   tweets: "messages",
   glossary: "messages",
-  summarise: "messages",
   ideas: "messages",
+  quotes: "messages",
   sketch: "messages",
+  timeline: "messages",
   explain: "chat",
   chat: "chat",
   search: "chat",
@@ -550,9 +563,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   arc: null,
   tweets: null,
   glossary: null,
-  summarise: null,
   ideas: null,
+  quotes: null,
   sketch: null,
+  timeline: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
@@ -739,7 +753,14 @@ for (const task of PIPELINE_TASKS) {
 export type Effort = "low" | "medium" | "high";
 
 /** The stages that read the whole article and could share one cached copy of it. */
-export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas" | "sketch";
+export type ArticleStage =
+  | "arc"
+  | "tweets"
+  | "glossary"
+  | "quotes"
+  | "ideas"
+  | "sketch"
+  | "timeline";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -755,7 +776,7 @@ export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas" | "sketch";
  * It was measured rather than argued: four calls, one identical 7,291-token
  * cached block, only `effort` varying — changing it paid a full write, changing
  * back read the original, and the two prefixes then coexisted. See
- * docs/research/prompt-caching-anthropic.md, which also corrects that doc's
+ * docs/research/260826b-prompt-caching-anthropic.md, which also corrects that doc's
  * earlier claim that generation parameters stay out of the key. `temperature`
  * and `max_tokens` do; this one does not, and nothing about "it's a generation
  * parameter" would have told you which.
@@ -785,6 +806,26 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
   arc: "high",
   tweets: "high",
   glossary: "medium",
+  /* `medium`, and it is the same setting for the same reason the glossary's is:
+     choosing the sentence a piece turns on is a judgment about *this* text with
+     the text in front of it, not the multi-step inference `ideas` makes when it
+     argues a piece collapses without an unstated premise.
+
+     **It is cache-COMPATIBLE with `glossary` and with nothing else** — same
+     model, same effort, same renderer, same bytes. Compatible is all it is, and
+     the first version of this comment claimed a saving it does not get: a cache
+     entry is only *written* when a later step in the SAME job would read it
+     (`cacheArticle` in src/pipeline.ts § StepContext), and a reader pressing
+     "Find the terms" and then "Choose the quotes" makes two jobs minutes apart.
+     The saving is real for `steps: ["glossary","quotes"]` in one job and for
+     nothing else. GPT Sol, 2026-08-31.
+
+     It is still a constraint: `sharesArticleCache` groups on effort AND
+     renderer, so moving either stage's effort ends the compatibility silently.
+     Untested, like every effort choice that has not been through
+     evals/results/effort-vs-quality.md, and said out loud so the next person
+     knows it is a guess rather than a measurement. */
+  quotes: "medium",
   /* `high`: finding an unstated premise and then arguing that the piece
      collapses without it is the hardest judgment any stage here makes — harder
      than the glossary's "is this word obvious", which is what `medium` was
@@ -812,6 +853,19 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      constraint: moving either stage's effort breaks it silently. GPT Sol,
      2026-08-30. */
   sketch: "high",
+  /* `high`, and it is the third member of that group rather than a fourth
+     cache: same effort, same `ids` renderer, so `timeline` shares a cached
+     article with `ideas` and `sketch`.
+
+     The judgment it is being paid for is the sequence — putting a piece that
+     recounts the same three months three times, once per participant, back into
+     one order. That is multi-step inference over the whole article at once, and
+     it is the ONLY ordering the mode has: Greg's call is that the dates label
+     the rows and never sort them (docs/plans/260831i-timeline-mode.md § Ordering), so
+     an `order` the model got wrong is a timeline that is wrong, with nothing
+     downstream to correct it. Untested, like every effort choice that has not
+     been through evals/results/effort-vs-quality.md. */
+  timeline: "high",
 };
 
 /**
@@ -826,7 +880,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  * `ideas` sends `articleWithIds`, because every occurrence it returns is a block
  * id and the ids therefore have to be on the page (src/article-prompt.ts says
  * why the other four deliberately omit them). So it can never share a prefix
- * with arc, tweets, glossary or summary however its effort is set — and
+ * with arc, tweets or glossary however its effort is set — and
  * `sharesArticleCache` in src/pipeline.ts reads both tables rather than the one,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
  *
@@ -839,11 +893,23 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   arc: "text",
   tweets: "text",
   glossary: "text",
+  /* The model returns the words and never a block id — src/quotes.ts § the
+     header — so this sends the same bytes `glossary` does, which is what lets
+     the two share one cached article. */
+  quotes: "text",
   ideas: "ids",
   /* Every node the picture draws may carry a block id for the reader to jump
      to, so the ids have to be on the page — the same reason `ideas` is `ids`,
      and the same consequence: no shared prefix with the four above. */
   sketch: "ids",
+  /* Every occurrence names a block id, exactly as `ideas` does — and the
+     publication date, which is the one thing this stage needs that the others
+     do not, goes in the *user* prompt rather than into the head
+     `articleWithIds` writes. That is deliberate: a date in the head would be
+     different bytes for the same article and would cost this stage the share
+     with `ideas` and `sketch` on every article, to save nothing.
+     src/timeline.ts § `renderPrompt`. */
+  timeline: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

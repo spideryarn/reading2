@@ -490,10 +490,12 @@ function drawLink(node: PhrasingContent & { type: "link" }, ctx: Ctx): ReactNode
  *
  * Not printed when the label already *is* the address, which would say it twice.
  *
- * Two more guards, both reuses: the label and the URL are strings React escapes,
- * never HTML; and `noreferrer` as well as `noopener`, because the article's own
- * URL is a reading history and a model-supplied destination is not owed it.
- * docs/plans/chat-web-links.md.
+ * Three guards besides, all of them reuses: the scheme was checked before this
+ * is reached — by `webLinks` for a bare address, by `drawLink` above for one the
+ * model wrote in `[…](…)`; the label and the URL are *strings* that React
+ * escapes, never HTML; and `noreferrer` as well as `noopener`, because the
+ * article's own URL is a reading history and a model-supplied destination is
+ * not owed it. docs/plans/260827ao-chat-web-links.md.
  */
 function anchor(label: ReactNode, url: string): ReactElement {
   const host = hostOf(url);
@@ -550,9 +552,9 @@ function cited(text: string, ctx: Ctx): ReactNode {
  * them decide whether to click at all — and, more to the point, lets them check
  * the model against the article without leaving the sentence they are reading.
  * That check is the whole justification for both features that use this
- * (docs/plans/chat-mode.md § Say the awkward thing first, and
- * docs/project/summaries.md § A summary is a door), and until it existed it cost
- * a jump and a scroll back.
+ * (docs/plans/260826a-chat-mode.md § Say the awkward thing first, and
+ * docs/project/summaries.md § A summary is a door), and until it existed it
+ * cost a jump and a scroll back.
  *
  * Truncated, deliberately and not generously. Enough to recognise the paragraph
  * and see whether it says what the summary claims; not enough to read instead of

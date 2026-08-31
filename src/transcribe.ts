@@ -4,7 +4,7 @@
  * the version that gets saved.
  *
  * The full reasoning, the measurements and the alternatives are in
- * [docs/plans/dictation-two-pass.md](../docs/plans/dictation-two-pass.md). The
+ * [docs/plans/260827x-dictation-two-pass.md](../docs/plans/260827x-dictation-two-pass.md). The
  * three things worth knowing from here:
  *
  * ## It is a chat model, not one of the nineteen transcribers
@@ -184,7 +184,7 @@ export async function transcribe(
   /* **The clock starts before the vocabulary, not after it.** It used to start
      after, which hid the one part of this request that ships an article's worth
      of blocks: `loadArticle` sanitises every block through jsdom, measured at
-     76–184 ms locally in docs/plans/library-read-latency.md, and none of it
+     76–184 ms locally in docs/plans/260828c-library-read-latency.md, and none of it
      appeared in the `ms` we log or in the eval's timings. A cost that is not in
      the number is a cost nobody will ever be asked about. GPT Sol's review,
      item 9. */

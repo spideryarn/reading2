@@ -16,7 +16,7 @@
  * ([AGENTS.md](../AGENTS.md)). Moving the rule into a pure function was not, and
  * this is the guard that makes the move worth it.
  *
- * See docs/plans/library-shelf-actions-and-search.md.
+ * See docs/plans/260826k-library-shelf-actions-and-search.md.
  */
 import { describe, expect, it } from "vitest";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "../src/web/library-hits.js";

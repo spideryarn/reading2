@@ -18,7 +18,7 @@ limitation. See [§ why the prose is untouched](#why-the-prose-is-untouched).
 
 The code is [`src/web/swipe.ts`](../../src/web/swipe.ts) — one pure function and one hook over six
 window listeners. The reasoning, the sources and the two mechanisms we rejected are in
-[ipad-touch-scrolling.md](../research/ipad-touch-scrolling.md).
+[260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md).
 
 ## What happens where
 
@@ -37,7 +37,7 @@ any coarse pointer since 2026-08-27 — Greg had asked for a finger drag to go o
 and never diagonally, and `touch-action` is read when the finger goes down, so the axis has to be a
 property of the region rather than of the gesture. A table too wide for the window can still be
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
-[mobile-reading-view.md § One axis at a time](../plans/mobile-reading-view.md).
+[260827t-mobile-reading-view.md § One axis at a time](../plans/260827t-mobile-reading-view.md).
 
 A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Two places reveal
 first and act second**, and both for the same reason: they carry a hover card, and a surface with
@@ -49,7 +49,7 @@ no hover has to let the first press mean *show me* or the reader commits blind.
 
   **The rail is 12px wide, and that is below every guideline by a factor of four.** It was 24px,
   which was already far below the 44/48px everyone recommends; Greg halved it on 2026-08-28
-  ([spine-rail.md](../plans/spine-rail.md)) and the cost lands entirely here, because a mouse loses
+  ([260828ay-spine-rail.md](../plans/260828ay-spine-rail.md)) and the cost lands entirely here, because a mouse loses
   almost nothing — the rail is flush against the left edge of the viewport, and an edge target is
   the easy case under Fitts's law. A finger has no such help.
 
@@ -73,7 +73,7 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   ([glossary.md](glossary.md)). First tap opens the hover card, second goes to glossary mode with
   that term selected, which is what the card's **in the glossary** button does. Before this the
   underline was a line with nothing behind it on an iPad, because the card was hover-only.
-  [touch-glossary-card.md](../plans/touch-glossary-card.md) has the design and the event sequence,
+  [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md) has the design and the event sequence,
   which is the whole of the difficulty; the short version is that it is decided at `pointerup`
   rather than at `click`, because the `mouseup` that comes between them is where the prose reads a
   selection and opens a chat thread, and a tap has to get past both.
@@ -151,7 +151,7 @@ question anyone will ask:
   before the gesture — which is the buggy path, run before every swipe.
 
 The full account, including the two arguments that turned out to be **wrong** and are worth not
-repeating, is in [ipad-touch-scrolling.md](../research/ipad-touch-scrolling.md).
+repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md).
 
 ## How it is wired
 
@@ -266,18 +266,18 @@ to anything else that has to be pressed with a thumb:
   they will never touch.
 - **Height was the affordable axis, and only because the bar learnt to leave.** The bar now slides
   off the bottom while you scroll forwards, on the same `data-bars="hidden"` switch the top bars have
-  used since [mobile-reading-view.md](../plans/mobile-reading-view.md). Before that, 12px of bar was
+  used since [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md). Before that, 12px of bar was
   12px of article at every scroll position, and the same query was *shrinking* the bar on a landscape
   phone for exactly that reason.
 - **Eleven buttons do not fit a 390px row at a size worth pressing**, and the row scrolls sideways
   rather than pretending otherwise. Greg chose that over hiding three of them behind a `⋯`. What it
   costs is that Tweets and Metadata are off the right-hand edge on an iPhone until you discover the
   bar scrolls; the two-row bar that would fix it properly is in
-  [mobile-screen-real-estate.md § Open for Greg](../plans/mobile-screen-real-estate.md).
+  [260828av-mobile-screen-real-estate.md § Open for Greg](../plans/260828av-mobile-screen-real-estate.md).
 
 The rest of that work — the browser's own chrome, which is not ours to hide, and the Add to Home
 Screen path that is the only way to be rid of it — is
-[mobile-screen-real-estate.md](../plans/mobile-screen-real-estate.md).
+[260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
 ## What we deliberately did not build
 
@@ -339,6 +339,6 @@ the position *change*, just not the travel.
 - [keyboard.md](keyboard.md) — the same step, taken with keys, and where the stride idea comes from
 - [granularity-zoom.md](granularity-zoom.md#the-tabular-view) — the view being scrolled
 - [column-context.md](column-context.md) — the fixed panel a finger actually lands on
-- [ipad-touch-scrolling.md](../research/ipad-touch-scrolling.md) — the research, the sources, and
+- [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md) — the research, the sources, and
   the mechanisms we rejected
 - [browser-testing.md](browser-testing.md) — and why it cannot help you here

@@ -1,5 +1,5 @@
 /**
- * The panel a selection opens — see docs/plans/chat-as-gateway.md.
+ * The panel a selection opens — see docs/plans/260826ab-chat-as-gateway.md.
  *
  * Two things in one slot, because they are two moments of one gesture:
  *
@@ -81,7 +81,7 @@ export type ChatTarget =
        * have just saved. Passed through to the send and no further: the
        * **server** writes the link, because the thread id this client is about
        * to mint is a guess it only finds out was overruled if it was. See
-       * docs/plans/comments-and-bookmarks.md § the Save & ask choreography.
+       * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
        */
       sourceCommentId?: string;
     }

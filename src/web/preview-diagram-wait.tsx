@@ -63,7 +63,6 @@ const ROOT = buildSummaryTree(
     },
   } as unknown as Tree,
   BLOCKS,
-  null,
 );
 if (!ROOT) throw new Error("fixture tree is unusable");
 

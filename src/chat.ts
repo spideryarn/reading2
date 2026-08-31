@@ -18,7 +18,7 @@
  * own** — no sharing, no cross-article list, no server-side ordering. It is a
  * list inside the article's own file, and the article owns it.
  *
- * See docs/plans/chat-mode.md, and docs/project/database.md for what happens to
+ * See docs/plans/260826a-chat-mode.md, and docs/project/database.md for what happens to
  * this file when storage moves to Postgres — the answer is "one table, one row
  * per message", and nothing in this module's interface has to change.
  */
@@ -30,6 +30,7 @@ import type {
   ChatThread,
   ReviewStance,
   ThreadKind,
+  ToolRun,
 } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
@@ -76,7 +77,7 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
  * **`ChatThread.kind` is required**, deliberately — an optional field would mean
  * a `?? "chat"` at every read site, and one of those would eventually be missed,
  * which is a review answered with chat's prompt and nothing on screen
- * disagreeing (GPT Sol's review of docs/plans/review-mode.md, finding 5). The
+ * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
  * price of "required" is exactly this function, and its twin in
  * src/store/pg-chat.ts. Two places hold the default instead of twenty.
  *
@@ -296,7 +297,7 @@ export function withTurn(
   /* **A thread is one kind for life.** Refused rather than ignored, and refused
      here rather than only in the route, because the route's `inTurnOrder` is a
      per-process convenience and this runs inside the Postgres transaction. See
-     `Turn.kind`, and docs/plans/review-mode.md § `kind` belongs to the thread.
+     `Turn.kind`, and docs/plans/260827ah-review-mode.md § `kind` belongs to the thread.
 
      An *identical* kind passes, so a retried send — the same request arriving
      twice — is harmless rather than a 409 the reader has to understand. Same
@@ -348,7 +349,7 @@ export function withTurn(
        dropped here — that would append a question about passage B to a thread
        the database says is about passage A, with nothing anywhere disagreeing.
        The route refuses it before we are reached. See `answerChat` in
-       src/routes.ts and docs/plans/chat-as-gateway.md § Set once.
+       src/routes.ts and docs/plans/260826ab-chat-as-gateway.md § Set once.
 
        Conditional spread, never `anchor: undefined`: `exactOptionalPropertyTypes`
        is on and the two stores are compared field for field, where an explicit
@@ -372,6 +373,149 @@ export function withTurn(
     updatedAt: at,
     messages: [...base.messages, user, reply],
   };
+  return {
+    threads: existing
+      ? threads.map((t) => (t.id === thread.id ? thread : t))
+      : [...threads, thread],
+    thread,
+    user,
+    reply,
+  };
+}
+
+/**
+ * One spoken exchange, both halves known, ready to append.
+ *
+ * Deliberately not a `Turn`: that type describes a question **about to be
+ * answered**, and half its fields (`stance`, and the pending row `beginTurn`
+ * writes) only make sense while an answer is still coming.
+ */
+export interface SpokenTurn {
+  threadId: string;
+  /** What the reader said. May be empty if the transcription failed. */
+  question: string;
+  /** What the companion said. */
+  answer: string;
+  passages?: { blockIds: string[]; why: string }[];
+  tools?: ToolRun[];
+  /** The reader talked over it, so the text may run past what they heard. */
+  interrupted?: boolean;
+  model?: string;
+  /**
+   * **The message this caller believes is last, or `null` for "this thread is
+   * empty".**
+   *
+   * Required, not optional, and that is the difference from `edit`'s version of
+   * the same guard. There it is a safety net over a destructive operation; here
+   * it is the *only* thing standing between a replayed request and a duplicated
+   * turn, so a caller with no opinion must not be able to skip it by omission.
+   *
+   * It buys idempotency for free, which is why there is no exchange-id column:
+   * a POST that is retried after succeeding presents a tail the first one has
+   * already moved, so it conflicts instead of appending twice. Two *different*
+   * exchanges racing present the same tail, and the loser conflicts and retries
+   * with the new one — which is correct, because they have to be ordered.
+   *
+   * `null` rather than absent for the empty thread, so "I think this is new"
+   * and "I forgot to say" stay different states. A reader can press Live before
+   * typing anything, and that case is real.
+   */
+  expectedTailId: string | null;
+}
+
+/**
+ * **Append a finished exchange — both rows, `done`, in one write.**
+ *
+ * Live conversation's counterpart to `withTurn`, and pure for the same reason:
+ * this is an invariant, and an invariant with two implementations is an
+ * invariant with two behaviours. The filesystem store calls it inside its
+ * mutex, the Postgres store inside its transaction, and neither owns the rule.
+ *
+ * ## Why not `beginTurn` then `finishTurn`
+ *
+ * Because both halves are already known, so the pending row `beginTurn` exists
+ * to create has nothing to be pending for — and a crash between the two calls
+ * would leave a false unfinished answer in a conversation nobody is answering.
+ * There is also a concrete obstacle: the Postgres store's `finish` refuses
+ * without the attempt token `begin` returned (src/store/pg-chat.ts), so the
+ * pair is not two free-function calls. GPT Sol's review of
+ * docs/plans/260831l-live-conversation-in-chat.md, finding 4.
+ *
+ * ## The rows are ordinary
+ *
+ * `status: "done"` on both, no attempt, no stance. A spoken turn is a turn: the
+ * renderer, the retry path and the prompt builder all treat it exactly as they
+ * treat a typed one, which is the whole point of putting it in the same thread.
+ * The only two fields it can carry that a typed turn cannot are `passages` and
+ * `interrupted`, and both are absent unless there is something to say.
+ */
+export function withSpokenTurn(
+  threads: ChatThread[],
+  spoken: SpokenTurn,
+  at: string,
+): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
+  const { threadId, expectedTailId } = spoken;
+  const existing = threads.find((t) => t.id === threadId);
+
+  /* **The guard, and it runs before anything is minted.** `null` means the
+     caller believes there is nothing here yet — which is true both for a thread
+     that does not exist and for one created but never spoken into. */
+  const tail = existing?.messages.at(-1)?.id ?? null;
+  if (tail !== expectedTailId) {
+    throw new ChatConflict(
+      "This conversation has moved on since the live session started. Reload and try again.",
+    );
+  }
+
+  const ids = taken(threads);
+  const user: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "user",
+    text: spoken.question,
+    createdAt: at,
+    status: "done",
+  };
+  const reply: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "assistant",
+    text: spoken.answer,
+    createdAt: at,
+    status: "done",
+    /* Conditional spreads throughout, never `x: undefined`. The two stores are
+       compared field for field by tests/store-roundtrip.test.ts, where an
+       absent key and an explicit undefined are not the same thing. */
+    ...(spoken.passages && spoken.passages.length > 0 ? { passages: spoken.passages } : {}),
+    ...(spoken.tools && spoken.tools.length > 0 ? { tools: spoken.tools } : {}),
+    ...(spoken.interrupted ? { interrupted: true } : {}),
+    ...(spoken.model ? { model: spoken.model } : {}),
+  };
+
+  const base: ChatThread = existing ?? {
+    /* Same rule as `withTurn`: the client's id is honoured only if it is one of
+       ours and free, so a duplicate cannot append to a stranger's thread. */
+    id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
+    title: "New chat",
+    createdAt: at,
+    updatedAt: at,
+    /* Always `chat`. Live conversation has no review stance and no anchor —
+       and a spoken review is a mode nobody has designed, so inventing one here
+       by passing a kind through would be deciding it by accident. */
+    kind: "chat",
+    messages: [],
+  };
+  const thread: ChatThread = {
+    ...base,
+    /* The first thing said names the thread, exactly as the first typed
+       question does. A spoken opener whose transcription failed leaves the
+       default rather than titling the conversation with the empty string. */
+    title:
+      base.messages.length === 0 && spoken.question.trim() !== ""
+        ? titleFrom(spoken.question)
+        : base.title,
+    updatedAt: at,
+    messages: [...base.messages, user, reply],
+  };
+
   return {
     threads: existing
       ? threads.map((t) => (t.id === thread.id ? thread : t))
@@ -495,7 +639,7 @@ export class ChatConflict extends Error {
  * work. Regenerating a turn in the middle leaves every later turn answering a
  * question about words that no longer exist — the conversation reads as a
  * non-sequitur and nothing says why. The products that allow it all pay for it
- * with a message tree and a branch pager; docs/plans/chat-mode.md § What a
+ * with a message tree and a branch pager; docs/plans/260826a-chat-mode.md § What a
  * retry may touch says why we are not buying that for a four-turn conversation
  * in a 400px panel. Retry the last one, or edit the question.
  */
@@ -541,7 +685,7 @@ export function withRetry(
        If it took the reader's current picker instead, moving the picker and
        then pressing retry would silently rewrite the instruction attached to a
        stored turn — a button that says "have another go" changing what was
-       asked. GPT Sol's review of docs/plans/review-mode.md, finding 4. */
+       asked. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 4. */
     ...(last.stance ? { stance: last.stance } : {}),
   };
   const thread: ChatThread = {
@@ -597,7 +741,7 @@ export async function retryTurn(
  *
  * So the panel warns before it discards — it says how many turns will go — and
  * that warning is the whole safety mechanism. It is deliberately not a modal:
- * see docs/plans/chat-mode.md § Editing a question.
+ * see docs/plans/260826a-chat-mode.md § Editing a question.
  *
  * The old text is not kept either. `editedAt` records only *that* it happened,
  * which is what stops a reader reading an answer that no longer matches the
@@ -656,7 +800,7 @@ export function withEdit(
        `settleThread` before it gets here, so no aborted write can be in flight
        — that path is closed twice over. What is left is the second server on
        the same `data/` directory, which cannot see this one's `streaming` map
-       at all; that is the unfixed problem in docs/plans/chat-mode.md § What was
+       at all; that is the unfixed problem in docs/plans/260826a-chat-mode.md § What was
        deliberately not fixed, and this is one of the few places it is cheap to
        be robust against. Note also that the guarantee is only within one call:
        a discarded id leaves the file, so the *next* mint may hand it back. Ids

@@ -1,7 +1,7 @@
 /**
  * **Exactly these keys, and no others** — the allowlist, checked recursively.
  *
- * The first draft of docs/plans/public-read-only-access.md proposed serving
+ * The first draft of docs/plans/260827ai-public-read-only-access.md proposed serving
  * today's responses through a key *denylist*, and GPT Sol refused it:
  *
  * > A recursive key denylist is insufficient: it misses innocently named fields
@@ -17,7 +17,7 @@
  * Sol's own instruction for making this go red: *"add `guidance` to one
  * projection"*. The equivalent for the two endpoints that landed is to put
  * `note` back on a block or `url` back on the meta, and both were watched — see
- * the report on docs/plans/public-read-only-access.md.
+ * the report on docs/plans/260827ai-public-read-only-access.md.
  *
  * The half this cannot do is the query: a projection can be perfectly right
  * while the SQL still says `.select()`. That is
@@ -35,8 +35,8 @@ import type {
   BlockId,
   Glossary,
   Ideas,
+  Quotes,
   NodeId,
-  Summaries,
   Tree,
   TreeNode,
   TweetThread,
@@ -52,8 +52,8 @@ import type {
  */
 const NO_ARTEFACTS = {
   glossary: null,
-  summary: null,
   ideas: null,
+  quotes: null,
   tweets: null,
 } as const;
 
@@ -232,14 +232,26 @@ const ASSETS: Assets = {
 
 /**
  * The whole owner-side row, with every field the payload table in
- * docs/plans/public-read-only-access.md § The payload names as forbidden.
+ * docs/plans/260827ai-public-read-only-access.md § The payload names as forbidden.
  *
  * The DTO takes named arguments rather than a `Meta`, so the private fields
  * cannot even be *passed* — which is the design. They are listed here in the
  * assertions instead, as the set that must not appear in the output.
  */
 const FORBIDDEN_ON_META = [
-  "url", // the FINAL fetched URL — credentials, signed query parameters
+  /* **`url` was on this list until 2026-08-30** — "the FINAL fetched URL —
+     credentials, signed query parameters" — and Greg took it off: *"I think
+     Public-readable articles should show their provenance-url to all
+     reader[s]."* The credentials half of that reason is still real and is now
+     enforced where it belongs, on the value rather than on the key:
+     `publicSourceUrl` in src/urls.ts refuses a `user:pw@` address, and § the
+     source URL at the end of this file is what says so. Leaving the key
+     forbidden here *and* publishing it would have been the two halves of this
+     suite disagreeing, with the whole-key-set assertion above the one that wins.
+
+     `requestedUrl` is not published and is not on this list either, because the
+     DTO cannot be handed one — there is no such argument. That is the design
+     this file's header describes, and it is why the list below is short. */
   "fetchedAt",
   "note", // the extraction note
   "source", // and the whole PDF/upload provenance block below
@@ -268,6 +280,12 @@ describe("the public article payload", () => {
     lang: "en",
     excerpt: "Two sentences of Readability's own.",
     headingTitle: "The mythology of conscious AI",
+    /* **A real address, not `null`**, for the same reason `assets` below is a
+       real manifest: with `null` in, the whole-key-set assertion never sees
+       `meta.url` at all, and would stay green over a projection that published
+       the raw column beside three more of them. The published value itself is
+       § the source URL at the end of this file. */
+    finalUrl: "https://www.noemamag.com/the-mythology-of-conscious-ai/",
     blocks: [HEADING, BLOCK],
     tree: TREE,
     arc: ARC,
@@ -335,6 +353,11 @@ describe("the public article payload", () => {
         "meta.siteName",
         "meta.slug",
         "meta.title",
+        /* Published since 2026-08-30, and this line is the allowlist entry for
+           it — Greg: *"Public-readable articles should show their
+           provenance-url to all reader[s]."* It is `publicSourceUrl`'s answer,
+           never `articles.final_url` itself. */
+        "meta.url",
         "tree",
         "tree.generator",
         "tree.nodes",
@@ -445,6 +468,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [HEADING, BLOCK],
       tree: { ...TREE, provisional: "headings" as const },
       arc: null,
@@ -536,6 +560,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
       tree: TREE,
       arc: null,
@@ -585,6 +610,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: withExtra,
       arc: null,
@@ -604,6 +630,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: "From the article's own h1",
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -625,6 +652,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -636,17 +664,17 @@ describe("the public article payload", () => {
 });
 
 /**
- * **The four artefacts slice 1b carries**, each fed an input that is
+ * **The artefacts a shared link carries**, each fed an input that is
  * deliberately over-full.
  *
  * Every fixture below carries the private field as well as the public one —
- * `guidance` on the summaries, a `lookup` on a glossary entry, `profileHash` on
- * all four, the generator and the timings — so a projection that copied its
+ * a `lookup` on a glossary entry, `profileHash` on
+ * each, the generator and the timings — so a projection that copied its
  * argument, spread it, or filtered a denylist would fail here rather than pass
  * for want of anything to leak. A fixture with nothing forbidden in it proves
  * nothing at all, which is the mistake the top of this file exists to name.
  */
-describe("the four artefacts a shared link carries", () => {
+describe("the artefacts a shared link carries", () => {
   /**
    * A glossary with **a lookup on one of its entries**, which is the single
    * most private thing in any of these four.
@@ -701,37 +729,6 @@ describe("the four artefacts a shared link carries", () => {
     ],
   };
 
-  /**
-   * Summaries carrying **`guidance`** — the owner's free-text steer.
-   *
-   * The steer was deleted on 2026-08-30 and `Summaries` no longer declares the
-   * field (docs/plans/steer-becomes-the-profile.md), hence the cast. It stays in
-   * this fixture because **the state is real, not invented**: every summary
-   * written before that date still has one inside its stored JSON, and the
-   * projection has to go on dropping it. Deleting the fixture would retire a
-   * guard over data that still exists.
-   */
-  const SUMMARIES = {
-    version: "summary/1",
-    generator: "some-model",
-    slug: "noema",
-    sourceHash: "abc123",
-    profileHash: "profile-of-a-person",
-    guidance: "I am reading this for the argument about measurement, skip the history.",
-    missing: 2,
-    generatedAt: "2026-08-28T10:00:00.000Z",
-    elapsedMs: 62_000,
-    entries: [
-      {
-        range: ["spya-h1aaaa", "spya-k3m9qt"],
-        depth: 0,
-        short: "A few sentences.",
-        long: "A paragraph.",
-      },
-      { range: ["spya-k3m9qt", "spya-k3m9qt"], depth: 1 },
-    ],
-  } as Summaries & { guidance: string };
-
   const IDEAS: Ideas = {
     version: "ideas/1",
     generator: "some-model",
@@ -772,6 +769,44 @@ describe("the four artefacts a shared link carries", () => {
     elapsedMs: 12_000,
   };
 
+  /**
+   * **A real one, not `null`** — and it is here because a cross-family review
+   * pointed out that every Quotes assertion in this repo was passing
+   * vacuously: the store round-trip proves an absent artefact stays absent, the
+   * copy inventory deliberately omits it, the manifest exempts it, the deploy
+   * fixtures have none, and this file passed `quotes: null`. Nothing has run
+   * the stage against a real article, so every check was agreeing about
+   * nothing. GPT Sol, 2026-08-31.
+   */
+  const QUOTES: Quotes = {
+    version: "quotes/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 20_000,
+    discarded: {
+      unfound: 2,
+      otherVoice: 1,
+      wrongLength: 3,
+      overlapping: 0,
+      overCap: 0,
+      malformed: 0,
+    },
+    quotes: [
+      {
+        id: "spya-quote1",
+        blockId: "spya-k3m9qt",
+        text: "It does not survive its own first example, which is the whole trouble.",
+        start: 17,
+        reason: "The claim the rest of the piece is spent defending.",
+        importance: 0.91,
+        striking: 0.88,
+      },
+    ],
+  };
+
   const built = publicArticle({
     slug: "noema",
     title: "The mythology of conscious AI",
@@ -780,13 +815,14 @@ describe("the four artefacts a shared link carries", () => {
     lang: null,
     excerpt: null,
     headingTitle: null,
+    finalUrl: null,
     blocks: [BLOCK],
     tree: TREE,
     arc: null,
     assets: null,
     glossary: GLOSSARY,
-    summary: SUMMARIES,
     ideas: IDEAS,
+    quotes: QUOTES,
     tweets: THREAD,
   });
 
@@ -794,6 +830,44 @@ describe("the four artefacts a shared link carries", () => {
   function pathsUnder(key: string): string[] {
     return keyPaths((built as unknown as Record<string, unknown>)[key]);
   }
+
+  /**
+   * **The one pipeline-shaped field this projection lets through, and the
+   * several it does not.**
+   *
+   * `discarded` crosses because it is a fact about the list on the screen —
+   * that it is shorter than what the model produced — rather than about our
+   * pipeline, and the panel says so in a sentence a visitor is entitled to read
+   * as much as an owner. `sourceHash`, `version`, `generator`, `profileHash`
+   * and the timings do not, on the rule the whole file keeps.
+   */
+  it("carries a quote's fields, its disclosure, and no provenance about us", () => {
+    expect(pathsUnder("quotes")).toEqual(
+      [
+        "discarded",
+        "discarded.malformed",
+        "discarded.otherVoice",
+        "discarded.overCap",
+        "discarded.overlapping",
+        "discarded.unfound",
+        "discarded.wrongLength",
+        "quotes",
+        "quotes[].blockId",
+        "quotes[].id",
+        "quotes[].importance",
+        "quotes[].reason",
+        "quotes[].start",
+        "quotes[].striking",
+        "quotes[].text",
+      ].sort(),
+    );
+  });
+
+  it("hands the quote's words across unchanged — they are the article's own", () => {
+    /* The one artefact whose payload IS the prose the visitor is reading, so a
+       projection that altered it would be changing the article. */
+    expect(built.quotes?.quotes[0]?.text).toBe(QUOTES.quotes[0]?.text);
+  });
 
   it("carries a glossary entry's fields and never its lookup", () => {
     expect(pathsUnder("glossary")).toEqual(
@@ -822,13 +896,6 @@ describe("the four artefacts a shared link carries", () => {
     for (const forbidden of ["profileHash", "passes", "generatedAt", "elapsedMs", "sourceHash"]) {
       expect(pathsUnder("glossary"), forbidden).not.toContain(forbidden);
     }
-  });
-
-  it("carries the summary ladder and never the owner's steer", () => {
-    expect(pathsUnder("summary")).toEqual(
-      ["entries", "entries[].depth", "entries[].long", "entries[].range", "entries[].short", "missing"].sort(),
-    );
-    expect(JSON.stringify(built.summary)).not.toContain("skip the history");
   });
 
   it("carries the ideas and none of their provenance", () => {
@@ -864,8 +931,6 @@ describe("the four artefacts a shared link carries", () => {
     expect(built.glossary?.entries).toHaveLength(2);
     expect(built.glossary?.entries[0]?.name).toBe("Integrated information theory");
     expect(built.glossary?.entries[0]?.blocks).toEqual(["spya-k3m9qt"]);
-    expect(built.summary?.entries[0]?.long).toBe("A paragraph.");
-    expect(built.summary?.missing).toBe(2);
     expect(built.ideas?.ideas[0]?.statement).toContain("no way to measure");
     expect(built.ideas?.ideas[0]?.occurrences[0]?.quote).toContain("first example");
     expect(built.tweets?.tweets[0]?.text).toBe("The first post.");
@@ -894,20 +959,20 @@ describe("the four artefacts a shared link carries", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
       assets: null,
       glossary: { ...GLOSSARY, entries: [] },
-      summary: null,
       ideas: { ...IDEAS, ideas: [] },
+      quotes: null,
       tweets: null,
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);
     expect("ideas" in empty).toBe(true);
     expect(empty.ideas?.ideas).toEqual([]);
-    expect("summary" in empty).toBe(false);
     expect("tweets" in empty).toBe(false);
   });
 
@@ -920,13 +985,14 @@ describe("the four artefacts a shared link carries", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "summary", "ideas", "tweets"]) {
+    for (const key of ["glossary", "ideas", "tweets"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -937,11 +1003,17 @@ describe("the public metadata payload", () => {
     slug: "noema",
     title: "The mythology of conscious AI",
     headingTitle: null,
-    available: { arc: true, tweets: false, glossary: true, summary: false, ideas: false },
+    available: {
+      arc: true,
+      tweets: false,
+      glossary: true,
+      ideas: false,
+      quotes: false,
+    },
   });
 
   /**
-   * **Five booleans and a title.** The owner's `ArticleMetadata` carries `dir`,
+   * **A handful of booleans and a title.** The owner's `ArticleMetadata` carries `dir`,
    * the whole of `stages` — internal paths, column names, run times, byte
    * counts — plus `comments`, `profile`, `purpose` and `archivedAt`. None of it
    * is a visitor's business and most of it is about us rather than about the
@@ -954,7 +1026,7 @@ describe("the public metadata payload", () => {
         "available.arc",
         "available.glossary",
         "available.ideas",
-        "available.summary",
+        "available.quotes",
         "available.tweets",
         "slug",
         "title",
@@ -967,8 +1039,8 @@ describe("the public metadata payload", () => {
       arc: true,
       tweets: false,
       glossary: true,
-      summary: false,
       ideas: false,
+      quotes: false,
     });
   });
 
@@ -977,4 +1049,125 @@ describe("the public metadata payload", () => {
       expect(keyPaths(built)).not.toContain(forbidden);
     });
   }
+});
+
+/**
+ * **The source URL, published to whoever can read the article.**
+ *
+ * Greg, 2026-08-30: *"I think Public-readable articles should show their
+ * provenance-url to all reader[s]."* `final_url` had been held out of the
+ * public projection until then, so this is the whole of what changed on the
+ * public path, and the policy that replaced the absence is `publicSourceUrl`
+ * in src/urls.ts.
+ *
+ * Asserted **through the DTO** rather than against that function directly. The
+ * function has its own unit tests; what nothing else can see is whether
+ * `publicMeta` actually calls it — a projection that published `row.finalUrl`
+ * raw would pass every test of the policy and leak every credential it refuses.
+ * Same reason `tests/public-reads.test.ts` reads the generated SQL rather than
+ * the projection object beside it.
+ */
+describe("the source URL a stranger receives", () => {
+  /** One article, one `finalUrl`, and only the published `meta.url` back. */
+  const published = (finalUrl: string | null): string | undefined =>
+    publicArticle({
+      slug: "noema",
+      title: "The mythology of conscious AI",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl,
+      blocks: [HEADING, BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    }).meta.url;
+
+  it("publishes an ordinary address", () => {
+    expect(published("https://www.noemamag.com/the-mythology-of-conscious-ai/")).toBe(
+      "https://www.noemamag.com/the-mythology-of-conscious-ai/",
+    );
+  });
+
+  /**
+   * **A query string is refused outright**, and this is the clause the first
+   * draft of `publicSourceUrl` got wrong. Keeping it looked right — on a great
+   * many sites `?id=123` *is* the article, and dropping it names a section index
+   * — until the fixture in `tests/public-visibility-pg.test.ts` reminded us what
+   * else a query holds: `?sig=…`, a capability the owner holds and very often
+   * their own paywall bypass. From here an id, a `utm_` and a signature are the
+   * same string, so refusing is the honest answer. Measured before it was
+   * accepted: of the twenty articles in `data/` with a URL, none has a query.
+   */
+  it("refuses an address carrying a query, which may be a signature", () => {
+    expect(published("https://example.com/read?id=123")).toBeUndefined();
+    expect(published("https://example.com/piece?sig=SECRETSIGNATURE")).toBeUndefined();
+  });
+
+  it("drops the fragment, which is a scroll position and not a document", () => {
+    expect(published("https://example.com/a#section-3")).toBe("https://example.com/a");
+  });
+
+  /**
+   * The one thing publishing an essay does not imply. A share token in a query
+   * grants access to the piece the visitor is already reading; a password in the
+   * authority grants access to a *site*, and no decision to publish an article
+   * covers that.
+   */
+  it("refuses an address carrying a credential", () => {
+    expect(published("https://user:pw@example.com/a")).toBeUndefined();
+    /* A password with an empty username is the same disclosure and a different
+       URL field — `new URL` keeps them apart, so a check on `username` alone
+       would pass this one straight through. */
+    expect(published("https://:pw@example.com/a")).toBeUndefined();
+  });
+
+  it("refuses a scheme a browser would not follow", () => {
+    expect(published("javascript:alert(1)")).toBeUndefined();
+    expect(published("file:///Users/greg/Documents/thing.pdf")).toBeUndefined();
+  });
+
+  it("refuses a payload wearing an address as a disguise", () => {
+    expect(published(`https://example.com/${"a".repeat(2100)}`)).toBeUndefined();
+  });
+
+  /**
+   * **A host a stranger could not have reached anyway.**
+   *
+   * Stage 1 refuses to *fetch* a private destination and resolves the name to do
+   * it (`guardAddress`, src/fetch.ts) — but `src/store/import.ts` writes a
+   * revision without going through stage 1, so a `final_url` of
+   * `http://10.0.0.5/token` can exist in the database and this boundary is what
+   * would hand it out. Raised by GPT Sol, 2026-08-30.
+   *
+   * The rule is a shape rule, because a DTO has no DNS: any IP literal, any host
+   * with no dot, and the three private suffixes. A public name pointing inward
+   * is not caught and cannot be from here.
+   */
+  it("refuses a host nobody outside could reach", () => {
+    expect(published("http://localhost/private")).toBeUndefined();
+    expect(published("http://10.0.0.5/token")).toBeUndefined();
+    expect(published("http://192.168.1.10/a")).toBeUndefined();
+    expect(published("http://[::1]/a")).toBeUndefined();
+    expect(published("http://build-box/a")).toBeUndefined();
+    expect(published("http://printer.local/a")).toBeUndefined();
+    /* A public IP literal goes too, and that is deliberate rather than an
+       over-reach: enumerating the private ranges is a list that fails open when
+       one is wrong, and nobody publishes an article addressed by bare IP. */
+    expect(published("http://93.184.216.34/a")).toBeUndefined();
+  });
+
+  /**
+   * **The absence, and the two different things behind it.** An uploaded article
+   * has no address at all; a refused one has an address we will not publish. A
+   * visitor is told the same nothing by both, and so may never conclude
+   * "uploaded" from it — the gate on that sentence is in src/web/Masthead.tsx.
+   */
+  it("says nothing at all when there is nothing it may say", () => {
+    expect(published(null)).toBeUndefined();
+    expect(published("https://user:pw@example.com/a")).toBeUndefined();
+  });
 });
