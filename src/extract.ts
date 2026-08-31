@@ -1,9 +1,12 @@
 /**
  * Stage 2 — Readability over a page somebody else fetched.
  *
- * Writes the standalone debug page (`output/<slug>.html`, which stage 3 reads)
- * and `data/<slug>/meta.json`, which is what everything downstream knows the
- * article *by* — its title, who wrote it, where it came from and when. See
+ * Produces two artefacts and **writes neither**: the standalone page that stage
+ * 3 reads and stamps ids into, and the metadata, which is what everything
+ * downstream knows the article *by* — its title, who wrote it, where it came
+ * from and when. Both are returned; the store puts them where that store keeps
+ * things (`output/<slug>.html` and `data/<slug>/meta.json` on a filesystem,
+ * columns on `article_revisions` in Postgres). See
  * docs/project/content-extraction.md and docs/project/library.md.
  *
  * Stage 1 is src/fetch.ts and is somebody else's problem, deliberately: getting
@@ -136,7 +139,7 @@ export function defaultOutFile(url: string): string {
 }
 
 /**
- * The slug an output filename implies.
+ * The slug an output filename implies. **Command line only.**
  *
  * Taken from the OUTPUT FILE rather than from the URL, which looks like the
  * long way round given `defaultOutFile` just derived the filename from the URL
@@ -148,6 +151,11 @@ export function defaultOutFile(url: string): string {
  * right-looking directory for `npm run extract <url>` and in the wrong one the
  * moment anybody passed an explicit filename — and the only symptom would be an
  * article with no byline.
+ *
+ * `runExtract` used to call this. It takes the slug directly now, because the
+ * queue has always known it and there is no filename in that path to read one
+ * off. The reasoning above still applies to `main()`, which is where an
+ * explicit filename can arrive.
  */
 export function slugForOutFile(outFile: string): string {
   return path.basename(outFile).replace(/\.[^.]+$/, "");
@@ -155,8 +163,20 @@ export function slugForOutFile(outFile: string): string {
 
 export interface ExtractResult {
   slug: string;
-  outFile: string;
   meta: Meta;
+  /**
+   * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
+   *
+   * Not Readability's `article.content` — the page `debugPage` builds around it,
+   * `<!doctype>`, `<head>`, styles and all. That is what this stage has always
+   * left at `output/<slug>.html`, and stage 3 reads that file and rewrites it
+   * with the block ids stamped in (src/blocks.ts). So the artefact and the
+   * thing a person opens to see what extraction did are one document, which is
+   * a slightly surprising fact worth stating rather than tidying: making the
+   * artefact the bare body would change every block stage 3 cuts, on every
+   * article, in the same commit that moved where it is stored.
+   */
+  extractedHtml: string;
   /** Readability's own character count, for the log line. */
   length: number | null;
   excerpt: string | null;
@@ -355,22 +375,30 @@ export function publicationDate(raw: Maybe): string | undefined {
   return `${day}T${time}${offset ?? ""}`;
 }
 
+/**
+ * Stage 2 over already-fetched HTML — **and it writes nothing.**
+ *
+ * It took `outFile` and `dataDir` until 2026-08-31 and wrote the page and
+ * `meta.json` itself. Both artefacts are returned now and the store decides
+ * where they land — `output/<slug>.html` plus `data/<slug>/meta.json` on the
+ * filesystem, columns on `article_revisions` in Postgres. The two write
+ * destinations were the last thing in this stage that assumed a disk.
+ * docs/plans/finish-the-database-move.md § Stage 2c.
+ *
+ * `slug` is passed in rather than derived, which is the one call-site change
+ * worth noticing. It used to come from the output filename via
+ * `slugForOutFile`, on the reasoning that the basename is what stages 3 and 4
+ * would name this article — true, and now moot: there is no filename here to
+ * derive it from, and every caller already knows the slug. The command line
+ * below still derives one that way, because an explicit `outFile` on the
+ * command line is the only place the two can differ.
+ */
 export async function runExtract(opts: {
   html: string;
   url: string;
-  outFile?: string;
-  /**
-   * Where `meta.json` goes. Passed in rather than assumed, because `data/…`
-   * relative to the process's cwd is only `<repo>/data/…` when you happen to
-   * have started in the repo root — and the queue checks for the file at an
-   * absolute path (src/pipeline.ts). A server started from anywhere else would
-   * write the metadata somewhere the pipeline never looks, and the step would
-   * still go green.
-   */
-  dataDir?: string;
+  slug: string;
 }): Promise<ExtractResult> {
-  const outFile = opts.outFile ?? defaultOutFile(opts.url);
-  const slug = slugForOutFile(outFile);
+  const { slug } = opts;
 
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -394,15 +422,10 @@ export async function runExtract(opts: {
     throw new Error("Readability could not parse this page.");
   }
 
-  await mkdir(path.dirname(outFile), { recursive: true });
-  await writeFile(outFile, debugPage(article), "utf-8");
-
-  /* meta.json is the article's identity — the only place the source URL, the
-     byline and the fetch date survive past this stage. Written straight into
-     `data/<slug>/`, beside the artefacts the later stages put there, because it
-     is where the server looks (src/api.ts) and because a piece of provenance
-     left in `output/` would be scratch. Written on every run: re-extracting is
-     how you refresh a page, and the fetch date should follow. */
+  /* The metadata is the article's identity — the only place the source URL, the
+     byline and the fetch date survive past this stage (src/api.ts reads it).
+     Rebuilt on every run: re-extracting is how you refresh a page, and the
+     fetch date should follow. */
   /* Readability has been handing `publishedTime` back all along and this stage
      dropped it on the floor. It is the reference frame for every year-less date
      in the piece — the field's note in src/types.ts says why it is not
@@ -419,20 +442,38 @@ export async function runExtract(opts: {
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
   };
-  const metaFile = path.join(opts.dataDir ?? path.join("data", slug), "meta.json");
-  await mkdir(path.dirname(metaFile), { recursive: true });
-  await writeFile(metaFile, `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
 
   return {
     slug,
-    outFile,
     meta,
+    extractedHtml: debugPage(article),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,
   };
 }
 
+/**
+ * `npm run extract -- <url> [outFile]`
+ *
+ * **The one place left that writes stage 2's artefacts to a disk**, and it does
+ * it here rather than inside `runExtract` because it is the only caller that
+ * wants files: it exists so a person can open the page and see what extraction
+ * did. The queue hands the same two artefacts to the store instead.
+ *
+ * It writes to exactly where it always did — `output/<slug>.html` and
+ * `data/<slug>/meta.json` — so the fixtures, the evals and anybody's muscle
+ * memory are unaffected. It fetches the page itself, as it always did, and does
+ * not read anything `npm run fetch` left behind — the two commands are separate
+ * one-shot tools and neither feeds the other.
+ *
+ * **Both paths below are relative to the process's cwd**, which is why they are
+ * here and not in the stage. `data/…` is `<repo>/data/…` only when you started
+ * in the repo root, and the queue used to pass `dataDir` in for exactly that
+ * reason: a server started elsewhere would have written the metadata somewhere
+ * the pipeline never looks, with the step still going green. A command line has
+ * no such problem — it prints the resolved paths, and a person is reading them.
+ */
 async function main(): Promise<void> {
   const url = process.argv[2];
   if (!url) {
@@ -442,7 +483,18 @@ async function main(): Promise<void> {
   const outFile = process.argv[3] ?? defaultOutFile(url);
 
   const html = await fetchHtml(url);
-  const result = await runExtract({ html, url, outFile });
+  /* `slugForOutFile`, not `slugFromUrl`: an explicit `outFile` on the command
+     line is what stages 3 and 4 will name this article after, and deriving the
+     slug from the URL a second time would put meta.json in the right-looking
+     directory for the default case and the wrong one the moment anybody passed
+     a filename. The only symptom would be an article with no byline. */
+  const result = await runExtract({ html, url, slug: slugForOutFile(outFile) });
+
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, result.extractedHtml, "utf-8");
+  const metaFile = path.join("data", result.slug, "meta.json");
+  await mkdir(path.dirname(metaFile), { recursive: true });
+  await writeFile(metaFile, `${JSON.stringify(result.meta, null, 2)}\n`, "utf-8");
 
   console.log(`Title: ${result.meta.title}`);
   console.log(`Byline: ${result.meta.byline}`);
@@ -453,8 +505,8 @@ async function main(): Promise<void> {
       `${JSON.stringify(result.notes.shapes)})`,
   );
   console.log(`Excerpt: ${result.excerpt}`);
-  console.log(`\nWritten to: ${path.resolve(result.outFile)}`);
-  console.log(`            ${path.resolve("data", result.slug, "meta.json")}`);
+  console.log(`\nWritten to: ${path.resolve(outFile)}`);
+  console.log(`            ${path.resolve(metaFile)}`);
 }
 
 if (isMain(import.meta.url)) void main();

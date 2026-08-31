@@ -26,9 +26,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
@@ -41,7 +42,7 @@ import {
   type MetaFingerprint,
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
+import type { Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
@@ -349,7 +350,6 @@ export function overLimit(thread: TweetThread): number {
 
 export interface TweetsRun {
   thread: TweetThread;
-  outFile: string;
   blocks: number;
   words: number;
   over: number;
@@ -365,8 +365,16 @@ export interface TweetsRun {
 }
 
 /**
- * Stage 5c over a data directory: one model call, then `tweets.json` beside the
- * tree and the arc.
+ * Stage 5c over one article: a single model call, and the thread it returns.
+ *
+ * **It writes nothing, and it reads nothing.** It used to drop `tweets.json`
+ * beside the tree and the arc, which works on a laptop and cannot work through
+ * a store that puts the artefact in a Postgres column — so the caller writes
+ * now: src/pipeline.ts through the store, `main()` below to the directory it
+ * was given. The blocks, the tree and the metadata arrive together as one
+ * `Article` (src/article-input.ts), so the bytes the thread is written from are
+ * the bytes its `stamp` fingerprinted.
+ * docs/plans/finish-the-database-move.md § Stage 2.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
@@ -378,7 +386,7 @@ export interface TweetsRun {
  * docs/project/original-version/borrow-list.md.
  */
 export async function generateTweets(opts: {
-  dir: string;
+  article: Article;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -407,24 +415,13 @@ export async function generateTweets(opts: {
   profile?: string | null;
 
 }): Promise<TweetsRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  // Optional, and only ever used for attribution. A missing meta.json costs the
-  // thread the author's name, which the prompt handles; it is not worth failing
-  // the whole stage over.
-  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
+  /* `meta` is `null` when the article has no metadata, and that is a state
+     rather than a failure: the thread loses the author's name, which the prompt
+     handles in so many words, and the fingerprint below is handed the same
+     `null` the prompt was. Whoever built the `Article` resolved it — two
+     resolutions of "is there metadata" are two answers waiting to differ.
+     src/article-input.ts. */
+  const { blocks, tree, meta } = opts.article;
 
   /* Read once, used for both the prompt and the stamp — the stamp's whole job
      is to name what the prompt actually carried. */
@@ -536,12 +533,8 @@ export async function generateTweets(opts: {
     elapsedMs: Date.now() - started,
   });
 
-  const outFile = path.join(opts.dir, "tweets.json");
-  await writeFile(outFile, JSON.stringify(thread, null, 2), "utf-8");
-
   return {
     thread,
-    outFile,
     blocks: blocks.length,
     words,
     over: overLimit(thread),
@@ -567,16 +560,26 @@ async function main(): Promise<void> {
      there in `.env.local`. */
   loadEnvLocal();
   console.log(`Writing the thread with ${CAPABLE_MODEL}…`);
+  /* The command line has a folder and no store, so it reads the article itself
+     — `readArticleFromDir` is the one place left that opens these three files,
+     and it is deliberately not reachable from a request or a queued job. */
   const run = await generateTweets({
-    dir,
+    article: await readArticleFromDir(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
+
+  /* And the command writes its own tweets.json, in the same place the stage
+     used to. `npx tsx src/tweets.ts <dir>` is unchanged from outside; what
+     moved is which layer does the writing, so the pipeline can write through
+     the store instead. */
+  const outFile = path.join(dir, "tweets.json");
+  await writeFile(outFile, JSON.stringify(run.thread, null, 2), "utf-8");
 
   console.log(`\n${run.blocks} blocks, ${run.words} words → ${run.thread.tweets.length} posts`);
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`Over ${LIMIT}:   ${run.over}`);
-  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
   run.thread.tweets.forEach((t, i) => {
     // Only a real violation is flagged. A 190-character post is not a warning
     // about anything, and colouring it as one teaches the reader to ignore the

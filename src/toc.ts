@@ -21,8 +21,14 @@
  * bound — 73% of this stage's answer on a 360-block article — and they took the
  * whole stage over the 128,000-token ceiling on a single response. They now live
  * in src/labels.ts, batched along this tree's own section boundaries and run in
- * parallel. `generateToc` still drives both and still writes one set of
+ * parallel. `generateToc` still drives both and still returns one set of
  * artefacts, so the pipeline sees one step. docs/plans/toc-scaling.md.
+ *
+ * **The stage reads no path and writes no file.** It is handed the blocks and
+ * hands back the three artefacts in one object; the caller stores them. The
+ * pipeline gives that object to the artefact store as a single `parts` map, and
+ * `main()` below is the only thing left that turns them into files.
+ * docs/plans/finish-the-database-move.md § Stage 2.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -37,7 +43,8 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
-import { COVERAGE_FLOOR, generateLabels, mergeLabels } from "./labels.js";
+import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
+import { hashBlocks } from "./source-hash.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -1000,9 +1007,81 @@ export function slugForBlocksPath(blocksPath: string): string {
   return path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
 }
 
-export interface TocRun {
+/**
+ * **Stage 4's three artefacts, and all three are required.**
+ *
+ * They are one object because they are one write. `labels.json` and the tree
+ * are two halves of the same answer — a tree with a third of its labels missing
+ * is a valid-looking artefact that quietly describes part of an article — and
+ * the blocks are the thing both of them address. A caller that stored the tree
+ * and not the labels would publish exactly that, and the step that stored them
+ * as three separate calls had a window in which it could.
+ *
+ * So the shape refuses it: **a `generateToc` that returned the tree without the
+ * labels would not compile**, which is a guarantee no test has to be remembered
+ * for (docs/project/typechecking.md § Let the types catch it). What the type
+ * cannot say is that the three are *about each other*, and that is why
+ * `generateToc` runs `assertTreeSound` and `checkCoverage` over this object
+ * rather than over the locals it was built from.
+ *
+ * `blocks` is `ReturnType<typeof blocksArtefact>` rather than `{ blocks }`, so
+ * the sanitiser stamp stage 3 puts in it cannot be dropped here by a tidier
+ * declaration — an absent stamp reads as stale and costs every reader a
+ * re-clean on every load (see the note at the write in `main` below).
+ */
+export interface TocArtefacts {
   tree: Tree;
-  outDir: string;
+  labels: LabelsFile;
+  blocks: ReturnType<typeof blocksArtefact>;
+}
+
+export interface TocRun {
+  /**
+   * What this run produced, for the caller to store. Assignable to
+   * `ArtifactParts` (src/store/artifacts.ts) as it stands, so the pipeline step
+   * hands the whole object to one `write` and the three land together.
+   */
+  parts: TocArtefacts;
+  /**
+   * **The hash the caller must record for this step**, read off `labels.json`
+   * rather than computed beside it.
+   *
+   * `toc` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
+   * at length, and it is not an oversight. Recording *no input hash* is a
+   * different thing: `reasonsNotToPublish` compares `toc`'s `input_hash`
+   * against the stored blocks and refuses the publication when they differ, so
+   * a run left carrying `NO_INPUT_HASH` makes the article unpublishable
+   * (src/store/pg-revisions.ts, src/store/artifacts-pg.ts § `writeArtefacts`).
+   *
+   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.toc` is
+   * `"labels"`: whatever the caller passes as `inputHash` is compared against
+   * that same field by `assertStampAgrees` on the way into either store, and a
+   * second computation of "the blocks hash" is how the two come to disagree.
+   * It is `hashBlocks` of the blocks in `parts.blocks` — checked at the seam
+   * below rather than assumed, since the two are computed by different modules
+   * over arguments only a convention keeps equal.
+   *
+   * **Only `inputHash`.** A caller that also declares a `promptVersion` gets a
+   * throw: the labels file is stamped `labels/1` and the tree is `toc/2`, so a
+   * stamp carrying the tree's version contradicts the artefact the stamp is
+   * read from. Verified against a real artefact, not reasoned about.
+   */
+  inputHash: string;
+  /**
+   * Throw the label run's working state away — **call it once the artefacts are
+   * stored**, not when this function returns.
+   *
+   * Returned rather than called here, and the gap is the whole point. It
+   * protects **money, not consistency**: a checkpoint left behind is read by the
+   * next run, matched fingerprint by fingerprint, and either reused correctly or
+   * ignored (src/labels.ts § `LabelRun.clearCheckpoint`), so forgetting to call
+   * this costs nothing. Calling it too early costs a whole label pass, because
+   * a caller that dies between here and its store's commit has thrown away every
+   * batch it just paid for — which is the case the checkpoint exists for.
+   *
+   * A no-op when no `checkpointDir` was given.
+   */
+  clearCheckpoint: () => Promise<void>;
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
   model: string;
   blocks: number;
@@ -1103,6 +1182,11 @@ export interface TocRun {
 /**
  * Write JSON so that it is either wholly there or not there at all.
  *
+ * **`main()`'s, and nothing else's.** The stage itself no longer writes: it
+ * returns `TocArtefacts` and the pipeline hands all three to the store in one
+ * call. This is the command line's own writer, and the three files it produces
+ * are the same three files in the same three places.
+ *
  * `writeFile` truncates its target before it writes, so a process killed at the
  * wrong moment leaves a file that exists and is not valid JSON — and existence
  * is exactly what src/pipeline.ts uses to decide a step is done. Writing beside
@@ -1121,21 +1205,28 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
 }
 
 /**
- * Stage 4 over a blocks.json on disk: the structure in one call, the nav labels
- * in parallel batches after it, then `tree.json`, `labels.json` and a copy of
- * `blocks.json`.
+ * Stage 4 over a block sequence: the structure in one call, the nav labels in
+ * parallel batches after it, then the tree, the labels file and this stage's
+ * copy of the blocks — **returned, not written.**
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  *
- * **Two model passes, one pipeline step, and nothing written until both are
+ * **The blocks come in, the artefacts go out, and the stage knows nothing about
+ * where either lives.** It used to open a path and write a directory, which
+ * meant the pipeline hashed what the *store* held and generated from what the
+ * *disk* held — the same defect src/article-input.ts was written to close for
+ * the seven article-reading stages. docs/plans/finish-the-database-move.md.
+ *
+ * **Two model passes, one pipeline step, and nothing returned until both are
  * done.** The split exists so the unbounded half can be batched
- * (docs/plans/toc-scaling.md), not so it can be published separately — a tree on
- * disk with a third of its labels missing is a valid-looking artefact that quietly
- * describes part of an article, which is docs/reusable/silent-success.md exactly.
- * Deferring the labels so a reader can start sooner is a real option and a
- * deliberate later one; it needs a state that says "still arriving" rather than
- * an absence that says nothing.
+ * (docs/plans/toc-scaling.md), not so it can be published separately — a tree
+ * stored with a third of its labels missing is a valid-looking artefact that
+ * quietly describes part of an article, which is
+ * docs/reusable/silent-success.md exactly. `TocArtefacts` is what now makes
+ * that unsayable rather than merely undone. Deferring the labels so a reader
+ * can start sooner is a real option and a deliberate later one; it needs a
+ * state that says "still arriving" rather than an absence that says nothing.
  *
  * `onProgress` reports what is arriving. For the structure call there is nothing
  * useful to say about *what* has been written — the JSON is unparseable until it
@@ -1143,22 +1234,32 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * do better, and counts finished sections.
  */
 export async function generateToc(opts: {
-  blocksPath: string;
-  outDir?: string;
+  blocks: Block[];
+  /** Stamped into the tree and the labels file; the article's own name. */
+  slug: string;
+  /**
+   * Where the **label checkpoint** goes, and it is not where the artefacts go
+   * any more — nothing this function returns is written by it.
+   *
+   * Still a directory, and still the filesystem, because the checkpoint store
+   * (src/store/checkpoints.ts) is not the seam this call can go through yet:
+   * it is keyed on an `articleId` this stage is not given, and it has no
+   * `delete`, deliberately — landing D drops `clearCheckpoint` along with the
+   * one-file-per-run format that made it necessary. Redirecting it early would
+   * silently stop resuming and re-buy a paid model call per batch, so it stays
+   * on disk until that landing moves both halves at once.
+   *
+   * **No directory, no checkpoint**, exactly as `generateLabels` has it: a
+   * caller that has one passes it, and a test or a one-off gets nothing on
+   * disk. `TocRun.labelsResumed` is how a caller that meant to checkpoint and
+   * did not finds out.
+   */
+  checkpointDir?: string;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
 }): Promise<TocRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(opts.blocksPath, "utf-8"),
-    "blocks.json",
-  );
-  const slug = slugForBlocksPath(opts.blocksPath);
-  const outDir = opts.outDir ?? path.join("data", slug);
+  const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
 
@@ -1319,7 +1420,7 @@ export async function generateToc(opts: {
   /* Before the labels, not after, because the checkpoint they write as they
      land goes in here — and a directory that does not exist yet would turn the
      first batch's saved work into a thrown ENOENT. */
-  await mkdir(outDir, { recursive: true });
+  if (opts.checkpointDir) await mkdir(opts.checkpointDir, { recursive: true });
 
   const labelRun = await generateLabels({
     tree: structure,
@@ -1329,63 +1430,142 @@ export async function generateToc(opts: {
        lands, so a 429 or a 5xx eight batches into a book costs the one batch
        rather than the eight — and the retry the queue makes (src/jobs.ts) picks
        up where this one stopped. src/labels.ts § `usableCheckpoint` for the
-       four things that have to match before a single one is reused. */
-    dir: outDir,
+       four things that have to match before a single one is reused.
+       Absent when the caller gave no `checkpointDir`: `generateLabels` treats
+       that as "no checkpoint" rather than defaulting to a directory, so this
+       spread is the difference between the two rather than a tidy-up. */
+    ...(opts.checkpointDir ? { dir: opts.checkpointDir } : {}),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     ...(opts.signal ? { signal: opts.signal } : {}),
   });
 
-  const tree = mergeLabels(structure, labelRun.labels);
-  /* **The invariants, on the artefact that is about to be written.** They ran
-     in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
+  /**
+   * **The three artefacts, assembled once, and every check below asks about
+   * this object rather than about the locals it was built from.**
+   *
+   * The distinction is the whole of what stops the set going out inconsistent.
+   * A tree merged from one set of labels and returned beside another, or
+   * checked against one block array and returned beside a second, is a set that
+   * looks finished and describes two different articles — and no check written
+   * over `tree`, `labels` and `blocks` as three separate variables can see the
+   * difference, because it is a fact about what was *returned*.
+   *
+   * So the merge reads `labelRun.file.labels`, the labels this object carries,
+   * rather than `labelRun.labels`, which is the same map by construction today
+   * and would be the wrong thing to depend on tomorrow. Everything after this
+   * line reads `parts.*`.
+   *
+   * `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser version
+   * into `output/<slug>.blocks.json`; this is the copy the reading view
+   * actually opens, and handing back the bare array dropped the stamp on every
+   * article. Not unsafe — an absent stamp reads as stale, and stale means
+   * re-sanitise — but it made the stamp worthless: every article paid the
+   * re-clean on every load and fired the "predates the sanitiser" warn every
+   * time, which is how a warning stops being read. Note the check anybody would
+   * run, "is stage 3 writing the stamp?", answers yes. It is, into a different
+   * file. See docs/project/security.md.
+   */
+  const parts: TocArtefacts = {
+    labels: labelRun.file,
+    blocks: blocksArtefact(blocks),
+    tree: mergeLabels(structure, labelRun.file.labels),
+  };
+
+  /* **The invariants, on the artefacts that are about to be handed back.** They
+     ran in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
      (src/store/pg-revisions.ts, which collects reasons rather than throwing),
      and nowhere on this path — so a stage-4 regression was invisible in exactly
      the workflow most of this repo's testing goes through. GPT Sol, F5.
      After `mergeLabels` rather than before `generateLabels`: what this
-     guarantees is a property of the file, and checking `structure` instead
+     guarantees is a property of the artefact, and checking `structure` instead
      would leave the merge unchecked while costing the same. It does mean a
      tree the model got wrong is found after a full label run has been paid
-     for; that is the cheaper of the two mistakes. */
-  assertTreeSound(blocks, tree);
-  checkCoverage(labelRun.labels, tree, blocks);
+     for; that is the cheaper of the two mistakes.
+     Over `parts.blocks.blocks`, which is the array the caller stores, not the
+     `blocks` argument it was derived from — `blocksArtefact` maps one to one and
+     touches only `html`, so the two agree, and asking the question about the
+     wrong one of them is precisely the mistake this whole stage of the migration
+     exists to stop. */
+  assertTreeSound(parts.blocks.blocks, parts.tree);
+  checkCoverage(parts.labels.labels, parts.tree, parts.blocks.blocks);
 
-  /* Each file is written to a temporary name and renamed into place, and the
-     tree goes last.
-     **Ordering alone was not enough, and the first version of this claimed it
-     was.** The queue decides a step is done by whether its output files exist
-     (src/pipeline.ts), so "write the tree last" only helps if a half-written
-     tree does not exist — and `writeFile` creates and truncates its target
-     before it has anything to put in it. A process killed mid-write leaves a
-     truncated `tree.json` that is very much present, the step reports itself
-     finished, and a retry skips it. On a forced regeneration it is worse: the
-     *old* tree is on disk throughout, so a crash can leave new labels and new
-     blocks beside last week's tree, all three present and mutually
-     inconsistent.
-     `rename` within a directory is atomic on every filesystem this runs on, so
-     each file appears whole or not at all, and the tree — the one every reader
-     starts from — appears only after the other two are already whole. Raised by
-     GPT-5.6-sol, 2026-08-26; see docs/plans/toc-scaling.md for what this still
-     does not give us, which is a way to tell a *stale* complete set from a
-     current one. */
-  await writeAtomic(path.join(outDir, "labels.json"), labelRun.file);
-  /* Through `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser
-     version into `output/<slug>.blocks.json`; this line rewrites the copy the
-     reading view actually opens, and writing the bare array here dropped the
-     stamp on every article. Not unsafe — an absent stamp reads as stale, and
-     stale means re-sanitise — but it made the stamp worthless: every article
-     paid the re-clean on every load and fired the "predates the sanitiser"
-     warn every time, which is how a warning stops being read. Note the check
-     anybody would run, "is stage 3 writing the stamp?", answers yes. It is,
-     into a different file. See docs/project/security.md. */
-  await writeAtomic(path.join(outDir, "blocks.json"), blocksArtefact(blocks));
-  await writeAtomic(path.join(outDir, "tree.json"), tree);
-  /* The working state is only now safe to throw away — see
-     src/labels.ts § `LabelRun.clearCheckpoint`. */
-  await labelRun.clearCheckpoint();
+  /**
+   * **The blocks that went in and the blocks that come out hash the same, and
+   * that is asserted rather than assumed.**
+   *
+   * Three parties hash "the blocks this tree was built from" and none of them
+   * talks to the other two. `generateLabels` hashes what it was handed and
+   * stamps it into `labels.json`. The pipeline step records `hashBlocks` of the
+   * array it read from the store and passed in here — that is the value
+   * `reasonsNotToPublish` compares against the published blocks, and the value
+   * `assertStampAgrees` compares against `labels.sourceHash` on the way into
+   * either store. And this stage returns `blocksArtefact(blocks)`, which is
+   * what actually gets stored.
+   *
+   * They agree today, and for a narrow reason: `hashBlocks` reads `id`, `text`,
+   * `role` and `treatment`, and `blocksArtefact` maps one to one and rewrites
+   * only `html`. Both halves of that could move — a label pass over the body
+   * alone, a sanitiser that touched text — and the failure is silent at the
+   * point it happens and loud somewhere useless: every article becomes
+   * unpublishable with *"the tree was built from different blocks"*, from runs
+   * that all reported success.
+   *
+   * So it is checked here, at the seam, where the answer is known and the
+   * message can say what actually went wrong.
+   */
+  const storedHash = hashBlocks(parts.blocks.blocks);
+  if (parts.labels.sourceHash !== storedHash) {
+    throw new Error(
+      `The labels were written against different blocks from the ones this stage is returning ` +
+        `(${parts.labels.sourceHash} vs ${storedHash}). The step records a hash of the blocks it ` +
+        `handed in, and the publish guard compares that against the blocks that were stored, so ` +
+        `this would make the article unpublishable. Nothing has been written.`,
+    );
+  }
+
+  /* **No write, and no ordering.** This function used to write `labels.json`,
+     then `blocks.json`, then `tree.json`, and the tree went last on purpose: the
+     queue decided a step was done by whether its output files existed
+     (src/pipeline.ts) and `writeFile` truncates its target before it has
+     anything to put in it, so a crash mid-sequence left a present-but-truncated
+     tree that a retry skipped — or, on a forced regeneration, new labels beside
+     last week's tree.
+     Both halves of that justification are about three separate writes, and this
+     function makes none: it hands all three to its caller in one `parts` map
+     and the caller gives them to its store in one call.
+
+     **What that map does and does not buy, because an earlier version of this
+     comment said they "land together or not at all" and that is false on the
+     filesystem.** `fsStoreSession` has no transaction and says so outright
+     (src/store/session.ts); its writes are sequential, so a kill between them
+     really does leave one artefact new and another old. Three separate things
+     make the ordering unnecessary anyway:
+
+     - **On the filesystem**, the `beginStep` marker. A step that did not finish
+       leaves it behind, so the next run re-runs the step over whatever the
+       partial write left rather than skipping it. That marker is the
+       filesystem's whole answer to atomicity, and it is weaker than a
+       transaction rather than an imitation of one.
+     - **On Postgres**, the store's transaction, which does make the three
+       atomic — the property the old sentence claimed, in the one store that has
+       it.
+     - **And the map itself** centralises ownership: one place that knows what
+       this stage produces, so nothing can write two of the three and forget the
+       third. That is worth having and it is not atomicity.
+
+     The ordering survives in exactly one place — `main()` below, which really
+     does write three files. GPT Sol, 2026-08-31. */
 
   return {
-    tree,
-    outDir,
+    parts,
+    /* `parts.labels.sourceHash`, not `storedHash`, though the check above has
+       just proved them equal. The caller's stamp is compared against the labels
+       file by `assertStampAgrees`, so the value that travels has to be *read
+       off the artefact* rather than computed alongside it — otherwise the two
+       are equal by a convention rather than by construction, which is the
+       arrangement this whole stage of the migration exists to remove. */
+    inputHash: parts.labels.sourceHash,
+    clearCheckpoint: labelRun.clearCheckpoint,
     model: CAPABLE_MODEL,
     blocks: blocks.length,
     structural,
@@ -1401,8 +1581,8 @@ export async function generateToc(opts: {
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedHeadings: built.droppedHeadings.length,
-    labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
-    internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
+    labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
+    internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
@@ -1417,29 +1597,77 @@ export async function generateToc(opts: {
   };
 }
 
+/**
+ * `npm run toc -- <blocks.json> [outDir]` — **the only caller that still turns
+ * these artefacts into files.**
+ *
+ * It reads the blocks itself and writes the three files itself, which is what
+ * "every stage stays runnable on its own" costs now that the stage neither
+ * reads a path nor writes a directory. The files are the same three files, in
+ * the same three places, with the same contents.
+ */
 async function main(): Promise<void> {
   const blocksPath = process.argv[2];
   if (!blocksPath) {
     console.error("Usage: tsx src/toc.ts <blocks.json> [outDir]");
     process.exit(1);
   }
-  const argOutDir = process.argv[3];
-  // Before the call, not after: this is the only thing on screen for the two
-  // minutes the model takes.
+  const slug = slugForBlocksPath(blocksPath);
+  const outDir = process.argv[3] ?? path.join("data", slug);
   /* At the program's edge, not inside the gateway — see `messagesClient` in
      src/messages-stream.ts for the test that proved the difference. Without it
      this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
+     there in `.env.local`.
+
+     **Before the first `await`**, which is why it sits above the read rather
+     than beside the call it is for: "the file is read before the work starts"
+     is the property, and a rule that has to make an exception for which awaits
+     are harmless is not a rule. src/labels.ts § `main` makes the same point,
+     and tests/paid-cli-ledger.test.ts is what caught this one going below the
+     blocks read when stage 4 stopped reading them itself. */
   loadEnvLocal();
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a CLI's uncaught throw is printed, and the same text
+     reaches the log when a stage throws (src/jobs.ts § `errorFields`).
+     src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
+    await readFile(blocksPath, "utf-8"),
+    "blocks.json",
+  );
+  // Before the call, not after: this is the only thing on screen for the two
+  // minutes the model takes.
   console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
+  /* The checkpoint lands in the output directory, as it always has, so a CLI
+     run killed eight batches into a book resumes rather than paying again.
+     `generateToc` makes the directory before the first batch can save into it. */
   const run = await generateToc({
-    blocksPath,
-    ...(argOutDir ? { outDir: argOutDir } : {}),
+    blocks,
+    slug,
+    checkpointDir: outDir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
+  /* **Labels, blocks, then the tree — and here the ordering is still real.**
+     These are three separate writes into a directory other things read, and the
+     filesystem store answers "is this step done?" with "do its files exist?".
+     Each is written beside its target and renamed, so it appears whole or not at
+     all, and the tree — the file every reader starts from — appears only once the
+     other two are already there.
+     The stage itself no longer does any of this: it returns all three and the
+     pipeline stores them in one call, where a partial set is not a state that
+     exists. See the note at the end of `generateToc`. */
+  await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
+  await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
+  await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
+  /* Only now is the working state safe to throw away — see
+     `TocRun.clearCheckpoint`, and src/labels.ts for what it protects. */
+  await run.clearCheckpoint();
+
   console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
-  console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
+  console.log(
+    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)`,
+  );
   console.log(
     `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s)` +
       (run.labelsResumed > 0
@@ -1484,9 +1712,9 @@ async function main(): Promise<void> {
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
-  console.log(`Validate:  npm run validate-tree -- ${run.outDir}`);
-  console.log(`Eval:      npm run eval:toc -- ${run.outDir}`);
+  console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
+  console.log(`Validate:  npm run validate-tree -- ${outDir}`);
+  console.log(`Eval:      npm run eval:toc -- ${outDir}`);
 }
 
 /* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`

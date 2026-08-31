@@ -86,7 +86,19 @@ function stepProducing(name: StepName, produces: PipelineStep["produces"]): Pipe
     label: "Testing the seam",
     outputs: () => [],
     produces,
-    run: async () => ({ detail: "never called" }),
+    /* **It throws rather than returning something, and that is the honest
+       shape.** These cases hand `checkProduct` and `commit` a product directly —
+       the subject is the rule that decides what a `run` may return, so nothing
+       here runs one. It used to answer `{ detail: "never called" }`, which
+       stopped compiling when `LEGACY_UNCONVERTED_STEPS` emptied on 2026-08-31
+       and every step's `run` came to require a `ConvertedProduct`. Inventing a
+       `parts` to satisfy the signature would put a fiction in the one fixture
+       whose whole subject is what counts as a real product, and a cast would
+       hide it. A throw satisfies the type, says what it means, and turns a
+       future caller into an immediate error instead of a plausible answer. */
+    run: async () => {
+      throw new Error("stepProducing().run is never called — see the note beside it");
+    },
   };
 }
 

@@ -251,6 +251,39 @@ other three are three different problems, and one of them is not a stage-2 probl
   the right answer rather than writing compatibility code — but only if the state is refused loudly
   rather than skipped.
 
+**✅ Built 2026-08-31.** `writeRaw(doc)` loses its directory and returns a `StoredRawManifest`;
+`readRawBytes(manifest)` is its inverse; `runExtract({ html, url, slug })` and `runPdfExtract`
+return `extractedHtml` instead of writing it. Both steps return `parts`, so
+`LEGACY_UNCONVERTED_STEPS` is now **empty** and `LegacyUnconvertedStep` resolves to `never` — every
+step's `run` is required by the compiler to return a `ConvertedProduct`, with no way round it.
+
+- **The read went in `src/fetch.ts` as `writeRaw`'s inverse, not on `SourceStore`**, and the reason
+  is stronger than the content-type one this plan gave. `pgSourceStore.readPdf` resolves the slug
+  through `articles.currentRevisionId` and `ownedSlug`; stage 2 runs against a **draft** revision in
+  a job with no request owner, and a fresh ingest has no current revision at all — so a sibling
+  method there would answer `null` on the ordinary path. That is the shape of Sol's first NO-SHIP.
+  Store selection is `blobStore()`, matching the write; anything else is a split brain by
+  construction.
+- **The `npm run fetch` CLI still writes its two files.** Every other stage CLI does, the rule is
+  *the generator stops writing and the caller writes*, and for a command line the caller is
+  `main()`. It prints the object key as well, which is new and earns its place — see below.
+- **`RawDocumentUnavailable` is classified `blocked`, not left unclassified.** All three reasons —
+  `no-object`, `missing`, `corrupt` — mean the document behind the manifest is not there. Retry
+  never re-runs a step that finished, and `fetch` finished, so a retry would read the same absent
+  object. The fix is a refetch, and `blocked` is how the reader is told that instead of being
+  offered a button that cannot work.
+- **The upload branch moved with the fetched branch.** `acquireUpload` wrote `raw.pdf` and
+  `raw.json` itself, which would have left the two origins ending in different places — the one
+  thing the stage 1/2 seam exists to prevent.
+
+**And it found a fault nobody was looking for: nine of the eighteen local manifests name an object
+the reading process cannot see.** `blobStore()` follows the credentials, so the corpus was written
+across two stores depending on whether a process had called `loadEnvLocal()`. There was a writer, a
+name, a hash and a verification on the way in, and **no reader at all** — so every check that
+existed passed, because every check that existed was on the write. It is loud now.
+[a-write-path-with-no-reader.md](../postmortems/a-write-path-with-no-reader.md) has the measurement
+and how to repeat it. Refetching is the answer, per decision 4, and stage 2.5 is where it happens.
+
 #### Stage 2a — ✅ built 2026-08-31
 
 **It does not fix anything a reader can see, and I wrote the opposite here first.** The correction is
@@ -288,11 +321,23 @@ job-scoped `/tmp` they are not, and a stage that hashes one article and generate
 stale artefact reporting itself current for ever. Both halves now go through the one function, so
 they cannot disagree.
 
-- **`meta` stays nullable and the nullability is load-bearing.** `ideas` and `sketch` build a stub
-  `{ title: tree.slug }` for the *prompt* while fingerprinting the real `null`. Hashing the stub
-  writes a fingerprint the stamp can never reproduce — every article without metadata stale for ever,
-  looking healthy. That near-miss was caught once before; `tests/stage-stamp-agreement.test.ts` is
-  now the thing that catches it, and it was made to go red on exactly that mutation.
+- **`meta` stays nullable, and what the nullability buys is not what this bullet said until
+  2026-08-31.** `ideas` and `sketch` build a stub `{ title: tree.slug }` for the *prompt* while
+  fingerprinting the real `null`. The claim here — and in two source comments and two test headers —
+  was that hashing the stub instead writes a fingerprint the stamp can never reproduce. It does not:
+  `articleWithIdsFingerprint` resolves `fallbackHeadTitle` itself for a `null` meta, so the stub and
+  the `null` hash to the same sixteen characters (`…6a2b21a9397b6af2` on `example/`, both), and the
+  mutation was applied to the real source with nothing going red anywhere.
+
+  The property that *is* load-bearing: **every field the fallback renders into the prompt has to be
+  one the fingerprint represents.** Adding `byline: "Unknown"` to the stub puts a `BY: Unknown` line
+  in front of the model that no hash describes — stale for ever, looking healthy — and it left both
+  `tests/stage-stamp-agreement.test.ts` and `tests/meta-fallback-fingerprint.test.ts` green.
+  `tests/meta-fallback-fingerprint.test.ts` now asks the property directly: the head that reached the
+  model must be exactly the head the fingerprint stands for, reconstructed from the fields the
+  fingerprint canonicalises. Watched red on that mutation for both stages. `stage-stamp-agreement`
+  cannot see it and now says so — both of its sides go on hashing the same `null`. GPT Sol, NO-SHIP
+  finding 2 of 2026-08-31.
 - **`writeAssets` is gone** rather than left exported with no callers.
 
 #### Stage 2b — `blocks` and `toc`
@@ -347,6 +392,23 @@ one `parts` map with `stamp: { inputHash: run.inputHash }`.
   the interface nor the return. `stamp: { inputHash: undefined }` records nothing, `toc` carries
   `NO_INPUT_HASH`, and `reasonsNotToPublish` then refuses every article. A report is evidence about
   what an agent meant, not about what is in the file.
+
+**One test across all three stages, because every seam moved on the same day.**
+`tests/acquire-extract-blocks-end-to-end.test.ts` runs stage 1 → 2 → 3 in sequence through the real
+artefact store, with no network and no model call. Every other test in the repo asks about one seam;
+this asks whether they join, which matters because the bytes, the article and the blocks all changed
+what crosses their boundary within hours of each other, converted by three different agents. It also
+asks the two questions no unit test does: that `isDone` answers **true immediately after a run**
+(an over-firing guard makes stage 3 re-run for ever while every fixture-based test stays green — two
+earlier versions of that guard did over-fire), and that a re-run carries the ids.
+
+**Its first version was vacuous and the way it was vacuous is the lesson.** It asserted that a second
+`blocks` run kept the ids, and that passes on the filesystem *whether or not the baseline works* —
+`extractedHtml` and `stampedHtml` are one file, so stage 3 re-reads a document that already carries
+the ids it wrote last time and simply reuses them. Deleting the baseline outright
+(`previous = undefined`) left it green. It now re-runs **stage 2** first, so an id-free document is
+back in place and the baseline is the only possible source; the same mutation now reddens it. That is
+fault 2 in miniature — in Postgres `extractedHtml` never carries ids, so *every* run is that run.
 
 **`extractedHtml` and `stampedHtml` stay one file on the filesystem, and that is a deliberate
 non-decision.** `PATHS` in [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts) maps both to
@@ -417,8 +479,29 @@ Two ways out: write explicit legacy handling for imported revisions, or **refetc
 article before the flip**. Refetching wins on Greg's decision 4 — the data is expendable and refetch
 is free — and it avoids writing compatibility code whose only purpose is to be deleted at stage 4.
 
-**Done:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, proved by
-a query rather than by re-running the importer.
+**And since 2026-08-31 there is a second, larger reason to refetch.** Nine of the eighteen local
+manifests name a source object the reading process cannot see, because `blobStore()` follows the
+credentials and the corpus was written across two stores
+([a-write-path-with-no-reader.md](../postmortems/a-write-path-with-no-reader.md)). Stage 2c made
+that loud: `extract` now dereferences the manifest, so about half the corpus refuses on a laptop
+until it is refetched. Same answer, same reason — decision 4 — and it is now the *first* thing a
+developer hits rather than something discovered at the flip.
+
+**Done:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, and every
+manifest's object is readable through `readRawBytes` — both proved by a query and a dereference
+rather than by re-running the importer.
+
+### Stage 3 — the flip
+
+**This heading did not exist until 2026-08-31 and its absence was doing damage:** every bullet below
+was sitting under stage 2.5, so the document read as though refetching the corpus and switching the
+store were one piece of work. They are not, and the whole staging argument turns on their being
+separate.
+
+**The flip itself is one line** — `fsStoreSession` becomes `pgStoreSession` at
+[`src/jobs.ts:1048`](../../src/jobs.ts), where line 57 also imports `fsArtifacts` directly. Stage 2
+exists so that this line is the only one that has to change; everything before it was making that
+true.
 
 - **Exercise the real coordinator through `openPgStoreSession`** — the unexercised path.
 - **Add exact-base verification**: reads bound to revision R1 must not be overlaid onto a draft
@@ -431,6 +514,26 @@ a query rather than by re-running the importer.
   columns untouched, and the active-job guard no longer covers a finished job. *"Data is expendable"*
   does not make a revision whose metadata and referenced object describe different acquisitions
   correct.
+- **Give `slugIsSpokenFor` its Postgres branch — this is a hard prerequisite, not a tidy-up.** It
+  reads the `fetch` manifest to answer *is this article this upload's own*, and under Postgres that
+  answer is not on the revision: `origin` is derivable from the two URLs being null, and the upload
+  id is on `jobs.upload_id`. Without it, **retrying an existing upload treats its own slug as
+  occupied and creates `slug-2`**, re-running from the top and paying for the transcription again.
+  Deferring it out of stage 2 was right; carrying it past the flip is not. GPT Sol, 2026-08-31.
+- **Fix retry after a failed forced refresh, which currently loses the work it completed.** Sol found
+  this and it is a **fourth fault**, not a refinement of the three above:
+  1. Published revision R1 exists.
+  2. A forced job writes new `fetch`, `extract` and `blocks` into a draft, then fails at `toc`.
+  3. The failed draft is discarded (`src/store/pg-session.ts`).
+  4. Retry forces only from the first *unfinished* step (`src/jobs.ts` § `forceForRetry`).
+  5. Its new draft copies **R1**, so the earlier steps skip as current and `toc` runs over the old
+     article. **The retry reports success and the refresh is silently gone.**
+
+  Two ways out and they are not equivalent: re-force from the earliest *originally* forced step, or
+  retain the failed draft rather than discarding it. The first is cheaper and throws away paid work;
+  the second keeps it and needs a rule for when a failed draft is finally dropped. Decide it before
+  the flip, because the flip is what makes step 3 real — on the filesystem there is no draft to
+  discard.
 - Then flip.
 
 **Done:** a real ingest, a real single-step job and a real retry, end to end against Postgres, on a

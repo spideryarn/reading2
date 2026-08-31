@@ -54,6 +54,7 @@ import {
   blocksArtefact,
   previousBlocksFrom,
   runBlocks,
+  splitIntoBlocks,
 } from "../src/blocks.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
@@ -505,6 +506,51 @@ describe("the stamped HTML stage 3 returns", () => {
     expect(again.stats.reused).toBe(3);
     expect(again.stats.minted).toBe(0);
     expect(idsIn(again.blocks)).toEqual(idsIn(first.blocks));
+  });
+
+  /**
+   * **The ids are not the pair.** The two above ask about ids, and every
+   * assertion in them survives a `runBlocks` that keeps each id exactly where it
+   * was and hands back a document whose *paragraphs say something else*: the ids
+   * exist, they are in the HTML, all three are reused on a second pass, none is
+   * minted. GPT Sol found that mutation on 2026-08-31 and it passed the whole
+   * file. What it produces is a Postgres commit — one transaction, so genuinely
+   * atomic — of a `stampedHtml` and a `blocks` that describe different text, and
+   * then the stage re-runs on every job for ever, because `blocksMatchTheirHtml`
+   * refuses it at each following skip check and its answer is *not current*
+   * rather than *broken*.
+   *
+   * So the pair is asked about twice here, and the two questions are not the
+   * same one:
+   *
+   * 1. **The replay**, which is `blocksMatchTheirHtml`'s own question
+   *    (src/pipeline.ts § 2 and 3) asked at the seam where the answer still
+   *    means something: stage 3 run again over stage 2's document, with these
+   *    blocks as its baseline, must give this document and these blocks.
+   * 2. **The re-read**, which the replay cannot ask. A replay runs
+   *    `splitIntoBlocks` a second time, so anything wrong *inside*
+   *    `splitIntoBlocks` is wrong identically on both sides and the comparison
+   *    agrees with it — and that is not only a hole in this test, it is the same
+   *    hole in `blocksMatchTheirHtml`, which would go on calling the step done.
+   *    Parsing the returned HTML back out shares no such assumption: whatever
+   *    the document actually says is what comes back.
+   *
+   * Both were watched red; the messages are in the review write-up.
+   */
+  it("describes the same text the blocks beside it claim", () => {
+    const run = runBlocks({ slug: "a", extractedHtml: EXTRACTED, previous: undefined });
+
+    const replay = splitIntoBlocks(EXTRACTED, run.blocks);
+    expect(replay.html).toBe(run.html);
+    expect(replay.blocks).toEqual(run.blocks);
+
+    /* No baseline, deliberately. Handing `run.blocks` in would let
+       `carryOverIds` put an id back onto a paragraph by matching its words, so a
+       document that had lost its ids would still come back looking right; with
+       nothing to help it, every id has to be in the bytes and every word beside
+       it has to be the word the block claims. */
+    const reread = splitIntoBlocks(run.html);
+    expect(reread.blocks).toEqual(run.blocks);
   });
 });
 

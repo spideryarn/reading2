@@ -156,8 +156,6 @@ interface Ran {
 function fakeStep(
   name: StepName,
   ran: Ran & { names: StepName[] },
-  artifacts: FakeArtifacts,
-  slug: string,
   body: () => Promise<void> | void = () => {},
 ): PipelineStep {
   return {
@@ -169,9 +167,9 @@ function fakeStep(
       ran.names.push(name);
       await body();
       /* Everything it declares, so `checkProduct` accepts it and
-         `assertProduced` reads it back. `artifacts` is still a parameter
-         because the cases that want an artefact already present — a step that
-         should skip — put it there with `put` before the walk starts. */
+         `assertProduced` reads it back. The cases that want an artefact
+         *already* present — a step that should skip — put it there with `put`
+         before the walk starts, which is why this no longer takes the store. */
       const parts = Object.fromEntries(
         STEPS[name].produces.map((kind) => [kind, { made: name }]),
       ) as ArtifactParts;
@@ -223,7 +221,7 @@ async function fixture(
   const artifacts = memoryArtifacts();
   const ran: Ran & { names: StepName[] } = { names: [] };
   const steps = Object.fromEntries(
-    names.map((name) => [name, fakeStep(name, ran, artifacts, slug, bodies[name])]),
+    names.map((name) => [name, fakeStep(name, ran, bodies[name])]),
   ) as Partial<Record<StepName, PipelineStep>>;
   const job = await queueJob(slug, names);
   return { artifacts, ran, job, parts: partsFor(artifacts, steps) };

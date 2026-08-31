@@ -5,9 +5,14 @@
  *
  *   npm run blocks -- output/noema-mythology-of-conscious-ai.html
  *
- * Writes ids into the HTML in place (so `#spya-k3m9qt` anchors work with no
- * JavaScript) and a sibling `.blocks.json`. Re-running is idempotent: ids
- * already present are kept, only missing ones are minted.
+ * Ids go into the HTML itself (so `#spya-k3m9qt` anchors work with no
+ * JavaScript) and into a `.blocks.json` beside it. Re-running is idempotent:
+ * ids already present are kept, only missing ones are minted.
+ *
+ * **`runBlocks` neither reads nor writes any of that.** It takes the HTML as a
+ * string and returns the stamped HTML and the blocks; the pipeline gives them
+ * to the artefact store and `main()` at the bottom of this file writes the two
+ * files the command line above still produces.
  */
 
 import { JSDOM } from "jsdom";
@@ -1111,17 +1116,24 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
 
 // ---------------------------------------------------------------- CLI
 
+/* The CLI lives in a function rather than at the top level so this module has
+   no top-level `await`. With one, the module becomes an *async module* and any
+   CommonJS consumer gets ERR_REQUIRE_ASYNC_MODULE on import — which the isMain
+   guard does not prevent, since it is the syntax that matters, not whether the
+   branch runs. ESM importers are unaffected either way; this just keeps
+   splitIntoBlocks importable from anywhere. */
+
 /**
- * The CLI lives in a function rather than at the top level so this module has
- * no top-level `await`. With one, the module becomes an *async module* and any
- * CommonJS consumer gets ERR_REQUIRE_ASYNC_MODULE on import — which the isMain
- * guard does not prevent, since it is the syntax that matters, not whether the
- * branch runs. ESM importers are unaffected either way; this just keeps
- * splitIntoBlocks importable from anywhere.
+ * What one run of stage 3 produced, and **the two artefacts are both in here**
+ * — `html` is the stamped document and `blocks` is the spine, inherited from
+ * `SplitResult`. The step hands them to the store as
+ * `parts: { stampedHtml, blocks }`; `main()` below writes them to two files.
+ *
+ * `html` keeps its name rather than becoming `stampedHtml`, because
+ * `blocksMatchTheirHtml` (src/pipeline.ts) reads the same field off a bare
+ * `SplitResult` and the two must not be two names for one string.
  */
 export interface BlocksRun extends SplitResult {
-  htmlFile: string;
-  jsonFile: string;
   /**
    * How many blocks the baseline held — what the pipeline used to work out for
    * itself by counting two files, and now simply gets told.
@@ -1445,54 +1457,75 @@ async function previousBlocksInFile(jsonFile: string): Promise<Block[] | undefin
 }
 
 /**
- * Stage 3 over a file on disk: read, split, write both artefacts back.
+ * Stage 3 as a function of its input: the article's HTML in, the stamped HTML
+ * and the blocks out. **It reads nothing and writes nothing.**
  *
- * Exported because there are two callers and they must not drift — `main()`
- * below, and the ingest queue running the same stage in the server process
- * (src/pipeline.ts). Everything interesting is still in `splitIntoBlocks`,
- * which is pure; this is the IO around it.
+ * Until 2026-08-31 it took an `htmlFile`, read it, and wrote the two artefacts
+ * back over it and beside it. Both halves have gone with the filesystem: the
+ * step reads `BLOCKS_INPUT_HTML` out of the store and hands the string in, then
+ * gives what comes back to the store as `parts: { stampedHtml, blocks }`.
+ * `main()` below does its own reading and writing, and that is now the entire
+ * difference between the command line and the pipeline.
+ *
+ * Exported because there are still two callers and they must not drift.
+ * Everything interesting remains in `splitIntoBlocks`; this is the baseline,
+ * the two guards and the slug.
+ *
+ * **Synchronous, and deliberately so.** There is nothing left to await, and an
+ * `async` wrapper around a pure function turns both refusals below into
+ * rejected promises — which a caller that forgets the `await`, or writes `void
+ * runBlocks(…)`, converts into an unhandled rejection while carrying on. A
+ * throw is a throw at the call site.
  *
  * **Ids are carried over from the previous run's blocks, not re-minted.** That
  * is the whole reason a re-extraction is survivable — see
  * docs/project/block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters.
  *
- * **`previous` is required, and that is the point of this change.** It used to
- * be read here, from `jsonFile`, inside a `try/catch` whose `catch` said "first
- * run for this article" — so the day the pipeline's artefacts leave the
- * filesystem, that read fails on every run and every article silently becomes a
- * first ingest. A required argument cannot be dropped by a landing that removes
- * the files; an optional one can, and would compile.
+ * **`previous` is required, and it is the load-bearing part of this signature.**
+ * It used to be read here, from `jsonFile`, inside a `try/catch` whose `catch`
+ * said "first run for this article" — so the day the pipeline's artefacts leave
+ * the filesystem, that read fails on every run and every article silently
+ * becomes a first ingest. A required argument cannot be dropped by a landing
+ * that removes the files; an optional one can, and would compile.
  */
-export async function runBlocks(opts: {
-  htmlFile: string;
-  jsonFile?: string;
+export function runBlocks(opts: {
+  /**
+   * The article's name, for the two refusals to say out loud. It used to come
+   * from `path.basename(htmlFile)`; with no path there is no basename, and a
+   * refusal that cannot name the article is much less use than one that can.
+   */
+  slug: string;
+  /**
+   * **Stage 2's document, and never stage 3's own `stampedHtml`** — the choice
+   * is real once the two stop being one file, and `BLOCKS_INPUT_HTML` above is
+   * where the reasoning lives. Named for the artefact rather than called `html`
+   * so that handing over the wrong one is visible at the call site.
+   */
+  extractedHtml: string;
   /**
    * The previous run's blocks — `undefined` **only** for a genuine first
    * ingest. `previousBlocksFrom` above is how the pipeline gets it.
    */
   previous: Block[] | undefined;
-}): Promise<BlocksRun> {
-  const htmlFile = opts.htmlFile;
-  const jsonFile = opts.jsonFile ?? `${htmlFile.replace(/\.html$/, "")}.blocks.json`;
-  const previous = opts.previous;
+}): BlocksRun {
+  const { slug, extractedHtml, previous } = opts;
 
-  const source = await readFile(htmlFile, "utf-8");
-  const result = splitIntoBlocks(source, previous);
-  /* Before either write, so a refusal leaves the previous artefacts exactly
-     where they were rather than half-replaced by the run that was refused. */
-  const slug = path.basename(htmlFile).replace(/\.html$/, "");
+  const result = splitIntoBlocks(extractedHtml, previous);
+
+  /* **Before the `return`, which is now the whole of the mechanism.** These two
+     used to run "before either write"; there are no writes left here to stand
+     in front of, so what a refusal has to withhold is not a half-finished file
+     but the *value* — the `BlocksRun` its caller would otherwise go on to store.
+     There is exactly one `return` in this function and it is below both, so a
+     refused run yields nothing at all and the previous revision's blocks and
+     HTML are still the article, in either store. Keeping them here rather than
+     in the step matters for the same reason: a guard the caller has to remember
+     is a guard the next caller forgets. The order between the two is unchanged
+     and argued at `assertSomethingWasProduced`. */
   assertIdsCarried(slug, previous, result.blocks);
   assertSomethingWasProduced(slug, result.blocks);
 
-  await writeFile(htmlFile, result.html, "utf-8");
-  /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp
-     is what makes a stale artefact visible at all; without it a blocks.json
-     written before DOMPurify existed is indistinguishable from one written this
-     morning, and "re-run stage 3 to clean them" is advice nothing ever asks
-     for. Re-running this stage *is* the migration: it rewrites the file anyway. */
-  await writeFile(jsonFile, JSON.stringify(blocksArtefact(result.blocks), null, 2), "utf-8");
-
-  return { ...result, htmlFile, jsonFile, previousBlocks: previous?.length ?? 0 };
+  return { ...result, previousBlocks: previous?.length ?? 0 };
 }
 
 async function main() {
@@ -1503,14 +1536,30 @@ async function main() {
   }
   const argOut = process.argv[3];
   const jsonFile = argOut ?? `${input.replace(/\.html$/, "")}.blocks.json`;
+  /* The reading and the writing are the CLI's own now. On the filesystem stage
+     2's `extractedHtml` and stage 3's `stampedHtml` are the same path, so the
+     file named here is both — which is exactly the ambiguity `BLOCKS_INPUT_HTML`
+     exists to remove for the pipeline, and which the command line cannot have
+     an opinion about. */
+  const source = await readFile(input, "utf-8");
   /* The CLI has files and no store, so it resolves its own baseline — and it is
      the *only* caller allowed to, because it is the only one for which "the
      file is not there" honestly means "there is nothing to carry". */
-  const { blocks, stats, jsonFile: outJson } = await runBlocks({
-    htmlFile: input,
-    jsonFile,
+  const { blocks, html, stats } = runBlocks({
+    slug: path.basename(input).replace(/\.html$/, ""),
+    extractedHtml: source,
     previous: await previousBlocksInFile(jsonFile),
   });
+
+  /* Nothing above this line has touched the disk, so a run the guards refused
+     leaves both artefacts exactly as the previous run left them. */
+  await writeFile(input, html, "utf-8");
+  /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp
+     is what makes a stale artefact visible at all; without it a blocks.json
+     written before DOMPurify existed is indistinguishable from one written this
+     morning, and "re-run stage 3 to clean them" is advice nothing ever asks
+     for. Re-running this stage *is* the migration: it rewrites the file anyway. */
+  await writeFile(jsonFile, JSON.stringify(blocksArtefact(blocks), null, 2), "utf-8");
 
   const byKind = blocks.reduce<Record<string, number>>((acc, b) => {
     acc[b.kind] = (acc[b.kind] ?? 0) + 1;
@@ -1524,7 +1573,7 @@ async function main() {
   console.log(`Links:     ${stats.retargeted} internal links repointed at our ids`);
   console.log(`Gistable:  ${stats.gistable}  (${stats.total - stats.gistable} skipped)`);
   console.log(`\nHTML:      ${path.resolve(input)}`);
-  console.log(`Blocks:    ${path.resolve(outJson)}`);
+  console.log(`Blocks:    ${path.resolve(jsonFile)}`);
 }
 
 if (isMain(import.meta.url)) void main();

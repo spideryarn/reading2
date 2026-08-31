@@ -27,9 +27,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
@@ -37,7 +38,7 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
+import type { Arc, ArcEntry, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
@@ -290,7 +291,6 @@ function parseJson(raw: string): { arc: string[] } {
 
 export interface ArcRun {
   arc: Arc;
-  outFile: string;
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what an arc cost. */
   model: string;
   parts: TreeNode[];
@@ -307,14 +307,24 @@ export interface ArcRun {
 }
 
 /**
- * Stage 5b over a data directory: one model call, then `arc.json` beside the
- * tree it was written against.
+ * Stage 5b over one article: a single model call, and the arc it returns.
+ *
+ * **It writes nothing.** It used to drop `arc.json` next to the tree it was
+ * written against, which works on a laptop and cannot work through a store that
+ * puts the artefact in a Postgres column — so the caller writes now:
+ * src/pipeline.ts through the store, `main()` below to the directory it was
+ * given. docs/plans/finish-the-database-move.md § Stage 2.
+ *
+ * It no longer reads anything either. The three artefacts it is written from
+ * arrive together as one `Article` (src/article-input.ts), so the bytes it
+ * generates from are the same bytes its `stamp` fingerprinted — on a laptop
+ * those were the same file, and through a job-scoped `/tmp` they were not.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  */
 export async function generateArc(opts: {
-  dir: string;
+  article: Article;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -335,26 +345,13 @@ export async function generateArc(opts: {
   cacheArticle?: boolean;
 
 }): Promise<ArcRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  /* Loaded only so the cached article block reads the same here as it does in
-     the thread and the glossary — the three share one cache entry per article,
-     and a head that differs by a line is a prefix that does not match. Optional,
-     like it is there: a missing meta.json is not worth failing the stage over,
-     and its absence is the same absence for all three. */
-  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
+  /* `meta` is `null` when the article has no metadata, and that is a state
+     rather than a failure — the head of the prompt simply loses its lines, and
+     the fingerprint below is handed the same `null` the prompt was. Whoever
+     built the `Article` resolved it; nothing here re-reads it, because two
+     resolutions of "is there metadata" are two answers waiting to differ.
+     src/article-input.ts. */
+  const { blocks, tree, meta } = opts.article;
   /* **The argument, not the apparatus.** Applied here at the call site rather
      than inside `articleText`/`articleWithIds`, and that is the whole care in
      this line: the two builders look like the seam between automatic and asked
@@ -449,12 +446,9 @@ export async function generateArc(opts: {
     .join("");
 
   const arc = buildArc(parseJson(raw).arc, tree, tree.slug, inputFingerprint(blocks, tree, meta));
-  const outFile = path.join(opts.dir, "arc.json");
-  await writeFile(outFile, JSON.stringify(arc, null, 2), "utf-8");
 
   return {
     arc,
-    outFile,
     model: CAPABLE_MODEL,
     parts,
     blocks: blocks.length,
@@ -481,15 +475,25 @@ async function main(): Promise<void> {
      there in `.env.local`. */
   loadEnvLocal();
   console.log(`Writing the arc with ${CAPABLE_MODEL}\u2026`);
+  /* The command line has a folder and no store, so it reads the article itself
+     — `readArticleFromDir` is the one place left that opens these three files,
+     and it is deliberately not reachable from a request or a queued job. */
   const run = await generateArc({
-    dir,
+    article: await readArticleFromDir(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
+
+  /* And the command writes its own arc.json, in the same place the stage used
+     to. `npx tsx src/arc.ts <dir>` is unchanged from outside; what moved is
+     which layer does the writing, so the pipeline can write through the store
+     instead. */
+  const outFile = path.join(dir, "arc.json");
+  await writeFile(outFile, JSON.stringify(run.arc, null, 2), "utf-8");
 
   console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${CAPABLE_MODEL}`);
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
   run.arc.entries.forEach((e, i) => {
     console.log(`${String(i + 1).padStart(2)}. ${run.parts[i]?.title ?? ""}\n    ${e.text}\n`);
   });

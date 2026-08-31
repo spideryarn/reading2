@@ -20,10 +20,9 @@
  * ran.
  */
 import { createHash } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { readRaw } from "../src/fetch.js";
+import { readRawBytes } from "../src/fetch.js";
 import { contextPaths, STEPS, stepLabel } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { canonicalKey, stagingKey } from "../src/source.js";
@@ -88,12 +87,19 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
 describe("acquiring an uploaded file", () => {
   it("writes the same manifest a fetch writes, so stage 2 cannot tell the difference", async () => {
     const bytes = aPdf();
-    const { id, ctx, dir } = await readyToVerify(bytes);
+    const { id, ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx, fsArtifacts);
-
-    const manifest = await readRaw(dir);
+    /* **The manifest the step returns, not one read back off the disk.** Stage
+       1 stopped writing `raw.json` and `raw.pdf` on 2026-08-31: it puts the
+       document in the content-addressed bucket and hands the manifest back as
+       `parts.raw` for the store to write
+       (docs/plans/finish-the-database-move.md § Stage 2c). Reading a file here
+       tested the old shape, and the claim in this test's name — that the two
+       origins produce the same artefact — is about the artefact rather than
+       about where a laptop happens to keep it. */
+    const product = await STEPS.fetch.run(ctx, fsArtifacts);
+    const manifest = product.parts?.raw;
     expect(manifest?.kind).toBe("pdf");
     expect(manifest?.file).toBe("raw.pdf");
     expect(manifest?.origin).toBe("upload");
@@ -116,7 +122,14 @@ describe("acquiring an uploaded file", () => {
        that a path which set them from each other would still fail. */
     expect(manifest?.storedSha256).toBe(shaOf(bytes));
     expect(manifest?.storedBytes).toBe(bytes.byteLength);
-    expect(new Uint8Array(await readFile(path.join(dir, "raw.pdf")))).toEqual(bytes);
+    /* **The object in the bucket, not `raw.pdf` on the disk.** The upload path
+       stopped writing that file with the fetch path on 2026-08-31; the bytes
+       live at their own hash and the manifest names them. Read back through
+       `readRawBytes`, which is the function stage 2 uses, so this asserts the
+       document is reachable *the way the pipeline reaches it* rather than that
+       a copy exists somewhere. */
+    if (!manifest) throw new Error("the step returned no manifest");
+    expect(await readRawBytes(manifest)).toEqual(bytes);
   });
 
   /** The name is a claim about its contents, so promotion has to be create-only. */

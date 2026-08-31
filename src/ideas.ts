@@ -45,9 +45,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -598,7 +599,6 @@ export async function previousIdeasFrom(
 
 export interface IdeasRun {
   ideas: Ideas;
-  outFile: string;
   blocks: number;
   words: number;
   dropped: Dropped;
@@ -815,7 +815,11 @@ function parseJson(raw: string): { ideas?: unknown } {
 }
 
 export async function generateIdeas(opts: {
-  dir: string;
+  /**
+   * The article, read once by whoever has a store or a directory —
+   * src/article-input.ts. This stage no longer knows where one comes from.
+   */
+  article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the full note. */
@@ -834,35 +838,43 @@ export async function generateIdeas(opts: {
    */
   previous: Ideas | null;
 }): Promise<IdeasRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  /* Unlike the glossary, this stage cannot shrug meta.json off: `articleWithIds`
-     needs a head, and a stage that silently rendered a different head would be
-     a stage that silently sent uncacheable bytes. A stub with the slug in it is
-     enough — the head is context for the model, not something the answer cites
-     — and it keeps a missing meta.json from failing a run that has everything
-     it actually needs. */
-  const onDiskMeta: Meta | null = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
-  const meta: Meta = onDiskMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
+  const { blocks, tree } = opts.article;
+  /* Unlike the glossary, this stage cannot shrug a missing metadata off:
+     `articleWithIds` needs a head, and a stage that silently rendered a
+     different head would be a stage that silently sent uncacheable bytes. A
+     stub with the slug in it is enough — the head is context for the model, not
+     something the answer cites — and it keeps an article with no metadata from
+     failing a run that has everything it actually needs. */
+  const realMeta: Meta | null = opts.article.meta;
+  const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
 
-  /* **`onDiskMeta`, not the stub.** The stamp in src/pipeline.ts asks the store
-     for the metadata and hashes `null` when there is none, so hashing the stub
-     here would write a fingerprint the stamp can never produce — and every
-     article without a `meta.json` would report this stage stale for ever, on
-     every run, while looking perfectly healthy. The two sides of a fingerprint
-     have to be handed the same input; the stub is a *prompt* fallback and stops
-     at the prompt. */
-  const sourceHash = inputFingerprint(blocks, tree, onDiskMeta);
+  /* **Nothing may go on that stub that the fingerprint does not represent**,
+     and that — not the choice of `realMeta` on the line below — is the rule
+     this comment is here for.
+
+     The measurement, which is real and which is why the wrong rule looked
+     right: hashing the stub here produces the *identical* hash to hashing
+     `null`. `articleWithIdsFingerprint` resolves `fallbackHeadTitle` itself for
+     a `null` meta, and the stub carries that one field and nothing else, so
+     both give `…6a2b21a9397b6af2` on `example/`. That mutation was applied to
+     this file and nothing went red, because there was nothing to go red. So
+     three earlier versions of this comment, and four other places, stated the
+     load-bearing property as *"hash the real `null`, never the stub"*, and it
+     is not: hashing either is correct today.
+
+     What actually breaks it is a **second field** on the stub. `byline:
+     "Unknown"` puts a `BY: Unknown` line in the prompt that no fingerprint
+     anywhere describes, so the stamp in src/pipeline.ts — which asks the store,
+     finds nothing and hashes `null` — can never reproduce what this stage
+     wrote, and every article without metadata reports this stage stale for
+     ever while looking perfectly healthy. GPT Sol found that the two suites
+     written to protect this both stayed green on it, 2026-08-31.
+     tests/meta-fallback-fingerprint.test.ts now asks the property itself: the
+     head that reaches the model must be exactly the head the hash stands for.
+
+     `realMeta` below rather than `meta` all the same, because passing the value
+     the stamp will pass is the honest way to write it. */
+  const sourceHash = inputFingerprint(blocks, tree, realMeta);
   const profile = opts.profile ?? null;
   /* No `existingFor`, because there is no append. The only thing the old file
      is read for is its ids — and only when it describes the same article, since
@@ -1004,12 +1016,12 @@ export async function generateIdeas(opts: {
     dropped,
   });
 
-  const outFile = path.join(opts.dir, "ideas.json");
-  await writeFile(outFile, JSON.stringify(ideas, null, 2), "utf-8");
-
+  /* **Nothing is written here** — the shape `sketch` and `quotes` already have,
+     and the reason is in `main()` below: a generator that wrote
+     `<dir>/ideas.json` works on a laptop and cannot work through a store that
+     puts the artefact in a Postgres column. */
   return {
     ideas,
-    outFile,
     blocks: blocks.length,
     words,
     dropped,
@@ -1048,7 +1060,11 @@ async function main(): Promise<void> {
   // model works, and printing it afterwards makes the command look hung.
   console.log(`Finding the ideas with ${CAPABLE_MODEL}…`);
   const run = await generateIdeas({
-    dir,
+    /* The command line has a folder and no store, so it is the caller that
+       turns one into an article — src/article-input.ts § `readArticleFromDir`,
+       which is deliberately the only filesystem read left in this half of the
+       pipeline. */
+    article: await readArticleFromDir(dir),
     /* The CLI has files and no store, so it reads the file — and `readIdeas`
        gives one `null` for every kind of failure, which is exactly why this is
        not the pipeline's path any more. Acceptable here: a person is watching,
@@ -1059,6 +1075,15 @@ async function main(): Promise<void> {
   });
 
   const { ideas } = run;
+  /* **The caller writes, not the generator** — the converted shape `sketch`
+     introduced and the one `quotes` follows. A stage that wrote
+     `<dir>/ideas.json` inside `generateIdeas` would work on a laptop and could
+     not work through a store that puts the artefact in a Postgres column; a
+     generator that wrote AND returned would give the pipeline two writes, one
+     of them to a path that does not exist in production. */
+  const outFile = path.join(dir, "ideas.json");
+  await writeFile(outFile, JSON.stringify(ideas, null, 2), "utf-8");
+
   const assumed = ideas.ideas.filter((i) => i.provenance === "assumed").length;
   console.log(
     `\n${run.blocks} blocks, ${run.words} words → ${ideas.ideas.length} ideas ` +
@@ -1076,7 +1101,7 @@ async function main(): Promise<void> {
       `${run.dropped.malformed} malformed, ${run.dropped.truncated} occurrences over the ` +
       `cap, ${run.dropped.overCap} ideas over the cap`,
   );
-  console.log(`\nWrote ${run.outFile}`);
+  console.log(`\nWrote ${outFile}`);
 }
 
 /* **`stageCli`, which is the guard and the ledger together.** Awaited rather

@@ -40,9 +40,11 @@ import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
+import { loadEnvLocal } from "./env.js";
 import { slugFromUrl } from "./ingest.js";
 import { isMain } from "./is-main.js";
-import { storeRawSource } from "./store/blobs.js";
+import { canonicalKey } from "./source.js";
+import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
  * What comes back
@@ -77,14 +79,23 @@ export interface FetchedDocument {
 }
 
 /**
- * **What stage 1 left on disk, and which file is authoritative.**
+ * **What stage 1 acquired, and where the bytes of it are.**
  *
- * Written as `raw.json` beside the bytes. Stage 2 reads this rather than
- * looking to see which raw file exists, and that difference is the whole reason
- * it exists: a re-fetch of a URL that used to serve HTML and now serves a PDF
- * leaves `raw.html` and `raw.pdf` side by side, and "whichever is there" then
- * makes a stale file authoritative by accident — silently, with the article
- * still rendering. Found by a GPT Sol review of the plan before it was built.
+ * Stage 1's whole product since 2026-08-31, when `writeRaw` stopped writing
+ * files: it is returned as `parts: { raw }` and the store decides where it
+ * lands — `raw.json` on the filesystem, columns on `article_revisions` in
+ * Postgres. The **bytes** are not in it and never were; they are a
+ * content-addressed object named by `storedSha256`, and `readRawBytes` below is
+ * how stage 2 gets them back.
+ *
+ * Stage 2 branches on `kind` here rather than looking to see which raw file
+ * exists, and that difference is the whole reason this artefact exists: a
+ * re-fetch of a URL that used to serve HTML and now serves a PDF left
+ * `raw.html` and `raw.pdf` side by side, and "whichever is there" then made a
+ * stale file authoritative by accident — silently, with the article still
+ * rendering. Found by a GPT Sol review of the plan before it was built. Content
+ * addressing closes that a second way: the bytes are named by what they *are*,
+ * so a manifest cannot point at last week's document.
  *
  * It is also where the fields `fetchDocument` already returns and the pipeline
  * used to throw away finally survive: the final URL after redirects, the
@@ -94,7 +105,17 @@ export interface FetchedDocument {
  */
 export interface RawManifest {
   kind: DocumentKind;
-  /** The file beside this manifest that holds the bytes — `raw.html` or `raw.pdf`. */
+  /**
+   * `raw.html` or `raw.pdf` — the name the bytes go by, **not a path to them**.
+   *
+   * It named a real file beside this manifest until 2026-08-31. Nothing writes
+   * that file any more, and the field is kept for three reasons rather than out
+   * of sentiment: `SHAPE.raw` in src/store/artifacts.ts is `{ field: "file" }`,
+   * so it is what tells a usable manifest from a JSON object; `db:export`
+   * writes a directory whose raw file this names (src/store/export.ts); and
+   * every manifest already written has it. Read it as a restatement of `kind`,
+   * and get the bytes from `readRawBytes`.
+   */
   file: string;
   /**
    * How we came by this document. **Absent means `"url"`**, which is what every
@@ -170,25 +191,72 @@ export interface RawManifest {
   backfilled?: string;
 }
 
-/** The bytes and the manifest, together, so the two cannot disagree. */
-export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawManifest> {
-  const file = doc.kind === "pdf" ? "raw.pdf" : "raw.html";
-  await mkdir(dir, { recursive: true });
-  /* HTML is written as the decoded string, not the fetched bytes — every later
-     stage wants text, and the encoding sniff above is the only place that knows
-     how to decode it. The manifest records the encoding so that stays visible;
-     `raw.html` is therefore not raw, which src/db/schema.ts says out loud. */
-  /* One value written to two places, rather than the same expression twice.
-     The file and the object have to be the same bytes or the hash below is
-     about something nobody has. */
-  const storedBytes =
-    doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
-  await writeFile(path.join(dir, file), storedBytes);
-  /* **The object goes to the blob store too, keyed by the hash of what we
-     actually stored.**
-     
+/**
+ * **A manifest that certainly names an object**, which is what every manifest
+ * written from now on is.
+ *
+ * The two fields are optional on `RawManifest` because manifests written before
+ * 2026-08-27 genuinely have no object behind them, and absent is the honest way
+ * to say so. But anything `writeRaw` produces has just put the bytes in the
+ * bucket, so for *that* value they are facts — and saying so in the type is
+ * what lets `npm run fetch` print the key without a non-null assertion, and
+ * what makes `NoStoredDocument` in src/store/artifacts-pg.ts a check on
+ * manifests read back from somewhere rather than on ones we just made.
+ */
+export type StoredRawManifest = RawManifest & { storedSha256: string; storedBytes: number };
+
+/**
+ * **Stage 1's product: the bytes into the object store, and the manifest that
+ * names them.** One function, so the two cannot disagree.
+ *
+ * **It writes no files, and took a `dir` until 2026-08-31.** It wrote
+ * `raw.html`/`raw.pdf` and `raw.json` into `data/<slug>/`, and every one of
+ * those three is now somebody else's decision: the manifest is returned as
+ * `parts: { raw }` and the store puts it wherever that store keeps artefacts,
+ * and the bytes go where they were already going — the content-addressed
+ * `sources` bucket, through a store that is itself selected (`blobs-fs.ts`
+ * locally, `blobs-supabase.ts` deployed). Nothing was reading the two byte
+ * files except stage 2, which now asks `readRawBytes` below.
+ * docs/plans/finish-the-database-move.md § Stage 2c.
+ *
+ * The name is kept deliberately even though the destination changed. It still
+ * writes the raw document; it never promised a directory. Renaming it would
+ * touch ten files' worth of prose to say the same thing.
+ */
+/**
+ * **The bytes we keep, which for an HTML page are not the bytes we were sent.**
+ *
+ * HTML is stored as the decoded string — every later stage wants text, and the
+ * encoding sniff in `decodeHtml` is the only place that knows how to produce
+ * it. The manifest records the encoding so that stays visible; what sits under
+ * `storedSha256` is therefore not raw for a web page, which src/db/schema.ts
+ * says out loud.
+ *
+ * **A function rather than an expression inlined at each site**, and that is
+ * the whole reason it exists. `writeRaw` needs these bytes to hash and store;
+ * `writeRawFiles` needs the identical bytes to put in `raw.html`/`raw.pdf`, or
+ * the file beside a manifest is not the document the manifest's hash describes.
+ * Two copies of one expression is precisely how `npm run fetch` and the
+ * pipeline produced different files at the same path once before.
+ */
+export function storedDocumentBytes(doc: FetchedDocument): Uint8Array {
+  return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
+}
+
+export async function writeRaw(
+  doc: FetchedDocument,
+  /* Injectable for the same reason `readRawBytes` below takes one: the value
+     that matters here is the one that crosses between them, and a round-trip
+     test that cannot name the store is a test of whatever `.env.local` happens
+     to say. `storeRawSource` already took the parameter; this only passes it
+     on. */
+  store?: RawSourceStore,
+): Promise<StoredRawManifest> {
+  const storedBytes = storedDocumentBytes(doc);
+  /* **The object is keyed by the hash of what we actually stored.**
+
      Not `manifest.sha256`, which hashes the bytes off the *network* — and for
-     HTML those are not the bytes above, because this function writes the
+     HTML those are not the bytes above, because this function stores the
      decoded string. Two different questions, and conflating them puts bytes
      under a name that does not describe them, which is the one thing content
      addressing must never do. docs/plans/raw-bytes-in-storage.md § The backfill
@@ -202,11 +270,11 @@ export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawMa
      key is the contents: writing twice is a no-op, and an object nothing
      references is one we keep on purpose. `storeRawSource` verifies a dedup hit
      rather than trusting it. */
-  const stored = await storeRawSource(storedBytes, doc.kind);
+  const stored = await storeRawSource(storedBytes, doc.kind, store ?? blobStore());
 
-  const manifest: RawManifest = {
+  return {
     kind: doc.kind,
-    file,
+    file: doc.kind === "pdf" ? "raw.pdf" : "raw.html",
     requestedUrl: doc.requestedUrl,
     url: doc.url,
     contentType: doc.contentType,
@@ -214,23 +282,300 @@ export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawMa
     bytes: doc.bytes.byteLength,
     sha256: createHash("sha256").update(doc.bytes).digest("hex"),
     storedSha256: stored.sha256,
-    /* The length of what was written above, not of what arrived. `writeRaw`
+    /* The length of what was stored above, not of what arrived. `writeRaw`
        computes `storedBytes` and recorded only its hash until now, so
        `raw_sources.bytes` had no source but a second call to the bucket. */
     storedBytes: storedBytes.byteLength,
     fetchedAt: doc.fetchedAt,
   };
-  await writeFile(path.join(dir, "raw.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  return manifest;
 }
 
 /**
- * The manifest, or `null` where a fetch predates it.
+ * **`raw.json` and the bytes beside it, for the one caller that wants files.**
  *
- * **Null must mean "assume HTML", not "fail".** Every article ingested before
- * this existed has a `raw.html` and no `raw.json`, and refusing to extract
- * those would turn a new field into a migration. The caller decides; this
- * function only reports.
+ * The rule that came out of stage 2a is *the generator stops writing and the
+ * caller writes*, and for a command line the caller is `main()`. Every other
+ * stage CLI in this repo still leaves the file it always left — `arc.json`,
+ * `sketch.json`, `output/<slug>.html` — and a `fetch` command that printed a
+ * digest instead would be the one that broke the pattern. It would also break
+ * something people actually do: running `npm run fetch -- <url>` by hand under
+ * `SPIDERYARN_STORE=files` satisfies the queue's `fetch` step, because the
+ * filesystem artefact store reads `raw.json` at exactly this path
+ * (`PATHS.fetch.raw` in src/store/artifacts-fs.ts).
+ *
+ * **It takes the manifest rather than making one**, so the two files cannot
+ * describe different documents: the caller has already had `writeRaw` hash and
+ * store the bytes, and this puts *those* bytes — from the same
+ * `storedDocumentBytes` — under the name the manifest gives them.
+ *
+ * All of this dies at stage 4 with the filesystem store, which is the right
+ * time for it to die. docs/plans/finish-the-database-move.md § Stage 4.
+ */
+export async function writeRawFiles(
+  dir: string,
+  doc: FetchedDocument,
+  manifest: RawManifest,
+): Promise<{ file: string; manifestFile: string }> {
+  await mkdir(dir, { recursive: true });
+  const file = path.join(dir, manifest.file);
+  await writeFile(file, storedDocumentBytes(doc));
+  const manifestFile = path.join(dir, "raw.json");
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return { file, manifestFile };
+}
+
+/**
+ * A manifest whose bytes cannot be handed over, and **which of the three ways**.
+ *
+ * Its own class, with the reason as a field, because the three are three
+ * different next actions and a caller that cannot tell them apart cannot say
+ * anything useful. `no-object` is a manifest from before the bucket existed and
+ * the answer is a re-fetch; `missing` and `corrupt` are the object store
+ * disagreeing with a reference, and the answer is a person looking — the same
+ * rule, and nearly the same sentence, as `readRawDocument` in
+ * src/store/export.ts and `readPdf` in src/store/pg-source.ts.
+ *
+ * **None of the three is ever silently downgraded to "assume HTML".** That
+ * fallback existed on `readRaw` below and stage 2 relied on it; it is gone, and
+ * this class is what replaced it. Greg's decision 4 of
+ * docs/plans/finish-the-database-move.md makes refetching the right answer for
+ * an old article — but only if the state says so out loud, which is what a
+ * thrown error does and what a quiet default did not.
+ */
+export class RawDocumentUnavailable extends Error {
+  constructor(
+    readonly reason: "no-object" | "missing" | "corrupt",
+    message: string,
+  ) {
+    super(message);
+    this.name = "RawDocumentUnavailable";
+  }
+}
+
+/**
+ * **The bytes a manifest names** — `writeRaw`'s inverse, and stage 2's only way
+ * in.
+ *
+ * Reads the content-addressed object at `canonicalKey(storedSha256, kind)` and
+ * checks it hashes to its own name before handing it over.
+ *
+ * ## Why this is not a method on `SourceStore`
+ *
+ * `SourceStore.readPdf` looks an article up **by slug**, and its Postgres
+ * implementation resolves that through `articles.currentRevisionId` and
+ * `ownedSlug` (src/store/pg-source.ts). Stage 2 runs against a *draft* revision
+ * inside a job: there is no request owner, and on a fresh ingest there is no
+ * current revision at all, so a sibling method there would answer `null` on the
+ * ordinary path. That is the shape of the NO-SHIP in
+ * docs/plans/finish-the-database-move.md § *The thing Greg asked for that is not
+ * available* — pointing a fresh ingest's read at the published revision breaks
+ * the common case to serve the uncommon one. The content-type argument that
+ * makes `readPdf` PDF-only is a separate and also true reason; this one is
+ * decisive on its own.
+ *
+ * ## Why `blobStore()`, and not `postgresBlobStore()`
+ *
+ * Because `writeRaw` above writes through `blobStore()`. Selecting differently
+ * here would be a split brain by construction: the process that fetched and the
+ * process that extracts would look in two different buckets. If the pipeline
+ * should one day fail closed rather than fall back to `data/_blobs/`, that is
+ * one change in src/store/blobs.ts affecting both halves, not a divergence
+ * introduced here.
+ *
+ * ## The verification is not ceremony
+ *
+ * `storeRawSource` proves what was written; this proves what came back, and
+ * they are different moments with a network and a filesystem in between. One
+ * SHA-256 pass over a buffer already in memory — about 60 ms at the 32 MB
+ * ceiling — against a stage that is about to run jsdom over it or spend a
+ * vision-model call on it. The same trade `pg-source.ts` makes, for the same
+ * reason.
+ */
+export async function readRawBytes(
+  manifest: RawManifest,
+  opts: {
+    /**
+     * The article this manifest belongs to, for the message.
+     *
+     * Optional because a manifest does not carry one and this function should
+     * not invent one — but every pipeline caller has `ctx.slug`, and *which
+     * article* is the first thing anybody reading the failure needs.
+     */
+    slug?: string;
+    store?: RawSourceStore;
+  } = {},
+): Promise<Uint8Array> {
+  const store = opts.store ?? blobStore();
+  const about = opts.slug === undefined ? "This article" : `"${opts.slug}"`;
+  const { storedSha256, kind } = manifest;
+  if (!storedSha256) {
+    throw new RawDocumentUnavailable(
+      "no-object",
+      `${about} was fetched before its bytes were kept in the object store, so there is ` +
+        "nothing to extract from — its manifest has no storedSha256 (RawManifest in " +
+        "src/fetch.ts). Fetch it again; the corpus is expendable and refetching is free " +
+        "(docs/plans/finish-the-database-move.md, decision 4).",
+    );
+  }
+  const key = canonicalKey(storedSha256, kind);
+  /* `maxBytes` from the manifest's own count, so an object *longer* than the
+     one this manifest describes throws out of `get` rather than coming back as
+     a prefix. An over-long object at a content-addressed name is corruption
+     too, and a prefix of a PDF is a corrupt PDF that parses far enough to look
+     like an article. `storeRawSource` bounds its read-back the same way. */
+  let bytes: Uint8Array | null;
+  try {
+    bytes = await store.get(
+      key,
+      manifest.storedBytes === undefined ? {} : { maxBytes: manifest.storedBytes },
+    );
+  } catch (err) {
+    /* **The bound throwing is corruption; everything else is a fault.** Both
+       adapters raise an ordinary `Error` when `maxBytes` is exceeded, and
+       src/pipeline.ts converts only `RawDocumentUnavailable` into a `blocked`
+       failure — so until this existed, an over-long object reached the reader
+       as a **Retry**, and retry skips the finished `fetch` step, reads the same
+       object and fails identically. GPT Sol found it, 2026-08-31.
+
+       The two are told apart by **asking the store how big the object is**,
+       never by reading the message: a message match would break the first time
+       either adapter reworded its sentence, and it is the same "match on the
+       string and learn nothing" that `FetchFailureCode` exists to avoid. A
+       catch-all would be worse than either — a Storage 503 classified as
+       corruption tells a reader to re-fetch an article that would have loaded
+       on the next click, which is exactly the reading of a transient failure
+       that `head()` in src/store/blobs.ts refuses to make. */
+    throw (await overlongObject(store, key, manifest, about)) ?? err;
+  }
+  if (!bytes) {
+    throw new RawDocumentUnavailable("missing", `${about} ${missingObjectAdvice(key)}`);
+  }
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (actual !== storedSha256) {
+    throw new RawDocumentUnavailable(
+      "corrupt",
+      `${about} points at the object "${key}", and its bytes hash to ${actual} — so what ` +
+        "is there is not the document that name promises. Nothing here will overwrite it " +
+        "(see CorruptObject in src/store/blobs.ts for why a repair races every other " +
+        "writer), so it needs clearing by hand, or the article refetching.",
+    );
+  }
+  return bytes;
+}
+
+/**
+ * **Was that failure the size bound, or something else?** — asked of the store,
+ * rather than of the error's message.
+ *
+ * `null` means *not the bound*, and the caller then rethrows what it caught,
+ * because a store that is refusing to answer at all is a fault worth retrying
+ * and not a document worth re-fetching. Two ways to reach `null` and both are
+ * that: `head` says the object is absent or is no bigger than the manifest
+ * claims, or `head` itself fails — in which case the store is unreachable and
+ * the original error is the honest one to show.
+ *
+ * A second call to the store, but only on a path that has already failed: the
+ * ordinary read stays one round trip, which is why this is not a `head` before
+ * every `get`.
+ */
+async function overlongObject(
+  store: RawSourceStore,
+  key: string,
+  manifest: RawManifest,
+  about: string,
+): Promise<RawDocumentUnavailable | null> {
+  const claimed = manifest.storedBytes;
+  if (claimed === undefined) return null;
+  const head = await store.head(key).catch(() => null);
+  if (head === null || head.bytes <= claimed) return null;
+  return new RawDocumentUnavailable(
+    "corrupt",
+    `${about} points at the object "${key}", and what is there is ${head.bytes} bytes where ` +
+      `its manifest says ${claimed} — so what is at that name is not the document the name ` +
+      "promises. It is not read: a prefix of a PDF is a corrupt PDF that parses far enough " +
+      "to look like an article. Nothing here will overwrite it (see CorruptObject in " +
+      "src/store/blobs.ts for why a repair races every other writer), so it needs clearing " +
+      "by hand, or the article refetching.",
+  );
+}
+
+/**
+ * **The sentence for the commonest way this fails, which is not corruption.**
+ *
+ * Measured on 2026-08-31: of the eighteen manifests under `data/`, nine name an
+ * object that is only in the local Supabase container's `sources` bucket and
+ * nine name one that is only in `data/_blobs/`. Nothing had noticed, because
+ * `storeRawSource` had a writer and no reader — [silent
+ * success](docs/reusable/silent-success.md) in the shape this repo keeps
+ * finding. The cause is that `blobStore()` follows the process's credentials,
+ * so a document stored by a process that loaded `.env.local` is invisible to
+ * one that did not, and the other way round.
+ *
+ * So the message says *that*, rather than "not found". A reader who is told
+ * only that an object is missing goes looking for something they deleted.
+ *
+ * **It reports the two credentials as observed rather than announcing which
+ * store was chosen**, and the distinction is the point: the selection rule
+ * lives in `blobStore()` and restating it here would be a second copy that
+ * nothing keeps in step — the exact failure AGENTS.md § One source of truth
+ * describes, and the one that let a comment in src/token-budget.ts mislead two
+ * agents. Whether an environment variable is set is an observable fact about
+ * this process; which adapter that produced is `blobStore()`'s business, and
+ * naming the function is how a reader gets the answer that cannot go stale.
+ *
+ * Only whether they are set, never their values.
+ */
+function missingObjectAdvice(key: string): string {
+  return (
+    `points at the object "${key}" and nothing is there. The manifest asserts that ` +
+    "object exists, so this is a fault rather than an article without a source document " +
+    "— but the likeliest cause is not that anything was deleted. `blobStore()` " +
+    "(src/store/blobs.ts) chooses between Supabase Storage and data/_blobs/ from this " +
+    "process's credentials, so a document stored by a process configured the other way " +
+    `is invisible to this one. Here, ${credentialsSeen()}. Refetch the article rather ` +
+    "than hunting for the object: the corpus is expendable and refetching is free " +
+    "(docs/plans/finish-the-database-move.md, decision 4)."
+  );
+}
+
+/**
+ * **The two facts that decide which object store this process is talking to**,
+ * as a clause — one function, so the failure message above and `npm run fetch`
+ * below cannot describe the same moment differently.
+ *
+ * **No `.trim()`, and it had one until GPT Sol pointed out what that costs.**
+ * `blobStore()`'s own test is `url && key` (src/store/blobs.ts), so a
+ * whitespace-only `SUPABASE_URL` selects Supabase Storage — while a trimmed
+ * reading here called it "not set" and sent the reader to look in
+ * `data/_blobs/`. A sentence that disagrees with the selection it is explaining
+ * is worse than either answer on its own. `postgresBlobStore` does trim and
+ * refuses, which is a different function with a different rule; this clause is
+ * about the one `blobStore()` applies.
+ *
+ * Only whether they are set, never their values.
+ */
+function credentialsSeen(): string {
+  const seen = (name: string): string => `${name} is ${process.env[name] ? "set" : "not set"}`;
+  return `${seen("SUPABASE_URL")} and ${seen("SUPABASE_SERVICE_ROLE_KEY")}`;
+}
+
+/**
+ * The manifest sitting in a directory, or `null` when there is not one.
+ *
+ * **Not stage 2's route any more, and the `null` no longer means "assume
+ * HTML".** It meant that until 2026-08-31: every article ingested before
+ * manifests existed had a `raw.html` and no `raw.json`, and stage 2 fell back
+ * to reading that file. Nothing writes `raw.html` now, so the fallback had
+ * nothing to fall back *to*, and it is gone rather than left pointing at
+ * absence. Two articles in the local corpus were relying on it —
+ * `data/constitution` and `data/noema-mythology-of-conscious-ai` — and the
+ * answer for them is a re-fetch (Greg, 2026-08-30: the corpus is expendable).
+ *
+ * What still calls this is `slugIsSpokenFor` in src/jobs.ts, which reads a
+ * candidate slug's manifest during *enqueue* to decide whether an upload would
+ * collide with an article already there. That read is listed as stage 1b of
+ * docs/plans/finish-the-database-move.md and is not converted yet, so this
+ * function stays exactly as it was.
  */
 export async function readRaw(dir: string): Promise<RawManifest | null> {
   try {
@@ -1548,21 +1893,60 @@ export async function fetchHtml(url: string, options: FetchOptions = {}): Promis
 /**
  * `npm run fetch -- <url> [dir]`
  *
- * Writes what came back to `data/<slug>/raw.html`, or `raw.pdf` — the same
- * place and name the ingest queue's fetch step writes, so running this by hand
- * satisfies that step and the queue skips straight to extraction
- * (docs/project/ingest-queue.md).
+ * Writes what came back to `data/<slug>/raw.html`, or `raw.pdf`, with the
+ * `raw.json` manifest beside it — the same place and name the filesystem
+ * artefact store keeps them, so running this by hand satisfies the queue's
+ * fetch step under `SPIDERYARN_STORE=files` and the queue skips straight to
+ * extraction (docs/project/ingest-queue.md).
+ *
+ * **The writing moved out of `writeRaw` and into here on 2026-08-31**, which
+ * looks like nothing changed and is the whole shape of stage 2c. The stage no
+ * longer writes: it returns a manifest, and whoever called it decides where
+ * that goes — the store, for the queue, and `writeRawFiles` for this command,
+ * which is the rule every converted stage follows. What a person running this
+ * sees is identical.
  *
  * Mostly, though, this exists for the other job: **finding out why a URL won't
  * come in.** It prints the chain, the type, the encoding and the size, which
  * between them explain nearly every failure — and on a failure it prints the
  * code and the sentence rather than a stack trace.
  *
+ * It also prints the **object key and the credentials that chose its store**,
+ * which is new and is worth having: the bytes go into the content-addressed
+ * `sources` bucket as well as into the file above, and which bucket that is
+ * depends on this process's credentials (`blobStore()`, src/store/blobs.ts).
+ * Half the local corpus turned out to be split across two of them because
+ * nothing had ever read one back — see `missingObjectAdvice`. The key alone
+ * does not say which store it is in, and two runs that wrote to two different
+ * stores printed the identical line; the `Store:` line is the half that makes
+ * that visible.
+ *
  * The slug comes from the URL you typed, not from where you were redirected to,
  * so that it matches what the add box on the homepage shows for the same URL
  * (src/ingest.ts). Where the two differ, the line below says so.
  */
 async function main(): Promise<void> {
+  /* **First, before the arguments, and this is not the cosmetic ordering it
+     looks like.** Every paid CLI in this repo loads `.env.local` because
+     otherwise a paid call reads "OPENROUTER_API_KEY is not set" with the key
+     sitting unread in the file (src/cli-ledger.ts). This one has a second and
+     worse failure: `blobStore()` picks between Supabase Storage and
+     `data/_blobs/` from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+     (src/store/blobs.ts), so a command that has not read the file makes a
+     *different storage selection from the server*, which loads it. It then
+     writes `raw.json`, the queue counts the fetch step done, and extraction
+     dereferences the manifest against the other store and blocks on an object
+     that exists — docs/postmortems/a-write-path-with-no-reader.md, recreated by
+     the command meant to be the safe way in. GPT Sol found it, 2026-08-31.
+
+     Above the argument check rather than beside `writeRaw` so there is no
+     ordering left to get wrong later, and so the guarantee is observable: the
+     no-argument run applies the file and then prints usage, which is what
+     tests/stage2c-raw-bytes.test.ts drives. Inside `main`, so importing this
+     module still reads no files — the rule src/ideas.ts states. It memoises,
+     so a second call anywhere costs nothing. */
+  loadEnvLocal();
+
   const url = process.argv[2];
   if (!url) {
     console.error("Usage: tsx src/fetch.ts <url> [dir]");
@@ -1574,35 +1958,49 @@ async function main(): Promise<void> {
     doc = await fetchDocument(url);
   } catch (err) {
     const failure = classifyNetworkError(err, url);
-    console.error(`\n  ✗ ${failure.code}\n    ${failure.message}\n`);
+    console.error(`\n  \u2717 ${failure.code}\n    ${failure.message}\n`);
     process.exit(1);
   }
 
   const slug = slugFromUrl(url) || "article";
   const dir = process.argv[3] ?? path.join("data", slug);
-  /* **`writeRaw`, not a second copy of it.** This wrote `doc.bytes` by hand and
-     no manifest at all, which made `npm run fetch` and the pipeline produce
-     *different files at the same path*: undecoded bytes here against the
-     decoded string there, and `extract` reads that path with `"utf8"`, so a
-     page in any other encoding came out as mojibake one way and correctly the
-     other. The absent `raw.json` then took the content type, the encoding and
-     the hash with it.
-
-     Not a decision that was made and later regretted — `writeRaw` arrived on
-     2026-08-26 (b6e41b4) and this function was simply not moved onto it. There
-     is one writer of a raw document now, which is the only version of this that
-     stays true. */
-  const manifest = await writeRaw(dir, doc);
-  const file = path.join(dir, manifest.file);
+  /* **`writeRaw` and `writeRawFiles`, not a second copy of either.** This wrote
+     `doc.bytes` by hand and no manifest at all, which made `npm run fetch` and
+     the pipeline produce *different files at the same path*: undecoded bytes
+     here against the decoded string there, and stage 2 read that path as UTF-8,
+     so a page in any other encoding came out as mojibake one way and correctly
+     the other. There is one function that decides what bytes we keep
+     (`storedDocumentBytes`) and both callers go through it. */
+  const manifest = await writeRaw(doc);
+  const written = await writeRawFiles(dir, doc, manifest);
 
   console.log(`Requested: ${doc.requestedUrl}`);
   if (doc.url !== doc.requestedUrl) {
     console.log(`Final:     ${doc.url}   (${doc.chain.length - 1} redirect(s))`);
   }
+  console.log(`Slug:      ${slug}`);
   console.log(`Type:      ${doc.kind}${doc.contentType ? `  (${doc.contentType})` : ""}`);
   if (doc.encoding) console.log(`Encoding:  ${doc.encoding}`);
   console.log(`Size:      ${(doc.bytes.byteLength / 1024).toFixed(1)} KB`);
-  console.log(`\nWritten to: ${path.resolve(file)}`);
+  /* The stored count as well as the network one whenever they differ, which is
+     every page that was not already UTF-8 — the two numbers `bytes` and
+     `storedBytes` exist to keep apart, and a diagnostic that printed only one
+     would be the place somebody learned they were the same. */
+  if (manifest.storedBytes !== manifest.bytes) {
+    console.log(`Stored:    ${(manifest.storedBytes / 1024).toFixed(1)} KB (decoded)`);
+  }
+  console.log(`\nWritten to: ${path.resolve(written.file)}`);
+  console.log(`            ${path.resolve(written.manifestFile)}`);
+  console.log(`Object:     ${canonicalKey(manifest.storedSha256, manifest.kind)}`);
+  /* **And which store that object is in**, which the key alone does not say and
+     which is the whole difficulty: the same key names an object in Supabase
+     Storage on one process and in `data/_blobs/` on another, and a command that
+     printed only the name is a command you can run twice, get identical output
+     from, and have written to two different places. The credentials rather than
+     the adapter's name for the same reason `missingObjectAdvice` reports them:
+     the selection rule is `blobStore()`'s, and a second copy of it here is the
+     thing that goes stale. GPT Sol, 2026-08-31. */
+  console.log(`Store:      chosen by blobStore() from this process — ${credentialsSeen()}`);
   if (doc.kind === "pdf") {
     console.log("\nNote: nothing downstream reads a PDF yet — see docs/project/fetching.md.");
   }

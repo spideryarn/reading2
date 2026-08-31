@@ -55,8 +55,10 @@ import { PDFDocument } from "pdf-lib";
 import { stageCli } from "./cli-ledger.js";
 import { allOrStop } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
+import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
+import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
@@ -884,7 +886,17 @@ ${parts.join("\n")}
  */
 export interface PdfExtractResult {
   slug: string;
-  outFile: string;
+  /**
+   * The transcribed article as a standalone page — **the `extractedHtml`
+   * artefact**, exactly as `runExtract` returns one for a web page.
+   *
+   * The convergence is the whole design of the two extractors: stage 3 onwards
+   * cannot tell which of them made a given article
+   * (docs/project/content-extraction.md § Two extractors, one artefact). This
+   * used to be written to `outFile` from inside the stage, which is the half of
+   * that convergence the filesystem was holding up.
+   */
+  extractedHtml: string;
   meta: Meta;
   pages: number;
   /** How many model calls it took. One per page range. */
@@ -915,7 +927,18 @@ export interface PdfExtractOptions {
   url?: string;
   /** The reader's own name for an uploaded file. The title ladder's last rung prefers it. */
   filename?: string;
-  outFile: string;
+  /**
+   * **Where the per-chunk checkpoints live, and nothing else.**
+   *
+   * It was where the article and its metadata went too, until 2026-08-31; those
+   * are returned now. What is left is `<dataDir>/pdf-chunks/`, one file per
+   * model call, and that is deliberately still a directory: a checkpoint is not
+   * an artefact — it is money already spent, written *during* a step so a later
+   * attempt does not re-buy it, which is the opposite of something committed
+   * when a step succeeds. Converting these is somebody else's landing
+   * (docs/plans/finish-the-database-move.md § Stage 2b), and the atomic-write
+   * recipe below is left exactly as it was.
+   */
   dataDir: string;
   slug: string;
   reader?: PdfReader;
@@ -1037,7 +1060,6 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     throw err;
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
-  await keepTheOriginal(opts, rawSha256);
   const chunks = planChunks(pass);
   const cacheDir = path.join(opts.dataDir, "pdf-chunks");
   await mkdir(cacheDir, { recursive: true });
@@ -1326,8 +1348,6 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      without a URL. `decodeURIComponent` can throw on a hand-mangled escape,
      which used to take the whole stage with it. */
   const title = titleFrom(mended, pass, lastName(opts));
-  await mkdir(path.dirname(opts.outFile), { recursive: true });
-  await writeFile(opts.outFile, renderHtml(mended, title), "utf-8");
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the
@@ -1360,15 +1380,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     ...(recall === null ? {} : { recall }),
     ...(failures.length ? { quality: failures } : {}),
   };
-  await writeFile(
-    path.join(opts.dataDir, "meta.json"),
-    `${JSON.stringify(meta, null, 2)}\n`,
-    "utf-8",
-  );
 
   return {
     slug: opts.slug,
-    outFile: opts.outFile,
+    extractedHtml: renderHtml(mended, title),
     meta,
     pages: pass.pages.length,
     chunks: chunks.length,
@@ -1383,43 +1398,65 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 }
 
 /**
- * **Make sure the PDF itself is beside the article, whatever route got us here.**
+ * **Make sure the PDF itself is beside the article** — for `npm run pdf --
+ * <file.pdf>`, which is the only route that gets here without a stage 1.
  *
- * The ingest queue has already done this — stage 1 wrote `raw.pdf` and
- * `raw.json` before stage 2 ran, and this leaves both alone. `npm run pdf --
- * <file.pdf>` has not, and without this the article it produces claims
- * `source: "pdf"` while `GET /api/source/:slug` returns 404 and the reader's
- * "view the scanned pages" link goes nowhere.
+ * Without it the article that command produces claims `source: "pdf"` while
+ * `GET /api/source/:slug` returns 404 and the reader's "view the scanned pages"
+ * link goes nowhere. That link is not decoration: on a scan it is the *only*
+ * verification there is — a person looking at the ink — so an article that
+ * offers it and cannot honour it is worse than one that never offered.
  *
- * That link is not decoration. On a scan it is the *only* verification there
- * is — a person looking at the ink — so an article that offers it and cannot
- * honour it is worse than one that never offered.
+ * **It moved out of `runPdfExtract` on 2026-08-31**, which is the change that
+ * makes the rest of this stage a function of bytes rather than of a directory.
+ * It was called from inside, guarded by *"has stage 1 already written a
+ * raw.json?"*, and that guard is a filesystem question the queue path can no
+ * longer ask. The queue never needed the call — stage 1 acquires the document,
+ * both halves of it — so the only caller left is the command line, and it is
+ * where the call now lives. The guard survives, because re-running the command
+ * on a slug that a real fetch produced should not replace that fetch's final
+ * URL, content type and redirect chain with what a local file can know.
  *
- * Only when absent, and that matters: the queue's manifest carries the final
- * URL, the content type and the redirect chain, and overwriting it from here
- * would replace real provenance with what a local file can know, which is
- * almost nothing.
+ * **It stores the object as well as writing the files, and did not until now.**
+ * `storeRawSource` is what puts the bytes under their own hash and what
+ * `storedSha256`/`storedBytes` come from; leaving them out produced a manifest
+ * that `src/store/artifacts-pg.ts` refuses outright (`NoStoredDocument`), so
+ * every article made by this command was un-ingestable into Postgres and
+ * nothing said so until the write failed. The same shape as the two bugs
+ * src/store/blobs.ts records — a path that wrote the manifest by hand instead
+ * of going through the shared helper.
  */
-async function keepTheOriginal(opts: PdfExtractOptions, sha256: string): Promise<void> {
+export async function keepTheOriginal(
+  opts: Pick<PdfExtractOptions, "bytes" | "url" | "dataDir">,
+  sha256: string,
+  /* Injected so a test can watch the object land somewhere it can look, rather
+     than in whatever bucket `.env.local` selects. That is not a convenience:
+     the bug this function had was that it never stored the object at all, and a
+     test that cannot see the store cannot tell that apart from success. */
+  store?: RawSourceStore,
+): Promise<void> {
   if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+  const stored = await storeRawSource(opts.bytes, "pdf", store ?? blobStore());
   await mkdir(opts.dataDir, { recursive: true });
   await writeFile(path.join(opts.dataDir, "raw.pdf"), opts.bytes);
+  const manifest: RawManifest = {
+    kind: "pdf",
+    file: "raw.pdf",
+    ...(opts.url ? { requestedUrl: opts.url, url: opts.url } : { origin: "upload" as const }),
+    contentType: "application/pdf",
+    encoding: null,
+    bytes: opts.bytes.byteLength,
+    sha256,
+    storedSha256: stored.sha256,
+    /* Equal to `bytes` above for a PDF, because the stored bytes *are* the
+       bytes — unlike HTML, where `writeRaw` stores the decoded string. Taken
+       from what we actually stored anyway rather than assumed. */
+    storedBytes: opts.bytes.byteLength,
+    fetchedAt: new Date().toISOString(),
+  };
   await writeFile(
     path.join(opts.dataDir, "raw.json"),
-    `${JSON.stringify(
-      {
-        kind: "pdf",
-        file: "raw.pdf",
-        ...(opts.url ? { requestedUrl: opts.url, url: opts.url } : { origin: "upload" }),
-        contentType: "application/pdf",
-        encoding: null,
-        bytes: opts.bytes.byteLength,
-        sha256,
-        fetchedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(manifest, null, 2)}\n`,
     "utf-8",
   );
 }
@@ -1693,13 +1730,20 @@ async function main() {
   const outFile = path.join("output", `${slug}.html`);
   const dataDir = path.join("data", slug);
   await mkdir(dataDir, { recursive: true });
+  const url = `file://${path.resolve(input)}`;
+  /* **Before the model calls, not after**, which is where it was when it ran
+     from inside the stage. The stage can fail on a page it cannot read, and the
+     original is exactly what somebody wants to look at when it does. */
+  await keepTheOriginal(
+    { bytes, url, dataDir },
+    createHash("sha256").update(bytes).digest("hex"),
+  );
   const pass = await pass0(bytes);
   console.log(`Pages:  ${pass.pages.length}${pass.isScan ? " (a scan — no text layer)" : ""}`);
   console.log(`Chunks: ${planChunks(pass).map((c) => c.pages.join("–")).join(", ")}`);
   const result = await runPdfExtract({
     bytes,
-    url: `file://${path.resolve(input)}`,
-    outFile,
+    url,
     dataDir,
     slug,
     onProgress: (done, total, pages, checked) => {
@@ -1712,6 +1756,18 @@ async function main() {
       );
     },
   });
+  /* The two artefacts, written here rather than inside the stage — the same
+     move `main()` in src/extract.ts makes, and for the same reason: the command
+     line is the one caller that wants files, and it is the reader looking at
+     `output/<slug>.html` that the whole thing is for. */
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, result.extractedHtml, "utf-8");
+  await writeFile(
+    path.join(dataDir, "meta.json"),
+    `${JSON.stringify(result.meta, null, 2)}\n`,
+    "utf-8",
+  );
+
   console.log(`\nTitle:   ${result.meta.title}`);
   console.log(
     `Records: ${result.records}, mean recall ${result.recall ?? "— (nothing to check it against)"}` +
@@ -1722,7 +1778,7 @@ async function main() {
       `${result.usage.input === 0 ? "   (every chunk came from the cache)" : ""}` +
       `${result.retries.length ? `, ${result.retries.length} chunk(s) asked twice` : ""}`,
   );
-  console.log(`Written: ${path.resolve(result.outFile)}`);
+  console.log(`Written: ${path.resolve(outFile)}`);
 
 }
 

@@ -345,7 +345,6 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
 function writingStep(
   name: StepName,
   parts: Partial<Record<ArtifactKind, unknown>>,
-  slug: string,
   body: () => Promise<void> | void = () => {},
 ): PipelineStep {
   return {
@@ -355,8 +354,14 @@ function writingStep(
     produces: STEPS[name].produces,
     async run(): Promise<StepProduct> {
       await body();
-      await fsArtifacts.write(slug, name, parts as never, {});
-      return { detail: `${name} ran` };
+      /* **Returned, not written here.** It wrote through `fsArtifacts` itself
+         and handed back a bare detail until 2026-08-31, which matched the
+         stages while they were unconverted; `LEGACY_UNCONVERTED_STEPS` is now
+         empty and `checkProduct` refuses a product with no `parts` for any
+         step. The session's commit writes through the same `fsArtifacts` the
+         finalizer is handed as `from`, so the property this file is about — the
+         copy reads the disk the run phase wrote to — is unchanged. */
+      return { parts: parts as never, detail: `${name} ran` };
     },
   } as PipelineStep;
 }
@@ -392,16 +397,10 @@ function articleSteps(
       extract: writingStep(
         "extract",
         { extractedHtml: html, meta: { slug, title: "A fixture article" } },
-        slug,
         bodies.extract,
       ),
-      blocks: writingStep("blocks", { blocks: { blocks }, stampedHtml: html }, slug, bodies.blocks),
-      toc: writingStep(
-        "toc",
-        { tree, labels: labelsFor(slug, blocks), blocks: { blocks } },
-        slug,
-        bodies.toc,
-      ),
+      blocks: writingStep("blocks", { blocks: { blocks }, stampedHtml: html }, bodies.blocks),
+      toc: writingStep("toc", { tree, labels: labelsFor(slug, blocks), blocks: { blocks } }, bodies.toc),
     },
   };
 }

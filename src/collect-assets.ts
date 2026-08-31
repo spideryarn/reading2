@@ -64,9 +64,6 @@
  * for documents, and content addressing is what makes it non-negotiable: the
  * name we store *is* a claim about the contents.
  */
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
-
 import { JSDOM } from "jsdom";
 
 import {
@@ -736,13 +733,3 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   };
 }
 
-/**
- * The artefact, on disk beside the article.
- *
- * Split from `collectAssets` so the work above needs no filesystem, and so the
- * one place that knows the filename is this one — matching every other stage
- * that still writes its own output.
- */
-export async function writeAssets(dir: string, assets: Assets): Promise<void> {
-  await writeFile(path.join(dir, "assets.json"), `${JSON.stringify(assets, null, 2)}\n`, "utf8");
-}

@@ -153,6 +153,10 @@ async function renderOnly(file: string, outDir: string, dir: string | null): Pro
 
 async function draw(opts: Options): Promise<void> {
   const { generateSketch, summarise } = await import("../../src/sketch.js");
+  /* Inside the paid branch with the rest of them, for the reason at the top of
+     this file: the free `--render` path must not drag in anything a peer's
+     half-finished edit under `src/store/` can break. */
+  const { readArticleFromDir } = await import("../../src/article-input.js");
   const { loadEnvLocal } = await import("../../src/env.js");
   loadEnvLocal();
 
@@ -167,7 +171,7 @@ async function draw(opts: Options): Promise<void> {
     const slug = path.basename(dir);
     process.stdout.write(`${slug}: drawing…`);
     const r = await generateSketch({
-      dir,
+      article: await readArticleFromDir(dir),
       ...(systemOverride ? { systemOverride } : {}),
       onProgress: (d) => process.stdout.write(`\r${slug}: ${d}          `),
     });

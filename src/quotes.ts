@@ -62,9 +62,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -934,7 +935,11 @@ function parseJson(raw: string): { quotes?: unknown } {
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  */
 export async function generateQuotes(opts: {
-  dir: string;
+  /**
+   * The article, read once by whoever has a store or a directory —
+   * src/article-input.ts. This stage no longer knows where one comes from.
+   */
+  article: Article;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -974,23 +979,14 @@ export async function generateQuotes(opts: {
    */
   previous: Quotes | null;
 }): Promise<QuotesRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a step that throws is logged by src/jobs.ts with
-     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  // Optional, and only ever used to tell the model what it is reading. A
-  // missing meta.json is not worth failing the whole stage over.
-  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
+  const { blocks, tree } = opts.article;
+  /* **`null` straight through, and no stub.** Unlike `ideas` and `sketch`, this
+     stage does not synthesise a head when there is no metadata — `articleText`
+     simply loses those lines — so the one value goes to the prompt and to the
+     fingerprint alike and the two sides cannot disagree. Optional, and only
+     ever used to tell the model what it is reading; an article with no metadata
+     is not worth failing the whole stage over. */
+  const meta: Meta | null = opts.article.meta;
 
   const sourceHash = inputFingerprint(blocks, tree, meta);
   const onDisk = opts.previous;
@@ -1139,7 +1135,10 @@ async function main(): Promise<void> {
   loadEnvLocal();
   console.log(`Choosing the quotes with ${CAPABLE_MODEL}…`);
   const run = await generateQuotes({
-    dir,
+    /* The command line has a folder and no store — src/article-input.ts §
+       `readArticleFromDir`, which is deliberately the only filesystem read left
+       in this half of the pipeline. */
+    article: await readArticleFromDir(dir),
     /* The CLI has files and no store, so it reads the file — and `readQuotes`
        swallows the difference between "no quotes" and "quotes I cannot read",
        which is exactly why this is not the pipeline's path any more. Acceptable
