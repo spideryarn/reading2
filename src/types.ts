@@ -25,14 +25,47 @@ import type { Assets } from "./assets.js";
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
 export type BlockKind =
-  /* `callout` is the box an author sets apart from the argument — a Substack
-     callout, a MkDocs admonition, an RFC's editorial aside. It is stamped at
-     stage 2, before Readability deletes the element that says so
-     (src/callouts.ts), and it is *not* `quote`: in a callout the author is
-     usually still the one speaking. Added 2026-08-31; every article extracted
-     before then carries `text` on its callouts until it is re-extracted.
-     docs/plans/callout-blocks.md. */
+  /* **`callout` is legacy and is produced by nothing.** It was added on the
+     morning of 2026-08-31 and replaced the same afternoon by `Block.context`,
+     because a box drawn *around* blocks is a different axis from what a block
+     *is*: a heading inside a callout has to keep `kind: "heading"`, and so lost
+     the box entirely. It stays in the union and in the CHECK constraint because
+     every revision extracted in between has it on disk and in Postgres, and the
+     reading view reads both spellings.
+     docs/plans/260831af-carrying-markup-facts-past-readability.md. */
   | "heading" | "text" | "quote" | "callout" | "code" | "media" | "caption" | "other";
+
+/**
+ * **An authored grouping a run of blocks belongs to** — the box a piece drops
+ * into the middle of an argument. Recognised at stage 2, before Readability
+ * deletes the markup that says so (src/callouts.ts), and carried here by stage
+ * 3.
+ *
+ * Three rules, and the first two are what keep this from becoming a second
+ * `kind` or a second address space:
+ *
+ * 1. **A context groups blocks; it is never copied into `kind`.** Every block in
+ *    a callout keeps its own kind — heading, quote, media — and the reading view
+ *    sets it differently because of the context it is in.
+ * 2. **The id is not an address.** Comments, URLs, the tree and the spine
+ *    address block ids, which are the permanent identity
+ *    (docs/project/block-ids.md). This is revision-local, and it is stable
+ *    across re-runs only so that a diff of blocks.json shows real changes.
+ * 3. **Membership decides no policy on its own.** Whether a block is searched,
+ *    embedded, gisted or on the clock stays with the named predicates in
+ *    src/block-policy.ts.
+ *
+ * **One context per block, deliberately**, and today it cannot be otherwise:
+ * stage 2 collapses a callout inside a callout into one. The day a second type
+ * has to co-exist with the first — a verse inside a callout — this becomes a
+ * membership table, with a real case to design against.
+ * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+ */
+export interface BlockContext {
+  /** `c-` and ten hex digits — `CONTEXT_ID_PATTERN` in src/reserved.ts. */
+  id: string;
+  type: "callout";
+}
 
 /**
  * One block of the article. **Array order in blocks.json IS document order** —
@@ -87,6 +120,11 @@ export interface Block {
   role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
   /** How the argument machinery must treat it. Absent means "body". */
   treatment?: "supplement";
+  /**
+   * The authored box this block sits inside, if any — see {@link BlockContext}.
+   * Absent means ordinary flow, which is most blocks.
+   */
+  context?: BlockContext;
   /**
    * Which note this block belongs to. **A note is a RANGE of blocks, not one
    * block** — gwern has 34 notes across 41 supplement blocks, and conflating
@@ -2544,3 +2582,96 @@ export interface TimelineResponse {
  * after all, the `Omit` goes in one place instead of being searched for.
  */
 export type TimelineFound = TimelineResponse;
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * **Which page the reader was on when they pressed Feedback**, as a name from a
+ * list we wrote — never the address bar.
+ *
+ * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § Always — where
+ * they were: this app's URLs carry `?q=` and `?find=`, which are reader-typed
+ * search text, and `/add/<a whole third-party URL>`, which may carry a token.
+ * So the raw location may not leave the browser at all, and this closed
+ * vocabulary is the part of it that may.
+ *
+ * It mirrors `Route["kind"]` in src/web/router.ts and is written out here by
+ * hand rather than derived from it, because this file is imported by the server
+ * and by src/db/schema.ts while that one is a client module. `unknown` is in the
+ * list on purpose: a route added later must still be *reportable*, and a report
+ * that cannot be filed because the reader was on a new page is the worst way to
+ * lose the one report that mattered.
+ */
+export const FEEDBACK_ROUTE_KINDS = [
+  "library",
+  "read",
+  "add",
+  "add-upload",
+  "design",
+  "profile",
+  "admin",
+  "login",
+  "callback",
+  "unknown",
+] as const;
+
+export type FeedbackRouteKind = (typeof FEEDBACK_ROUTE_KINDS)[number];
+
+/**
+ * **Which deployment the report came from** — the union of what `VERCEL_ENV`
+ * and `NODE_ENV` can say (src/monitoring.ts builds Sentry's `environment` from
+ * exactly that pair).
+ *
+ * Closed, so that a report from a preview build cannot be read as one from
+ * production. The server maps its environment onto this rather than passing a
+ * string through: the type refuses the wrong value before the CHECK does.
+ */
+export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "test"] as const;
+
+export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
+
+/**
+ * The longest any one of the three answers may be.
+ *
+ * Here rather than beside the store for the reason `MAX_PROFILE_CHARS` is here:
+ * the dialog's `maxlength` and the number the server refuses at must be one
+ * value, and src/store/ reaches for `pg` and `node:fs`, which nothing under
+ * src/web/ may import (tests/client-imports.test.ts).
+ *
+ * Generous, because a bug report is a story and cutting one off mid-sentence
+ * costs us the detail that would have identified it — and small enough that a
+ * pasted article cannot become an attachment, which is the case the cap is
+ * really for.
+ */
+export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+
+/**
+ * The largest screenshot the database will take, in **decoded** bytes.
+ *
+ * The dialog downscales to around 300 KB; this is the ceiling that holds
+ * whatever the dialog does, because client-side downscaling is not validation.
+ * A CHECK on `octet_length` rather than a rule in TypeScript, so it holds for
+ * every writer including a script — docs/project/sql.md.
+ */
+export const MAX_FEEDBACK_SCREENSHOT_BYTES = 400_000;
+
+/**
+ * The opt-in diagnostics blob — **opaque to everything that stores it**.
+ *
+ * Deliberately `unknown`. The stage that builds it owns its shape (the plan's
+ * *client log buffer and the diagnostics*), it is an allowlist at both ends, and
+ * no part of it is ever queried — which is the sentence docs/project/sql.md
+ * demands before a value may be JSONB rather than a column.
+ *
+ * It is carried with a **version**, so an old report is still readable when the
+ * shape changes. The version lives in its own column (`diagnostics_version`)
+ * rather than inside the blob, so it can be filtered on without reading the blob
+ * and so there is only one copy of it.
+ */
+export type FeedbackDiagnosticsPayload = unknown;
+
+export interface FeedbackDiagnostics {
+  /** Which shape `payload` has. Stored in `feedback.diagnostics_version`. */
+  version: number;
+  payload: FeedbackDiagnosticsPayload;
+}
