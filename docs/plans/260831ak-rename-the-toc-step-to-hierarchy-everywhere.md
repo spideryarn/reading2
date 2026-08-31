@@ -259,6 +259,40 @@ as a historical protocol identifier, or migrate it — but say which.**
 **What Sol cleared:** no other `toc` enum, generated column, trigger, view, partial index or seeded row
 exists, and the primary key containing `step_name` updates automatically.
 
+### The complete inventory of `"toc"` as a persisted value
+
+Assembled from three independent sweeps — GPT Sol's review, the database agent probing the live
+catalogue, and the stage B agent finding three more while deliberately not renaming them. **Nobody
+found all of it alone, which is the argument for stage C being a designed rollout rather than a
+careful `sed`.** Every row verified here.
+
+| Where | What holds `"toc"` | Notes |
+|---|---|---|
+| `revision_step_runs.step_name` | + the `revision_step_runs_step` CHECK | [`schema.ts`](../../src/db/schema.ts):1412. 3 rows locally |
+| `ai_calls.step_name` | no CHECK over it | :1577 |
+| `ai_calls.purpose` | the `Task` union member | :1588, from [`hierarchy.ts`](../../src/hierarchy.ts):1461 via [`ai-spend.ts`](../../src/ai-spend.ts):750 |
+| `checkpoints.namespace` | `'toc-labels'`, + the `checkpoints_namespace` CHECK | :2219, twin at [`checkpoints.ts`](../../src/store/checkpoints.ts):137 |
+| `jobs.steps` | `JobStep[]` — `{"name":"toc"}` | :1133. **And `jobs.work_key`, which hashes it** |
+| filesystem markers | `steps/toc.running` | [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431. **2 exist locally** |
+| filesystem ledger | `data/_ai-calls.jsonl` | both fields, [`ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts):70 |
+| artefact metadata | `PROMPT_VERSION = "toc/2"` | [`hierarchy.ts`](../../src/hierarchy.ts):57 → `tree.json`, and `labels.structureVersion` |
+| thrown + reader-facing text | `"run the toc step first"`, `"re-run toc"` | correct **today**; flips with the value, not before |
+
+**Two corrections to what the sweeps reported**, because a plan that repeats them is worse than none:
+there is **no `ai_calls.task` column** — the stage B agent named it that, and the `Task` union's value
+actually lands in `purpose`, which is the same finding Sol reached from the other end. And the
+`toc-labels` checkpoint worry is **smaller than this plan first said**: the label pipeline does not
+currently use the checkpoint store (it writes `labels-progress.json`) and no such directories exist
+locally, so the "orphans every checkpoint and re-buys model calls" cost does not apply to the current
+implementation.
+
+**The two exempt on purpose**, unless someone argues otherwise: the historical literals in
+`scripts/migration-reconciliations.ts` and every shipped `.sql` and snapshot — a reconciliation
+asserts *this database has been brought to the state migration X produced* and then stamps X's hash,
+so modernising its vocabulary makes the ledger lie in the one table whose job is to be trustworthy.
+The database agent is adding a never-rename note there, placed where a global find-and-replace will
+hit it, **because the failure mode this week was not ignorance, it was `sed`.**
+
 ### The decision
 
 **Stages A and B ship; stage C does not.** A and B change no persisted value, so the code and the

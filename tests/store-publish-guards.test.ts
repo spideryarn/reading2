@@ -18,7 +18,7 @@
  *
  * ## How to watch these go red
  *
- * Delete the `toc.status !== "done"` branch from `publishRevision` and
+ * Delete the `hierarchyRun.status !== "done"` branch from `publishRevision` and
  * *"refuses a tree whose toc run errored"* and *"…is still running"* both fail.
  * Both were watched failing that way before the branch existed.
  *
