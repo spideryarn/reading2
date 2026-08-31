@@ -1180,6 +1180,14 @@ run. Merging risks losing a real distinction; not merging produces a list with v
 told that the same happening mentioned twice is **one** event with two occurrences. If that fails in
 practice, the fix is the prompt, not a similarity threshold in code.
 
+**Answered by the real run, 2026-08-31.** It happened, once, exactly as predicted. Two rows —
+"Later wave rediscovers message board" and "Persistent-Astra agents find old message board" — cite
+**different blocks** (`spya-matth4`, `spya-c2bkgz`) and **different phrases** ("after July 13th",
+"After July 12"). So the model is not duplicating: the *article* says the same thing twice from two
+vantage points, once as the METR report narrating the third civilisation starting and once as the
+later paragraph noting the signed messages that prove it. That is one event with two occurrences, and
+the recommendation holds — the fix is a line in the prompt, not a similarity threshold.
+
 ---
 
 ---
@@ -1406,6 +1414,25 @@ and the marks are the enhancement.**
 - **Following the reader** down the page ([question 2](#2-does-the-panel-follow-the-reader-down-the-page)).
 - **A time-to-scale axis.** The obvious v2, and the data model already supports it — intervals with
   real bounds are exactly what an axis needs. Greg chose the flat list for v1.
+
+## Two prompt gaps, for a follow-up
+
+Neither blocks v1, both are one line of prompt, and both were found by running it rather than by
+reading it.
+
+1. **A span that contains other events is still an event.** *"Over the course of three months at
+   OpenAI"* — the row containing every other row — was missed in both runs. Not the parser's fault:
+   it has no date to place and refusing is correct. It belongs on the list as a `words` row. Nothing
+   in the prompt says a container counts, and the *"topic on a line"* ban probably reads as
+   forbidding it.
+2. **The same happening from two vantage points is one event.** See
+   [question 5](#5-what-happens-when-two-sentences-describe-the-same-event) — it occurred once, and
+   the prompt does not yet say so.
+
+Both should be checked against a **second** article. Everything measured so far comes from one piece,
+which is dense with dates and unusually well suited to this mode; the plan's own warning that
+[most articles are not chronological](#most-articles-are-not-chronological) has not been tested
+against a single one.
 
 ## See also
 
