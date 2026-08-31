@@ -992,9 +992,10 @@ projection can only ever **shorten** a distance, so:
   one of the 1,022 directions this threw away.
 
 No percentage rescues the second half: a figure for the whole article says
-nothing about any particular pair. So the strip above the picture says it in
-words, not only as a number. GPT Sol's finding on the plan, and the most
-important one of the round.
+nothing about any particular pair. So the picture says it in words, not only as a
+number — GPT Sol's finding on the plan, and the most important one of the round.
+Where those words live is
+[the icon on the control row](#the-caveat-is-an-icon-not-a-strip).
 
 Measured on this corpus, 2026-08-27: **the two axes hold about a fifth of the
 variation** — 14.6% and 6.4% on `constitution`, 12.3% and 8.2% on the Noema
@@ -1017,14 +1018,50 @@ headings and one-line list items.
 A three-word heading embeds perfectly well and then sits at cosine 0.8 from
 every other three-word heading, because what they have in common is being short.
 
-**The strip says how many were left out**, because a picture that quietly drops
-a fifth of the article looks exactly like a picture of all of it. One
+**The picture says how many were left out**, because one that quietly drops a
+fifth of the article looks exactly like a picture of all of it — in the icon's
+card, and in an `.sr-only` live region that announces when the projection lands
+([below](#the-caveat-is-an-icon-not-a-strip)). One
 consequence to own rather than hide: **Trail's chain joins consecutive *dots*,
 not consecutive paragraphs**, so a segment can silently bridge a run of list
 items nobody drew. What *does*
 tile is each dot's row **range**: a dot answers for everything from itself to
 just before the next one, so the you-are-here mark never falls in a gap even
 though the dots do.
+
+### The caveat is an icon, not a strip
+
+It was a `<p class="diag-note">` above the picture — four lines of 10.5px prose,
+about fifty pixels of a 400px band, saying the same thing every time.
+
+> It uses up valuable vertical real estate. Hide it behind a tooltip or warning
+> icon or something.
+>
+> — Greg, 2026-08-30
+
+So it is an `Info` icon at the right-hand end of the control row, carrying the
+same words in the panel's own hover card (`ScatterNote` in
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
+
+Three things make that a move rather than a deletion, and each of them is the
+half a tooltip on its own would lose:
+
+- **The sentence is still announced.** An `.sr-only` `role="status"` carries the
+  whole of it, so a reader who cannot see the picture still learns when the
+  projection lands that a fifth of the article is not in it. A card is reached by
+  pointing or by Tab; it announces nothing.
+- **The counts are in the control's own name**, not only inside the card. "Info"
+  is a noun, and a control whose whole accessible name is a noun is one a screen
+  reader cannot skim.
+- **It cannot take a line of its own.** The chips wrap inside `.diag-opt-rows`
+  and the icon is the outer strip's second child, so the row is exactly as tall
+  with it as without. The first version used `margin-left: auto` on a wrapping
+  row, which right-aligns an item without stopping it starting a new line —
+  ⟨Sol⟩, 2026-08-30.
+
+`Info` rather than a warning triangle: paragraphs going unplaced is the ordinary
+case, and an alarm on the ordinary case is an alarm nobody reads by the second
+article.
 
 ### Sideways on Drift: lanes or spread
 

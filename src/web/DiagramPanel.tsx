@@ -53,11 +53,12 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChartScatter,
   ChevronDown,
   ChevronUp,
+  Info,
   LoaderCircle,
   Network,
   PenLine,
@@ -402,7 +403,39 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const [roving, setRoving] = useState<NodeId | null>(null);
   /** Whether focus is genuinely inside the picture, so the card can say so. */
   const [hasFocus, setHasFocus] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
+
+  /**
+   * **All three are dropped when the picture changes, because all three name a
+   * node that no longer exists.**
+   *
+   * Every one of them is cleared by an event on the SVG — pointer-leave, blur —
+   * and a picture that is *removed* fires neither. Pressing Sketch takes the
+   * whole subtree away (§ Sketch replaces everything below the chips) and so
+   * does the browser's Back button, so the pointer can leave a node by having
+   * the node deleted underneath it. What was left behind was not cosmetic:
+   * `hovering.current` is `hover !== null`, and the follow-scroll effect below
+   * does nothing while it is true — so one hovered dot, one press of Sketch, and
+   * the picture silently stops keeping up with the reader for the rest of the
+   * session. ⟨Sol⟩, 2026-08-30, reviewing the callback-ref fix; the same class
+   * of bug one variable over.
+   *
+   * `rovingId` already repairs the *tab stop* against the drawn nodes, which is
+   * why this was survivable at all — but it repairs a derived value, and
+   * `picked` reads the raw `roving`.
+   */
+  /* **`kind` is a trigger, not a value this reads**, which is the one thing a
+     linter objects to here — `useExhaustiveDependencies` calls it an unnecessary
+     dependency and offers to remove it, and taking that fix would leave an
+     effect that runs once and clears nothing on any later press. The same shape,
+     and the same reason, as the `attempt` counter in useProjection.ts. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `kind` is the trigger, and the offered fix silently disables this
+  useEffect(() => {
+    setHover(null);
+    setRoving(null);
+    setHasFocus(false);
+  }, [kind]);
+
+  const scroller = useRef<HTMLDivElement | null>(null);
 
   /* **The picture is laid out against a measured box, not a computed one.**
      The band's width is decided by `fitMode` in layout.ts and could be threaded
@@ -415,9 +448,44 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      `null` until the first measure, which is one frame with an empty box —
      see the `diag-measuring` branch for why that is the cheaper mistake. */
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
-  useLayoutEffect(() => {
-    const el = scroller.current;
+  /**
+   * **A callback ref, because the element it measures is not always there.**
+   *
+   * This was a `useLayoutEffect` with `[]` deps reading `scroller.current`, and
+   * that is only correct while the scroller is in the *first* render. Sketch
+   * arrived on 2026-08-30 and replaces everything below the chips, this element
+   * included — so a panel whose first render was a Sketch measured a `null`
+   * ref, returned early, and with empty deps never ran again. Pressing Drift or
+   * Trail afterwards left `box` at `null` for good, which is the `diag-measuring`
+   * branch: an empty `<div>`, no spinner, no words, and a strip above it
+   * cheerfully reporting a projection that had landed. Reproduced on production
+   * the same day; `tests/diagram-panel-hover.test.tsx` § switching away from
+   * Sketch holds it.
+   *
+   * A callback ref fires **when the element mounts, whenever that turns out to
+   * be** — so the observer is attached to the element that exists rather than to
+   * the one that existed at mount. The measure stays synchronous inside it for
+   * the reason below, and the whole teardown moves in here with it.
+   *
+   * **It returns a cleanup rather than waiting to be called with `null`.** Both
+   * work today; only one of them is the contract. React documents the
+   * null-on-detach call as backward compatibility it intends to remove, and a
+   * ref that returns a cleanup is never called with `null` at all — so the
+   * observer's release is tied to *this* attachment rather than to a second
+   * invocation we would be relying on. ⟨Sol⟩, 2026-08-30. (`SketchView.tsx`'s
+   * two callback refs still take the older shape; that is its file to change.)
+   *
+   * `useCallback` with `[]` is load-bearing: a new function identity on every
+   * render would make React detach and reattach the ref each time, which is a
+   * disconnect and a fresh `ResizeObserver` per render.
+   */
+  const attachScroller = useCallback((el: HTMLDivElement | null) => {
+    /* Unreachable while the cleanup below is returned — React calls a ref with
+       `null` only when it was given nothing to clean up. Handled rather than
+       asserted, because which of the two shapes React uses is React's decision
+       and not one this component should fall over. */
     if (!el) return;
+    scroller.current = el;
 
     /**
      * The scroller's inner width and height.
@@ -442,9 +510,10 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     const store = (next: { w: number; h: number }) =>
       setBox((prev) => (prev && prev.w === next.w && prev.h === next.h ? prev : next));
 
-    /* **The first measure is synchronous, and that is the whole point of this
-       being a layout effect.** It used to go through `requestAnimationFrame`
-       like the resize path below, and rAF DOES NOT RUN IN A BACKGROUND TAB —
+    /* **The first measure is synchronous, and that is the whole point of doing
+       it here rather than on a frame.** It used to go through
+       `requestAnimationFrame` like the resize path below, and rAF DOES NOT RUN
+       IN A BACKGROUND TAB —
        so a panel first rendered in a tab that was never focused stayed on its
        "measuring" placeholder forever, with correctly-sized elements and a
        clean console. It is a blank picture that reports nothing wrong, which is
@@ -470,6 +539,11 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     return () => {
       ro.disconnect();
       cancelAnimationFrame(raf);
+      /* Only if it is still ours. A cleanup runs after the *replacement* ref
+         has been attached in some orders, and clearing unconditionally would
+         blank a `scroller.current` that already points at the live element —
+         which is the follow-scroll effect's only way to find the picture. */
+      if (scroller.current === el) scroller.current = null;
     };
   }, []);
 
@@ -1008,65 +1082,107 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           control that is visibly present and inert is worse than one that is
           not there. */}
       {wantsPoints && (
+        /* **Two boxes, and the inner one is the only thing that wraps.**
+           `.diag-opts` used to be a single wrapping row with the icon in it, and
+           ⟨Sol⟩ was right that this made the claim below false: `margin-left:
+           auto` right-aligns an item, it does not reserve it a slot, so at a
+           width where the chips fit and the icon does not the icon took a line
+           of its own. The chips wrap inside `.diag-opt-rows`; the icon is the
+           outer row's second child and cannot start a line. */
         <div className="diag-opts">
-          {kind === "drift" && (
+          <div className="diag-opt-rows">
+            {kind === "drift" && (
+              <Choice
+                label="Sideways"
+                value={axis}
+                onChange={onAxis}
+                options={[
+                  {
+                    value: "lanes",
+                    label: "Lanes",
+                    blurb:
+                      "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
+                    /* **Not “how central it is to its topic”**, which is what this
+                       card said first and is a sentence `laneX` was rewritten to
+                       stop being true: sideways inside a lane is the paragraph's
+                       own first component, on the same scale Spread shows across
+                       the whole band, so the two modes are two readings of one
+                       number. ⟨Sol⟩ caught the falsehood coming back, having
+                       caught it once in scatter.ts in August — the geometry looks
+                       identical either way, which is exactly why a card about it
+                       has to be checked against the code rather than the picture. */
+                    how: "Inside a lane, sideways is the same number Spread uses, scaled to that lane — so the two are two readings of one measurement rather than two different pictures. The number of lanes comes from the article's length and is capped at eight, which is a fact about a 300px band rather than about the article.",
+                  },
+                  {
+                    value: "spread",
+                    label: "Spread",
+                    blurb:
+                      "Every paragraph on one sliding scale — the single biggest axis of variation in the article.",
+                    how: "Honest about degree where Lanes is honest about grouping. Nothing more to buy: both are arithmetic over the same model call.",
+                  },
+                ]}
+              />
+            )}
             <Choice
-              label="Sideways"
-              value={axis}
-              onChange={onAxis}
+              label="Colour"
+              value={hue}
+              onChange={onHue}
               options={[
                 {
-                  value: "lanes",
-                  label: "Lanes",
+                  value: "section",
+                  label: "Section",
                   blurb:
-                    "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
-                  /* **Not “how central it is to its topic”**, which is what this
-                     card said first and is a sentence `laneX` was rewritten to
-                     stop being true: sideways inside a lane is the paragraph's
-                     own first component, on the same scale Spread shows across
-                     the whole band, so the two modes are two readings of one
-                     number. ⟨Sol⟩ caught the falsehood coming back, having
-                     caught it once in scatter.ts in August — the geometry looks
-                     identical either way, which is exactly why a card about it
-                     has to be checked against the code rather than the picture. */
-                  how: "Inside a lane, sideways is the same number Spread uses, scaled to that lane — so the two are two readings of one measurement rather than two different pictures. The number of lanes comes from the article's length and is capped at eight, which is a fact about a 300px band rather than about the article.",
+                    "The same eight hues the rest of the app uses, one per part of the article, reused round it.",
+                  how: "Positional, and it means nothing beyond it: the hue says these dots belong together, so the eye can group them without reading anything.",
                 },
                 {
-                  value: "spread",
-                  label: "Spread",
-                  blurb:
-                    "Every paragraph on one sliding scale — the single biggest axis of variation in the article.",
-                  how: "Honest about degree where Lanes is honest about grouping. Nothing more to buy: both are arithmetic over the same model call.",
+                  value: "progress",
+                  label: "Progress",
+                  blurb: "Dark at the start of the article, bright at the end.",
+                  how: "The one setting that answers “does this piece travel through its subject or circle back over it?” without following the chain — which on a long article is a web you cannot trace.",
+                },
+                {
+                  value: "topic",
+                  label: "Topic",
+                  blurb: "The model’s own grouping — one hue per topic, the same one the Lanes columns use.",
+                  how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
                 },
               ]}
             />
+          </div>
+          {/* **What the two scatters have to say, on the row that is already
+              there.** It was four lines of 10.5px prose above the picture, and
+              in a band 400px wide that is about fifty pixels of the reader's
+              vertical space spent on a caveat they have read once. Greg,
+              2026-08-30: *"It uses up valuable vertical real estate. Hide it
+              behind a tooltip or warning icon or something."*
+
+              So it moves into this row rather than getting a shorter version of
+              its own line: it is the second child of a strip whose *first* child
+              is the box the chips wrap inside, so it sits at the right-hand end
+              of a row that is drawn whether or not it is there and **cannot add
+              a line of its own**. Right-alignment alone was not enough, and the
+              first version of this got it wrong — styles.css § `.diag-opt-rows`.
+
+              **The words are the same words, with one addition**: the
+              one-paragraph case gained a second sentence, because a card has two
+              paragraphs where a strip had one. Nothing else about them changed,
+              and that is the part worth guarding. Two components out of 1,024
+              throw away most of what the model saw, so a scatter that does not
+              say so is the silent-success shape with a picture on it, and the
+              number alone is worse than useless to a reader who does not know
+              what "variance" means. The
+              card says the thing a percentage cannot — *the projection can only
+              ever pull dots together, never push them apart* — and `ScatterNote`
+              keeps a `role="status"` copy for a screen reader, which is what
+              the strip was doing before and is the half a tooltip cannot do.
+
+              **Only when there is a picture to describe.** Waiting and failing
+              belong to `Waiting` inside the scroller, where the picture is
+              missing; a second voice up here would say it twice. */}
+          {drawingPoints && projection.status === "ready" && (
+            <ScatterNote projection={projection} />
           )}
-          <Choice
-            label="Colour"
-            value={hue}
-            onChange={onHue}
-            options={[
-              {
-                value: "section",
-                label: "Section",
-                blurb:
-                  "The same eight hues the rest of the app uses, one per part of the article, reused round it.",
-                how: "Positional, and it means nothing beyond it: the hue says these dots belong together, so the eye can group them without reading anything.",
-              },
-              {
-                value: "progress",
-                label: "Progress",
-                blurb: "Dark at the start of the article, bright at the end.",
-                how: "The one setting that answers “does this piece travel through its subject or circle back over it?” without following the chain — which on a long article is a web you cannot trace.",
-              },
-              {
-                value: "topic",
-                label: "Topic",
-                blurb: "The model’s own grouping — one hue per topic, the same one the Lanes columns use.",
-                how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
-              },
-            ]}
-          />
         </div>
       )}
 
@@ -1140,27 +1256,6 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           The error branch is not decoration either: without it a failed request
           would leave a picture that quietly draws four kinds where five were
           promised, and nothing on screen would be wrong. */}
-      {/* What the two scatters have to say out loud, and the reason it is not
-          in a tooltip. Two components out of 1,024 throw away most of what the
-          model saw, so a scatter plot that does not say so is the
-          silent-success shape with a picture on it — and the number alone is
-          worse than useless to a reader who does not know what "variance"
-          means. So it is one sentence in ordinary words, and it says the thing
-          a percentage cannot: **the projection can only ever pull dots
-          together, never push them apart.** GPT Sol's finding, 2026-08-27.
-
-          **Only when there is a picture to describe.** Waiting and failing used
-          to be reported here too, back when a fallback picture was drawn
-          underneath and something had to explain it. There is no fallback any
-          more, so those two states belong to `Waiting` inside the scroller —
-          where the picture is missing — and a strip that also announced them
-          would say the same thing twice in two places. */}
-      {drawingPoints && projection.status === "ready" && (
-        <p className="diag-note" role="status">
-          {kept(projection)}
-        </p>
-      )}
-
       {kind === "force" && similar.status !== "idle" && (
         <p className="diag-note" role="status">
           {/* **The spinner, in the strip rather than over the picture.** Greg,
@@ -1212,7 +1307,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         </p>
       )}
 
-      <div className="diag-scroll" ref={scroller}>
+      <div className="diag-scroll" ref={attachScroller}>
         {root === null ? (
           <p className="diag-quiet">
             This article has no usable tree, so there is nothing to draw. Run <code>npm run toc</code>{" "}
@@ -1757,16 +1852,19 @@ function Choice<T extends string>({
  * span does not, so quoting them separately would be quoting the least stable
  * half of the answer. GPT Sol's finding, 2026-08-27.
  */
-function kept(p: UseProjection): string {
+function kept(p: UseProjection): { what: string; how: string } {
   /* **A picture too thin to describe.** The *empty* case no longer reaches
      here — no dots means no picture, and `Waiting` says so where the picture is
      missing. What is left is the article that placed exactly **one** paragraph:
-     there is a dot, so this strip renders, and the general wording below would
-     report what percentage of the differences a flat view keeps of a view with
-     nothing to be different from. GPT Sol's finding, 2026-08-27, and the reason
-     the threshold is 2 rather than 1. */
+     there is a dot, so this renders, and the general wording below would report
+     what percentage of the differences a flat view keeps of a view with nothing
+     to be different from. GPT Sol's finding, 2026-08-27, and the reason the
+     threshold is 2 rather than 1. */
   if (p.blocks < 2) {
-    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about.";
+    return {
+      what: "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about.",
+      how: "There is a dot, and one dot has nothing to be far from, so nothing here says how far apart two paragraphs are.",
+    };
   }
   const held = Math.round((p.variance[0] + p.variance[1]) * 100);
   const short = p.skipped.tooShort + p.skipped.nonProse;
@@ -1777,8 +1875,70 @@ function kept(p: UseProjection): string {
      together with a dash and a "so", which made the asymmetry — the only real
      content here — the tail of a sentence about a percentage. Fable's rewrite,
      2026-08-27, and it is better: how many dots, how flat the view is, and then
-     the two halves of what flatness costs, each given its own full stop. */
-  return `${p.blocks} paragraphs${missing}${capped}. This is a flattened view — it keeps about ${held}% of the differences the model saw. Far-apart dots really do differ. Close-together dots may not: their differences may be in what the flattening dropped.${by}`;
+     the two halves of what flatness costs, each given its own full stop.
+
+     **The split into two is where the card's two paragraphs come from**, and it
+     is the split `ControlTip` already asks for everywhere else in this panel:
+     what it is, then the thing a reader could not have worked out by looking.
+     How many dots there are is the first; what a flat view costs is the second,
+     and it is the whole reason any of this is on screen. */
+  return {
+    what: `${p.blocks} paragraphs${missing}${capped}.`,
+    how: `This is a flattened view — it keeps about ${held}% of the differences the model saw. Far-apart dots really do differ. Close-together dots may not: their differences may be in what the flattening dropped.${by}`,
+  };
+}
+
+/**
+ * **The picture's own caveat, as an icon on the controls row.**
+ *
+ * It was four lines of prose above the picture until 2026-08-30. Greg:
+ *
+ * > It uses up valuable vertical real estate. Hide it behind a tooltip or
+ * > warning icon or something.
+ *
+ * Two things it keeps, because a hover card on its own would drop both.
+ *
+ * **A `role="status"`, still.** The strip announced itself when the projection
+ * landed, and that announcement is the only way a reader who cannot see the
+ * picture learns that a fifth of the article is not in it. A tooltip is reached
+ * by pointing or by Tab, so it announces nothing. The sentence is therefore
+ * still in the DOM and still live — it is only invisible, which is what
+ * `.sr-only` is for.
+ *
+ * **And the counts are in the button's name**, not just in the card. "Info" or
+ * "About this picture" would make the one hard number — how many paragraphs are
+ * missing — reachable only by opening something, and a control whose label is a
+ * noun is a control a screen reader cannot skim.
+ *
+ * `Info` rather than a warning triangle: paragraphs going unplaced is the
+ * ordinary case (headings and one-line list items are not embedded — see
+ * src/article-vectors.ts), and an alarm on the ordinary case is an alarm nobody
+ * reads by the second article.
+ */
+function ScatterNote({ projection }: { projection: UseProjection }) {
+  const { what, how } = kept(projection);
+  return (
+    <>
+      <Tooltip
+        placement="bottom"
+        /* Same finding as the chips beside it: the card is far wider than this
+           icon and the icon sits at the right-hand end of a 400px band, so
+           without this the card is thrown sideways onto the controls the reader
+           just came from. Tooltip.tsx § keepSide. */
+        keepSide
+        className="tip-soon"
+        content={<ControlTip head="What is drawn" what={what} how={how} />}
+      >
+        <button type="button" className="diag-about" aria-label={`About this picture: ${what}`}>
+          <Info size={13} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      {/* The whole sentence, spoken once when the projection lands — the job the
+          visible strip used to do. Not `aria-label` on the button above: that is
+          heard on focus, and this has to be heard on arrival. */}
+      <p className="sr-only" role="status">{`${what} ${how}`}</p>
+    </>
+  );
 }
 
 /**

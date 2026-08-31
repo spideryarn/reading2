@@ -816,3 +816,150 @@ describe("the controls explain themselves", () => {
     }
   });
 });
+
+/**
+ * **The measure has to happen whenever the scroller mounts, not once.**
+ *
+ * `Sketch` replaces everything below the chips, `.diag-scroll` included
+ * (DiagramPanel.tsx § Sketch replaces everything below the chips). So a panel
+ * whose first render is a Sketch runs its measuring layout effect against a
+ * `ref` that is still `null`, returns early — and with `[]` deps never runs
+ * again. Press Drift or Trail afterwards and `box` is still `null`, which is
+ * the branch that renders `.diag-measuring`: an empty `<div>` with
+ * `min-height: 100%`, no spinner, no words, nothing in the console. The step
+ * readout says "—" because there is no layout to count, and the strip above
+ * still reports a projection that landed perfectly well.
+ *
+ * Reproduced on production on 2026-08-30 — open `?diagram=sketch`, press Trail,
+ * wait — and the fix is a **callback ref**: it fires when the element mounts,
+ * whenever that turns out to be.
+ */
+describe("switching away from Sketch", () => {
+  it("measures the scroller that arrives after the first render", () => {
+    mount("sketch");
+    expect(host.querySelector(".diag-scroll"), "Sketch drew a scroller").toBeNull();
+    mount("force");
+    /* The tell, and it is the *absence* of a picture rather than any message:
+       `.diag-measuring` is the one branch of this panel that says nothing at
+       all, so a reader gets a blank band and no reason for it. */
+    expect(
+      host.querySelector(".diag-measuring"),
+      "the panel is still waiting for a width it will never measure",
+    ).toBeNull();
+    expect(host.querySelector("svg.diag-svg"), "no picture after leaving Sketch").not.toBeNull();
+  });
+});
+
+/**
+ * **The scatter's caveat, after it stopped being four lines above the picture.**
+ *
+ * Greg, 2026-08-30: *"It uses up valuable vertical real estate. Hide it behind a
+ * tooltip or warning icon or something."* So it is an icon at the end of a
+ * control row that was already drawn, and the words are in its card.
+ *
+ * The risk in a change like that is not that the icon fails to appear. It is
+ * that **the sentence stops being said at all** to a reader who cannot see the
+ * picture: a hover card is reached by pointing or by Tab, so it announces
+ * nothing when the projection lands, and the strip it replaced was a live
+ * region. That is the silent half, and it is the half these pin.
+ */
+describe("what a scatter says about itself", () => {
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  /** Two placed paragraphs and three that were not — enough to have a caveat. */
+  const PLACED = {
+    model: "voyageai/voyage-4",
+    blocks: 2,
+    k: 1,
+    variance: [0.1, 0.06],
+    skipped: { tooShort: 2, nonProse: 1, capped: 0 },
+    points: [
+      { id: "spya-b0", x: -0.2, y: 0.1, c: 0 },
+      { id: "spya-b2", x: 0.3, y: -0.1, c: 0 },
+    ],
+  };
+
+  const placedProjection = () =>
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) =>
+      String(url).includes("/api/projection/")
+        ? new Response(JSON.stringify(PLACED), { status: 200 })
+        : new Response(JSON.stringify({ model: "m", blocks: 2, eligible: 2, omitted: 0, pairs: [] }), { status: 200 }),
+    );
+
+  it("costs no line of its own", async () => {
+    placedProjection();
+    mount("drift");
+    await settle();
+    /* `.diag-note` is the strip — one line of 10.5px prose per line of it. Force
+       still grows one while it buys the dotted lines; a scatter must not, which
+       is the whole of the change. Asserted as an absence because the height it
+       used to take is exactly what a regression would hand back. */
+    expect(host.querySelector(".diag-note"), "the scatter grew a strip again").toBeNull();
+    expect(host.querySelector(".diag-about"), "nothing says where the picture came from").not.toBeNull();
+  });
+
+  it("still says it out loud when the picture lands", async () => {
+    placedProjection();
+    mount("drift");
+    await settle();
+    /* One live region, and it carries the whole sentence — the counts *and* the
+       thing a percentage cannot say. A card that only opens on hover would
+       leave a reader who cannot see the picture with no way to learn that three
+       paragraphs are not in it. */
+    const live = [...host.querySelectorAll('[role="status"]')];
+    expect(live).toHaveLength(1);
+    const said = live[0]?.textContent ?? "";
+    expect(said, "the counts are gone").toContain("2 paragraphs");
+    expect(said, "the paragraphs that were left out are gone").toContain("3 too short");
+    expect(said, "the asymmetry — the only real content — is gone").toContain("Close-together dots");
+    expect(live[0]?.className, "the sentence is visible again, taking the space it used to").toBe("sr-only");
+  });
+
+  it("opens a card with both halves of what it has to say", { timeout: 20000 }, async () => {
+    /* **The other two tests pass on a control whose card never opens**, which
+       ⟨Sol⟩ named: they read the DOM around the button and the button's own
+       name, and a `<Tooltip>` whose content threw or whose trigger lost its
+       handlers would leave both of them green. So this one opens it and reads
+       it. The focus route rather than hover, for the reason the chip-card tests
+       above give: `Tooltip` includes `useFocus`, and a jsdom hover reaches
+       nothing.
+
+       The open-and-read dance is copied from `cardFor` above rather than
+       shared, because that helper lives inside a describe with its own fetch
+       stub and this one needs a projection that landed. Two short copies beat
+       one helper that has to take the stub as an argument. */
+    placedProjection();
+    mount("drift");
+    await settle();
+    const icon = host.querySelector<HTMLElement>(".diag-about");
+    expect(icon, "no control to open").not.toBeNull();
+    icon?.focus();
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    const cards = document.querySelectorAll('[role="tooltip"]');
+    expect(cards, "focusing the icon opened no card, or more than one").toHaveLength(1);
+    const card = cards[0];
+    expect(card?.querySelector(".tip-soon-head")?.textContent).toBe("What is drawn");
+    const body = card?.textContent ?? "";
+    expect(body, "the counts are not in the card").toContain("2 paragraphs");
+    /* The second paragraph is the whole reason this is on screen: a percentage
+       cannot say that the flattening is one-directional, and a card that had
+       lost it would still look like a card. */
+    expect(body, "the asymmetry is not in the card").toContain("Close-together dots");
+    expect(body, "the model is not named").toContain("voyage-4");
+    icon?.blur();
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+  });
+
+  it("names the counts on the control itself, not only inside the card", async () => {
+    /* "Info" is a noun, and a control whose whole accessible name is a noun is
+       one a screen reader cannot skim. The one hard number here — how much of
+       the article is not drawn — must not be reachable only by opening
+       something. */
+    placedProjection();
+    mount("drift");
+    await settle();
+    const name = host.querySelector(".diag-about")?.getAttribute("aria-label") ?? "";
+    expect(name).toContain("2 paragraphs");
+    expect(name).toContain("3 too short");
+  });
+});
