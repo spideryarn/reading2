@@ -21,7 +21,11 @@
     "deny": [
       "mcp__vercel__buy_pro",
       "mcp__vercel__buy_domain",
-      "mcp__vercel__buy_credits"
+      "mcp__vercel__buy_credits",
+      "mcp__vercel__buy_addon",
+      "mcp__vercel__use_vercel_cli",
+      "mcp__vercel__pause_project",
+      "mcp__vercel__update_project_deployment_protection"
     ]
   }
 }

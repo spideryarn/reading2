@@ -327,6 +327,54 @@ are under `/home`, `findmnt /home` reports `/dev/sdb`, and that is the volume. S
 **Still manual, and unavoidably so:** `claude mcp login vercel` and `claude mcp login sentry`, in a
 browser, by Greg. Nothing else in stage 4 needs a human.
 
+**Sol reviewed it and said STOP, with one finding worth the whole review.** The banner
+`push-env` writes on the box says "production credentials are deliberately absent", and nothing made
+that true. The allowlist matches key *names*; `DATABASE_URL` is spelled the same for the throwaway
+container and for the one production database. Point `.env.local` at production for an afternoon,
+push, and the box quietly holds production under a file claiming it does not. Measured on the box
+the same day: every value there is loopback today — so this was latent, not live. Fixed by making it
+structural rather than lucky: `MUST_BE_LOCAL` in
+[`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) refuses to send `DATABASE_URL`,
+`SUPABASE_URL` or `VITE_SUPABASE_URL` unless the value is loopback, reusing the migrator's own
+`isLocalDatabaseUrl` so "local" cannot mean two things in one repo. Four tests, watched red first,
+including the `user:p@localhost:5432@remote.example.com` shape that defeated a regex version of this
+check elsewhere.
+
+**The deny list was a claim, not a control, and the doc said otherwise.** Three corrections:
+`buy_addon` was missing (there are four `buy_*`, not three); `use_vercel_cli` runs the Vercel CLI and
+routes around every per-tool entry; and a session on the box can write
+`.claude/settings.local.json`, so any agent that can edit the repo can edit the list. It is a guard
+rail against the accidental reach, and the README now says exactly that rather than implying a wall.
+`pause_project` and `update_project_deployment_protection` are denied too — neither is routine and
+both reach production. `deploy_to_vercel` is deliberately left open, because deploying is ordinary
+work here.
+
+**`doctor` was oversold as "check the lot".** It knows nothing about the checkout, `.env.local`, the
+database, the migrations, the owner row or the fixtures, and the browser smoke deliberately uses a
+global `playwright-core` so it works on a clean `/home` with no checkout at all — so a box that
+skipped half of First run gets a green doctor. The runbook now says so and closes with
+`REQUIRE_POSTGRES=1 npm test`, which is the step that actually proves that half.
+
+**`infra/hetzner/README.md` was outside the doc-links gate**, which globbed `docs/**` plus
+`AGENTS.md` only. That is how it came to carry a link to a `#mcp-servers` heading that did not
+exist. It is in the gate now, and the gate immediately found a second dead anchor in the same file —
+a link of mine to this plan that used the short form of a heading ending "…, discovered by trying
+it". The runbook is the markdown most likely to be followed literally by someone who cannot yet ask
+the repo anything, and it was the only one not checked.
+
+**Two claims of mine that were wrong.** `/var/log/provision.log` "must end with PROVISION OK" is
+false on the live box — cloud-init tees that file on the first boot and never touches it again, so
+it still ends `PROVISION INCOMPLETE` from an old build while the status file says `PROVISION OK`.
+And a comment in `gjd-remote-env.ts` said the Supabase MCP "gets --read-only"; no such mode exists on
+that server or on Vercel's.
+
+**Still open, and not mine to fix:** `npm run setup` inherits the shell, and
+[`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) deliberately prefers an exported
+`DATABASE_URL` and allows a remote one under `DB_MIGRATE_ALLOW_REMOTE=yes`. Both exports would have
+to be present, and the guard refuses a remote URL without the opt-in — so it is two deliberate acts,
+not one slip. But `setup-local.ts` calls itself "local by construction" and that is a shade stronger
+than what holds. Raised with Greg and with the session that owns that script.
+
 ## The `provision.sh` refactor — approved, with a correction
 
 Extract it from the cloud-init heredoc into `infra/hetzner/provision.sh`, so it is shellcheck-able

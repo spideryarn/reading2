@@ -16,8 +16,8 @@ the server's own disk.
 
 ## First run
 
-Zero to a box an agent can work on. Everything is scripted **except three steps that need a human
-in a browser** — they are marked ⚑, and no amount of Terraform will remove them.
+Zero to a box an agent can work on. Everything is scripted **except four steps that need a human in
+a browser** — they are marked ⚑, and no amount of Terraform will remove them.
 
 You need, on the laptop: OpenTofu (or Terraform) ≥ 1.5, a Hetzner Cloud project, a Read & Write API
 token for it (Hetzner console → Security → API tokens), and an ssh keypair whose public half sits at
@@ -57,15 +57,28 @@ Then, in this order, from the repo root on the laptop:
 4. **Send the environment.** `npx tsx scripts/gjd-remote.ts push-env` — allowlisted key names only,
    rebuilt on the box rather than copied, and it prints what it skipped. It writes *into the
    checkout*, so it has to come after the clone and not before it.
-5. **Build it, on the box.** `npm ci`, then **`npm run setup`**
+5. **Build it, on the box** — `ssh greg@<ip>`, `cd ~/code/spideryarn2`, and there
+   `npm ci`, then **`npm run setup`**
    ([`scripts/setup-local.ts`](../../scripts/setup-local.ts)), which runs the local Supabase stack,
    the migrations and the owner seed in the one order that works. The first run pulls ~2GB of Docker
    images. `npm ci` stays outside it on purpose — you cannot run the script before installing.
    It is the same command on the laptop, which is why it is the one that gets exercised.
 6. **Copy the article fixtures**, which git does not carry — same section.
 7. ⚑ **Authenticate the MCP servers** that need it — [MCP servers](#mcp-servers).
-8. **Check the lot:** `npx tsx scripts/gjd-remote.ts doctor`. It exits non-zero if anything failed,
-   so it is usable as a gate rather than something to read hopefully.
+8. ⚑ **Log Codex in**, so cross-family review works without a 12-second tax per run:
+   `codex login --device-auth` — [Codex, for cross-family review](#codex-for-cross-family-review).
+9. **Check the machine:** `npx tsx scripts/gjd-remote.ts doctor`. It exits non-zero if anything
+   failed, so it is usable as a gate. But be clear what it covers: ssh, mosh, ten system binaries,
+   the browser stack, the MCP servers, and provisioning. It knows **nothing** about steps 3–7 —
+   there is no check for the checkout, `.env.local`, the database, the migrations, the owner row or
+   the fixtures, and the browser smoke deliberately uses a global `playwright-core` so that it works
+   on a clean `/home` with no checkout at all. **A box where you skipped 3 through 7 gets a green
+   doctor.**
+10. **Then check the work**, which is the step that actually proves 3–7: on the box,
+    `REQUIRE_POSTGRES=1 npm test`. That is stage 3's exit criterion in
+    [the plan](../../docs/plans/260831x-remote-box-dev-environment.md), and
+    [`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) makes an absent database say so
+    rather than failing obscurely.
 
 ## Before every apply
 
@@ -215,9 +228,15 @@ Then, from the output:
 
 ```
 ssh greg@<ip>
-sudo tail -20 /var/log/provision.log    # must end with PROVISION OK
+cat /var/log/gjd-provision-status        # must end with PROVISION OK
 claude                                   # press c, open the URL on your laptop, paste the code back
 ```
+
+**Not `/var/log/provision.log`**, which this said until 2026-08-31 and which is actively
+misleading: cloud-init tees that file on the FIRST boot and never touches it again, so on the live
+box it still ends `PROVISION INCOMPLETE — see above` from a build months ago, while the status file
+from the most recent re-run says `PROVISION OK`. Both were true; only one was current. The log is
+for reading *why* something failed, and the status file is for deciding *whether* it did.
 
 **Read that log before trusting the box.** Provisioning ends with a block of explicit checks —
 volume mounted, swap on, claude and chrome and docker actually running, both MCP servers registered,
@@ -409,7 +428,7 @@ x11vnc and websockify are all bound to localhost and reached through the tunnel.
 
 ## MCP servers
 
-Four kinds, and only one of them needs anything from a human.
+Three kinds, and only one of them needs anything from a human.
 
 **Greg's account brings its own.** Canva, Zapier, Google Calendar, Gmail, Drive, Notion arrive on
 any machine he logs into and need nothing per-box. Do not register them here and do not count them
@@ -432,34 +451,95 @@ A project-scope server normally makes every session sit at `⏸ Pending approval
 approves it interactively. `enabledMcpjsonServers` in
 [`.claude/settings.json`](../../.claude/settings.json) pre-approves these three by name, which is
 why nobody gets a modal. That file is also where the deny list lives, and JSON cannot hold a comment
-saying why, so it is here instead: **Vercel's MCP can spend money** — `buy_pro`, `buy_domain`,
-`buy_credits` — and an autonomous agent must never reach them. The matcher is
-`mcp__<server>__<tool>` for one tool, **`mcp__<server>` with no trailing wildcard** for a whole
-server, and `mcp__*` for all of them; `mcp__vercel__*` is not the syntax, however much it looks like
-it. `deploy_to_vercel`, `pause_project` and `update_project_deployment_protection` are deliberately
-*not* denied — they are real work, and sessions here run in normal permission mode (there is no
-`--dangerously-skip-permissions` anywhere in `gjd-remote`), so they prompt.
+saying why, so it is here instead.
+
+**Vercel's MCP can spend money.** Four `buy_*` tools — `buy_pro`, `buy_domain`, `buy_credits`,
+`buy_addon` — and an autonomous agent must never reach any of them. Denied, along with
+**`use_vercel_cli`**, which is a general escape hatch: it runs the Vercel CLI, so leaving it open
+would route straight around every other name on the list. Also denied: **`pause_project`**, which
+can take production offline, and **`update_project_deployment_protection`**, which can expose it.
+Neither is routine work, and Vercel's own guidance is that its MCP has whatever access the account
+has and wants human confirmation for every workflow.
+
+**`deploy_to_vercel` is deliberately left open**, and that is a judgement rather than an oversight:
+deploying is ordinary work here, sessions run in normal permission mode (`gjd-remote` passes no
+`--dangerously-skip-permissions`), so it prompts. If unattended deploys ever become the worry, it is
+one more line.
+
+**Syntax.** `mcp__<server>__<tool>` for one tool, `mcp__<server>` for a whole server, `mcp__*` for
+every server. `mcp__<server>__*` works too, but the bare form is the one the CLI's own help
+documents. Denied tools are removed from the model's tool list rather than refused when called —
+proved on the box by denying `mcp__supabase__list_tables` and watching that one tool disappear while
+the other ten stayed. Deny also beat an explicit allow of the same name.
+
+**This is a guard rail, not a wall, and it matters which.** A session on that box can write
+`.claude/settings.local.json`, which takes precedence over the project settings — so an agent that
+edits the repo can re-allow what this denies. It stops the accidental reach, not a determined one.
+The only version an agent cannot touch is a managed-settings file deployed outside the repo, and we
+do not have one. Say "guard rail" when describing this to somebody; calling it a control would be
+false.
 
 ### ⚑ The one manual step, per box
 
 ```
 ssh -t greg@<ip>
 cd ~/code/spideryarn2
-claude mcp login vercel     # prints a URL; open it on the laptop, approve, come back
-claude mcp login sentry
-claude mcp list             # both must now say ✔ Connected, not ! Needs authentication
+claude mcp login --no-browser vercel
+claude mcp login --no-browser sentry
+claude mcp list        # both must now say ✔ Connected, not ! Needs authentication
 ```
+
+**It is an exchange, not a link.** `--no-browser` prints an authorization URL *and then waits*: you
+open it in a browser on the laptop, approve, and **paste the redirect URL back** at its prompt. Miss
+that second half and it sits there until it times out, which looks like a hang. Pass the flag
+explicitly rather than relying on the headless auto-detection added in 2.1.191 — a default is not a
+decision, and this is the same reasoning that makes `provision.sh` name `--browser chrome` out
+loud.
 
 **A rebuild does not undo this.** The tokens are in `~/.claude/.credentials.json` and
 `~/.claude.json`, `/home` is the volume (`findmnt /home` says `/dev/sdb`), and the volume outlives
-the server. So this is a once-per-*box* ceremony, not a once-per-`apply` one.
+the server. So the unit is not the box and not the `apply` — it is **the retained volume**, and it lasts until the tokens expire or are revoked.
+
+**But `claude mcp remove <name>` is a de-authentication.** Measured on the box, 2026-08-31:
+removing a server shrank `~/.claude/.credentials.json` from 1364 to 959 bytes for `vercel`, then
+959 to 523 for `sentry`, and re-adding restored nothing. The control was a duplicate `add`, which
+fails and leaves the file byte-identical — so the shrink is `remove`'s doing. And the store is keyed
+by **server name, not by scope**: the laptop's existing Vercel login was picked up by the new
+project-scope entry the moment the name matched. So `remove` at any scope destroys the one
+credential every scope shares. That is a trap for whoever next tidies up a duplicate registration,
+and it is the reason these three live in `.mcp.json` rather than in `provision.sh`: the provisioning
+helper for the browser MCPs does remove-then-add for idempotence, and copying that pattern here
+would log the box out of Vercel and Sentry on every re-provision. If you ever do script one, guard
+with `claude mcp get <name>` — exit 0 present, exit 1 absent — and add only when absent.
+
+**You do not have to remember the login**, because `gjd-remote doctor` fails when it has not been
+done:
+
+```
+✗ mcp  sentry, vercel not connected — on the box: claude mcp login sentry
+```
+
+It reads the wanted names out of `.mcp.json` rather than keeping a second list, so adding a server
+extends the check on its own. It tells a *missing login* apart from a *stale checkout* — a box that
+has not pulled the commit adding `.mcp.json` is told to pull, not sent off to do a browser ceremony
+that cannot help. [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts),
+[`tests/gjd-remote-mcp.test.ts`](../../tests/gjd-remote-mcp.test.ts).
 
 ### Why Supabase needs no credential, and what that buys
 
-It is the **local** stack's own MCP on a loopback address, not Supabase's hosted one, so it is
-structurally incapable of reaching production — there is no production Supabase credential on the
-box at all, which is what lets `push-env`'s allowlist leave `SUPABASE_ACCESS_TOKEN` behind
-([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)). It serves 11 tools, verified by a
+It is the **local** stack's own MCP on a loopback address, not Supabase's hosted one, so it cannot
+reach production. That is what lets `push-env`'s allowlist leave `SUPABASE_ACCESS_TOKEN` — the
+management token that can delete the production project — behind entirely.
+
+**And that claim is now enforced rather than merely true.** The allowlist matches key *names*, and a
+name says nothing about where it points: `DATABASE_URL` is spelled the same for the throwaway
+container and for the one production database. So "no production credential on the box" was
+something nobody was checking, and it would have gone quietly false the first afternoon somebody
+pointed `.env.local` at production and then pushed. Since 2026-08-31 `push-env` refuses to send
+`DATABASE_URL`, `SUPABASE_URL` or `VITE_SUPABASE_URL` unless the value is loopback
+([`MUST_BE_LOCAL` in `scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)), reusing the
+migrator's own `isLocalDatabaseUrl` so "local" cannot mean two different things in one repo. Found
+by GPT Sol. It serves 11 tools, verified by a
 `tools/list` call on 2026-08-31: `search_docs`, `list_tables`, `list_extensions`, `list_migrations`,
 `apply_migration`, `execute_sql`, `query_logs`, `get_advisors`, `get_project_url`,
 `get_publishable_keys`, `generate_typescript_types`.
@@ -472,7 +552,7 @@ every session on it, so `execute_sql` there is somebody else's data as well as y
 
 Two things a green `git clone` does not give you. Both were found by running the suite on a new box,
 not by reading anything, and both fail in ways that do not name the cause — the archaeology is in
-[the plan](../../docs/plans/260831x-remote-box-dev-environment.md#what-a-fresh-clone-cannot-do).
+[the plan](../../docs/plans/260831x-remote-box-dev-environment.md#what-a-fresh-clone-cannot-do-discovered-by-trying-it).
 
 **`npm run db:seed-owner`.** A freshly migrated database has no owner row, so every insert carrying
 an `owner_id` dies on a foreign key. It cost 18 failing test files and the error names neither the

@@ -7,6 +7,7 @@
  * main() on import, and an entrypoint guard is a bad thing to depend on.
  */
 import { createHash } from "node:crypto";
+import { isLocalDatabaseUrl } from "../src/db/ssl.js";
 
 /**
  * THE ALLOWLIST. Every key that may reach the box, named.
@@ -25,8 +26,11 @@ import { createHash } from "node:crypto";
  *    the credential for its own deletion is one bad agent away from gone.
  *  - SUPABASE_ACCESS_TOKEN — a Supabase *management* PAT. `.env.example` says
  *    in its own comment that it can create and delete projects, which includes
- *    the production one. Nothing on the box needs it; stage 4's Supabase MCP
- *    is pointed at the local stack and gets --read-only.
+ *    the production one. Nothing on the box needs it: the Supabase MCP is
+ *    pointed at the LOCAL stack on a loopback address, which is what makes the
+ *    box able to do without this key at all. It has no --read-only mode — an
+ *    earlier version of this comment said it did — so two of its eleven tools
+ *    write; they just cannot write anywhere that matters.
  *
  * And one that is not here to be added by symmetry: **the local administrator's
  * password**. It is generated per machine into `~/.config/spideryarn/`
@@ -37,6 +41,26 @@ import { createHash } from "node:crypto";
  * The box is shared by many autonomous agents running as one user with
  * passwordless sudo, so "on the box" means "reachable by all of them".
  */
+/**
+ * Allowlisted keys whose VALUE must point at the throwaway container, not just
+ * whose name is on the list above.
+ *
+ * The allowlist matches names, and a name says nothing about where it points:
+ * `DATABASE_URL` is spelled the same whether it is the local Docker stack or
+ * the one production database we have no staging copy of. So the banner
+ * `buildEnvPayload` writes — "production credentials are deliberately absent" —
+ * was a claim nothing enforced, and it would have gone quietly false the first
+ * afternoon somebody pointed `.env.local` at production and then ran a push.
+ * Now the banner is true by construction rather than by habit. Found by GPT
+ * Sol, 2026-08-31.
+ *
+ * `isLocalDatabaseUrl` rather than a fresh test, deliberately: "local" must not
+ * mean one thing to the migrator's guard and another to this one, and that
+ * function already fails closed on a URL it cannot parse and already survives a
+ * loopback address hidden in a password (src/db/ssl.ts).
+ */
+export const MUST_BE_LOCAL: readonly string[] = ["DATABASE_URL", "SUPABASE_URL", "VITE_SUPABASE_URL"];
+
 export const ALLOWLIST: readonly string[] = [
   "OPENROUTER_API_KEY",
   "OPENAI_API_KEY",
@@ -215,6 +239,21 @@ export function buildEnvPayload(localText: string): EnvPayload {
     else pushed.set(key, value);
   }
   const skipped = [...local.keys()].filter((k) => !allowed.has(k)).sort();
+
+  /* Refused, not warned about. A push that went ahead with a note would put
+     production on a box shared by autonomous agents, under a header saying it
+     had not. The KEY is named and the value never is — the host would usually
+     be harmless, but "usually" is not a rule this file can apply to a string it
+     has not parsed. */
+  for (const key of MUST_BE_LOCAL) {
+    const value = pushed.get(key);
+    if (value !== undefined && !isLocalDatabaseUrl(value)) {
+      problems.push(
+        `${key} does not point at the local stack, and this only ever sends local ones. ` +
+          `Point it back at 127.0.0.1, or edit MUST_BE_LOCAL in scripts/gjd-remote-env.ts on purpose.`,
+      );
+    }
+  }
 
   // No timestamp in the banner: it would make every push a change even when
   // nothing changed, and the file's mtime already says when.

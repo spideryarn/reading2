@@ -68,6 +68,11 @@ both said Connected while one of them was, on the evidence available at the time
 unable to launch. Driving them over stdio is the check that would close it. Until it exists, if you
 depend on an MCP there, open one page with it before you trust it.
 
+`gjd-remote doctor` has had an `mcp` check since 2026-08-31 and it does **not** close this hole. It
+covers the three service servers in [`.mcp.json`](../../.mcp.json), not `playwright` and
+`chrome-devtools`, and what it asserts is the handshake, not a browser. Everything above still
+stands for both browser MCPs.
+
 ## The trap both halves share
 
 **A browser that renders nothing still produces a perfectly valid screenshot.** Right magic bytes,

@@ -49,7 +49,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   stale copy.
 - [`.mcp.json`](../../.mcp.json) — the `supabase`, `vercel` and `sentry` MCP servers, at project
   scope so they arrive with the clone rather than with provisioning. The two OAuth logins, the deny
-  list that stops an agent buying things, and why Supabase needs no credential are in
+  list that makes it harder for an agent to buy things (a guard rail, not a wall — an agent that can
+  edit the repo can edit the list), and why Supabase needs no credential are in
   [infra/hetzner/README.md § MCP servers](../../infra/hetzner/README.md#mcp-servers).
 
 **Doing things on it**

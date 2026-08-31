@@ -125,3 +125,57 @@ describe("the change report", () => {
     });
   });
 });
+
+/**
+ * The banner `buildEnvPayload` writes says "production credentials are
+ * deliberately absent". Until 2026-08-31 nothing made that true: the allowlist
+ * matches KEY NAMES, and `DATABASE_URL`, `SUPABASE_URL` and `VITE_SUPABASE_URL`
+ * are the same names whether they point at the throwaway container or at the
+ * one production database. Point `.env.local` at production for an afternoon,
+ * run `push-env`, and the box silently gets production — with the file it just
+ * wrote claiming otherwise. Found by GPT Sol, 2026-08-31.
+ */
+describe("the local-only keys", () => {
+  const localEnv = [
+    "OPENROUTER_API_KEY=sk-test",
+    "DATABASE_URL=postgres://postgres:pw@127.0.0.1:54362/postgres",
+    "SUPABASE_URL=http://127.0.0.1:54361",
+    "VITE_SUPABASE_URL=http://127.0.0.1:54361",
+  ].join("\n");
+
+  it("pushes when every one of them is loopback", () => {
+    const got = buildEnvPayload(localEnv);
+    expect(got.problems).toEqual([]);
+    expect(got.pushed.has("DATABASE_URL")).toBe(true);
+  });
+
+  it.each(["DATABASE_URL", "SUPABASE_URL", "VITE_SUPABASE_URL"])(
+    "refuses when %s points somewhere else",
+    (key) => {
+      const remote = localEnv.replace(
+        new RegExp(`^${key}=.*$`, "m"),
+        `${key}=postgres://u:p@db.prod.example.com:5432/postgres`,
+      );
+      const got = buildEnvPayload(remote);
+      expect(got.problems.join(" ")).toContain(key);
+      // The refusal must not carry the value it is refusing.
+      expect(got.problems.join(" ")).not.toContain("db.prod.example.com");
+    },
+  );
+
+  // The exact shape that defeated a regex version of this check elsewhere in
+  // the repo: userinfo runs to the LAST @, so the host here is the remote one.
+  it("is not fooled by a loopback address sitting in the password", () => {
+    const sneaky = localEnv.replace(
+      /^DATABASE_URL=.*$/m,
+      "DATABASE_URL=postgres://user:p@localhost:5432@remote.example.com/db",
+    );
+    expect(buildEnvPayload(sneaky).problems.join(" ")).toContain("DATABASE_URL");
+  });
+
+  // A key that is absent is a different complaint (`missing`), not this one.
+  it("does not complain about a key that is not there at all", () => {
+    const without = localEnv.replace(/^SUPABASE_URL=.*$/m, "");
+    expect(buildEnvPayload(without).problems.join(" ")).not.toContain("SUPABASE_URL");
+  });
+});
