@@ -17,8 +17,10 @@ This page is the map. Everything below is a signpost; the detail lives in the do
 The **server is disposable and the volume is not**. A separate volume is bind-mounted over `/home`,
 so checkouts, `~/.claude` and everything else survive destroying and recreating the machine. One
 tmux session per Claude session, because mosh cannot reattach and a client that dies would otherwise
-leave a session nobody could get back into. Sessions start under a placeholder name and adopt
-Claude's own title for the work at the next `gjd-remote ls`.
+leave a session nobody could get back into. Sessions start under a placeholder name — `s-260831-192843`,
+`yyMMdd-HHmmss` on the laptop's own clock — and adopt Claude's own title for the work at the next
+`gjd-remote ls`. The seconds are in it because two `new` runs in the same minute minted the same name
+and tmux refused the second one; on a box meant to hold many parallel sessions that is not an edge case.
 
 ## Where things are
 

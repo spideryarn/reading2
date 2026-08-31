@@ -80,7 +80,7 @@ nothing and says whose it is.
 ## How a session gets its name
 
 `gjd-remote new` takes no name. It starts under a placeholder and `ls` later adopts Claude Code's
-own title for the work, so `s-0831-1136` becomes `remote-server-setup-for-claude-code`.
+own title for the work, so `s-260831-113604` becomes `remote-server-setup-for-claude-code`.
 
 The mechanism, verified rather than assumed:
 
