@@ -471,6 +471,8 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
+      contextId: revisionBlocks.contextId,
+      contextType: revisionBlocks.contextType,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -489,6 +491,9 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
     ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
     ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
     ...(row.noteId === null ? {} : { noteId: row.noteId }),
+    ...(row.contextId === null || row.contextType === null
+      ? {}
+      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
   }));
 }
 
@@ -593,7 +598,28 @@ export async function beginRevision(opts: BeginRevisionOptions): Promise<BeginRe
  * teeth: between "this job has no draft" and "here is one", a second request
  * for the same job could get the same answer and mint a second draft, and the
  * later `fenceJob` would silently point the job at whichever won.
+ *//**
+ * **Every column of `revision_blocks` a draft carries forward, by name.**
+ *
+ * Strings, and **nothing typechecks them** — a column left out is silently
+ * dropped from every `{ steps: ["extract"] }` draft, which for
+ * `role`/`treatment`/`note_id` means a re-extracted article quietly puts its
+ * bibliography back into the argument, and for `context_id`/`context_type`
+ * means a callout re-reads as ordinary prose. Add here and to `storedBlocks`
+ * together.
+ *
+ * `revision_id` is absent because the insert supplies the *new* one, and `fts`
+ * because it is `generatedAlwaysAs`: naming it would either fail or freeze a
+ * stale search vector. `tests/store-carried-columns.test.ts` asserts this list
+ * against the table itself, which is the check the comment above it used to ask
+ * a reader to perform by eye. GPT Sol, 2026-08-31.
  */
+export const CARRIED_BLOCK_COLUMNS = [
+  "article_id", "block_id", "ordinal", "tag", "kind", "level", "text", "words", "html",
+  "gistable", "note", "role", "treatment", "note_id", "context_id", "context_type",
+] as const;
+
+
 async function beginDraftIn(
   tx: Tx,
   opts: BeginRevisionOptions,
@@ -636,17 +662,7 @@ async function beginDraftIn(
        recomputes it from the copied text. Naming it here would either fail or
        freeze a stale search vector. */
     const blockColumns = sql.join(
-      /* **Nothing typechecks this list.** It is strings, and a column left out
-         of it is silently dropped from every `{ steps: ["extract"] }` draft —
-         which for `role`/`treatment`/`noteId` means a re-extracted article
-         quietly puts its bibliography back into the argument. Add here and to
-         `storedBlocks` above together. */
-      [
-        "article_id", "block_id", "ordinal", "tag", "kind", "level", "text", "words", "html",
-        "gistable", "note", "role", "treatment", "note_id",
-      ].map(
-        (name) => sql.identifier(name),
-      ),
+      CARRIED_BLOCK_COLUMNS.map((name) => sql.identifier(name)),
       sql`, `,
     );
     let blocksCopied = 0;
@@ -1164,14 +1180,14 @@ async function reasonsNotToPublish(
     .select()
     .from(revisionStepRuns)
     .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")));
-  const toc = runs[0];
+  const hierarchyRun = runs[0];
   const blocksHash = hashBlocks(blocks);
 
-  if (!toc) {
+  if (!hierarchyRun) {
     reasons.push(
       "there is no record of the toc step running, so nothing can say the tree describes these blocks",
     );
-  } else if (toc.status !== "done") {
+  } else if (hierarchyRun.status !== "done") {
     /* **Before the hash, and instead of it.** `revision_step_runs.status` is
        `running`, `done` or `error`, and this branch did not exist until
        2026-08-27: the guard read the row, compared `input_hash` and stopped, so
@@ -1191,11 +1207,11 @@ async function reasonsNotToPublish(
        re-run toc" would send somebody to re-run the thing that has just told us
        it failed. */
     reasons.push(
-      `the toc step ${toc.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
+      `the toc step ${hierarchyRun.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
     );
-  } else if (toc.inputHash !== blocksHash) {
+  } else if (hierarchyRun.inputHash !== blocksHash) {
     reasons.push(
-      `the tree was built from different blocks (toc ran against ${toc.inputHash}, these blocks are ${blocksHash}) — re-run toc`,
+      `the tree was built from different blocks (toc ran against ${hierarchyRun.inputHash}, these blocks are ${blocksHash}) — re-run toc`,
     );
   }
 
