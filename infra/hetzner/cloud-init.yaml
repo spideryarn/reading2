@@ -111,6 +111,39 @@ write_files:
       USER_NAME=${username}
       DEV=/dev/disk/by-id/scsi-0HC_Volume_${volume_id}
 
+      # Everything below is defended against the failure that actually happened
+      # on the first build: provisioning stopped at zero CPU and waited forever,
+      # so cloud-init never finished and never said why. A hang is worse than a
+      # failure, because a failure names its step.
+      #
+      # Three defences, applied to every step:
+      #   1. stdin is /dev/null, so anything that decides to prompt dies instead
+      #      of waiting for a human who will never come.
+      #   2. every step has a timeout, so a network stall or a lock ends the run
+      #      with a message rather than a silence.
+      #   3. apt is non-interactive and will wait a bounded time for the dpkg
+      #      lock instead of forever. unattended-upgrades is installed and
+      #      enabled by this same file, and it takes that lock on first boot.
+      export DEBIAN_FRONTEND=noninteractive
+      export NEEDRESTART_MODE=a
+
+      # run <seconds> <description> <command...>
+      run() {
+        local secs=$1 what=$2; shift 2
+        echo "--- $what (timeout $${secs}s)"
+        if ! timeout --kill-after=30 "$secs" "$@" </dev/null; then
+          echo "FATAL: '$what' failed or timed out after $${secs}s" >&2
+          return 1
+        fi
+      }
+      apt_get() {
+        apt-get -o DPkg::Lock::Timeout=600 -y "$@" </dev/null
+      }
+
+      # The apt timers fire on first boot and fight us for the dpkg lock. Stop
+      # them for the duration; they are re-enabled at the end.
+      systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades 2>/dev/null || true
+
       echo "=== swap ==="
       if [ ! -f /swapfile ]; then
         fallocate -l ${swap_gb}G /swapfile
@@ -157,23 +190,22 @@ write_files:
       mountpoint -q /home || mount --bind /mnt/data/home /home
 
       echo "=== node ==="
-      curl -fsSL https://deb.nodesource.com/setup_${node_major}.x | bash -
-      apt-get install -y nodejs
-      npm install -g @anthropic-ai/claude-code
+      run 180 "nodesource repo" bash -c 'curl -fsSL https://deb.nodesource.com/setup_${node_major}.x | bash -'
+      run 300 "install nodejs" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install nodejs'
+      run 300 "install claude code" npm install -g @anthropic-ai/claude-code
 
       echo "=== chrome ==="
       # chrome-devtools-mcp needs real Chrome stable, not Playwright's Chromium.
       # amd64 only: this block is wrong on an ARM (CAX) server.
-      curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-        | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+      run 60 "chrome signing key" bash -c 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg'
       echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
         > /etc/apt/sources.list.d/google-chrome.list
-      apt-get update
-      apt-get install -y google-chrome-stable
+      run 180 "apt update" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y update'
+      run 300 "install chrome" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install google-chrome-stable'
 
       echo "=== playwright ==="
-      npx --yes playwright@latest install-deps chromium
-      su - "$USER_NAME" -c 'npx --yes playwright@latest install chromium'
+      run 420 "playwright system deps" npx --yes playwright@latest install-deps chromium
+      run 420 "playwright chromium" su - "$USER_NAME" -c 'npx --yes playwright@latest install chromium </dev/null'
 
       echo "=== apparmor ==="
       systemctl reload apparmor || true
@@ -210,17 +242,21 @@ write_files:
       # The docs warn the server NAME must not directly follow --env or the CLI
       # reads it as another KEY=value pair, hence --scope sitting between them.
       CAP="NODE_OPTIONS=--max-old-space-size=512"
+      # Prime suspect for the first build's hang: claude has never run for this
+      # user, so any first-run prompt here waits on stdin forever at zero CPU.
+      # stdin closed AND a timeout, because either alone would have let it hang.
       add_mcp() {
         name=$1; shift
-        if ! su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $*"; then
-          echo "WARN: --env rejected for $name; retrying uncapped" >&2
-          su - "$USER_NAME" -c "claude mcp add --scope user $name -- $*"
+        if ! timeout 60 su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null; then
+          echo "WARN: capped add failed for $name; retrying uncapped" >&2
+          timeout 60 su - "$USER_NAME" -c "claude mcp add --scope user $name -- $* </dev/null" </dev/null
         fi
       }
       add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated"
       add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
 
       echo "=== ssh ==="
+      systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
       sshd -t
       systemctl enable --now fail2ban
       systemctl restart ssh || systemctl restart sshd
