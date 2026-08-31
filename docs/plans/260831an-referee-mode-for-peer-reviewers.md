@@ -237,8 +237,26 @@ ICLR trial actually tested, plus one clearly labelled experiment:
 - **Tone** — the ICLR tool checked for unprofessional remarks and the first draft dropped it.
 - **Coverage** against the criteria list, marked in the UI as **not validated by that trial**, because
   a pile of passage notes is not a review and cannot prove a criterion went unaddressed.
+- **A placement with no reason** — a valence recorded with nothing written under it. A strong claim
+  about the paper that gives an author nothing to act on, and the only remark that is a matter of fact
+  rather than judgement, so it is the one kind that never abstains.
 
-Comments with no body are skipped: a bookmark has no sentence to critique. Mirror must **abstain**
+**Every remark carries whether a trial tested its shape, and two of the five say no.** Coverage was
+never tested. Neither was placement — I claimed in a brief that it was "precisely the specificity
+failure the ICLR trial targeted", and the agent building it pushed back correctly: that trial tested
+vague *prose* and had no placement scale in it. The flag records *whether anyone has tested feedback
+of this shape*, which is deliberately not the same as how confident we are — coverage is untested and
+uncertain, placement is untested and near-certain, and both read `false`. That is the second time this
+plan overstated the ICLR paper (the first was reading "27% revised" as "they liked it"), which is
+worth writing down as a pattern rather than twice as an incident.
+
+Comments with no body are skipped, with one exception: a bookmark has no sentence to critique, but a
+bodyless comment carrying a *valence* is the placement case above, where the number is the claim.
+
+**Mirror is never given the article** — only the marked passages and the referee's words. That makes
+rule 4 below true by construction rather than by prompt: there is no byline, no publication, no URL
+and not even a title in its input. "It says nothing about the paper" stops being something the prompt
+asks for and becomes something the input cannot express. Mirror must **abstain**
 rather than manufacture a remark, and says nothing at all about whether the paper is any good. Greg
 ruled the report scaffold out and this is not it by another door — Mirror produces criticism of the
 referee's sentences, never sentences the referee can paste.
@@ -285,6 +303,27 @@ motivates it**, so it obeys the mode's provenance rule and the editor can see wh
 for a statistician. It has no hallucinated-person failure mode, it is useful on its own, and it is
 also the query the conversation then refines. If layer two disappoints, this still stands.
 
+**Chat steers; a list is what you look at.** The editor research
+([editors-and-finding-reviewers.md](../research/260831e-helping-peer-reviewers/editors-and-finding-reviewers.md))
+qualifies the pure-chat design in a way worth building for. There is no prior art for chat plus
+reviewer-finding, and the nearest analogues — Elicit, Consensus, ReviewerNet — all default to a
+structured surface with conversation secondary. The HCI evidence is that people *like* chat and
+*perform worse* with it on comparison tasks, which is exactly what choosing between candidates is. So
+the conversation is how you steer — *not that lab, prefer early-career, must know Bayesian methods* —
+and the panel keeps a persistent, browsable shortlist that each turn revises. A name that scrolls
+away up a transcript is a name the editor cannot compare.
+
+**Give a long list, not a good one.** This is the finding that changes the feature's shape most.
+Invitation acceptance has fallen from 56% to 36–39% over the decade, and roughly one accepted review
+in four never arrives. An editor does not need three excellent names; they need a shortlist deep
+enough to survive 60–70% attrition. A tool that returns a confident top three is solving a problem
+nobody has.
+
+**Rank by fit and evidence, never by prominence.** Reviewing load is already concentrated — 20% of
+researchers do 69–94% of it — and editor gender-homophily in selection is measured (33% vs 27%).
+Sorting by h-index would mechanically reproduce all of that. Elsevier's own recommender ranks journal
+history and content match *above* citation count, and that is the counter-model to copy.
+
 **Then names, under four hard rules**, whether they arrive in the first answer or the fifth:
 
 - **No name without a source link** the web search actually returned. A candidate with no citation is
@@ -294,10 +333,15 @@ also the query the conversation then refines. If layer two disappoints, this sti
   sees the byline, and only to exclude — a stated exception to rule 4 below, written here rather than
   discovered in a diff.
 - **Every candidate says which fit-requirement it answers**, and links the passage behind it.
-- **What we cannot check is said in the panel, not in a footnote.** We have no co-authorship graph and
-  no affiliation history, so we cannot detect conflicts of interest. The research is candid that even
-  Prophy, Web of Science Reviewer Locator and Elsevier's recommender catch only recent co-authorship
-  and miss informal conflicts and homophily. The editor does that check; the panel says so.
+- **Conflict of interest is two different things and the panel must not blur them.** Half the
+  categories publishers name — co-authorship inside a 3–5 year window (no two publishers agree on the
+  number), shared current institution, grant co-investigation — are mechanically checkable from
+  OpenAlex or ORCID. **We check none of them in v1, because we have no identity graph**, and the panel
+  says exactly that rather than implying a filter ran. The other half — advisor/advisee, which is
+  often lifelong and invisible in any public record, personal rivalry, informal collaboration — is not
+  automatable by anyone. That second half is what the conversation is *for*: "exclude anyone who
+  trained under X" is the editor's own knowledge, which no database has. Presenting an algorithmic
+  pass as though it caught everything is the specific move the research says editors already distrust.
 
 **The bias gets labelled rather than denied.** The MIT study (27k evaluations, four models) found
 LLMs rate papers higher for prestigious institutions and famous authors, and the matching literature

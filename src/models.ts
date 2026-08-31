@@ -335,7 +335,16 @@ export type Task =
      because it is already there would attribute every mark to Explain in the
      cost report, quietly and for ever. GPT Sol's finding 9. */
   | "quiz-mark"
-  | "search";
+  | "search"
+  /* The model reading a referee's own notes rather than the paper —
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
+     paying job that never sees the article: its input is the referee's comments
+     and the passages they are anchored to, so it renders neither `articleText`
+     nor `articleWithIds` and shares no cached prefix with anything. Its own task
+     rather than search's because a call billed under another job's name is spend
+     nobody can find later — the mistake `quiz-mark` exists to have stopped
+     making. */
+  | "referee-mirror";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -433,6 +442,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   chat: "capable",
   "quiz-mark": "capable",
   search: "capable",
+  "referee-mirror": "capable",
 };
 
 /**
@@ -520,6 +530,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   chat: "chat",
   "quiz-mark": "chat",
   search: "chat",
+  "referee-mirror": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -588,6 +599,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
+  "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */
