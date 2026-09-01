@@ -23,7 +23,8 @@ local proof reaches.
 | **3 item 6 — the flip** | **DONE** (`c42c940`) |
 | 4a — `raw_bytes` | **done** — column dropped locally (`0049`), every reference gone, the `readPdf` legacy query with it |
 | 4b — the dead seams | **done** — `revisionLifecycle`, the checkpoint fs adapter, `checkNoteFields`; 510 lines |
-| 4A — fixtures read the corpus | in progress |
+| 4A — fixtures read the corpus | **done** — proved on a simulated fresh clone with no `data/` at all |
+| 4B — the ~48 route suites | pilot in progress: convert six, **measure**, then decide |
 | 4B–4J | **not started** — see § *How stage 4 actually goes* |
 
 ### What the three Sol reviews found, and where each finding ended up
@@ -1304,6 +1305,17 @@ becomes the default, or `pgReady` starts throwing the way `requireFixture` does.
 starts requiring Postgres**: there is no longer a configuration without it.
 
 **Traps, each verified rather than inherited:**
+
+0. **`tests/helpers/seed-reader-state.ts` cannot be pointed at the corpus at all, and the fix is
+   deliberately not being made.** It reads through `loadShelf`, `loadComments`, `loadThreads`,
+   `loadRuns` and `loadLookups`, and those five modules — `src/shelf.ts`, `src/comments.ts`,
+   `src/chat.ts`, `src/searches.ts`, `src/glossary-lookups.ts` — each pin their own `ROOT` at module
+   scope (`src/glossary-lookups.ts` uses `process.cwd()`) and consult `SPIDERYARN_DATA_ROOT` **not at
+   all**. Pointing them at `dataRoot()` is a one-line change each and would also close a latent
+   deployment bug — two levels above a bundled `api-dist/vercel.js` is `/var`. **It is not being
+   done, because all five are on this stage's own deletion list**; sub-stage B removes the need
+   instead. The latent bug is not live, because under `postgres` `guarded()` never reaches those
+   paths. Until B lands, `store-parity` and `store-roundtrip` still read the laptop.
 
 1. **`tests/seed-reader-state.ts` is itself built on condemned code** — it reads through
    `loadComments`, `loadThreads`, `loadRuns` and `loadShelf`, all of which die in stage 4. Exactly the
