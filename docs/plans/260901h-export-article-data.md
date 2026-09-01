@@ -234,20 +234,48 @@ Ordered as the review recommended: the data contract first, docs before the butt
       signposts like these"*), so no approval was needed and none was sought.
 - [x] `doc-links` 8/8, and its orphan check watched going red against a throwaway doc first.
 
-**Stage F — the button.** `ExportSection` in `Metadata.tsx`, before "Delete this article".
-- [ ] Inline card button in the `DeleteArticle` style, not `IconButton`; a Lucide icon that is not
-      `Download` (spent on the fetch stage). Pending state, readable failure
-      ([copy.md](../project/copy.md)).
-- [ ] Download via `apiFetch` → `res.blob()` → `<a download>` — the header's filename is lost
-      through the blob URL, so the anchor must carry the name.
-- [ ] A component test (pending state, error text, anchor click, URL revocation) **and** a browser
-      check in a Sonnet subagent. The manual check is extra evidence, not the only evidence.
+**Stage F — the button.** ✅ **Done.** `ExportSection` in `Metadata.tsx`, between "Access & sharing"
+and "Not built yet"; Delete still last.
+- [x] `FileArchive` (not `Download`, spent on the fetch stage), inline card button in
+      `DeleteArticle`'s style minus the destructive tint.
+- [x] Three deliberate departures from `SourceLink`'s blob idiom, each with its reason recorded: the
+      anchor goes **into** the document (Firefox will not run the default action for a detached
+      one); revoke is a macrotask later, not synchronous (which can abort the download) and not
+      `SourceLink`'s 60s (that timer exists because a new tab must fetch the URL itself); and
+      failures go through `failure`, not `readJson`, which would consume the zip.
+- [x] 8 tests, and **six mutations watched going red** and reverted: dropped `download` attribute,
+      dropped `disabled`, swallowed catch, removed the gate, detached anchor, dropped revoke.
+- [x] **Honest cost recorded on the component:** `hasShelfRow` is false while the metadata request is
+      out *and for ever if it fails* — the same complaint that moved the sharing card off it. Kept,
+      because there is no useful "we could not check" state for a section that is one button.
+- [x] **Browser-checked on the remote box** against the running dev server. The card is in the right
+      place with the right visual weight and is not styled destructive; pressing it returned
+      `200` and downloaded `own-spya-bf6g9b.zip` — a real 13-entry archive; no console errors.
+      **Not confirmed:** the "Building the zip…" disabled state, which completed faster than the
+      tooling could snapshot. Reported as unverified rather than assumed; the button returned to
+      rest cleanly, which is consistent but is not the same as having seen it.
 
-**Stage G — `index.html`, deliberately minimal.** An escaped index of what's in the zip, with the
-article title and counts. Every reader-controlled and model-derived string HTML-escaped, a
-restrictive CSP blocking scripts and network, and adversarial fixtures (`<script>`, event handlers,
-closing tags). **`extractedHtml` is not safe to render directly.** Rendering every feature inline
-would be a second reading client inside a zip — out of scope, and the piece to cut if anything gives.
+**Stage G — `index.html`.** ✅ **Done.** Deliberately an index, not a reading client, per Sol.
+- [x] Self-contained, no JavaScript, no external anything. Title, byline, source, export time; counts
+      (blocks, words, hierarchy nodes, glossary terms, comments, chat messages…); a file table with a
+      note and a size for each entry; and what is not in it.
+- [x] **The page and the manifest cannot disagree** — both read a shared `omissions()`, rather than
+      the page carrying a second copy of the list.
+- [x] One escaper, and it is the repo's (`escapeHtml` in `src/html.ts`), not a fresh one — that
+      file's own doc records what happened the last time it was written twice. CSP
+      `default-src 'none'`, `referrer: no-referrer`. Neither `extractedHtml` nor `stampedHtml` is
+      rendered, proved with a marker string.
+- [x] A URL only becomes an `href` if `isWebUrl()` accepts it — **and this fired on real data**:
+      `fowler-phrenology`'s `finalUrl` is a `file:///…` path, and it prints as plain text with no
+      anchor.
+- [x] Escaping control watched going red across four tests, the page rendering
+      `<h1></title><script>alert(1)</script></h1>`. **The two that stayed green were the two not
+      about escaping** — `isWebUrl` is what keeps `javascript:` out of an `href`, and "no article
+      markup" is a claim about what is rendered at all. That distinction is written into the test
+      file's header rather than left as a coincidence.
+- [x] Anti-drift guard: the file table must cover exactly the zip's contents minus itself and the
+      manifest, each with a real note — so a file added to the bundle without one turns it red.
+- [x] Built for real: `fowler-phrenology` 13 entries / 95 KB, `noema…` 19 entries / 176 KB.
 
 ## What this is deliberately not doing
 

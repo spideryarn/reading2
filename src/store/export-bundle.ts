@@ -41,7 +41,9 @@ import {
   messagesOfThread,
   readArticleRows,
 } from "./article-rows.js";
+import { escapeHtml, normaliseText } from "../html.js";
 import { log } from "../log.js";
+import { isWebUrl } from "../urls.js";
 
 const logger = log("store");
 
@@ -174,6 +176,16 @@ const CONTENT_OMISSIONS: readonly Omission[] = [
   },
 ];
 
+/**
+ * **Everything the bundle leaves out, in one list** — the manifest's `omitted`
+ * and the "What is not here" section of `index.html` are the same list, read
+ * twice, so the page cannot say something different from the machine-readable
+ * answer beside it.
+ */
+function omissions(): Omission[] {
+  return [...tableOmissions(), ...CONTENT_OMISSIONS];
+}
+
 /** The tables the coverage record says the bundle leaves out, and why. */
 function tableOmissions(): Omission[] {
   const out: Omission[] = [];
@@ -211,10 +223,22 @@ export async function articleBundle(slug: string): Promise<ArticleBundle> {
   const encoded = new Map<string, Uint8Array>();
   for (const [path, text] of files) encoded.set(path, encoder.encode(text));
 
-  const entries: BundleEntry[] = [...encoded].map(([path, bytes]) => ({
+  /* `index.html` states every other file's size, so it is built once those are
+     encoded and — like the manifest, and for the same reason — does not list
+     itself. `manifest.json` is not in here either, because it is built after
+     this page and would be a size that changes while being written down; the
+     page names it in prose instead. */
+  const listed: BundleEntry[] = [...encoded].map(([path, bytes]) => ({
     path,
     bytes: bytes.byteLength,
   }));
+  const index = encoder.encode(indexHtml(rows, exportedAt, listed));
+  encoded.set("index.html", index);
+
+  const entries: BundleEntry[] = [
+    ...listed,
+    { path: "index.html", bytes: index.byteLength },
+  ];
 
   /* The manifest lists everything but itself — it cannot state its own size
      without changing it. Built last, written first. */
@@ -267,7 +291,7 @@ function manifestJson(
     title: revision.title,
     url: revision.finalUrl ?? revision.requestedUrl,
     entries: [...entries].sort((a, b) => a.path.localeCompare(b.path)),
-    omitted: [...tableOmissions(), ...CONTENT_OMISSIONS],
+    omitted: omissions(),
   };
 }
 
@@ -398,6 +422,9 @@ one thing that will make the rest of these files make sense.
 
 ## What's here
 
+    index.html             Open this first if you are a person rather than a program: the
+                           article's title, what is in the zip, and how much of each. It is
+                           an index, not a reader — it does not show you the article.
     manifest.json          What this export is, when it was made, and what was left out.
     article.json           The article on your shelf: your title for it, when you opened it,
                            your purpose for reading it, and whether it is shared.
@@ -437,12 +464,14 @@ one thing that will make the rest of these files make sense.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
 
 \`manifest.json\` lists every file in the zip under \`entries\`, with its uncompressed size —
-every file except itself, which cannot state its own size without changing it.
+every file except itself, which cannot state its own size without changing it. \`index.html\`
+lists the same files for a person to read, minus itself and the manifest, for the same reason.
 
 A file is absent when there is nothing in it. An article you never chatted about has no
 \`chat.json\`. That is not an error, and an importer should treat every file as optional —
-except \`manifest.json\`, \`article.json\`, \`README.md\` and \`content/block-identities.json\`,
-which are always written, the last of them even when it is empty.
+except \`index.html\`, \`manifest.json\`, \`article.json\`, \`README.md\` and
+\`content/block-identities.json\`, which are always written, the last of them even when it is
+empty.
 
 Every file holding a list wraps it in a single-key object — \`{ "comments": [...] }\`,
 \`{ "threads": [...] }\` — so that the format has somewhere to grow. The artefact files
@@ -488,5 +517,364 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 
 \`manifest.json\` repeats this list in machine-readable form under \`omitted\`, so an importer can
 check what it is missing rather than inferring it from absent files.
+`;
+}
+
+/* -------------------------------------------------------------------------- *
+ * index.html — the page a person opens
+ * -------------------------------------------------------------------------- */
+
+/**
+ * **Deliberately an index, not a reading client.**
+ *
+ * Greg asked for "perhaps also with a human-readable index .html", and GPT Sol's
+ * review of the plan drew the line this section holds to:
+ *
+ * > I would make `index.html` a simple escaped file index in v1. Rendering every
+ * > feature recreates a second reading client inside a ZIP.
+ *
+ * So the page says *what you have got*: the article's identity, a table of the
+ * files with their sizes, counts of the things inside them, and what is not in
+ * the zip. It renders **no article prose, no comment bodies and no chat**, and
+ * in particular it never renders `extractedHtml` or `stampedHtml` — those are
+ * the article's own markup, they are not ours, and putting them in a page is
+ * exactly the thing this file is careful not to do. The reader already has both
+ * as files; the browser will open either one directly.
+ *
+ * ## Why the escaping here is not the usual escaping
+ *
+ * Every string on this page is somebody else's: a title and a byline the site
+ * wrote, a site name, a slug. Two of the four untrusted parties in
+ * docs/project/security-map.md arrive here at once, and the page is opened from
+ * a `file://` URL — where there is no origin to isolate, no CSP header from a
+ * server, and a script that runs has the local filesystem in reach. So:
+ *
+ * 1. **`safe()` below, on every interpolated value, with no exceptions.** One
+ *    function, so there is no second copy to drift, and nothing on this page is
+ *    concatenated past it.
+ * 2. **A `<meta>` CSP that forbids scripts and every network request**, as the
+ *    second line rather than the first. It is real defence — it is why a hole in
+ *    (1) would not also be an exfiltration channel — but `<meta>` CSP support on
+ *    `file://` varies by browser, so it is not what the escaping rests on.
+ * 3. **No JavaScript at all, and nothing external**: no fonts, no images, no
+ *    stylesheets. The page works with the network unplugged, which is the point
+ *    of a download you keep.
+ */
+
+/**
+ * **The one escaper**, and everything interpolated into the page goes through it.
+ *
+ * [`escapeHtml`](../html.ts) rather than a private copy — it is the repo's
+ * escaper, it handles all five characters (the two quote marks included, which
+ * is what makes it safe in an attribute as well as in text), and its own doc
+ * records what happened the last time this was written twice: two copies that
+ * had already drifted, one of them missing `'`.
+ *
+ * `normaliseText` first, for the reason that file gives: escaping makes
+ * `</title>` harmless and does nothing about a newline, a C1 control, or an RLO
+ * override that reverses how the rest of the line reads. Those are not injection
+ * — they are a string that is unsuitable for a table cell — and they survive
+ * escaping untouched, because they are not markup.
+ */
+function safe(value: string): string {
+  return escapeHtml(normaliseText(value));
+}
+
+/**
+ * What each file is, in a few words, for the table.
+ *
+ * Short on purpose: `readme()` above is the format's documentation and the long
+ * version, and this is the column beside a filename, read by somebody who has
+ * just double-clicked the page. **A file the bundle writes and this record has
+ * never heard of is a test failure** (`tests/store-export-bundle.test.ts`), so a
+ * new file cannot arrive here unlabelled — which is the only thing keeping this
+ * map and the layout in step.
+ */
+const FILE_NOTES: Readonly<Record<string, string>> = {
+  "manifest.json": "What this export is, when it was made, and what was left out.",
+  "article.json": "The article on your shelf: your title, your purpose, sharing state.",
+  "README.md": "The format, file by file, for whoever writes an importer.",
+  "index.html": "This page.",
+  "content/stamped.html": "The article as Spideryarn reads it, with a block id on every element. This is the one to open.",
+  "content/extracted.html": "The same article before the ids were stamped on. Rarely what you want.",
+  "content/blocks.json": "Every block as data: id, position, tag, kind, text, word count, and its own HTML.",
+  "content/block-identities.json": "Every block id this article has ever had, including ids whose blocks are gone.",
+  "content/assets.json": "Every image the article referenced: source URL, hash, type, size. Names only.",
+  "augmentations/tree.json": "The hierarchy and the summaries — one nested structure, a gist on every node.",
+  "augmentations/glossary.json": "Terms the article assumes you know, and what they mean here.",
+  "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
+  "augmentations/ideas.json": "Propositions the article takes as given.",
+  "augmentations/quotes.json": "Lines worth keeping.",
+  "augmentations/timeline.json": "When the article says things happened.",
+  "augmentations/quiz.json": "Questions generated from the article.",
+  "augmentations/sketch.json": "The diagram.",
+  "augmentations/arc.json": "The shape of the argument.",
+  "augmentations/tweets.json": "Short extracts.",
+  "augmentations/labels.json": "Section labels.",
+  "augmentations/comments.json": "Your comments, bookmarks and notes, each anchored to a block.",
+  "augmentations/chat.json": "Your conversations: threads, with every message nested inside its thread.",
+  "augmentations/searches.json": "Meaning-searches you ran, and what they matched.",
+  "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
+  "augmentations/referee-criteria.json": "Referee mode: the criteria you set, and how the article scored.",
+};
+
+/** The three groups the zip is laid out in, in the order the page shows them. */
+const FILE_GROUPS: readonly { readonly prefix: string; readonly heading: string }[] = [
+  { prefix: "", heading: "The export itself" },
+  { prefix: "content/", heading: "content/ — the article as Spideryarn read it" },
+  { prefix: "augmentations/", heading: "augmentations/ — everything added on top of it" },
+];
+
+/** Which group a path belongs to: its first path segment, or none. */
+function groupOf(path: string): string {
+  const slash = path.indexOf("/");
+  return slash === -1 ? "" : path.slice(0, slash + 1);
+}
+
+/** Sizes a person reads, not a machine. Binary units, one decimal past a kilobyte. */
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * How many things are in a JSON artefact, without knowing its type.
+ *
+ * The artefact columns are typed, so this could read `revision.quotes.quotes`
+ * directly — but these numbers are **cosmetic**, and a shape that has moved
+ * should make a count vanish from the page rather than throw on the way to a
+ * download somebody is waiting for. The data itself is serialised whole, by
+ * `rowJson`, and does not depend on any of this being right.
+ *
+ * A record counts as its keys, which is what makes `tree.nodes` answerable
+ * alongside the plain arrays.
+ */
+function countOf(value: unknown, key: string): number {
+  if (value === null || typeof value !== "object") return 0;
+  const found = (value as Record<string, unknown>)[key];
+  if (Array.isArray(found)) return found.length;
+  if (found !== null && typeof found === "object") return Object.keys(found).length;
+  return 0;
+}
+
+/**
+ * The counts, in the order the page shows them, with the empty ones dropped.
+ *
+ * Dropping zeroes rather than printing them: a page telling a reader they have
+ * 0 quotes and 0 chat messages is a list of things they did not do. What is
+ * here is what they have.
+ */
+function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: number }[] {
+  const { revision } = rows;
+  const all = [
+    { label: "blocks", n: rows.blocks.length },
+    { label: "words", n: rows.blocks.reduce((sum, block) => sum + block.words, 0) },
+    { label: "nodes in the hierarchy", n: countOf(revision.tree, "nodes") },
+    { label: "glossary terms", n: countOf(revision.glossary, "entries") },
+    { label: "ideas", n: countOf(revision.ideas, "ideas") },
+    { label: "quotes", n: countOf(revision.quotes, "quotes") },
+    { label: "timeline events", n: countOf(revision.timeline, "events") },
+    { label: "quiz questions", n: countOf(revision.quiz, "questions") },
+    { label: "arc entries", n: countOf(revision.arc, "entries") },
+    { label: "images named", n: countOf(revision.assets, "entries") },
+    { label: "comments and notes", n: rows.comments.length },
+    { label: "chat threads", n: rows.chatThreads.length },
+    { label: "chat messages", n: rows.chatMessages.length },
+    { label: "searches", n: rows.searchRuns.length },
+    { label: "referee criteria", n: rows.refereeCriteria.length },
+    { label: "glossary lookups", n: rows.glossaryLookups.length },
+    { label: "block ids ever minted", n: rows.blockIdentities.length },
+  ];
+  return all.filter((count) => count.n > 0);
+}
+
+/**
+ * `2026-09-01 14:32 UTC` — deterministic, and not the machine's locale.
+ *
+ * `toLocaleString` would print in whatever locale the *server* runs in, which is
+ * nobody's, and would make two exports of the same article differ by where they
+ * were built.
+ */
+function stampedTime(at: Date): string {
+  return `${at.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/**
+ * **Plain, legible, and no dependencies.** System fonts because a downloaded
+ * page cannot fetch one, and `color-scheme` plus a `prefers-color-scheme` block
+ * so it is readable in both — a media query rather than `light-dark()`, since
+ * this file may be opened years from now in whatever browser is to hand.
+ */
+const INDEX_CSS = `
+:root { color-scheme: light dark; --ink: #17171a; --dim: #5c5c66; --line: #dcdce2; --bg: #fbfbfc; --panel: #fff; --link: #1a4fa0; }
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #e8e8ec; --dim: #9c9ca8; --line: #33333c; --bg: #16161a; --panel: #1d1d22; --link: #8fb4f2; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 2.5rem 1.25rem 4rem; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 54rem; margin: 0 auto; }
+a { color: var(--link); }
+h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 .4rem; }
+h2 { font-size: 1.05rem; margin: 2.4rem 0 .7rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+h3 { font-size: .82rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--dim); margin: 1.5rem 0 .4rem; }
+p { margin: .6rem 0; }
+.sub { color: var(--dim); margin: 0 0 .2rem; }
+.lede { max-width: 42rem; }
+.counts { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0; margin: .8rem 0 0; list-style: none; }
+.counts li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: .45rem .7rem; min-width: 6.5rem; }
+.counts b { display: block; font-size: 1.25rem; font-weight: 600; }
+.counts span { color: var(--dim); font-size: .8rem; }
+.files { width: 100%; border-collapse: collapse; margin-top: .3rem; }
+.files th, .files td { text-align: left; padding: .38rem .6rem .38rem 0; border-bottom: 1px solid var(--line);
+  vertical-align: top; }
+.files th { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.files code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+.files .size { text-align: right; white-space: nowrap; color: var(--dim);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.omitted { padding-left: 1.1rem; margin: .6rem 0; max-width: 46rem; }
+.omitted li { margin-bottom: .45rem; }
+.omitted code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+footer { margin-top: 3rem; padding-top: .8rem; border-top: 1px solid var(--line);
+  color: var(--dim); font-size: .85rem; }
+`;
+
+/**
+ * The page itself.
+ *
+ * `listed` is every other file in the zip with its uncompressed size. It does
+ * not contain this page, which cannot state its own size without changing it,
+ * nor `manifest.json`, which is built afterwards for the same reason —
+ * `articleBundle` says so at the call site, and `readme()` says so to the reader.
+ */
+function indexHtml(
+  rows: ArticleRows,
+  exportedAt: Date,
+  listed: readonly BundleEntry[],
+): string {
+  const { article, revision } = rows;
+  /* The reader's own name for it wins on the page, because that is what they
+     call it. Both facts are in the files: `titleOverride` in article.json, the
+     extraction's title in manifest.json. */
+  const title = article.titleOverride ?? revision.title ?? article.slug;
+
+  /* The byline and the site name. The separator appears only when both are
+     there — a leading or trailing `·` is the untidiness this avoids, and most
+     articles have one of the two rather than both. */
+  const attribution = [revision.byline, revision.siteName]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .map(safe)
+    .join(" · ");
+
+  /* **A validated URL or no `href` at all.** `isWebUrl` (src/urls.ts) is an
+     allowlist of `http:` and `https:` rather than a blocklist, because the set
+     of dangerous schemes is open-ended — `javascript:`, `data:`, `vbscript:` —
+     and this is a link a person clicks from a local file. `finalUrl` is where
+     the fetcher actually landed; the escaping is the caller's job, done here. */
+  const url = revision.finalUrl ?? revision.requestedUrl;
+  const link =
+    url && isWebUrl(url)
+      ? `<p class="sub"><a href="${safe(url)}" rel="noreferrer noopener nofollow">${safe(url)}</a></p>`
+      : url
+        ? `<p class="sub">${safe(url)}</p>`
+        : "";
+
+  /* Joined rather than interpolated line by line, so an article with no byline
+     and no URL leaves no blank lines behind in the file somebody opens. */
+  const header = [
+    `<p class="sub">Spideryarn export · ${safe(stampedTime(exportedAt))}</p>`,
+    `<h1>${safe(title)}</h1>`,
+    attribution ? `<p class="sub">${attribution}</p>` : "",
+    link,
+  ]
+    .filter(Boolean)
+    .join("\n    ");
+
+  const counts = bundleCounts(rows)
+    .map(({ label, n }) => `<li><b>${safe(n.toLocaleString("en-GB"))}</b><span>${safe(label)}</span></li>`)
+    .join("\n      ");
+
+  const groups = FILE_GROUPS.map(({ prefix, heading }) => {
+    const inGroup = listed.filter((entry) => groupOf(entry.path) === prefix);
+    if (!inGroup.length) return "";
+    const rowsHtml = inGroup
+      .map(
+        (entry) =>
+          `<tr><td><code>${safe(entry.path)}</code></td>` +
+          `<td>${safe(FILE_NOTES[entry.path] ?? "")}</td>` +
+          `<td class="size">${safe(humanBytes(entry.bytes))}</td></tr>`,
+      )
+      .join("\n        ");
+    return `<h3>${safe(heading)}</h3>
+      <table class="files">
+        <tr><th>File</th><th>What it is</th><th class="size">Size</th></tr>
+        ${rowsHtml}
+      </table>`;
+  })
+    .filter(Boolean)
+    .join("\n      ");
+
+  const omitted = omissions()
+    .map((o) => `<li><code>${safe(o.what)}</code> — ${safe(o.why)}</li>`)
+    .join("\n        ");
+
+  /* The CSP is the second line of defence and the escaping above is the first —
+     see the section comment. `default-src 'none'` refuses every fetch the page
+     could make, which is what makes a mistake in the escaping unable to phone
+     anywhere; `style-src 'unsafe-inline'` is the one exception, for the
+     stylesheet below, and a stylesheet cannot execute or (with `img-src` and
+     `font-src` denied by the default) fetch. */
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>${safe(title)} — Spideryarn export</title>
+<style>${INDEX_CSS}</style>
+</head>
+<body>
+  <main>
+    ${header}
+
+    <p class="lede">This is everything Spideryarn holds for one article, as plain files.
+    Nothing here needs Spideryarn to read it. <strong>This page is an index, not a reader</strong>
+    — to read the article itself, open <code>content/stamped.html</code>.</p>
+
+    <p class="lede">If you are writing code to import this, read <code>README.md</code>: it has
+    the format file by file, and the <strong>block id contract</strong> that makes the rest of it
+    make sense. Every note, comment, summary and search in here points at text by a stable block
+    id such as <code>spya-k3m9qt</code> — never by position in the file. The ids are in
+    <code>content/stamped.html</code> and in <code>content/blocks.json</code>, and they survive
+    the article being re-read, so they are safe to store in your own system.</p>
+
+    <h2>What is in it</h2>
+    <ul class="counts">
+      ${counts || "<li><b>0</b><span>nothing counted</span></li>"}
+    </ul>
+
+    <h2>The files</h2>
+    <p class="sub">Sizes are uncompressed. This page and <code>manifest.json</code> are not in the
+    table — neither can state its own size without changing it. <code>manifest.json</code> lists
+    every file, this one included, in machine-readable form.</p>
+    ${groups}
+
+    <h2>What is not in it, and why</h2>
+    <ul class="omitted">
+      ${omitted}
+    </ul>
+
+    <footer>
+      Format ${safe(String(BUNDLE_FORMAT))} · <code>${safe(article.slug)}</code>${
+        article.shortId ? ` · ${safe(article.shortId)}` : ""
+      } · exported ${safe(exportedAt.toISOString())}
+    </footer>
+  </main>
+</body>
+</html>
 `;
 }

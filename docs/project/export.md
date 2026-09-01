@@ -25,6 +25,7 @@ button are not written yet** — its stages D and F. The bundle builds; nothing 
 the foot of that file is the layout's own documentation — it ships inside every zip. That is the
 file-by-file list, and the thing to edit when the layout changes.
 
+    index.html        what is in the zip, as a page a person double-clicks
     manifest.json     what this export is, when it was made, and what was left out
     article.json      the article on your shelf: your title, your purpose, sharing state
     README.md         the above, for whoever writes an importer
@@ -33,12 +34,40 @@ file-by-file list, and the thing to edit when the layout changes.
                       tweets, labels, comments, chat, searches, referee-claims, referee-criteria
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
-has no `chat.json` — except `manifest.json`, `article.json`, `README.md` and
+has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md` and
 `content/block-identities.json`, which are always written, the last even when empty. Anything
 holding a list wraps it in a single-key object, so the format has somewhere to grow.
 
 `articleBundle(slug)` is owner-scoped through `readArticleRows` and throws `ArticleNotFound` for a
 slug that is not this reader's, which a route turns into a 404 rather than a 500.
+
+## `index.html` is an index, not a reader
+
+Greg asked for "perhaps also with a human-readable index .html", and the review drew the line:
+
+> I would make `index.html` a simple escaped file index in v1. Rendering every feature recreates a
+> second reading client inside a ZIP.
+>
+> — GPT Sol, 2026-09-01
+
+So the page says **what you have got**, not what it says: the title, byline, site and source URL;
+a table of every file with a few words and its size; counts taken off the rows; and the same
+`omitted` list the manifest carries, read from the same function so the two cannot disagree. It
+renders **no article prose, no comment bodies and no chat**, and in particular neither
+`extractedHtml` nor `stampedHtml` — the reader has both as files and the browser opens either.
+
+It is opened from a `file://` URL, where there is no origin isolating it and no CSP header from a
+server, and every string on it — title, byline, site name — was written by the site the article came
+from or by a model. So: one escaper ([`escapeHtml`](../../src/html.ts), through `safe()`) on every
+interpolated value with no exceptions; a `<meta>` CSP of `default-src 'none'` as the second line of
+defence rather than the first, since `<meta>` CSP on `file://` varies by browser; no JavaScript and
+nothing external, so it works with the network unplugged. A URL only becomes an `href` if
+[`isWebUrl`](../../src/urls.ts) accepts it — real articles in the local database include a
+`file:///…/source.pdf`, which prints as text. The adversarial fixtures are in
+`tests/store-export-bundle.test.ts`, and the escaping was watched failing before it was believed.
+
+The file table doubles as the guard against drift: a file the bundle writes and `FILE_NOTES` has no
+words for turns that test red, so a new file cannot arrive undescribed.
 
 ## Why there are two exporters
 

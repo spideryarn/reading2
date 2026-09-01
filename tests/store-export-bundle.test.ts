@@ -371,6 +371,46 @@ when("the bundle is the faithful projection", () => {
     expect(bundled.has("augmentations/searches.json")).toBe(false);
   });
 
+  it("puts index.html in the zip, in the manifest, and describes every other file in it", () => {
+    const page = bundled.get("index.html");
+    expect(page).toBeDefined();
+    if (!page) throw new Error("no index.html");
+
+    /* **Verified rather than assumed**: the manifest's entry list is built from
+       the same map the zip is, so a file added the normal way is listed — but
+       "is listed" is the claim, and it is cheap to check. */
+    const entries = (parsed("manifest.json").entries as { path: string }[]).map((e) => e.path);
+    expect(entries).toContain("index.html");
+
+    /* Every row of the page's file table, as (path, what-it-is). The notes are
+       escaped text with no markup in them, which is what makes this parseable
+       without a DOM. */
+    const rows = [...page.matchAll(/<tr><td><code>([^<]*)<\/code><\/td><td>([^<]*)<\/td>/g)];
+    const tabled = new Map(rows.map((m) => [m[1] ?? "", m[2] ?? ""]));
+
+    /* The page lists everything except itself and the manifest, neither of which
+       can state its own size without changing it. **A file the bundle writes and
+       the page has no words for is a failure here**, which is the only thing
+       keeping the note list and the layout in step: add a file, and this goes
+       red until it is described. */
+    const expected = new Set(bundled.keys());
+    expected.delete("index.html");
+    expected.delete("manifest.json");
+    expect(new Set(tabled.keys())).toEqual(expected);
+    for (const [path, note] of tabled) {
+      expect(note.length, `index.html says nothing about ${path}`).toBeGreaterThan(10);
+    }
+
+    /* A real web URL gets a link; the scheme check is the XSS suite's job. */
+    expect(page).toContain('<a href="https://example.test/bundle"');
+    // Counts that come from the rows, so the reader can see it is their article.
+    expect(page).toContain("<span>blocks</span>");
+    expect(page).toContain("<span>comments and notes</span>");
+    // And the omissions are the manifest's list, not a second copy of it.
+    expect(page).toContain("<code>checkpoints</code>");
+    expect(page).toContain("<code>image-bytes</code>");
+  });
+
   /* ------------------------------------------------- the three known losses -- */
 
   it("keeps a Candidates thread's kind, where the rollback flattens it to chat", async () => {
@@ -546,5 +586,160 @@ describe("the size cap", () => {
     // not exceed.
     expect(overBundleCap(BUNDLE_BYTE_CAP)).toBe(false);
     expect(overBundleCap(BUNDLE_BYTE_CAP + 1)).toBe(true);
+  });
+});
+
+/* ---------------------------------------------------------- index.html -- */
+
+/**
+ * **The page a reader double-clicks, and the escaping that has to hold.**
+ *
+ * Its own article, whose title, byline and site name are each an injection
+ * payload, because the strings on that page come from the site the article was
+ * fetched from and from the model — two of the four untrusted parties in
+ * docs/project/security-map.md — and the page is opened from a `file://` URL,
+ * where there is no origin isolating it from the reader's disk.
+ *
+ * The assertions are written as pairs on purpose: the dangerous form must be
+ * **absent as markup**, and the harmless form must be **present as text**. Only
+ * the first half is a security claim, but a page that had silently dropped the
+ * title would pass it, and that is the failure that reads as success.
+ *
+ * The escaping was watched failing before it was believed: with `safe()` in
+ * export-bundle.ts changed to skip `escapeHtml`, **four of these six went red**
+ * — the title breakout (three `</title>` in one document), the `<img>` from the
+ * byline, the ampersand, and the no-scripts claim. The two that stayed green are
+ * the two that are not about escaping: `isWebUrl` is what keeps a
+ * `javascript:` URL out of an `href`, and "no article markup" is a claim about
+ * what the page renders at all. docs/reusable/silent-success.md.
+ */
+const XSS_SLUG = "store-export-bundle-xss";
+const XSS_ARTICLE_ID = "00000000-0000-4000-8000-00000000b0d5";
+const XSS_REVISION_ID = "00000000-0000-4000-8000-00000000b0d6";
+
+/** Breaks out of the `<title>` element, which is the one sink escaping alone would miss. */
+const XSS_TITLE = "</title><script>alert(1)</script>";
+/** Breaks out of a double-quoted attribute, then needs no `<script>` to run. */
+const XSS_BYLINE = '"><img src=x onerror=alert(2)>';
+/** An ampersand as well, since escaping `&` in the same pass is what stops double-escaping. */
+const XSS_SITE = "Ampersand & Co <script>alert(3)</script>";
+/** Not `http:` or `https:`, so it must never reach an `href`. */
+const XSS_URL = "javascript:alert(4)";
+/**
+ * A string that appears only in the article's own markup.
+ *
+ * `extractedHtml` and `stampedHtml` are the article's HTML, not ours, and this
+ * page must never render either: it is an index, not a reader. A marker is how
+ * that is checked, because "no article markup" is not something a regex over
+ * arbitrary prose can assert.
+ */
+const ONLY_IN_THE_ARTICLE = "prose-that-must-not-reach-the-index-page";
+
+when("index.html is safe to open", () => {
+  let html: string;
+  /** Every `href` the page emits, for the URL-scheme assertions. */
+  let hrefs: string[];
+
+  beforeAll(async () => {
+    const db = getDb();
+    await db
+      .insert(schema.articles)
+      .values({ id: XSS_ARTICLE_ID, ownerId: owner(), slug: XSS_SLUG })
+      .onConflictDoNothing();
+    await db
+      .insert(schema.articleRevisions)
+      .values({
+        id: XSS_REVISION_ID,
+        articleId: XSS_ARTICLE_ID,
+        status: "published",
+        title: XSS_TITLE,
+        byline: XSS_BYLINE,
+        siteName: XSS_SITE,
+        finalUrl: XSS_URL,
+        stampedHtml: `<article><p data-spya-id="spya-bnx234">${ONLY_IN_THE_ARTICLE}</p></article>`,
+        extractedHtml: `<article><p>${ONLY_IN_THE_ARTICLE}</p></article>`,
+      })
+      .onConflictDoNothing();
+    await db
+      .update(schema.articles)
+      .set({ currentRevisionId: XSS_REVISION_ID })
+      .where(eq(schema.articles.id, XSS_ARTICLE_ID));
+
+    const bundle = await articleBundle(XSS_SLUG);
+    const decoder = new TextDecoder();
+    const files = unzipSync(bundle.bytes);
+    const page = files["index.html"];
+    if (!page) throw new Error("the bundle has no index.html");
+    html = decoder.decode(page);
+    hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? "");
+  });
+
+  afterAll(async () => {
+    const db = getDb();
+    await db
+      .update(schema.articles)
+      .set({ currentRevisionId: null })
+      .where(eq(schema.articles.id, XSS_ARTICLE_ID));
+    await db.delete(schema.articleRevisions).where(eq(schema.articleRevisions.id, XSS_REVISION_ID));
+    await db.delete(schema.articles).where(eq(schema.articles.id, XSS_ARTICLE_ID));
+    await closeDb();
+  });
+
+  it("escapes a title that tries to close the title element and open a script", () => {
+    /* The document has exactly one `<title>`…`</title>` pair. A raw `</title>`
+       from the article's own title would make two, which is the whole trick —
+       and is why this counts rather than asserting the string is absent, since
+       the real closing tag is legitimately there. */
+    expect(html.match(/<title>/g)?.length).toBe(1);
+    expect(html.match(/<\/title>/g)?.length).toBe(1);
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/<\/script/i);
+
+    // And the title is still on the page, as text.
+    expect(html).toContain("&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
+  it("escapes a byline that tries to break out of an attribute and fire onerror", () => {
+    /* `<img` rather than `onerror=`: the escaped form legitimately contains the
+       characters `onerror=`, so asserting on those would fail on correct output.
+       What must not exist is the tag that would carry the handler. */
+    expect(html).not.toMatch(/<img/i);
+    expect(html).toContain("&quot;&gt;&lt;img src=x onerror=alert(2)&gt;");
+  });
+
+  it("escapes the ampersand in a site name once, not twice", () => {
+    expect(html).toContain("Ampersand &amp; Co &lt;script&gt;alert(3)&lt;/script&gt;");
+    // Double-escaping is the other failure, and it is silent: the page renders
+    // `&amp;` where the reader should see `&`.
+    expect(html).not.toContain("&amp;amp;");
+  });
+
+  it("emits no href for a URL that is not http or https", () => {
+    expect(hrefs).toEqual([]);
+    expect(html).not.toMatch(/href="javascript:/i);
+    // Still shown, as text, so the reader can see where the article came from.
+    expect(html).toContain("javascript:alert(4)");
+  });
+
+  it("renders no article markup: it is an index, not a reader", () => {
+    /* `extractedHtml` is not safe to render directly and `stampedHtml` is the
+       same markup with ids on it. Neither is on this page — the reader has both
+       as files, and the browser opens either one. */
+    expect(html).not.toContain(ONLY_IN_THE_ARTICLE);
+    expect(html).not.toContain("data-spya-id");
+  });
+
+  it("forbids scripts and every network request, and loads nothing external", () => {
+    expect(html).toContain(
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
+        `style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">`,
+    );
+    /* No JavaScript, and nothing fetched: a page in a zip a reader keeps has to
+       work with the network unplugged, and the CSP above would block it anyway.
+       The `src=` check is written against a tag rather than the bare attribute,
+       because this fixture's byline legitimately contains the *text* `src=x`. */
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/<link\b/i);
+    expect(html).not.toMatch(/<[a-z]+[^>]*\ssrc=/i);
   });
 });
