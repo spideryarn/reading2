@@ -1,15 +1,19 @@
 # Finish the move from files to the database
 
-**Status, 2026-09-01 09:10. STAGE 3 IS COMPLETE — the pipeline publishes through Postgres.**
-`claimSession` opens the job's draft and commits into it; `publish-session.ts`, the 447-line
-decorator that copied files in at the end, is deleted. Stages 1, 2, 2.4, 2.5 and 3 are all done.
-**Only stage 4 remains.** Twelve GPT Sol reviews; the three on this work were each NO-SHIP and each
-right, and the third found a Critical the first two had not.
+**Status, 2026-09-01 15:30. Stages 1, 2, 2.4, 2.5 and 3 are done. Stage 4 is about a third
+through.** The pipeline publishes through Postgres and the decorator is gone; `raw_bytes` is dropped;
+three dead seams are deleted; the committed fixture corpus is actually being read for the first time.
+What remains is the bulk of the test conversion, the hinge, and the deletions behind it.
 
-**Nothing here has been deployed.** The flip lands in code. Deploying it is Greg's call and needs
-credentials that are not in this tree, and the deployed run remains the canary for bundling,
-environment variables, Supabase credentials, auth wiring and real external calls — none of which a
-local proof reaches.
+**Nothing has been deployed.** The flip and the `raw_bytes` drop are in code only. Deploying needs
+credentials that are not in this tree, and **the `raw_bytes` drop is destructive on the remote and
+needs Greg's explicit go-ahead** — it also cannot ride in a single `npm run deploy`, because
+`scripts/deploy.ts` migrates before it pushes, so one run would drop the column while the old code
+still selects it.
+
+**Two decisions are waiting on Greg**, neither blocking: sub-stage I (deleting `readArticleFromDir`
+removes the *"every stage stays runnable on its own against a slug"* capability and four eval entry
+points), and the four suites that test modules this stage deletes rather than converts.
 
 | item | state |
 |---|---|
