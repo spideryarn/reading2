@@ -1568,6 +1568,34 @@ export const ADDING_SENDS_TEXT_AWAY =
   "The article's text is sent to a third-party model provider for processing.";
 
 /**
+ * **The same fact, in the past tense, for the surfaces that never got to ask.**
+ *
+ * `/add/<url>` and `/add/upload/<id>` are direct-entry pages for bookmarklets
+ * and shared links (src/web/AddPage.tsx). They exist precisely so that the
+ * whole request fits in an address, which means there is no form, no Add
+ * button and no moment before the POST: the page queues ingestion from its
+ * first effect. By the time anybody can read a word on it, the article's text
+ * is already on its way.
+ *
+ * So this is `ADDING_SENDS_TEXT_AWAY` with its tense corrected, and **the
+ * asymmetry between the two is the point rather than an inconsistency to tidy
+ * up**. Above, the reader still has a choice, so the sentence is present tense
+ * and sits beside the control that makes it. Here the choice is already spent,
+ * and a present-tense warning about something already done is simply false —
+ * the same mistake, and the same fix, as `REFEREE_TEXT_ALREADY_SENT` below.
+ * Anyone tempted to make the three agree should change the *page*, not the
+ * copy: a confirmation gate on a deliberately frictionless surface is a product
+ * decision and it is Greg's.
+ * docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+ *
+ * Still no acknowledgement to tick, for the reason the block comment above
+ * gives: a box saying "I understand" in front of something already done would
+ * imply that ticking it made it permissible.
+ */
+export const DIRECT_ADD_SENT_TEXT_AWAY =
+  "The article's text has been sent to a third-party model provider for processing.";
+
+/**
  * **What a peer reviewer is told, in the past tense, because it has happened.**
  *
  * Every publisher and funder checked — NIH, NSF, Elsevier, Springer Nature,
