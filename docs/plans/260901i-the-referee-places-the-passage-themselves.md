@@ -479,3 +479,58 @@ standing between two things that were never connected.** A validator no client c
 store persists. A rule and the configuration nobody deploys. A formatter and the screen that has to
 print its words. The placement feature was itself the largest instance — storage, route, validator,
 export and eleven tests, with nothing on screen ever able to make one.
+
+## Stage 5 — the review, and the one thing it found that code could not fix
+
+GPT Sol reviewed the built code
+([260901i-…-code-review-sol.md](260901i-the-referee-places-the-passage-themselves-code-review-sol.md)).
+Five must-fixes, four of them repaired in this stage. The fifth was not a bug.
+
+**The anchoring safeguard existed in this plan and not in the code.** The instrument sits in the
+selection flow, which is genuinely better than a control beside the model's row — but it does not
+make anything independent. The criteria panel stays mounted. A referee can read the model's −90,
+select that sentence, and place their own, and **nothing records which came first.** A browser pass
+photographed it: the panel's ranked results, including the rank-1 row for the very passage being
+judged, sit a few hundred pixels from the five buttons. So `valenceGap` was not measuring what this
+plan said. It measures *what the referee said after an unknown amount of exposure to the model* —
+a different quantity that looks identical in the database.
+
+Sol put the choice exactly right: **preserve the first pre-reveal placement, or stop describing
+later placements as independent.** Greg took the second on 2026-09-01, as a decision and not a
+postponement — see [referee-mode.md § The referee's own mark](../project/referee-mode.md#the-referees-own-mark)
+for what was passed over and why. The rule that follows from it: **nothing in this repo may describe
+a placement as independent of the model**, and the last test in `tests/referee-anchoring.test.tsx`
+pins the gap where it runs so that whoever builds the envelope has to meet it.
+
+### The four that were repaired
+
+- **Changing a criterion carried the old number onto the new poles**, turning "clearly underpowered"
+  into "clearly \<whatever the new criterion's against-pole is\>" — a judgement the referee never
+  made, on words they never saw. It sends `valence: null` now.
+- **Two quick presses could store the first one.** Every placement fired its own PATCH, and each
+  answer replaced the whole comment in client state, so a late body answer restored the old mark and
+  a late mark answer restored the old note. Both now go through one per-comment chain, the pattern
+  `useCriteria.recolour` already had. The two halves need *different* races to reproduce — arrival
+  order at the server for one, delivery order at the client for the other — and a test that models
+  only one cannot see the other.
+- **One placement was drawn beside every model result in its paragraph**, as though the referee had
+  made several, and every extra placement was filed under "the model did not turn up" — which was
+  false, since the model had turned up the paragraph. Pairing now happens only where a paragraph
+  holds one of each; anything else says so in its own sub-list rather than guessing.
+- **The provider guard could vanish while reporting itself installed.** It asked a boolean, so a
+  test assigning a fresh `globalThis.fetch` removed it and re-installation did nothing. It compares
+  wrapper identity now and restores the *per-test baseline* rather than itself — restoring the guard
+  would have broken every file that stubs before its first test. This is the **second** time the bug
+  class reappeared inside its own fix.
+
+### And five tests that could not fail
+
+Named by the review, each with the one-line production change it would survive: the anchoring
+tripwire that mounted the dialog without the panel; the five-position table that took both its
+clicks and its expectations from the production constant (**my brief asked for that**, and it is the
+shared assumption written down); the matching test with no paragraph holding two of anything; the
+"no third number" check that scanned one element rather than the row; and the guard's host sweep,
+which iterates the same registry the guard reads. All repaired. The last is only partly repairable —
+two of the four provider hosts appear in no source file at all, arriving as SDK default base URLs,
+so no honest test proves that registry complete, and the test now says so instead of implying
+otherwise.

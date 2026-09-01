@@ -66,18 +66,18 @@ cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothi
 instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
 alike. Rule 5 below says where each of its rules is enforced.
 
-**One thing is built and not connected**, and it is the kind of thing that looks finished from a
-test file:
+**The referee's own judgement is built, reachable and editable**, as of 2026-09-01 — and for one
+day it was none of those while looking finished from a test file, which is worth keeping in view:
 
-- The `comments.criterionId` and `comments.valence` columns **now cross the application boundary**,
-  as of 2026-09-01: `Comment` and `NewComment` carry them, `POST /api/comments/:slug` accepts and
-  validates them, and both stores write and read them. So the referee's *own* judgement — the
-  anchoring antidote in the design — can be recorded through the real API, and a **negative** one
-  survives it (`tests/comment-referee-mark.test.ts`). **And it is reachable, as of 2026-09-01**:
-  select a passage in Referee mode and the comment box offers five labelled positions on one of your
-  `diverging` criteria (§ *The referee's own mark*). What is still missing is a route for *editing* a placement once
-  made — a second `create` under the same id carrying a different valence is a 409, not a re-score.
-  Sol's finding 5, and see § *The referee's own mark* below.
+- The `comments.criterionId` and `comments.valence` columns crossed the application boundary a day
+  before anything on screen could make one. `Comment` and `NewComment` carried them, the route
+  validated them, both stores wrote and read them, `db:export` carried them, and eleven tests
+  passed — with **no way for a referee to record a single placement**. That is the mode's own
+  instance of the shape [silent-success.md](../reusable/silent-success.md) collects: a green check
+  standing between two things that were never connected. Now: select a passage in Referee mode and
+  the comment box offers five labelled positions on one of your `diverging` criteria; change one
+  through `PATCH /api/comments/:slug/:id/mark`; and the panel prints it beside the model's
+  (§ *The referee's own mark*).
 
 **Plan**: [260831an-referee-mode-for-peer-reviewers.md](../plans/260831an-referee-mode-for-peer-reviewers.md).
 **Cross-family review**: [260831an-referee-mode-review-sol.md](../plans/260831an-referee-mode-review-sol.md)
@@ -192,8 +192,18 @@ may read the model's number in the panel, select the passage and then place it, 
 which came first, so *"independent"* here means *"made in a control that does not itself show the
 model's number"* — a real property, and a much weaker one than the mode's argument implies. Sol's
 one change, if it could only have one: a **sealed-envelope** state that keeps the first pre-reveal
-placement, or stop calling later placements independent. That is a product decision and it is Greg's;
-the last test in that file pins the gap where it runs, so whoever builds the envelope meets it.
+placement, or stop calling later placements independent.
+
+**Greg took the second, on 2026-09-01**, and it is a decision rather than a postponement: record the
+claim honestly and leave the envelope unbuilt. So the wording above is the wording, here and in the
+plan — a placement is *the referee's own judgement, made after an unknown amount of exposure to the
+model's*, and `valenceGap` measures that and not the thing the plan first said it did. The two
+options he passed over were a write-once `valence_first` column, which makes the claim true for
+placements genuinely made blind at the cost of a migration on the production database, and
+withholding the model's valence for a passage until the referee has placed it, which makes
+independence structural and fights the panel's own marks-default-off design. The last test in
+`tests/referee-anchoring.test.tsx` pins the gap where it runs, so whoever builds the envelope meets
+it; until then nothing in this repo may describe a placement as independent of the model.
 
 **Changing one is its own operation**: `PATCH /api/comments/:slug/:id/mark`, and
 `CommentStore.patchMark` beneath it on both stores — the fifth, added on 2026-09-01. Both fields
