@@ -206,47 +206,37 @@ export interface LoadOptions {
    * **The spawns have to be barrier-synchronised or the measurement lies.** The
    * first run of this rig staggered its K processes by their own `tsx` startup
    * and reported the unserialised arm as *faster than it is* and — worse —
-   * **zero** collisions in the case below, where a real barrier gives fifteen
-   * of sixteen. Load that arrives spread out is not the load a test run applies.
+   * **zero** collisions in the `raw_sources` race below, where a real barrier
+   * gives fifteen of sixteen. Load that arrives spread out is not the load a
+   * test run applies.
    *
    * ## When you must pass `true`
    *
-   * **Two loads contend when they write the same row, and the slug is not the
-   * only row they share.** Both of these need the lock:
+   * **A fixed slug**, and now only that. `articles_slug_unique`,
+   * `jobs_active_slug` on `(owner_id, slug)`, and every article-scoped table
+   * under it — two copies of one suite, or two suites naming the same corpus
+   * article, are reading and deleting each other's rows. This is
+   * `./run-lock.ts` § cause 2 and it has not changed.
    *
-   * 1. **A fixed slug.** `articles_slug_unique`, `jobs_active_slug` on
-   *    `(owner_id, slug)`, and every article-scoped table under it — two copies
-   *    of one suite, or two suites naming the same corpus article, are reading
-   *    and deleting each other's rows. This is `./run-lock.ts` § cause 2 and it
-   *    has not changed.
-   * 2. **The same raw document as somebody else**, which is *not* about the
-   *    slug and is the reason this option is not simply "is my slug unique".
-   *    `raw_sources` is keyed `(sha256, kind)` — one row per *document*, shared
-   *    by every article made from those bytes — and `writeRaw`
-   *    (src/store/artifacts-pg.ts) does `select … for update` then `insert`.
-   *    A `for update` over **no rows locks nothing**, so when the row is not
-   *    there yet two concurrent loads both miss and both insert, and the loser
-   *    gets `duplicate key value violates unique constraint
-   *    "raw_sources_sha256_kind_pk"`. Reproduced, not reasoned about: sixteen
-   *    unserialised clones of `writes` with the raw bytes freshened so the row
-   *    was absent gave **15, 7 and 15 failures of 16** over three runs; the same
-   *    sixteen with `serialise: true` gave none. With the corpus's real bytes —
-   *    the row long since present — both arms give zero, which is the reading a
-   *    laptop hands you. `tests/load-article-serialisation.test.ts` holds it as
-   *    a case.
+   * **The same raw document as somebody else used to be a second reason, and is
+   * not any more.** `raw_sources` is keyed `(sha256, kind)` — one row per
+   * *document*, shared by every article made from those bytes — and
+   * `writeRawSource` (src/store/artifacts-pg.ts) did `select … for update` then
+   * `insert`. A `for update` over **no rows locks nothing**, so when the row was
+   * not there yet two concurrent loads both missed and both inserted, and the
+   * loser got `duplicate key value violates unique constraint
+   * "raw_sources_sha256_kind_pk"` and lost its whole transaction. Reproduced,
+   * not reasoned about: sixteen unserialised clones of `writes` with the raw
+   * bytes freshened so the row was absent gave **15, 7 and 15 failures of 16**
+   * over three runs; the same sixteen with `serialise: true` gave none. It bit
+   * only on the *first* load of a given document, which is why it hid: on a
+   * laptop whose row already exists, every caller took the other branch.
    *
-   *    It bites only on the *first* load of a given document, which is exactly
-   *    why it hides: on a laptop whose `raw_sources` row already exists — and
-   *    on the second run of anything — every caller takes the `for update`
-   *    branch and it is invisible. A fresh checkout, a `db:reset`, or CI is
-   *    where it would have surfaced.
-   *
-   *    `tests/helpers/scratch-article.ts` clones one corpus article N times, so
-   *    all N clones carry **identical** `raw.html` and one `raw_sources` row.
-   *    It is safe unlocked today only because that row is already in every
-   *    developer's database; it is not safe by construction. Either strip the
-   *    manifest from the clone, or fix `writeRaw` to insert conflict-tolerantly
-   *    — not this file's call to make.
+   * Fixed on 2026-09-01 — the insert is conflict-tolerant and the row is read
+   * back and compared — so a shared document no longer needs this flag.
+   * `tests/store-raw-source-race.test.ts` holds the deterministic version and
+   * `tests/load-article-serialisation.test.ts` the four-load one. A fixed slug
+   * is the only reason left to pass `true`.
    */
   readonly serialise?: boolean;
 }

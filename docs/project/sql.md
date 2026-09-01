@@ -35,6 +35,25 @@ tidiness measure — an article going away has to take the reader's transcriptio
 chosen, and [database.md § What is not done yet](database.md#what-is-not-done-yet) says what that
 costs.
 
+## `SELECT … FOR UPDATE` cannot lock a row that is not there
+
+A row lock is taken on the rows the statement *returns*, so a `FOR UPDATE` that matches nothing locks
+nothing. `select … for update` followed by `if (!found) insert` therefore protects nothing at all in
+the one case it was written for, and two concurrent callers both insert — the loser aborting its
+whole transaction on the unique index, not just its own statement.
+
+Insert **`on conflict do nothing`, targeted at the key**, then read the row back and work from what
+came back rather than from what you tried to write.
+[`lockOrCreateArticle`](../../src/store/pg-revisions.ts) is the pattern. It needs `read committed`,
+PostgreSQL's default: under `repeatable read` the read back comes from a snapshot taken before the
+racing transaction committed, and finds nothing.
+
+It hides, because the collision needs the row to be absent and it is absent only the first time
+anybody writes it. Suspect it whenever a duplicate-key error names a table keyed by something that is
+not the caller's own id — a content hash, a slug, a natural key — and nobody can reproduce it twice.
+[260901f](../postmortems/260901f-a-for-update-that-locks-nothing.md) is the instance, with the audit
+of every `for update` in `src/store/`.
+
 ## A nullable timestamp says more than a boolean
 
 Where a flag is "off, or on since some moment", store the moment. `null` is off, a date is on, and

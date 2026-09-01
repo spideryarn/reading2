@@ -51,10 +51,25 @@
  * The lock is there for suites that share **fixed** fixture slugs with copies of
  * themselves (./run-lock.ts § cause 2). Nothing here shares a slug with
  * anything, and the global one-running-job index that would have been the other
- * reason was dropped on 2026-08-30. So for these suites the lock is pure queue.
- * It is kept anyway for now, because removing it is a change to
- * `loadArticleIntoPg`'s contract and belongs in one deliberate commit rather
- * than as a side effect of converting a test file.
+ * reason was dropped on 2026-08-30.
+ *
+ * **A unique slug is not the same as a private set of rows**, and this is where
+ * that used to bite. Every clone here carries the *same* `raw.html`, so N clones
+ * of one corpus article write one `raw_sources` row — that table is keyed
+ * `(sha256, kind)`, one row per document rather than per article. Until
+ * 2026-09-01 `writeRawSource` did `select … for update` and then `insert`, and a
+ * `for update` over no rows locks nothing, so N unserialised clones of a
+ * document Postgres had never seen all inserted and all but one lost their whole
+ * transaction to a duplicate key. It was invisible on a laptop only because the
+ * corpus's row is already there.
+ *
+ * That is fixed at the source: the insert is conflict-tolerant and the row is
+ * read back and compared (src/store/artifacts-pg.ts § `writeRawSource`,
+ * tests/store-raw-source-race.test.ts). So the shared row is now genuinely safe
+ * unserialised, and for these suites the lock really is pure queue. It is kept
+ * anyway for now, because removing it is a change to `loadArticleIntoPg`'s
+ * contract and belongs in one deliberate commit rather than as a side effect of
+ * converting a test file.
  */
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

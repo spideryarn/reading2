@@ -1,6 +1,6 @@
 /**
  * `loadArticleIntoPg`'s `serialise` option, checked against Postgres rather
- * than against itself — and the one collision that survives a unique slug.
+ * than against itself — and the one row two unique slugs still share.
  *
  * ## Why this file exists
  *
@@ -260,43 +260,36 @@ when("loadArticleIntoPg's serialise option", () => {
     }
   }, 60_000);
 
-  it("does not protect two loads that share a raw document, which unique slugs do not separate", async () => {
+  it("loads one unseen document concurrently without the lock, and leaves one row", async () => {
     /**
-     * **A characterisation test. When it goes red, delete it.**
-     *
-     * The reasoning behind making the lock opt-in is "a seed under a slug
-     * nobody else uses shares no row with anybody". `articles`, `jobs`,
-     * `block_identities`, `revision_blocks` and `revision_step_runs` are all
-     * keyed by article or by slug, so that holds for them.
+     * **The reason `serialise` can default to off.** The argument for opting out
+     * is "a seed under a slug nobody else uses shares no row with anybody" —
+     * true of `articles`, `jobs`, `block_identities`, `revision_blocks` and
+     * `revision_step_runs`, which are keyed by article or by slug.
      *
      * **`raw_sources` is not.** Its primary key is `(sha256, kind)` — one row
-     * per *document*, shared by every article made from those bytes — and
-     * `writeRaw` (src/store/artifacts-pg.ts) does `select … for update` and
-     * then `insert`. A `for update` over **no rows locks nothing**, so when the
-     * row is not there yet, concurrent loads all miss and all insert, and every
-     * loser gets `duplicate key value violates unique constraint
-     * "raw_sources_sha256_kind_pk"` and rolls its whole transaction back.
+     * per *document*, shared by every article made from those bytes — so N
+     * clones of one corpus article all write one row. This case is the only
+     * thing in the suite that puts that under concurrency with the row **absent**,
+     * which is the state a developer's laptop never has and the only state in
+     * which it ever went wrong.
      *
-     * It bites only on the **first** load of a given document, which is exactly
-     * why it hides: once the row exists every caller takes the `for update`
-     * branch. Measured 2026-09-01: sixteen concurrent unserialised clones of
-     * `writes` with the raw bytes freshened so the row was absent gave 15, 7 and
-     * 15 failures of 16 over three runs; the same sixteen serialised gave none.
-     * With the corpus's real bytes — the row long since present — it gave zero
-     * either way, which is the reading a laptop hands you and the reason this
-     * case invents its own document.
+     * It used to assert the opposite. `writeRawSource` did `select … for update`
+     * and then `insert`, and a `for update` over no rows locks nothing: all four
+     * loads missed, all four inserted, and every loser got `duplicate key value
+     * violates unique constraint "raw_sources_sha256_kind_pk"` and rolled its
+     * whole transaction back. Measured 2026-09-01, sixteen concurrent
+     * unserialised clones with the raw bytes freshened: 15, 7 and 15 failures of
+     * 16 over three runs. `writeRawSource` now inserts conflict-tolerantly and
+     * compares what came back, so every writer finishes and the row is written
+     * once (src/store/artifacts-pg.ts).
      *
-     * `tests/helpers/scratch-article.ts` clones one corpus article N times, so
-     * all N clones carry identical `raw.html` and one `raw_sources` row. It is
-     * safe unserialised only because that row is already in every developer's
-     * database, not by construction — a fresh checkout, a `db:reset` or CI is
-     * where this would surface, and it would surface as a duplicate key naming
-     * a table nobody in that suite has heard of.
-     *
-     * **The fix is in `writeRaw`, not here**: insert conflict-tolerantly and
-     * then compare, which is the shape the `existing` branch beside it already
-     * has. The day somebody does that, this case fails, and the right response
-     * is to delete it and the warning in `LoadOptions.serialise` with it.
+     * **This rig really does overlap.** Its four loads collided on demand for as
+     * long as the bug existed, which is what says the concurrency is real rather
+     * than four calls politely taking turns. The deterministic version — writer
+     * B held on writer A's uncommitted row, with the block asserted — is
+     * tests/store-raw-source-race.test.ts, and that is the one to reach for if
+     * this ever needs debugging.
      */
     const marker = `<!-- serialisation ${randomBytes(8).toString("hex")} -->`;
     const sha = createHash("sha256")
@@ -315,7 +308,7 @@ when("loadArticleIntoPg's serialise option", () => {
       .from(rawSources)
       .where(and(eq(rawSources.sha256, sha), eq(rawSources.kind, "html")));
     /* The precondition, and the whole reason the marker is random: with the row
-       already there every caller reads it and nothing collides, so this case
+       already there every caller reads it and nothing contends, so this case
        would pass on any code at all. */
     expect(before, "this document must be one Postgres has never seen").toEqual([]);
 
@@ -325,18 +318,14 @@ when("loadArticleIntoPg's serialise option", () => {
       const outcomes = await Promise.allSettled(
         slugs.map((slug, i) => loadArticleIntoPg(slug, { root: roots[i]!, serialise: false })),
       );
-      const refused = outcomes.filter(
-        (o) => o.status === "rejected" && /raw_sources|duplicate key/.test(String(o.reason)),
-      );
+      const refused = outcomes.filter((o) => o.status === "rejected");
       expect(
-        refused.length,
-        "concurrent unserialised loads of one unseen document still collide on raw_sources — " +
-          "if this is now zero, writeRaw has been fixed: delete this case and the warning in " +
-          "LoadOptions.serialise",
-      ).toBeGreaterThan(0);
+        refused.map((o) => String((o as PromiseRejectedResult).reason)),
+        "concurrent unserialised loads of one unseen document must all succeed",
+      ).toEqual([]);
 
-      /* And exactly one of them got the row in, so the failure really is the
-         race and not the fixture being unloadable. */
+      /* And the shared row was written exactly once — which is what says they
+         succeeded by agreeing on one row, not by each getting their own. */
       const after = await db
         .select({ sha256: rawSources.sha256 })
         .from(rawSources)

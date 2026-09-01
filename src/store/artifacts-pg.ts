@@ -1008,7 +1008,43 @@ export class RawSourceDisagrees extends Error {
  * writes is the *row*, inside the caller's transaction, so the reference and
  * the artefacts land together or not at all.
  *
- * ## `verified_at` is not touched on conflict, and that is the whole point
+ * ## Insert first, then read back and compare — not select, then insert
+ *
+ * `raw_sources` is keyed `(sha256, kind)`: **one row per document**, shared by
+ * every article ever made from those bytes. So the row this write wants may be
+ * being written by somebody else at the same moment — the same URL added by two
+ * readers, the same PDF uploaded twice, a refresh racing an add.
+ *
+ * This used to be `select … for update`, then insert if nothing came back, and
+ * **a `for update` over no rows locks nothing**. Two concurrent first-writers of
+ * one document both selected nothing, both inserted, and the loser got
+ * `duplicate key value violates unique constraint "raw_sources_sha256_kind_pk"`
+ * — which rolled back its *whole* transaction, losing the revision write and not
+ * just this row. It bit only on the first write of a given document, which is
+ * why a laptop never sees it: after that the row is always there. Reproduced,
+ * not argued: sixteen concurrent loads of one unseen document gave 15, 7 and 15
+ * failures of 16 over three runs.
+ *
+ * `insert … on conflict do nothing` needs no row to exist in order to be safe,
+ * because the unique index is the thing doing the excluding. A racing writer
+ * makes this a no-op instead of an error.
+ *
+ * **Then the row is read back, and it is the row in the table that is compared**
+ * — never the values we tried to insert. If the comparison used those, a racing
+ * writer's row would enter the table without anything ever checking it, which is
+ * precisely the corruption the check exists to stop: two different documents
+ * sharing a hash row, one of them silently getting the other's size.
+ *
+ * **This rests on `read committed`**, PostgreSQL's default, and it is written
+ * down here rather than inherited for the same reason src/store/pg-feedback.ts
+ * writes it down: under `repeatable read` the read back would be taken from a
+ * snapshot established *before* the racing transaction committed, so the row
+ * the insert just waited for would not be visible and this would throw. A
+ * `default_transaction_isolation` set on the role or the database would do that
+ * silently, and nothing would fail on a laptop. The caller owns the transaction,
+ * so this cannot set the level itself — it can only say what it needs.
+ *
+ * ## `verified_at` is not touched when the row is already there
  *
  * The column means *"when the bytes at this key were last shown to hash to
  * it"*. **This function verifies nothing** — it is handed a `RawManifest`,
@@ -1020,11 +1056,12 @@ export class RawSourceDisagrees extends Error {
  *
  * So: on insert, `verified_at` is the manifest's own `fetchedAt`, which is when
  * `storeRawSource` did the verifying — traceable, and never later than the
- * truth. On conflict it is left alone, because nothing here has re-verified
- * anything. The sweeper that re-verifies is the thing entitled to move it.
+ * truth. `do nothing` rather than `do update` is what keeps that true, because
+ * nothing here has re-verified anything. The sweeper that re-verifies is the
+ * thing entitled to move it.
  *
- * And on conflict the two describable facts are **compared**, not ignored: same
- * digest and kind must mean the same bytes.
+ * And when a row is already there the two describable facts are **compared**,
+ * not ignored: same digest and kind must mean the same bytes.
  */
 async function writeRawSource(
   tx: Tx,
@@ -1042,32 +1079,51 @@ async function writeRawSource(
     throw new NoStoredDocument(slug);
   }
 
-  const [existing] = await tx
-    .select({ bytes: rawSources.bytes, contentType: rawSources.contentType })
-    .from(rawSources)
-    .where(and(eq(rawSources.sha256, storedSha256), eq(rawSources.kind, kind)))
-    .for("update")
-    .limit(1);
-
-  if (existing) {
-    const differences: string[] = [];
-    if (existing.bytes !== manifest.storedBytes) {
-      differences.push(`${existing.bytes} bytes and this says ${manifest.storedBytes}`);
-    }
-    if (existing.contentType !== CONTENT_TYPE[kind]) {
-      differences.push(`content type ${existing.contentType} and this kind is ${CONTENT_TYPE[kind]}`);
-    }
-    if (differences.length) {
-      throw new RawSourceDisagrees(storedSha256, kind, differences.join(", and "));
-    }
-  } else {
-    await tx.insert(rawSources).values({
+  await tx
+    .insert(rawSources)
+    .values({
       sha256: storedSha256,
       kind,
       bytes: manifest.storedBytes,
       contentType: CONTENT_TYPE[kind],
       verifiedAt: new Date(manifest.fetchedAt),
-    });
+    })
+    /* **Targeted at the primary key**, so this swallows the one conflict it is
+       about and nothing else. An untargeted `do nothing` would also absorb a
+       future constraint, quietly, and the write would report success having
+       stored nothing. `lockOrCreateArticle` (src/store/pg-revisions.ts) targets
+       for the same reason. */
+    .onConflictDoNothing({ target: [rawSources.sha256, rawSources.kind] });
+
+  const [stored] = await tx
+    .select({ bytes: rawSources.bytes, contentType: rawSources.contentType })
+    .from(rawSources)
+    .where(and(eq(rawSources.sha256, storedSha256), eq(rawSources.kind, kind)))
+    .limit(1);
+
+  /* Not reachable under `read committed`: the insert above either put the row
+     there or waited for the transaction that did. The two ways to see this are
+     a delete landing in the gap — nothing in the request path deletes from this
+     table — and the isolation level having been changed underneath us, which
+     the note above is about. Either way it is a fault worth naming rather than
+     a `!` that would one day be a null reference with no explanation. */
+  if (!stored) {
+    throw new Error(
+      `the raw_sources row for ${storedSha256} (${kind}) was not there on the read back, writing ` +
+        `"${slug}". Either something is deleting from that table under a live write, or this ` +
+        `transaction is not running at read committed — see writeRawSource.`,
+    );
+  }
+
+  const differences: string[] = [];
+  if (stored.bytes !== manifest.storedBytes) {
+    differences.push(`${stored.bytes} bytes and this says ${manifest.storedBytes}`);
+  }
+  if (stored.contentType !== CONTENT_TYPE[kind]) {
+    differences.push(`content type ${stored.contentType} and this kind is ${CONTENT_TYPE[kind]}`);
+  }
+  if (differences.length) {
+    throw new RawSourceDisagrees(storedSha256, kind, differences.join(", and "));
   }
 
   const columns: Partial<typeof articleRevisions.$inferInsert> = {
