@@ -42,6 +42,45 @@ Asked directly, and the answers set the shape of everything below:
   working soon without tooo much work."* — the spike is a stage of its own, and the feature ships
   without it if the answer is "complex".
 
+## Where this has got to
+
+| | stage | commit |
+|---|---|---|
+| ✅ | the table and the store | `a072827` |
+| ✅ | the route, and the Sentry mirror | `ba2ff5e` |
+| ✅ | the client log buffer and its seams | `d1b9db0` |
+| 🔧 | **fixing GPT Sol's code review** — five blockers, see below | in progress |
+| ⬜ | the button, the dialog, the diagnostics collector, the screenshot paste | |
+| ⬜ | docs, browser check, second review, ship | |
+
+**GPT Sol's code review of the first three stages returned NO-SHIP**, and it was right on every
+count — see [the code review](260831aj-feedback-button-and-bug-reports-to-sentry-code-review-sol.md).
+The five, each verified before being acted on:
+
+1. **The global scope still leaks.** Replacing the isolation and current scopes is not enough:
+   `prepareEvent` *starts* from the global scope. Reproduced —
+   `getGlobalScope().setExtra("globalProse", …)` reaches the final envelope. The same mistake one
+   layer out: the leak that was tested for got fixed, and the boundary was declared closed. The fix
+   is a guard at the **final envelope/transport boundary**, after scope merging and event processors.
+2. **A log injection.** `Unexpected field: ${key.slice(0, 40)}` is written to logs as `reason`, so an
+   authenticated caller can stream arbitrary prose into our logs forty characters at a time, *without
+   touching the rate limiter* — breaking this plan's own stated rule. There is a **pre-existing
+   instance of the same bug** on the admin route from `c5c7e37`; both fixed.
+3. **The screenshot sniff is defeatable.** `PNG_SIGNATURE || articleProse` passes eight bytes of
+   check and is forwarded to a third party. Decode and re-encode server-side so the bytes are ours —
+   `@napi-rs/canvas` is already a dependency.
+4. **`mirrored_at` claimed delivery it cannot know about.** The SDK sends asynchronously and
+   `sendEnvelope` swallows transport failures, so an outage leaves the column populated with nothing
+   delivered — [silent-success.md](../reusable/silent-success.md) in the very column we would use to
+   find stranded reports. And its test mocked a *synchronous throw*, which is not how an outage
+   behaves, so it passed while the real failure mode stayed broken.
+5. **The concurrency tests could not fail.** The lock ordering is correct — GPT Sol checked it — but
+   the tests are sequential: delete the `pg_advisory_xact_lock` line and every one still passes.
+
+The lesson worth keeping, because it is the same one twice: **a guard is worth exactly what its test
+can disprove.** Both times the code was right about the case it imagined and silent about the case
+beside it.
+
 ## References
 
 Read these first; they are the constraints rather than the background.
@@ -593,7 +632,11 @@ Four things were decided here that the plan left open:
   buffer stage, and until it exists a name is what may travel.
 - **A screenshot is identified by its own magic bytes**, PNG or JPEG, and refused otherwise. Not
   tidiness: without it the field is a 400 KB hole through which any bytes at all — an article
-  included — reach a third party as an attachment. The filename and content type are written from
+  included — reach a third party as an attachment.
+
+  **Superseded on 2026-09-01, and it was not enough**: eight bytes of signature followed by anything
+  at all still passes, and a valid PNG can carry text chunks, EXIF and a whole appended payload after
+  `IEND`. The screenshot is now decoded and written again — see the review stage below. The filename and content type are written from
   that sniff, so there is no field in which a caller could put either, and an unexpected key in the
   body is a 400 rather than something ignored.
 - **The `fb-` codes are inline in `src/routes.ts`**, not in `src/messages.ts`, following `cmt-` and
@@ -636,6 +679,89 @@ Three things decided here:
   reach them. They are facts about the server rather than about the reader, and Sentry already has
   this project's source maps. Accepted, and written into the file's header rather than found later.
 
+  **Reversed for `server_name` on 2026-09-01.** It is also a free-form string an event processor can
+  write, and once the envelope guard existed there was nothing that could tell a hostname from a
+  paragraph. `contexts.runtime` stays, rebuilt from two shape-checked fields.
+
+### Stage: what the second review sent back, 2026-09-01
+
+**GPT Sol reviewed the built code and would not have shipped it.**
+[260831aj-…-code-review-sol.md](260831aj-feedback-button-and-bug-reports-to-sentry-code-review-sol.md)
+is the review; every finding in it was reproduced before it was fixed. The five, and what each cost:
+
+- [x] **The global scope still leaked, and so did an event processor.** The plan's own correction
+      above — replace the isolation and current scopes — was *itself* incomplete, because
+      `prepareEvent` **starts from the global scope** and merges the other two into it, and an event
+      processor runs after all three. Reproduced: global extras, a global scope attachment (they are
+      appended *after* `hint.attachments`, so they arrive as extra envelope items) and a processor's
+      rewrite of `extra`, `tags` and `server_name` all reached the final envelope.
+
+      So the guard moved to the **envelope**, on the line before the transport, in a new
+      [`src/feedback-envelope.ts`](../../src/feedback-envelope.ts). It **rebuilds** the feedback item
+      from what `mirrorFeedback` registered before capturing — only `event_id` and `timestamp` are
+      taken off the event, both shape-checked — and writes the attachment items from the
+      registration, so an ambient attachment wearing our own filename is never copied rather than
+      filtered.
+
+      Of the two designs the review would accept, this is "wrap the transport", taken through the
+      SDK's own `beforeEnvelope` hook. Chosen over replacing the transport factory in
+      `initMonitoring` for a reason worth stating: the guard installs itself on **whatever client
+      `mirrorFeedback` finds**, so the test's client and the production client run the same code. A
+      guard wired into `initMonitoring` would have to be re-wired by hand in the test, and the test
+      would then be evidence about the test.
+
+      **`server_name` no longer rides**, reversing the third bullet of the stage above. It was
+      accepted there as "a fact about the server"; it is also a free-form string an event processor
+      can write, and the guard cannot tell a hostname from a paragraph. `contexts.runtime` stays,
+      rebuilt from two shape-checked fields.
+- [x] **Caller-controlled strings crossing boundaries.** Four of them:
+      - `Unexpected field: ${key}` in **two** routes — feedback's and, pre-existing from `c5c7e37`,
+        `transcribeDictation`'s. `logRequest` writes an `httpError` message as `reason`, so that is
+        an authenticated caller writing prose into our logs a request at a time without ever
+        reaching the rate limiter, which counts reports and not refusals. Both are fixed prose now.
+      - The diagnostics blob was length-capped and not shape-checked, so `blockIds` took 200
+        arbitrary 64-character strings and an API `path` took 200 arbitrary characters. Every field
+        in [`src/feedback-payload.ts`](../../src/feedback-payload.ts) is now an identifier, a closed
+        vocabulary, a number in range or a timestamp; paths are reduced to **route templates**
+        (`/api/chat/:x/live`); block ids go through `isSpideryarnId`. That file now imports
+        `src/ids.ts`, `src/modes.ts` and `src/read-address.ts`, all of which are import-free enough
+        for the dialog to share it.
+      - `requestVercelId` was truncated and never shape-checked, then made a Sentry tag — relying on
+        Vercel to overwrite the header rather than establishing the invariant. Shape-checked now.
+      - **The screenshot.** `sniffScreenshot` checked eight bytes, so `PNG_SIGNATURE || articleProse`
+        was stored and forwarded. Replaced by [`src/feedback-image.ts`](../../src/feedback-image.ts),
+        which takes the file apart, inflates the raster, checks it is exactly the size the header
+        says, and **writes a new PNG**. Text chunks, EXIF and anything after `IEND` are never copied.
+- [x] **`mirrored_at` claimed delivery it could not know about.** Split into `mirror_attempted_at`
+      (written when the event is handed over) and `mirrored_at` (written only for a 2xx from the
+      transport, via `afterSendEvent`), so `mirror_attempted_at is not null and mirrored_at is null`
+      is a trustworthy stranded-report query. `markMirrored` is conditional on `mirrored_at is null`
+      and answers whether a row changed. `drizzle/0045_feedback_mirror_attempted.sql`.
+- [x] **The concurrency claim had no test that could disprove it.** Two `Promise.all` tests, and one
+      thing that had to be discovered to make them real: **`pg` opens connections one at a time**, so
+      the first `Promise.all` against a cold pool is not concurrent and says it is. With the pool
+      warmed and the advisory lock deleted, six concurrent submits of one id produce four uniqueness
+      violations and eleven distinct ids produce eleven `created`. Both were watched red.
+      Also: `isolationLevel: "read committed"` is now explicit, and the cap uses the database's
+      `now()` for both the cutoff and the retry rather than this process's clock.
+- [x] **The outer body cap refused bodies the inner validator accepted.** `MAX_FEEDBACK_BODY_BYTES`
+      is now derived term by term from the schema, and there is a maximum-valid positive control:
+      the largest report the validator takes, at every cap at once, with the answers in the character
+      `JSON.stringify` expands furthest.
+
+**One thing was not fixed the way the review asked**, and it is worth naming. The review said to
+decode and re-encode the screenshot with `@napi-rs/canvas`, which is already a dependency. Measured
+2026-09-01 with Vercel's own tracer: naming that package from anything the API function reaches adds
+**34 MB** to the bundle — one Skia binary — and turns `tests/pdf-bundle-trace.test.ts` red, which
+lists `@napi-rs/canvas/index.js` under `MUST_NOT_SHIP` for exactly this reason and was written after
+two production outages about that package. So the re-encode is a PNG decoder in about 200 lines of
+`node:zlib` instead, and **JPEG is refused**: its entropy-coded scan cannot be length-checked without
+a baseline decoder, so a rebuilt JPEG would still forward an opaque caller-supplied span, and half a
+guarantee at this seam reads exactly like a whole one.
+
+**That is a product decision, and it is Greg's:** the dialog stage below must produce PNG. If a
+JPEG paste turns out to matter, the two ways forward are a baseline decoder or accepting the 34 MB.
+
 ### Stage: the button and the dialog
 
 - [ ] `FeedbackButton.tsx`, fixed top-right, mirroring `HomeLogo.tsx`'s fixed top-left.
@@ -668,27 +794,27 @@ Three things decided here:
 
 ### Stage: the client log buffer and the diagnostics
 
-- [ ] `src/web/log-buffer.ts` — the ring buffer and the `log()` call, to the four rules in
+- [x] `src/web/log-buffer.ts` — the ring buffer and the `log()` call, to the four rules in
       [The client log buffer](#the-client-log-buffer). No dependency. Module state, the shape
       [`src/web/offline.ts`](../../src/web/offline.ts) already establishes for cross-tree state that
       is not URL state.
-- [ ] **Tests first, and each must be red before it is green**: that a denied key name is redacted;
+- [x] **Tests first, and each must be red before it is green**: that a denied key name is redacted;
       that a long message is truncated; that the buffer never exceeds its capacity and evicts
       oldest-first; that nothing is serialised until it is asked for.
-- [ ] **"Three seams see every failure" was false**, and GPT Sol listed the misses:
+- [x] **"Three seams see every failure" was false**, and GPT Sol listed the misses:
       [`src/web/upload.ts`](../../src/web/upload.ts) uses XHR and never touches `apiFetch`;
       `Tweets.tsx` catches and logs, so it reaches neither the global handler nor `AppBoundary`;
       `leavingFetch` has its own failure path; and "recent API calls" needs **successes and non-2xx
       responses too**, not only the transport `catch`.
-- [ ] So the entry is a **discriminated union — `api` | `upload` | `client-error`** — written through
+- [x] So the entry is a **discriminated union — `api` | `upload` | `client-error`** — written through
       one narrow recording function. An `AppBoundary` error does not have a method, a path or a
       status, and forcing it into an API-shaped row would have produced three empty columns.
-- [ ] **Strip the query string from every recorded path.** `apiFetch("/api/library/search?q=…")`
+- [x] **Strip the query string from every recorded path.** `apiFetch("/api/library/search?q=…")`
       otherwise captures reader-typed text — the same leak as `location.href`, one layer down, and
       worth stating twice because it was missed twice.
 - [ ] Build the collector **before** the tick-box that offers it, so the checkbox never promises
       something that is not there.
-- [ ] Update the header of [`src/web/lib/api.ts`](../../src/web/lib/api.ts), which currently says
+- [x] Update the header of [`src/web/lib/api.ts`](../../src/web/lib/api.ts), which currently says
       there should not be a client logger, with the reasoning above.
 - [ ] Read `x-vercel-id` off responses in `apiFetch`. Same-origin, so it is readable; this is the
       only thing in the repo that would tie a browser to a Vercel log line.
@@ -711,8 +837,8 @@ in [the spike section below](#the-screenshot-spike).
       no permission prompt, and it can never break on our CSS because it never touches our CSS. The
       reader takes their own screenshot (⌘⇧4, PrtScn) and pastes; a `paste` listener pulls the image
       off `clipboardData.items`, and a file input covers the reader who would rather pick a file.
-- [ ] Downscale to 1600px on the long edge and step JPEG quality down until it is under ~300 KB,
-      then send as a base64 field. **Its own body limit on the route**, the way
+- [ ] Downscale to 1600px on the long edge and send as **PNG** — not JPEG; see the note at the end
+      of the review stage above for why the server refuses one — under ~300 KB, as a base64 field. **Its own body limit on the route**, the way
       `MAX_AUDIO_BODY_BYTES` is its own — a screenshot is four figures past what the other routes
       need, and raising the shared 64 KB for forty routes to admit one caller gives away the thing
       the limit was for.
