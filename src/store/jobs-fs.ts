@@ -443,10 +443,15 @@ export const fsJobStore: JobStore = {
    * owner-scoped call has to leave the other owner's job in exactly the state
    * it found it, and dropping their token would revoke a live claimant's write
    * authority (src/store/job-fence.ts) without settling the job — the one
-   * outcome worse than not sweeping at all, since nothing would then be able to
-   * move it but the global sweep. An entry with no job behind it belongs to
-   * nobody, so an owner-scoped call leaves that alone too and the table-wide
-   * one clears it.
+   * outcome worse than not sweeping at all. **And the recovery is not the
+   * table-wide sweep**, which this comment said until GPT Sol read it on
+   * 2026-09-01: that sweep iterates `attempts` too, so deleting the entry is
+   * exactly what makes the running row invisible to it. What would recover such
+   * a row is a restart's `sweepStopped`, or its own owner pressing Stop. A
+   * wrong reason for a right rule is still a wrong reason, and the next person
+   * to weigh this trade would have weighed it against a safety net that is not
+   * there. An entry with no job behind it belongs to nobody, so an
+   * owner-scoped call leaves that alone too.
    */
   async settleExpired(now: Date = new Date(), owner?: OwnerId): Promise<ExpirySettlement[]> {
     await ready();

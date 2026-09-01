@@ -540,6 +540,55 @@ third parameter appears it stops being cosmetic.
 
 
 
+### Stage 3b — three tests that agreed with the code
+
+**Sol's review of Stage 3**
+([here](260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear-stage3-review-sol.md)) found **no
+HIGH and no MEDIUM** — *"Stage 3 reaches the returning-reader case safely, and the owner filter and
+gate are correct for every legal store state"* — and then found that three of the things it was
+supposed to have pinned, it had not. All fixed 2026-09-01.
+
+- [x] **The re-list was not pinned at all, and the reason is worth keeping.** `fsJobStore.list`
+      returns references to the live in-memory records, and `settleExpired` mutates those same
+      objects — so the supposedly *pre-sweep* array changes underneath the assertion, and
+      `return listed` passes every line of the test meant to catch it. That is
+      [silent-success.md](../reusable/silent-success.md) in a test rather than in code: the check
+      agrees with the implementation because they share an assumption, and the assumption is that a
+      list is a copy. Replaced by counting `list` calls — two after a settlement, one on a quiet
+      shelf, so the count cannot be satisfied by reading twice every time. **Watched red**: the new
+      test fails on `expected "list" to be called 2 times, but got 1`, and the old one still passes,
+      which is the finding demonstrated rather than taken on trust.
+- [x] **The log test grepped where it should have parsed.** `toContain(id)` plus
+      `toContain("settled")` passes a line carrying neither the ending nor the door — the two fields
+      the message exists for, since *"settled 1 job(s)"* joins to nothing and a `cancelled` ending
+      must not be reported as a failure. Now parsed, with `count`, `where` and
+      `settled: [{ id, status }]` asserted exactly. **Watched red** by removing `where` from the log
+      call.
+- [x] **The comment named a recovery that does not exist.** The filesystem adapter is right to
+      filter before `attempts.delete` — but the reason given was that the table-wide sweep could
+      repair a dropped foreign token, and it could not: that sweep iterates `attempts` too, so
+      deleting the entry is exactly what hides the row from it. The real recovery is a restart's
+      `sweepStopped`, or that owner pressing Stop. A wrong reason for a right rule is still wrong,
+      and the next person to weigh the trade would have weighed it against a safety net that is not
+      there.
+- [x] **"Nothing settled means the answer did not change" was too strong.** The advance door sweeps
+      globally, so it can settle the job between the list and the scoped sweep; this call then loses
+      the race, answers `[]`, and the stale `running` snapshot is returned. Nothing is corrupted or
+      stranded — one redundant advance, corrected by the next one-second poll. Paying a third
+      statement on every quiet poll to close that is the wrong trade, so the race is **accepted and
+      written down** rather than fixed.
+
+**Carried forward** from the same review, into stages not yet built: Stage 5 must take terminal
+elapsed time from `finishedAt`, not `startedAt`, because `startedAt` survives a retry and so measures
+total job age rather than the current attempt. And Stage 6 must not treat `listJobs()` as a pure
+lookup — it now mutates, logs and sometimes re-reads, so the blocking job's identity has to come from
+the atomic claim result.
+
+**On the measurement**, Sol accepted the statement-count conclusion as the useful headline and
+qualified the rest: the local latency split cannot establish *"nearly all round trip"* without
+separate server-execution timing, and the benchmark script is not in the commit so the millisecond
+ranges are not independently reproducible. Both fair.
+
 ### Stage 4 — one place that says what state a job is in
 
 - [ ] `src/job-state.ts`, beside `src/job-failure.ts`, which is the established precedent: one place

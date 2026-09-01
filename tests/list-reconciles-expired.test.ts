@@ -168,6 +168,49 @@ describe("listing your jobs", () => {
   });
 
   /**
+   * **That the answer is re-read, and not the pre-sweep one handed back.**
+   *
+   * Its own test because the case above **cannot** pin this, which GPT Sol
+   * found on 2026-09-01: `fsJobStore.list` returns references to the live
+   * in-memory records, and `settleExpired` mutates those same objects — so the
+   * supposedly pre-sweep array changes underneath the assertion and
+   * `return listed` passes every line of it. That is
+   * docs/reusable/silent-success.md in a test rather than in code: the check
+   * agrees with the implementation because the two share an assumption, and the
+   * assumption is that a list is a copy.
+   *
+   * So this counts the calls instead, which no amount of shared mutation can
+   * fake. Watched red with the final `store.list(owner)` replaced by
+   * `return listed`: one call, not two.
+   */
+  it("reads the list again after settling, rather than handing back the one it swept", async () => {
+    await abandoned(ALICE);
+    const reads = vi.spyOn(fsJobStore, "list");
+    try {
+      await as(ALICE, () => listJobs());
+      expect(reads).toHaveBeenCalledTimes(2);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  /**
+   * The other half, and the one that stops the count above being satisfied by a
+   * `listJobs` that simply reads twice every time. A quiet shelf pays for one.
+   */
+  it("reads the list once when there was nothing to settle", async () => {
+    const quiet = aJob(ALICE);
+    await fsJobStore.enqueueOrGet(quiet, `k-${quiet.id}`);
+    const reads = vi.spyOn(fsJobStore, "list");
+    try {
+      await as(ALICE, () => listJobs());
+      expect(reads).toHaveBeenCalledTimes(1);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  /**
    * **A page load is not a cron job.**
    *
    * The sweep runs under whoever is signed in, so it has to be scoped to them.
@@ -253,7 +296,25 @@ describe("listing your jobs", () => {
        empty string, and an empty string contains nothing and fails nothing. */
     expect(lines).not.toBe("");
     expect(listed.find((one) => one.id === job.id)?.status).toBe("error");
-    expect(lines).toContain(job.id);
-    expect(lines).toContain("settled");
+
+    /* **Parsed, not grepped.** GPT Sol pointed out on 2026-09-01 that
+       `toContain(id)` and `toContain("settled")` between them pass a line that
+       carries neither the ending nor the door — which are the two fields the
+       message was added for, since "settled 1 job(s)" joins to nothing and a
+       `cancelled` ending must not be reported as a failure. A substring check
+       on a log line is a check that agrees with almost any log line. */
+    const line = lines
+      .split("\n")
+      .filter((one) => one.trim() !== "")
+      .map((one) => JSON.parse(one) as Record<string, unknown>)
+      .find((one) => one.msg === "settled 1 job(s) whose claimant stopped answering");
+
+    expect(line).toBeDefined();
+    expect(line?.count).toBe(1);
+    /* Which door found it. The advance path writes the identical sentence, so
+       without this the two are indistinguishable in production — and which one
+       is settling dead claimants is the whole question this stage raises. */
+    expect(line?.where).toBe("list");
+    expect(line?.settled).toEqual([{ id: job.id, status: "error" }]);
   });
 });

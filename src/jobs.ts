@@ -2354,6 +2354,15 @@ export async function listJobs(): Promise<Job[]> {
   if (!listed.some((job) => job.status === "running")) return listed;
 
   const settled = await store.settleExpired(undefined, owner);
+  /* **Not quite "nothing settled means the answer did not change"**, which is
+     what this said and is too strong. The advance door sweeps globally, so it
+     can settle this very job between the list above and the statement above,
+     and this call then loses the update race and answers `[]` — leaving the
+     stale `running` snapshot to be returned. Nothing is corrupted or stranded:
+     the engine sends one redundant advance and the next one-second poll shows
+     the truth. Paying a third statement on every quiet poll to close a window
+     that costs one redundant request is the wrong trade, so the race is
+     accepted and written down rather than fixed. GPT Sol, 2026-09-01. */
   if (settled.length === 0) return listed;
 
   /* **The same line the advance path writes, from the door that is now the
