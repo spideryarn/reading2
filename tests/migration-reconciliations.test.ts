@@ -36,6 +36,7 @@ import {
   RECONCILIATIONS,
   shapeGuards,
   sqlLiteral,
+  whitelistShape,
   type Probe,
   type ProbeRow,
 } from "../scripts/migration-reconciliations.js";
@@ -197,38 +198,100 @@ live("every probe, against the schema this laptop actually has", () => {
     expect(await whileBroken(ddl, p)).toContain("nothing is there");
   });
 
+  /**
+   * **The live step list, read independently of the probe.**
+   *
+   * A control that parses the constraint the same way the probe does shares the
+   * probe's blind spots, so this reads the deparsed text with its own regexp.
+   * It exists because of the asymmetry that made the old control impossible to
+   * run: **adding a name to a CHECK is free, removing one is not.** Postgres
+   * validates a re-added CHECK against the rows already in the table, and this
+   * laptop now has step runs saying `hierarchy` and `quiz` — so the old
+   * mutation, which re-added `0036`'s twelve historical names plus `summary`,
+   * died with a 23514 before the probe was ever asked anything. Widening the
+   * *current* list can never be refused by a row that is already there.
+   */
+  const liveStepNames = async (): Promise<string[]> => {
+    const { rows } = await client!.query<{ def: string }>(
+      `select pg_get_constraintdef(con.oid) as def from pg_constraint con` +
+        ` join pg_class rel on rel.oid = con.conrelid` +
+        ` join pg_namespace n on n.oid = rel.relnamespace` +
+        ` where n.nspname='spideryarn' and rel.relname='revision_step_runs'` +
+        ` and con.conname='revision_step_runs_step'`,
+    );
+    const names = [...(rows[0]?.def ?? "").matchAll(/'([a-z_]+)'::text/g)].map((m) => m[1]!);
+    /* Nothing parsed means the mutations below would be built from an empty
+       list and would prove nothing at all. */
+    if (names.length < 5) throw new Error(`could not read the live step list: ${rows[0]?.def}`);
+    return names;
+  };
+
+  const dropStepCheck =
+    `alter table "spideryarn"."revision_step_runs" drop constraint "revision_step_runs_step"`;
+  const stepCheck = (names: readonly string[]) =>
+    `alter table "spideryarn"."revision_step_runs" add constraint "revision_step_runs_step" ` +
+    `check ("spideryarn"."revision_step_runs"."step_name" in (${names.map((n) => `'${n}'`).join(",")}))`;
+
   it("goes red when the step list lets 'summary' back in", async () => {
     const p = probe("0036_drop_summary_column", "revision_step_runs_step");
     const why = await whileBroken(
-      [
-        `alter table "spideryarn"."revision_step_runs" drop constraint "revision_step_runs_step"`,
-        `alter table "spideryarn"."revision_step_runs" add constraint "revision_step_runs_step" ` +
-          `check ("spideryarn"."revision_step_runs"."step_name" in ('fetch','extract','blocks','toc',` +
-          `'assets','arc','tweets','glossary','quotes','ideas','timeline','sketch','summary'))`,
-      ],
+      [dropStepCheck, stepCheck([...(await liveStepNames()), "summary"])],
       p,
     );
-    expect(why).toContain("found");
-    expect(why).toContain("'summary'::text");
+    expect(why).toContain("ADMITTING 'summary'");
   });
 
-  /* The other direction: a list that is *narrower* than 0036's. The rows that
-     would refuse the narrowing go first, inside the same rolled-back
-     transaction, so the database really is in a state 0036 never produced. */
-  it("goes red when the step list is missing a step the migration put in it", async () => {
+  /**
+   * **The coupling, gone, stated as a test.** This probe used to pin `0036`'s
+   * whole twelve-name list, so every migration that added a step turned it red
+   * on a correct schema — `0041` and `0046` both did — and the reflex fix was to
+   * paste today's list in, which is how an expectation stops being read. A
+   * step `0036` never heard of is not `0036`'s business.
+   */
+  it("stays green when a step the pipeline gained later is added to the list", async () => {
+    const p = probe("0036_drop_summary_column", "revision_step_runs_step");
+    expect(
+      await whileBroken([dropStepCheck, stepCheck([...(await liveStepNames()), "fourteenth"])], p),
+    ).toBeNull();
+  });
+
+  /**
+   * **`NOT VALID` on this one too**, because it is the constraint the hole was
+   * in. The list is right, the name is right, and `convalidated` is the only
+   * field that says the rows already in the table were never checked against
+   * it — so the probe names that rather than the list, which is the complaint
+   * somebody can act on.
+   */
+  it("goes red on a step list re-added NOT VALID", async () => {
+    const p = probe("0036_drop_summary_column", "revision_step_runs_step");
+    const why = await whileBroken(
+      [dropStepCheck, `${stepCheck(await liveStepNames())} not valid`],
+      p,
+    );
+    expect(why).toContain("validated=false");
+    /* And it still reads as the whitelist it is, rather than as gibberish. */
+    expect(why).toContain("whitelist without 'summary' validated=false");
+  });
+
+  /**
+   * **The other direction, which is where a narrowed probe could go wrong.**
+   * `CHECK (true)` has the right name, is validated, is local, and mentions no
+   * step name at all — so "the definition does not contain `'summary'`" calls
+   * it correct while it admits every step name there is. That is the original
+   * hole in a second costume, and it is why the probe asks whether the
+   * expression is *still a whitelist* rather than only what is missing from it.
+   */
+  it("goes red on a constraint of the right name that whitelists nothing", async () => {
     const p = probe("0036_drop_summary_column", "revision_step_runs_step");
     const why = await whileBroken(
       [
-        `alter table "spideryarn"."revision_step_runs" drop constraint "revision_step_runs_step"`,
-        `delete from "spideryarn"."revision_step_runs" where step_name = 'timeline'`,
-        `alter table "spideryarn"."revision_step_runs" add constraint "revision_step_runs_step" ` +
-          `check ("spideryarn"."revision_step_runs"."step_name" in ('fetch','extract','blocks','toc',` +
-          `'assets','arc','tweets','glossary','quotes','ideas','sketch'))`,
+        dropStepCheck,
+        `alter table "spideryarn"."revision_step_runs" add constraint "revision_step_runs_step" check (true)`,
       ],
       p,
     );
-    expect(why).toContain("found");
-    expect(why).toContain("expected");
+    expect(why).toContain("not a step_name whitelist");
+    expect(why).toContain("CHECK (true)");
   });
 
   /**
@@ -390,6 +453,13 @@ live("every probe, against the schema this laptop actually has", () => {
   it("does not answer a constraint question with a same-named constraint on another table", async () => {
     const rows = await client!.query<ProbeRow>(
       constraintShape("article_revisions", "revision_step_runs_step"),
+    );
+    expect(rows.rowCount).toBe(0);
+  });
+
+  it("does not answer a whitelist question with a same-named constraint on another table", async () => {
+    const rows = await client!.query<ProbeRow>(
+      whitelistShape("article_revisions", "revision_step_runs_step", "step_name", "summary"),
     );
     expect(rows.rowCount).toBe(0);
   });

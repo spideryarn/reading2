@@ -35,11 +35,16 @@
  * - **columns** — `format_type` with its typmod, nullability, the default
  *   expression or `(none)`, identity, generated, and the collation (which is
  *   how a `text` column built under a different `lc_collate` shows up);
- * - **CHECKs** — the owning schema and table, `contype`, the whole normalised
- *   expression from `pg_get_constraintdef`, and **`convalidated`**, because a
- *   `NOT VALID` constraint satisfies any name check while admitting rows the
- *   migration would have rejected. `conislocal` and `coninhcount` come along so
- *   that an inherited constraint is not read as a local one.
+ * - **CHECKs** — the owning schema and table, `contype`, the expression, and
+ *   **`convalidated`**, because a `NOT VALID` constraint satisfies any name
+ *   check while admitting rows the migration would have rejected. `conislocal`
+ *   and `coninhcount` come along so that an inherited constraint is not read as
+ *   a local one. Two forms: {@link constraintShape} pins the whole normalised
+ *   `pg_get_constraintdef` text, and {@link whitelistShape} pins only that the
+ *   expression is still a whitelist over a named column and that one named
+ *   value is not in it. **Which form is right is not a matter of taste** — see
+ *   the warning above RECONCILIATIONS. Pin the whole text where no later
+ *   migration is entitled to change it, and the property where one is.
  *
  * ## Where the expected strings came from
  *
@@ -144,6 +149,84 @@ export function constraintShape(table: string, name: string): string {
   );
 }
 
+/**
+ * **A whitelist CHECK, asked only what the migration actually promised.**
+ *
+ * `constraintShape` pins the *whole* deparsed expression, which is right for a
+ * constraint nothing later touches and wrong for one that is a **list the
+ * pipeline keeps adding to**. `revision_step_runs_step` has been re-added twice
+ * since `0036` — `0041_rename_toc_step_to_hierarchy` and `0046_quiz` — so a
+ * probe pinning `0036`'s twelve names goes red on a schema that is entirely
+ * correct, and the fix everybody reaches for is to paste today's list in. That
+ * is a probe teaching the next person to edit the expectation without reading
+ * it.
+ *
+ * `0036_drop_summary_column` never promised a particular list. It promised that
+ * **`'summary'` is not in it**. So this asks three things and nothing else:
+ *
+ * - the constraint **is there**, on the right table, validated and local — the
+ *   half a `like '%''summary''%' … want: no rows` probe could never see, and
+ *   the reason the predecessor passed on a database with no constraint at all;
+ * - its expression **is still a whitelist over `column`** — `CHECK (true)` has
+ *   the right name, is validated, mentions no step at all and admits every step
+ *   name there is, so "does not mention summary" is not enough;
+ * - `forbidden` **is not among the names it admits** — by membership of the
+ *   parsed list rather than by substring, so a name that merely contains the
+ *   word cannot answer for it.
+ *
+ * Which leaves the *other* names free to change, because whether the pipeline
+ * has twelve steps or fourteen is nothing to do with `0036`.
+ * `tests/db-step-constraint.test.ts` is what holds the newest migration's list
+ * to `STEP_ORDER`; that is where "the list is today's list" belongs.
+ *
+ * Parsing note: Postgres deparses `in (…)` of two or more values as
+ * `= ANY (ARRAY['a'::text, …])`, which is what the pattern below reads. A
+ * one-element list deparses as a bare `=` and would read here as "not a
+ * whitelist" — loudly wrong rather than quietly wrong, which is the right way
+ * round for this file.
+ */
+export function whitelistShape(
+  table: string,
+  name: string,
+  column: string,
+  forbidden: string,
+): string {
+  const def = "pg_get_constraintdef(con.oid)";
+  /* The capture is the ARRAY body. A non-match yields NULL, and NULL travels
+     `string_to_array` → `unnest` (no rows) → `array_agg` (NULL) to arrive as a
+     null `list`, which is the "not a whitelist" branch below.
+
+     The trailing ` NOT VALID` is matched and thrown away — non-capturing,
+     because `substring(… from …)` returns the *first* group and a second one
+     would steal the answer. It is allowed for so that a `NOT VALID` whitelist
+     reports itself as a whitelist that is not validated, which is the true
+     complaint, rather than as "not a whitelist", which is not. Both fail; only
+     one of them tells you what to fix. */
+  const pattern = sqlLiteral(
+    `^CHECK \\(\\(${column} = ANY \\(ARRAY\\[(.*)\\]\\)\\)\\)(?: NOT VALID)?$`,
+  );
+  return (
+    `select con.contype::text || ' on ' || n.nspname || '.' || rel.relname || ' '` +
+    ` || case when items.list is null` +
+    `           then ${sqlLiteral(`not a ${column} whitelist: `)} || ${def}` +
+    `         when ${sqlLiteral(forbidden)} = any (items.list)` +
+    `           then ${sqlLiteral(`${column} whitelist ADMITTING '${forbidden}'`)}` +
+    `         else ${sqlLiteral(`${column} whitelist without '${forbidden}'`)} end` +
+    ` || ' validated=' || con.convalidated` +
+    ` || ' local=' || con.conislocal` +
+    ` || ' inherited=' || con.coninhcount as actual` +
+    ` from pg_constraint con` +
+    ` join pg_class rel on rel.oid = con.conrelid` +
+    ` join pg_namespace n on n.oid = rel.relnamespace` +
+    ` left join lateral (` +
+    `   select array_agg(btrim(replace(x, '::text', ''), '''')) as list` +
+    `     from unnest(string_to_array(substring(${def} from ${pattern}), ', ')) x` +
+    ` ) items on true` +
+    ` where con.conname = '${name}' and n.nspname = 'spideryarn'` +
+    ` and rel.relname = '${table}'`
+  );
+}
+
 const COLUMN_JSONB_NULLABLE = "jsonb NULL default=(none) identity=- generated=- collation=-";
 const COLUMN_TEXT_NULLABLE = "text NULL default=(none) identity=- generated=- collation=default";
 
@@ -152,36 +235,54 @@ const COLUMN_TEXT_NULLABLE = "text NULL default=(none) identity=- generated=- co
 /* ------------------------------------------------------------------ */
 
 /**
- * ## ⚠ NOTHING IN THIS TABLE MAY BE RENAMED. NOT EVER. NOT BY A GLOBAL REPLACE.
+ * ## ⚠ NO STEP NAME IN A `repair` OR A `refuseIf` MAY BE RENAMED. NOT EVER.
  *
- * Every string literal below — every step name, column name, constraint name
- * and CHECK expression — is a **historical fact about a migration that has
- * already run**. It is not a description of what the pipeline calls things
- * today, and it must not be brought into line with what the pipeline calls
- * things today.
+ * `repair` is a migration's **own DDL, replayed**, and `refuseIf` is the
+ * starting state that DDL needs in order to run. Both describe a migration that
+ * has already happened. They are not descriptions of what the pipeline calls
+ * things today and must never be brought into line with what it calls things
+ * today.
  *
  * The reason is what a repaired ledger row *means*. When this script records
  * `0036_drop_summary_column` as applied, it stamps that file's sha256 and
  * asserts "this database has been brought to the state `0036` produced".
- * `0036`'s state includes a CHECK listing `'toc'` among its step names, because
+ * `0036`'s DDL writes a CHECK listing `'toc'` among its step names, because
  * that is the word the migration wrote. Modernise the literal to whatever the
- * step is called now and the row still carries `0036`'s hash while claiming a
- * postcondition `0036` never had — a lie, in the one table whose entire job is
- * to be believed, discovered later by somebody debugging a `DROP CONSTRAINT`
- * that cannot find its object.
+ * step is called now and the row still carries `0036`'s hash while the database
+ * carries a constraint `0036` never built — a lie, in the one table whose
+ * entire job is to be believed, discovered later by somebody debugging a
+ * `DROP CONSTRAINT` that cannot find its object.
  *
  * **This is live right now.** `569458f` renamed the `toc` step to `hierarchy`
  * across the repo, code and docs. GPT Sol stopped that rename at the door of
- * this table and of `drizzle/*.sql`, and was right to.
- *
- * The step-name *string* then moved too, on 2026-08-31, in
+ * this table and of `drizzle/*.sql`, and was right to. The step-name *string*
+ * then moved too, on 2026-08-31, in
  * `drizzle/0041_rename_toc_step_to_hierarchy.sql` — a new migration with a new
- * row, which is the only way it was ever allowed to move. **These literals did
- * not move with it and never will.** They are `0036`'s postcondition; they
- * describe the past, and the past does not get renamed. A `sed` over this file
- * would make a repaired ledger claim a state `0036` never produced.
+ * row, which is the only way it was ever allowed to move. **The `repair` and
+ * `refuseIf` literals did not move with it and never will.**
  *
- * The same rule covers `drizzle/*.sql` and the snapshots in `drizzle/meta/`.
+ * ## But an `effects` probe is a different kind of thing, and this warning used
+ * to cover it too, which is how it came to be red for a whole day.
+ *
+ * An effect is a **postcondition, evaluated against the database as it is
+ * now** — not against the database as it was the day the migration ran.
+ * Everything later has also happened to it. So an effect may only assert the
+ * part of the migration's postcondition that **later migrations are not
+ * entitled to change**, and it must say that part exactly, in full, as a value.
+ *
+ * `0036`'s postcondition, written as the whole deparsed step list, failed that
+ * test the moment `0041` renamed a step and `0046` added one: the probe went
+ * red on a schema with nothing whatever wrong with it, and the tempting repair
+ * — paste today's list in — is a habit of editing expectations without reading
+ * them. What `0036` is actually entitled to assert for ever is that the CHECK
+ * exists, still whitelists `step_name`, and **no longer admits `'summary'`**.
+ * That is what {@link whitelistShape} asks. See the probe itself.
+ *
+ * The rule, then: **a `repair` literal is history and is frozen; an `effects`
+ * literal is a claim about today and must be narrowed to what its migration
+ * still owns.** Pinning more than that is not extra rigour, it is a fuse.
+ *
+ * The freeze also covers `drizzle/*.sql` and the snapshots in `drizzle/meta/`.
  * A migration file is a record of what ran; editing one changes its hash and
  * makes every ledger row that names it wrong.
  */
@@ -291,26 +392,31 @@ export const RECONCILIATIONS: Reconciliation[] = [
         sql: columnShape("article_revisions", "summary"),
         want: null,
       },
-      /* **The whole normalised expression, not "does it mention summary".** The
-         predecessor asked for a same-named constraint whose text contains
+      /* **The property, not the literal.** Two things went wrong here in turn.
+         The predecessor asked for a same-named constraint whose text contains
          `'summary'` and wanted no rows — which a *missing* constraint answers
          just as well as a correct one, and a missing one lets every step name
-         through. This says what the list is. Sol § 1, and it is the finding
-         that made the review a NO-SHIP. */
-      /* ⚠ HISTORICAL STEP NAMES — DO NOT RENAME, INCLUDING BY GLOBAL REPLACE.
-         `'toc'` here is the word `0036_drop_summary_column` wrote into the
-         database on 2026-08-31. The pipeline step is called `hierarchy` in the
-         code since 569458f; this list is not the code, it is 0036's
-         postcondition, and a row stamped with 0036's hash must describe 0036's
-         state. See the warning above RECONCILIATIONS. */
+         through (Sol § 1, the finding that made the review a NO-SHIP). The
+         replacement pinned `0036`'s whole deparsed expression, which fixed that
+         and bought a second fault: it asserted the other eleven step names too,
+         and `0041_rename_toc_step_to_hierarchy` and `0046_quiz` have since
+         re-added this constraint with a different, entirely correct list. The
+         probe was red all day on a schema with nothing wrong with it.
+
+         `0036` is "drop the summary column". Its postcondition is that
+         `article_revisions.summary` is gone, that no summary step runs are
+         left, and that this CHECK **no longer admits `'summary'`** — and not
+         one word about which other steps exist. `whitelistShape` checks exactly
+         that, so a fourteenth step does not make this red and `CHECK (true)`
+         still does. The list belonging to *today* is
+         `tests/db-step-constraint.test.ts`'s job, against `STEP_ORDER`. */
       {
-        what: "revision_step_runs_step is 0036's final step list, validated",
-        sql: constraintShape("revision_step_runs", "revision_step_runs_step"),
+        what:
+          "revision_step_runs_step is still a step_name whitelist and no longer admits 'summary'",
+        sql: whitelistShape("revision_step_runs", "revision_step_runs_step", "step_name", "summary"),
         want:
-          "c on spideryarn.revision_step_runs CHECK ((step_name = ANY (ARRAY['fetch'::text, " +
-          "'extract'::text, 'blocks'::text, 'toc'::text, 'assets'::text, 'arc'::text, " +
-          "'tweets'::text, 'glossary'::text, 'quotes'::text, 'ideas'::text, 'timeline'::text, " +
-          "'sketch'::text]))) validated=true local=true inherited=0",
+          "c on spideryarn.revision_step_runs step_name whitelist without 'summary'" +
+          " validated=true local=true inherited=0",
       },
       {
         what: "no summary step runs are left",
