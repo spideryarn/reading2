@@ -1026,8 +1026,21 @@ describe("running a job", () => {
        flight elsewhere is not a write that failed here, and asserting over the
        whole directory made this red at random (seen 2026-09-01, on a temp file
        belonging to tests/retry-is-only-for-a-failed-job.test.ts). The name is
-       `<id>.json.<pid>.<n>.tmp`, so the prefix is the job. */
-    expect(files.filter((f) => f.startsWith(job.id) && f.endsWith(".tmp"))).toEqual([]);
+       `<id>.json.<pid>.<n>.tmp`, so the prefix is the job.
+
+       **And waited for rather than read once**, which is the half the prefix
+       did not fix. `settle` above polls `getJob`, and terminal status lands in
+       the live map *before* its `persist` completes — `forgetJob` in
+       src/jobs.ts says so, and builds its own tombstone around the same gap. So
+       a single `readdir` here can catch this job's own write mid-rename and
+       call it a leak. Under load it did (2026-09-01). A bounded wait is the
+       honest reading: the file must be gone soon, not instantly. */
+    const strays = async () =>
+      (await readdir(JOBS_DIR)).filter((f) => f.startsWith(job.id) && f.endsWith(".tmp"));
+    for (let i = 0; i < 40 && (await strays()).length; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(await strays()).toEqual([]);
   });
 });
 
