@@ -39,6 +39,23 @@ export interface UseJobs {
    */
   error: string | null;
   /**
+   * Consecutive failed `POST /api/jobs/:id/advance` calls, per job id.
+   *
+   * **The one thing on here that no poll can tell you.** `drive` catches a
+   * failed advance, waits, and retries for ever without a word — so a job
+   * whose advance route keeps answering 500 sits at `running` while every
+   * status poll looks perfectly healthy, which is
+   * docs/reusable/silent-success.md happening inside the loop built to prevent
+   * a stalled ingest. The engine has counted this since the refactor; nothing
+   * rendered it until stage 5, and a count nobody can see is not a warning.
+   *
+   * Reset by any successful advance and dropped when the job goes terminal or
+   * leaves the list, so it is always *right now* rather than a tally. Ask
+   * `driverStalled` (src/job-state.ts) rather than comparing it yourself —
+   * that is where the threshold and its reasoning live.
+   */
+  driverFailures: Readonly<Record<string, number>>;
+  /**
    * Why the **most recent action** failed, or null if it worked. Read it
    * straight after awaiting the action.
    *
@@ -259,6 +276,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     jobs: snapshot.jobs,
     loaded: snapshot.loaded,
     error: snapshot.error,
+    driverFailures: snapshot.driverFailures,
     lastFailure: () => lastFailure.current,
     add: (url) => act(() => post({ url })),
     addUpload: (uploadId) => act(() => post({ uploadId })),

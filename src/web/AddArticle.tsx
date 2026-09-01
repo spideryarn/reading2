@@ -30,10 +30,17 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
-import { jobWorthRetrying } from "../job-failure.js";
+import {
+  DRIVER_STALLED,
+  displayJob,
+  driverStalled,
+  elapsedLabel,
+  KEEP_A_TAB_OPEN,
+} from "../job-state.js";
 import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
 import { addHref, navigate } from "./router.js";
 import { UploadPicker } from "./UploadPicker.js";
+import { useNow } from "./useNow.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
 
@@ -348,14 +355,28 @@ function JobList({
   queue: UseJobs;
   onHide: (id: string) => void;
 }) {
+  /* One fact about the browser, so one sentence — three imports at once do not
+     make it three times as true. On the list rather than on the card for
+     exactly that reason. */
+  const importing = jobs.some((j) => j.status === "queued" || j.status === "running");
   return (
-    <ul className="tw:mt-3 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-      {jobs.map((job) => (
-        <li key={job.id}>
-          <JobCard job={job} queue={queue} onHide={() => onHide(job.id)} />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="tw:mt-3 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
+        {jobs.map((job) => (
+          <li key={job.id}>
+            <JobCard job={job} queue={queue} onHide={() => onHide(job.id)} />
+          </li>
+        ))}
+      </ul>
+      {/* **Only while something is importing**, because it is advice about
+          right now and not a standing disclaimer. Under the list, where a
+          reader who has just watched a step sit still for a minute is looking.
+          See `KEEP_A_TAB_OPEN` in src/job-state.ts for why this has to be said
+          at all: the tab is the worker. */}
+      {importing && (
+        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted-foreground">{KEEP_A_TAB_OPEN}</p>
+      )}
+    </>
   );
 }
 
@@ -366,6 +387,15 @@ function JobList({
  * job it started. Same card on purpose rather than a second one that looks like
  * it: the words in these rows come off the server, and two renderers of the
  * same job would be two chances to disagree about what "skipped" looks like.
+ *
+ * **What state the job is in is not worked out here.** `displayJob`
+ * (src/job-state.ts) answers that once for every surface, so this card and the
+ * band in JobProgress.tsx cannot drift into two accounts of the same job — the
+ * same argument src/job-failure.ts makes about the Retry button, which is now
+ * one of its answers. What is still this file's own is **where** each of those
+ * answers goes: this card renders `step.error` and never `job.error`, and the
+ * band is the mirror image. tests/interrupted-job-card.test.tsx is what
+ * happened the last time somebody had that the wrong way round.
  */
 export function JobCard({
   job,
@@ -377,6 +407,31 @@ export function JobCard({
   onHide: () => void;
 }) {
   const busy = job.status === "queued" || job.status === "running";
+  /**
+   * **The clock has to tick by itself, and that is not obvious.**
+   *
+   * `ctx.report` writes a step's `detail` in memory and never persists it
+   * ("Persisting at this rate would be two writes a second per running job",
+   * src/jobs.ts), so a job in the middle of a six-minute `hierarchy` sends
+   * back a byte-identical record on every poll — and `sameJobs` in
+   * jobEngine.ts deliberately suppresses an identical snapshot. Without a tick
+   * of its own the elapsed time would freeze at whatever it read when the step
+   * began and sit there for six minutes, which is a worse lie than showing
+   * nothing.
+   *
+   * A second while something is running, and **a day** otherwise: a finished
+   * card has no running step, so nothing on it changes with time and a minute
+   * would be a re-render an hour to paint the same pixels. A day is inside the
+   * 32-bit timer range, so it is one timer that never fires. `useNow` stops
+   * dead while the tab is hidden and catches up on return, which is exactly
+   * right here — nobody is watching a timer they cannot see.
+   */
+  const now = useNow(busy ? 1000 : 86_400_000);
+  const shown = displayJob(job, now);
+  /* Only while it is going. A count that outlived its job would be a warning
+     about something that has already stopped — and the engine drops the count
+     at the same moment, so this is belt and braces about a race of one poll. */
+  const stalled = busy && driverStalled(queue.driverFailures, job.id);
   return (
     <div className="tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3">
       <div className="tw:mb-2 tw:flex tw:items-baseline tw:gap-2">
@@ -408,12 +463,15 @@ export function JobCard({
                 holds, a page Readability has already refused over bytes that
                 are still in the cache — and a button under one of those is
                 worse than a badly worded sentence, because the reader can act
-                on it. `jobWorthRetrying` is the one place that decides; see
-                src/job-failure.ts and docs/postmortems/260826a-toc-max-tokens.md.
+                on it. `jobWorthRetrying` is still the one place that decides;
+                since 2026-09-01 it is asked through `displayJob`, which calls
+                it rather than absorbing it — the server's own spend gate in
+                `retryJob` imports the same function. See src/job-failure.ts,
+                src/job-state.ts and docs/postmortems/260826a-toc-max-tokens.md.
 
                 Nothing takes its place when it is hidden. The failed step's own
                 message is already on the card and already says why. */}
-            {(job.status === "error" || job.status === "cancelled") && jobWorthRetrying(job) && (
+            {(job.status === "error" || job.status === "cancelled") && shown.retryable && (
               <Button
                 type="button"
                 variant="ghost"
@@ -442,15 +500,65 @@ export function JobCard({
 
       <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0">
         {job.steps.map((step) => (
-          <StepRow key={step.name} step={step} />
+          <StepRow
+            key={step.name}
+            step={step}
+            /* By identity, not by re-testing the status: `displayJob` has
+               already decided which step the reader is waiting on, and a
+               second opinion here is a second place to disagree with it. */
+            elapsedMs={step === shown.step ? shown.elapsedMs : null}
+            usually={step === shown.step ? shown.usually : null}
+          />
         ))}
       </ol>
+
+      {/* Under the steps rather than beside the title, because it is about the
+          run as a whole and it is read after them. Five of the eight display
+          states say nothing at all here — see `SENTENCES` in src/job-state.ts
+          for why silence is the right answer for a failure, whose own step row
+          is already carrying the explanation. */}
+      {shown.sentence && (
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">{shown.sentence}</p>
+      )}
+
+      {/* **The one thing on this card that the job does not know.** Everything
+          above comes off the server; this is the tab admitting that it can see
+          the import and cannot move it. Not `text-destructive`: nothing has
+          failed, it is still trying, and colouring a thing that resolves
+          itself as an error teaches the reader to distrust the colour. */}
+      {stalled && (
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">{DRIVER_STALLED}</p>
+      )}
     </div>
   );
 }
 
-/** One line per stage. The icon carries the status; the text never repeats it. */
-function StepRow({ step }: { step: JobStep }) {
+/**
+ * One line per stage. The icon carries the status; the text never repeats it.
+ *
+ * The running row reads `Building the hierarchy · 2m 14s · 18k characters of
+ * tree so far` — **what**, then **how long**, then whatever the step is saying
+ * about itself. That last part is the older signal and this is built beside it
+ * rather than over it: a step that streams its progress was already the best
+ * thing on this card, and the duration is what a step that streams *nothing*
+ * needed. A middot rather than the em dash the finished rows use, because
+ * three things separated by one em dash read as a sentence with an aside.
+ *
+ * **No progress bar, and no percentage.** Neither response size nor provider
+ * latency is knowable before the fact, so a bar would be a number we invented,
+ * shown in the one shape a reader is entitled to trust.
+ */
+function StepRow({
+  step,
+  elapsedMs,
+  usually,
+}: {
+  step: JobStep;
+  /** How long this step has been running, or null when it is not, or unknowable. */
+  elapsedMs: number | null;
+  /** What this step usually takes, where that was measured. See src/job-state.ts. */
+  usually: string | null;
+}) {
   const tone =
     step.status === "error"
       ? "tw:text-destructive"
@@ -465,10 +573,27 @@ function StepRow({ step }: { step: JobStep }) {
       <span className="tw:flex tw:items-center tw:gap-2">
         <StepIcon status={step.status} />
         <span className="tw:whitespace-nowrap">{step.label}</span>
+        {elapsedMs !== null && (
+          <span className="tw:whitespace-nowrap tw:tabular-nums tw:text-ink-faint">
+            · {elapsedLabel(elapsedMs)}
+          </span>
+        )}
         {step.detail && step.status !== "error" && (
-          <span className="tw:min-w-0 tw:truncate tw:text-ink-faint">— {step.detail}</span>
+          <span className="tw:min-w-0 tw:truncate tw:text-ink-faint">
+            {elapsedMs === null ? "—" : "·"} {step.detail}
+          </span>
         )}
       </span>
+      {/* Under the row, in the same indent the error message uses, because it
+          is a whole sentence and the row above it is a list of fragments. Only
+          for the two steps `data/_ai-calls.jsonl` has actually timed — a
+          reassurance nobody measured is docs/reusable/silent-success.md with a
+          number on it. */}
+      {usually !== null && (
+        <span className="tw:mt-0.5 tw:block tw:pl-[21px] tw:leading-snug tw:text-ink-faint">
+          {usually}
+        </span>
+      )}
       {/* The message on its own line, indented under the label rather than
           beside it. A fetch failure is a whole sentence — src/fetch.ts writes
           them to be acted on — and inline it either squeezed the label onto two

@@ -104,6 +104,16 @@ const SHARED = new Set([
   // so the rule lives in one place rather than being spelled out at the
   // button. See docs/postmortems/260826a-toc-max-tokens.md.
   "job-failure.js",
+  /* What state an import is in, as the reader sees it, and the sentences that
+     go with each. Beside `job-failure.js` because it is the same argument one
+     question along — that file answers *may I press Retry*, this one answers
+     *what is happening right now* — and it calls that one rather than
+     absorbing it, since `retryJob` on the server needs the same answer. It
+     imports `job-failure.js`, `messages.js` and types, all of which are on
+     this list. Two surfaces read it and they disagreed before it existed: the
+     add card and the run button in a band.
+     See docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 4. */
+  "job-state.js",
   // What counts as a PDF worth uploading, and how big is too big. The picker
   // asks (src/web/UploadPicker.tsx) and `POST /api/uploads` will ask when it
   // exists, which is the whole reason it is a module rather than a constant in
@@ -213,6 +223,23 @@ const SHARED = new Set([
      docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
   "referee-criteria.js",
   "saved-criteria.js",
+  /* What a Mirror run is made of — the five remark kinds, the input counts and
+     the coverage status. On the list because it imports **nothing at all**: it
+     is a `.ts` of type declarations only, on the model of `public-types.js`
+     above, and it exists because of this test rather than in spite of it.
+
+     Mirror's shapes were declared inside `src/referee-mirror.ts` until stage 5b
+     put a panel on them, and that module reaches `node:crypto`, the log, the
+     gateway and the model table. The fix this file's own header names — *move
+     the shared thing into a module that imports nothing* — is what was done,
+     and `referee-mirror.ts` re-exports every name so nothing else had to
+     change. The browser needs them for the reason `sketch-scene.js` is here:
+     the panel draws exactly what the validator stamped, and the field that
+     matters most is `RemarkCommon.trialTested` — a literal `true` or `false`
+     per member, so a second declaration in `src/web/` is how a panel comes to
+     print an untested remark as though a randomised trial were behind it.
+     See src/referee-mirror-types.ts and docs/project/referee-mode.md § Mirror. */
+  "referee-mirror-types.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

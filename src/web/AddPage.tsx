@@ -51,6 +51,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
+import { KEEP_A_TAB_OPEN } from "../job-state.js";
 import { DIRECT_ADD_SENT_TEXT_AWAY } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
@@ -269,6 +270,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       )}
 
       {job && <JobCard job={job} queue={queue} onHide={() => navigate(LIBRARY_HREF)} />}
+
+      {/* **The tab is the worker, said where somebody is watching it work.**
+          `pump` in src/jobs.ts returns immediately on Vercel, so the only
+          thing calling `/advance` in production is this page. The shelf's box
+          says the same sentence over its own list (`JobList` in
+          AddArticle.tsx); this page has one job and no list, so it says it
+          here. Only while the job is going — it is advice about now, not a
+          standing disclaimer under a finished import. */}
+      {job && (job.status === "queued" || job.status === "running") && (
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">{KEEP_A_TAB_OPEN}</p>
+      )}
 
       {job?.status === "done" && <Done job={job} />}
 

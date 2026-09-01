@@ -591,42 +591,86 @@ ranges are not independently reproducible. Both fair.
 
 ### Stage 4 — one place that says what state a job is in
 
-- [ ] `src/job-state.ts`, beside `src/job-failure.ts`, which is the established precedent: one place
+- [x] `src/job-state.ts`, beside `src/job-failure.ts`, which is the established precedent: one place
       that decides what the card offers.
-- [ ] **`displayJob(job, now)` — pure, with the clock injected.** `slow` is not derivable from a
+- [x] **`displayJob(job, now)` — pure, with the clock injected.** `slow` is not derivable from a
       `Job` alone, and a mapper that reads the wall clock is a mapper nothing can test. Decide
       whether the threshold is global or per-step, and test a malformed and a future `startedAt`.
-- [ ] It maps to a **display** state — `waiting | working | slow | stopping | interrupted | failed |
+- [x] It maps to a **display** state — `waiting | working | slow | stopping | interrupted | failed |
       stopped | done`. The constraint that makes it correct: **`Job` on the wire carries no lease.**
       `leaseExpiresAt` lives on the pg row and the fs `attempts` map and never reaches `publicJob`,
       so "running, lease expired" is invisible to the client until stage 3 reconciles it — a
       feature, not a gap. Do **not** take lease timestamps: that re-derives ownership in the browser,
       which this plan's own rule forbids.
-- [ ] **`interrupted` is not derivable from `failureKind: "retry"`** — many failures are retryable.
+- [x] **`interrupted` is not derivable from `failureKind: "retry"`** — many failures are retryable.
       Name the exact classifier; the canonical `INTERRUPTED` identity is the candidate.
-- [ ] It **calls** `jobWorthRetrying` rather than absorbing it — that function is also the server's
+- [x] It **calls** `jobWorthRetrying` rather than absorbing it — that function is also the server's
       spend gate in `retryJob` and must stay independently importable. (It moved from
       `AddArticle.tsx` to `src/job-failure.ts` in a peer's in-flight work; check before importing.)
-- [ ] **Decide where transport health goes.** Consecutive advance failures are client state and are
+- [x] **Decide where transport health goes.** Consecutive advance failures are client state and are
       not on `Job` at all. Either `displayJob` accepts it as a second input, or stage 4 keeps
       transport health explicitly separate. Say which.
 
 ### Stage 5 — say the time, and say the dependency
 
-- [ ] `JobStep.startedAt` is already on the record and nothing displays it. A running step should
+- [x] `JobStep.startedAt` is already on the record and nothing displays it. A running step should
       read `Building the hierarchy · 2m 14s · 18 KB received`, with a measured "this often takes a
       few minutes" where `data/_ai-calls.jsonl` gives us one and nothing where it does not.
-- [ ] Distinct copy per state, driven by stage 4: *Waiting to continue*; *This is taking longer than
+- [x] Distinct copy per state, driven by stage 4: *Waiting to continue*; *This is taking longer than
       usual — you can stop it*; *Stopping after the current step…*.
-- [ ] **No determinate progress bar.** Response size and provider latency are both unknown, so a
+- [x] **No determinate progress bar.** Response size and provider latency are both unknown, so a
       percentage would be invented — [silent-success.md](../reusable/silent-success.md) with a
       number on it.
-- [ ] Say the browser dependency out loud on the add page: *"Keep a Spideryarn tab open while this
+- [x] Say the browser dependency out loud on the add page: *"Keep a Spideryarn tab open while this
       imports. If you close them all, it will continue when you return."* Until there is a real
       background runner, calling this a queue without saying that over-promises.
-- [ ] Per-job **advance-failure health** in the engine snapshot: an exact threshold, reset on
+- [x] Per-job **advance-failure health** in the engine snapshot: an exact threshold, reset on
       success, cleanup when a job disappears or finishes, and the sentence *"Spideryarn can see this
       import but cannot continue it right now. It will keep trying."*
+
+**Stages 4 and 5 landed 2026-09-01.** `src/job-state.ts` holds `displayJob(job, now)` — pure, clock
+injected, no lease — returning the eight states as proposed, plus `elapsedLabel`, `driverStalled`
+and the five reader-facing sentences. `UseJobs` exposes `driverFailures` off the engine snapshot.
+
+**Transport health kept separate**, and the reasoning is the useful part: it is not a fact about the
+job (the job is working, the *connection* is unwell, and the reader needs both facts rather than one
+overriding the other); it is not on `Job` at all, and `job-state.ts` is shared with the server; and
+it is a communication failure, not an ownership one. Rendered on `JobCard` and deliberately **not**
+in `JobProgress` — that would thread a prop through eight panels for a surface watching one artefact
+rather than an import. A gap on purpose.
+
+**The threshold is per step**, because six minutes into `hierarchy` is ordinary and six minutes into
+`fetch` is a fetch that is never coming back. Two steps had enough evidence to say anything;
+everything else is marked **GUESS** and says nothing.
+
+**The trap, sprung and caught.** The first `sketch` figure came from grouping by `runId`, which pulls
+in eval batches of several articles under one id — a median of 287s where the truth is ~144s. It
+would have promised readers three minutes more than the step has ever taken. Written into the table's
+comment because the next person will reach for the same aggregate. Independently re-derived by the
+coordinator from `data/_ai-calls.jsonl`: `hierarchy` n=6, median 409s, and the ten-minute slow
+threshold sits below the 740s self-abort, so the warning has a real window before the step is killed.
+
+**One reversion in twenty-two did not go red, and that is the interesting one.** *"Does not mention
+tabs when nothing is importing"* passed even with `importing` forced true — because the fixture's
+`finishedAt` put the job behind the "1 earlier import" chevron, so no card rendered at all and the
+absence being asserted was the absence of everything. Fixed by removing the `finishedAt` and
+asserting the card is on screen *before* asserting what is not on it. A test that passes because
+nothing rendered is [silent-success.md](../reusable/silent-success.md) wearing the shape of a
+negative assertion.
+
+**A regression of its own, found rather than hidden.** `tests/client-imports.test.ts` gates what the
+browser bundle may reach out of `src/web` for; `job-state.js` had to join the shared allowlist, and
+until it did, three imports were offenders. That file was on the known-failing list for a peer's two
+offenders, so the list would have hidden it.
+
+**The gap it stated rather than papered over:** nothing records when the *current attempt* began.
+`job.startedAt` is `coalesce(startedAt, now())` and so survives a retry; `job.finishedAt` is null
+while running. So a job-level *"this attempt has been going N"* is not derivable from `Job`, and
+per-step is the honest granularity available — which is why no terminal duration is shown at all.
+That is Sol's `finishedAt` warning answered: the untrustworthy number is
+`job.finishedAt − job.startedAt`, and it is never computed.
+
+
 
 ### Stage 6 — the 409 points at the job it is talking about
 
@@ -670,7 +714,8 @@ the card sits confidently at `queued`, no lease exists to catch it, and every st
 healthy. That is [silent success](../reusable/silent-success.md) in the one loop built to prevent a
 stalled ingest.
 
-- [ ] Count consecutive advance failures in the client. Past a short threshold keep retrying but say
+- [x] Count consecutive advance failures in the client. **Done in Stage 5** — `driverStalled`,
+      threshold 3, ~24 seconds of getting nowhere given the eight-second backoff. Past a short threshold keep retrying but say
       so: *"Spideryarn can see this import but cannot continue it right now. It will keep trying."*
       Keep Stop live. Client state, not a durable job status — it is a communication failure, not an
       ownership one.

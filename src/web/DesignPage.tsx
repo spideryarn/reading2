@@ -51,6 +51,15 @@ import type { Job } from "../types.js";
  * "Waiting for the queue…" against the step's own live label — which is the
  * kind of thing you only notice side by side.
  */
+/**
+ * Four jobs that are never real, so the states nobody can screenshot can be
+ * looked at.
+ *
+ * **The dates are relative to now**, which is what makes the elapsed times
+ * mean anything: `displayJob` (src/job-state.ts) works out *taking longer than
+ * usual* from the running step's own clock, so a fixed timestamp would drift
+ * from "2m 14s" into "eleven months" the week after it was written.
+ */
 const DESIGN_JOB = {
   queued: {
     id: "design-1",
@@ -63,10 +72,46 @@ const DESIGN_JOB = {
     slug: "example",
     status: "running",
     steps: [
-      { name: "glossary", status: "running", label: "Reading the article", detail: "batch 2 of 5" },
+      {
+        name: "glossary",
+        status: "running",
+        label: "Reading the article",
+        detail: "batch 2 of 5",
+        startedAt: new Date(Date.now() - 134_000).toISOString(),
+      },
     ],
   },
-} as unknown as { queued: Job; running: Job };
+  /* Past what any recorded run of this step has taken. Twenty minutes rather
+     than a number just over the threshold, so the row reads the same however
+     long this page is left open. */
+  slow: {
+    id: "design-3",
+    slug: "example",
+    status: "running",
+    steps: [
+      {
+        name: "glossary",
+        status: "running",
+        label: "Reading the article",
+        startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+      },
+    ],
+  },
+  stopping: {
+    id: "design-4",
+    slug: "example",
+    status: "running",
+    cancelling: true,
+    steps: [
+      {
+        name: "glossary",
+        status: "running",
+        label: "Reading the article",
+        startedAt: new Date(Date.now() - 42_000).toISOString(),
+      },
+    ],
+  },
+} as unknown as { queued: Job; running: Job; slow: Job; stopping: Job };
 
 import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
@@ -479,8 +524,10 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           One component — <code className="design-token">JobProgress</code> — shared by the
           glossary, the summaries and the thread. It was three private copies until 2026-08-26, two
           of them drawn with hand-written CSS that differed from each other only in two paddings and
-          two colours. All four states are here because three of them only appear while a model call
-          is in flight, which is exactly when nobody is looking at this page.
+          two colours. Every state is here because most of them only appear while a model call is in
+          flight, which is exactly when nobody is looking at this page. Which state a job is in is
+          decided once, in <code className="design-token">src/job-state.ts</code>, and the add card
+          on the shelf reads the same answer.
         </p>
         <div className="design-row" style={{ flexDirection: "column", alignItems: "flex-start" }}>
           <JobProgress
@@ -505,6 +552,26 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           />
           <JobProgress
             job={DESIGN_JOB.running}
+            failed={null}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.slow}
+            failed={null}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.stopping}
             failed={null}
             onRun={async () => {}}
             onCancel={() => {}}

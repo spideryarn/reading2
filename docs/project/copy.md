@@ -137,6 +137,26 @@ that is about the reader: a code, last, in brackets, so somebody can quote four
 characters. Added 2026-08-27 with the two-pass rewrite, when they were the one
 family of reader-facing messages in the app without one.
 
+**The import-state sentences are the second exception**, and they differ from the
+`mic-` family in the one way that matters: they carry **no bracketed code at
+all**. They live in [`src/job-state.ts`](../../src/job-state.ts) —
+`WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `KEEP_A_TAB_OPEN`,
+`DRIVER_STALLED`, and the two `STEP_USUALLY_*` lines — beside `displayJob`, which
+is the one place that decides what state an import is in.
+
+Not in `src/messages.ts` for the same reason as the `mic-` family: that file is
+about **failures a model call can return**, and *"Waiting to continue."* is not a
+failure. Nor is a step being slow, nor a Stop that is waiting for a step to
+finish. They have nothing to say to `worthRetrying`.
+
+And no codes, which is the part worth arguing rather than copying. A code exists
+so somebody can quote four characters when reporting a problem. **None of these
+is a problem** — they are an import doing exactly what an import does, described
+honestly while the reader waits. A code on *"This step usually takes a few
+minutes"* would invite a bug report about a step that is working. The failures an
+import can have already have codes, and they come from `src/messages.ts` through
+`failureKind` as they always did.
+
 The `db-` pair also marks the **second widening of `src/messages.ts`**, after
 `UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts
 every bound parameter into `Error.message`, and the bound parameters are the

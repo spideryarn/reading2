@@ -17,6 +17,19 @@
  * reader sees here are the words the add box shows for the same step. A local
  * "Step 1 of 1" would say neither what is slow nor what is about to fail.
  *
+ * ## Where the words come from
+ *
+ * The **state** is `displayJob` (src/job-state.ts), shared with the add card,
+ * so a band and a card cannot end up with two accounts of one job. The
+ * **layout** is not shared and should not be: this is a band about twenty
+ * characters wide, so everything that is not the label and Stop goes on its
+ * own wrapped line.
+ *
+ * This is the **mirror image of `JobCard`**: it shows the job's own sentence
+ * and never a step's `error`. Check which you are writing for before adding
+ * anything — tests/interrupted-job-card.test.tsx is what happened the last
+ * time somebody had it the other way round.
+ *
  * ## The two failures it distinguishes
  *
  * `failed` is a message, not a boolean, and it can arrive from two different
@@ -61,7 +74,9 @@
 import { LoaderCircle, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { displayJob, elapsedLabel, WAITING_TO_CONTINUE } from "../job-state.js";
 import type { Job, StepName } from "../types.js";
+import { useNow } from "./useNow.js";
 
 export function JobProgress({
   job,
@@ -88,13 +103,44 @@ export function JobProgress({
   /** Shown while running, when the step has not reported a label of its own. */
   runningLabel: string;
 }) {
+  /**
+   * A second while a job is on screen, a minute otherwise.
+   *
+   * The band has to tick by itself for the same reason the card does: a step's
+   * `detail` is written in memory and never persisted (src/jobs.ts §
+   * `report`), so a job halfway through a long step sends back an identical
+   * record on every poll and `sameJobs` correctly suppresses the re-render.
+   * Without this the elapsed time would freeze at whatever it read when the
+   * step began. `useNow` stops while the tab is hidden and catches up on
+   * return.
+   *
+   * **A day when there is no job**, rather than the hook's own minute: with
+   * nothing running the value is not read by anything, and a minute would be
+   * this panel re-rendering once a minute for ever behind an idle button —
+   * the exact cost `useNow`'s own header describes paying by accident. A day
+   * is comfortably inside the 32-bit timer range, so it is one timer that
+   * never fires rather than a clever nothing.
+   */
+  const now = useNow(job ? 1000 : 86_400_000);
+
   if (job) {
-    const current = job.steps.find((s) => s.name === step);
+    const shown = displayJob(job, now);
+    /* The step that is actually running, and the panel's own step as the
+       fallback for the moment between two of them. Naming the step the reader
+       is really waiting on is the same rule the add card follows — "each step
+       is named, not counted". */
+    const current = shown.step ?? job.steps.find((s) => s.name === step);
+    const waiting = shown.state === "waiting";
+    /* Not repeated underneath when it is already the heading. */
+    const note = waiting ? null : shown.sentence;
     return (
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
         <LoaderCircle size={13} className="cmt-spinner" />
         <span>
-          {job.status === "queued" ? "Waiting for the queue…" : (current?.label ?? runningLabel)}
+          {waiting ? WAITING_TO_CONTINUE : (current?.label ?? runningLabel)}
+          {shown.elapsedMs !== null && (
+            <span className="tw:tabular-nums tw:text-ink-faint"> · {elapsedLabel(shown.elapsedMs)}</span>
+          )}
         </span>
         <Button
           type="button"
@@ -119,6 +165,18 @@ export function JobProgress({
           <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
             {current.detail}
           </span>
+        )}
+        {/* Full width for the same reason the detail is: this is a whole
+            sentence in a band about twenty characters wide, and inline it
+            would push Stop onto a third row. Two of the eight states have one
+            — *taking longer than usual* and *stopping after the current step*
+            — and both are the reader's cue that the wait is not a mistake they
+            are making. */}
+        {note && <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{note}</span>}
+        {/* Only where `data/_ai-calls.jsonl` gave us a number, and only while
+            it is still true — see `STEP_TIMING` in src/job-state.ts. */}
+        {shown.usually !== null && (
+          <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{shown.usually}</span>
         )}
       </div>
     );

@@ -55,6 +55,9 @@ const queue: UseJobs = {
   jobs: [],
   loaded: true,
   error: null,
+  /* Stage 5's per-job driver health. Empty, because nothing here is about a
+     driver that has stopped getting through — src/job-state.ts § driverStalled. */
+  driverFailures: {},
   lastFailure: () => null,
   add: async () => null,
   addUpload: async () => null,

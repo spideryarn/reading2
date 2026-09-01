@@ -729,6 +729,67 @@ chosen:
   succeeded it cleared the error while leaving the engine paused — a stopped queue with nothing on
   screen saying so, which is [silent-success.md](../reusable/silent-success.md) exactly.
 
+### What the card says, and why it says the time
+
+Each row of the progress list already names its step. Since 2026-09-01 a *running* step also says
+how long it has been running, and one place decides what state an import is in:
+[`src/job-state.ts`](../../src/job-state.ts), beside [`job-failure.ts`](../../src/job-failure.ts)
+which does the same job for what a failure offers.
+
+`displayJob(job, now)` is **pure, with the clock injected** — a mapper that reads the wall clock is a
+mapper nothing can test — and returns one of eight states: `waiting`, `working`, `slow`, `stopping`,
+`interrupted`, `failed`, `stopped`, `done`. Four things about it are decisions rather than details.
+
+**It takes no lease, and cannot.** `Job` on the wire carries no `leaseExpiresAt`; it lives on the
+Postgres row and the filesystem `attempts` map and never reaches `publicJob`. So *running with an
+expired lease* is invisible to the browser until [the sweep](#the-browser-is-the-worker) settles it,
+and that is the design working: taking a lease here would re-derive ownership in the reader's
+browser. Elapsed time is a **display** clock and decides nothing.
+
+**`interrupted` is `job.error === INTERRUPTED.message`, not `failureKind === "retry"`.** Many
+failures are retryable; only one of them is *nobody was there any more*.
+
+**The "taking longer than usual" threshold is per step, not global.** Six minutes into `hierarchy` is
+an ordinary run; six minutes into `fetch` is a fetch that is never coming back. Only two steps have
+enough runs in `data/_ai-calls.jsonl` to say anything: `hierarchy` (six runs, median ~409s → *"a few
+minutes"*, flagged slow at ten) and `sketch` (thirteen, median ~144s → *"two or three minutes"*).
+Every other step gets a default marked **GUESS** in the table, and **says nothing to the reader** —
+`STEP_BUDGET_MS` sets that discipline and this follows it.
+
+> **The trap that discipline exists for, sprung again while this was written.** The first `sketch`
+> figure was a median of 287s, from grouping by `runId` and taking the wall clock. The long ones are
+> **eval batches of several articles under one `runId`** with a null `articleSlug`. That number would
+> have promised readers three minutes more than the step has ever taken. Group by `jobId`.
+
+**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
+so a job six minutes into `hierarchy` returns a byte-identical record on every poll and `sameJobs`
+correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
+began. Both surfaces use `useNow(1000)` while busy, and a day otherwise, so an idle band is not
+re-rendering once a minute for ever.
+
+**Transport health is deliberately not part of it.** Consecutive failed advances are not a fact about
+the job — the job is fine; the *connection* is unwell — and are not on `Job` at all. `driverStalled`
+is a separate question with its own threshold of three, which is about twenty-four seconds of getting
+nowhere given the eight-second backoff. It answers a real silent success: `drive()` swallows an
+advance rejection and retries for ever, so a card could sit confidently at `queued` while every
+status poll looked healthy. It is rendered on `JobCard` and **not** in `JobProgress`, which would
+mean threading a prop through eight panels for a surface watching one artefact rather than an import.
+A gap on purpose.
+
+### The app says out loud that it needs a tab open
+
+> Keep a Spideryarn tab open while this imports. If you close them all, it will continue when you
+> return.
+
+Once per shelf, only while something is importing, and on the add page under its card. Until there is
+a real background runner this is simply true, and calling the thing a queue without saying it
+over-promises. **No determinate progress bar**, ever, for the same reason: response size and provider
+latency are both unknown, so a percentage would be a number we invented —
+[silent-success.md](../reusable/silent-success.md) with a decimal point.
+
+The sentences themselves live in `src/job-state.ts` rather than `src/messages.ts`, and carry no
+bracketed codes, because none of them is a failure — [copy.md](copy.md).
+
 The plan and both reviews are
 [260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md](../plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md).
 
