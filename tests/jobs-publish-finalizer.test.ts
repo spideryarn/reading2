@@ -889,9 +889,25 @@ when("a job that finishes", () => {
       advanceUntilNotBusy(second.id, { session: claimSession, steps: STEPS }),
     ).catch((err: unknown) => err);
 
-    /* The failure reaches the caller — the request 500s, as any unexpected store
-       failure does — and that is not the point. The point is the row. */
-    expect(advanced).toBeInstanceOf(Error);
+    /* **What the caller is told changed on 2026-09-01, and the row did not.**
+       This used to assert an `Error`: the failure was recorded by
+       `publishingSession` and then rethrown, so the request 500'd. `walkClaim`
+       now catches every non-stale failure on the all-skipped door itself and
+       ends the job the way it ends a step's failure — with the job, not with a
+       throw — so the client gets the red card through its ordinary path rather
+       than through an error toast. One rule for a publication that did not
+       happen, reached through either door: docs/plans/260831b-stage3-items3and4-review-sol.md
+       finding 2, and `walkClaim` in src/jobs.ts.
+
+       Either way it was never the point of this case, which is the row below.
+       One round trip is spent on the way, and it was watched rather than
+       reasoned about: the first advance answers `{"busy":true,"done":false,
+       "status":"error"}`. The decorator has already recorded the ending, so the
+       coordinator's own settlement is refused as a stale attempt, and
+       `advanceUntilNotBusy` asks again and is told the job is finished. That
+       round trip goes away with the decorator. */
+    expect(advanced).not.toBeInstanceOf(Error);
+    expect((advanced as { done?: boolean } | null)?.done).toBe(true);
 
     const row = await jobRow(second.id);
     /* **Terminal, immediately.** Without the recovery settlement this row is

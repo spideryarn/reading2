@@ -57,9 +57,15 @@ import { costStore, totalRows } from "./store/ai-calls.js";
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
 import { fsJobStore } from "./store/jobs-fs.js";
 import { pgJobStore } from "./store/pg-jobs.js";
+/* The refusal a publication answers with, by name, because the walk has to tell
+   it apart from a database fault: one is a draft that is not fit to be an
+   article and ends the job with something a person can act on, the other is a
+   500. Imported from the module that defines it rather than through
+   src/store/revisions.js, which does not re-export it. See `walkClaim`. */
+import { PublishRefused } from "./store/pg-revisions.js";
 import { mintAttempt, StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
 import { STORE } from "./store/live.js";
-import { failureKindOf } from "./job-failure.js";
+import { failureKindOf, jobWorthRetrying } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
 import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
@@ -1074,6 +1080,26 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
   });
 }
 
+/**
+ * What a job card says when the publication failed for a reason of its own.
+ *
+ * A whole sentence and no detail, because the detail is usually a database
+ * error whose message carries the bound parameters of the statement that failed
+ * — the job's `steps` and its title, which is the article's. See `walkClaim`,
+ * and src/store/db-errors.ts for the rule this is one end of.
+ *
+ * **The same sentence as `COULD_NOT_PUBLISH` in src/store/publish-session.ts,
+ * deliberately, and the duplication is temporary in one direction.** That
+ * decorator exists only until `pgStoreSession` takes the session seam
+ * (docs/plans/260831b-finish-the-database-move.md § the flip); its copy goes
+ * with the file, and this is the one that survives. Two copies of a sentence a
+ * reader sees is worse than one, so if the flip is delayed, move it to
+ * src/messages.ts rather than leaving them to drift.
+ */
+const COULD_NOT_PUBLISH =
+  "Everything ran, but putting the finished article on your shelf did not go through. " +
+  "Nothing was published and your library is unchanged. Trying again is safe.";
+
 const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS };
 
 /**
@@ -1458,7 +1484,83 @@ async function walkClaim(
        Under Postgres that door is what publishes the draft this claim has been
        writing into (src/store/pg-session.ts, case 5), so it is load-bearing
        rather than tidy. */
-    const after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs, session);
+    /**
+     * **And that door can fail, which is the one ending with no catcher of its
+     * own.**
+     *
+     * A publication that goes wrong out of `commit` — the last step ran —
+     * unwinds through `runStep`, which records it on the step and on the job,
+     * and the walk ends the job as an error a few lines above. This door has no
+     * `runStep` around it: `endJob` throws, the walk's outer `catch` re-raises
+     * anything that is not a `StaleAttemptError`, and the job row is `running` with
+     * its draft pointer held until the lease lapses — every advance until then
+     * answering `busy`, the local pump stopping at once, and the eventual
+     * `failExpired` recording a generic interruption rather than the conflict a
+     * person could act on. GPT Sol, 2026-08-31,
+     * docs/plans/260831b-stage3-items3and4-review-sol.md finding 2.
+     *
+     * So it is recorded here **the same way `runStep` records the one that comes
+     * out of `commit`** — the job failed, and the second `endJob` is the
+     * settlement that fails the draft and clears the pointer. One rule for a
+     * publication that did not happen, reached through either door.
+     *
+     * **Every failure, not only `PublishRefused`.** A narrower catch would be
+     * right today and a regression at the flip: `publishingSession` — the
+     * decorator this replaces — terminalises the job for *any* non-stale failure
+     * on this path, so catching only the refusal would leave a database error
+     * doing exactly what the finding describes, and it would be this change that
+     * put it there. GPT Sol, 2026-09-01. The reader's position makes it worse
+     * rather than better: a job stuck `running` is neither `error` nor
+     * `cancelled`, so `retryJob` now refuses it and there is no button either.
+     *
+     * **`StaleAttemptError` keeps going.** It does not mean the publication
+     * failed, it means this claimant no longer owns the job — the settlement
+     * below is fenced on the same attempt and could only be refused too. The
+     * walk's outer `catch` answers `busy` and the client asks again. It arrives on
+     * the ordinary path as well as the rare one: `publishingSession.settleJob`
+     * records the ending itself before rethrowing, so by the time we try, the
+     * job is terminal and this claim is over.
+     *
+     * **A second failure is not swallowed.** An `error` ending publishes
+     * nothing, so the recovery cannot fail the same way; if it fails anyway the
+     * throw goes out, because a job we could not record the ending for is not a
+     * job to report as ended.
+     */
+    let after: Job;
+    try {
+      after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs, session);
+    } catch (err) {
+      if (err instanceof StaleAttemptError) throw err;
+      captureFailure(err, { slug: job.slug, jobId: job.id, phase: "publish" });
+      /* **The class, never the message.** A raw driver error carries the failed
+         statement's bound parameters — the job's `steps` and the article's title
+         — and `errorFields` puts the message straight into the line, where
+         redaction cannot reach it. `guardDbStore` has already logged the
+         SQLSTATE, the table and the constraint on the way out, and
+         `captureFailure` above has the stack. src/store/db-errors.ts,
+         docs/project/logging.md. */
+      jlog.error(
+        { errorType: err instanceof Error ? err.name : typeof err },
+        `could not publish a claim where every step skipped — ${job.slug}`,
+      );
+      job.status = "error";
+      /* **`PublishRefused`'s own words, or nothing**, and the rule is the same
+         one `publishingSession` states: that message is ours — a slug and a list
+         of reasons naming revision ids — and it is the one a person can act on.
+         Anything else may be a driver error with the article in it, and this
+         string goes onto the job card and into the `jobs` row. */
+      job.error = err instanceof PublishRefused ? err.message : COULD_NOT_PUBLISH;
+      /* `retry` for anything that is not the refusal, because another go really
+         is the right move — a database that was briefly unreachable is exactly
+         what re-running fixes. The refusal keeps `failureKindOf`, which reads
+         `undefined` and so offers the retry as well; naming them separately is
+         what keeps a *future* refusal that declares itself `bug` from being
+         quietly relabelled. */
+      recordFailureKind(job, err instanceof PublishRefused ? failureKindOf(err) : "retry");
+      job.finishedAt = new Date().toISOString();
+      delete job.cancelling;
+      after = await endJob(job, attempt, endingFrom(job, "error"), jlog, startedMs, session);
+    }
     return { job: after, ran: lastRan, busy: false, done: true };
   } catch (err) {
     /* **The claim went somewhere else while we were inside a step.** Not a step
@@ -2009,12 +2111,56 @@ export async function cancelJob(id: string): Promise<Job | null> {
  * it forced the first time, because in Postgres those steps' work went into a
  * draft that the failure threw away: see `forceForRetry` below, which is where
  * the reasoning and its cost are written down.
+ *
+ * ## Only a job that failed, and only one the card would have offered
+ *
+ * **The server is the authority, and until 2026-08-31 it checked nothing but
+ * ownership.** That was harmless while a retry of a finished job forced nothing
+ * — every step found its artefacts current and skipped — and it stopped being
+ * harmless the same day, when `forceForRetry` began re-forcing everything the
+ * original forced. A successful forced refresh could then be POSTed to its own
+ * `/retry` endpoint, re-force every step, pay for the PDF transcription again,
+ * and be done to each completed replacement job in turn, for as long as somebody
+ * kept asking. GPT Sol, docs/plans/260831b-stage3-items3and4-review-sol.md
+ * finding 3.
+ *
+ * The two refusals below are exactly what the card already decides
+ * (src/web/AddArticle.tsx): a job that ended in a *failure*, and one
+ * `jobWorthRetrying` says could come out differently. The rule is written twice
+ * because the two ask different questions — the button asks what to draw, this
+ * asks whether to spend — and a client is not where a spending rule lives.
+ *
+ * **`jobWorthRetrying`'s direction is preserved rather than tightened.** A job
+ * carrying no `failureKind` at all — every job recorded before that field
+ * existed, and every one the restart sweep marked — is retryable and must stay
+ * so: refusing what nobody classified would take the button away from exactly
+ * the jobs another go would fix. See src/job-failure.ts § *Which way to be
+ * wrong*.
+ *
+ * **A refusal is a 409, not a 404.** `null` here means *no such job of yours*
+ * and src/routes.ts answers 404 to it; a job that is plainly there and is not a
+ * candidate is a different answer, and a conflict is the honest one. Thrown with
+ * a numeric `status` rather than returned, because that is this codebase's mark
+ * for a failure somebody chose and worded — `handleApi` reads it off the error —
+ * so the route keeps its one line and the rule stays in one place. Both messages
+ * are made of words we chose and nothing else: they are written to the log.
  */
 export async function retryJob(id: string): Promise<Job | null> {
   /* Somebody else's is `null`, as a missing one is — and this one spends money,
      so it is the worst of the four to leave open. */
   const old = await store.get(id, currentOwnerId());
   if (!old) return null;
+  if (old.status !== "error" && old.status !== "cancelled") {
+    throw Object.assign(new Error("That job hasn't failed, so there is nothing to try again."), {
+      status: 409,
+    });
+  }
+  if (!jobWorthRetrying(old)) {
+    throw Object.assign(
+      new Error("Another go at that job would fail in the same way, so it is not offered."),
+      { status: 409 },
+    );
+  }
 
   return await enqueue({
     slug: old.slug,

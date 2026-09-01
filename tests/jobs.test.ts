@@ -1019,8 +1019,15 @@ describe("running a job", () => {
     await settle(job.id);
     const files = await readdir(JOBS_DIR);
     expect(files).toContain(`${job.id}.json`);
-    // No temp file left behind: a stray `.tmp` is a write that never renamed.
-    expect(files.filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    /* No temp file left behind: a stray `.tmp` is a write that never renamed.
+       **This job's own**, rather than every `.tmp` in the directory, because
+       `data/_jobs/` is shared with every other suite in the run and several of
+       them are writing to it from other workers at this moment — a write in
+       flight elsewhere is not a write that failed here, and asserting over the
+       whole directory made this red at random (seen 2026-09-01, on a temp file
+       belonging to tests/retry-is-only-for-a-failed-job.test.ts). The name is
+       `<id>.json.<pid>.<n>.tmp`, so the prefix is the job. */
+    expect(files.filter((f) => f.startsWith(job.id) && f.endsWith(".tmp"))).toEqual([]);
   });
 });
 
