@@ -929,7 +929,11 @@ function osa(script: string, args: string[], opts: { retry: boolean }): { ok: bo
 function resumeBin(): string {
   const override = process.env.GJD_REMOTE_BIN;
   if (override) return shq(override);
-  const which = spawnSync("command", ["-v", "gjd-remote"], { encoding: "utf8", shell: true });
+  // `sh -c`, not `shell: true`: `command` is a shell builtin so it needs a
+  // shell, but passing an args array WITH shell:true concatenates them onto the
+  // command line unescaped, and Node warns about it (DEP0190) on stderr — which
+  // is the command's own output, in front of the person who ran it.
+  const which = spawnSync("/bin/sh", ["-c", "command -v gjd-remote"], { encoding: "utf8" });
   const found = (which.stdout ?? "").trim().split("\n")[0] ?? "";
   if (which.status === 0 && found.startsWith("/") && existsSync(found)) return shq(found);
   return `${shq(path.join(REPO, "node_modules/.bin/tsx"))} ${shq(path.join(REPO, "scripts/gjd-remote.ts"))}`;
