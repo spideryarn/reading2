@@ -122,7 +122,7 @@ when("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
     expect(await articleExists(SLUG)).toBe(true);
   });
 
-  /** And this is the one `freeSlug` asks, through `onShelfOrInFlight`. */
+  /** The URL `enqueue` puts on a late step's job when the request carries none. */
   it("gives its source URL to urlForSlug", async () => {
     const { urlForSlug } = await import("../src/pipeline.js");
     expect(await urlForSlug(SLUG)).toBe(URL);

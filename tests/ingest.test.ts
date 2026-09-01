@@ -8,7 +8,14 @@
  * `data/` and `output/` — see docs/project/ingest-queue.md#the-one-security-check.
  */
 import { describe, expect, it } from "vitest";
-import { isSlug, normaliseUrl, slugFromUrl, urlKey } from "../src/ingest.js";
+import {
+  isSlug,
+  normaliseUrl,
+  shortIdInSlug,
+  slugFromUrl,
+  slugWithShortId,
+  urlKey,
+} from "../src/ingest.js";
 
 describe("slugFromUrl", () => {
   it("uses the last path segment, which is where the headline lives", () => {
@@ -306,5 +313,79 @@ describe("isSlug", () => {
     ]) {
       expect(isSlug(slugFromUrl(url))).toBe(true);
     }
+  });
+});
+
+/* --------------------------------------------------------------------------
+   The short id every new slug carries.
+
+   > Yes, let's add a short id — and actually then we could in future allow
+   > users to rename the slug, and redirect/find it from the short id. So make
+   > sure it's globally unique. I'm fine with adding that to all slugs.
+   >
+   > — Greg, 2026-08-31
+
+   Which is what deleted `freeSlug`'s collision ladder and the whole of
+   `freeUploadSlug`: two articles can no longer want the same name, so nothing
+   has to step aside from anything.
+   -------------------------------------------------------------------------- */
+describe("slugWithShortId", () => {
+  it("puts a block-id-shaped id on the end, keeping the readable part", () => {
+    expect(slugWithShortId("why-trees")).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
+  });
+
+  it("gives two calls two ids", () => {
+    expect(slugWithShortId("news")).not.toBe(slugWithShortId("news"));
+  });
+
+  /* The length cap is a path-traversal guard, not tidiness — `isSlug`'s own
+     header. Appending twelve characters to a sixty-character base would produce
+     a slug that guard refuses, so the base is trimmed to make room. */
+  it("trims the base rather than overflowing what isSlug allows", () => {
+    const got = slugWithShortId("a".repeat(200));
+    expect(isSlug(got)).toBe(true);
+    expect(got).toMatch(/-spya-[a-z0-9]{6}$/);
+  });
+
+  it("does not leave a double dash where it trimmed", () => {
+    expect(slugWithShortId("ends-with-a-dash-")).toMatch(/^ends-with-a-dash-spya-/);
+  });
+
+  /* `slugFromFilename` returns "" for a name that kebabs to nothing (文档.pdf),
+     and the caller must still get a usable slug rather than one starting with a
+     dash — which `isSlug` refuses. */
+  it("still produces a slug when there is no readable part at all", () => {
+    const got = slugWithShortId("");
+    expect(isSlug(got)).toBe(true);
+    expect(got).toMatch(/^spya-[a-z0-9]{6}$/);
+  });
+
+  it("round-trips through shortIdInSlug", () => {
+    const got = slugWithShortId("why-trees");
+    expect(got.endsWith(shortIdInSlug(got) ?? "!")).toBe(true);
+  });
+});
+
+describe("shortIdInSlug", () => {
+  it("finds nothing in a slug minted before 2026-08-31", () => {
+    expect(shortIdInSlug("why-trees")).toBeUndefined();
+    expect(shortIdInSlug("b-news")).toBeUndefined();
+    expect(shortIdInSlug("news-2")).toBeUndefined();
+  });
+
+  /* The boundary matters: a headline that happens to contain the words is not
+     an id, and neither is one that only looks like the prefix. */
+  it("refuses a tail that is not actually an id", () => {
+    expect(shortIdInSlug("notes-spya-thing")).toBeUndefined();
+    expect(shortIdInSlug("notes-spya-k3m9q")).toBeUndefined();
+    expect(shortIdInSlug("notes-spya-k3m9qtx")).toBeUndefined();
+    /* `l`, `o`, `i` and `1` are not in the alphabet — src/ids.ts. */
+    expect(shortIdInSlug("notes-spya-k3m9ql")).toBeUndefined();
+    /* No dash before it: `spya-k3m9qt` is the whole slug, not a suffix on one. */
+    expect(shortIdInSlug("spya-k3m9qt")).toBeUndefined();
+  });
+
+  it("takes the last one when the headline contains an earlier one", () => {
+    expect(shortIdInSlug("about-spya-k3m9qt-spya-qtk3m9")).toBe("spya-qtk3m9");
   });
 });

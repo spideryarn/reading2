@@ -11,8 +11,9 @@
  * would report an error, because every half would have done exactly what it was
  * told.
  *
- * No dependencies: the browser imports this too. See docs/project/library.md
- * and docs/project/ingest-queue.md.
+ * No dependencies but src/ids.ts, which is pure and on the same client
+ * allowlist: the browser imports this too. See docs/project/library.md and
+ * docs/project/ingest-queue.md.
  *
  * `pipelineCommands` used to live here, printing the four commands for the add
  * box to show. The queue (src/jobs.ts) runs them now, so the box submits
@@ -20,6 +21,8 @@
  * have drifted from the pipeline silently. The stages are documented in
  * docs/project/setup-dev.md#the-pipeline-stages, which is where they belong.
  */
+
+import { ID_PREFIX, isSpideryarnId, mintId } from "./ids.js";
 
 /** Long enough to stay readable, short enough for a directory name. */
 const MAX = 60;
@@ -400,4 +403,57 @@ export function slugFromFilename(filename: string): string {
  */
 export function isSlug(value: unknown): value is string {
   return typeof value === "string" && value.length <= MAX && /^[a-z0-9][a-z0-9-]*$/.test(value);
+}
+
+
+/**
+ * **The short id every new slug ends with**, and the reason it is there.
+ *
+ * > Yes, let's add a short id — and actually then we could in future allow
+ * > users to rename the slug, and redirect/find it from the short id. So make
+ * > sure it's globally unique. I'm fine with adding that to all slugs.
+ * >
+ * > — Greg, 2026-08-31
+ *
+ * So `why-trees` becomes `why-trees-spya-k3m9qt`, and two articles can never
+ * want the same name — which is what deleted the collision ladder `freeSlug`
+ * used to walk (host prefix, then `-2`…`-99`) and the whole of
+ * `freeUploadSlug` with it. docs/plans/260831b-finish-the-database-move.md
+ * § Stage 3 item 0.
+ *
+ * **`mintId` rather than a second id shape**, because the codebase already has
+ * one and a slug id that looked different from a block id would be a second
+ * thing to learn for no gain. src/ids.ts.
+ *
+ * **The base is trimmed to make room**, not the whole thing afterwards: a slug
+ * is a path segment and `isSlug` caps it at `MAX`, so appending twelve
+ * characters to a sixty-character base would produce something the
+ * path-traversal guard refuses. Trailing dashes go with the trim, since
+ * `a-long-name-` + id reads as two dashes.
+ *
+ * The id is *also* stored in its own column (`articles.short_id`), and that is
+ * the copy that matters: a slug the reader has renamed no longer contains one,
+ * and the column is what a rename would redirect through.
+ */
+export function slugWithShortId(base: string, id: string = mintId()): string {
+  const trimmed = base.slice(0, MAX - (id.length + 1)).replace(/-+$/, "");
+  return trimmed ? `${trimmed}-${id}` : id;
+}
+
+/**
+ * The short id on the end of a slug, if it has one.
+ *
+ * `undefined` for every slug minted before 2026-08-31, which is why
+ * `articles.short_id` is nullable and nothing backfills it.
+ *
+ * Deliberately strict about the boundary: the id has to be a whole
+ * dash-separated tail, so `notes-spya-thing` (a headline that happens to
+ * contain the words) is not mistaken for one. `isSpideryarnId` is the same
+ * check block ids go through, so the two cannot drift.
+ */
+export function shortIdInSlug(slug: string): string | undefined {
+  const at = slug.lastIndexOf(`-${ID_PREFIX}`);
+  if (at < 1) return undefined;
+  const tail = slug.slice(at + 1);
+  return isSpideryarnId(tail) ? tail : undefined;
 }

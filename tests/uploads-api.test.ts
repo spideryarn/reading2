@@ -16,8 +16,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
-import { freeUploadSlug } from "../src/jobs.js";
-import { slugFromFilename } from "../src/ingest.js";
+import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
 import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -268,13 +267,17 @@ describe("GET /api/uploads/:id", () => {
  *
  * > Two uploads both named `paper.pdf` get two articles, not one directory.
  *
- * And its other half, which the plan does not mention and which only shows up
- * on a second attempt: a **retry** of one upload must keep its own slug rather
- * than stepping aside from itself and paying for the transcription twice.
+ * **Answered by minting rather than by searching, since 2026-08-31.** Every new
+ * slug ends in a globally unique short id (src/ingest.ts § `slugWithShortId`),
+ * so two uploads of one filename cannot want one name and there is nothing to
+ * step aside from. `freeUploadSlug` and `slugIsSpokenFor` walked a `-2`…`-99`
+ * counter and read the fetch manifest to ask *is this article this upload's
+ * own*; both are gone, and with them the retry bug that question existed to
+ * avoid — a retry now mints a fresh id and takes a fresh slug, which costs a
+ * name and no money, because the artefacts are keyed by content.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0.
  */
 describe("the slug an upload gets", () => {
-  const MINE = "11111111-2222-4333-8444-555555555555";
-  const THEIRS = "99999999-2222-4333-8444-555555555555";
 
   it("reads a filename the way a person would", () => {
     expect(slugFromFilename("Bergson — Matter & Memory (1911).pdf")).toBe(
@@ -287,18 +290,19 @@ describe("the slug an upload gets", () => {
     expect(slugFromFilename("文档.pdf")).toBe("");
   });
 
-  it("gives two files of the same name two articles", async () => {
-    const taken = new Set(["paper"]);
-    expect(await freeUploadSlug("paper", MINE, async (c) => taken.has(c))).toBe("paper-2");
+  it("gives two files of the same name two articles", () => {
+    const first = slugWithShortId(slugFromFilename("paper.pdf"));
+    const second = slugWithShortId(slugFromFilename("paper.pdf"));
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^paper-spya-[a-z0-9]{6}$/);
+    expect(second).toMatch(/^paper-spya-[a-z0-9]{6}$/);
   });
 
-  it("lets a retry keep the article it already started", async () => {
-    /* "Claimed by somebody, and that somebody is not me" is the question.
-       Without the `mine` argument this steps aside to `paper-2` and re-runs
-       from the top. */
-    const claimed = async (candidate: string, mine: string) =>
-      candidate === "paper" && mine !== MINE;
-    expect(await freeUploadSlug("paper", MINE, claimed)).toBe("paper");
-    expect(await freeUploadSlug("paper", THEIRS, claimed)).toBe("paper-2");
+  it("keeps the reader's filename in the name they will see", () => {
+    /* The short id is a suffix, not a replacement: the shelf card, the address
+       bar and the metadata page all still read as the document. */
+    expect(slugWithShortId("bergson-matter-memory-1911")).toMatch(
+      /^bergson-matter-memory-1911-spya-[a-z0-9]{6}$/,
+    );
   });
 });
