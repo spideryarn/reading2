@@ -79,6 +79,9 @@ const EXAMPLE = path.join(ROOT, "example");
 /** A module of `src/`, as a quoted absolute path for the child's `import()`. */
 const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
 
+/** The same, for a module of `tests/helpers/`. */
+const helper = (name: string) => JSON.stringify(path.join(ROOT, "tests", "helpers", name));
+
 /**
  * Ten characters each — the number V8 quotes — and no two sharing a prefix.
  *
@@ -88,7 +91,8 @@ const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
  * model said back.
  *
  * `arc` is `arc.json` read by `loadArticle` in src/api.ts; `blocks` is the
- * `blocks.json` that `readArticleFromDir` parses for the arc command line.
+ * `blocks.json` that `readArticleFromDir` parses for an eval
+ * (tests/helpers/article-from-dir.ts).
  */
 const LEAK = {
   arc: "ZQARCJSONA",
@@ -168,7 +172,7 @@ beforeAll(async () => {
     const { loadThreads } = await import(${src("chat.ts")});
     const { loadRuns } = await import(${src("searches.ts")});
     const { generateArc } = await import(${src("arc.ts")});
-    const { readArticleFromDir } = await import(${src("article-input.ts")});
+    const { readArticleFromDir } = await import(${helper("article-from-dir.ts")});
     const { parseJsonFrom, stripFence } = await import(${src("parse-json.ts")});
 
     // These four log for themselves, then rethrow.
@@ -177,12 +181,16 @@ beforeAll(async () => {
     await step("chat", () => loadThreads(${JSON.stringify(STORE_SLUG)}));
     await step("searches", () => loadRuns(${JSON.stringify(STORE_SLUG)}));
 
-    /* A stage reading an artefact — as \`npx tsx src/arc.ts <dir>\` does it.
+    /* A stage reading an artefact off a folder — which is what an eval does.
        \`generateArc\` no longer opens anything itself (the pipeline hands it an
        article the store read); the read moved to \`readArticleFromDir\`, whose
        very first statement parses blocks.json. So this still never reaches a
-       model or needs a key, and it is still the reachable path — the CLI is now
-       the caller that meets a corrupt blocks.json. */
+       model or needs a key. The eight stage CLIs that used to be this caller
+       were deleted on 2026-09-01 and the function moved to
+       tests/helpers/article-from-dir.ts, where the evals reach it; what is
+       being measured — a corrupt blocks.json must not reach a log — is
+       unchanged, and \`evals/quiz.ts\` and \`evals/sketch/run.ts\` are the two
+       live callers it now stands for. */
     await step("arc", async () =>
       generateArc({ article: await readArticleFromDir(${JSON.stringify(STORE_DIR)}) }),
     );

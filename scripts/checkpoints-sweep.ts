@@ -54,13 +54,20 @@ if (!Number.isFinite(days) || days <= 0) {
 const before = checkpointCutoff(days);
 
 /**
- * **The `checkpoints` table is empty today, and a zero here means that rather
- * than a broken sweep.** Nothing writes a checkpoint through the store yet —
- * `src/labels.ts` and `src/pdf-read.ts` still hand-roll theirs to disk, and
- * putting them on this seam is landing D2. Until then this reports zero
- * correctly, which is the one number a sweep can report for two very different
- * reasons: read `docs/reusable/silent-success.md` before believing it means the
- * table is clean.
+ * **A zero here still has two meanings, and they need telling apart.**
+ *
+ * Both callers write through the store since 2026-09-01 (landing D2), so the
+ * table is no longer empty by construction — `src/labels.ts` records one row per
+ * label batch and `src/pdf-read.ts` one per transcribed chunk. But a zero is
+ * also what a sweep that walked the wrong shape would report, which is exactly
+ * what the deleted filesystem sweep did for a year against a
+ * `data/<slug>/checkpoints/` directory that never existed. So: a zero means
+ * *nothing is ninety days cold*, and the way to check that it means that is to
+ * look at whether there are any rows at all — `select count(*) from
+ * spideryarn.checkpoints`. docs/reusable/silent-success.md.
+ *
+ * **Nothing is deleted on success**, deliberately: retention is this script's
+ * job and nobody else's. src/store/checkpoints.ts § Retention.
  */
 async function main(): Promise<void> {
   console.log(

@@ -45,6 +45,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
 import { hashBlocks } from "./source-hash.js";
+import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -1222,21 +1223,13 @@ export interface HierarchyRun {
    * read from. Verified against a real artefact, not reasoned about.
    */
   inputHash: string;
-  /**
-   * Throw the label run's working state away — **call it once the artefacts are
-   * stored**, not when this function returns.
-   *
-   * Returned rather than called here, and the gap is the whole point. It
-   * protects **money, not consistency**: a checkpoint left behind is read by the
-   * next run, matched fingerprint by fingerprint, and either reused correctly or
-   * ignored (src/labels.ts § `LabelRun.clearCheckpoint`), so forgetting to call
-   * this costs nothing. Calling it too early costs a whole label pass, because
-   * a caller that dies between here and its store's commit has thrown away every
-   * batch it just paid for — which is the case the checkpoint exists for.
-   *
-   * A no-op when no `checkpointDir` was given.
-   */
-  clearCheckpoint: () => Promise<void>;
+  /* **There is no `clearCheckpoint` here any more.** It was passed out on this
+     object rather than called inside, so that whoever *stored* the three
+     artefacts closed the gap — a caller that died in between would otherwise
+     have thrown away every batch it had just paid for. All of that existed
+     because the unit of deletion was a whole file. One row per batch has
+     nothing to delete on success; retention is the sweep's.
+     src/store/checkpoints.ts § Retention. */
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
   model: string;
   blocks: number;
@@ -1404,23 +1397,22 @@ export async function generateHierarchy(opts: {
   /** Stamped into the tree and the labels file; the article's own name. */
   slug: string;
   /**
-   * Where the **label checkpoint** goes, and it is not where the artefacts go
-   * any more — nothing this function returns is written by it.
+   * Where each finished **label batch** goes as it lands — passed straight down
+   * to `generateLabels`, which is the only thing here that checkpoints.
    *
-   * Still a directory, and still the filesystem, because the checkpoint store
-   * (src/store/checkpoints.ts) is not the seam this call can go through yet:
-   * it is keyed on an `articleId` this stage is not given, and it has no
-   * `delete`, deliberately — landing D drops `clearCheckpoint` along with the
-   * one-file-per-run format that made it necessary. Redirecting it early would
-   * silently stop resuming and re-buy a paid model call per batch, so it stays
-   * on disk until that landing moves both halves at once.
+   * It was a directory until 2026-09-01, and the store was not the seam this
+   * call could go through because it is keyed on an `articleId` no stage was
+   * ever handed. `StoreSession` hands one down now
+   * (src/store/pg-session.ts), which was the last piece of plumbing the seam
+   * was missing; the `delete` it does not have stopped mattering when the
+   * whole-file format went and there was nothing left to delete.
    *
-   * **No directory, no checkpoint**, exactly as `generateLabels` has it: a
-   * caller that has one passes it, and a test or a one-off gets nothing on
-   * disk. `HierarchyRun.labelsResumed` is how a caller that meant to checkpoint and
-   * did not finds out.
+   * **Required, and the passing of it is the point.** A caller with no article
+   * to key on says `nullCheckpointStore()` rather than saying nothing;
+   * `HierarchyRun.labelsResumed` is how one that meant to checkpoint and did not
+   * finds out.
    */
-  checkpointDir?: string;
+  checkpoints: CheckpointStore;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -1582,24 +1574,21 @@ export async function generateHierarchy(opts: {
   /* Pass two. The tree has to exist first: the batches are cut along its own
      section boundaries, so that every label a reader compares with another was
      written in the same call. src/labels.ts says why that is the rule. */
-  /* Before the labels, not after, because the checkpoint they write as they
-     land goes in here — and a directory that does not exist yet would turn the
-     first batch's saved work into a thrown ENOENT. */
-  if (opts.checkpointDir) await mkdir(opts.checkpointDir, { recursive: true });
-
+  /* **And no `mkdir` before it.** There used to be one, because the first batch
+     to land wrote into a directory that might not exist yet and a thrown ENOENT
+     out of the checkpoint would have taken the whole step with it. There is no
+     directory now, and a store that cannot be reached is a miss rather than a
+     throw — src/labels.ts § `keepBatch`. */
   const labelRun = await generateLabels({
     tree: structure,
     blocks,
     slug,
-    /* Which turns checkpointing on. Each batch's labels are written here as it
-       lands, so a 429 or a 5xx eight batches into a book costs the one batch
-       rather than the eight — and the retry the queue makes (src/jobs.ts) picks
-       up where this one stopped. src/labels.ts § `usableCheckpoint` for the
-       four things that have to match before a single one is reused.
-       Absent when the caller gave no `checkpointDir`: `generateLabels` treats
-       that as "no checkpoint" rather than defaulting to a directory, so this
-       spread is the difference between the two rather than a tidy-up. */
-    ...(opts.checkpointDir ? { dir: opts.checkpointDir } : {}),
+    /* Each batch's labels are kept here as it lands, so a 429 or a 5xx eight
+       batches into a book costs the one batch rather than the eight — and the
+       retry the queue makes (src/jobs.ts) picks up where this one stopped, on
+       whatever machine it lands on. src/labels.ts § `usableEntry` and
+       `coversExactly` for what has to hold before one is reused. */
+    checkpoints: opts.checkpoints,
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     ...(opts.signal ? { signal: opts.signal } : {}),
   });
@@ -1730,7 +1719,6 @@ export async function generateHierarchy(opts: {
        are equal by a convention rather than by construction, which is the
        arrangement this whole stage of the migration exists to remove. */
     inputHash: parts.labels.sourceHash,
-    clearCheckpoint: labelRun.clearCheckpoint,
     model: CAPABLE_MODEL,
     blocks: blocks.length,
     structural,
@@ -1804,13 +1792,16 @@ async function main(): Promise<void> {
   // Before the call, not after: this is the only thing on screen for the two
   // minutes the model takes.
   console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
-  /* The checkpoint lands in the output directory, as it always has, so a CLI
-     run killed eight batches into a book resumes rather than paying again.
-     `generateHierarchy` makes the directory before the first batch can save into it. */
+  /* **Nothing is remembered between runs of this command**, and it used to be:
+     the checkpoint landed in the output directory, so a run killed eight batches
+     into a book resumed rather than paying again. The batches are rows keyed on
+     an `articles` row now, and this command does not have one —
+     src/store/checkpoints.ts § nullCheckpointStore. The queue, which is how an
+     article really gets a tree, does have one and does resume. */
   const run = await generateHierarchy({
     blocks,
     slug,
-    checkpointDir: outDir,
+    checkpoints: nullCheckpointStore(),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
@@ -1823,12 +1814,15 @@ async function main(): Promise<void> {
      The stage itself no longer does any of this: it returns all three and the
      pipeline stores them in one call, where a partial set is not a state that
      exists. See the note at the end of `generateHierarchy`. */
+  /* **Made here now.** `generateHierarchy` used to create this directory before
+     the first label batch could checkpoint into it; the batches are rows and it
+     does not, so the one caller that still writes files makes its own. Without
+     it `npm run hierarchy -- blocks.json some/new/dir` fails on the first
+     write. */
+  await mkdir(outDir, { recursive: true });
   await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
   await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
   await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
-  /* Only now is the working state safe to throw away — see
-     `HierarchyRun.clearCheckpoint`, and src/labels.ts for what it protects. */
-  await run.clearCheckpoint();
 
   console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
   console.log(

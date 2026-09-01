@@ -48,7 +48,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import PQueue from "p-queue";
 import { PDFDocument } from "pdf-lib";
@@ -59,6 +59,7 @@ import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
+import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
@@ -876,8 +877,8 @@ ${parts.join("\n")}
 /**
  * What the stage hands back — **including everything the run cost**, because
  * this stage does not log what it did. (It writes one kind of line and one
- * only: a cache entry it had to throw away, in `readCachedChunk`, which is
- * about a *previous* run dying rather than about this one.)
+ * only: a checkpoint entry it had to throw away, in `usableChunkReading`, which
+ * is about a *previous* run dying rather than about this one.)
  *
  * Not an oversight: src/pipeline.ts logs one line per step, from the seam it
  * already owns, so that "what did this article cost?" has a single answer
@@ -928,18 +929,26 @@ export interface PdfExtractOptions {
   /** The reader's own name for an uploaded file. The title ladder's last rung prefers it. */
   filename?: string;
   /**
-   * **Where the per-chunk checkpoints live, and nothing else.**
+   * **Where the per-chunk transcriptions are kept, and it is not a path.**
    *
-   * It was where the article and its metadata went too, until 2026-08-31; those
-   * are returned now. What is left is `<dataDir>/pdf-chunks/`, one file per
-   * model call, and that is deliberately still a directory: a checkpoint is not
-   * an artefact — it is money already spent, written *during* a step so a later
-   * attempt does not re-buy it, which is the opposite of something committed
-   * when a step succeeds. Converting these is somebody else's landing
-   * (docs/plans/260831b-finish-the-database-move.md § Stage 2b), and the atomic-write
-   * recipe below is left exactly as it was.
+   * A checkpoint is not an artefact: it is money already spent, written
+   * *during* a step so that a later attempt does not re-buy it, which is the
+   * opposite of something committed when a step succeeds. It was
+   * `<dataDir>/pdf-chunks/` until 2026-09-01, and that was the bug rather than
+   * an untidiness — the directory is job-scoped `/tmp` on Vercel, a retry is a
+   * new job id by design and lands on a different machine anyway, so **every
+   * attempt at a long PDF started from zero**. `MAX_PAGES` is 100 and
+   * `CHUNK_CONCURRENCY`'s own arithmetic says a hundred dense chunks can miss
+   * the 740s deadline, so an accepted document could fail for ever without
+   * accumulating enough finished chunks to get under it. That is a liveness
+   * failure and not a bill — docs/plans/260901d-simpler-finish-sol.md § 4.
+   *
+   * Keyed on the **article**, which is stable across every job, every attempt
+   * and every draft revision. src/store/checkpoints.ts has the contract; a
+   * caller with no article to key on passes `nullCheckpointStore()` and gets a
+   * run that pays for everything, which is what the command line does.
    */
-  dataDir: string;
+  checkpoints: CheckpointStore;
   slug: string;
   reader?: PdfReader;
   /**
@@ -954,26 +963,32 @@ export interface PdfExtractOptions {
 }
 
 /**
- * Read one cached chunk, or nothing at all — and **a damaged entry is nothing,
- * not an error.**
+ * One stored chunk reading, or nothing at all — and **an entry that is not one
+ * is nothing, not an error.**
  *
- * The twin of `readJsonIfPresent` in src/labels.ts, which had this right from
- * the start: a checkpoint that is missing, unreadable or not JSON is worth the
- * same as one that is stale, and the alternative to reusing it is a run that
- * costs money, not a run that cannot happen. This one did not, and the
- * difference between the two is a permanent trap. `writeFile` truncates before
- * it writes, so a process killed mid-write leaves a file that exists and does
- * not parse; the key is a hash of things that do not change between runs, so
- * every later attempt computed the same key, found the same broken file, and
- * threw the same `SyntaxError` out of the whole extract step. Nothing here ever
- * deletes these files, so Retry could not clear it and the message never said
- * which file to delete. docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md.
+ * The twin of the entry gate in src/labels.ts, which had this right from the
+ * start: a checkpoint that is missing, unreadable or the wrong shape is worth
+ * the same as one that is stale, and the alternative to reusing it is a run
+ * that costs money, not a run that cannot happen. The filesystem version of
+ * this did not, and the difference was a permanent trap: `writeFile` truncates
+ * before it writes, so a process killed mid-write left a file that existed and
+ * would not parse; the key is a hash of things that do not change between runs,
+ * so every later attempt computed the same key, found the same broken file, and
+ * threw the same `SyntaxError` out of the whole extract step. Nothing deleted
+ * those files, so Retry could not clear it.
+ * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md.
+ *
+ * **In Postgres a row cannot be half-written**, so that exact failure is gone —
+ * but the tolerance stays, because *whole* and *usable* are still two different
+ * things. A row written by an older shape of this code parses perfectly and is
+ * not a reading, and the store deliberately does not check what a value means
+ * (src/store/checkpoints.ts § What the store knows about a key).
  *
  * **A miss re-buys a vision-model call**, so this is deliberately the most
- * tolerant test that still means anything: parses, and has the `records` array
- * every reading has. Nothing about the records themselves — they go through
- * `checkChunk` next, which is the real gate and is stricter than anything a
- * shape test here could be.
+ * tolerant test that still means anything: it is an object, and it has the
+ * `records` array every reading has. Nothing about the records themselves —
+ * they go through `checkChunk` next, which is the real gate and is stricter
+ * than anything a shape test here could be.
  *
  * It says so in the log, because an entry that had to be discarded is the only
  * surviving trace that a run was killed halfway through writing it. This file
@@ -981,48 +996,104 @@ export interface PdfExtractOptions {
  * that line is about what the step cost, and it cannot mention something only
  * this loop can see.
  */
-async function readCachedChunk(
-  file: string,
+function usableChunkReading(
+  value: unknown,
   about: { slug: string; chunk: string; pages: number[] },
-): Promise<ChunkReading | null> {
-  const text = await readFile(file, "utf-8").catch(() => null);
-  if (text === null) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
+): ChunkReading | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || !Array.isArray((value as ChunkReading).records)) {
     log("pipeline").warn(
-      { ...about, bytes: text.length },
-      "discarded an unreadable pdf chunk cache entry; re-reading those pages",
+      about,
+      "discarded a pdf chunk checkpoint that is not a reading; re-reading those pages",
     );
     return null;
   }
-  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ChunkReading).records)) {
-    log("pipeline").warn(
-      { ...about, bytes: text.length },
-      "discarded a pdf chunk cache entry that is not a reading; re-reading those pages",
-    );
-    return null;
-  }
-  return parsed as ChunkReading;
+  return value as ChunkReading;
 }
 
 /**
- * Write JSON so that it is either wholly there or not there at all.
+ * **The address of one chunk's transcription**, and every input the work
+ * depends on is in it.
  *
- * The same four lines as `writeAtomic` in src/hierarchy.ts and src/labels.ts, and
- * duplicated for the reason given there: sharing them would mean a third module
- * for four lines, and two copies cannot drift in a way that matters — either a
- * write is atomic or it is not.
+ * That is the rule the store cannot enforce and the caller has to keep
+ * (src/store/checkpoints.ts): the source bytes, which pages, the context page,
+ * the prompt, the model and the token ceiling. Change any of them and this is a
+ * different question, so the old answer is simply never found again — which is
+ * why nothing here ever invalidates anything.
  *
- * It matters more here than it does there. A half-written `tree.json` is one
- * step's output and the step runs again; a half-written chunk is a paid model
- * call that nothing will re-buy, sitting under a key that never changes.
+ * Lifted out of the per-chunk closure on 2026-09-01 so that **every key is
+ * known before the first call**, which is what lets the whole set be read in
+ * one round trip instead of N. Sixteen hex characters, which is what
+ * `CHECKPOINT_KEY_RE` is happy with — tests/pdf-read.test.ts asserts that
+ * against the keys this really mints rather than against a copy of the regex.
  */
-async function writeAtomic(file: string, value: unknown): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-  await rename(tmp, file);
+function chunkKey(
+  chunk: Chunk,
+  about: { rawSha256: string; readerId: string },
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        rawSha256: about.rawSha256,
+        pages: chunk.pages,
+        context: chunk.context ?? null,
+        prompt: promptFingerprint(),
+        reader: about.readerId,
+        maxTokens: MAX_TOKENS,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/**
+ * **A checkpoint may not take the step down with it.**
+ *
+ * Every call into the store here goes through one of these two. A checkpoint is
+ * a saving, so the worst a broken one may cost is the saving: a read that
+ * throws becomes "nothing is stored" and a write that throws becomes "this
+ * chunk will be bought again next time". Neither is allowed to fail the extract
+ * step, because a step that dies on its cache is a cache that has become an
+ * outage — which is exactly what the filesystem version could do, since a full
+ * `/tmp` made `mkdir` and `writeFile` throw straight out of the stage.
+ *
+ * **Logged, at `warn`, so it is not silent.** A store that quietly answered
+ * nothing for ever would look exactly like a store nobody had wired up, and the
+ * only other symptom is a larger bill. docs/reusable/silent-success.md. No
+ * value and no article text reaches the line — the key is a digest and the slug
+ * is already in the URL. src/store/checkpoints-pg.ts § What may be logged.
+ */
+async function storedChunks(
+  checkpoints: CheckpointStore,
+  slug: string,
+  keys: readonly string[],
+): Promise<Map<string, unknown>> {
+  try {
+    return await checkpoints.read<unknown>(slug, "pdf-chunk", keys);
+  } catch (err) {
+    log("pipeline").warn(
+      { slug, chunks: keys.length, err },
+      "could not read the pdf chunk checkpoints; every chunk will be read again",
+    );
+    return new Map<string, unknown>();
+  }
+}
+
+/** The other half of `storedChunks`: a write that fails costs one re-read, not the step. */
+async function keepChunk(
+  checkpoints: CheckpointStore,
+  slug: string,
+  key: string,
+  reading: ChunkReading,
+): Promise<void> {
+  try {
+    await checkpoints.write(slug, "pdf-chunk", key, reading);
+  } catch (err) {
+    log("pipeline").warn(
+      { slug, chunk: key, err },
+      "could not save a pdf chunk checkpoint; a later attempt will pay for these pages again",
+    );
+  }
 }
 
 /**
@@ -1061,8 +1132,19 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
   const chunks = planChunks(pass);
-  const cacheDir = path.join(opts.dataDir, "pdf-chunks");
-  await mkdir(cacheDir, { recursive: true });
+  /**
+   * **Every key, and then one read for all of them.**
+   *
+   * Both halves are deliberate. Computing the keys before the queue starts is
+   * what makes a bulk read possible at all — the store's `read` is plural
+   * because both its callers know every key they want before they begin
+   * (src/store/checkpoints.ts). And one round trip rather than one per chunk
+   * matters at the size this stage runs at: a hundred-page PDF can plan a
+   * hundred chunks, and a hundred serial statements before the first model call
+   * is latency spent on a document that is already close to its deadline.
+   */
+  const keys = chunks.map((chunk) => chunkKey(chunk, { rawSha256, readerId: reader.id }));
+  const stored = await storedChunks(opts.checkpoints, opts.slug, keys);
 
   const all: PdfRecord[] = [];
   const usage = { input: 0, output: 0 };
@@ -1123,26 +1205,21 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   let completed = 0;
 
   const readings = await allOrStop(
-    chunks.map((chunk) =>
+    chunks.map((chunk, at) =>
       /* The signal goes to `add` as well as into the request. Without it a chunk
          still queued when a fatal one aborts would never run and never settle,
          and the `Promise.all` inside `allOrStop` would wait on it forever. */
       queue.add(
         async () => {
-          const key = createHash("sha256")
-            .update(
-              JSON.stringify({
-                rawSha256,
-                pages: chunk.pages,
-                context: chunk.context ?? null,
-                prompt: promptFingerprint(),
-                reader: reader.id,
-                maxTokens: MAX_TOKENS,
-              }),
-            )
-            .digest("hex")
-            .slice(0, 16);
-          const cacheFile = path.join(cacheDir, `${key}.json`);
+          /* Minted above, with all of its siblings, so the whole set could be
+             read in one statement. `keys` is built from `chunks` by `map`, so
+             the index is the same chunk — but `noUncheckedIndexedAccess` is on
+             and a missing key would be a wiring bug rather than a miss, so it
+             says so instead of quietly checkpointing under `undefined`. */
+          const key = keys[at];
+          if (key === undefined) {
+            throw new Error(`No checkpoint key was minted for chunk ${at} of ${chunks.length}.`);
+          }
 
           /**
            * **One retry of a chunk that fails its check, and it is not the
@@ -1169,7 +1246,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
           /* Empty, and deliberately not `seen` — see the note above this block. */
           const alone = new Set<string>();
           const asked: string[] = [];
-          const cached = await readCachedChunk(cacheFile, {
+          const cached = usableChunkReading(stored.get(key), {
             slug: opts.slug,
             chunk: key,
             pages: chunk.pages,
@@ -1209,10 +1286,14 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
                 `pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`,
               );
             }
-            /* Only a reading that passed is cached. A failed one is not worth
-               replaying, and caching it would make the retry above read back the
+            /* **The moment the call comes back**, not at the end of the run —
+               that is the whole point of a checkpoint, and it is why the store's
+               `write` is singular while its `read` is plural.
+
+               Only a reading that passed is kept. A failed one is not worth
+               replaying, and storing it would make the retry above read back the
                answer it is retrying. */
-            if (result.ok) await writeAtomic(cacheFile, reading);
+            if (result.ok) await keepChunk(opts.checkpoints, opts.slug, key, reading);
           }
 
           /* Counted as chunks land rather than in page order, because this is
@@ -1427,7 +1508,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
  * of going through the shared helper.
  */
 export async function keepTheOriginal(
-  opts: Pick<PdfExtractOptions, "bytes" | "url" | "dataDir">,
+  /* Its own shape since the stage stopped taking a `dataDir` at all. It was a
+     `Pick<PdfExtractOptions, …>`, which was a nice way of saying "the same
+     directory the stage writes into" back when the stage wrote into one. It
+     does not any more (its checkpoints are rows), and this function is the
+     command line's, so it names what it needs. */
+  opts: { bytes: Uint8Array; url?: string; dataDir: string },
   sha256: string,
   /* Injected so a test can watch the object land somewhere it can look, rather
      than in whatever bucket `.env.local` selects. That is not a convenience:
@@ -1744,7 +1830,14 @@ async function main() {
   const result = await runPdfExtract({
     bytes,
     url,
-    dataDir,
+    /* **Nothing is remembered between runs of this command**, and that is a
+       change of 2026-09-01 worth knowing before you point it at a book: the
+       chunk checkpoints are rows in the `checkpoints` table now, keyed on an
+       `articles` row this command does not have. A run killed halfway pays for
+       every chunk again. The queue — `POST /api/jobs`, which is how an article
+       really gets ingested — has the article and does resume.
+       src/store/checkpoints.ts § nullCheckpointStore. */
+    checkpoints: nullCheckpointStore(),
     slug,
     onProgress: (done, total, pages, checked) => {
       console.log(`\n  ${done}/${total}  pages ${pages.join(", ")}`);

@@ -302,14 +302,15 @@ transiently, a tap or click pins it — and the row stays one big target. `Toolt
 everything after `arc` is a thing somebody asks for. In `FORCE_ONLY_WHEN_NAMED`.
 
 ```
-npm run quotes -- data/<slug>
+POST /api/jobs { "slug": "…", "steps": ["quotes"] }
 ```
 
-or `POST /api/jobs { "slug": "…", "steps": ["quotes"] }`, which is what the panel's button does.
+which is what the panel's button does, and is the only way in — the stage's own command line was
+deleted on 2026-09-01 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
 **It is a converted step**, like `sketch` and unlike its eight other neighbours:
-`generateQuotes` writes nothing and hands the artefact back, and the two callers decide — the step
-returns it as `parts`, the CLI writes the file. A step that wrote `<dir>/quotes.json` inside `run`
+`generateQuotes` writes nothing and hands the artefact back, and the caller decides — the step
+returns it as `parts`. A step that wrote `<dir>/quotes.json` inside `run`
 works on a laptop and cannot work through a store that puts the artefact in a Postgres column.
 
 ### It replaces. It does not append.

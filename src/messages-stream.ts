@@ -124,8 +124,9 @@ export function messagesClient(): Anthropic {
 
      So it belongs at the program's edge — which is what `src/ideas.ts` already
      did, its own comment saying it was "worth fixing for all of them". Now done
-     for all of them: each stage's CLI `main()` loads the file, and nothing in
-     the request path or a test loads anything. */
+     for all of them: `stageCli` (src/cli-ledger.ts) loads the file at
+     each surviving command line's entrypoint, and nothing in the request path or
+     a test loads anything. */
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error(NOT_CONFIGURED.message);
   return new Anthropic({

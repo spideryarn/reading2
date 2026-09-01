@@ -522,7 +522,7 @@ Three decisions worth keeping:
   its neighbour while still looking perfectly plausible. An entry that no longer matches is dropped.
 
 Generation is [`src/arc.ts`](../../src/arc.ts) — stage 5b, one model pass over the tree skeleton plus
-the full text, run with `npm run arc -- data/<slug>`. Both inputs on purpose: you cannot write "what
+the full text, run with `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`. Both inputs on purpose: you cannot write "what
 remains" without seeing what comes after, and the full text is what keeps the sentences in the
 author's vocabulary rather than in a summary of a summary. Without `arc.json` the column falls back
 to the root node exactly as before, so the feature is additive and an article is readable without it.

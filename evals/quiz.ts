@@ -1,8 +1,9 @@
 /**
  * Eval — do the quiz's two prompts behave?
  *
- *     npm run eval:quiz -- data/noema-mythology-of-conscious-ai
- *     npm run eval:quiz -- data/noema-mythology-of-conscious-ai --marks-only
+ *     npm run eval:quiz                  # the committed corpus article
+ *     npm run eval:quiz -- --marks-only
+ *     npm run eval:quiz -- <dir with blocks.json + tree.json>
  *
  * **This one spends money**, and it is the reason stage 1 of
  * docs/plans/260831al-review-quiz-sub-mode.md is prompts-and-eval with no
@@ -95,7 +96,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { generateQuiz } from "../src/quiz.js";
 import { GRADE_WORDS, markAnswer } from "../src/quiz-mark.js";
-import { readArticleFromDir } from "../src/article-input.js";
+import { readArticleFromDir } from "../tests/helpers/article-from-dir.js";
+import { FIXTURE_ROOT } from "../tests/helpers/require-fixture.js";
 import { fallbackHeadTitle } from "../src/source-hash.js";
 import { findQuote } from "../src/quote-match.js";
 import type { Block, Meta, QuizBand, QuizEvidence } from "../src/types.js";
@@ -440,7 +442,17 @@ const BAND_MARK: Record<QuizBand, string> = { easy: "easy  ", medium: "medium", 
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const dir = args.find((a) => !a.startsWith("--")) ?? "data/noema-mythology-of-conscious-ai";
+  /* **The committed corpus by default, not `data/`.** The eight marking cases
+     below are written against *this* article — `elsewhere` is only elsewhere if
+     the piece really does say the same thing in two places — so the article has
+     to be the same bytes every time the eval is run. `data/` is gitignored and
+     is whatever that laptop last ingested; `tests/fixtures/data-root/data/` is
+     tracked in git (tests/helpers/require-fixture.ts,
+     docs/plans/260901b-committed-fixture-corpus.md). A positional path still
+     overrides it, for a hand-edited copy of the folder. */
+  const dir =
+    args.find((a) => !a.startsWith("--")) ??
+    path.join(FIXTURE_ROOT, "data", "noema-mythology-of-conscious-ai");
   const doGenerate = !args.includes("--marks-only");
   const doMark = !args.includes("--generate-only");
 

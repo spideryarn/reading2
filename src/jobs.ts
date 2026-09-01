@@ -563,7 +563,13 @@ async function runStep(
        say nothing and this still gets the whole bill.
 
        What it is told about the work is below rather than here. */
-    const { result: product } = await collectSpend(() => registry[step.name].run(ctx, session.reads), {
+    /* **Three things the run phase gets, and each is a different lifetime.**
+       `ctx` is this attempt, `session.reads` is this draft revision, and
+       `session.checkpoints` is the *article* — work a previous attempt already
+       paid for, which is the only one of the three that must survive this
+       attempt failing. src/store/checkpoints.ts. */
+    const run = () => registry[step.name].run(ctx, session.reads, session.checkpoints);
+    const { result: product } = await collectSpend(run, {
       /* **Everything the ledger cannot work out for itself.** A gateway sees a
          model id and a body; this is the frame that knows whose article it is,
          which job, and which step — so it says so once and every call inside
@@ -1105,8 +1111,9 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * Three of the tests this stage owes cannot honestly be written without it. The
  * Postgres session's preflight-over-misleading-files claim, its all-skipped
  * path, and its handling of a release that resolves to cancellation are all
- * claims about **the coordinator driving that session** — and production is
- * hardwired to `fsStoreSession` and will stay that way until D2. A test that
+ * claims about **the coordinator driving that session** — and production picks
+ * its session by `STORE` in `claimSession` below, which since the flip (commit
+ * `c42c940`) is Postgres wherever that is configured. A test that
  * called a session method directly would be proving something else: the whole
  * point of the first of those is that `stepIsDone` goes through `session.reads`
  * and not through a store the caller happens to have. GPT Sol, 2026-08-29,
@@ -1119,9 +1126,10 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * and still not replaceable. A session and a step registry are exactly what a
  * different *storage backend* changes, which is why they are the two.
  *
- * **Production behaviour does not change.** `PRODUCTION` builds the same session
- * from the same filesystem store `advanceJob` built inline before, and nothing
- * selects Postgres — src/jobs.ts still imports `fsArtifacts`.
+ * **Production behaviour does not change**, because `PRODUCTION` builds its
+ * session through `claimSession` below rather than choosing one here — and that
+ * is the line that selects Postgres or the filesystem. This seam replaces the
+ * chooser, never the choice.
  */
 export interface AdvanceParts {
   /**

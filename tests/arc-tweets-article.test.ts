@@ -15,8 +15,9 @@
  *  1. **The stage writes nothing.** It used to drop its artefact beside the tree
  *     it was written from, which works on a laptop and cannot work through a
  *     store that puts the artefact in a Postgres column. The pipeline writes it
- *     now; the command line writes its own. Checked against the source rather
- *     than against a directory, and `generatorBody` below says why.
+ *     now, and since 2026-09-01 it is the only caller — the stage's own command
+ *     line is gone. Checked against the source rather than against a directory,
+ *     and `generatorBody` below says why.
  *  2. **The fingerprint describes the article it was given.** A stage that hashed
  *     anything other than the three artefacts it generated from is a stale
  *     artefact reporting itself current for ever, in silence — which is the hole
@@ -156,17 +157,30 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * what the first version of this file did.
  *
  * So the claim is made where it is decidable: no `writeFile` inside the
- * generator. `main()` below it still writes, and must — the command line is
- * unchanged from outside — so the scan stops at its signature rather than
- * covering the file.
+ * generator.
+ *
+ * **The scan used to stop at `async function main(`**, because the stage's own
+ * command line sat below the generator and did — legitimately — write a file.
+ * Those command lines were deleted on 2026-09-01
+ * (docs/plans/260831b-finish-the-database-move.md § sub-stage I), the generator
+ * is now the last thing in each file, and the scan runs to the end. That is
+ * strictly stronger, and it is asserted rather than assumed: a `main(`
+ * reappearing below the generator would mean the file had grown a second writer
+ * this test was written to forbid, so it is an offence here rather than a new
+ * cut-off point.
  */
 async function generatorBody(file: string, fn: string): Promise<string> {
   const source = await readFile(path.join(ROOT, "src", file), "utf8");
   const from = source.indexOf(`export async function ${fn}(opts: {`);
-  const to = source.indexOf("async function main(", from);
   expect(from, `${fn} not found in src/${file}`).toBeGreaterThan(-1);
-  expect(to, `main() not found after ${fn} in src/${file}`).toBeGreaterThan(from);
-  return source.slice(from, to);
+  const body = source.slice(from);
+  expect(
+    body.includes("async function main("),
+    `src/${file} has grown a main() below ${fn}. The stage command lines were deleted on ` +
+      "2026-09-01 and the queue is how a stage re-runs (docs/project/ingest-queue.md); a new " +
+      "one here is a second writer, which is the thing this test forbids.",
+  ).toBe(false);
+  return body;
 }
 
 describe("generateArc", () => {

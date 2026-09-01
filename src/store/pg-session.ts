@@ -94,6 +94,7 @@ import {
   pgArtifactsIn,
   readsPgArtifacts,
 } from "./artifacts-pg.js";
+import { createPgCheckpointStore } from "./checkpoints-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
@@ -461,6 +462,32 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
 
   const session: StoreSession = {
     reads: guardDbStore("session.reads", readsPgArtifacts(ref, db)),
+
+    /**
+     * **The article, not the draft** — and that is the whole of why this seam
+     * sat unused for three days.
+     *
+     * `createPgCheckpointStore` binds one `articleId`, and until this line
+     * nothing handed a stage one: the stages were given `ctx.dir`, which on
+     * Vercel is job-scoped `/tmp` and therefore gone on the retry that needed
+     * it. A hundred-page PDF could fail for ever without accumulating enough
+     * finished chunks to get under the deadline — the liveness failure in
+     * docs/plans/260901d-simpler-finish-sol.md § 4. `ref.articleId` is stable
+     * across every job, every attempt and every draft revision, which is exactly
+     * what a checkpoint has to be keyed on.
+     *
+     * **`db` is not passed and must not be.** The store uses `getDb()` — the
+     * pool — so its writes land on a connection of their own and survive
+     * `commit`'s transaction rolling back. A session that handed it this
+     * session's `db` would be one edit away from handing it a `tx`, which is the
+     * one thing src/store/checkpoints-pg.ts says it must never take.
+     *
+     * Already wrapped in `guardDbStore` by its own constructor, so the
+     * `guardDbStore("session", …)` at the foot of this function — which walks
+     * function properties and copies objects across untouched — has nothing left
+     * to do here.
+     */
+    checkpoints: createPgCheckpointStore({ slug: ref.slug, articleId: ref.articleId }),
 
     /**
      * **Its own transaction, and that is the point of it.**

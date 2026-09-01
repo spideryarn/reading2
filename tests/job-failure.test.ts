@@ -14,6 +14,7 @@
  * the failure for real and ask what it was called.
  */
 import { describe, expect, it } from "vitest";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -201,7 +202,7 @@ describe("the failures a retry cannot change", () => {
     // Retry copies the same absent URL, so it fails in the same place. The
     // article's meta.json has none and none was given: nothing about a second
     // attempt is different.
-    const err = await threw(() => STEPS.fetch.run(ctx("/nowhere"), fsArtifacts));
+    const err = await threw(() => STEPS.fetch.run(ctx("/nowhere"), fsArtifacts, nullCheckpointStore()));
     expect((err as Error).message).toMatch(/No source URL/);
     expect(failureKindOf(err)).toBe("ours");
   });
@@ -242,7 +243,7 @@ describe("the failures a retry cannot change", () => {
          would send the baseline read at `data/a-slug/` in the real repo. */
       const store = createFsArtifactStore(() => ({ dir, htmlFile }));
 
-      const err = await threw(() => STEPS.blocks.run(ctx(dir), store));
+      const err = await threw(() => STEPS.blocks.run(ctx(dir), store, nullCheckpointStore()));
       expect((err as Error).message).toMatch(/no blocks at all/);
       expect(failureKindOf(err)).toBe("blocked");
       /* Both halves, because the kind is only half the feature: the card is
@@ -291,7 +292,7 @@ describe("the failures a retry cannot change", () => {
         "utf8",
       );
       const err = await threw(() =>
-        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), store),
+        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), store, nullCheckpointStore()),
       );
       expect((err as Error).message).toMatch(/Readability/);
       expect(failureKindOf(err)).toBe("blocked");

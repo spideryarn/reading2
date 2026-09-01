@@ -2,7 +2,16 @@
  * Pipeline stage 5f — the **ideas**: the propositions a reader has to hold in
  * order to get this piece.
  *
- *   npm run ideas -- data/writes
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["ideas"], force: ["ideas"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * The glossary (stage 5d) answers *what does this word mean*, on both sides of
  * the introduced/assumed line — `senseHere` is what the author means,
@@ -45,10 +54,9 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -65,7 +73,6 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
-import { loadEnvLocal } from "./env.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type {
   Block,
@@ -78,7 +85,6 @@ import type {
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { stageCli } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an idea *is*.
@@ -518,7 +524,7 @@ export function isStale(
 }
 
 /**
- * The ideas on disk, or null — for the API and this file's own CLI, and since
+ * The ideas on disk, or null — for the API's filesystem read path, and since
  * 2026-08-28 **not for the pipeline**, which asks `previousIdeasFrom` below.
  *
  * Every road to `null` here is the same road: no file, a truncated one, a
@@ -1033,79 +1039,3 @@ export async function generateIdeas(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/ideas.ts <dir with blocks.json + tree.json>");
-    console.error("Running it again replaces the list — it does not append.");
-    process.exit(1);
-  }
-  /* **In `main`, never in `generateIdeas`.** The server already loaded
-     `.env.local` (vite.config.ts) before any stage runs, so doing it inside the
-     generator would be a no-op there and an import of `node:fs` into a code
-     path that does not need one.
-
-     **That gap is closed, and this comment outlived it.** When it was written
-     the other pipeline stages did not do this, and running one from a shell
-     with no exported key failed with "this app has not been set up to talk to
-     the AI service" — a missing credential, apparently, rather than an unread
-     file. By 2026-08-28 six of the seven others had the call. The one left was
-     `src/pdf-read.ts`, which this comment did not name and which nobody would
-     have thought to look in. It has it now, and
-     `tests/paid-cli-ledger.test.ts` holds the rule for all eight, so the next
-     stage CLI cannot be copied without it. */
-  loadEnvLocal();
-  // Before the call, not after: this is the only thing on screen while the
-  // model works, and printing it afterwards makes the command look hung.
-  console.log(`Finding the ideas with ${CAPABLE_MODEL}…`);
-  const run = await generateIdeas({
-    /* The command line has a folder and no store, so it is the caller that
-       turns one into an article — src/article-input.ts § `readArticleFromDir`,
-       which is deliberately the only filesystem read left in this half of the
-       pipeline. */
-    article: await readArticleFromDir(dir),
-    /* The CLI has files and no store, so it reads the file — and `readIdeas`
-       gives one `null` for every kind of failure, which is exactly why this is
-       not the pipeline's path any more. Acceptable here: a person is watching,
-       and the worst case is a re-run that mints fresh ids in a directory they
-       named by hand. */
-    previous: await readIdeas(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  const { ideas } = run;
-  /* **The caller writes, not the generator** — the converted shape `sketch`
-     introduced and the one `quotes` follows. A stage that wrote
-     `<dir>/ideas.json` inside `generateIdeas` would work on a laptop and could
-     not work through a store that puts the artefact in a Postgres column; a
-     generator that wrote AND returned would give the pipeline two writes, one
-     of them to a path that does not exist in production. */
-  const outFile = path.join(dir, "ideas.json");
-  await writeFile(outFile, JSON.stringify(ideas, null, 2), "utf-8");
-
-  const assumed = ideas.ideas.filter((i) => i.provenance === "assumed").length;
-  console.log(
-    `\n${run.blocks} blocks, ${run.words} words → ${ideas.ideas.length} ideas ` +
-      `(${assumed} to bring, ${ideas.ideas.length - assumed} the piece adds)`,
-  );
-  for (const idea of ideas.ideas) {
-    const mark = idea.provenance === "assumed" ? "bring" : "adds ";
-    console.log(`  [${mark}] ${idea.name}  (${idea.occurrences.length})`);
-  }
-  console.log(`\nTokens:  ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed: ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(
-    `Dropped: ${run.dropped.unanchored} unanchored, ${run.dropped.unargued} unargued, ` +
-      `${run.dropped.unknownIds} bad ids, ${run.dropped.unquoted} unquoted, ` +
-      `${run.dropped.malformed} malformed, ${run.dropped.truncated} occurrences over the ` +
-      `cap, ${run.dropped.overCap} ideas over the cap`,
-  );
-  console.log(`\nWrote ${outFile}`);
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

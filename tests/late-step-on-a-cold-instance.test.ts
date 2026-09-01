@@ -34,6 +34,7 @@
  * end; nothing here reaches the network.
  */
 import { cp, mkdtemp, rm } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -162,7 +163,7 @@ describe("a single-step job on an instance that never ingested the article", () 
    */
   it("tweets reads the article from the store, not from its empty directory", async () => {
     answers.push(JSON.stringify({ tweets: ["A post about the article.", "And a second one."] }));
-    await expect(STEPS.tweets.run(coldContext(), store)).resolves.toMatchObject({
+    await expect(STEPS.tweets.run(coldContext(), store, nullCheckpointStore())).resolves.toMatchObject({
       detail: expect.stringContaining("posts"),
       parts: { tweets: expect.objectContaining({ tweets: expect.any(Array) }) },
     });
@@ -179,7 +180,7 @@ describe("a single-step job on an instance that never ingested the article", () 
     if (!tree) throw new Error("the fixture has no tree");
     const sentences = partsOf(tree).map((_, i) => `Part ${i + 1} says something.`);
     answers.push(JSON.stringify({ arc: sentences }));
-    await expect(STEPS.arc.run(coldContext(), store)).resolves.toMatchObject({
+    await expect(STEPS.arc.run(coldContext(), store, nullCheckpointStore())).resolves.toMatchObject({
       parts: { arc: expect.objectContaining({ entries: expect.any(Array) }) },
     });
   });
@@ -199,6 +200,6 @@ describe("a single-step job on an instance that never ingested the article", () 
       dir: path.join(scratch, "data", slug),
       htmlFile: path.join(scratch, "output", `${slug}.html`),
     })) as ArtifactReads;
-    await expect(STEPS.arc.run(coldContext(), empty)).rejects.toThrow(/run the hierarchy step first/);
+    await expect(STEPS.arc.run(coldContext(), empty, nullCheckpointStore())).rejects.toThrow(/run the hierarchy step first/);
   });
 });

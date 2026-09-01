@@ -2,7 +2,16 @@
  * **Stage: Sketch** — ask a model what shape the argument is, and let it draw
  * that shape.
  *
- *   npx tsx src/sketch.ts data/<slug>
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["sketch"], force: ["sketch"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * The other four diagrams each answer one question with one algorithm. This one
  * has no algorithm and no fixed picture: three arguments that converge, a hub
@@ -19,16 +28,13 @@
  * Shaped on src/ideas.ts, which is the nearest neighbour: article-reading,
  * on-demand, and it names block ids so it sends `articleWithIds`.
  */
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
-import { stageCli } from "./cli-ledger.js";
-import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -37,14 +43,12 @@ import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import {
   accept,
   CANVAS_W,
-  MAX_CANVAS_H,
   readSketch,
   stripInferredOpens,
   scoreSketch,
   type Sketch,
   type SketchReport,
   type SketchScore,
-  SKETCH_VERSION,
 } from "./sketch-scene.js";
 import {
   articleWithIdsFingerprint,
@@ -104,7 +108,7 @@ export function isStale(
 }
 
 /**
- * The sketch on disk, or `null` — for the API and this file's own CLI.
+ * The sketch on disk, or `null` — for the API's filesystem read path.
  *
  * Every road to `null` is the same road: no file, a truncated one, a document
  * of the wrong shape. That is right for the panel, which has one thing to say
@@ -616,9 +620,9 @@ export async function generateSketch(opts: {
      *converted* step in this pipeline (src/pipeline.ts § LEGACY_UNCONVERTED_STEPS).
      The other nine stages write their own file inside `run`, which works on a
      laptop and cannot work through a store that puts the artefact in a Postgres
-     column. This one hands the sketch back and lets its three callers decide:
-     the pipeline returns it as `parts`, the CLI writes `sketch.json` beside the
-     article, and the harness writes it into a results directory. A generator
+     column. This one hands the sketch back and lets its two callers decide:
+     the pipeline returns it as `parts`, and `evals/sketch/run.ts` writes it into
+     a results directory. A generator
      that wrote the file *and* returned it would give the pipeline two writes,
      one of them to a path that does not exist in production. */
   return {
@@ -639,7 +643,7 @@ export async function generateSketch(opts: {
   };
 }
 
-/** Everything the harness and the CLI both want to print about a run. */
+/** Everything `evals/sketch/run.ts` wants to print about a run. */
 export function summarise(run: SketchRun): string[] {
   const s = run.score;
   const flow = s.flow === null ? "n/a" : s.flow.toFixed(2);
@@ -658,35 +662,3 @@ export function summarise(run: SketchRun): string[] {
     `tokens: ${run.inputTokens} in, ${run.outputTokens} out; ${(run.elapsedMs / 1000).toFixed(1)}s`,
   ];
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/sketch.ts <dir with blocks.json + tree.json>");
-    console.error("Running it again replaces the picture — it does not append.");
-    process.exit(1);
-  }
-  loadEnvLocal();
-  console.log(`Drawing the argument with ${CAPABLE_MODEL}…`);
-  const run = await generateSketch({
-    /* The command line has a folder and no store — src/article-input.ts §
-       `readArticleFromDir`, which is deliberately the only filesystem read left
-       in this half of the pipeline. */
-    article: await readArticleFromDir(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-  const outFile = path.join(dir, "sketch.json");
-  await writeFile(outFile, JSON.stringify(run.sketch, null, 2), "utf-8");
-  console.log(`\n${run.sketch.title} — ${run.sketch.caption}\n`);
-  for (const line of summarise(run)) console.log(`  ${line}`);
-  if (run.report.faults.length > 0) {
-    console.log("\nFaults:");
-    for (const f of run.report.faults.slice(0, 20)) console.log(`  ${f.where}: ${f.what}`);
-  }
-  console.log(`\nWrote ${outFile}`);
-}
-
-/** Kept for the harness, which reports it beside a run. */
-export { SKETCH_VERSION, MAX_CANVAS_H };
-
-await stageCli(import.meta.url, main);

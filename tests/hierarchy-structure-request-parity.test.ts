@@ -18,6 +18,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import type { Block } from "../src/types.js";
 
 /* The capture. streamMessage is mocked to record the one body generateHierarchy
@@ -113,7 +114,7 @@ describe("the structure call's request", () => {
   it("sends exactly the pinned bytes and settings", async () => {
     captured.length = 0;
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "fixture" }),
+      generateHierarchy({ blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
     ).rejects.toThrow(); // the mocked call fails on purpose, after capture
     expect(captured).toHaveLength(1);
 
@@ -137,7 +138,7 @@ describe("the structure call's request", () => {
   it("structureRequest is the same request - parity by construction, checked anyway", async () => {
     captured.length = 0;
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "fixture" }),
+      generateHierarchy({ blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
     ).rejects.toThrow();
     const { body } = captured[0]!;
     const req = structureRequest(BLOCKS);

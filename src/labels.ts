@@ -30,8 +30,8 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
-import { createHash, randomUUID } from "node:crypto";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
 import { stageCli } from "./cli-ledger.js";
@@ -42,6 +42,14 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
+/* **The one thing this file logs**, and only from the checkpoint seam: a
+   store that could not be read or written. src/pipeline.ts owns the one line
+   per step and that line is about what the step cost — it cannot mention a
+   saving that silently stopped happening, which only this loop can see.
+   Never a value and never any prose: a label is the reader's own document.
+   docs/project/logging.md. */
+import { log } from "./log.js";
+import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
@@ -862,75 +870,40 @@ export interface LabelCheckpointEntry {
 }
 
 /**
- * Batches that have landed, for a run that has not finished.
+ * **One stored batch, or nothing at all** — the entry gate, and it is a
+ * refusal from end to end.
  *
- * A separate file from `labels.json` on purpose. `labels.json` is an artefact —
- * src/pipeline.ts reads its existence as "stage 4 is done", and the store
- * publishes it — so a partial one would be a finished-looking article with
- * holes in its navigation. This is working state: it is written as batches
- * land, read only by the run that resumes it, and deleted the moment the real
- * artefacts are published.
+ * It is handed a value written by some earlier process, about an article that
+ * may since have changed, and the only interesting failure is the one where it
+ * says yes when it should have said no: a resumed run then publishes labels
+ * written for a different question and looks exactly like a run that worked. So
+ * the shape is checked field by field rather than cast, an unrecognisable value
+ * is worth nothing rather than a guess, and `coversExactly` is still asked
+ * afterwards even when everything here agrees.
+ *
+ * **It replaced `usableCheckpoint` on 2026-09-01, and lost a whole layer with
+ * it.** That one was handed a *file* holding every batch, so before it could
+ * look at an entry it had to agree that the file was about this article, this
+ * prompt version, this model and these blocks — four fields of a manifest whose
+ * only job was to say the file was not somebody else's. One row per batch, in a
+ * table keyed on the article, deletes that job rather than doing it: the store
+ * is bound to one `articleId` and refuses any other (src/store/checkpoints.ts),
+ * and the key is `batchFingerprint`, which already carries the prompt version,
+ * the model, the effort, the system prompt, the block ids, the sibling grouping
+ * and the rendered prose. A stale entry is not rejected; it is never looked up.
+ *
+ * The store does not check the shape of a value and says so, which is why this
+ * exists at all rather than a cast at the call site.
  */
-export interface LabelCheckpoint {
-  version: string;
-  generator: string;
-  slug: string;
-  sourceHash: string;
-  /**
-   * Which run last wrote this. Not part of what makes a checkpoint *usable* —
-   * resuming another run's work is the whole point — but it is what lets
-   * `clearCheckpoint` refuse to delete a file some other process is still
-   * writing to.
-   */
-  runId?: string;
-  batches: LabelCheckpointEntry[];
-}
-
-/** Where the working state lives, beside the artefacts it is working towards. */
-export const CHECKPOINT_FILE = "labels-progress.json";
-
-/**
- * The batches in a checkpoint that this run is allowed to reuse.
- *
- * **Everything about this function is a refusal.** It is handed a file written
- * by some earlier process, about an article that may since have changed, and
- * the only interesting failure is the one where it says yes when it should have
- * said no — a resumed run then publishes labels that were written for a
- * different article and looks exactly like a run that worked. So the shape is
- * checked field by field rather than cast, an unreadable or unrecognisable file
- * is worth nothing rather than worth a guess, and the per-batch fingerprints
- * are still matched afterwards even when everything here agrees.
- *
- * Returned as a map so the caller does not have to trust the order, which is
- * whatever order four parallel batches happened to finish in.
- */
-export function usableCheckpoint(
-  file: unknown,
-  expect: { version: string; generator: string; slug: string; sourceHash: string },
-): Map<string, LabelCheckpointEntry> {
-  const empty = new Map<string, LabelCheckpointEntry>();
-  if (typeof file !== "object" || file === null) return empty;
-  const cp = file as Partial<LabelCheckpoint>;
-  if (cp.version !== expect.version) return empty;
-  if (cp.generator !== expect.generator) return empty;
-  if (cp.slug !== expect.slug) return empty;
-  if (cp.sourceHash !== expect.sourceHash) return empty;
-  if (!Array.isArray(cp.batches)) return empty;
-
-  const out = new Map<string, LabelCheckpointEntry>();
-  for (const entry of cp.batches) {
-    if (typeof entry !== "object" || entry === null) continue;
-    const { fingerprint, labels, record } = entry as Partial<LabelCheckpointEntry>;
-    if (typeof fingerprint !== "string" || fingerprint.length === 0) continue;
-    if (typeof labels !== "object" || labels === null) continue;
-    if (Object.values(labels).some((v) => typeof v !== "string" || v.trim().length === 0)) continue;
-    if (typeof record !== "object" || record === null) continue;
-    if (!Array.isArray(record.blocks)) continue;
-    /* Last one wins, and it does not matter which: two entries with the same
-       fingerprint were produced by the same prompt asking the same question. */
-    out.set(fingerprint, { fingerprint, labels, record });
-  }
-  return out;
+export function usableEntry(value: unknown): LabelCheckpointEntry | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { fingerprint, labels, record } = value as Partial<LabelCheckpointEntry>;
+  if (typeof fingerprint !== "string" || fingerprint.length === 0) return null;
+  if (typeof labels !== "object" || labels === null) return null;
+  if (Object.values(labels).some((v) => typeof v !== "string" || v.trim().length === 0)) return null;
+  if (typeof record !== "object" || record === null) return null;
+  if (!Array.isArray(record.blocks)) return null;
+  return { fingerprint, labels, record };
 }
 
 /**
@@ -1537,28 +1510,16 @@ export interface LabelRun {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
-  /**
-   * Throw the working state away — **call it once the artefacts are stored**,
-   * not when this function returns.
-   *
-   * The gap is the whole point. If `generateLabels` deleted the checkpoint
-   * itself, a caller that crashed between here and storing `labels.json` would
-   * have lost every batch it had just paid for, which is the case the
-   * checkpoint exists for. A no-op when no `dir` was given, and harmless to
-   * forget: a checkpoint left behind is read by the next run, matched
-   * fingerprint by fingerprint, and either reused correctly or ignored.
-   *
-   * **So what it protects is money, not consistency** — worth saying because
-   * the gap looks like a crash-safety property and has twice been written down
-   * as one. Nothing is inconsistent if this is never called; the next run pays
-   * again if it is called too early.
-   *
-   * `generateHierarchy` does not call it at all: it passes this function out on
-   * `HierarchyRun` so that the caller that stores the three artefacts is the one that
-   * closes the gap, which on the pipeline path is after the store has them
-   * rather than after this function returns.
-   */
-  clearCheckpoint: () => Promise<void>;
+  /* **There is no `clearCheckpoint` here any more**, and its absence is the
+     point rather than a tidy-up. It threw the whole `labels-progress.json`
+     away, and it had to be called by whoever *stored* the artefacts rather than
+     here, because a caller that crashed in the gap would have lost every batch
+     it had just paid for. That whole dance existed because the unit of deletion
+     — one file holding every batch — was larger than the unit of work. One row
+     per batch makes it unnecessary: there is nothing to delete on success, and
+     retention belongs to the sweep (`scripts/checkpoints-sweep.ts`,
+     src/store/checkpoints.ts § Retention). Gone 2026-09-01 with `runId` and the
+     serialised rewrite. */
 }
 
 /**
@@ -2078,14 +2039,20 @@ export async function generateLabels(opts: {
   blocks: Block[];
   slug: string;
   /**
-   * Where to keep the checkpoint. **No directory, no checkpoint** — and that is
-   * a real choice rather than a default, which is why it is not silently the
-   * article's directory: a caller that has one passes it, and a caller that
-   * does not (a test, a one-off) gets the old behaviour with nothing on disk.
-   * The run reports how many batches it resumed, so a caller that meant to
-   * checkpoint and did not can see it in the numbers.
+   * Where each finished batch is kept as it lands, one row apiece, so a run
+   * that dies eight batches into a book costs one batch rather than eight.
+   *
+   * **Required, and it was an optional `dir` until 2026-09-01.** The old shape
+   * read *no directory, no checkpoint*, which is the same sentence as *a run
+   * that quietly pays for everything twice* and looks identical from outside.
+   * A caller with nothing to key on now says so — `nullCheckpointStore()` —
+   * rather than saying nothing. `LabelRun.resumed` is still the number that
+   * shows which one happened.
+   *
+   * src/store/checkpoints.ts is the contract, and the key is
+   * `batchFingerprint`.
    */
-  dir?: string;
+  checkpoints: CheckpointStore;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
 }): Promise<LabelRun> {
@@ -2099,12 +2066,6 @@ export async function generateLabels(opts: {
      (`logLevel: "off"`, and why it is not a preference) now lives with the call
      in `runBatch`. */
   const sourceHash = hashBlocks(opts.blocks);
-  const manifest = {
-    version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
-    slug: opts.slug,
-    sourceHash,
-  };
 
   /* **Fail fast, and stop paying.** Without this, a 429 that outlives the SDK's
      own retries rejects the `Promise.all` while every other batch carries on to
@@ -2122,37 +2083,55 @@ export async function generateLabels(opts: {
     ? AbortSignal.any([opts.signal, fatal.signal])
     : fatal.signal;
 
-  const checkpointPath = opts.dir ? path.join(opts.dir, CHECKPOINT_FILE) : null;
-  /* Whose checkpoint this is. Two processes labelling the same directory is not
-     a supported thing to do, but `clearCheckpoint` deleting the *other* one's
-     live working state would be a silent, expensive way to find that out — so
-     the delete checks the file still says this run wrote it. Random rather than
-     derived, because two runs of the same article against the same tree would
-     derive the same id, which is exactly the pair that must not match. */
-  const runId = randomUUID();
-  const resumable = checkpointPath
-    ? usableCheckpoint(await readJsonIfPresent(checkpointPath), manifest)
-    : new Map<string, LabelCheckpointEntry>();
-  /* Only the entries this run's own plan asks for. A checkpoint left by a run
-     against a different tree can share this article's source hash — the blocks
-     did not change, the boundaries did — and every one of its batches will
-     simply fail to match a fingerprint below. Keeping the whole map and writing
-     it back out would carry those stale entries forward for ever. */
-  const kept: LabelCheckpointEntry[] = [];
-  const writeCheckpoint = checkpointPath
-    ? serialise(async () => {
-        /* A batch that was already inside this write when the run was abandoned
-           would otherwise put the file back after a later run had cleared it.
-           p-queue can reject a running task's promise but cannot stop the
-           callback, so the callback has to look. GPT-5.6-sol, 2026-08-26. */
-        if (signal.aborted) return;
-        await writeAtomic(checkpointPath, {
-          ...manifest,
-          runId,
-          batches: kept,
-        } satisfies LabelCheckpoint);
-      })
-    : async (): Promise<void> => {};
+  /**
+   * **Every fingerprint, and then one read for all of them.**
+   *
+   * The plan is known before a single call goes out, so the whole set is asked
+   * for in one statement rather than one per batch — which is what the store's
+   * plural `read` is for (src/store/checkpoints.ts). Computed once here and
+   * indexed by position below, so the fingerprint a batch is *stored* under and
+   * the one it is *looked up* under cannot come apart.
+   *
+   * **A read that throws is a miss, not a failure.** The alternative to
+   * resuming is a run that works and costs money; a checkpoint layer that could
+   * fail the whole label pass would be a saving that had become an outage. It
+   * is logged, because a store that answered nothing for ever would look
+   * exactly like a store nobody had wired up.
+   * docs/reusable/silent-success.md.
+   */
+  const fingerprints = batches.map((batch) => batchFingerprint(batch, opts.blocks, outline));
+  let stored: Map<string, unknown>;
+  try {
+    stored = await opts.checkpoints.read<unknown>(opts.slug, "hierarchy-labels", fingerprints);
+  } catch (err) {
+    log("pipeline").warn(
+      { slug: opts.slug, batches: fingerprints.length, err },
+      "could not read the label checkpoints; every batch will be asked for again",
+    );
+    stored = new Map<string, unknown>();
+  }
+
+  /**
+   * Record one finished batch, and **never fail the run over it.**
+   *
+   * The other half of the read above: a write that throws costs one batch on
+   * the next attempt, and nothing else. There is no delete anywhere — the
+   * `runId`, the serialised whole-file rewrite and `clearCheckpoint` all went
+   * with the one-file-per-run format on 2026-09-01, because the hazard they
+   * guarded against was that the unit of deletion was larger than the unit of
+   * work. One row per batch removes it. Retention is the sweep's:
+   * `scripts/checkpoints-sweep.ts`, src/store/checkpoints.ts § Retention.
+   */
+  const keepBatch = async (entry: LabelCheckpointEntry): Promise<void> => {
+    try {
+      await opts.checkpoints.write(opts.slug, "hierarchy-labels", entry.fingerprint, entry);
+    } catch (err) {
+      log("pipeline").warn(
+        { slug: opts.slug, batch: entry.fingerprint, err },
+        "could not save a label checkpoint; a later attempt will ask for this batch again",
+      );
+    }
+  };
   /* **The warm-up, and the condition it now carries.** All these batches share
      the outline as their cached prefix, and a cache entry cannot be *read*
      until the request that writes it has begun streaming — so firing four at
@@ -2192,34 +2171,40 @@ export async function generateLabels(opts: {
   report();
 
   const results = await allOrStop(
-    batches.map((batch) =>
+    batches.map((batch, at) =>
       /* The signal goes to `add` as well as into the request. Without it a
          batch still sitting in the queue when a fatal one aborts would simply
          never run and never settle, and `Promise.all` would hang on a promise
          with nothing left to resolve it. */
       queue.add(async () => {
-        const fingerprint = batchFingerprint(batch, opts.blocks, outline);
-        const already = resumable.get(fingerprint);
-        /* Checked against *this* batch, not merely against the file's manifest.
-           `usableCheckpoint` can only ask whether an entry is well-formed; only
+        /* Minted above with all of its siblings so the whole set could be read
+           in one statement. `noUncheckedIndexedAccess` is on, and an absent one
+           would be a wiring bug rather than a miss — a batch checkpointed under
+           `undefined` is one nothing ever reads back. */
+        const fingerprint = fingerprints[at];
+        if (fingerprint === undefined) {
+          throw new Error(`No fingerprint was computed for batch ${at} of ${batches.length}.`);
+        }
+        const already = usableEntry(stored.get(fingerprint));
+        /* Checked against *this* batch, not merely against the entry's own
+           shape. `usableEntry` can only ask whether a value is well-formed; only
            here is it known which blocks the entry is supposed to be answering
            for. Without this, an entry carrying an extra id would quietly
            overwrite another batch's label, and the coverage gate at the end —
            which asks whether every block has one, not whether the right call
            wrote it — would pass. GPT-5.6-sol, 2026-08-26. */
         if (already && coversExactly(already, batch)) {
-          kept.push(already);
           done++;
           resumed++;
           report();
-          /* Written even though nothing new was bought. Two reasons, and the
-             second one is a bug this had: it stamps the file with *this* run's
-             id, without which a fully-resumed run would never have written the
-             file at all and `clearCheckpoint` would then refuse to delete it as
-             somebody else's — leaving working state behind for ever. And it
-             compacts: entries the new plan does not ask for are dropped rather
-             than carried forward run after run. */
-          await writeCheckpoint();
+          /* **And nothing is written back**, which is the whole of what one row
+             per batch bought. The old whole-file format had to rewrite the
+             manifest even on a pure resume: to stamp the file with this run's
+             id, or `clearCheckpoint` would refuse to delete somebody else's and
+             leave working state behind for ever; and to compact away entries the
+             new plan no longer asks for. Both jobs belonged to the file rather
+             than to the work. A row is already the right size, is already keyed
+             on the question, and is reclaimed by the sweep. */
           return { labels: already.labels, record: already.record, fromCheckpoint: true };
         }
 
@@ -2352,12 +2337,12 @@ export async function generateLabels(opts: {
         report();
 
         /* Written before this batch's result is handed back, so a failure in
-           the very next batch cannot lose it. The write is serialised: four
-           batches landing at once would otherwise each read `kept`, each build
-           a file, and the last rename would win, silently dropping the other
-           three — a checkpoint that quietly holds less than it should is worse
-           than no checkpoint, because the run that resumes from it pays again
-           and reports success. */
+           the very next batch cannot lose it. **No serialisation any more**:
+           four batches landing at once used to each read the whole `kept` list,
+           each build a file, and the last rename won — silently dropping the
+           other three, which is worse than no checkpoint, because the run that
+           resumes from it pays again and reports success. Four rows under four
+           different keys cannot do that to each other. */
         /* A partially-accepted batch is written here like any other, and a later
            run will not resume it: `coversExactly` demands an entry covering the
            batch's blocks exactly, and this one is short by whatever was dropped.
@@ -2366,8 +2351,7 @@ export async function generateLabels(opts: {
            back whole, which is strictly better than resuming a known gap, and
            the alternative is loosening a guard whose job is to pin an entry to
            its own batch. */
-        kept.push({ fingerprint, labels: out.labels, record: out.record });
-        await writeCheckpoint();
+        await keepBatch({ fingerprint, labels: out.labels, record: out.record });
         return { ...out, fromCheckpoint: false };
       }, { signal }),
     ),
@@ -2431,16 +2415,6 @@ export async function generateLabels(opts: {
     cacheReadTokens: paid.reduce((n, r) => n + r.cacheReadTokens, 0),
     cacheWriteTokens: paid.reduce((n, r) => n + r.cacheWriteTokens, 0),
     elapsedMs: Date.now() - started,
-    clearCheckpoint: async (): Promise<void> => {
-      if (!checkpointPath) return;
-      /* Only if it is still ours. A second process labelling the same directory
-         would have overwritten this file with its own working state, and
-         deleting that is an expensive, silent way to discover the collision. */
-      const onDisk = await readJsonIfPresent(checkpointPath);
-      const owner = (onDisk as Partial<LabelCheckpoint> | undefined)?.runId;
-      if (owner !== undefined && owner !== runId) return;
-      await rm(checkpointPath, { force: true });
-    },
   };
 }
 
@@ -2469,45 +2443,6 @@ export async function allOrStop<T>(work: Promise<T>[], stop: () => void): Promis
 }
 
 /**
- * Read a JSON file, or nothing at all.
- *
- * A checkpoint that is missing, unreadable or not JSON is worth exactly the
- * same as one that is stale: nothing. So this returns `undefined` for all of
- * them rather than distinguishing failures the caller has no different
- * response to — and it deliberately does not throw, because the alternative to
- * resuming is a run that works and costs money, not a run that cannot happen.
- */
-async function readJsonIfPresent(file: string): Promise<unknown> {
-  try {
-    return JSON.parse(await readFile(file, "utf-8"));
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Run an async function one at a time, however many callers ask at once.
- *
- * There are four batches in flight and each writes the whole checkpoint when it
- * lands. Without this they interleave — read `kept`, serialise, write, rename —
- * and the last rename wins, so a file that should hold four batches holds one
- * and nothing is red. The next run then re-buys three answers it had already
- * paid for and reports itself a success.
- *
- * A promise chain rather than a lock, because the only thing needed is "after
- * the one before". A rejection is swallowed into the chain so one failed write
- * cannot wedge every later one; the caller still sees it.
- */
-export function serialise(fn: () => Promise<void>): () => Promise<void> {
-  let tail: Promise<void> = Promise.resolve();
-  return () => {
-    const next = tail.then(fn);
-    tail = next.catch(() => {});
-    return next;
-  };
-}
-
-/**
  * Write JSON so that it is either wholly there or not there at all.
  *
  * The twin of `writeAtomic` in src/hierarchy.ts, deliberately duplicated rather than
@@ -2515,6 +2450,13 @@ export function serialise(fn: () => Promise<void>): () => Promise<void> {
  * move to a third module for four lines, and the two copies cannot drift in a
  * way that matters — either writes atomically or it does not, and there is no
  * middle behaviour to disagree about.
+ *
+ * **Only `main()` uses it now.** It used to write the checkpoint too, which is
+ * what `readJsonIfPresent` and `serialise` were for — a whole-file manifest
+ * rewritten by whichever of four parallel batches landed next, and serialised
+ * so the last rename could not silently drop the other three. One row per batch
+ * removes the interleaving rather than guarding it, so all three went on
+ * 2026-09-01 along with `runId` and `clearCheckpoint`.
  */
 async function writeAtomic(file: string, value: unknown): Promise<void> {
   const tmp = `${file}.${process.pid}.tmp`;
@@ -2549,7 +2491,12 @@ async function main(): Promise<void> {
     tree,
     blocks,
     slug: path.basename(dir),
-    dir,
+    /* **Nothing is remembered between runs of this command.** The batches are
+       rows in the `checkpoints` table now, keyed on an `articles` row this
+       command does not have — src/store/checkpoints.ts § nullCheckpointStore.
+       The queue, which is how an article really gets labelled, does have one and
+       does resume. */
+    checkpoints: nullCheckpointStore(),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
@@ -2565,9 +2512,6 @@ async function main(): Promise<void> {
      them in one go, where a half-written set is not a state that exists. */
   await writeAtomic(path.join(dir, "labels.json"), run.file);
   await writeAtomic(path.join(dir, "tree.json"), merged);
-  /* Only now. Until both artefacts are on disk the checkpoint is the only copy
-     of what this run bought. */
-  await run.clearCheckpoint();
 
   console.log(`\n\nBatches:   ${run.batches}${run.resumed > 0 ? ` (${run.resumed} resumed)` : ""}`);
   if (run.oversized > 0) {

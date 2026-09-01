@@ -32,6 +32,7 @@
  * such thing.
  */
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -156,7 +157,7 @@ async function promptOf(run: () => Promise<unknown>): Promise<string> {
 describe("the automatic stages never see the note", () => {
   it("arc", async () => {
     const { generateArc } = await import("../src/arc.js");
-    const { readArticleFromDir } = await import("../src/article-input.js");
+    const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
     const prompt = await promptOf(() => generateArc({ article }));
     expect(prompt).toContain(BODY_WORD);
@@ -165,7 +166,7 @@ describe("the automatic stages never see the note", () => {
 
   it("glossary", async () => {
     const { generateGlossary } = await import("../src/glossary.js");
-    const { readArticleFromDir } = await import("../src/article-input.js");
+    const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
     /* `previous: null` — a first pass, which is what this fixture is. The
        argument is required so that landing D cannot drop it silently; here it
@@ -177,7 +178,7 @@ describe("the automatic stages never see the note", () => {
 
   it("tweets", async () => {
     const { generateTweets } = await import("../src/tweets.js");
-    const { readArticleFromDir } = await import("../src/article-input.js");
+    const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
     const prompt = await promptOf(() => generateTweets({ article }));
     expect(prompt).toContain(BODY_WORD);
@@ -194,7 +195,7 @@ describe("the automatic stages never see the note", () => {
        the same `evidence` list to `articleText` and to `buildQuotes`.
        GPT Sol, 2026-08-31. */
     const { generateQuotes } = await import("../src/quotes.js");
-    const { readArticleFromDir } = await import("../src/article-input.js");
+    const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
     const prompt = await promptOf(() => generateQuotes({ article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
@@ -207,7 +208,7 @@ describe("the automatic stages never see the note", () => {
        green on arc, glossary and tweets and would leave this one reading the
        bibliography. */
     const { generateIdeas } = await import("../src/ideas.js");
-    const { readArticleFromDir } = await import("../src/article-input.js");
+    const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
     const prompt = await promptOf(() => generateIdeas({ article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
@@ -227,7 +228,7 @@ describe("the automatic stages never see the note", () => {
        the model is never handed a note at all. Handing it one with a label
        would not have been a fix. */
     const { generateHierarchy } = await import("../src/hierarchy.js");
-    const prompt = await promptOf(() => generateHierarchy({ blocks, slug: "block-policy-prompts" }));
+    const prompt = await promptOf(() => generateHierarchy({ blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -259,7 +260,7 @@ describe("the automatic stages never see the note", () => {
 
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const prompt = await promptOf(() =>
-      generateHierarchy({ blocks: stranded, slug: "block-policy-prompts" }),
+      generateHierarchy({ blocks: stranded, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
@@ -280,7 +281,7 @@ describe("the automatic stages never see the note", () => {
        tree is in, rather than relying on stage 4 having run. */
     const { generateLabels } = await import("../src/labels.js");
     const prompt = await promptOf(() =>
-      generateLabels({ tree, blocks, slug: "block-policy-prompts" }),
+      generateLabels({ tree, blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);

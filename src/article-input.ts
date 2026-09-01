@@ -25,12 +25,16 @@
  * `slug` is here because one stage needs it — `sketch` stamps it into the
  * picture it returns — and because `path.basename(opts.dir)` was how it used to
  * get it, which is exactly the kind of thing that keeps a directory alive.
+ *
+ * **There is no `readArticleFromDir` here any more, and that is the point.**
+ * It lived beside these two with a comment saying no request path may call it;
+ * a comment is not a mechanism. The eight stage CLIs that used it are gone
+ * (the queue re-runs a stage — docs/project/ingest-queue.md), and the function
+ * moved to [`tests/helpers/article-from-dir.ts`](../tests/helpers/article-from-dir.ts)
+ * where the evals and the suites that still want a folder can reach it and the
+ * server cannot. docs/plans/260831b-finish-the-database-move.md § sub-stage I.
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 import { stageFailure } from "./job-failure.js";
-import { parseJsonFrom } from "./parse-json.js";
 import type { ArtifactReads } from "./store/artifacts.js";
 import type { Block, Meta, Tree } from "./types.js";
 
@@ -79,28 +83,4 @@ export async function tryReadArticle(slug: string, store: ArtifactReads): Promis
   if (!file?.blocks || !tree) return null;
   const meta = await store.read(slug, "extract", "meta");
   return { slug, blocks: file.blocks, tree, meta: meta ?? null };
-}
-
-/**
- * The same triple straight off a directory, for the command lines and the eval
- * harnesses — the callers that have a folder and no store.
- *
- * **The last filesystem read in this half of the pipeline, and deliberately in
- * one place** so that stage 4 of the migration deletes a function rather than
- * hunting seven `readFile`s. Nothing in a request path or a queued job may call
- * it: those have a store, and the store is the point.
- */
-export async function readArticleFromDir(dir: string): Promise<Article> {
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  const meta: Meta | null = await readFile(path.join(dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
-  return { slug: path.basename(dir), blocks, tree, meta };
 }

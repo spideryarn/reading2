@@ -10,9 +10,8 @@
  * seen red against a deliberate reversion before being trusted, and the
  * reversion for each is named in its own comment.
  */
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { memoryCheckpoints } from "./helpers/memory-checkpoints.js";
+import { readFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
@@ -127,11 +126,13 @@ async function fixture() {
 }
 
 async function runWith(reader: PdfReader, bytes: Uint8Array) {
-  const dir = await mkdtemp(path.join(tmpdir(), "spya-pdfconc-"));
   return runPdfExtract({
     bytes,
     url: "https://example.test/paper.pdf",
-    dataDir: dir,
+    /* A fresh one per call, so nothing here resumes: this file is about the
+       width of the queue, and a chunk served from a checkpoint is a chunk that
+       never entered it. */
+    checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
     slug: "paper",
     reader,
   });
@@ -239,11 +240,10 @@ describe("PDF chunks are read concurrently", () => {
     };
 
     const survivor = async (reader: PdfReader) => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdfdup-"));
       const result = await runPdfExtract({
         bytes,
         url: "https://example.test/paper.pdf",
-        dataDir: dir,
+        checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
         slug: "paper",
         reader,
       });

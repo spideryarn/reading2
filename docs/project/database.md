@@ -63,10 +63,11 @@ data/_uploads/
   <uuid>.json   one file per upload attempt   (files store only — see below)
 ```
 
-**And one thing in there is not an artefact.** `labels-progress.json` and `pdf-chunks/<key>.json`
-are **checkpoints**: work a failed attempt already paid for, kept so the retry does not buy it
-again. They are not published, nothing reads them as "this step is done", and they survive a run
-that died — which is the entire point of them. See § Checkpoints below.
+**And one thing that used to be in there is not an artefact and is no longer a file.**
+`labels-progress.json` and `pdf-chunks/<key>.json` were **checkpoints**: work a failed attempt
+already paid for, kept so the retry does not buy it again. They are rows in the `checkpoints` table
+since 2026-09-01, because a directory could not do the one job they exist for — see § Checkpoints
+below. Old `data/` fixtures still carry the files; nothing reads them.
 
 **And, since 2026-08-27, one thing that is deliberately not a file here at all.** An uploaded PDF's
 bytes go to **Supabase Storage**, in the private `sources` bucket, because the browser has to be
@@ -866,22 +867,30 @@ it arrives as `0` and every negative judgement is gone with nothing to see.
 
 ## Checkpoints — work a failed attempt already paid for
 
-Two stages keep working state that has to **survive their own failure**: `hierarchy` writes a batch of nav
-labels to `labels-progress.json` as each one comes back, and the PDF reader writes each transcribed
-chunk to `pdf-chunks/<key>.json`. A 429 eight batches into a book then costs one batch rather than
-eight, and these are the expensive calls.
+Two stages keep working state that has to **survive their own failure**: `hierarchy` records each
+batch of nav labels as it comes back, and the PDF reader records each transcribed chunk. A 429 eight
+batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
-They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) since 2026-08-29,
-with [`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table,
-because landing D of [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)
-takes `data/<slug>/` away. The plan's § B3 has the three decisions and the reasoning.
+They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), with
+[`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table. A stage is
+handed one through **[`StoreSession.checkpoints`](../../src/store/session.ts)** — the third argument
+to `PipelineStep.run` — and never builds one for itself.
 
-**Nothing calls the store, and that is now a fact with a cost rather than a stage not yet reached.**
-The two stages still write their own files. The filesystem adapter — a second, genuine
-implementation rather than a fallback — was deleted unused on 2026-09-01
-([260831b § Stage 4](../plans/260831b-finish-the-database-move.md)): no `data/<slug>/checkpoints/`
-directory has ever existed, so its sweep walked an empty shape while ~300 KB of real checkpoints sat
-one directory up, invisible to it. **That is the argument for landing D2**, which is still unbuilt.
+**This was a directory until 2026-09-01, and it was not a tidiness problem.** The files went to
+`data/<slug>/`, which on Vercel is job-scoped `/tmp`; a retry is a new job id by design and lands on
+a different machine anyway, so **every attempt at a long PDF started from zero**. `MAX_PAGES` is 100
+and a hundred dense chunks can miss the 740s step deadline, so an accepted document could fail for
+ever without ever accumulating enough finished work to get under it — a liveness failure rather than
+a bill. GPT Sol revised its own earlier judgement to say so:
+[260901d-simpler-finish-sol.md § 4](../plans/260901d-simpler-finish-sol.md). The seam had existed
+since 2026-08-29 with no caller, for one reason: **a stage was never handed the stable `articleId`**,
+which is the only thing a checkpoint may be keyed on.
+
+The proof is [`tests/checkpoints-durable-resume.test.ts`](../../tests/checkpoints-durable-resume.test.ts),
+which kills a chunked extraction part way, starts a second job over the same article, and counts
+model calls. With the key scoped per job — which is what the directory was — the second attempt
+re-reads all six chunks when it owes one.
+
 What to know before touching any of it:
 
 - **The key is the article and the question, never the revision.** A retry is a new job and a new job
@@ -899,14 +908,27 @@ What to know before touching any of it:
   checkpoints are dead because the question changed (prompt version, model, or re-extracted text):
   ninety days on `last_used_at`, `npx tsx scripts/checkpoints-sweep.ts` to report, `--delete` to do
   it. **It sweeps Postgres only**, since 2026-09-01. Nothing schedules it, and what makes that safe
-  is that every row costs a paid model call to create, so the table cannot grow faster than the bill
-  — but note that until D2 lands it reports zero because the table is empty, which is the number a
-  broken sweep would report too ([silent-success.md](../reusable/silent-success.md)).
+  is that every row costs a paid model call to create, so the table cannot grow faster than the bill.
+  **There is deliberately no delete on success**: `labels.ts` used to mint a `runId` and refuse to
+  delete a file that was not its own, machinery that existed only because the unit of deletion — one
+  file holding every batch — was larger than the unit of work. One row per batch removes the hazard
+  rather than guarding it.
 - **The key is 16 lower-case hex characters**, and the `checkpoints_key_format` CHECK says so. Both
   producers are checked against it by the tests that own them — `tests/labels-batching.test.ts` on
-  the real `batchFingerprint`, `tests/pdf-read.test.ts` on the file names a real run writes. Add a
+  the real `batchFingerprint`, `tests/pdf-read.test.ts` on the keys a real run stores. Add a
   third checkpoint and its key has to satisfy that too; a `:` separator or upper-case hex would land
   cleanly and be rejected by the database later.
+- **A checkpoint may not take a step down with it.** Every call into the store from either stage is
+  wrapped: a read that throws is a miss, a write that throws costs one re-buy, and both are logged at
+  `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
+  that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
+  outage.
+- **A laptop with `SPIDERYARN_STORE` unset checkpoints nothing.** `fsStoreSession` has no `articles`
+  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines do the
+  same. Articles come out identical and a *second* attempt after a killed one pays again. That is a
+  decision, written down at `nullCheckpointStore` in
+  [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
+  does.
 
 A checkpoint write deliberately does **not** join the artefact transaction — preserving the work of a
 *failed* attempt is the whole point, and one rolled back with the attempt is worthless. The Postgres

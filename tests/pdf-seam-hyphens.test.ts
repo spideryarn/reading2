@@ -15,9 +15,8 @@
  *
  * SEEN RED, 2026-08-31, each against the specific reversion named on it.
  */
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { memoryCheckpoints } from "./helpers/memory-checkpoints.js";
+import { readFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { baselineFor, pageLines, type PdfRecord, pass0 } from "../src/pdf.js";
@@ -540,10 +539,9 @@ describe("the stage as it actually runs", () => {
     expect(cut[0]).toEqual([1, 2, 3]);
     expect(cut[1]).toEqual([4, 5, 6]);
 
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-seam-"));
     const result = await runPdfExtract({
       bytes,
-      dataDir: dir,
+      checkpoints: memoryCheckpoints({ slug: "seam", articleId: "article-seam" }),
       slug: "seam",
       reader: seamReader(),
     });

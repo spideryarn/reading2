@@ -575,13 +575,21 @@ stamp against and what `generateHierarchy` reports as the step's input hash. It 
 publish guard compares it with the stored blocks and refuses to publish an article whose tree was
 built from something else.
 
-While the batches are running, each one's labels are appended to **`labels-progress.json`** as it
-lands. That is working state, not an artefact, which is why it is not `labels.json`: a partial
-`labels.json` would be a finished-looking article with holes in its navigation. A later run reuses a
-batch only when a fingerprint matches over the exact bytes of its prompt **plus the sibling grouping
-those bytes never state** — never merely because the same block ids are in the same call, since the
-crumbs, gists, outline and boundaries around them may all have moved. The first unrecoverable failure
-aborts every other batch rather than letting a doomed run keep buying answers.
+While the batches are running, each one's labels are **checkpointed as it lands** — one row in the
+`checkpoints` table, under the `hierarchy-labels` namespace, keyed on the batch's fingerprint
+([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)). That
+is working state, not an artefact, which is why it is not `labels.json`: a partial `labels.json`
+would be a finished-looking article with holes in its navigation. A later run reuses a batch only
+when a fingerprint matches over the exact bytes of its prompt **plus the sibling grouping those bytes
+never state** — never merely because the same block ids are in the same call, since the crumbs,
+gists, outline and boundaries around them may all have moved. The first unrecoverable failure aborts
+every other batch rather than letting a doomed run keep buying answers.
+
+It was `labels-progress.json` in the article's directory until 2026-09-01, and one file holding every
+batch is what made the `runId`, the serialised rewrite and `clearCheckpoint` necessary — the unit of
+deletion was larger than the unit of work. One row per batch removed all three, and nothing is
+deleted on success at all. The store is handed down by `StoreSession`; `generateHierarchy` and
+`generateLabels` both take a `CheckpointStore` and neither builds one.
 
 The whole design, the alternatives weighed against it, and what it does not yet do are in
 [docs/plans/260826h-toc-scaling.md](../plans/260826h-toc-scaling.md).

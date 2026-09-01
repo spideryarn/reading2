@@ -1,7 +1,16 @@
 /**
  * The **quiz**: the questions the piece can ask you back.
  *
- *   npm run quiz -- data/noema-mythology-of-conscious-ai
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["quiz"], force: ["quiz"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * Remember mode today is free recall — the reader says what they took from the
  * article and the model shows them where that comes apart. This is the other
@@ -103,14 +112,11 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
-import { stageCli } from "./cli-ledger.js";
-import { loadEnvLocal } from "./env.js";
 import { mintUniqueId } from "./ids.js";
 /* One symbol, and it is imported rather than copied for the reason AGENTS.md
    gives about second copies: this is exactly the same question `ideas` asks
@@ -189,7 +195,7 @@ export type { Quiz, QuizBand, QuizEvidence, QuizQuestion, QuizQuestionId };
  * The artefact's own types live in src/types.ts, beside `Ideas` and `Timeline`
  * and every other artefact's, and are re-exported here because this file is
  * what a caller already imports. `tests/client-imports.test.ts` is the reason:
- * the panel cannot reach a module with a CLI and a model call in it, so the
+ * the panel cannot reach a module with a model call in it, so the
  * shape both sides speak has to live in a file that imports nothing.
  */
 export type Dropped = QuizDropped;
@@ -558,7 +564,7 @@ export function buildQuiz(
 }
 
 /**
- * The quiz on disk, or null — for this file's own CLI and the eval.
+ * The quiz on disk, or null — for the API's filesystem read path and the eval.
  *
  * Every road to `null` is the same road: no file, a truncated one, a document
  * of the wrong shape. Acceptable here because there is nothing to inherit — see
@@ -959,58 +965,3 @@ export async function generateQuiz(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-const BAND_MARK: Record<QuizBand, string> = { easy: "·  ", medium: "·· ", hard: "···" };
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/quiz.ts <dir with blocks.json + tree.json>");
-    console.error("Running it again replaces the quiz — it does not append, and ids do not carry.");
-    process.exit(1);
-  }
-  /* **In `main`, never in `generateQuiz`.** The server already loaded
-     `.env.local` before any stage runs, so doing it inside the generator would
-     be a no-op there and an import of `node:fs` into a path that does not need
-     one. `tests/paid-cli-ledger.test.ts` holds this rule for every stage CLI. */
-  loadEnvLocal();
-  const article = await readArticleFromDir(dir);
-  // Before the call, not after: this is the only thing on screen while the
-  // model works, and printing it afterwards makes the command look hung.
-  console.log(`Setting the quiz with ${CAPABLE_MODEL}…`);
-  const run = await generateQuiz({
-    article,
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  const outFile = path.join(dir, "quiz.json");
-  await writeFile(outFile, JSON.stringify(run.quiz, null, 2), "utf-8");
-
-  const { quiz, dropped } = run;
-  const count = (band: QuizBand) => quiz.questions.filter((q) => q.band === band).length;
-  console.log(
-    `\n${run.blocks} blocks, ${run.words} words → ${quiz.questions.length} questions ` +
-      `(${count("easy")} easy, ${count("medium")} medium, ${count("hard")} hard), ` +
-      `batch ${quiz.batchId}`,
-  );
-  for (const [i, q] of quiz.questions.entries()) {
-    console.log(`\n${String(i + 1).padStart(2)}. ${BAND_MARK[q.band]} v${q.value}  ${q.question}`);
-    console.log(`      ${q.referenceAnswer}`);
-    console.log(`      ${q.evidence.map((e) => e.blockId).join(" ")}`);
-  }
-  console.log(`\nTokens:  ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed: ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(
-    `Dropped: ${dropped.unanchored} unanchored, ${dropped.unknownIds} bad ids, ` +
-      `${dropped.unquoted} unquoted, ${dropped.malformed} malformed, ` +
-      `${dropped.duplicate} duplicates, ${dropped.truncated} pieces of evidence over the cap, ` +
-      `${dropped.overCap} questions over the cap`,
-  );
-  console.log(`\nWrote ${outFile}`);
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

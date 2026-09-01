@@ -29,6 +29,8 @@
 import { assertProduced, UNCONVERTED_STEPS } from "../pipeline.js";
 import type { PipelineStep, StepContext, StepProduct } from "../pipeline.js";
 import { ProductRefused } from "./artifacts.js";
+import { nullCheckpointStore } from "./checkpoints.js";
+import type { CheckpointStore } from "./checkpoints.js";
 import type {
   ArtifactKind,
   ArtifactMap,
@@ -229,6 +231,24 @@ export interface StoreSession {
    * by looking at files on disk is the exact silent success this seam is for.
    */
   readonly reads: ArtifactReads;
+  /**
+   * **Work a failed attempt already paid for**, handed to the run phase as the
+   * third argument to `PipelineStep.run` — src/store/checkpoints.ts.
+   *
+   * Beside `reads` rather than inside it, and the difference is the whole
+   * point: `reads` is the draft, and everything written through it is rolled
+   * back with the attempt. A checkpoint is the opposite — it exists *because*
+   * the attempt failed, so it goes to the pool on its own connection and
+   * survives the rollback. Anything that put these writes inside `commit`'s
+   * transaction would leave the seam looking wired and doing nothing.
+   *
+   * Bound to one article at construction, because a retry is a new job and a
+   * new draft revision and the entries have to outlive both. The Postgres
+   * session builds it from the `articleId` its draft reference already carries;
+   * the filesystem session has no article row and hands out
+   * `nullCheckpointStore()`.
+   */
+  readonly checkpoints: CheckpointStore;
   /** This step has started; nothing it writes is to be believed until `commit`. */
   beginStep(slug: string, step: StepName): Promise<string>;
   /**
@@ -444,6 +464,12 @@ export function fsStoreSession(options: {
 
   return {
     reads: readsOf(artifacts),
+    /* **Nothing, deliberately** — see `nullCheckpointStore`. There is no
+       `articles` row on this path and therefore no id to key an entry on, and
+       keying on anything else is the one mistake that would make the table
+       useless (src/store/checkpoints.ts). The articles this session produces are
+       unchanged; a *second* attempt after a killed one pays again. */
+    checkpoints: nullCheckpointStore(),
     beginStep: (slug, step) => artifacts.beginStep(slug, step),
     settleJob,
     async commit(ctx, step, attempt, product, transition) {

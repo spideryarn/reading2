@@ -18,12 +18,10 @@
  *
  * Deterministic — no network, no model. docs/project/testing.md.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import PQueue from "p-queue";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   allOrStop,
   assertEveryBlockLabelled,
@@ -40,12 +38,12 @@ import {
   batchParts,
   renderBatch,
   renderOutline,
-  serialise,
   structureHash,
-  usableCheckpoint,
+  usableEntry,
 } from "../src/labels.js";
 import type { Batch } from "../src/labels.js";
-import { CAPABLE_MODEL } from "../src/models.js";
+import { nullCheckpointStore, type CheckpointStore } from "../src/store/checkpoints.js";
+import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
@@ -1112,93 +1110,55 @@ describe("prefixIsCacheable", () => {
   });
 });
 
-describe("usableCheckpoint", () => {
-  const expected = {
-    version: "labels/1",
-    generator: "claude-sonnet-5",
-    slug: "test",
-    sourceHash: "abc123",
-  };
+describe("usableEntry", () => {
   const entry = {
     fingerprint: "ff00",
     labels: { "spya-000000": "A label" },
     record: { blocks: ["spya-000000"], setStarts: [0], inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, ms: 1 },
   };
-  const good = { ...expected, batches: [entry] };
 
-  it("accepts a checkpoint whose manifest matches, keyed by fingerprint", () => {
-    const map = usableCheckpoint(good, expected);
-    expect(map.size).toBe(1);
-    expect(map.get("ff00")?.labels).toEqual({ "spya-000000": "A label" });
+  /**
+   * **This replaced `usableCheckpoint` on 2026-09-01, and lost a layer with
+   * it.** That one was handed a whole file and had to agree about four manifest
+   * fields — version, generator, slug, source hash — before it could look at a
+   * single entry, because the file might have been written by a run against a
+   * different article. One row per batch in an article-scoped table deletes
+   * that job: the store refuses any article but its own
+   * (tests/store-checkpoints.test.ts § *two articles do not see each other's
+   * entries*), and the key is `batchFingerprint`, which already carries the
+   * prompt version, the model, the block ids and the sibling grouping. The
+   * four-field tests went with the four fields. What is left is the half that
+   * still has work to do: a value the store handed back is not necessarily a
+   * batch.
+   */
+  it("accepts a well-formed entry", () => {
+    expect(usableEntry(entry)?.labels).toEqual({ "spya-000000": "A label" });
   });
-
-  for (const field of ["version", "generator", "slug", "sourceHash"] as const) {
-    it(`refuses the whole file when ${field} differs`, () => {
-      // All four, one test each, because a check that quietly stopped comparing
-      // one of them would still pass every other test in this file — and what
-      // it would then do is resume a run against a different article.
-      const map = usableCheckpoint({ ...good, [field]: "something else" }, expected);
-      expect(map.size).toBe(0);
-    });
-  }
 
   it("is worth nothing rather than a guess when handed rubbish", () => {
     for (const junk of [undefined, null, "a string", 42, [], { batches: "no" }]) {
-      expect(usableCheckpoint(junk, expected).size).toBe(0);
+      expect(usableEntry(junk)).toBe(null);
     }
   });
 
-  it("drops a malformed entry and keeps the good ones beside it", () => {
-    const map = usableCheckpoint(
-      {
-        ...expected,
-        batches: [
-          entry,
-          { fingerprint: "", labels: {}, record: entry.record },
-          { fingerprint: "aa11", labels: null, record: entry.record },
-          { fingerprint: "bb22", labels: { x: "" }, record: entry.record },
-          { fingerprint: "cc33", labels: { x: 4 }, record: entry.record },
-          { fingerprint: "dd44", labels: { x: "fine" }, record: { blocks: "no" } },
-          "not an object",
-        ],
-      },
-      expected,
-    );
-    expect([...map.keys()]).toEqual(["ff00"]);
+  it("refuses a malformed entry field by field", () => {
+    /* One case per field, because a check that quietly stopped looking at one
+       of them would still pass every other test in this file — and what it
+       would then do is resume a batch from a value that is not one. */
+    expect(usableEntry({ fingerprint: "", labels: {}, record: entry.record })).toBe(null);
+    expect(usableEntry({ fingerprint: "aa11", labels: null, record: entry.record })).toBe(null);
+    expect(usableEntry({ fingerprint: "bb22", labels: { x: "" }, record: entry.record })).toBe(null);
+    expect(usableEntry({ fingerprint: "cc33", labels: { x: 4 }, record: entry.record })).toBe(null);
+    expect(usableEntry({ fingerprint: "dd44", labels: { x: "fine" }, record: { blocks: "no" } })).toBe(null);
   });
 });
 
-describe("serialise", () => {
-  it("runs overlapping calls one at a time", async () => {
-    // Four batches land at once and each writes the whole checkpoint. Without
-    // this they interleave and the last rename wins, so a file that should hold
-    // four holds one — and nothing is red, because the labels are all correct.
-    const order: string[] = [];
-    let inside = 0;
-    const run = serialise(async () => {
-      inside++;
-      expect(inside).toBe(1);
-      order.push("in");
-      await new Promise((r) => setTimeout(r, 5));
-      order.push("out");
-      inside--;
-    });
-    await Promise.all([run(), run(), run(), run()]);
-    expect(order).toEqual(["in", "out", "in", "out", "in", "out", "in", "out"]);
-  });
-
-  it("keeps going after one call throws", async () => {
-    let n = 0;
-    const run = serialise(async () => {
-      n++;
-      if (n === 1) throw new Error("first one fails");
-    });
-    await expect(run()).rejects.toThrow("first one fails");
-    await expect(run()).resolves.toBeUndefined();
-    expect(n).toBe(2);
-  });
-});
-
+/* **`serialise` was tested here and is gone.** It ran overlapping checkpoint
+   writes one at a time, because four batches landing at once each rewrote the
+   whole `labels-progress.json` and the last rename won — a file that should
+   hold four holding one, with nothing red. One row per batch under four
+   different keys cannot do that to each other, so the hazard is removed rather
+   than guarded and the helper went with it (2026-09-01). */
 describe("generateLabels, resuming", () => {
   /**
    * A checkpoint holding every batch of a plan, written the way a run would.
@@ -1207,16 +1167,17 @@ describe("generateLabels, resuming", () => {
    * *which* labels come back and whether anything went to the model, not what a
    * model would have said.
    */
-  async function checkpointFor(dir: string, tree: Tree, blocks: Block[]): Promise<Batch[]> {
+  async function checkpointFor(
+    store: CheckpointStore,
+    tree: Tree,
+    blocks: Block[],
+  ): Promise<Batch[]> {
     const outline = renderOutline(tree);
     const batches = planBatches(tree, blocks);
-    const file = {
-      version: "labels/1",
-      generator: CAPABLE_MODEL,
-      slug: "test",
-      sourceHash: hashBlocks(blocks),
-      batches: batches.map((batch) => ({
-        fingerprint: batchFingerprint(batch, blocks, outline),
+    for (const batch of batches) {
+      const fingerprint = batchFingerprint(batch, blocks, outline);
+      await store.write("test", "hierarchy-labels", fingerprint, {
+        fingerprint,
         labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
         record: {
           blocks: batch.blocks.map((b) => b.id),
@@ -1227,9 +1188,8 @@ describe("generateLabels, resuming", () => {
           cacheWriteTokens: 0,
           ms: 10,
         },
-      })),
-    };
-    await writeFile(path.join(dir, "labels-progress.json"), JSON.stringify(file), "utf8");
+      });
+    }
     return batches;
   }
 
@@ -1273,12 +1233,13 @@ describe("generateLabels, resuming", () => {
     }
   }
 
-  let dir = "";
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "labels-resume-"));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+  /* A store per test, so nothing carries between them. It is bound to `"test"`,
+     which is the slug every fixture here uses — a store built for one article
+     and asked about another throws before it reads anything, which is what
+     stops one document's labels being served to a different document. */
+  let store: MemoryCheckpoints;
+  beforeEach(() => {
+    store = memoryCheckpoints({ slug: "test", articleId: "article-under-test" });
   });
 
   it("makes no model call at all when every batch is in the checkpoint", async () => {
@@ -1289,9 +1250,9 @@ describe("generateLabels, resuming", () => {
        same thing only if the counter were wired to the thing that costs money. */
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
-      const batches = await checkpointFor(dir, tree, blocks);
+      const batches = await checkpointFor(store, tree, blocks);
 
-      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
 
       expect(run.resumed).toBe(batches.length);
       expect(run.batches).toBe(batches.length);
@@ -1310,8 +1271,8 @@ describe("generateLabels, resuming", () => {
   it("records the manifest that lets a stale complete set be spotted", async () => {
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
-      await checkpointFor(dir, tree, blocks);
-      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+      await checkpointFor(store, tree, blocks);
+      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
 
       expect(run.file.sourceHash).toBe(hashBlocks(blocks));
       expect(run.file.structureVersion).toBe(tree.version);
@@ -1338,18 +1299,18 @@ describe("generateLabels, resuming", () => {
        so the code at the end of that sentence is what proves a real request
        was attempted. */
     const { tree, blocks } = fixture(6, 7);
-    await checkpointFor(dir, tree, blocks);
+    await checkpointFor(store, tree, blocks);
     const moved = withMovedBoundary(tree, blocks);
 
     await noAuth(async () => {
-        await expect(generateLabels({ tree: moved, blocks, slug: "test", dir })).rejects.toThrow(
+        await expect(generateLabels({ tree: moved, blocks, slug: "test", checkpoints: store })).rejects.toThrow(
           /\[ai-not-set-up\]/,
         );
     });
 
     // And the control: unmoved, the same checkpoint resumes everything.
     await noAuth(async () => {
-        const run = await generateLabels({ tree, blocks, slug: "test", dir });
+        const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
         expect(run.resumed).toBe(run.batches);
     });
   });
@@ -1381,64 +1342,76 @@ describe("generateLabels, resuming", () => {
     expect(coversExactly(swapped, batch)).toBe(false);
   });
 
-  it("clears the checkpoint only when asked, and leaves it there until then", async () => {
+  it("keeps every entry it resumed from, because there is no delete on success", async () => {
+    /**
+     * **The three tests that used to sit here are gone with the thing they
+     * tested**, and what replaced them is one sentence: nothing is deleted.
+     *
+     * They were *clears the checkpoint only when asked*, *will not delete a
+     * checkpoint another run has claimed*, and *writes nothing at all when no
+     * directory is given*. All three were about the whole-file format: one file
+     * held every batch, so the unit of deletion was larger than the unit of
+     * work, so a `runId` had to say whose file it was and `clearCheckpoint` had
+     * to refuse somebody else's. One row per batch removes the hazard rather
+     * than guarding it — there is nothing to delete on success, and retention is
+     * the sweep's job (`scripts/checkpoints-sweep.ts`,
+     * src/store/checkpoints.ts § Retention).
+     *
+     * The third one is now a type error rather than a test: `checkpoints` is
+     * required, so a caller that means "remember nothing" says
+     * `nullCheckpointStore()` and cannot say it by omission.
+     */
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
-      await checkpointFor(dir, tree, blocks);
-      const file = path.join(dir, "labels-progress.json");
+      const batches = await checkpointFor(store, tree, blocks);
+      const before = store.entries.size;
+      expect(before).toBe(batches.length);
 
-      const run = await generateLabels({ tree, blocks, slug: "test", dir });
-      // Still there: the artefacts have not been written yet, and until they
-      // have, this file is the only copy of what the run bought.
-      expect(existsSync(file)).toBe(true);
-      /* And stamped by *this* run, which is what lets the delete below know it
-         is not some other process's live working state. The first version never
-         wrote the file on a fully-resumed run, so the stamp stayed with the run
-         that had failed and `clearCheckpoint` refused for ever — a leak the
-         hand-built checkpoint in this test, which carries no stamp at all, was
-         about to hide. */
-      const stamped = JSON.parse(readFileSync(file, "utf8")) as { runId?: string };
-      expect(typeof stamped.runId).toBe("string");
-
-      await run.clearCheckpoint();
-      expect(existsSync(file)).toBe(false);
-      // And calling it twice is not an error.
-      await run.clearCheckpoint();
+      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+      expect(run.resumed).toBe(batches.length);
+      /* Still every one of them, and not one written back either: a pure resume
+         buys nothing, so it records nothing. */
+      expect(store.entries.size).toBe(before);
+      expect(store.calls.writes).toBe(batches.length);
     });
   });
 
-  it("will not delete a checkpoint another run has claimed", async () => {
+  it("remembers nothing when handed a null store, and says so in the numbers", async () => {
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
-      await checkpointFor(dir, tree, blocks);
-      const file = path.join(dir, "labels-progress.json");
-      const run = await generateLabels({ tree, blocks, slug: "test", dir });
-
-      // Somebody else claims it between the artefacts landing and the delete.
-      const theirs = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-      await writeFile(file, JSON.stringify({ ...theirs, runId: "another-process" }), "utf8");
-
-      await run.clearCheckpoint();
-      expect(existsSync(file)).toBe(true);
+      /* The entries exist — in a store this run is not being given. So it goes
+         to the model, and with no key that throws. Matched on the code, because
+         a test that only asks "did it throw" passes just as happily when the
+         throw came from somewhere else, and what it would then stop checking is
+         whether the model was called. `[ai-not-set-up]` rather than the SDK's
+         own "Could not resolve authentication method": src/anthropic-call.ts
+         catches that and replaces it with NOT_CONFIGURED first. */
+      await checkpointFor(store, tree, blocks);
+      await expect(
+        generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
+      ).rejects.toThrow(/\[ai-not-set-up\]/);
     });
   });
 
-  it("writes nothing at all when no directory is given", async () => {
+  it("does not let a broken store fail the run, because a saving is not a dependency", async () => {
+    /* A store that throws must cost the *resume* and nothing else — otherwise a
+       cache has become an outage, which is what a full `/tmp` used to do to the
+       filesystem version. With no credentials the run still has to reach the
+       model to prove it did not resume, so the throw here is the model's and
+       not the store's. */
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
-      await checkpointFor(dir, tree, blocks);
-      // No `dir`, so the checkpoint sitting right there is not read — the run
-      // would go to the model, and with no key that throws. The point is that
-      // checkpointing is opt-in rather than inferred from a path lying around.
-      // Matched on the code, because a test that only asks "did it throw"
-      // passes just as happily when the throw came from somewhere else — and
-      // what it would then stop checking is whether the model was called.
-      // `[ai-not-set-up]` rather than the SDK's own "Could not resolve
-      // authentication method": src/anthropic-call.ts catches that and
-      // replaces it with NOT_CONFIGURED before it can reach a caller.
-      await expect(generateLabels({ tree, blocks, slug: "test" })).rejects.toThrow(
-        /\[ai-not-set-up\]/,
-      );
+      const angry: CheckpointStore = {
+        read: async () => {
+          throw new Error("the checkpoint store is on fire");
+        },
+        write: async () => {
+          throw new Error("the checkpoint store is still on fire");
+        },
+      };
+      await expect(
+        generateLabels({ tree, blocks, slug: "test", checkpoints: angry }),
+      ).rejects.toThrow(/\[ai-not-set-up\]/);
     });
   });
 
@@ -1448,8 +1421,8 @@ describe("generateLabels, resuming", () => {
         // mean nothing at all — which is exactly why `calls` is reported beside
         // `estimatedCacheable` rather than the flag being asked to carry it.
         const { tree, blocks } = fixture(6, 7);
-        await checkpointFor(dir, tree, blocks);
-        const run = await generateLabels({ tree, blocks, slug: "test", dir });
+        await checkpointFor(store, tree, blocks);
+        const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
         expect(run.estimatedCacheable).toBe(false);
         expect(run.calls).toBe(0);
         expect(run.cacheReadTokens).toBe(0);

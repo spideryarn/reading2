@@ -2254,7 +2254,10 @@ export const pgArticleReader: Pick<
     const thread = found.revision.tweets as TweetThread | null;
     if (!thread) {
       throw Object.assign(
-        new Error(`No thread for "${slug}" yet. Write one with \`npm run tweets -- ${slug}\`.`),
+        new Error(
+          `No thread for "${slug}" yet. Write one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2279,7 +2282,10 @@ export const pgArticleReader: Pick<
     const glossary = found.revision.glossary as Glossary | null;
     if (!glossary) {
       throw Object.assign(
-        new Error(`No glossary for "${slug}" yet. Write one with \`npm run glossary -- ${slug}\`.`),
+        new Error(
+          `No glossary for "${slug}" yet. Find one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2342,7 +2348,10 @@ export const pgArticleReader: Pick<
     const quotes = found.revision.quotes as Quotes | null;
     if (!quotes) {
       throw Object.assign(
-        new Error(`No quotes for "${slug}" yet. Choose them with \`npm run quotes -- ${slug}\`.`),
+        new Error(
+          `No quotes for "${slug}" yet. Choose them with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2373,7 +2382,10 @@ export const pgArticleReader: Pick<
     const ideas = found.revision.ideas as Ideas | null;
     if (!ideas) {
       throw Object.assign(
-        new Error(`No ideas for "${slug}" yet. Find them with \`npm run ideas -- ${slug}\`.`),
+        new Error(
+          `No ideas for "${slug}" yet. Find them with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2418,7 +2430,10 @@ export const pgArticleReader: Pick<
     const timeline = found.revision.timeline as Timeline | null;
     if (!timeline) {
       throw Object.assign(
-        new Error(`No timeline for "${slug}" yet. Build one with \`npm run timeline -- ${slug}\`.`),
+        new Error(
+          `No timeline for "${slug}" yet. Build one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2457,7 +2472,10 @@ export const pgArticleReader: Pick<
     const quiz = found.revision.quiz as Quiz | null;
     if (!quiz) {
       throw Object.assign(
-        new Error(`No quiz for "${slug}" yet. Build one with \`npm run quiz -- ${slug}\`.`),
+        new Error(
+          `No quiz for "${slug}" yet. Build one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2491,7 +2509,10 @@ export const pgArticleReader: Pick<
        and a panel handed that would draw an empty band and report success. */
     if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) {
       throw Object.assign(
-        new Error(`No sketch for "${slug}" yet. Draw one with \`npm run sketch -- ${slug}\`.`),
+        new Error(
+          `No sketch for "${slug}" yet. Draw one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
+        ),
         { status: 404 },
       );
     }
@@ -2528,7 +2549,10 @@ export const pgArticleReader: Pick<
     const arc = found.revision.arc as Arc | null;
     if (!arc) {
       throw Object.assign(
-        new Error(`No arc for "${slug}" yet. Write one with \`npm run arc -- ${slug}\`.`),
+        new Error(
+          `No arc for "${slug}" yet. Write one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
+        ),
         { status: 404 },
       );
     }

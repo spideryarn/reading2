@@ -146,7 +146,7 @@ it does not change when something happened.
 | | |
 |---|---|
 | [`src/timeline-time.ts`](../../src/timeline-time.ts) | the parser and the interval arithmetic. No model call, no I/O. **No `Date` objects anywhere** — ISO strings end to end, or a timezone moves a calendar day |
-| [`src/timeline.ts`](../../src/timeline.ts) | the stage: the prompt, the call, the validation, the counters, the CLI |
+| [`src/timeline.ts`](../../src/timeline.ts) | the stage: the prompt, the call, the validation, the counters |
 | [`src/web/TimelinePanel.tsx`](../../src/web/TimelinePanel.tsx) | the panel, and the pure functions that turn an interval into words |
 | [`src/web/useTimeline.ts`](../../src/web/useTimeline.ts) | the read, the staleness, and the one verb |
 | `TimelineBand` in [`src/web/App.tsx`](../../src/web/App.tsx) | `?event=`, and the resolved passages it pushes up to the prose |

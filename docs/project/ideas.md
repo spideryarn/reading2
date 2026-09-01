@@ -253,7 +253,7 @@ for. Four answers, the same table as
 previous ideas and a `sourceHash` that no longer matches both mint quietly, an artefact the store
 cannot read **fails the stage**, and a read that throws propagates. A truncated `ideas.json` still
 holds every id a `?idea=` link names, and minting over it would take the chance to restore it away
-without saying so. `npm run ideas -- <dir>` still reads the file; a CLI has no store to ask.
+without saying so.
 
 ## Drawing it: the third arm of one pipe
 

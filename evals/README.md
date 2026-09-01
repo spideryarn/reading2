@@ -408,7 +408,14 @@ npm run eval:embeddings
 SPIDERYARN_JUDGE_MODEL=claude-opus-5 npm run eval:embeddings   # a real second opinion
 ```
 
-**This one spends money twice**: it embeds the whole shelf with each candidate model (a twentieth of
+It reads the **committed fixture corpus** (`tests/fixtures/data-root/data/`, plus `example/`), not
+the gitignored `data/` at the repository root — since 2026-09-01, so that two runs a week apart are
+about the same passages. That also means the counts below, and the numbers in
+[results/embedding-retrieval-2026-08-26.md](results/embedding-retrieval-2026-08-26.md), were taken
+over a **larger** corpus than the one it reads now: arm-to-arm gaps within a run still compare, the
+absolute precision does not.
+
+**This one spends money twice**: it embeds the whole corpus with each candidate model (a twentieth of
 a penny) and it calls a judge model once per query (a few cents). Both are the point. Everything
 cheaper — MTEB tables, vendor benchmark pages — answers a question about somebody else's corpus, and
 the research that recommended `openai/text-embedding-3-small` said as much out loud: it could not

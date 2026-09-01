@@ -22,7 +22,8 @@
  *
  * ## What it does
  *
- * 1. Embeds every gistable block in `data/*` with each *arm* — a model plus how
+ * 1. Embeds every gistable block in the committed corpus
+ *    (`tests/fixtures/data-root/data/*`, plus `example/`) with each *arm* — a model plus how
  *    that model wants to be asked. See `Arm`.
  * 2. Embeds `QUERIES` — hand-written, committed below, phrased so the words do
  *    NOT appear in the passage they are aiming at. That is the whole thing
@@ -83,6 +84,7 @@ import {
   withDeclaredExternalCall,
 } from "./declared-spend.js";
 import { withLedger } from "../src/cli-ledger.js";
+import { FIXTURE_ROOT } from "../tests/helpers/require-fixture.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const RESULTS = path.join(ROOT, "evals", "results");
@@ -369,15 +371,33 @@ interface Passage {
  * `example/` being skipped by name: if the fixture is ever re-cut with fresh
  * ids, the drop count falls to zero and the printed line says so, instead of a
  * hardcoded exclusion silently protecting against a problem that has moved.
+ *
+ * ## The corpus is the committed one, and that is the whole point of an eval
+ *
+ * This read `data/` at the repository root until 2026-09-01, and `data/` is
+ * gitignored: the articles in it are whatever that laptop happened to have
+ * ingested, so two runs of "the same eval" a week apart were measuring two
+ * different corpora with nothing saying so, and the numbers in
+ * `evals/results/embedding-retrieval-2026-08-26.md` name bytes nobody else has.
+ * `tests/fixtures/data-root/data/` is five articles tracked in git
+ * (`tests/helpers/require-fixture.ts`), so the passage set is the same on every
+ * machine and in every week. The eighteen queries below are all aimed at
+ * `noema-mythology-of-conscious-ai`, `constitution` and `writes`, and all three
+ * are in it.
+ *
+ * **The absolute scores are therefore not comparable with the 2026-08-26 run.**
+ * That corpus was larger and unrecoverable; this one is smaller, so there are
+ * fewer distractors and precision should read a little higher. Arm-to-arm gaps
+ * within one run are what this eval is for, and those are unaffected.
  */
 async function loadCorpus(): Promise<{ passages: Passage[]; duplicates: number }> {
   const dirs: { dir: string; slug: string }[] = [];
-  const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
+  const entries = await readdir(path.join(FIXTURE_ROOT, "data"), { withFileTypes: true });
   for (const e of entries) {
     // `_`-prefixed directories are not articles — `data/_jobs/` is the queue's
     // records. Same rule as `listArticles` and `searchLibrary`.
     if (e.isDirectory() && !e.name.startsWith("_")) {
-      dirs.push({ dir: path.join(ROOT, "data", e.name), slug: e.name });
+      dirs.push({ dir: path.join(FIXTURE_ROOT, "data", e.name), slug: e.name });
     }
   }
   dirs.push({ dir: path.join(ROOT, "example"), slug: "example" });

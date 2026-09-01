@@ -120,7 +120,7 @@ let withMeta: Article;
 let withoutMeta: Article;
 
 beforeAll(async () => {
-  const { readArticleFromDir } = await import("../src/article-input.js");
+  const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
   withMeta = await readArticleFromDir(path.join(ROOT, "example"));
   expect(withMeta.meta, "the fixture is supposed to have metadata").not.toBeNull();
   withoutMeta = { ...withMeta, meta: null };

@@ -149,11 +149,13 @@ failing, generating again, for as long as the tab stayed open. A button removes 
 structurally rather than by remembering to set a flag on every error path.
 
 ```
-npm run glossary -- data/<slug>        # once for a list
-npm run glossary -- data/<slug>        # again to add more terms to the same list
+POST /api/jobs { "slug": "…", "steps": ["glossary"] }                          # once for a list
+POST /api/jobs { "slug": "…", "steps": ["glossary"], "force": ["glossary"] }   # again, to add more
 ```
 
-or `POST /api/jobs { "slug": "…", "steps": ["glossary"] }`, which is what the panel's button does.
+The first is what the panel's button does, the second what "Find more" does. There is no command
+line: the stage's own one was deleted on 2026-09-01 as a second way to do this
+([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
 ## The two bugs this feature is shaped around
 
@@ -567,8 +569,6 @@ the reader's links name, so somebody with a backup can put it back — and minti
 possibility away while reporting success. Whether the ids are recoverable is a different question
 from whether to proceed; the same argument, and the same mistake made first, is in
 [block-ids.md](block-ids.md#where-the-previous-run-comes-from-and-the-three-answers-it-can-give).
-
-`npm run glossary -- <dir>` still reads the file, because a CLI has no store to ask.
 
 ## The scores, and the condition attached to keeping them
 

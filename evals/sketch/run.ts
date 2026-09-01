@@ -3,7 +3,7 @@
  * and leave a picture on disk that a person (or a subagent) can look at.
  *
  *   npx tsx evals/sketch/run.ts                          # the three defaults
- *   npx tsx evals/sketch/run.ts data/constitution        # one article
+ *   npx tsx evals/sketch/run.ts <dir with blocks.json + tree.json>
  *   npx tsx evals/sketch/run.ts --system evals/sketch/variants/hub.txt
  *   npx tsx evals/sketch/run.ts --render data/x/sketch.json   # free: no model call
  *
@@ -30,6 +30,7 @@ import type { SketchRun } from "../../src/sketch.js";
 import { readSketch, scoreSketch, type Sketch } from "../../src/sketch-scene.js";
 import type { Block } from "../../src/types.js";
 import { sketchSvg } from "./svg.js";
+import { FIXTURE_ROOT } from "../../tests/helpers/require-fixture.js";
 
 /* **`src/sketch.js`, `src/env.js` and the ledger are imported inside the paid
    branch, never at the top of this file.** Re-rendering a scene that is already
@@ -42,11 +43,25 @@ import { sketchSvg } from "./svg.js";
 
 const run = promisify(execFile);
 
-/** Articles with a tree and enough shape to be worth drawing. */
+/**
+ * Articles with a tree and enough shape to be worth drawing.
+ *
+ * **From the committed corpus, not `data/`.** Until 2026-09-01 these were
+ * `data/<slug>` at the repository root, which is gitignored — so the three
+ * articles this harness drew were whatever that laptop had ingested, and two
+ * runs of "the defaults" a week apart could be two different sets of pictures
+ * with nothing saying so. `tests/fixtures/data-root/data/` is tracked in git
+ * (`tests/helpers/require-fixture.ts`), so a fault found here reproduces
+ * everywhere. `data/scaling-hypothesis` is not in the corpus and
+ * `openai-huggingface` is, which is the one swap.
+ *
+ * Any folder still works as an argument — that is the point of the positional
+ * form, and it is how a re-extraction or a hand-edited tree gets drawn.
+ */
 const DEFAULT_DIRS = [
-  "data/noema-mythology-of-conscious-ai",
-  "data/constitution",
-  "data/scaling-hypothesis",
+  path.join(FIXTURE_ROOT, "data", "noema-mythology-of-conscious-ai"),
+  path.join(FIXTURE_ROOT, "data", "constitution"),
+  path.join(FIXTURE_ROOT, "data", "openai-huggingface"),
 ];
 
 interface Options {
@@ -139,7 +154,9 @@ async function renderOnly(file: string, outDir: string, dir: string | null): Pro
      see the note in src/sketch.ts about `data/constitution`'s tree calling
      itself "blocks". */
   const slug = dir ?? (raw as { slug?: string }).slug ?? path.basename(path.dirname(file));
-  const blockOrder = await blockOrderFor(slug.includes("/") ? slug : path.join("data", slug));
+  const blockOrder = await blockOrderFor(
+    slug.includes("/") ? slug : path.join(FIXTURE_ROOT, "data", slug),
+  );
   const { sketch, report } = readSketch(raw, { blockOrder });
   const score = scoreSketch(sketch, report, { blockOrder });
   const where = await renderOne(sketch, outDir, path.basename(slug));
@@ -156,7 +173,7 @@ async function draw(opts: Options): Promise<void> {
   /* Inside the paid branch with the rest of them, for the reason at the top of
      this file: the free `--render` path must not drag in anything a peer's
      half-finished edit under `src/store/` can break. */
-  const { readArticleFromDir } = await import("../../src/article-input.js");
+  const { readArticleFromDir } = await import("../../tests/helpers/article-from-dir.js");
   const { loadEnvLocal } = await import("../../src/env.js");
   loadEnvLocal();
 

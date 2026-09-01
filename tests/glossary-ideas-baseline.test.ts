@@ -140,14 +140,15 @@ async function anArticle(prefix: string): Promise<{ root: string; dir: string; b
 }
 
 /**
- * The three files a stage is handed instead of a path — src/article-input.ts.
+ * The three files a stage is handed instead of a path —
+ * tests/helpers/article-from-dir.ts.
  *
  * Imported here rather than at the top because everything else in this file
  * that touches `src/` is, and the reason is `vi.mock` above: one import style
  * throughout is one fewer thing to reason about when a stub does not take.
  */
 const articleIn = async (dir: string) =>
-  (await import("../src/article-input.js")).readArticleFromDir(dir);
+  (await import("./helpers/article-from-dir.js")).readArticleFromDir(dir);
 
 /**
  * A glossary answer naming these terms.
@@ -360,9 +361,10 @@ describe("the previous artefact, over the filesystem store", () => {
    * The stage, and then the write the stage no longer does itself.
    *
    * `generateGlossary` hands its glossary back and writes nothing — the caller
-   * stores it, through the artefact store in the pipeline and to a file at the
-   * command line (docs/plans/260831b-finish-the-database-move.md § stage 2). Over the
-   * filesystem store those are the same bytes in the same place, so everything
+   * stores it, through the artefact store in the pipeline, which since
+   * 2026-09-01 is the only caller there is
+   * (docs/plans/260831b-finish-the-database-move.md § stage 2, § sub-stage I).
+   * Over the filesystem store those are the same bytes in the same place, so everything
    * below that reads `glossary.json` back is still reading what a real caller
    * put there rather than a fixture this file invented for itself.
    */
@@ -385,8 +387,8 @@ describe("the previous artefact, over the filesystem store", () => {
    *
    * `generateIdeas` wrote `<dir>/ideas.json` itself until stage 2 took the
    * directory away from it — there is no path inside a stage any more, so the
-   * caller stores the artefact, through the artefact store in the pipeline and
-   * to a file at the command line. Everything below that reads `ideas.json`
+   * caller stores the artefact, through the artefact store in the pipeline.
+   * Everything below that reads `ideas.json`
    * back is therefore still reading what a real caller put there.
    */
   async function ideasInto(dir: string, opts: { previous: Ideas | null }) {

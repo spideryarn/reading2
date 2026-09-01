@@ -2,7 +2,16 @@
  * Pipeline stage 5b — the **arc**: one article-level sentence per part, saying
  * where the argument stands there. See docs/project/granularity-zoom.md#the-arc.
  *
- *   npm run arc -- data/noema-mythology-of-conscious-ai
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * Why this exists. The L0 column used to render the root node, and a tree has
  * one root, so the column was a single cell: a constant along an axis whose
@@ -27,15 +36,11 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { type Article, readArticleFromDir } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
+import type { Article } from "./article-input.js";
 import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Tree, TreeNode } from "./types.js";
@@ -43,7 +48,6 @@ import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
-import { withLedger } from "./cli-ledger.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 
 /**
@@ -459,51 +463,3 @@ export async function generateArc(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/arc.ts <dir with blocks.json + tree.json>");
-    process.exit(1);
-  }
-  // Before the call, not after. This is the only thing on screen for the two
-  // minutes the model takes, and printing it afterwards made `npm run arc` look
-  // hung for the whole request.
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
-  loadEnvLocal();
-  console.log(`Writing the arc with ${CAPABLE_MODEL}\u2026`);
-  /* The command line has a folder and no store, so it reads the article itself
-     — `readArticleFromDir` is the one place left that opens these three files,
-     and it is deliberately not reachable from a request or a queued job. */
-  const run = await generateArc({
-    article: await readArticleFromDir(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  /* And the command writes its own arc.json, in the same place the stage used
-     to. `npx tsx src/arc.ts <dir>` is unchanged from outside; what moved is
-     which layer does the writing, so the pipeline can write through the store
-     instead. */
-  const outFile = path.join(dir, "arc.json");
-  await writeFile(outFile, JSON.stringify(run.arc, null, 2), "utf-8");
-
-  console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${CAPABLE_MODEL}`);
-  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
-  run.arc.entries.forEach((e, i) => {
-    console.log(`${String(i + 1).padStart(2)}. ${run.parts[i]?.title ?? ""}\n    ${e.text}\n`);
-  });
-}
-
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
-   effect of the import, which is the one thing this guard exists to prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void withLedger("cli", main);

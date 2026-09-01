@@ -40,6 +40,7 @@
  * count matches: two equal totals made of entirely different ids is the failure.
  */
 import { mkdtemp, rm } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -104,7 +105,7 @@ function ctx(): StepContext {
  */
 async function runStep(name: "extract" | "blocks"): Promise<Record<string, unknown>> {
   const attempt = await fsArtifacts.beginStep(SLUG, name);
-  const product = await STEPS[name].run(ctx(), fsArtifacts);
+  const product = await STEPS[name].run(ctx(), fsArtifacts, nullCheckpointStore());
   /* Every step in this pipeline is converted, so `parts` is required by the
      compiler — this asserts it at runtime too, because a `parts` that arrived
      as `undefined` through an `as` cast somewhere would otherwise write nothing

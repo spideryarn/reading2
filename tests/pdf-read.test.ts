@@ -7,9 +7,7 @@
  * transcription that loses a page fails in this file, at no cost, rather than
  * in production at the price of a full transcription.
  */
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
@@ -24,6 +22,7 @@ import {
   withoutRepeats,
   wordsOf,
 } from "../src/pdf-read.js";
+import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 
@@ -312,19 +311,19 @@ describe("the whole stage, with the model stubbed out", () => {
   let asks = 0;
 
   /**
-   * `into` runs the stage over a directory that already exists, which is the
-   * only way to exercise the chunk cache: the key is deterministic, so a second
-   * run over the same `dataDir` finds the first run's answers.
+   * `into` runs the stage against a checkpoint store that already holds
+   * something, which is the only way to exercise resuming: the key is
+   * deterministic, so a second run over the same store finds the first run's
+   * answers. Without one it gets a fresh store and pays for everything.
    */
-  async function run(sabotage?: (r: PdfRecord[]) => PdfRecord[], into?: string) {
+  async function run(sabotage?: (r: PdfRecord[]) => PdfRecord[], into?: MemoryCheckpoints) {
     asks = 0;
     const bytes = new Uint8Array(await readFile(EASY));
-    const dir = into ?? (await mkdtemp(path.join(tmpdir(), "spya-pdf-")));
     const pass = await pass0(bytes);
     return runPdfExtract({
       bytes,
       url: "https://example.test/paper.pdf",
-      dataDir: dir,
+      checkpoints: into ?? memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
       slug: "paper",
       reader: honestReader(pass, sabotage),
     });
@@ -402,108 +401,156 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(result.meta.quality).toBeUndefined();
   }, 30_000);
 
-  /* ================================= the chunk cache, and what a crash leaves ==
-     Every entry under `pdf-chunks/` is a paid vision-model call, so the two
-     things that can go wrong here pull in opposite directions and both cost
-     money: a valid entry that stops being read re-buys the call on every run,
-     and a corrupt entry that is not tolerated wedges the article for ever,
-     because the key is deterministic and nothing in the codebase deletes these
-     files. Both directions get a test. See docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md. */
-  describe("the chunk cache", () => {
-    async function cacheFiles(dir: string): Promise<string[]> {
-      const names = await readdir(path.join(dir, "pdf-chunks"));
-      return names.filter((n) => n.endsWith(".json")).sort();
+  /* ============================== the chunk checkpoints, and what a crash leaves ==
+     Every entry under the `pdf-chunk` namespace is a paid vision-model call, so
+     the two things that can go wrong here pull in opposite directions and both
+     cost money: a valid entry that stops being read re-buys the call on every
+     run, and an unusable entry that is not tolerated wedges the article for
+     ever, because the key is deterministic and nothing ever deletes these. Both
+     directions get a test. See
+     docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md.
+
+     **These were files under `data/<slug>/pdf-chunks/` until 2026-09-01**, and
+     the change is the whole of landing D2: the directory is job-scoped `/tmp`
+     on Vercel, a retry is a new job id on a different machine, and every one of
+     these tests passed while production resumed nothing at all. The store is
+     keyed on the article now (src/store/checkpoints.ts). What survives here is
+     what these tests were really about — that the stage stops paying, and that
+     a bad entry is a miss rather than an outage — asked of the store instead of
+     the filesystem. The liveness property itself, across two jobs and a real
+     database, is tests/checkpoints-durable-resume.test.ts. */
+  describe("the chunk checkpoints", () => {
+    /** The keys the stage actually minted, which is the only honest place to read one. */
+    function keysIn(store: MemoryCheckpoints): string[] {
+      return [...store.entries.keys()]
+        .filter((k) => k.startsWith("pdf-chunk/"))
+        .map((k) => k.slice("pdf-chunk/".length))
+        .sort();
     }
 
     /**
-     * **Every real cache key is one the checkpoint store would accept.**
+     * **Every real key is one the checkpoint store's constraint accepts.**
      *
-     * `docs/plans/260827aa-delete-the-importer.md` § B3 moves these entries into a
-     * `checkpoints` table whose `key` column carries a CHECK constraint,
-     * `^[a-z0-9][a-z0-9_-]{0,127}$` — narrower than "any string", because the
-     * filesystem adapter turns the key into a file name and macOS is
-     * case-insensitive.
+     * The `checkpoints` table's `key` column carries a CHECK,
+     * `^[a-z0-9][a-z0-9_-]{0,127}$`. This asserts it against **the keys this
+     * code actually mints**, not against a copy of the expression written into
+     * a test: the key is computed inside `runPdfExtract` and is not exported, so
+     * the only honest way to see one is to run the stage and read back what it
+     * stored. Upper-case hex, a `:` or `=` separator, or a base64url `+` would
+     * every one of them pass a test that re-derived the key, and then be
+     * rejected by the database. docs/reusable/silent-success.md.
      *
-     * This asserts it against **the keys this code actually mints**, not
-     * against a copy of the expression written into a test. The key is computed
-     * inline in `runPdfExtract` and is not exported, so the only honest way to
-     * see one is to run the stage and read the file names back — which is what
-     * `cacheFiles` already does for the tests below. Upper-case hex, a `:` or
-     * `=` separator, or a base64url `+` would every one of them pass a test
-     * that re-derived the key, and then be rejected by the database in landing
-     * D. `docs/reusable/silent-success.md`.
-     *
-     * The regex is duplicated here rather than imported, deliberately: importing
-     * `src/store/checkpoints.ts` from a stage test would let a change to the
-     * constraint silently relax this assertion at the same moment. If the two
-     * disagree, one of them is wrong and somebody should look.
+     * The regex is duplicated here rather than imported, deliberately:
+     * importing `CHECKPOINT_KEY_RE` would let a change to the constraint
+     * silently relax this assertion at the same moment. If the two disagree,
+     * one of them is wrong and somebody should look.
      */
-    it("mints cache keys the checkpoint store's key constraint accepts", async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-key-"));
-      await run(undefined, dir);
-      const names = await cacheFiles(dir);
-      /* Not vacuous: a run that cached nothing would pass every assertion
+    it("mints keys the checkpoint store's key constraint accepts", async () => {
+      const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      await run(undefined, store);
+      const keys = keysIn(store);
+      /* Not vacuous: a run that checkpointed nothing would pass every assertion
          below about the contents of an empty list. */
-      expect(names.length).toBeGreaterThan(0);
-      for (const name of names) {
-        expect(name.endsWith(".json")).toBe(true);
-        expect(name.replace(/\.json$/, "")).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) {
+        expect(key).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
       }
     }, 60_000);
 
     it("reads a well-formed entry back rather than paying for the call again", async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
-      const first = await run(undefined, dir);
+      const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      const first = await run(undefined, store);
       expect(asks).toBeGreaterThan(0);
-      expect((await cacheFiles(dir)).length).toBe(first.chunks);
+      expect(keysIn(store).length).toBe(first.chunks);
 
-      const again = await run(undefined, dir);
+      const again = await run(undefined, store);
       /* The load-bearing assertion in this file: zero. One ask here is one
          vision-model call bought a second time for nothing. */
       expect(asks).toBe(0);
       expect(again.records).toBe(first.records);
     }, 60_000);
 
-    it("treats a half-written entry as a miss, not as a failure of the whole step", async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
-      const first = await run(undefined, dir);
-      const names = await cacheFiles(dir);
-      expect(names.length).toBeGreaterThan(1);
+    it("asks the store once for every chunk, not once per chunk", async () => {
+      /* The bulk read, measured rather than assumed. A hundred-page PDF can
+         plan a hundred chunks, and a hundred round trips before the first model
+         call is latency spent on a document that is already close to its
+         deadline. src/store/checkpoints.ts § `read` is plural. */
+      const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      const first = await run(undefined, store);
+      expect(first.chunks).toBeGreaterThan(1);
+      expect(store.calls.reads).toBe(1);
+      expect(store.calls.keysAsked).toBe(first.chunks);
+    }, 60_000);
 
-      /* Exactly what `writeFile` leaves behind when the process dies mid-write:
-         the file exists, and it stops in the middle of a record. */
-      const victim = path.join(dir, "pdf-chunks", names[0]!);
-      const whole = await readFile(victim, "utf-8");
-      await writeFile(victim, whole.slice(0, Math.floor(whole.length / 2)), "utf-8");
-      expect(() => JSON.parse(whole.slice(0, Math.floor(whole.length / 2)))).toThrow(SyntaxError);
+    it("treats an unusable entry as a miss, not as a failure of the whole step", async () => {
+      const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      const first = await run(undefined, store);
+      const keys = keysIn(store);
+      expect(keys.length).toBeGreaterThan(1);
 
-      const again = await run(undefined, dir);
+      /* **Not a half-written file, because Postgres cannot write half a row** —
+         which is what took the permanent trap in the postmortem away. What
+         remains is an entry that is whole and is not a reading: an older shape
+         of this code, or a value written under a key whose meaning has moved.
+         It parses, so nothing catches it before the caller looks. */
+      store.entries.set(`pdf-chunk/${keys[0]!}`, JSON.stringify({ pages: [1], note: "not a reading" }));
+
+      const again = await run(undefined, store);
       expect(again.records).toBe(first.records);
-      /* One, not all of them: the damaged chunk is re-read and every intact
+      /* One, not all of them: the unusable entry is re-read and every intact
          entry beside it is still used. */
       expect(asks).toBe(1);
-      /* And the good entry is back on disk, so the next run pays nothing. */
-      expect(JSON.parse(await readFile(victim, "utf-8")).records.length).toBeGreaterThan(0);
+      /* And the good entry is back in the store, so the next run pays nothing. */
+      const healed = JSON.parse(store.entries.get(`pdf-chunk/${keys[0]!}`)!) as { records: unknown[] };
+      expect(healed.records.length).toBeGreaterThan(0);
     }, 60_000);
 
     it("says in the log that it threw an entry away, since nothing else records the crash", async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
-      await run(undefined, dir);
-      const names = await cacheFiles(dir);
-      await writeFile(path.join(dir, "pdf-chunks", names[0]!), "{ \"records\": [", "utf-8");
+      const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      await run(undefined, store);
+      const keys = keysIn(store);
+      store.entries.set(`pdf-chunk/${keys[0]!}`, JSON.stringify({ records: "not an array" }));
 
       warnings.length = 0;
-      await run(undefined, dir);
+      await run(undefined, store);
       expect(warnings.length).toBe(1);
-      expect(warnings[0]?.msg).toMatch(/cache/i);
-      expect(warnings[0]?.fields).toMatchObject({ slug: "paper", chunk: names[0]!.replace(".json", "") });
+      expect(warnings[0]?.msg).toMatch(/checkpoint/i);
+      expect(warnings[0]?.fields).toMatchObject({ slug: "paper", chunk: keys[0]! });
     }, 60_000);
 
-    it("leaves no scratch file behind, so the next run does not read one", async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
-      await run(undefined, dir);
-      const names = await readdir(path.join(dir, "pdf-chunks"));
-      expect(names.filter((n) => !n.endsWith(".json"))).toEqual([]);
+    it("does not let a broken store fail the step, because a saving is not a dependency", async () => {
+      /**
+       * **A cache that has become an outage is the failure this guards.** The
+       * filesystem version could do exactly that: a full `/tmp` made `mkdir`
+       * and `writeFile` throw straight out of the stage, so a machine running
+       * short of scratch space stopped being able to read PDFs at all. A store
+       * that throws must cost the *saving* and nothing else.
+       */
+      const broken = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+      const angry = {
+        ...broken,
+        read: async (): Promise<Map<string, never>> => {
+          throw new Error("the checkpoint store is on fire");
+        },
+        write: async (): Promise<void> => {
+          throw new Error("the checkpoint store is still on fire");
+        },
+      };
+      const bytes = new Uint8Array(await readFile(EASY));
+      const pass = await pass0(bytes);
+      asks = 0;
+      const result = await runPdfExtract({
+        bytes,
+        url: "https://example.test/paper.pdf",
+        checkpoints: angry,
+        slug: "paper",
+        reader: honestReader(pass),
+      });
+      expect(result.records).toBeGreaterThan(0);
+      /* It paid for every chunk, which is the cost of a broken store — and it
+         said so, twice, rather than failing silently. */
+      expect(asks).toBe(result.chunks);
+      expect(warnings.filter((w) => /checkpoint/i.test(w.msg ?? "")).length).toBeGreaterThan(0);
     }, 60_000);
   });
 });

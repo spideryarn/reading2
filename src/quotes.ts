@@ -2,7 +2,16 @@
  * Pipeline stage 5h — the **quotes**: the lines worth keeping, in the author's
  * own words.
  *
- *   npm run quotes -- data/writes
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["quotes"], force: ["quotes"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * Greg, 2026-08-31:
  *
@@ -62,14 +71,12 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
@@ -81,7 +88,6 @@ import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type { Block, BlockId, Meta, Quote, QuoteDrops, Quotes, Tree } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { stageCli } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what a quote *is*.
@@ -668,7 +674,7 @@ export function isStale(
 }
 
 /**
- * The quotes on disk, or null — for the API and this file's own CLI, and **not
+ * The quotes on disk, or null — for the API's filesystem read path, and **not
  * for the pipeline**, which asks `previousQuotesFrom` below.
  *
  * Every road to `null` here is the same road: no file, a truncated one, a
@@ -924,8 +930,8 @@ function parseJson(raw: string): { quotes?: unknown } {
  * Stage 5h over a data directory: one model call, and the artefact handed back.
  *
  * **It writes nothing**, which is the converted shape `sketch` introduced —
- * see the note in `main()` below. The pipeline step returns it as `parts`; the
- * CLI writes `quotes.json`.
+ * see the note in `generateSketch` (src/sketch.ts). The pipeline step returns it
+ * as `parts` and the store writes it.
  *
  * **It replaces.** There is no append path and therefore no `existing`, no
  * FORBIDDEN list and no "a stale list is not appended to" rule — see the header.
@@ -1122,72 +1128,3 @@ export async function generateQuotes(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/quotes.ts <dir with blocks.json + tree.json>");
-    console.error("Running it again replaces the list — it does not append to it.");
-    process.exit(1);
-  }
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. */
-  loadEnvLocal();
-  console.log(`Choosing the quotes with ${CAPABLE_MODEL}…`);
-  const run = await generateQuotes({
-    /* The command line has a folder and no store — src/article-input.ts §
-       `readArticleFromDir`, which is deliberately the only filesystem read left
-       in this half of the pipeline. */
-    article: await readArticleFromDir(dir),
-    /* The CLI has files and no store, so it reads the file — and `readQuotes`
-       swallows the difference between "no quotes" and "quotes I cannot read",
-       which is exactly why this is not the pipeline's path any more. Acceptable
-       here: a person is watching, and the worst case is a rewrite that mints
-       fresh ids in a directory they chose by hand. */
-    previous: await readQuotes(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  const { quotes, dropped } = run;
-  /* **The caller writes, not the generator** — the converted shape `sketch`
-     introduced and the one `PipelineStep`'s types now make the default. A stage
-     that wrote `<dir>/quotes.json` inside `generateQuotes` would work on a
-     laptop and could not work through a store that puts the artefact in a
-     Postgres column; a generator that wrote AND returned would give the
-     pipeline two writes, one of them to a path that does not exist in
-     production. So there are two callers and they decide: this one writes the
-     file, and the step returns `parts`. */
-  const outFile = path.join(dir, "quotes.json");
-  await writeFile(outFile, JSON.stringify(quotes, null, 2), "utf-8");
-
-  console.log(`\n${run.blocks} blocks, ${run.words} words → ${quotes.quotes.length} quotes`);
-  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  /* **`unfound` first and on its own line.** It is the model paraphrasing
-     rather than copying, which is the one failure this stage may not have, and
-     it is invisible everywhere else. */
-  console.log(`Not found: ${dropped.unfound}  ← the model paraphrasing, if it is not 0`);
-  console.log(
-    `Dropped:   ${dropped.wrongLength} wrong length, ${dropped.overlapping} overlapping, ` +
-      `${dropped.overCap} over the cap, ${dropped.malformed} malformed`,
-  );
-  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
-  for (const quote of quotes.quotes) {
-    const scores = [
-      quote.importance === undefined ? null : `imp ${quote.importance.toFixed(2)}`,
-      quote.striking === undefined ? null : `str ${quote.striking.toFixed(2)}`,
-    ]
-      .filter(Boolean)
-      .join("  ");
-    console.log(`${quote.blockId}  ${scores}`);
-    console.log(`  "${quote.text}"`);
-    if (quote.reason) console.log(`  why: ${quote.reason}`);
-    console.log("");
-  }
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

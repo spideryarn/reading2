@@ -2,7 +2,16 @@
  * Pipeline stage 5c — the **thread**: the article as a short numbered sequence
  * of standalone posts. See docs/plans/260825g-tweet-thread-page.md.
  *
- *   npm run tweets -- data/writes
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["tweets"], force: ["tweets"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * Why this exists, and the awkwardness it has to answer to. A tweet thread sits
  * close to two of vision.md's anti-goals — "read this in 2 minutes" and
@@ -26,13 +35,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
@@ -47,7 +53,6 @@ import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
-import { stageCli } from "./cli-ledger.js";
 
 export const PROMPT_VERSION = "tweets/2";
 
@@ -343,7 +348,7 @@ export function buildThread(
   };
 }
 
-/** How many posts went over the limit. What the step and the CLI report. */
+/** How many posts went over the limit. What the step reports on its run. */
 export function overLimit(thread: TweetThread): number {
   return thread.tweets.filter((t) => t.chars > thread.limit).length;
 }
@@ -545,52 +550,3 @@ export async function generateTweets(opts: {
     elapsedMs: thread.elapsedMs,
   };
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/tweets.ts <dir with blocks.json + tree.json>");
-    process.exit(1);
-  }
-  // Before the call, not after. This is the only thing on screen while the
-  // model works, and printing it afterwards makes the command look hung.
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
-  loadEnvLocal();
-  console.log(`Writing the thread with ${CAPABLE_MODEL}…`);
-  /* The command line has a folder and no store, so it reads the article itself
-     — `readArticleFromDir` is the one place left that opens these three files,
-     and it is deliberately not reachable from a request or a queued job. */
-  const run = await generateTweets({
-    article: await readArticleFromDir(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  /* And the command writes its own tweets.json, in the same place the stage
-     used to. `npx tsx src/tweets.ts <dir>` is unchanged from outside; what
-     moved is which layer does the writing, so the pipeline can write through
-     the store instead. */
-  const outFile = path.join(dir, "tweets.json");
-  await writeFile(outFile, JSON.stringify(run.thread, null, 2), "utf-8");
-
-  console.log(`\n${run.blocks} blocks, ${run.words} words → ${run.thread.tweets.length} posts`);
-  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`Over ${LIMIT}:   ${run.over}`);
-  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
-  run.thread.tweets.forEach((t, i) => {
-    // Only a real violation is flagged. A 190-character post is not a warning
-    // about anything, and colouring it as one teaches the reader to ignore the
-    // flag that matters.
-    const flag = t.chars > run.thread.limit ? " ← over" : "";
-    console.log(`${i + 1}/${run.thread.tweets.length}  (${t.chars})${flag}\n${t.text}\n`);
-  });
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

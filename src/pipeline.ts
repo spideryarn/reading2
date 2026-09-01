@@ -81,6 +81,7 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
 import { runPdfExtract } from "./pdf-read.js";
+import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
@@ -110,8 +111,8 @@ import { ownedSlug } from "./store/owned-slug.js";
  * **Why the logging lives here rather than in the stages.** Every model stage
  * already counts its own tokens and times its own call, and then hands those
  * numbers back in its run object — which the `run()` closures below receive and
- * currently reduce to a sentence for a progress bar. The stage CLIs print them;
- * the queue threw them away. So "what did this article's tree cost?" had no
+ * currently reduce to a sentence for a progress bar. The stage command lines
+ * printed them and the queue threw them away. So "what did this article's tree cost?" had no
  * answer once the web UI became the normal way to ingest, which is open question
  * Q7 in docs/project/open-questions.md.
  *
@@ -615,10 +616,24 @@ export interface PipelineStep<N extends StepName = StepName> {
    * is the only stage whose *previous output* is an input it cannot do without
    * (docs/project/block-ids.md); the two stages with the same shape, `glossary`
    * and `ideas`, are the next piece of work and this is the seam they take.
+   *
+   * **`checkpoints` is the third argument and not a field of `ctx`**, and the
+   * reason is the same as `store`'s: `ctx` also reaches `stamp`, `isDone` and
+   * `outputs`, none of which may buy anything, and a capability that only the
+   * run phase has should only be reachable from the run phase. Two of the
+   * thirteen steps use it — `extract`, for a PDF's per-chunk transcriptions, and
+   * `hierarchy`, for the nav-label batches — and both hand it straight down to
+   * the stage rather than reading it here.
+   *
+   * **Required, with no default.** A stage handed nothing checkpoints nothing,
+   * which is a run that costs money and reports success — so a caller with no
+   * article to key on passes `nullCheckpointStore()` and says so out loud.
+   * src/store/checkpoints.ts.
    */
   run(
     ctx: StepContext,
     store: ArtifactReads,
+    checkpoints: CheckpointStore,
   ): Promise<N extends LegacyUnconvertedStep ? StepProduct : ConvertedProduct>;
 }
 
@@ -1418,7 +1433,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Extracting the article",
     outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
     produces: ["extractedHtml", "meta"],
-    async run(ctx, store) {
+    async run(ctx, store, checkpoints) {
       /* **The manifest through the store, and the bytes by content address.**
          Stage 1 no longer leaves anything in `ctx.dir`: it puts the document in
          the `sources` bucket and returns the manifest that names it. So this
@@ -1486,11 +1501,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            has for a scan. For a fetched PDF it stays the URL's last segment,
            which is what it always was. */
         ...(manifest.filename ? { filename: manifest.filename } : {}),
-        /* **The chunk checkpoints, and nothing else now.** It used to be where
-           the artefacts went too; those are returned. A half-read book resumes
-           from this directory rather than re-buying every chunk, which is why
-           it is still a path and still `ctx.dir` — src/pdf-read.ts. */
-        dataDir: ctx.dir,
+        /* **The chunk checkpoints, which is what makes a hundred-page PDF
+           finishable at all.** It was `ctx.dir` until 2026-09-01 — job-scoped
+           `/tmp` on Vercel — and a retry is a new job id on a different machine,
+           so every attempt started from zero and a long document could fail for
+           ever without ever accumulating enough finished chunks to get under the
+           deadline. This store is keyed on the article, so it survives both.
+           docs/plans/260901d-simpler-finish-sol.md § 4. */
+        checkpoints,
         slug: ctx.slug,
         signal: ctx.signal,
         /* Aggregated here rather than reported per chunk from inside the stage:
@@ -1728,7 +1746,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * and refuses the publication when they differ — so a `hierarchy` left carrying
      * `NO_INPUT_HASH` would make every article unpublishable.
      */
-    async run(ctx, store) {
+    async run(ctx, store, checkpoints) {
       /* **Stage 3's copy, through the store**, which is the same artefact
          `blocksPathFor` used to open by path — `output/<slug>.blocks.json`, not
          the copy this step is about to write into `data/`. Reading the other
@@ -1741,14 +1759,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const run = await generateHierarchy({
         blocks: file.blocks,
         slug: ctx.slug,
-        /* Where the **label checkpoint** lives, and nothing else. Not where the
-           artefacts go — those are returned now. It stays a directory because
-           `CheckpointStore` has no `delete` and deliberately does not: its
-           header says landing D drops `runId` and the one-file-per-run format
-           together, and it keys on an `articleId` this stage is not given.
-           Redirecting half of that now would stop the next run resuming and
-           re-buy a paid model call per batch, silently. */
-        checkpointDir: ctx.dir,
+        /* Where the **label batches** are kept as they land, one row each, so a
+           run that dies eight batches into a book costs one batch rather than
+           eight. It was `ctx.dir` until 2026-09-01, which on Vercel is a
+           job-scoped `/tmp` the retry never sees. */
+        checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
       });
@@ -1833,16 +1848,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * here, because a second computation of "the blocks hash" is exactly how
        * the two sides of that comparison come to disagree.
        *
-       * **`run.clearCheckpoint` is deliberately not called**, and the omission
-       * is the safer half of a choice rather than an oversight. It throws the
-       * label run's working state away, and it should happen once the artefacts
-       * are *stored* — which is `StoreSession.commit`, after this function has
-       * returned. Calling it here would discard the checkpoint while the write
-       * could still fail, and the next run would re-buy a whole label pass.
-       * Leaving it costs a file that the next run either reuses correctly or
-       * ignores, fingerprint by fingerprint — `src/labels.ts` calls a checkpoint
-       * "harmless to forget", and `scripts/checkpoints-sweep.ts` reclaims it.
-       * The command line, which does store the artefacts itself, does call it.
+       * **There is nothing to clean up, and that is the change of 2026-09-01.**
+       * `run.clearCheckpoint` used to be here as a deliberate omission — it threw
+       * the whole `labels-progress.json` away, and calling it before the
+       * artefacts were stored would have discarded a paid label pass. One row
+       * per batch removes the hazard rather than guarding it: there is no
+       * whole-file manifest to delete, no `runId` deciding whose it is, and no
+       * delete on success at all. Retention is the sweep's
+       * (`scripts/checkpoints-sweep.ts`, `sweepPgCheckpoints`), which is where a
+       * cache's lifetime belongs. src/store/checkpoints.ts § Retention.
        */
       return {
         parts: run.parts,

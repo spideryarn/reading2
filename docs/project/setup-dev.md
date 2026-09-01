@@ -371,21 +371,29 @@ the ways it fails quietly are in [supabase-local.md](supabase-local.md).
 ## The pipeline stages
 
 Each stage runs on its own against a slug, so any one can be re-run without the others
-([architecture.md § Pipeline](architecture.md#pipeline)).
+([architecture.md § Pipeline](architecture.md#pipeline)) — and **the queue is how you do that**:
+`POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`
+([ingest-queue.md](ingest-queue.md)). The commands below are the stages that still have a command
+line: the ones that take a URL, a file or a `blocks.json` rather than an article that is already in
+the library.
+
+**The eight article-reading stages lost theirs on 2026-09-01** — `arc`, `tweets`, `glossary`,
+`ideas`, `quotes`, `timeline`, `quiz` and `sketch`. Each read `blocks.json`, `tree.json` and
+`meta.json` out of a folder and wrote its artefact back beside them, which is a second way to do
+what a job already does — and the job is the one that exercises the store writes, the half that
+actually breaks. A stage CLI writing to a different store than the queue reads has cost us a day
+here before ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md)).
 
 | Command | Stage | Writes |
 |---|---|---|
 | `npm run fetch -- <url> [dir]` | 1, fetch the page and say what came back ([fetching.md](fetching.md)) | `data/<slug>/raw.html` or `raw.pdf`, plus the `raw.json` manifest |
 | `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html`, `data/<slug>/meta.json` |
 | `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | nothing — it prints |
-| `npm run pdf -- <file.pdf> [slug]` | 2, **the other extractor**: a model reads the pages, the transcription is checked against the PDF's own text, and the result is the same `article.html` Readability would have made ([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)) | `output/<slug>.html`, `data/<slug>/meta.json`, `data/<slug>/pdf-chunks/` |
+| `npm run pdf -- <file.pdf> [slug]` | 2, **the other extractor**: a model reads the pages, the transcription is checked against the PDF's own text, and the result is the same `article.html` Readability would have made ([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)) | `output/<slug>.html`, `data/<slug>/meta.json` — and **nothing is remembered between runs** since 2026-09-01: the chunk checkpoints are rows keyed on an `articles` row this command does not have ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)), so a run killed halfway pays again. The queue resumes; this does not |
 | `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
 | `npm run hierarchy -- <blocks.json> [dir]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one command, and nothing is written until both finish | `tree.json`, `labels.json`, `blocks.json` |
 | `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
 | `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |
-| `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
-| `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)) | `tweets.json` |
-| `npm run glossary -- <dir>` | 5d, the terms this piece uses ([glossary.md](glossary.md)). Run it again to add more | `glossary.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
@@ -403,8 +411,8 @@ ingest queue runs the same chain in the server process, with each stage named as
 to see its output.
 
 **Except `tweets` and `glossary`, which an add never runs.** Both are in the pipeline's order and
-neither is in its default list, so each is produced only when something asks for it by name — the
-commands above, or `POST /api/jobs { slug, steps: ["tweets"] }` / `{ steps: ["glossary"] }`. Each
+neither is in its default list, so each is produced only when something asks for it by name:
+`POST /api/jobs { slug, steps: ["tweets"] }` / `{ steps: ["glossary"] }`. Each
 costs a model call over the whole article and each is somewhere you go — a page, and a mode — rather
 than part of making an article readable
 ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely),
@@ -421,9 +429,10 @@ glossary does not replace the list, it **appends another batch of terms** to it 
 panel's "Find more" button is. To start the list over, delete it first:
 `DELETE /api/glossary/<slug>`, then run the step. See [glossary.md § Finding more](glossary.md).
 
-They are literally the same code: each script above is a thin argv wrapper around an exported
-function, and the queue calls that function. So there is one code path per stage and no way for the
-CLI and the queue to drift — which is the thing to preserve if you change a stage.
+Each script above is a thin argv wrapper around an exported function, and the queue calls that same
+function — one code path per stage, which is the thing to preserve if you change one. The stages
+that lost their script keep only the exported function, so for those the queue is not merely the
+same path, it is the only one.
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).

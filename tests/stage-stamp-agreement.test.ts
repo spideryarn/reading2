@@ -57,6 +57,7 @@
  * that nobody "fixes" it into `articleFingerprint`.
  */
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -397,7 +398,7 @@ async function bothHashes(stage: Stage, fixture: Fixture) {
   answers.length = 0;
   answers.push(...scriptFor(stage, fixture.article));
   const ctx = ctxFor();
-  const result = await STEPS[stage].run(ctx, fixture.store);
+  const result = await STEPS[stage].run(ctx, fixture.store, nullCheckpointStore());
   const artefact = result.parts?.[stage] as { sourceHash?: string } | undefined;
   /* If the stub ran short, `answers` still holds entries — a silent way for a
      stage to have taken a path this file did not intend. */

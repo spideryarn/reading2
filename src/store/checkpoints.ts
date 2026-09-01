@@ -423,3 +423,69 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * cycle closed, and it would come back the moment anything here imported the
  * adapter.
  */
+
+/* -------------------------------------------------------- and no store at all -- */
+
+/**
+ * **A checkpoint store that remembers nothing**, for the callers that have no
+ * article row to key on.
+ *
+ * There are two, and neither is production. `fsStoreSession`
+ * ([session.ts](session.ts)) runs against `data/<slug>/` on a laptop with
+ * `SPIDERYARN_STORE` unset, where there is no `articles` row and therefore no
+ * `articleId` — the one thing this store must be keyed on. And the stage
+ * command lines (`npm run pdf`, `npm run labels`, `npm run hierarchy`) are in the
+ * same position for the same reason.
+ *
+ * **So the filesystem path keeps working and stops resuming**, and those are
+ * two different sentences. Every article it produces is byte-for-byte what it
+ * was; what it loses is the discount on a *second* attempt after a killed one,
+ * which used to come from `data/<slug>/pdf-chunks/` and `labels-progress.json`.
+ * That is a laptop paying twice for a run it interrupted, not an article coming
+ * out wrong — and it is bounded by the deletion of the filesystem store
+ * (docs/plans/260831b-finish-the-database-move.md), after which there is no caller
+ * left. The alternative was to resurrect `checkpoints-fs.ts`, deleted on
+ * 2026-09-01 having never written a byte, to serve a path that is going away.
+ *
+ * **It is not silent about it.** Both callers report what they resumed —
+ * `LabelRun.resumed` and, for chunks, `PdfExtractResult.usage` being non-zero on
+ * a second run — so a *Postgres* run that came back with this store by mistake
+ * shows up as a run that resumed nothing rather than as nothing at all.
+ * docs/reusable/silent-success.md.
+ *
+ * **And it still refuses what the real store refuses.** A namespace that is not
+ * declared, or a key the CHECK would reject, throws here exactly as it would in
+ * Postgres — so a caller that mints a bad key finds out from `npm test` on a
+ * laptop rather than from production. Only the slug assertion is missing, and
+ * only because there is no article to bind to.
+ */
+export function nullCheckpointStore(): CheckpointStore {
+  const check = (namespace: CheckpointNamespace, keys: readonly string[]): void => {
+    /* A slug that matches itself, so the shared refusal can be reused whole
+       rather than half-copied — the two would drift, and the half that drifted
+       would be the one only the laptop runs. */
+    assertCheckpointRequest({ slug: "", articleId: "" }, "", namespace, keys);
+  };
+  return {
+    async read<T>(
+      _slug: string,
+      namespace: CheckpointNamespace,
+      keys: readonly string[],
+    ): Promise<Map<string, T>> {
+      check(namespace, keys);
+      return new Map<string, T>();
+    },
+    async write(
+      _slug: string,
+      namespace: CheckpointNamespace,
+      key: string,
+      value: unknown,
+    ): Promise<void> {
+      check(namespace, [key]);
+      /* Checked and thrown away. A value that will not serialise is a bug in the
+         caller either way, and finding it only under Postgres is finding it
+         late. */
+      checkpointJson(value);
+    },
+  };
+}

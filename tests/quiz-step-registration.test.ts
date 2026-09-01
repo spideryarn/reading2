@@ -35,6 +35,7 @@
  * tests/late-step-on-a-cold-instance.test.ts.
  */
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -143,7 +144,7 @@ async function script(): Promise<void> {
 async function runAndWrite(): Promise<Quiz> {
   await script();
   const ctx = ctxFor();
-  const result = await STEPS.quiz.run(ctx, store);
+  const result = await STEPS.quiz.run(ctx, store, nullCheckpointStore());
   /* The stub ran short if anything is left — a silent way for the stage to have
      taken a path this file did not intend. */
   expect(answers).toEqual([]);

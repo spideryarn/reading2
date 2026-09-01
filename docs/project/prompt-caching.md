@@ -129,7 +129,8 @@ write in a doc and a different thing to decide about.
 same job* is in its cache group — `sharesArticleCache` in [`src/pipeline.ts`](../../src/pipeline.ts),
 set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
 An ordinary ingest therefore marks nothing, a job that asks for arc and tweets together marks the
-arc, and a `npm run glossary` by hand marks nothing, which is correct: there is no second call.
+arc, and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no
+second call.
 
 The default is **off**. A cache write costs 1.25× and an unread prefix never earns it back, so the
 question a stage has to answer is not "could this be cached" but "is anyone coming".

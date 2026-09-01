@@ -2,7 +2,16 @@
  * Pipeline stage 5d — the **glossary**: the terms this piece uses in a
  * non-obvious way, defined from the piece itself.
  *
- *   npm run glossary -- data/writes
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["glossary"], force: ["glossary"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * [vision.md](docs/project/vision.md#where-this-goes-after-granularity-zoom)
  * has listed an *author's glossary* as a thing to build since the beginning.
@@ -38,14 +47,12 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
@@ -64,7 +71,6 @@ import type {
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { stageCli } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an entry *is*.
@@ -718,7 +724,7 @@ export function isStale(
 }
 
 /**
- * The glossary on disk, or null — for the API and this file's own CLI, and
+ * The glossary on disk, or null — for the API's filesystem read path, and
  * since 2026-08-28 **not for the pipeline**.
  *
  * The swallowed error is why. "There is no glossary" and "there is a glossary I
@@ -1378,70 +1384,3 @@ export async function generateGlossary(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/glossary.ts <dir with blocks.json + tree.json>");
-    console.error("Run it twice to add a second batch of terms to the same article.");
-    process.exit(1);
-  }
-  // Before the call, not after. This is the only thing on screen while the
-  // model works, and printing it afterwards makes the command look hung.
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
-  loadEnvLocal();
-  console.log(`Finding the terms with ${CAPABLE_MODEL}…`);
-  const run = await generateGlossary({
-    /* A folder and no store, so the last filesystem read in this half of the
-       pipeline is here at the command line — src/article-input.ts. */
-    article: await readArticleFromDir(dir),
-    /* The CLI has files and no store, so it reads the file — and `readGlossary`
-       swallows the difference between "no glossary" and "a glossary I cannot
-       read", which is exactly why this is not the pipeline's path any more.
-       Acceptable here: a person is watching, and the worst case is a top-up
-       that starts a fresh list in a directory they chose by hand. */
-    previous: await readGlossary(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  const { glossary } = run;
-  /* The generator hands its product back and writes nothing, so the command
-     line writes the file it has always written, in the place it has always
-     written it. */
-  const outFile = path.join(dir, "glossary.json");
-  await writeFile(outFile, JSON.stringify(glossary, null, 2), "utf-8");
-  console.log(
-    `\n${run.blocks} blocks, ${run.words} words → ${glossary.entries.length} terms ` +
-      `(${run.added} new, pass ${glossary.passes})`,
-  );
-  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`Unmatched: ${run.unmatched}`);
-  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
-  for (const entry of glossary.entries) {
-    // The occurrence count is the interesting number here: a term with no
-    // occurrences is the alias instruction not landing, and it is the one thing
-    // reading this output is good for.
-    const where = entry.blocks.length === 0 ? "no blocks ←" : `${entry.blocks.length} blocks`;
-    console.log(`${entry.name}  [${entry.kind}] (${where})`);
-    if (entry.aliases.length > 0) console.log(`  aka ${entry.aliases.join(", ")}`);
-    /* Labelled, and both, because which field the model filled is the thing
-       worth looking at after a prompt change — an entry whose `senseHere` is a
-       sentence about the article rather than about the term is the failure
-       `glossary/2` exists to fix, and it is invisible in an unlabelled dump.
-       `gloss` for anything written before that. */
-    if (entry.senseHere) console.log(`  here: ${entry.senseHere}`);
-    if (entry.background) console.log(`  bg:   ${entry.background}`);
-    if (entry.gloss) console.log(`  ${entry.gloss}`);
-    console.log("");
-  }
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

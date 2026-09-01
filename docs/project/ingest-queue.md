@@ -1428,10 +1428,17 @@ The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`,
 
 ## They are the same functions the CLI runs
 
-`npm run extract`, `npm run blocks`, `npm run hierarchy` and `npm run arc` still work, and still do exactly
-what they did. Each of those scripts is now a thin argv wrapper around an exported function, and the
-queue calls the same function — so there is one code path per stage and no way for the two to drift.
-That was the point of the refactor, and it is the thing to preserve if anyone changes a stage.
+`npm run extract`, `npm run blocks` and `npm run hierarchy` still work, and still do exactly what
+they did. Each of those scripts is a thin argv wrapper around an exported function, and the queue
+calls the same function — so there is one code path per stage and no way for the two to drift. That
+was the point of the refactor, and it is the thing to preserve if anyone changes a stage.
+
+**`npm run arc` is gone, and so are its seven siblings** — `tweets`, `glossary`, `ideas`, `quotes`,
+`timeline`, `quiz`, `sketch`. Deleted on 2026-09-01, because *re-run a stage* is one of the three
+things listed above and the queue already does it: `{ slug, steps: ["arc"], force: ["arc"] }`. A CLI
+beside it was a second way to do the same thing, and the queue's way is the one that exercises the
+store writes. The exported functions are untouched; only the argv wrappers went
+([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
 Greg chose in-process over spawning subprocesses (2026-08-25). The cost is real and worth stating: a
 stage that throws inside the server process is now the server's problem, and the four stage files

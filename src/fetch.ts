@@ -294,10 +294,10 @@ export async function writeRaw(
  * **`raw.json` and the bytes beside it, for the one caller that wants files.**
  *
  * The rule that came out of stage 2a is *the generator stops writing and the
- * caller writes*, and for a command line the caller is `main()`. Every other
- * stage CLI in this repo still leaves the file it always left — `arc.json`,
- * `sketch.json`, `output/<slug>.html` — and a `fetch` command that printed a
- * digest instead would be the one that broke the pattern. It would also break
+ * caller writes*, and for a command line the caller is `main()`. Every stage
+ * that still has a command line leaves the file it always left —
+ * `output/<slug>.html`, `tree.json`, `labels.json` — and a `fetch` command that
+ * printed a digest instead would be the one that broke the pattern. It would also break
  * something people actually do: running `npm run fetch -- <url>` by hand under
  * `SPIDERYARN_STORE=files` satisfies the queue's `fetch` step, because the
  * filesystem artefact store reads `raw.json` at exactly this path

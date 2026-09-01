@@ -2,7 +2,16 @@
  * Pipeline stage 5h — the **timeline**: when the piece says these things
  * happened, in what order, and how sure it actually is.
  *
- *   npx tsx src/timeline.ts data/openai-huggingface
+ * **There is no command line here.** Re-running this stage against one
+ * article is a job, not a script:
+ *
+ *   POST /api/jobs { slug, steps: ["timeline"], force: ["timeline"] }
+ *
+ * That is the path the pipeline itself takes, so it exercises the store
+ * writes — the half that actually breaks. The folder-reading CLI this file
+ * used to carry was a second way to do the same thing, and was deleted on
+ * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
  * Full design, the two reviews that rewrote it and the spike that measured it:
  * docs/plans/260831i-timeline-mode.md.
@@ -95,10 +104,9 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
-import { type Article, readArticleFromDir } from "./article-input.js";
+import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -115,7 +123,6 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
-import { loadEnvLocal } from "./env.js";
 import {
   countOrderConflicts,
   orderEvents,
@@ -137,7 +144,6 @@ import type {
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { stageCli } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an *event* is.
@@ -836,14 +842,14 @@ export function buildTimeline(
 }
 
 /**
- * The timeline on disk, or null — for this file's own CLI and, later, the API.
+ * The timeline on disk, or null — for the API's filesystem read path.
  *
  * Every road to `null` is the same road: no file, a truncated one, a document
  * of the wrong shape. That is right for the panel, which has one thing to say
  * either way, and wrong for the pipeline, which would lose every `?event=` link
  * on one of them — so the pipeline calls `previousTimelineFrom` above instead,
- * and this is left to the CLI, where a person is watching and the worst case is
- * a re-run in a directory they named by hand.
+ * and this is left to the read path, where the worst case is a panel that says
+ * there is no timeline yet.
  */
 export class TimelineBaselineUnusable extends Error {
   constructor(readonly slug: string) {
@@ -1331,90 +1337,3 @@ export async function generateTimeline(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-
-/** One row, in the notation the panel will draw — see `markFor`. */
-function line(event: TimelineEvent): string {
-  const d = event.dating;
-  /* A rejected row keeps its words where it has them — on an article with no
-     publication date every dated event lands here, and "⊘" alone would tell the
-     reader nothing they could go and check. */
-  if (d.kind === "rejected") return d.phrase ? `  ⊘  “${d.phrase}”` : "  ⊘  ";
-  if (d.kind === "words") return `“${d.phrase}”`;
-  if (d.kind === "untimed") return "  ·  ";
-  const when = d.when;
-  const body = when.extent === "extended" ? "▬▬" : " ● ";
-  return `${when.earliest === null ? "⋯" : "│"}${body}${when.latest === null ? "⋯" : "│"} ` +
-    `${when.earliest ?? ""}${when.earliest !== when.latest ? `…${when.latest ?? ""}` : ""}`;
-}
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/timeline.ts <dir with blocks.json + tree.json>");
-    console.error("Running it again replaces the timeline — it does not append.");
-    process.exit(1);
-  }
-  /* **In `main`, never in `generateTimeline`.** The server already loaded
-     `.env.local` before any stage runs, so doing it inside the generator would
-     be a no-op there and an import of `node:fs` into a path that does not need
-     one. `tests/paid-cli-ledger.test.ts` holds this rule for every stage CLI. */
-  loadEnvLocal();
-  /* **The last filesystem read in this half of the pipeline lives in ONE
-     place** — src/article-input.ts — and this is a caller that has a folder and
-     no store. The generator is handed the result; it never opens anything. */
-  const article = await readArticleFromDir(dir);
-  // Before the call, not after: this is the only thing on screen while the
-  // model works, and printing it afterwards makes the command look hung.
-  console.log(`Building the timeline with ${CAPABLE_MODEL}…`);
-  const run = await generateTimeline({
-    article,
-    /* The CLI has files and no store, so it reads the file — and `readTimeline`
-       gives one `null` for every kind of failure. Acceptable here: a person is
-       watching, and the worst case is a re-run that mints fresh ids in a
-       directory they named by hand. The pipeline wants the store's baseline. */
-    previous: await readTimeline(dir),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-  /* Written here rather than in the generator — see the note on the return
-     value. Stage 4 hands `parts` to the transaction instead. */
-  const outFile = path.join(dir, "timeline.json");
-  await writeFile(outFile, JSON.stringify(run.timeline, null, 2), "utf-8");
-
-  const { timeline, dropped } = run;
-  const dated = timeline.events.filter((e) => e.dating.kind === "dated").length;
-  console.log(
-    `\n${run.blocks} blocks, ${run.words} words → ${timeline.events.length} events ` +
-      `(${dated} dated), frame ${run.frame ?? "none"}`,
-  );
-  for (const event of timeline.events) {
-    const mark = event.modality === "happened" ? " " : event.modality === "predicted" ? "→" : "?";
-    console.log(`  ${mark} ${line(event).padEnd(28)} ${event.label}  (${event.occurrences.length})`);
-  }
-  console.log(`\nTokens:  ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed: ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(
-    `Dropped: ${dropped.unanchored} unanchored, ${dropped.unknownIds} bad ids, ` +
-      `${dropped.unquoted} unquoted, ${dropped.malformed} malformed, ` +
-      `${dropped.datedLabel} with a date in the label, ` +
-      `${dropped.truncated} occurrences over the cap, ${dropped.overCap} events over the cap`,
-  );
-  console.log(
-    `Dates:   ${dropped.noDateInPhrase} phrases with no date in them (fine), ` +
-      `${dropped.unparseablePhrase} unparseable, ` +
-      `${dropped.phraseNotInOccurrence} not in the quoted passage, ` +
-      `${dropped.noYearFrame} with no year to fill in, ` +
-      `${dropped.phraseNotFound} phrases we could not locate and so did not show`,
-  );
-  console.log(
-    `Order:   ${dropped.unordered} without an order, ` +
-      `${dropped.duplicateOrders} sharing one with another event, ` +
-      `${dropped.orderConflicts} conflicts with the article's own dates`,
-  );
-  console.log(`\nWrote ${outFile}`);
-}
-
-/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
-   than `void`ed: flushing the ledger, and any failure in it, are part of the
-   command finishing rather than something the process might exit before doing.
-   src/cli-ledger.ts says what the one line replaces and why it is one line. */
-await stageCli(import.meta.url, main);

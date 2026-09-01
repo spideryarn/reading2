@@ -82,6 +82,9 @@ const SOURCE = "writes";
 /** A module of `src/`, as a quoted absolute path for the child's `import()`. */
 const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
 
+/** The same, for a module of `tests/helpers/`. */
+const helper = (name: string) => JSON.stringify(path.join(ROOT, "tests", "helpers", name));
+
 /**
  * Ten characters each, and no one of them a substring of another.
  *
@@ -211,9 +214,15 @@ beforeAll(async () => {
     const { generateArc } = await import(${src("arc.ts")});
     const { generateTweets } = await import(${src("tweets.ts")});
     const { generateGlossary } = await import(${src("glossary.ts")});
-    const { readArticleFromDir } = await import(${src("article-input.ts")});
+    const { readArticleFromDir } = await import(${helper("article-from-dir.ts")});
     const { generateIdeas } = await import(${src("ideas.ts")});
     const { generateLabels } = await import(${src("labels.ts")});
+    /* Both stages take a \`CheckpointStore\` since 2026-09-01 and neither builds
+       one; this simulation has no article row, so it says "remember nothing"
+       explicitly. Without it the two calls warn that they could not read a
+       checkpoint — which is one extra log line, and the count below is the whole
+       measurement. */
+    const { nullCheckpointStore } = await import(${src("store/checkpoints.ts")});
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const { collectSpend } = await import(${src("ai-spend.ts")});
 
@@ -225,7 +234,7 @@ beforeAll(async () => {
     /* Read once here rather than inside the steps: this simulation is about what
        a *refusal* does, so a stage that threw on its own inputs before making a
        call would report "step failed" for the wrong reason and the absence of a
-       leak would be measuring nothing. src/article-input.ts. */
+       leak would be measuring nothing. tests/helpers/article-from-dir.ts. */
     const article = await readArticleFromDir(DIR);
 
     /* Exactly how src/jobs.ts records a step that threw — and exactly one line
@@ -245,12 +254,12 @@ beforeAll(async () => {
       }
     };
 
-    await step("hierarchy", () => generateHierarchy({ blocks, slug: "stop-details" }));
+    await step("hierarchy", () => generateHierarchy({ blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
     await step("arc", () => generateArc({ article }));
     await step("tweets", () => generateTweets({ article }));
     await step("glossary", () => generateGlossary({ article, previous: null }));
     await step("ideas", () => generateIdeas({ article, previous: null }));
-    await step("labels", () => generateLabels({ tree, blocks, slug: "stop-details" }));
+    await step("labels", () => generateLabels({ tree, blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
 
     /* The control: the code that was deleted, run against the same stream and
        logged the same way. Its sentinel has to come out the other side, or the

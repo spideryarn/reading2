@@ -328,8 +328,8 @@ fix — which is a re-fetch. The measurement, the two probes that produced it an
 
 **`npm run fetch -- <url> [dir]` still writes its files**, and that is deliberate rather than
 left over. The rule the conversion follows is *the generator stops writing and the caller writes*,
-and for a command line the caller is `main()` — every other stage CLI in this repo leaves the file
-it always left, and a `fetch` that printed a digest instead would be the one that broke the pattern.
+and for a command line the caller is `main()` — every stage that still has one leaves the file it
+always left, and a `fetch` that printed a digest instead would be the one that broke the pattern.
 It also keeps a property people use: running it by hand under `SPIDERYARN_STORE=files` satisfies the
 queue's fetch step, because `writeRawFiles` writes `raw.json` at exactly the path
 `PATHS.fetch.raw` reads. It now prints the **object key** as well, which is how the split above

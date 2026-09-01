@@ -1503,8 +1503,8 @@ glossary, and three consequences follow from it rather than from taste:
 **The first converted step, and for a while the only one.** Writing a file inside
 `run()` works on a laptop and cannot work through a store that puts the artefact
 in a Postgres column. `generateSketch` writes nothing and hands the scene back;
-the step returns it as `parts`, the CLI writes `sketch.json`, the harness writes
-into a results directory. Every other article-reading stage followed on
+the step returns it as `parts`, and `evals/sketch/run.ts` writes it into a results
+directory. Every other article-reading stage followed on
 2026-08-31 — [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ### 288px is not a size a diagram fits in, and zooming inside it does not help

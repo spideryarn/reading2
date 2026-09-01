@@ -35,6 +35,7 @@
  * keeps this to a single fake response instead of the whole batch protocol.
  */
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -135,7 +136,6 @@ vi.mock("../src/labels.js", async (importOriginal) => {
         outputTokens: 0,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-        clearCheckpoint: async () => {},
       };
     },
   };
@@ -193,7 +193,7 @@ let generateHierarchy!: typeof import("../src/hierarchy.js")["generateHierarchy"
 
 async function run(): Promise<{ threw: Error | null; run?: HierarchyRun }> {
   try {
-    const result = await generateHierarchy({ blocks, slug: "toc-write-guard" });
+    const result = await generateHierarchy({ blocks, slug: "toc-write-guard", checkpoints: nullCheckpointStore() });
     return { threw: null, run: result };
   } catch (err) {
     return { threw: err as Error };

@@ -59,11 +59,17 @@ import { costStore } from "./store/ai-calls.js";
  * which reads as correct and is useless. Here there is no ordering to get
  * wrong.
  *
- * The eight CLIs in `tests/paid-cli-ledger.test.ts` still call `loadEnvLocal()`
- * at the top of `main` themselves, and that gate still requires it, because five
- * of them are mid-migration. The call memoises, so the second one does nothing.
- * When all eight are on `stageCli`, the in-`main` calls and the rule that checks
- * for them can go, and this line becomes the only one.
+ * The CLIs in `tests/paid-cli-ledger.test.ts` still call `loadEnvLocal()` at the
+ * top of `main` themselves, and that gate still requires it, because
+ * `src/hierarchy.ts` is still on the old tail. The call memoises, so the second
+ * one does nothing. When it moves too, the in-`main` calls and the rule that
+ * checks for them can go, and this line becomes the only one.
+ *
+ * **There are three of them now, not eight.** The seven article-reading stage
+ * CLIs — `arc`, `tweets`, `glossary`, `ideas`, `quotes`, `timeline`, `quiz` —
+ * were deleted on 2026-09-01: re-running one stage against one article is a
+ * job (`{ slug, steps, force }`), and a second way to do it was a second thing
+ * to keep in step. docs/plans/260831b-finish-the-database-move.md § sub-stage I.
  *
  * `await`ed by the caller rather than `void`ed, so flushing the ledger and any
  * failure in it stay part of the command finishing (§0.1).
