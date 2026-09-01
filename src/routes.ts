@@ -59,6 +59,9 @@
  *                                           see `runRefereeCriterion`
  *   PATCH  /api/referee/criteria/:slug/:id  { colour } — the palette slot, or null for auto
  *   DELETE /api/referee/criteria/:slug/:id
+ *   GET    /api/referee/claims/:slug        the paper's claims run, or null
+ *   POST   /api/referee/claims/:slug        no body → **a stream**, see `runRefereeClaims`.
+ *                                           One run per article; a second POST replaces the first
  *   POST   /api/referee/mirror/:slug        no body → **a stream**, see `runMirror`. Reads the
  *                                           referee's own comments back to them; never the paper
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
@@ -96,6 +99,7 @@ import {
   librarySearch,
   listArticles,
   readerStore,
+  refereeClaimsStore,
   refereeCriteriaStore,
   searchStore,
   shelfStore,
@@ -145,6 +149,12 @@ import {
   type RefereeResult,
 } from "./referee-criteria.js";
 import type { SavedCriterion } from "./saved-criteria.js";
+/* Referee mode's Claims sub-mode. `referee-claims.js` is pure — it reaches
+   `quote-match` and `types` and nothing else — so the shapes and the copy come
+   in for free; `referee-claims-run.js` is the paying call, imported for the same
+   reason `findPassagesStream` and `runCriterionStream` above are. */
+import { runClaimsStream } from "./referee-claims-run.js";
+import type { Claim, ClaimsRun } from "./referee-claims.js";
 /* Referee mode's Mirror sub-mode. The generator, and only the generator: the
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
@@ -285,6 +295,7 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  QuizFound,
   QuotesResponse,
   SketchResponse,
   RememberStance,
@@ -724,6 +735,18 @@ export function heartbeat(
 function sse(res: ServerResponse): {
   frame(event: string, data: unknown): void;
   alive(): boolean;
+  /**
+   * Fires when the reader's connection closes — the same event `alive()` is
+   * built on, in the form a model call can be handed.
+   *
+   * Here rather than in each caller because the two answers must be the same
+   * answer. `alive()` stops us *writing* to a dead socket, which is only half
+   * of what "the reader has gone" should mean: without a signal on the model
+   * call, closing the tab leaves OpenRouter generating, and being paid for,
+   * until it finishes on its own — and a retry then starts a second paid call
+   * beside the first. A caller that wants only the frames can ignore this.
+   */
+  gone: AbortSignal;
 } {
   /* Has the reader gone?
 
@@ -737,8 +760,13 @@ function sse(res: ServerResponse): {
      answer is written to disk behind them. The response's `close` has one
      meaning: this connection is finished. */
   let open = true;
+  /* One listener, two consumers: the boolean the writes are guarded by, and the
+     signal the model call is cancelled by. Two listeners could disagree about
+     the moment the reader left; one cannot. */
+  const left = new AbortController();
   res.on("close", () => {
     open = false;
+    left.abort();
   });
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -763,6 +791,7 @@ function sse(res: ServerResponse): {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     },
     alive,
+    gone: left.signal,
   };
 }
 
@@ -1119,6 +1148,36 @@ async function answer(
    docs/plans/260831al-review-quiz-sub-mode.md § Marking. */
 
 /**
+ * The two 409s a mark can meet, in the order they have to be asked.
+ *
+ * **Stale first, then the batch**, because the two failures have different
+ * sentences and the staler fact is the more useful one: a reader told "the
+ * questions were rewritten" when in fact the *article* moved would go and press
+ * the wrong button.
+ *
+ * A function because `markOneAnswer` asks twice — once on the quiz it read, and
+ * again after reading the article, which is a second resolution of "the current
+ * revision". Written inline both times, the two copies would eventually give
+ * the reader two different accounts of one event.
+ */
+function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
+  if (found.stale) {
+    throw httpError(
+      409,
+      "The article has changed since these questions were written, so this answer " +
+        "cannot be marked against them. Write the questions again.",
+    );
+  }
+  if (found.quiz.batchId !== batchId) {
+    throw httpError(
+      409,
+      "These questions have been rewritten since you opened them, so this answer " +
+        "belongs to a batch that no longer exists. Reload to get the current ones.",
+    );
+  }
+}
+
+/**
  * Mark one answer against one question, a few words at a time.
  *
  * `POST /api/quiz/:slug/mark`, body `{ batchId, questionId, answer }`, SSE out.
@@ -1149,6 +1208,10 @@ async function answer(
  * the tempting repair and is the bug: the ids are minted per batch, so a match
  * across batches is a coincidence rather than the same question.
  *
+ * **And all three are asked twice**, because reading the quiz and reading the
+ * article are two separate resolutions of "the current revision" —
+ * `refuseAMovedQuiz` below the second read, and the comment there.
+ *
  * ## The stream has to be able to say it failed
  *
  * Zero or more `delta` frames, then **exactly one terminal frame** — `done` on
@@ -1157,6 +1220,10 @@ async function answer(
  * without finishing) arrives here as a throw and leaves as `error`, carrying
  * whatever partial text had already been shown so the reader is not left
  * wondering whether the half-sentence in front of them is the whole reply.
+ *
+ * The one case with **no** terminal frame is the reader leaving: `sse`'s `gone`
+ * aborts the model call, `markAnswerStream` ends without a `done`, and there is
+ * nobody on the other end of the socket to tell either way.
  *
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
@@ -1195,31 +1262,34 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
      nobody has written the questions yet — which is the right answer to a mark
      against a quiz that does not exist. */
   const found = await loadQuiz(slug);
-  /* **Stale first, then the batch**, because the two failures have different
-     sentences and the staler fact is the more useful one: a reader told "the
-     questions were rewritten" when in fact the *article* moved would go and
-     press the wrong button. */
-  if (found.stale) {
-    throw httpError(
-      409,
-      "The article has changed since these questions were written, so this answer " +
-        "cannot be marked against them. Write the questions again.",
-    );
-  }
-  if (found.quiz.batchId !== batchId) {
-    throw httpError(
-      409,
-      "These questions have been rewritten since you opened them, so this answer " +
-        "belongs to a batch that no longer exists. Reload to get the current ones.",
-    );
-  }
+  refuseAMovedQuiz(found, batchId);
   const at = found.quiz.questions.findIndex((q) => q.id === questionId);
   const question = found.quiz.questions[at];
   if (!question) throw httpError(404, "questionId is not a question in this quiz");
 
   const article = await loadArticle(slug);
+  /* **And asked again, because that was a second read.**
 
-  const { frame } = sse(res);
+     The checks above were made against whatever revision `loadQuiz` resolved;
+     `loadArticle` then resolves the current revision all over again. A publication
+     landing between the two awaits gets the model revision A's question,
+     reference answer and evidence beside revision B's prose — a 200, a
+     plausible mark, and the guard whose whole job is to prevent it having
+     already passed. Asking again closes it: a quiz is stale the moment the
+     article's fingerprint moves, so a revision in that gap makes this read say
+     so (or, if the questions were rewritten too, changes the batch).
+
+     **This is a re-check, not a snapshot, and the difference is worth being
+     honest about.** What the review asked for was all four inputs from one
+     revision, which needs a revision-scoped read the `ArticleReader` contract
+     does not have — every read there takes a slug and resolves "current"
+     itself. Adding one would be a second way to read an article, for a window
+     of microseconds, so it was not worth it now: what is left is a revision
+     that lands *and* is superseded by one with an identical fingerprint, both
+     inside one handler. Written down rather than left to be rediscovered. */
+  refuseAMovedQuiz(await loadQuiz(slug), batchId);
+
+  const { frame, gone } = sse(res);
   let text = "";
   try {
     for await (const event of markAnswerStream({
@@ -1230,6 +1300,15 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
       referenceAnswer: question.referenceAnswer,
       evidence: question.evidence,
       answer: written,
+      /* **The reader leaving cancels the paid call, not just the frames.**
+         Without this, closing the tab left OpenRouter generating a mark nobody
+         would ever see, and being paid for it, until it finished on its own —
+         and a reader who came back and pressed Answer again started a second
+         one beside the first. There is no stop button in the quiz panel and no
+         attempt row to reconcile, so this is the only cancellation there is.
+         `markAnswerStream` tells this signal apart from its own deadline and
+         stall clocks and ends the mark without a `done`. */
+      signal: gone,
       telemetry: {
         /* Content-free, all five of them: three ids, an ordinal and the slug.
            `markAnswerStream` writes the one line per mark and adds the counts.
@@ -3136,6 +3215,130 @@ async function runRefereeCriterion(
   }
 }
 
+/* ------------------------------------------------ referee claims (stage 4) --
+   What the paper claims about itself, and where it takes each claim up.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
+
+   **Criteria's two routes rather than its four**, and the difference is the data
+   model rather than a corner cut: there is one claims run per article, so there
+   is no row to name, nothing to recolour and nothing to delete one of. A second
+   run replaces the first, which is what POST already means.
+
+   The ownership check is the same `assertOwner` this dispatcher runs for every
+   `/api/` route, and the spend is attributed the same way Criteria's is. */
+
+/**
+ * The articles this process is pulling claims for right now, as slugs.
+ *
+ * The same job `refereeing` and `searching` do above, for the same reason:
+ * `pending` in the store does not mean "an answer is coming", because it is
+ * written *before* the model call precisely so a crash leaves evidence. A slug
+ * rather than a `slug/id` because there is only ever one run per article.
+ */
+const pullingClaims = new Set<string>();
+
+/**
+ * The run a request should ask for, and a 400 saying why not.
+ *
+ * **A claims POST carries no body at all**, and that is the design rather than
+ * an omission — the same call `runMirror` below makes and for the same reason.
+ * Everything this run is about is already ours: the article is in the store and
+ * the question is fixed. A body that named anything would be a way for a stale
+ * tab, or a tampered client, to steer a paid call.
+ *
+ * So the only thing to refuse is a paper with no blocks in it. That check is
+ * here, above `sse(res)`, because after a header has gone out there is nowhere
+ * to put a 400 — and a model asked to find claims in an empty article does not
+ * fail, it invents.
+ */
+function claimsProblem(blocks: Block[]): string | null {
+  return blocks.length === 0
+    ? "This article has no text to read yet. Let ingestion finish and try again."
+    : null;
+}
+
+/**
+ * Pull the paper's claims, streaming each one as it arrives, and store the run.
+ *
+ * **`runRefereeCriterion` above, with three differences and no fourth.** Read
+ * its docstring, and `search`'s behind it, for every decision repeated here —
+ * validation before `begin`, the `pending` row written before a header goes out,
+ * a model failure being a `done` frame rather than an HTTP error, and nothing
+ * past `sse(res)` being allowed to throw.
+ *
+ * The three differences:
+ *
+ * - **The middle frame is `claim`**, and it carries a whole `Claim` with its
+ *   passages already anchored and re-quoted against the article.
+ * - **A streamed claim is not in document order and the final one is.**
+ *   `validateClaims` sorts by position, and a preview cannot — the claims after
+ *   it have not arrived. So the panel sorts what it is holding on every frame
+ *   (src/web/ClaimsPanel.tsx), which is what makes rule 1 true on screen at
+ *   every instant rather than only at the end.
+ * - **There is no id and no attempt.** One run per article, so `finish` writes
+ *   over whatever `begin` wrote and identity is the slug. The cost of that is
+ *   real and is written down in src/referee-claims-store.ts: two tabs running
+ *   this at once will have the slower answer win, where a criterion's
+ *   `attempt` would have refused the stale one.
+ *
+ * The `dropped` counts come back on the outcome and are **not** sent to the
+ * client, exactly as Criteria's are not — with the same exception, for the same
+ * reason. An answer in which every claim was thrown away is raised as a failure
+ * by `runClaimsStream` (`CLAIMS_UNUSABLE`) and stored as one, because otherwise
+ * the panel would print "the model did not find" about an answer that found
+ * things and could not place them. The per-claim half of that lives on the row
+ * as `Claim.discarded` and *is* sent, because the sentence under an empty claim
+ * depends on it.
+ */
+async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void> {
+  /* Read before anything is written, so a slug that is not an article is a clean
+     404 and an empty one is a clean 400 — both before a header exists. */
+  const article = await loadArticle(slug);
+  const problem = claimsProblem(article.blocks);
+  if (problem) throw httpError(400, problem);
+
+  const row = await refereeClaimsStore.begin(slug);
+  pullingClaims.add(slug);
+
+  const { frame } = sse(res);
+  frame("begin", row);
+
+  let patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>;
+  try {
+    let claims: Claim[] = [];
+    let model = "";
+    for await (const event of runClaimsStream({ meta: article.meta, blocks: article.blocks })) {
+      if (event.type === "claim") {
+        frame("claim", { claim: event.claim });
+        continue;
+      }
+      claims = event.outcome.claims;
+      model = event.outcome.model;
+    }
+    patch = { status: "done", claims, model };
+  } catch (err) {
+    captureFailure(err, { route: "referee-claims", slug });
+    patch = { status: "error", error: (err as Error).message, claims: [] };
+  } finally {
+    pullingClaims.delete(slug);
+  }
+
+  try {
+    const stored = await refereeClaimsStore.finish(slug, patch);
+    /* `null` means the run is not there any more — the article's data went away
+       underneath the call. Silence rather than a resurrection. */
+    if (stored) frame("done", stored);
+  } catch (storeErr) {
+    log("store").error(
+      { ...errorFields(storeErr), slug },
+      `could not record a claims run for ${slug}`,
+    );
+    captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+  } finally {
+    res.end();
+  }
+}
+
 /* ----------------------------------------------- referee mirror (stage 5b) --
    The model reads the referee's own comments and remarks on them. It is never
    given the article, so "it says nothing about the paper" is true of the input
@@ -3320,8 +3523,7 @@ const MAX_LIBRARY_HITS = 30;
  * `finally` in `handleApi` logs `path`, which is already stripped of its query
  * string for exactly this reason. See docs/project/logging.md.
  */
-async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
-  const params = new URL(url, "http://x").searchParams;
+async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchResponse> {
   const query = params.get("q") ?? "";
 
   const asked = Number(params.get("limit") ?? MAX_LIBRARY_HITS);
@@ -4849,16 +5051,32 @@ async function serveApi(
 
   const started = Date.now();
   const method = req.method ?? "";
-  /* **The path without the query string, for logging only.** The routes below
-     still match against `url` itself; nothing here changes what is served.
+  /* **The path without the query string, and every route below matches on it.**
 
-     `req.url` carries the query string, and `logRequest` writes its argument
-     into the message as well as the object — where redaction, which matches
-     key paths and never text, can never reach it. No route reads a query
-     string today, so this costs nothing and stops a future `?token=…`, or one
-     sent by mistake, from being written down twice. Raised by GPT/Codex in
-     review. */
+     It arrived for logging alone: `req.url` carries the query string, and
+     `logRequest` writes its argument into the message as well as the object,
+     where redaction — which matches key paths and never text — can never reach
+     it. Stripping it stops a `?token=…`, sent deliberately or by mistake, from
+     being written down twice. Raised by GPT/Codex in review.
+
+     Routing was left on the raw URL at the time, on the reasoning that no route
+     read a query string — which stopped being true the next morning. The library
+     family was moved here in the same commit that gave it `?q=` and
+     `?archived=1`, so it never broke; the generalisation just stopped at the
+     edge of that commit. The next route to take a parameter got no such move,
+     and every pattern here is `$`-anchored with a slug class that excludes `?`,
+     so it did not mis-route — it stopped matching anything.
+     `GET /api/chat/<slug>?summary=1` 404'd on every article an owner opened, for
+     five days, with its handler sitting a line below unreached.
+     docs/postmortems/260901a-the-route-the-query-string-hid.md. */
   const path = url.split("?")[0] ?? url;
+  /* **The other half of the same split, parsed once.** Four route families read
+     a query string, and before this each parsed the URL again for itself — one
+     of them out of `req.url` directly, which is the escape hatch that made the
+     `path`/`rawUrl` distinction above a convention rather than a rule. Handing
+     the parsed parameters down means no handler below has a reason to hold a
+     URL string at all. GPT Sol's finding 1, 2026-09-01. */
+  const query = new URLSearchParams(url.slice(path.length).replace(/^\?/, ""));
 
 
   /* Every response leaves by one of the ~14 `send` calls below, the catch, or
@@ -4923,7 +5141,7 @@ async function serveApi(
        `requireUser` can produce (src/auth.ts). Before the split, "an
        authenticated route reached without authentication" was prevented by this
        line being above the route table and by nothing else. GPT Sol's answer 2. */
-    await serveAuthenticatedApi(user, { req, res, url, path });
+    await serveAuthenticatedApi(user, { req, res, rawUrl: url, path, query });
     return true;
   } catch (err) {
     // Anything that knows its own status says so. What is left is either a
@@ -4980,10 +5198,25 @@ async function serveApi(
 /**
  * The request, as the dispatchers below take it.
  *
- * `path` is `url` with the query string already removed, computed once in
- * `serveApi` and handed on — so nothing downstream has to remember which of the
- * two it is holding. Several routes still match on `url`, which is why both are
- * here rather than only the safe one.
+ * **Three fields, three jobs, and the split is the whole point.** `path` is what
+ * every route matches on. `query` is what the four route families that take
+ * parameters read — the shelf's `?archived=1`, search's `?q=`, the reader's
+ * `?slug=`, chat's `?summary=1`. `rawUrl` is for the 404 message, which is worth
+ * printing in full. All three are computed once in `serveApi`.
+ *
+ * Matching a route against a URL with a query string on it cannot match
+ * anything, because every pattern below is `$`-anchored — that is the bug in
+ * docs/postmortems/260901a-the-route-the-query-string-hid.md, and it ran for
+ * five days. The field is called `rawUrl` rather than `url` so that `.exec(url)`
+ * does not compile.
+ *
+ * **That rename is a speed bump, not a wall**, and it is worth being honest
+ * about which: `req` is right here, so `.exec(req.url ?? "")` compiles fine, and
+ * so does aliasing `rawUrl`. GPT Sol made the point and it stands. What actually
+ * shrinks the class is `query`: before it, a handler that wanted a parameter had
+ * to get hold of a URL and parse it, and the chat handler did exactly that, out
+ * of `req.url`, one line under the matcher that could not reach it. Now nothing
+ * below has a reason to hold a URL string at all.
  *
  * **The public dispatcher takes a different, smaller envelope** and in
  * particular does not take `req` — see `PublicRequest` in src/public/routes.ts.
@@ -4994,19 +5227,23 @@ async function serveApi(
 interface ApiRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  url: string;
+  rawUrl: string;
   path: string;
+  /** The query string, parsed once in `serveApi`. Empty for most requests. */
+  query: URLSearchParams;
 }
 
 /**
  * **Everything behind the gate.** Reached only with a `VerifiedUser`, which only
  * `requireUser` can make.
  *
- * This function is the old body of `serveApi`, moved on 2026-08-28 and otherwise
- * unchanged — the route declarations and the `if` chain are the same text in the
- * same order, so the diff reads as a move. It was deliberately **not** redesigned
- * into a route table on the way: that is a real improvement and it is a different
- * change, and doing both at once would have made neither reviewable.
+ * This function is the old body of `serveApi`, moved here on 2026-08-28 so that
+ * the diff of *that* change read as a pure move — the route declarations and the
+ * `if` chain went across as the same text in the same order. It has been edited
+ * many times since, so do not read that as a description of the present. It was
+ * deliberately **not** redesigned into a route table on the way: that is a real
+ * improvement and it is a different change, and doing both at once would have
+ * made neither reviewable.
  *
  * ## What the split buys, which a boolean parameter would not
  *
@@ -5061,22 +5298,20 @@ export async function serveAuthenticatedApi(
      why it lands on the isolation scope and not the global one. */
   setMonitoringUser(user);
 
-  const { req, res, url, path } = request;
+  const { req, res, rawUrl, path, query } = request;
 
-  /* Matched on `path` rather than `url`, because the shelf now takes a query
-     string (`?archived=1`). It stays an EXACT match on the path — a stray
-     `/api/library/anything` must still 404 rather than quietly serve the whole
-     shelf, which is what this line has always been for. */
+  /* An EXACT match, which is what this line has always been for: a stray
+     `/api/library/anything` must 404 rather than quietly serve the whole shelf.
+     The shelf takes `?archived=1`, which is why it was the first route moved
+     off the raw URL. */
   /* **The admin namespace, and it is two comparisons rather than one.**
      `startsWith("/api/admin/")` alone would leave a future endpoint at exactly
      `/api/admin` — no trailing slash — outside the gate, which would make the
      claim that nothing under here can be added ungated quietly false. The bare
      path is in the namespace too. GPT Sol, 2026-08-27.
 
-     On `path`, not `url`: `url` carries the query string, and a check that
-     reads it is a check a `?` can be hidden behind. `serveApi` has already
-     refused anything not beginning `/api/`, so there is no other spelling to
-     get past.
+     `serveApi` has already refused anything not beginning `/api/`, and `path`
+     has no query string in it, so there is no other spelling to get past.
 
      `/api/administer` is deliberately **not** in here — the prefix ends at a
      slash — and neither is `/api/adminx`. The namespace is a path segment. */
@@ -5094,8 +5329,7 @@ export async function serveAuthenticatedApi(
   const shelfEntry = /^\/api\/library\/([\w.%-]+)$/.exec(path);
   const shelfOpen = /^\/api\/library\/([\w.%-]+)\/open$/.exec(path);
   /* No slug, and that is the whole shape of it: this one is about the reader
-     rather than about an article. Matched on `path` like the rest, so a query
-     string cannot smuggle a request past it. */
+     rather than about an article. */
   const readerRoute = path === "/api/reader";
   // Static as far as a request is concerned — a read of two constants. No slug
   // and no store behind it.
@@ -5112,13 +5346,9 @@ export async function serveAuthenticatedApi(
      when the report is about an article: what the reader was looking at is a
      *field of the report* — one of several, and nullable, because a report can
      come from the shelf or the profile page. src/feedback.ts and
-     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
-
-     On `path`, not `url`, like every check added since 2026-08-27: `url` carries
-     the query string, and a check that reads it is a check a `?` can be hidden
-     behind. */
+     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   const feedbackRoute = path === "/api/feedback";
-  const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
+  const article = /^\/api\/article\/([\w.%-]+)$/.exec(path);
   /**
    * **The sharing switch, and it is a sub-resource rather than a field.**
    *
@@ -5133,8 +5363,7 @@ export async function serveAuthenticatedApi(
    * and idempotent it is: asking for the state the article is already in returns
    * the current representation and changes nothing.
    *
-   * On `path`, not `url`, like every check added since 2026-08-27. No ordering
-   * hazard against `article` above it — that pattern ends at the slug, so it
+   * No ordering hazard against `article` above it — that pattern ends at the slug, so it
    * cannot match a path with `/visibility` on the end — but it is declared after
    * it so the two read in the order a person would look for them.
    */
@@ -5142,7 +5371,7 @@ export async function serveAuthenticatedApi(
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
   // charge every reader for a page almost nobody opens.
-  const metadata = /^\/api\/metadata\/([\w.%-]+)$/.exec(url);
+  const metadata = /^\/api\/metadata\/([\w.%-]+)$/.exec(path);
   /* Its own endpoint too, and for a sharper reason than the metadata one: a
      thread does not exist for most articles, and putting it on the article
      payload would mean every reader of every article downloads a `null` for a
@@ -5150,7 +5379,7 @@ export async function serveAuthenticatedApi(
      a request, because it is a model call that takes half a minute
      (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
      POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
-  const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(url);
+  const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(path);
   /* Same shape and same reasoning as the thread's — most articles have no
      glossary, so putting one on the article payload would make every reader of
      every article download a `null`.
@@ -5161,29 +5390,29 @@ export async function serveAuthenticatedApi(
      two acts rather than one flag. There is still no POST: *finding* terms is a
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
-  const glossary = /^\/api\/glossary\/([\w.%-]+)$/.exec(url);
+  const glossary = /^\/api\/glossary\/([\w.%-]+)$/.exec(path);
   /* The one POST the glossary has, and the exception that proves the rule above:
      *finding* terms is a job because it is one call over a whole article, but
      checking **one** term is a single question with a reader sitting in front of
      it — the same shape as a comment, and it reuses the same call. It can take
      the better part of a minute if the model searches, so the client's fetch
      needs a patient deadline; `explain` has its own. */
-  const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(url);
+  const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
      so re-running the step already *is* "start again". The glossary needs a
      delete precisely because running it again would add to the list it is
      trying to throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
-  const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
+  const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
   /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
      the step replaces rather than appends, so re-running it already *is* "find
      them again". POST /api/jobs { slug, steps: ["quotes"] }. */
-  const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(url);
+  const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(path);
   /* The timeline — docs/project/timeline.md. GET only, and no DELETE, for the
      reason `ideas` above has none: the step replaces rather than appends, so
      rebuilding it is
      POST /api/jobs { slug, steps: ["timeline"] }. */
-  const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(url);
+  const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(path);
   /* The quiz. GET only for the artefact, for the reason `ideas` and `timeline`
      have no DELETE: the step replaces rather than appends, so rewriting the
      questions is POST /api/jobs { slug, steps: ["quiz"] }.
@@ -5192,20 +5421,20 @@ export async function serveAuthenticatedApi(
      `lookup` is: *writing* the questions is one call over a whole article and so
      is a job, but marking ONE answer is a single question with a reader sitting
      in front of it. It stores nothing — see `markOneAnswer`. */
-  const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(url);
-  const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(url);
+  const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(path);
+  const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(path);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
      again" is spelled, because the step replaces rather than appends. */
-  const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(url);
+  const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(path);
   /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
      collect it when the job lands. Refetching the whole article for that re-reads
      every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
      what that costs on Postgres. */
-  const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(url);
+  const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(path);
   /* Its own endpoint, and unlike every artefact route above it this one is not
      a read: it embeds the article's blocks the first time it is asked, then
      serves the answer out of memory (src/similar.ts). It is here rather than on
@@ -5222,46 +5451,52 @@ export async function serveAuthenticatedApi(
      once and shared (src/article-vectors.ts) — so a reader who presses Force
      and then Drift pays for one article, not two. */
   const projection = /^\/api\/projection\/([\w.%-]+)$/.exec(path);
-  const source = /^\/api\/source\/([\w.%-]+)$/.exec(url);
-  const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
-  const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
+  const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(path);
+  const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Answering is its own sub-path rather than a field on the POST, because it
      is the one thing a comment can do that spends money and streams. **There is
      deliberately no route for linking a comment to its conversation**: the only
      place that knows the real thread id is the chat stream itself, so the link
      is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
-  const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(url);
-  const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
-  const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
-  const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(url);
-  const chatCancel = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/.exec(url);
+  const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(path);
+  const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(path);
+  const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
+  const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(path);
+  const chatCancel = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/.exec(path);
   /* Live conversation's two: a ticket to open one, and the write that lands a
      finished exchange in the thread. Both are under the conversation rather
      than under the article, because both need the thread — one to seed the
      session with it, the other to append to it. */
-  const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(url);
-  const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(url);
-  const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(url);
-  const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
-  const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(path);
+  const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(path);
+  const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(path);
+  const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
+  const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Referee mode's criteria. Two patterns and the same split as the two above:
      the collection, and one row. `criteria` sits inside the path rather than as
      `/api/referee/:slug` because the mode has four sub-modes and three of them
-     will want routes of their own — `/api/referee/claims/:slug` next — and a
+     will want routes of their own — `/api/referee/claims/:slug` and
+     `/api/referee/mirror/:slug` both arrived under it without a rename — and a
      namespace decided now is cheaper than a rename later. */
-  const criteria = /^\/api\/referee\/criteria\/([\w.%-]+)$/.exec(url);
-  const oneCriterion = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  const criteria = /^\/api\/referee\/criteria\/([\w.%-]+)$/.exec(path);
+  const oneCriterion = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
+  /* Claims, the sub-mode the comment beside the criteria regexes above named as
+     next, and the namespace is why it needed no rename to arrive. **One pattern,
+     not two**: there is one claims run per article, so there is no row to name.
+     GET reads it, POST replaces it. */
+  const refereeClaims = /^\/api\/referee\/claims\/([\w.%-]+)$/.exec(path);
   /* Mirror, the second sub-mode to get a route, and the namespace above is why
      it needed no rename to arrive. POST only: a run is a model call the referee
      asks for and nothing is stored, so there is nothing to GET, nothing to
      PATCH and nothing to DELETE. */
-  const refereeMirror = /^\/api\/referee\/mirror\/([\w.%-]+)$/.exec(url);
-  const allJobs = url === "/api/jobs";
-  const uploads = url === "/api/uploads";
-  const upload = /^\/api\/uploads\/([\w-]+)$/.exec(url);
-  const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(url);
-  const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(url);
-  const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(url);
+  const refereeMirror = /^\/api\/referee\/mirror\/([\w.%-]+)$/.exec(path);
+  const allJobs = path === "/api/jobs";
+  const uploads = path === "/api/uploads";
+  const upload = /^\/api\/uploads\/([\w-]+)$/.exec(path);
+  const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(path);
+  const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
+  const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -5308,12 +5543,12 @@ export async function serveAuthenticatedApi(
     if (library && req.method === "GET") {
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
-      const archived = new URL(url, "http://x").searchParams.get("archived") === "1";
+      const archived = query.get("archived") === "1";
       send(res, 200, { articles: await listArticles({ archived }) });
       return;
     }
     if (librarySearchRoute && req.method === "GET") {
-      send(res, 200, await searchTheLibrary(url));
+      send(res, 200, await searchTheLibrary(query));
       return;
     }
     /* PATCH rather than PUT: both fields are optional and the client sends
@@ -5367,7 +5602,7 @@ export async function serveAuthenticatedApi(
          `resolveProfileParts` rather than `resolveProfile`, and that also costs
          one store read fewer than this used to: the old pair read the global
          profile directly *and* again inside `resolveProfile`. */
-      const at = new URL(url, "http://x").searchParams.get("slug");
+      const at = query.get("slug");
       const parts: ProfileParts =
         at && isSlug(at)
           ? await resolveProfileParts(at)
@@ -5681,8 +5916,7 @@ export async function serveAuthenticatedApi(
          `TableView` would re-render — and re-`annotateHtml` — every paragraph
          of the article, hundreds of times, while an answer arrives. Found by a
          GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md § summaries. */
-      const url = new URL(req.url ?? "/", "http://localhost");
-      if (url.searchParams.get("summary") === "1") {
+      if (query.get("summary") === "1") {
         send(res, 200, { threads: threads.map(summarise) });
         return;
       }
@@ -5871,6 +6105,40 @@ export async function serveAuthenticatedApi(
       send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
       return;
     }
+    if (refereeClaims && req.method === "GET") {
+      const slug = slugPart(refereeClaims, 1);
+      /* Both halves in one response, and read close together, for the reason
+         `readSearches` gives: the paper can be re-extracted between them, and a
+         run read before a hash read would be compared against an article it was
+         never answered about.
+
+         The sweep is a *read* that repairs: a `pending` run this process is not
+         running is one an earlier process died in the middle of, and leaving it
+         would be a spinner nothing can ever clear. */
+      send(res, 200, {
+        run: await refereeClaimsStore.sweep(slug, pullingClaims.has(slug)),
+        sourceHash: await refereeClaimsStore.sourceHash(slug),
+      });
+      return;
+    }
+    if (refereeClaims && req.method === "POST") {
+      /* The sixth endpoint in this file that does not answer with JSON. It still
+         reaches `send` for its failures: `loadArticle` throws its 404 and
+         `claimsProblem` its 400 before a header is written, which is why both
+         are the first two lines of `runRefereeClaims`.
+
+         **No body is read at all** — see that function's docstring. A POST with
+         a body is not refused, it is ignored, which is the same call
+         `POST /api/referee/mirror/:slug` makes.
+
+         `withSpendAttribution`, because the call inside it pays: the rows have
+         to carry the article or the cost report cannot say which paper a
+         referee's session was about. src/ai-spend.ts. */
+      await withSpendAttribution({ articleSlug: slugPart(refereeClaims, 1) }, () =>
+        runRefereeClaims(slugPart(refereeClaims, 1), res),
+      );
+      return;
+    }
     if (refereeMirror && req.method === "POST") {
       /* The fifth endpoint in this file that does not answer with JSON. It
          still reaches `send` for its failures: `loadArticle` throws its 404
@@ -5999,6 +6267,6 @@ export async function serveAuthenticatedApi(
      * that is not ours at all still falls through, which is what makes this
      * function mountable as middleware.
      */
-    send(res, 404, { error: `No API route for ${req.method} ${url}` });
+    send(res, 404, { error: `No API route for ${req.method} ${rawUrl}` });
     return;
 }

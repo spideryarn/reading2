@@ -74,7 +74,15 @@ async function call(
   return { handled, status, headers: sent, body: text ? JSON.parse(text) : {} };
 }
 
-/** The envelope `serveAuthenticatedApi` takes, built by hand for the direct calls. */
+/**
+ * The envelope `serveAuthenticatedApi` takes, built by hand for the direct calls.
+ *
+ * `path` and `query` are derived here rather than passed in, because that is what
+ * `serveApi` does and a helper that let them disagree with `rawUrl` would hide
+ * the very bug tests/the-query-string-does-not-decide-the-route.test.ts is
+ * about — this function used to build `{ url, path: url }`, so in every suite
+ * that used it the two were the same string.
+ */
 function envelope(url: string) {
   return {
     req: Object.assign((async function* () {})(), {
@@ -87,8 +95,9 @@ function envelope(url: string) {
       setHeader() {},
       end() {},
     } as unknown as ServerResponse,
-    url,
-    path: url,
+    rawUrl: url,
+    path: url.split("?")[0] ?? url,
+    query: new URLSearchParams(url.split("?")[1] ?? ""),
   };
 }
 

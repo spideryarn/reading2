@@ -15,6 +15,14 @@ whoever owns those files next can land it in one sitting.
 
 ## 1. `?summary=1` has never once been routed
 
+> **Repaired 2026-09-01**, four days after this was written, exactly as prescribed below —
+> every matcher moved to `path`, plus a parsed `query` on `ApiRequest` so that no handler
+> below the dispatcher has a reason to hold a URL string. Not deployed at the time of
+> writing: `origin/main` still carries the bug. The delay is itself the subject of
+> [260901a-the-route-the-query-string-hid.md](../postmortems/260901a-the-route-the-query-string-hid.md):
+> parking a diagnosed bug in a plan document is not the same as queueing it, and nobody read
+> this until after the bug had been found a second time by reading the code.
+
 The reading view asks which conversations are anchored to which passage, so it can draw a mark on
 the prose and say something on hover. It asks like this
 ([`useChatAnchors.ts:123`](../../src/web/useChatAnchors.ts)):
