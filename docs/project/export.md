@@ -93,11 +93,12 @@ data", and must not become its definition.**
 
 So the two share **the queries, and nothing else**.
 [`readArticleRows(slug)`](../../src/store/article-rows.ts) is the one owner-scoped walk — the joins,
-the owner filter, and the `order by ordinal` that is the whole ballgame, since ids carry no position
-— and each side projects those rows its own way. The rollback keeps its hand-written field lists,
-because a byte comparison pins them. The bundle **serialises whole rows** and names only the handful
-of columns it drops, so a column added to [`src/db/schema.ts`](../../src/db/schema.ts) reaches the
-reader's download without anybody remembering it. Fidelity by construction rather than by memory:
+the owner filter, the `order by ordinal` that is the whole ballgame since ids carry no position, and
+[one snapshot](#one-snapshot-not-ten) — and each side projects those rows its own way. The rollback
+keeps its hand-written field lists, because a byte comparison pins them. The bundle **serialises
+whole rows** and names only the handful of columns it drops, so a column added to
+[`src/db/schema.ts`](../../src/db/schema.ts) reaches the reader's download without anybody
+remembering it. Fidelity by construction rather than by memory:
 `tools`, `stance`, `criterionId` and `valence` each went missing from `export.ts` for weeks, one
 field list at a time.
 
@@ -121,6 +122,23 @@ The middle option — a synthesized model both sides project from — was propos
 down. It would have to be rich enough for the bundle *and* lossily projectable back to a pinned
 format, and the rows are already the faithful representation.
 
+## One snapshot, not ten
+
+The walk reads eleven tables in ten statements, and the rows have to agree with each other, because
+the projections join them: a chat message is written *inside* its thread. Until 2026-09-01 it read
+them through the pool with `Promise.all` and no transaction, so each statement took its own snapshot
+— and a thread committed between the `chat_threads` read and the `chat_messages` read gave the
+caller a message whose thread it had never been handed. `export-bundle.ts` nests messages under the
+threads it was given, so that message was **dropped in silence**, out of a zip that says it holds
+everything. Every statement now runs inside one `repeatable read`, `read only` transaction.
+
+It costs about 12 ms per walk on the local database, and the walk is twelve round trips where it was
+three; the numbers, and why `Promise.all` inside the transaction was measured and then not taken,
+are on `walk()` in [`article-rows.ts`](../../src/store/article-rows.ts).
+`tests/article-rows-snapshot.test.ts` proves the snapshot without racing anything: it commits a
+thread, a message and a comment *during* the walk, deterministically, and asks the transaction
+itself what isolation it got.
+
 ## `block_identities`, the one table they disagree about
 
 The rollback leaves it out on purpose: stage 3 recovers ids from the HTML that export writes, which
@@ -137,13 +155,24 @@ image, its hash, type and source URL, so the bundle *names* everything. Earlier 
 exist and carry lineage, so this is a product decision, not an impossibility. `ai_calls`, whose
 `article_id` is nullable, so a per-article total would be quietly **wrong** rather than merely
 absent. And the pipeline tables — `checkpoints`, `jobs`, `queue_state`, `revision_step_runs` —
-machinery rather than reader data.
+machinery rather than reader data. Plus `raw_sources` and `uploads`, which describe *how the
+document arrived* rather than the article: the bucket object the fetch stored, and the upload
+attempt that produced it.
 
 `manifest.json` states all of this machine-readably under `omitted`, and that list is **derived from
 `ARTICLE_TABLE_COVERAGE`** rather than written out beside it, so the manifest cannot drift from the
 guard. The per-table reasons live in that record, one for each projection —
 [database.md](database.md) has why the record exists at all, and what a day of silence cost when
 `referee_criteria` was missing from it.
+
+**Those last two were missing from the record until 2026-09-01, and the reason is worth keeping.**
+The guard finds the tables by walking foreign keys, and it walked them **child → parent** only — so
+a table an article *points at* was never discovered, while the test's own comment said it found
+everything that reaches an article. Nothing failed; the two simply never appeared in `omitted`, so
+no reader was ever told they existed. The plan had said `uploads` was deliberately omitted, which
+was true in the plan and in nothing a reader could see. The collector now takes one hop **outward**
+as well, deliberately one and not a fixpoint: outward references reach the whole schema, and
+`feedback` and `reader_profiles` are correctly still outside it.
 
 ## Size, and the cap
 

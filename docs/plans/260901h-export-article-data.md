@@ -1,8 +1,11 @@
 # Export one article's data, from a button on the Metadata page
 
-**Status:** revised 2026-09-01 after GPT Sol's review
-([260901h-…-review-sol.md](260901h-export-article-data-review-sol.md)), which refuted the first
-version's central design. No code written yet. The rewrite below is what to build.
+**Status:** built, 2026-09-01 — stages A–H are committed and Stage I is in the tree. Two GPT Sol
+reviews shaped it. The [first](260901h-export-article-data-review-sol.md) read the plan and refuted
+its central design before any code existed, which is what the rewrite below is; the
+[second](260901h-export-article-data-review2-sol.md) read the code and found the `article_revisions`
+bug (Stage H) plus the three defects Stage I fixes. Each stage records what was actually built,
+including where it departed from the plan.
 
 ## What Greg asked for
 
@@ -323,6 +326,62 @@ executable change in `article-rows.ts` since is the `bundle` destination string 
 `export.ts` never reads, since it goes through `.rollback` alone via `RollbackTable`. A stand-in
 diff against `data/` was built and **thrown away as invalid evidence**, because Postgres has drifted
 from `data/` under other agents' work and it diffs red on an unmodified codebase.
+
+**Stage I — the rest of what the second review found.** In the tree, not committed.
+
+- [x] **`readArticleRows` is one snapshot now.** It resolved the article and then fired nine
+      independent queries through the pool with `Promise.all` and no transaction, so the ten answers
+      could come from ten different committed states. The failure Sol named costs a reader data:
+      `chat_threads` reads, somebody commits a thread *and* a message in it, `chat_messages` reads
+      and sees the message, and `export-bundle.ts` — which nests messages under the threads it was
+      handed — **drops it in silence**, out of a zip whose README says it holds everything. The whole
+      walk now runs inside one `repeatable read`, `read only` transaction.
+- [x] **The parallelism is genuinely gone, and it is not free.** A transaction is one connection and
+      one connection runs one statement at a time. Measured on
+      `noema-mythology-of-conscious-ai`, 40 runs of each interleaved in one process: **median
+      20.1 ms before, 32.5 ms after**. About 5 ms of that 12 is the sequencing rather than the
+      transaction — `Promise.all` *inside* the transaction measured 27.9 ms, and `pg` does queue
+      statements on one connection so it would have been safe for consistency. It was not taken:
+      when one of nine fails the other eight are still queued, drizzle's `rollback` lands behind
+      them, and each rejects into a `Promise.all` that has already settled. Eight unhandled
+      rejections for five milliseconds is a bad trade. The walk is now **eleven round trips instead
+      of three**, which is the number that matters against the remote pooler.
+- [x] Also on the record: a caller holds a pooled connection for the whole walk now, and the pool is
+      five. Not a queue worth engineering around for an Export press, and a reason not to grow the
+      function.
+- [x] **`tests/article-rows-snapshot.test.ts`, watched red first.** Not a race — the interleaving is
+      made deterministic: the handle `readArticleRows` reaches for is wrapped so the first statement
+      inside its transaction is a probe (which takes the snapshot), a second connection then commits
+      a thread, a message and a comment, and only then does the walk run its own reads. The wrapper
+      also **refuses every read made outside the transaction**, so a future walk that opens one and
+      reads around it goes red rather than half-green.
+- [x] **Two controls.** Against the old walk: *"readArticleRows called db.select() outside its
+      transaction"* — no transaction was ever opened. Then, with the pin changed to `read committed`
+      and everything else identical: `expected [ 'spya-snpt23', 'spya-snpt24' ] to deeply equal
+      [ 'spya-snpt23' ]` — the walk saw the concurrent thread. That second one is what makes the test
+      about the snapshot rather than about a transaction existing.
+- [x] The probe asks the *server* what it got (`current_setting('transaction_isolation')` and
+      `transaction_read_only`), the idiom `tests/store-session-isolation.test.ts` established — true
+      even if the pin moves or changes shape.
+- [x] **The coverage guard's claim was wider than its code**, and `raw_sources` and `uploads` are the
+      proof. The collector walked foreign keys **child → parent** only, so a table an article
+      *points at* was never discovered — while the test and the docs said it found everything that
+      reaches an article. Since `manifest.json` derives `omitted` from `ARTICLE_TABLE_COVERAGE`, a
+      table missing from that record is a table **no reader is ever told about**. This plan's own
+      claim that `uploads` was "deliberately omitted" was true here and nowhere a reader could see.
+- [x] Fixed the way that leaves the manifest more honest: one hop **outward** from the closure, which
+      finds exactly those two, plus an entry for each with reasons for both projections. Watched red
+      first — *"src/store/article-rows.ts has never heard of raw_sources, uploads"* — and they now
+      appear in a real `manifest.json`. Deliberately one hop and not a fixpoint: outward references
+      reach the whole schema, and `feedback` and `reader_profiles` are correctly still outside, which
+      the new `it` pins along with the two arrivals.
+- [x] The plan's Status line said "No code written yet" through all of stages A–H. Fixed above.
+- [x] **Not done, and said out loud:** `ArticleBundle.filename` (the review's finding 4) was already
+      deleted in Stage H, so nothing was owed. The review's finding 3 also lists ways a sentinel
+      check can pass while a projection mangles a row — enum flips, double-encoding, reordering,
+      duplication. Stage H's column check answers the "dropped column" half; the rest is not
+      attempted, and no test in this suite claims otherwise.
+
 
 ## What this is deliberately not doing
 

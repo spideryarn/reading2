@@ -23,7 +23,7 @@
 
 import { asc, eq } from "drizzle-orm";
 
-import { getDb } from "../db/client.js";
+import { type Db, getDb } from "../db/client.js";
 import {
   articleRevisions,
   articles,
@@ -38,6 +38,12 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { ownedSlug } from "./owned-slug.js";
+
+/**
+ * The handle inside a transaction — derived from `Db`, so it cannot drift from
+ * whatever drizzle hands the callback.
+ */
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * What one projection does about one table: names the file it lands in, or says
@@ -90,10 +96,14 @@ export interface TableCoverage {
  *
  * Keyed by the SQL table name, because that is what the schema and a migration
  * both call it. In scope is anything that reaches an article at all: an
- * `article_id` column, or a foreign key to something that has one. The second
- * half was missing until 2026-09-01 and `revision_step_runs` was the table it
- * missed — keyed by `revision_id` alone, article-scoped in substance, and
- * invisible to a collector that only looked for `articleId`.
+ * `article_id` column, a foreign key to something that has one, or — one hop —
+ * something an in-scope table itself points at. Each of those three was added
+ * after the one before it was found to be missing something, on 2026-09-01:
+ * `revision_step_runs` is keyed by `revision_id` alone and was invisible to a
+ * collector that only looked for `articleId`; `raw_sources` and `uploads` are
+ * pointed *at* rather than pointing, and were invisible to one that only walked
+ * child → parent. The collector is
+ * tests/store-export-covers-tables.test.ts § `articleScopedTables`.
  *
  * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
  * only the ones that mean ownership, so `jobs` arrives here because it points at
@@ -257,6 +267,52 @@ export const ARTICLE_TABLE_COVERAGE = {
         "says nothing about the article.",
     },
   },
+  /* The two the record could not see until 2026-09-01, because the guard's
+     closure only ever walked **child → parent**: nothing an article *points at*
+     was ever discovered. Both are now found by one outward hop in
+     tests/store-export-covers-tables.test.ts, and being here is the whole point
+     — `manifest.json`'s `omitted` list is derived from this record, so a table
+     missing from it is a table no reader is ever told about. The plan said
+     `uploads` was deliberately omitted; that was true in the plan and in
+     nothing a reader could see. GPT Sol's second code review, finding 3. */
+  raw_sources: {
+    rollback: {
+      exported: false,
+      why:
+        "The catalogue of the sources bucket — one row per stored document, by " +
+        "hash and kind. The rollback writes the document's bytes themselves, " +
+        "through writeRawDocument into data/<slug>/, and the filesystem store has " +
+        "no bucket for a catalogue to describe.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "One row describing an object in the sources bucket: its hash, kind, size " +
+        "and content type. The document it names is the original PDF or page, " +
+        "which Greg's call keeps out of the zip anyway — and content/revision.json " +
+        "carries rawSourceSha256 and rawSourceKind, so the object is named even " +
+        "though neither it nor its catalogue row is carried.",
+    },
+  },
+  uploads: {
+    rollback: {
+      exported: false,
+      why:
+        "One upload attempt: the grant we minted, its expiry, what the browser " +
+        "claimed and what actually landed. Reachable from an article only because " +
+        "a job points at it, and joined to the article it became by a bare `slug` " +
+        "text column with no key. Queue state, kept for the whole library beside " +
+        "data/_jobs, not one article's data.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The record of a file being uploaded — grant, expiry, the hash the browser " +
+        "claimed and the one we computed. It is about how the article arrived, not " +
+        "about the article, and its only link to one is an unconstrained `slug` " +
+        "column. What the upload produced is in the zip as content/stamped.html.",
+    },
+  },
   revision_step_runs: {
     rollback: {
       exported: false,
@@ -368,7 +424,18 @@ export interface ArticleRows {
 }
 
 /**
- * Read one article whole, **owner-scoped**, or throw `ArticleNotFound`.
+ * Read one article whole, **owner-scoped and as one snapshot**, or throw
+ * `ArticleNotFound`.
+ *
+ * ## One snapshot, not ten
+ *
+ * Every statement runs inside a single read-only `repeatable read` transaction
+ * — `SNAPSHOT` below says why, and `walk` says what that costs. The short
+ * version: the rows this returns have to agree with each other, because the
+ * callers join them (a message is nested under its thread) and a caller handed
+ * a message whose thread it was never given **drops it in silence**.
+ *
+ * ## Owner scoping
  *
  * `ownedSlug` and nothing else: `articles.slug` is globally unique, so
  * `eq(articles.slug, …)` on its own finds anybody's article and the failure is
@@ -417,9 +484,76 @@ export interface ArticleRows {
  *   exports of an unchanged article cannot differ.
  */
 export async function readArticleRows(slug: string): Promise<ArticleRows> {
-  const db = getDb();
+  return getDb().transaction((tx) => walk(tx, slug), SNAPSHOT);
+}
+
+/**
+ * **One snapshot for the whole walk**, and nothing may be written down it.
+ *
+ * `repeatable read` because the ten statements below are one *logical* read
+ * and must agree with each other. At `read committed` — Postgres's default, and
+ * what an unpinned transaction inherits — every statement takes its own
+ * snapshot, so a thread committed between the `chat_threads` read and the
+ * `chat_messages` read gives the caller a message whose thread it has never
+ * heard of. `export-bundle.ts` nests messages under the threads it was handed,
+ * so that message is dropped in silence, out of a zip that says it holds
+ * everything. GPT Sol's second review of
+ * docs/plans/260901h-export-article-data.md, finding 2; the proof is
+ * tests/article-rows-snapshot.test.ts, which commits exactly that row mid-walk.
+ *
+ * `read only` because neither caller writes and because `BEGIN … READ ONLY` is
+ * the cheapest possible statement of that: a future edit that tries to write
+ * down this connection is refused by the server rather than reviewed by a human.
+ * It also tells Postgres this transaction can never contribute to a conflict.
+ *
+ * **`serializable` would be wrong**, not merely stronger: it makes a read-only
+ * transaction abortable with `40001`, nothing in `src/` retries that code
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md is the last time
+ * that mattered), and a snapshot is all a read needs.
+ */
+const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
+
+/**
+ * The walk itself, on one connection, in order.
+ *
+ * **The cost, measured rather than waved at.** The nine child reads used to run
+ * through the pool with `Promise.all`, on up to five connections at once. A
+ * transaction is *one* connection, and one connection runs one statement at a
+ * time, so that parallelism is gone. Against
+ * `noema-mythology-of-conscious-ai` (141 blocks, 58 chat messages) on the local
+ * database, 40 runs of each interleaved in one process so they share the
+ * machine's noise:
+ *
+ *     Promise.all, no transaction   median 20.1 ms   (what this replaced)
+ *     sequential, in the snapshot   median 32.5 ms   (what this is)
+ *     Promise.all inside that same transaction   median 27.9 ms
+ *
+ * So the snapshot costs about **12 ms per walk** here, and about 5 ms of that
+ * is the sequencing rather than the transaction. That third line is not taken,
+ * deliberately: `pg` does queue statements on one connection, so it is *safe*
+ * for consistency, but when one of nine fails the other eight are still queued,
+ * drizzle's `rollback` lands behind them, and each of the eight rejects into a
+ * `Promise.all` that has already settled — eight unhandled rejections in
+ * exchange for five milliseconds. Sequential also stops at the first failure.
+ *
+ * The walk is now **twelve round trips** — `BEGIN`, ten selects, `COMMIT` —
+ * where it was one select and then nine over five connections. That is the
+ * number that matters somewhere latency-bound; against the remote pooler each
+ * one is tens of milliseconds. It is paid on an explicit Export press and on
+ * `npm run db:export`, neither of which is a hot path, and the alternative is a
+ * download that silently omits rows. If it ever needs to be cheaper, the honest
+ * fix is fewer statements, not a wider snapshot.
+ *
+ * The other cost is that a caller now **holds a pooled connection for the whole
+ * walk** rather than borrowing one per statement. The pool is five
+ * (src/db/client.ts § `poolMax`), so four concurrent exports and the server is
+ * out of connections. That is a reason not to grow this function into anything
+ * slow, and the reason the zip is assembled *after* it returns rather than
+ * inside it.
+ */
+async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
   const found = (
-    await db
+    await tx
       .select({ article: articles, revision: articleRevisions })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -429,66 +563,56 @@ export async function readArticleRows(slug: string): Promise<ArticleRows> {
   if (!found) throw new ArticleNotFound(slug);
   const { article, revision } = found;
 
-  /* In parallel because they are independent reads of one article and nothing
-     here holds a transaction; `pg`'s pool queues when it is smaller than this. */
-  const [
-    blocks,
-    identities,
-    comments,
-    threads,
-    messages,
-    runs,
-    criteria,
-    claims,
-    lookups,
-  ] = await Promise.all([
-    db
-      .select()
-      .from(revisionBlocks)
-      .where(eq(revisionBlocks.revisionId, revision.id))
-      .orderBy(revisionBlocks.ordinal),
-    db
-      .select()
-      .from(blockIdentities)
-      .where(eq(blockIdentities.articleId, article.id))
-      .orderBy(asc(blockIdentities.firstSeenAt), asc(blockIdentities.blockId)),
-    db
-      .select()
-      .from(commentsTable)
-      .where(eq(commentsTable.articleId, article.id))
-      .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id)),
-    db
-      .select()
-      .from(chatThreads)
-      .where(eq(chatThreads.articleId, article.id))
-      .orderBy(asc(chatThreads.createdAt), asc(chatThreads.id)),
-    /* One query for every thread's messages rather than one per thread. The
-       filter is on `article_id` — a thread id is unique only within its article
-       (`chat_threads`'s primary key is `(article_id, id)`, the same rule as
-       block ids), so a query keyed on `thread_id` alone would mix two articles'
-       conversations together. */
-    db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.articleId, article.id))
-      .orderBy(asc(chatMessages.threadId), asc(chatMessages.ordinal)),
-    db
-      .select()
-      .from(searchRuns)
-      .where(eq(searchRuns.articleId, article.id))
-      .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id)),
-    db
-      .select()
-      .from(refereeCriteria)
-      .where(eq(refereeCriteria.articleId, article.id))
-      .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id)),
-    db.select().from(refereeClaims).where(eq(refereeClaims.articleId, article.id)).limit(1),
-    db
-      .select()
-      .from(glossaryLookups)
-      .where(eq(glossaryLookups.articleId, article.id))
-      .orderBy(asc(glossaryLookups.entryId)),
-  ]);
+  const blocks = await tx
+    .select()
+    .from(revisionBlocks)
+    .where(eq(revisionBlocks.revisionId, revision.id))
+    .orderBy(revisionBlocks.ordinal);
+  const identities = await tx
+    .select()
+    .from(blockIdentities)
+    .where(eq(blockIdentities.articleId, article.id))
+    .orderBy(asc(blockIdentities.firstSeenAt), asc(blockIdentities.blockId));
+  const comments = await tx
+    .select()
+    .from(commentsTable)
+    .where(eq(commentsTable.articleId, article.id))
+    .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id));
+  const threads = await tx
+    .select()
+    .from(chatThreads)
+    .where(eq(chatThreads.articleId, article.id))
+    .orderBy(asc(chatThreads.createdAt), asc(chatThreads.id));
+  /* One query for every thread's messages rather than one per thread. The
+     filter is on `article_id` — a thread id is unique only within its article
+     (`chat_threads`'s primary key is `(article_id, id)`, the same rule as
+     block ids), so a query keyed on `thread_id` alone would mix two articles'
+     conversations together. */
+  const messages = await tx
+    .select()
+    .from(chatMessages)
+    .where(eq(chatMessages.articleId, article.id))
+    .orderBy(asc(chatMessages.threadId), asc(chatMessages.ordinal));
+  const runs = await tx
+    .select()
+    .from(searchRuns)
+    .where(eq(searchRuns.articleId, article.id))
+    .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
+  const criteria = await tx
+    .select()
+    .from(refereeCriteria)
+    .where(eq(refereeCriteria.articleId, article.id))
+    .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id));
+  const claims = await tx
+    .select()
+    .from(refereeClaims)
+    .where(eq(refereeClaims.articleId, article.id))
+    .limit(1);
+  const lookups = await tx
+    .select()
+    .from(glossaryLookups)
+    .where(eq(glossaryLookups.articleId, article.id))
+    .orderBy(asc(glossaryLookups.entryId));
 
   return {
     article,

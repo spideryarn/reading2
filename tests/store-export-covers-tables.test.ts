@@ -114,6 +114,32 @@ function schemaTables(): PgTable[] {
  *
  * `articles` itself is in the set rather than excluded: its own columns are the
  * reader's shelf state, and `shelf.json` is written from them.
+ *
+ * ## Both directions of a foreign key, and only one of them all the way
+ *
+ * That closure runs **child → parent**: a table is in scope because it *points
+ * at* something already in scope. GPT Sol's second review, finding 3, pointed
+ * out on 2026-09-01 that this left the claim wider than the code — a table an
+ * article *points at* was never discovered, and the two live examples are
+ * exactly the two you would not want left out:
+ *
+ * - **`raw_sources`**, which `article_revisions` references by
+ *   `(raw_source_sha256, raw_source_kind)` — the catalogue entry for the
+ *   document the article was made from;
+ * - **`uploads`**, referenced by `jobs.upload_id`, and joined to the article it
+ *   became by a bare `slug` text column with no key at all.
+ *
+ * The plan said `uploads` was "deliberately omitted", and it was — in the plan.
+ * `manifest.json` derives its `omitted` list from `ARTICLE_TABLE_COVERAGE`, so
+ * a table missing from that record is a table **no reader is ever told about**,
+ * which is the same silence the record exists to end.
+ *
+ * So there is a second pass: one hop **outward** from everything the closure
+ * found. Deliberately one hop and deliberately not a fixpoint — outward
+ * references are how you reach the whole schema, and `feedback` and
+ * `reader_profiles` are correctly still outside. Measured when it was added, the
+ * pass finds exactly `raw_sources` and `uploads`; the `it` below pins that, so
+ * a third arrival cannot slip in as noise.
  */
 function articleScopedTables(): string[] {
   const tables = schemaTables();
@@ -136,6 +162,16 @@ function articleScopedTables(): string[] {
       }
     }
   }
+  /* One hop outward, collected into a set of its own so the pass cannot feed
+     itself and walk the whole schema. */
+  const referenced = new Set<string>();
+  for (const table of tables) {
+    if (!scoped.has(getTableName(table))) continue;
+    for (const fk of getTableConfig(table).foreignKeys) {
+      referenced.add(getTableName(fk.reference().foreignTable));
+    }
+  }
+  for (const name of referenced) scoped.add(name);
   return [...scoped].sort();
 }
 
@@ -175,6 +211,33 @@ describe("both exports know about every article-scoped table", () => {
     const found = articleScopedTables();
     expect(getTableColumns(schema.revisionStepRuns)).not.toHaveProperty("articleId");
     expect(found).toContain("revision_step_runs");
+  });
+
+  it("follows a key the other way too, so a table the article points AT is found", () => {
+    /* The alarm for the outward pass. Nothing above needs it — the child→parent
+       closure satisfies every other assertion in this describe — so without a
+       case of its own it could be deleted, or quietly stop matching, and the
+       record would go back to being narrower than the sentence describing it.
+       That is precisely how `raw_sources` and `uploads` were missing from
+       `manifest.json`'s `omitted` list while the docs said the guard found
+       everything that reaches an article. GPT Sol's second review, finding 3.
+
+       `raw_sources` is the case with a real key: `article_revisions` references
+       it and it carries no `article_id` of its own, so only the outward hop
+       reaches it. `uploads` arrives through `jobs.upload_id`, and its own link
+       to an article is a `slug` text column with no constraint on it at all —
+       which is why it must be *declared* rather than trusted to a key. */
+    const found = articleScopedTables();
+    expect(getTableColumns(schema.rawSources)).not.toHaveProperty("articleId");
+    expect(found).toContain("raw_sources");
+    expect(found).toContain("uploads");
+    expect(getTableColumns(schema.uploads)).toHaveProperty("slug");
+
+    /* And it stays one hop. A pass that walked outward to a fixpoint would drag
+       in most of the schema and turn "declare every omission in words" into
+       busywork nobody reads, which is how a guard stops being read at all. */
+    expect(found).not.toContain("feedback");
+    expect(found).not.toContain("reader_profiles");
   });
 
   it("names every one of them, so a new table cannot arrive quietly", () => {
