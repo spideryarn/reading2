@@ -146,6 +146,7 @@ import {
   Clock,
   Download,
   ExternalLink,
+  FileArchive,
   FileText,
   FileQuestion,
   FileType,
@@ -191,7 +192,7 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
-import { apiFetch, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
 
@@ -824,7 +825,14 @@ export function Metadata({
           sharing={asArticleSharing(provenance?.sharing)}
         />
 
-        {/* --------------------------------------------- 7. not built yet --
+        {/* ------------------------------------------------ 7. export it --
+            Above "not built yet" because that list is things that do not
+            exist and this one does, and below sharing because both are
+            decisions about where this article's data goes. Still above
+            Delete, which stays last. */}
+        <ExportSection slug={slug} offer={hasShelfRow} />
+
+        {/* --------------------------------------------- 8. not built yet --
             Dimmed rows rather than absence, because absence is indistinguishable
             from an oversight. Same tooltip convention as the bar's placeholder
             buttons (Dock.tsx): what the thing would be, and what the previous
@@ -869,7 +877,7 @@ export function Metadata({
           </TooltipGroup>
         </Section>
 
-        {/* ------------------------------------------------ 8. deleting it --
+        {/* ------------------------------------------------ 9. deleting it --
             Last on the page, and last on purpose: a destructive control belongs
             past everything somebody might have come here to read, not beside
             it. Under "not built yet" rather than over it for the same reason —
@@ -933,6 +941,146 @@ function SharingSection({
   return (
     <Section label="Access & sharing">
       <AccessSharing slug={slug} title={title} sharing={sharing} />
+    </Section>
+  );
+}
+
+/**
+ * **Everything we hold for this article, in one zip.**
+ *
+ * > Let's add an Export button somewhere, perhaps in Metadata, that exports all
+ * > the data for an article. […] It can exclude the original PDF/HTML itself
+ * > (because that's easy to get otherwise).
+ * >
+ * > — Greg, 2026-09-01
+ *
+ * The zip is `GET /api/export/:slug` (src/routes.ts § `sendExport`), assembled
+ * per request from `articleBundle`. What is in it, and why there are two
+ * exporters, is docs/project/export.md.
+ *
+ * ## Why this cannot be an `<a href>`, which is the obvious first try
+ *
+ * The route needs an `Authorization: Bearer` and a navigation carries no
+ * headers, so a plain link would 401 for everybody — the same wall
+ * `SourceLink.tsx` hit on 2026-08-27, and the same way out: fetch it with the
+ * token, then hand the browser a `blob:` URL. `tests/no-api-hrefs.test.ts`
+ * exists because of that first try.
+ *
+ * **The filename has to be on the anchor.** The route sets a
+ * `Content-Disposition` naming `<slug>.zip`, and every header is lost the
+ * moment the bytes become a blob URL — so without `download="…"` the reader
+ * gets a file called something like `a1b2c3-…` with no extension. The header is
+ * still right for anyone who reaches the route directly.
+ *
+ * ## Gated on `hasShelfRow`, and that costs something
+ *
+ * `hasShelfRow` is false while the metadata request is out **and for ever if it
+ * fails**, so a failed check leaves no button and nothing saying why — the
+ * exact complaint that moved the sharing card off it (`SharingSection` above).
+ * It is still right here, because that card has a "we could not check" state
+ * worth rendering and this section is one button: with no row there is nothing
+ * to export, and a control whose only outcome is a 404 is worse than no control
+ * because pressing it is how you find out.
+ */
+function ExportSection({
+  slug,
+  offer,
+}: {
+  slug: string;
+  /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
+  offer: boolean;
+}) {
+  /* The zip is assembled on the server before a byte is sent, so this is a real
+     wait — a second or two on a long article — and the button is disabled for
+     it. Not only to say so: a second press would start a second assembly and
+     hand the reader two copies of the same file. */
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/export/${encodeURIComponent(slug)}`);
+      /* `failure`, not `readJson`: the success body is a zip and reading it as
+         text to look for an `error` key would consume the bytes we came for.
+         On a refusal it hands back the server's own sentence. */
+      if (!res.ok) throw await failure(res);
+
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${slug}.zip`;
+      /* In the document, not detached: Firefox has never dispatched the default
+         action for a `click()` on an anchor that is not in a tree, and the
+         symptom is nothing happening at all. */
+      document.body.append(link);
+      link.click();
+      link.remove();
+      /* A macrotask later, not synchronously. Revoking inside the same task can
+         land before the browser has resolved the URL for the download, and the
+         download then fails silently. A tick is enough — unlike SourceLink's
+         minute-long timer, where a *new tab* has to fetch the URL itself; here
+         the fetch starts during the click above. */
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      /* The 413's prose is the server's and it is already written for the
+         reader (src/routes.ts § `sendExport`): it says what happened and that
+         trying again will not help, which is what docs/project/copy.md asks
+         for. Putting "Couldn't build the download" in front of it would add a
+         lead that sentence does not need. Everything else gets the lead,
+         because a bare "No such article." beside a button says nothing about
+         which button. */
+      setError(
+        statusOf(e) === 413
+          ? `${(e as Error).message} [export-too-big]`
+          : `Couldn't build the download. ${(e as Error).message} [export-failed]`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!offer) return null;
+
+  return (
+    <Section label="Export">
+      <div className={`${CARD} tw:p-4`}>
+        {/* An inline button in the card, in `DeleteArticle`'s shape rather than
+            the toolbar's `IconButton` — this one has a label to carry and no
+            row to fit into. Quiet at rest, tinted on hover, and **not** the
+            destructive tint: nothing here changes the article. */}
+        <button
+          type="button"
+          onClick={() => void download()}
+          disabled={busy}
+          className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:disabled:opacity-50 tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
+        >
+          {/* Not `Download`, which this page has already spent on the fetch
+              stage (`STAGE_ICONS`) — two meanings on one glyph, on one page. */}
+          <FileArchive size={14} />
+          {busy ? "Building the zip…" : "Export this article"}
+        </button>
+
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          A zip of everything we hold for this article: the text as we read it, and every
+          augmentation on top of it — hierarchy, glossary, ideas, quotes, timeline, quiz, comments,
+          chats. Plain files, readable without Spideryarn. Not the original page or PDF, which you
+          already have, and not the image files themselves — those are listed rather than included.
+        </p>
+
+        {/* `role="alert"`, because the rest of a failed export is invisible: no
+            file arrives, and nothing else on the page moves. Same reason
+            SourceLink's arm carries one. */}
+        {error ? (
+          <p
+            role="alert"
+            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+          >
+            <TriangleAlert size={12} /> {error}
+          </p>
+        ) : null}
+      </div>
     </Section>
   );
 }
