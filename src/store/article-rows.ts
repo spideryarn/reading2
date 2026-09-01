@@ -40,6 +40,258 @@ import {
 import { ownedSlug } from "./owned-slug.js";
 
 /**
+ * What one projection does about one table: names the file it lands in, or says
+ * in words why it does not.
+ *
+ * There is no third state, and in particular there is no **silence** — which is
+ * what `referee_criteria` got when it was added on 2026-08-31, so `db:export`
+ * dropped every criterion a referee had written and reported success.
+ */
+export type Destination =
+  /**
+   * Written into this file — and a row of this table must actually come back
+   * out of that file when the projection runs.
+   *
+   * `tests/store-export-covers-tables.test.ts` puts a sentinel string in every
+   * declared table, runs **both** projections, and looks for that string in the
+   * file named here. A declaration that says "exported" while nothing writes the
+   * row is worse than no declaration: it reads as the check having been done.
+   */
+  | { readonly exported: true; readonly into: string }
+  /** Deliberately left out of this projection, for this stated reason. */
+  | { readonly exported: false; readonly why: string };
+
+/**
+ * What the **two** projections each do about one table.
+ *
+ * Two fields rather than one, because the two outputs genuinely disagree and
+ * flattening that would make one of them lie. `block_identities` is the case
+ * that forced it: the rollback omits it because stage 3 recovers ids from
+ * `output/<slug>.html`, which is true for re-ingestion and **false for anchor
+ * integrity** — a comment can point at a block that has since left the article,
+ * so the reader's bundle must carry the ids and the rollback need not.
+ */
+export interface TableCoverage {
+  /** `npm run db:export` — the rollback, into `data/<slug>/`. [export.ts](export.ts) */
+  readonly rollback: Destination;
+  /** The zip a reader downloads. [export-bundle.ts](export-bundle.ts) */
+  readonly bundle: Destination;
+}
+
+/**
+ * **Every table that hangs off an article, and what each projection does with it.**
+ *
+ * **It lives here, beside the query walk, and not beside either projection.**
+ * That is the point of the file: `readArticleRows` is the one place an article
+ * is read whole, so a table declared here is a table both outputs are answerable
+ * for, and a table added to `src/db/schema.ts` fails the guard on the day it
+ * lands for *both* of them rather than for whichever file somebody remembered.
+ * (It used to live in `export.ts`, which re-exports it for its old importers.)
+ *
+ * Keyed by the SQL table name, because that is what the schema and a migration
+ * both call it. In scope is anything that reaches an article at all: an
+ * `article_id` column, or a foreign key to something that has one. The second
+ * half was missing until 2026-09-01 and `revision_step_runs` was the table it
+ * missed — keyed by `revision_id` alone, article-scoped in substance, and
+ * invisible to a collector that only looked for `articleId`.
+ *
+ * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
+ * only the ones that mean ownership, so `jobs` arrives here because it points at
+ * the draft revision it is building, and `queue_state` because it points at
+ * `jobs`. Narrowing it would drop those two and would also drop the next child
+ * table that happens to hold a nullable parent id, which is the silence this
+ * record exists to prevent. The cost of over-reach is one written-down sentence
+ * per table; the cost of under-reach is a rollback that quietly loses somebody's
+ * work. So some entries are here to say, on the record, that they are not
+ * article data.
+ */
+export const ARTICLE_TABLE_COVERAGE = {
+  /* The article's own row — the shelf state the reader made, plus (for the
+     bundle) the identity and sharing columns the rollback has nowhere to put:
+     `data/` has no public sharing at all. `purpose` went missing from the
+     rollback once already. */
+  articles: {
+    rollback: { exported: true, into: "shelf.json" },
+    bundle: { exported: true, into: "article.json" },
+  },
+  /* The current revision. Its columns fan out across most of both outputs —
+     the extracted HTML, the blocks' parent, and every artefact column from
+     `tree` to `labels`. The file named here is where its *identity* lands, and
+     that is what the sentinel follows. */
+  article_revisions: {
+    rollback: { exported: true, into: "meta.json" },
+    bundle: { exported: true, into: "manifest.json" },
+  },
+  revision_blocks: {
+    rollback: { exported: true, into: "blocks.json" },
+    bundle: { exported: true, into: "content/blocks.json" },
+  },
+  comments: {
+    rollback: { exported: true, into: "comments.json" },
+    bundle: { exported: true, into: "augmentations/comments.json" },
+  },
+  chat_threads: {
+    rollback: { exported: true, into: "chat.json" },
+    bundle: { exported: true, into: "augmentations/chat.json" },
+  },
+  chat_messages: {
+    rollback: { exported: true, into: "chat.json" },
+    bundle: { exported: true, into: "augmentations/chat.json" },
+  },
+  search_runs: {
+    rollback: { exported: true, into: "searches.json" },
+    bundle: { exported: true, into: "augmentations/searches.json" },
+  },
+  referee_criteria: {
+    rollback: { exported: true, into: "referee-criteria.json" },
+    bundle: { exported: true, into: "augmentations/referee-criteria.json" },
+  },
+  referee_claims: {
+    rollback: { exported: true, into: "referee-claims.json" },
+    bundle: { exported: true, into: "augmentations/referee-claims.json" },
+  },
+  glossary_lookups: {
+    rollback: { exported: true, into: "glossary-lookups.json" },
+    bundle: { exported: true, into: "augmentations/glossary-lookups.json" },
+  },
+
+  /** The one table the two projections disagree about — see `TableCoverage`. */
+  block_identities: {
+    rollback: {
+      exported: false,
+      why:
+        "Recovered from output/<slug>.html, which that export writes. Stage 3 reads " +
+        "the ids back out of that file rather than re-minting them, which is the " +
+        "whole of docs/project/block-ids.md's preservation promise.",
+    },
+    bundle: { exported: true, into: "content/block-identities.json" },
+  },
+  checkpoints: {
+    rollback: {
+      exported: false,
+      why:
+        "A cache of work a failed attempt already paid for, keyed by content hash — " +
+        "docs/project/database.md § Checkpoints. Losing it costs money on the next " +
+        "run and loses nothing the reader made.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "A cache of model output keyed by content hash, not something the reader " +
+        "wrote and not meaningful outside Spideryarn's own pipeline. Every finished " +
+        "artefact it stands behind is in the bundle already.",
+    },
+  },
+  ai_calls: {
+    rollback: {
+      exported: false,
+      why:
+        "The spend ledger, and it is not article state: src/store/ai-calls-fs.ts " +
+        "writes it to data/_ai-calls.jsonl, one file for the whole library, not to " +
+        "any data/<slug>/. An article's directory has nowhere to put it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The spend ledger. `article_id` is nullable and many of an article's calls " +
+        "carry none, so a per-article total would be quietly wrong rather than " +
+        "merely absent — which is worse than saying nothing.",
+    },
+  },
+  article_visibility_changes: {
+    rollback: {
+      exported: false,
+      why:
+        "An append-only audit of who made an article public and when " +
+        "(src/store/pg-visibility.ts). The filesystem store has no public sharing " +
+        "at all, so a rollback to data/ has nothing that could read it back.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "An append-only audit of the sharing switch, kept for takedown evidence. " +
+        "The state it audits is in article.json as `visibility` and `publicAt`; " +
+        "the history of switching is about the decision, not about the article.",
+    },
+  },
+  jobs: {
+    rollback: {
+      exported: false,
+      why:
+        "The ingest queue's own state, reachable from here only because a job " +
+        "points at the draft revision it is building (`draft_revision_id`). It is " +
+        "not one article's data: the filesystem store keeps jobs in data/_jobs, " +
+        "one file for the whole library, and a finished job is scaffolding.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The ingest queue's own state, reachable only because a job points at the " +
+        "draft revision it built. Scaffolding once the article exists — and it " +
+        "carries a reader-profile snapshot, which is not this article's data.",
+    },
+  },
+  queue_state: {
+    rollback: {
+      exported: false,
+      why:
+        "One row saying which job is running, reachable from an article only " +
+        "through `jobs` above. It describes this machine at this moment, not any " +
+        "article, and a rollback that restored it would name a job that is not " +
+        "running.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "One row saying which job this server is running now, reachable from an " +
+        "article only through `jobs`. It describes the machine at this instant and " +
+        "says nothing about the article.",
+    },
+  },
+  revision_step_runs: {
+    rollback: {
+      exported: false,
+      why:
+        "Whether a pipeline step's output is CURRENT, keyed by input hash — the " +
+        "same class of thing as checkpoints, and derived from artefacts this " +
+        "export does write. A rollback to data/ recovers currency the way the " +
+        "filesystem store always has, by looking at the files.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Whether each pipeline step's output is still current, keyed by input " +
+        "hash. Derived from the artefacts the bundle already carries, and " +
+        "meaningless outside Spideryarn's own pipeline.",
+    },
+  },
+} as const satisfies Readonly<Record<string, TableCoverage>>;
+
+/** A table name this record knows about. */
+export type ArticleTable = keyof typeof ARTICLE_TABLE_COVERAGE;
+
+/** Every table name in the record whose `projection` destination is a file. */
+type ExportedInto<Projection extends keyof TableCoverage> = {
+  [K in ArticleTable]: (typeof ARTICLE_TABLE_COVERAGE)[K][Projection]["exported"] extends true
+    ? K
+    : never;
+}[ArticleTable];
+
+/**
+ * A table the record says the **rollback** exports — and the only thing
+ * `exportArticle`'s `put` will take.
+ *
+ * The compiler half of the promise. Attributing a write to a table declared
+ * `exported: false`, or to one the record has never heard of, does not compile;
+ * and every write that does compile lands in `ExportResult.tables`, so the test
+ * can ask what the export touched rather than reading its source.
+ */
+export type RollbackTable = ExportedInto<"rollback">;
+
+/** A table the record says the reader's **bundle** carries. */
+export type BundledTable = ExportedInto<"bundle">;
+
+/**
  * No article of this reader's by that slug, or one with no current revision.
  *
  * **A type rather than a message**, because a caller has to be able to tell it

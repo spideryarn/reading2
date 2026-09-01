@@ -40,7 +40,12 @@ import { articleRevisions, articles } from "../db/schema.js";
    it did — the rollback is pinned byte for byte by tests/store-roundtrip.test.ts,
    so this file's job is the lossy projection and article-rows.ts's job is the
    faithful read. docs/plans/260901h-export-article-data.md § The design. */
-import { ArticleNotFound, messagesOfThread, readArticleRows } from "./article-rows.js";
+import {
+  ArticleNotFound,
+  type RollbackTable,
+  messagesOfThread,
+  readArticleRows,
+} from "./article-rows.js";
 /* Pure — it reaches for `quote-match` and `urls` and nothing else — so naming
    the union's two spellings in one place costs this file no dependency it did
    not already have. */
@@ -104,151 +109,27 @@ export interface ExportResult {
 }
 
 /**
- * What this export does about one table, and **why a declaration exists at all.**
+ * **The coverage record moved to [article-rows.ts](article-rows.ts) on
+ * 2026-09-01, and is re-exported here so its old importers are unchanged.**
  *
- * A table is either written into a named file, or deliberately left out for a
- * reason somebody wrote down. There is no third state, and in particular there
- * is no *silence* — which is what `referee_criteria` got when it was added on
- * 2026-08-31. This file simply did not know the table existed, so `db:export`
- * dropped every criterion a referee had written, reported success, and listed
- * the files it had written as though that were all of them. Nobody could have
- * noticed from here: an exporter that has never heard of a table looks exactly
- * like one that has nothing to say about it.
+ * It belongs beside the query walk rather than beside this projection, because
+ * there are now two projections of one article — this rollback, and the zip a
+ * reader downloads ([export-bundle.ts](export-bundle.ts)) — and a record kept
+ * beside either one would only make that one answerable for a new table. The
+ * two also genuinely disagree: `block_identities` is omitted here and required
+ * there. `TableCoverage` has the reasoning.
  *
- * `tests/store-export-covers-tables.test.ts` derives the list of article-scoped
- * tables **from `src/db/schema.ts`** — following foreign keys, so a child table
- * that reaches an article only through its parent is in scope too — and requires
- * this record to name every one of them, so the *next* table cannot arrive
- * quietly either. That is the actual fix; adding `referee_criteria` below is
- * only the instance.
- *
- * ## `into` is a promise something checks by running the export
- *
- * A declaration that says "exported" while nothing writes the file is worse than
- * no declaration, because it reads as the check having been done. The first
- * version of the test held `into` against the *source text* of this file, which
- * two edits satisfy without exporting a row: declaring a new table into an
- * existing file such as `comments.json`, or writing `// TODO: put("new.json", …)`
- * inside a comment. So the check now inserts a row in every declared table, runs
- * the export, and looks for that row **in the file named here**. GPT Sol raised
- * it, 2026-09-01.
+ * `ExportedTable` keeps its name: it means "a table THIS file writes", which is
+ * exactly `RollbackTable` now that there is a second output to distinguish it
+ * from, and it is what `put` accepts.
  */
-export type TableCoverage =
-  /**
-   * Written into this artefact file — and a row of this table must actually
-   * come back out of that file when the export runs.
-   */
-  | { readonly exported: true; readonly into: string }
-  /** Deliberately not part of a rollback of `data/`, for this stated reason. */
-  | { readonly exported: false; readonly why: string };
-
-/**
- * **Every table that hangs off an article, and what this export does with it.**
- *
- * Keyed by the SQL table name, because that is what the schema and a migration
- * both call it. In scope is anything that reaches an article at all: an
- * `article_id` column, or a foreign key to something that has one. The second
- * half was missing until 2026-09-01 and `revision_step_runs` was the table it
- * missed — keyed by `revision_id` alone, article-scoped in substance, and
- * invisible to a collector that only looked for `articleId`. A future child of
- * `referee_criteria` or `chat_threads` would have been invisible the same way.
- *
- * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
- * only the ones that mean ownership, so `jobs` arrives here because it points at
- * the draft revision it is building, and `queue_state` because it points at
- * `jobs`. Narrowing it — identifying keys only, or non-null keys only — would
- * drop those two and would also drop the next child table that happens to hold a
- * nullable parent id, which is the silence this record exists to prevent. The
- * cost of over-reach is one written-down sentence per table; the cost of
- * under-reach is a rollback that quietly loses somebody's work. So the entries
- * below are not all "article data": some are here to say, on the record, that
- * they are not.
- */
-export const ARTICLE_TABLE_COVERAGE = {
-  /* The article's own row — the shelf state the reader made, which is the only
-     thing on `articles` that is not either an identifier or a pointer at the
-     revision. `purpose` went missing from this file once already. */
-  articles: { exported: true, into: "shelf.json" },
-  /* The current revision — its columns become meta.json, tree.json and the rest,
-     through the join at the top of `exportArticle`. */
-  article_revisions: { exported: true, into: "meta.json" },
-  revision_blocks: { exported: true, into: "blocks.json" },
-  comments: { exported: true, into: "comments.json" },
-  chat_threads: { exported: true, into: "chat.json" },
-  chat_messages: { exported: true, into: "chat.json" },
-  search_runs: { exported: true, into: "searches.json" },
-  referee_criteria: { exported: true, into: "referee-criteria.json" },
-  referee_claims: { exported: true, into: "referee-claims.json" },
-  glossary_lookups: { exported: true, into: "glossary-lookups.json" },
-
-  block_identities: {
-    exported: false,
-    why:
-      "Recovered from output/<slug>.html, which this export writes. Stage 3 reads " +
-      "the ids back out of that file rather than re-minting them, which is the " +
-      "whole of docs/project/block-ids.md's preservation promise.",
-  },
-  checkpoints: {
-    exported: false,
-    why:
-      "A cache of work a failed attempt already paid for, keyed by content hash — " +
-      "docs/project/database.md § Checkpoints. Losing it costs money on the next " +
-      "run and loses nothing the reader made.",
-  },
-  ai_calls: {
-    exported: false,
-    why:
-      "The spend ledger, and it is not article state: src/store/ai-calls-fs.ts " +
-      "writes it to data/_ai-calls.jsonl, one file for the whole library, not to " +
-      "any data/<slug>/. An article's directory has nowhere to put it.",
-  },
-  article_visibility_changes: {
-    exported: false,
-    why:
-      "An append-only audit of who made an article public and when " +
-      "(src/store/pg-visibility.ts). The filesystem store has no public sharing " +
-      "at all, so a rollback to data/ has nothing that could read it back.",
-  },
-  jobs: {
-    exported: false,
-    why:
-      "The ingest queue's own state, reachable from here only because a job " +
-      "points at the draft revision it is building (`draft_revision_id`). It is " +
-      "not one article's data: the filesystem store keeps jobs in data/_jobs, " +
-      "one file for the whole library, and a finished job is scaffolding.",
-  },
-  queue_state: {
-    exported: false,
-    why:
-      "One row saying which job is running, reachable from an article only " +
-      "through `jobs` above. It describes this machine at this moment, not any " +
-      "article, and a rollback that restored it would name a job that is not " +
-      "running.",
-  },
-  revision_step_runs: {
-    exported: false,
-    why:
-      "Whether a pipeline step's output is CURRENT, keyed by input hash — the " +
-      "same class of thing as checkpoints, and derived from artefacts this " +
-      "export does write. A rollback to data/ recovers currency the way the " +
-      "filesystem store always has, by looking at the files.",
-  },
-} as const satisfies Readonly<Record<string, TableCoverage>>;
-
-/** A table name this record knows about. */
-export type ArticleTable = keyof typeof ARTICLE_TABLE_COVERAGE;
-
-/**
- * A table the record says is **exported** — and the only thing `put` will take.
- *
- * The compiler half of the promise above. Attributing a write to a table
- * declared `exported: false`, or to one the record has never heard of, does not
- * compile; and every write that does compile lands in `ExportResult.tables`, so
- * the test can ask what the export touched rather than reading its source.
- */
-export type ExportedTable = {
-  [K in ArticleTable]: (typeof ARTICLE_TABLE_COVERAGE)[K]["exported"] extends true ? K : never;
-}[ArticleTable];
+export {
+  ARTICLE_TABLE_COVERAGE,
+  type ArticleTable,
+  type Destination,
+  type TableCoverage,
+} from "./article-rows.js";
+export type ExportedTable = RollbackTable;
 
 /**
  * Where the source documents come from, or a refusal — **never `data/_blobs`**.

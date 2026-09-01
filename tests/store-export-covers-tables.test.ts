@@ -1,6 +1,15 @@
 /**
- * **A new table must not be able to arrive without the rollback noticing — and
+ * **A new table must not be able to arrive without EITHER export noticing — and
  * "we export that one" must be something the export was watched doing.**
+ *
+ * There are two projections of one article now, and they share only the query
+ * walk in `src/store/article-rows.ts`: the rollback below, and
+ * `src/store/export-bundle.ts`, the zip a reader downloads. So the coverage
+ * record lives beside the *queries* rather than beside either projection — a
+ * record kept beside one of them would only make that one answerable for a new
+ * table — and every check here runs the same sentinel fixtures through both.
+ * A projection that receives a row and discards it goes red on its own account.
+ * docs/plans/260901h-export-article-data.md § Stage B.
  *
  * `src/store/export.ts` is the rollback: `npm run db:export` writes Postgres
  * back out as `data/<slug>/`, and it is the only thing standing between a
@@ -51,18 +60,25 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { unzipSync } from "fflate";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
+/* **From the query layer, not from either projection.** That is the move this
+   file is the guard for: the record is a claim about what happens to a row of
+   one article, and both outputs read that article through `readArticleRows`. */
 import {
   ARTICLE_TABLE_COVERAGE,
-  type ExportResult,
-  type ExportedTable,
-  exportArticle,
-} from "../src/store/export.js";
+  type ArticleTable,
+  type BundledTable,
+  type RollbackTable,
+  type TableCoverage,
+} from "../src/store/article-rows.js";
+import { articleBundle } from "../src/store/export-bundle.js";
+import { type ExportResult, exportArticle } from "../src/store/export.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -123,7 +139,19 @@ function articleScopedTables(): string[] {
   return [...scoped].sort();
 }
 
-describe("the rollback knows about every article-scoped table", () => {
+/** The two outputs, by the key each has in the coverage record. */
+const PROJECTIONS = ["rollback", "bundle"] as const;
+type Projection = (typeof PROJECTIONS)[number];
+
+/** The tables the record says one projection writes, in one sorted list. */
+function declaredIn(projection: Projection): ArticleTable[] {
+  return (Object.entries(ARTICLE_TABLE_COVERAGE) as [ArticleTable, TableCoverage][])
+    .filter(([, coverage]) => coverage[projection].exported)
+    .map(([name]) => name)
+    .sort();
+}
+
+describe("both exports know about every article-scoped table", () => {
   it("finds the tables by looking at the schema, not at a list", () => {
     /* The collector's own alarm. A `getTableColumns` that stopped recognising
        drizzle tables, or an import that resolved to an empty module, would
@@ -153,12 +181,14 @@ describe("the rollback knows about every article-scoped table", () => {
     const missing = articleScopedTables().filter((name) => !(name in ARTICLE_TABLE_COVERAGE));
     expect(
       missing,
-      `src/store/export.ts has never heard of ${missing.join(", ")}. ` +
-        "db:export is the rollback, and a table it does not know about is dropped " +
-        "silently — it reports success and lists the files it did write. Add an " +
-        "entry to ARTICLE_TABLE_COVERAGE: either { exported: true, into: '<file>.json' } " +
-        "with the code to write it AND a sentinel fixture below, or " +
-        "{ exported: false, why: '<why a rollback of data/ does not need it>' }.",
+      `src/store/article-rows.ts has never heard of ${missing.join(", ")}. ` +
+        "Both exports read an article through it, and a table neither knows about " +
+        "is dropped silently — each reports success and lists the files it did " +
+        "write. Add an entry to ARTICLE_TABLE_COVERAGE with BOTH projections " +
+        "answered: { rollback: …, bundle: … }, each either " +
+        "{ exported: true, into: '<file>' } with the code to write it AND a " +
+        "sentinel fixture below, or { exported: false, why: '<why that output " +
+        "does not need it>' }.",
     ).toEqual([]);
   });
 
@@ -176,17 +206,32 @@ describe("the rollback knows about every article-scoped table", () => {
     ).toEqual([]);
   });
 
-  it("gives every omission a reason written in words", () => {
+  it("gives every omission a reason written in words, for each output", () => {
     for (const [name, coverage] of Object.entries(ARTICLE_TABLE_COVERAGE)) {
-      if (coverage.exported) continue;
-      // A reason, not a shrug. "not needed" is what somebody writes when they
-      // have not thought about it, and it is what the next reader has to
-      // re-derive from scratch.
-      expect(
-        coverage.why.length,
-        `${name} is not exported and says why in too few words`,
-      ).toBeGreaterThan(40);
+      for (const projection of PROJECTIONS) {
+        const destination = coverage[projection];
+        if (destination.exported) continue;
+        // A reason, not a shrug. "not needed" is what somebody writes when they
+        // have not thought about it, and it is what the next reader has to
+        // re-derive from scratch. Per projection, because the two leave things
+        // out for different reasons — `block_identities` is recoverable from
+        // the HTML a rollback writes, and load-bearing for a reader's anchors.
+        expect(
+          destination.why.length,
+          `${name} is not in the ${projection} export and says why in too few words`,
+        ).toBeGreaterThan(40);
+      }
     }
+  });
+
+  it("answers for the bundle too, not only the rollback", () => {
+    /* The alarm for the move itself. If `bundle` were ever quietly dropped from
+       the record — a merge, a refactor, a `satisfies` that stopped biting —
+       every loop above would still run and check the rollback alone, and the
+       bundle would be back to having no guard at all while the file stayed
+       green. */
+    expect(declaredIn("bundle")).toContain("block_identities");
+    expect(declaredIn("bundle").length).toBeGreaterThan(8);
   });
 });
 
@@ -207,15 +252,28 @@ const BLOCK_ID = "spya-cvb234";
 const CRITERION_ID = "spya-cvc234";
 
 /**
+ * A block id that has **left the article** — minted once, and no longer a block
+ * of the current revision.
+ *
+ * The whole reason the bundle carries `block_identities` while the rollback does
+ * not: a comment or a chat thread can still be anchored to this id, so a bundle
+ * without it holds anchors pointing at nothing. It doubles as the sentinel for
+ * that table, which has no free-text column to hide a string in.
+ */
+const DEPARTED_BLOCK_ID = "spya-cvj234";
+
+/**
  * The string that has to survive the export, one per table.
  *
  * Distinct per table on purpose: `chat_threads` and `chat_messages` both declare
  * `chat.json`, and one sentinel for both would let either of them carry the
  * other. The prefix is nonsense so that finding it in a file means it came from
- * the row and not from a field name or a fixture path.
+ * the row and not from a field name or a fixture path — except for
+ * `block_identities`, whose only column worth checking is a block id and which
+ * must therefore carry a well-formed one.
  */
 function sentinel(table: string): string {
-  return `sentinel-3f9c1e-${table}`;
+  return table === "block_identities" ? DEPARTED_BLOCK_ID : `sentinel-3f9c1e-${table}`;
 }
 
 /** One table's row, inserted with its sentinel somewhere a reader would keep. */
@@ -224,13 +282,14 @@ type Fixture = () => Promise<void>;
 const owner = () => currentOwnerId();
 
 /**
- * A row for every table the record calls exported.
+ * A row for every table **either** record calls exported.
  *
- * Typed `Record<ExportedTable, …>`, so declaring a new table exported without
- * writing a fixture for it does not compile — and the test below says the same
- * thing in words, because `npm test` does not typecheck.
+ * Typed `Record<RollbackTable | BundledTable, …>`, so declaring a new table
+ * exported from either projection without writing a fixture for it does not
+ * compile — and the test below says the same thing in words, because `npm test`
+ * does not typecheck.
  */
-function fixtures(): Record<ExportedTable, Fixture> {
+function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
   const db = getDb();
   return {
     /* The article's own row: the shelf state, and `purpose` is the reader's own
@@ -330,6 +389,15 @@ function fixtures(): Record<ExportedTable, Fixture> {
         model: sentinel("referee_claims"),
       });
     },
+    /* An id the article used to have. `beforeAll` already inserts the identity
+       row for the block that is still there — this is the other kind, the one
+       only the bundle carries. */
+    block_identities: async () => {
+      await db
+        .insert(schema.blockIdentities)
+        .values({ articleId: ARTICLE_ID, blockId: sentinel("block_identities") })
+        .onConflictDoNothing();
+    },
     glossary_lookups: async () => {
       await db.insert(schema.glossaryLookups).values({
         articleId: ARTICLE_ID,
@@ -344,14 +412,6 @@ function fixtures(): Record<ExportedTable, Fixture> {
   };
 }
 
-/** The tables the record says are exported, in one sorted list. */
-function declaredExported(): ExportedTable[] {
-  return (Object.entries(ARTICLE_TABLE_COVERAGE) as [ExportedTable, { exported: boolean }][])
-    .filter(([, coverage]) => coverage.exported)
-    .map(([name]) => name)
-    .sort();
-}
-
 const { reachable } = await pgReady({
   suite: "tests/store-export-covers-tables.test.ts",
   tables: [
@@ -363,9 +423,11 @@ const { reachable } = await pgReady({
 
 const when = reachable ? describe : describe.skip;
 
-when("what the record calls exported, the export was watched writing", () => {
+when("what the record calls exported, both exports were watched writing", () => {
   let out: string;
   let result: ExportResult;
+  /** Every entry of the reader's zip, decoded — path to text. */
+  let bundled: Map<string, string>;
 
   beforeAll(async () => {
     const db = getDb();
@@ -395,7 +457,19 @@ when("what the record calls exported, the export was watched writing", () => {
     for (const fixture of Object.values(fixtures())) await fixture();
 
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-coverage-"));
+    /* **The same fixtures through both projections.** One article, one set of
+       rows, two outputs — which is the only way to catch a projection that
+       receives a row and drops it, since each looks perfectly healthy on its
+       own. GPT Sol's suggestion, and stronger than what either had. */
     result = await exportArticle(SLUG, { dataRoot: out, outputRoot: path.join(out, "output") });
+    const bundle = await articleBundle(SLUG);
+    const decoder = new TextDecoder();
+    bundled = new Map(
+      Object.entries(unzipSync(bundle.bytes)).map(([name, bytes]) => [
+        name,
+        decoder.decode(bytes),
+      ]),
+    );
   });
 
   afterAll(async () => {
@@ -429,62 +503,95 @@ when("what the record calls exported, the export was watched writing", () => {
     if (out) await rm(out, { recursive: true, force: true });
   });
 
-  it("has a sentinel row for every table it calls exported", () => {
+  it("has a sentinel row for every table either output calls exported", () => {
     const written = Object.keys(fixtures());
-    const missing = declaredExported().filter((table) => !written.includes(table));
+    const missing = [...new Set(PROJECTIONS.flatMap(declaredIn))]
+      .filter((table) => !written.includes(table))
+      .sort();
     expect(
       missing,
       `ARTICLE_TABLE_COVERAGE calls ${missing.join(", ")} exported and nothing here ` +
-        "puts a row in it, so the check below would pass over it in silence. Add a " +
+        "puts a row in it, so the checks below would pass over it in silence. Add a " +
         "fixture to `fixtures()` that inserts one row carrying `sentinel('<table>')` " +
-        "somewhere the export would keep it.",
+        "somewhere an export would keep it.",
     ).toEqual([]);
   });
 
-  it("puts each table's own row into the file that table declares", async () => {
-    /* The half that stops the record becoming a wish, and the reason it reads a
-       file rather than the source: adding a name to the list is one edit and
-       wiring the export is another, and a declaration that says "exported"
-       while nothing writes the row is worse than no declaration — it reads as
-       the check having been done. */
-    for (const table of declaredExported()) {
-      const coverage = ARTICLE_TABLE_COVERAGE[table];
-      /* Narrowing for the compiler; `declaredExported` already filtered. */
-      if (!coverage.exported) continue;
-      const file = path.join(out, SLUG, coverage.into);
-      const text = await readFile(file, "utf8").catch(() => null);
-      expect(
-        text,
-        `ARTICLE_TABLE_COVERAGE says ${table} is exported into ${coverage.into}, ` +
-          `and db:export wrote no ${coverage.into} at all. The declaration is a ` +
-          "claim about the rollback; write the code that makes it true, or change " +
-          "the entry to { exported: false, why: … }.",
-      ).not.toBeNull();
-      expect(
-        text?.includes(sentinel(table)) ?? false,
-        `ARTICLE_TABLE_COVERAGE says ${table} is exported into ${coverage.into}, ` +
-          `but the row this test put in ${table} is not in the ${coverage.into} ` +
-          "db:export wrote. Either nothing reads that table, or its rows are going " +
-          "somewhere other than the file declared here. A rollback that drops a " +
-          "table reports success and lists the files it did write.",
-      ).toBe(true);
-    }
-  });
+  /**
+   * The half that stops the record becoming a wish, and the reason it reads the
+   * output rather than the source: adding a name to the list is one edit and
+   * wiring the export is another, and a declaration that says "exported" while
+   * nothing writes the row is worse than no declaration — it reads as the check
+   * having been done.
+   *
+   * **One `it` per projection, over one shared set of fixtures.** Two tests
+   * rather than a loop inside one, so a failure names which output lost the row:
+   * "the bundle dropped `chat_messages`" and "the rollback dropped
+   * `chat_messages`" are different bugs in different files.
+   */
+  for (const projection of PROJECTIONS) {
+    it(`puts each table's own row into the file the ${projection} declares`, async () => {
+      const read =
+        projection === "rollback"
+          ? (into: string) => readFile(path.join(out, SLUG, into), "utf8").catch(() => null)
+          : async (into: string) => bundled.get(into) ?? null;
 
-  it("reports every declared table among the ones it actually wrote", () => {
+      /* An alarm on the reader itself, not on the export. A `read` that always
+         answered `null` — a wrong root, an empty zip — would turn every
+         assertion below into a failure that reads as the export's fault, and a
+         `read` that somehow always answered the whole output would pass
+         everything. Ask it for something that must exist and something that
+         must not, first. */
+      expect(await read(projection === "rollback" ? "meta.json" : "manifest.json")).not.toBeNull();
+      expect(await read("no-such-file.json")).toBeNull();
+
+      for (const table of declaredIn(projection)) {
+        const destination = ARTICLE_TABLE_COVERAGE[table][projection];
+        /* Narrowing for the compiler; `declaredIn` already filtered. */
+        if (!destination.exported) continue;
+        const { into } = destination;
+        const text = await read(into);
+        expect(
+          text,
+          `ARTICLE_TABLE_COVERAGE says ${table} goes into ${into} in the ` +
+            `${projection}, and the ${projection} wrote no ${into} at all. The ` +
+            "declaration is a claim about that output; write the code that makes " +
+            "it true, or change the entry to { exported: false, why: … }.",
+        ).not.toBeNull();
+        expect(
+          text?.includes(sentinel(table)) ?? false,
+          `ARTICLE_TABLE_COVERAGE says ${table} goes into ${into} in the ` +
+            `${projection}, but the row this test put in ${table} is not in the ` +
+            `${into} it wrote. Either nothing reads that table, or its rows are ` +
+            "going somewhere other than the file declared here — and a projection " +
+            "that receives a row and discards it reports success and lists the " +
+            "files it did write.",
+        ).toBe(true);
+      }
+    });
+  }
+
+  it("reports every declared table among the ones the rollback actually wrote", () => {
     /* `ExportResult.tables` is appended to by `put` as the export runs, so it is
        what happened rather than what was declared. It catches the case the
        sentinel search cannot: a file written from the right rows by code that
-       never names the table, which leaves the two lists agreeing by luck. */
-    const missing = declaredExported().filter((table) => !result.tables.includes(table));
+       never names the table, which leaves the two lists agreeing by luck.
+
+       The bundle has no equivalent and needs none — it writes whole rows rather
+       than attributing writes, so there is no second list there to fall out of
+       step. */
+    const missing = declaredIn("rollback").filter(
+      (table) => !(result.tables as readonly string[]).includes(table),
+    );
     expect(
       missing,
       `db:export finished without recording a write from ${missing.join(", ")}, ` +
-        "which ARTICLE_TABLE_COVERAGE calls exported. Pass the table name to " +
-        "`put(…)` at the call that writes its rows.",
+        "which ARTICLE_TABLE_COVERAGE calls exported by the rollback. Pass the " +
+        "table name to `put(…)` at the call that writes its rows.",
     ).toEqual([]);
     // And the run has to have done something at all — an empty result would
     // satisfy every `filter` above.
     expect(result.files.length).toBeGreaterThan(5);
+    expect(bundled.size).toBeGreaterThan(5);
   });
 });

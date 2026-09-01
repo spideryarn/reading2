@@ -157,29 +157,47 @@ Ordered as the review recommended: the data contract first, docs before the butt
       claimed. `tests/fixture-ids.test.ts` exists to catch exactly that, and the symptom is a 404 in
       whichever file loses the race — so it reads as a flake in someone else's work.
 
-**Stage B — move the guard to the query layer, and prove data survives.**
-- [ ] Coverage declaration attaches to `readArticleRows`, so a new table fails the test on the day
-      it lands, for both outputs.
-- [ ] **Run the same sentinel fixtures through both projections** and grep each declared destination
-      for its sentinel — Sol's suggestion, and stronger than what either had. A projection that
-      receives a row and discards it must go red.
-- [ ] Fidelity tests for the specific losses found: chat `kind` survives as `candidates`,
-      `passages` and `interrupted` survive, `extractedHtml` is present.
+**Stage B — move the guard, and prove data survives.** ✅ **Done.**
+- [x] `ARTICLE_TABLE_COVERAGE` moved to [`article-rows.ts`](../../src/store/article-rows.ts), beside
+      the query walk, and each entry now answers for **both** outputs:
+      `{ rollback: Destination; bundle: Destination }`. `export.ts` re-exports it, so `put()` and
+      every old importer are untouched.
+- [x] The two projections genuinely disagree in exactly one place, which is what forced two fields:
+      `block_identities` is `exported: false` for the rollback and **required** for the bundle.
+- [x] One set of sentinel fixtures now runs through **both** projections, one `it` each so a failure
+      names which output lost the row. The `block_identities` fixture's sentinel is deliberately a
+      block id that has *left the article*. 8 → 10 tests.
+- [x] Three controls watched going red and reverted: flattening `candidates`→`chat`; dropping
+      `comments.json` (only the bundle `it` went red, the rollback stayed green); and — the one that
+      matters — **writing `comments.json` but with only `{id}` per row**, the "received a row and
+      discarded it" case a weaker check would have passed.
 
-**Stage C — the bundle.** `src/store/export-bundle.ts`, `fflate`, no bucket access.
-- [ ] `manifest.json` (slug, title, url, exportedAt, `format`, entry list, and machine-readable
-      omissions), `article.json` (identity + shelf + sharing state), `content/` (`stamped.html`,
-      `extracted.html`, `blocks.json`, `block-identities.json`, `assets.json`), `augmentations/`
-      (tree, arc, tweets, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, labels,
-      comments, chat, searches, referee-claims, referee-criteria).
-- [ ] **`block-identities.json` is not optional.** Comments and chat anchors can reference ids whose
-      blocks are gone from the current revision, so without it the bundle contains anchors pointing
-      at nothing. The rollback omits it as "recoverable from stamped HTML", which is true for
-      re-ingestion and false for anchor integrity.
-- [ ] `README.md` for whoever writes an importer — drafted already; leads on the block-id contract
-      ([block-ids.md](../project/block-ids.md)) and warns that ids carry no ordering.
-- [ ] A test that the bundle path **never touches the blob store** — pass a store that throws.
-- [ ] The oversize path returns a readable 413, with a test.
+**Stage C — the bundle.** ✅ **Done.** [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts),
+`fflate` async `zip()`.
+- [x] Layout as planned, `manifest.json` at `format: 1`, and its machine-readable `omitted` list is
+      **derived from the coverage record** rather than written out beside it — so the manifest cannot
+      drift from the guard.
+- [x] **A better decision than this plan specified:** the bundle serialises **whole rows** (Dates to
+      ISO, `ownerId`/`articleId`/`revisionId`/`fts` dropped) rather than naming fields. A
+      hand-written field list is exactly how `tools`, `stance`, `criterionId` and `valence` each went
+      missing from `export.ts`. So `passages`, `interrupted` and a real `candidates` kind survive
+      **by construction, not by being remembered**. The rollback must keep its lists because a byte
+      comparison pins them; this file must not.
+- [x] `BUNDLE_BYTE_CAP = 4_500_000` and an exported `overBundleCap()` — the route must call it
+      rather than writing `>` a second time. Both sides unit-tested; `overCap` has never been
+      observed true on a real bundle and cannot be without a ~5 MB fixture, which is why the
+      comparison is shared rather than duplicated.
+- [x] **No bucket access, proved by mocking rather than by a parameter** — `articleBundle` takes no
+      store (a dead parameter would be worse), so the test mocks `src/store/blobs.js` to throw on
+      every call and asserts the bundle still builds. The positive control sits in the same file:
+      `exportArticle` on the same article, same process, throws — because `writeRawDocument` reads
+      before it writes. Scope: this catches a reach through either sanctioned constructor, not a
+      future direct import of `blobs-supabase.ts`.
+- [x] Built and inspected for real, not just tested: `noema-mythology-of-conscious-ai` → 18 entries,
+      **172 KB**, with chat and comments present; `fowler-phrenology` → 12 entries, 92 KB.
+- [x] Known and deliberate: `content/extracted.html` can be byte-identical to `stamped.html`. No
+      "skip when equal" rule, because an absent file meaning *identical* is indistinguishable from
+      one meaning *missing*.
 
 **Stage D — the route.** `GET /api/export/:slug`.
 - [ ] `slugPart`, not `part`. `contentDisposition(name, "attachment")` after the refactor above,
