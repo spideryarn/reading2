@@ -412,7 +412,8 @@ is a fair description of what shipped.
 
 ### What remains
 
-- **Stage 3b — the referee's own judgement crosses the boundary.** Sol's finding 5. The
+- ~~**Stage 3b — the referee's own judgement crosses the boundary.**~~ **Done, 2026-09-01**
+  (`4a39f14`). Sol's finding 5. The
   `comments.criterionId` and `comments.valence` columns exist and are migrated, but the `Comment`
   type, `NewComment`, the route and the Postgres reader and writer all ignore them, so the half of
   Greg's ask that matters most — *the referee records what **they** think, quantitatively, beside
@@ -434,7 +435,8 @@ is a fair description of what shipped.
   character count rather than characters**, because what streams is a raw JSON object whose pointers
   `validateRemarks` has not checked yet; showing it would be showing exactly the unverified claim
   about somebody's sentence that the validator exists to stop.
-- **Stage 5c — Mirror's invariants.** Sol's findings 3, 4 and 9: truncation can drop a placement it
+- **Stage 5c — Mirror's invariants.** First pass done in `ded0047`; the second review reopened it
+  (see below). Sol's findings 3, 4 and 9 were: truncation can drop a placement it
   promised to rank first; coverage can be asserted when the one comment bearing on a criterion was
   dropped as an orphan; the delimiter is forgeable; and the input caps do not cap criterion length,
   passage length, or the same block copied once per comment.
@@ -452,6 +454,41 @@ is a fair description of what shipped.
 - **Stage 8 — finish.** A browser pass over all four sub-modes including a colour-vision simulation,
   a narrow screen and a screen reader; GPT Sol on the code again; and the status paragraph at the
   top of [referee-mode.md](../project/referee-mode.md) rewritten to match what is then true.
+
+### The second code review, and what it reopened
+
+[260831an-referee-mode-stage3b5c-review-sol.md](260831an-referee-mode-stage3b5c-review-sol.md),
+on the five commits that answered the first one. Verdict: **"do not call the safeguard layer done
+yet"** — finding 9 closed, finding 5's round trip working, finding 4 still partly a prompt wish.
+Seven findings, and the four that matter:
+
+- **Coverage can still claim over text it never received.** The status knows about whole comments
+  dropped; it does not know about text *clipped from a retained comment* at 1,500 characters, nor
+  that the criteria list itself was capped at 24. A comment whose only criterion-bearing sentence
+  sits after the clip can still produce "nothing you wrote bears on this".
+- **"Placement always qualifies" is still not an invariant.** It survives truncation now, but a
+  placement at comment 61 never reaches the model, an empty response is valid, and a `tone` remark
+  on the same comment consumes the one-per-comment slot before placement priority runs. The test
+  named "keeps every placement" proves priority among an already-valid list, not the invariant.
+- **The nonce is prompt hardening, not a fence**, and the module said otherwise. A passage need not
+  forge the marker: it can simply ask, in English, for a valid-schema remark, and the validator
+  accepts it because it deliberately does not read English. One real bug beside it — the resolved
+  criterion was interpolated *outside* the fence.
+- **Yesterday's fixed bug came back in a different shape.** A missing diverging valence is no
+  longer coerced to `0`; it is dropped and counted. But the count is withheld from the client, so
+  the criterion stores as `done` with zero results and the panel says *the model did not find a
+  passage* — which is false, because it found one and failed to score it. Same class, and worse in
+  one way: that copy was written the same day specifically to be honest about a null result.
+
+It also called the export guard's "actually writes" half theatrical, which it was: it searched the
+source for `put("<file>"`, so a `// TODO: put(…)` in a comment satisfied it.
+
+**On the one design question put to it — should `placement` remarks be minted in code rather than
+asked of the model? — it said yes, unreservedly**, and so had the agent that built the hardening,
+independently. The model owns none of the facts, and the committed eval shows it adding precisely
+the invention the prompt forbids. That is being built now, under the reviewer's conditions: every
+word derived from stored facts, model-produced placements ignored entirely, and deterministic
+selection under the cap.
 
 Sol reviews the diff at the end of every stage. Evals measure the things unit tests cannot: false
 "did not find" rates, abstention, grounding, and valence-unit failures.
