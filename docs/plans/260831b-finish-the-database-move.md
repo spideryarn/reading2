@@ -1,20 +1,39 @@
 # Finish the move from files to the database
 
-**Status, 2026-08-31 evening: stages 1 and 2 are built, reviewed and committed. Stage 2.4 — which
-was not in the plan and had to be — is repaired locally and guarded (`e07a519`). Stage 2.5 is
-next, and its two conditions may already hold: measure before refetching anything.** Seven GPT Sol
-reviews so far, all NO-SHIP or SHIP-WITH-CHANGES, all accepted.
+**Status, 2026-09-01 06:30, after an overnight run.** Stage 2.4 (new — `db:migrate` was applying
+nothing) is done and reviewed. Stage 3 items 1, 3, 4 and 5 are built, reviewed and committed; item 0
+is built and migrated but **held uncommitted**, waiting on another session. Stage 2.5 has still not
+been *measured* — the machine has not been quiet enough to trust a reading. Stage 4 was deliberately
+not started. Nine GPT Sol reviews so far; the two on tonight's work were both NO-SHIP and both right.
 
-**And one thing the rest of this document assumes that is no longer true.** Stage 2.5 below says the
-corpus arrived through the importer and therefore carries `stamped_html` with `extracted_html` null.
-On this laptop, as of 2026-08-31, **no revision is in that state and not one has `raw_bytes` at
-all** — so the corpus was not written by the importer, and stage 2.5's first condition is already
-met. Its second, that every stored source reference resolves to a readable object, wants measuring
-the same way. `npx tsx scripts/db-corpus-readiness.ts` answers both and exits non-zero if either
-fails; `--seed-a-bad-row` makes a real row bad inside a rolled-back transaction so the checks can be
-watched failing, because on an empty or already-clean corpus both of them pass trivially.
-**Measure with no `vitest` running** — the DB-backed suites create and delete articles as they go,
-and a reading taken during a test run is somebody else's corpus.
+| item | state |
+|---|---|
+| 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem, NO-SHIP answered |
+| 3 item 1 — prove the coordinator | **done** (`132be8d`) — and it found the carry hazard below |
+| 3 item 3 — `forceForRetry` | **built and committed** in `265356b`; **Sol NO-SHIP outstanding** |
+| 3 item 4 — exact base | **built and committed** in `265356b`; **Sol says it does not close the race** |
+| 3 item 5 — delete the importer | **done** (`b73ad74`) |
+| 3 item 0 — short-id slugs | **built, migration applied, HELD** — see below |
+| 3 item 6 — the flip | not started |
+| 2.5 refetch | not measured |
+| 4 | deliberately not started |
+
+**THREE THINGS ARE OWED BEFORE ANYONE TRUSTS THIS, and the first is live in `main` now.**
+
+1. **`main` currently carries two orphan migrations.** `drizzle/0044_article_short_id.sql` and
+   `0045_feedback_mirror_attempted.sql` are committed while `drizzle/meta/_journal.json` is not, so
+   the journal in `HEAD` stops at `0043` and **`db:migrate` on a fresh clone applies neither**. Worse,
+   `0044_snapshot.json` is committed with `short_id` while `src/db/schema.ts` is not, so
+   **snapshot is ahead of schema and the next `drizzle-kit generate` emits a `DROP COLUMN short_id`.**
+   The orphan check added in stage 2.4 catches this on a clean checkout but **not locally**, because
+   it reads the working tree, where the journal is complete. Fixing it means committing the journal,
+   which names an untracked `0046_quiz`, which needs the quiz session's whole type chain — so it
+   cannot be fixed by one session alone.
+2. **Sol's NO-SHIP on items 3 and 4 is unanswered**, and item 3's half created a money hole:
+   `retryJob` checks only that the job exists, so POSTing `/retry` on a *successful* forced PDF
+   refresh now re-runs and re-pays, repeatedly. See § *Stage 3 — the flip* item 3.
+3. **Stage 2.5 has never been measured on a quiet machine.** Every reading tonight was taken while
+   other sessions were writing to the same database.
 
 | | what | commits |
 |---|---|---|
