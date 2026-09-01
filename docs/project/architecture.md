@@ -135,7 +135,8 @@ one script, writing to `output/`. That's the prototype stages 1–2 are growing 
 standalone-HTML output becomes a debug view once the server exists.
 
 **The queue is stage 6's, but the stages are not.** [`src/pipeline.ts`](../../src/pipeline.ts) calls
-each stage through the function that stage exports, and each stage's CLI calls the same function —
+each stage through the function that stage exports, and the stages that still have a command line
+(`extract`, `blocks`, `hierarchy`, `labels`, `pdf`) call the same function —
 one code path per stage, and no reimplementation of anybody's work. Adding a step means adding an
 entry to `STEPS` there; changing what a step *does* means changing that stage, in its own file, as
 its owner. On 2026-08-25 Greg chose in-process over spawning subprocesses, which is what made a small
@@ -304,7 +305,12 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 ## Conventions
 
 - TypeScript, ESM (`"type": "module"`), strict mode — see [`tsconfig.json`](../../tsconfig.json).
-- Every stage is runnable on its own against a slug, so any one can be re-run without the others.
+- Every stage is runnable on its own against a slug, so any one can be re-run without the others —
+  through the **queue**: `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`
+  ([ingest-queue.md](ingest-queue.md)). The capability is unchanged; the mechanism is one way in
+  rather than two. The eight article-reading stages had a folder-reading command line of their own
+  until 2026-09-01, and it was a second path to the same place — the queue's is the one that
+  exercises the store writes.
 - Anything expensive should be cached on a content hash. Seven stages do it, and copy *their* choice
   of hash input rather than only the idea — the rule is that a fingerprint covers **everything the
   stage's prompt reads** — for six of the seven that is the blocks, the tree and the head, and there

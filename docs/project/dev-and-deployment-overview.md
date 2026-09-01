@@ -31,7 +31,10 @@ Secrets are one gitignored `.env.local`, and **it beats what your shell exported
 
 ### The pipeline, one stage at a time
 
-Every stage re-runs on its own, and each has an npm script. You rarely need them — pasting a URL
+Every stage re-runs on its own **through the queue** — `POST /api/jobs { slug, steps, force }`
+([ingest-queue.md](ingest-queue.md)). Five stages also have an npm script, the ones that take a URL,
+a file or a `blocks.json`; the eight that read an article out of a folder lost theirs on 2026-09-01.
+You rarely need the scripts — pasting a URL
 into the homepage runs the same chain through the ingest queue — but they are how you look at one
 stage's output. The list, with what each argument means, is in
 [setup-dev.md](setup-dev.md); `package.json` is the authority. `npm run validate-tree -- <dir>`
