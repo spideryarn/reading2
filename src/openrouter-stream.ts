@@ -140,6 +140,33 @@ export function explainAbort(
  */
 export interface StreamEnd {
   terminated: boolean;
+  /**
+   * The last non-null `choice.finish_reason` the stream carried, or `null`.
+   *
+   * **Written here rather than scraped by the caller**, which is what all seven
+   * of them used to do with the identical line
+   * `if (choice?.finish_reason) finishReason = choice.finish_reason`. The
+   * duplication was not the problem; what each of them then *did* with it was —
+   * six read a non-null reason as evidence the reply was whole, which is true
+   * of `"stop"` and the exact opposite of `"length"`. See `classifyEnd` and
+   * docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
+   *
+   * **Written by `openRouterStream` in src/ai-call.ts, not here.** This file
+   * is the SSE parser and `terminated` is a framing fact — `[DONE]` is part of
+   * the wire format. A finish reason is payload, and belongs with the shim that
+   * already reads every chunk for the meter. GPT Sol drew that line on review.
+   *
+   * Optional so that the seven existing `{ terminated: false }` literals keep
+   * compiling while their files migrate one at a time.
+   */
+  finishReason?: string | null;
+  /**
+   * Whether any chunk at all arrived — as opposed to a stream that opened and
+   * said nothing. Written by `openRouterStream`, as above. Distinguishes "the provider answered and was cut off" from
+   * "the provider never spoke", which every caller currently re-derives from a
+   * local `answered` flag.
+   */
+  answered?: boolean;
 }
 
 export interface SseChunksOptions {

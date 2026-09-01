@@ -74,10 +74,140 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 import type { AiJob, Wire } from "./models.js";
 import {
   type StreamChunk,
+  readerAborted,
   type StreamEnd,
   sseChunks,
 } from "./openrouter-stream.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
+
+/**
+ * **How a stream ended**, as one value with one true answer.
+ *
+ * Every caller needs this and, until 2026-09-01, every caller worked it out
+ * again from three signals, a boolean and a string — in the same order, with
+ * the same comment, and with the same mistake in six of the seven. The mistake
+ * is worth stating once because it is what this type exists to make
+ * unwriteable: the guard was
+ *
+ * ```ts
+ * if (!stopped && !end.terminated && finishReason === null) throw …
+ * ```
+ *
+ * and a non-null finish reason can only ever make a conjunction *less* likely
+ * to be true. So no value of `finish_reason` ever failed a stream anywhere,
+ * and the comment beside it described a loosening as though it were a check.
+ *
+ * ## This says what happened. It does not say what to do
+ *
+ * That line is the whole design, and it is not squeamishness — the callers
+ * genuinely disagree, on evidence:
+ *
+ * - `"length"` is fatal to a quiz mark (a half-written mark ticked a question
+ *   off), success-with-a-flag to chat (`truncated`, because throwing away text
+ *   the reader watched arrive is worse), usually caught downstream by the four
+ *   JSON callers when the object fails to parse, and unchecked in `explain`.
+ * - An abandoned stream means keep-and-flag to chat, discard to quiz, keep-if-
+ *   it-parses to the JSON callers.
+ *
+ * A shared classifier that threw on `"length"` would break six callers to fix
+ * one. So this reports, and each caller `switch`es — with a `never` default, so
+ * that a new member of this union is a compile error at every site rather than
+ * a branch somebody forgot.
+ *
+ * ## One per stream, not one per request
+ *
+ * `converse` makes up to four requests in a turn for tool rounds and resets
+ * `end` between them, so this describes **one `sseChunks` run**. Folding a
+ * turn's rounds into a turn's verdict is the caller's, and has to be: a
+ * `"length"` on round two means something different from one on the last round.
+ */
+export type StreamOutcome =
+  /** `[DONE]` arrived, or the model said it had finished. */
+  | { kind: "finished" }
+  /** `"length"` — it ran out of room and stopped mid-sentence. */
+  | { kind: "truncated" }
+  /** `"content_filter"` — the provider stopped itself. */
+  | { kind: "filtered" }
+  /** `"tool_calls"` — it wants a tool run before it can carry on. */
+  | { kind: "wants-tools" }
+  /** `"error"` — the provider failed, and said so in the finish reason. */
+  | { kind: "provider-failed" }
+  /** The caller's own signal fired: the reader left, or asked for something else. */
+  | { kind: "abandoned" }
+  /** Our deadline. */
+  | { kind: "timed-out" }
+  /** Our stall timer — the connection is open and nothing is coming. */
+  | { kind: "went-quiet" }
+  /**
+   * The stream stopped and nothing says why. No `[DONE]`, no finish reason: a
+   * dropped connection, a killed instance. **The case the old guard was aiming
+   * at**, and the only one it could ever actually catch.
+   */
+  | { kind: "unterminated" }
+  /**
+   * A finish reason nobody here has a name for — `end_turn`, `eos`, a capital,
+   * whatever a future gateway sends.
+   *
+   * **A member of its own, and this is the correction that made the union
+   * honest.** The first draft folded an unknown reason into `finished` when the
+   * stream had terminated and `unterminated` when it had not, which reads as
+   * tidy and is not: "an unrecognised stop is a clean one" is a *decision*, with
+   * a cost on each side — accept it and one bad case behaves as before; refuse
+   * it and a provider spelling `stop` differently fails every call it serves, by
+   * throwing away complete replies people have already read. Quiz weighed that
+   * and chose to accept; burying the same choice in the classifier would have
+   * made it every caller's, invisibly, and made quiz's deny-list look like a
+   * coincidence. GPT Sol's review of this plan.
+   *
+   * So the classifier reports the fact — here is a reason, here is whether the
+   * terminator arrived — and each caller decides.
+   */
+  | { kind: "unknown-finish-reason"; reason: string; terminated: boolean };
+
+/**
+ * Classify one finished `sseChunks` run.
+ *
+ * Ours before theirs, deliberately. A deadline or a stall aborts the reader,
+ * which ends the loop cleanly and leaves whatever `finish_reason` had arrived
+ * standing — so asking the provider first would file our own twenty-second
+ * silence as whatever the model last happened to say. `readerAborted` already
+ * encodes that precedence for the reader's signal and is reused rather than
+ * re-derived.
+ */
+export function classifyEnd(
+  end: StreamEnd,
+  signals: { signal: AbortSignal | undefined; deadline: AbortSignal; stalled: AbortSignal },
+): StreamOutcome {
+  const { signal, deadline, stalled } = signals;
+  if (deadline.aborted) return { kind: "timed-out" };
+  if (stalled.aborted) return { kind: "went-quiet" };
+  if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };
+  switch (end.finishReason) {
+    case "length":
+      return { kind: "truncated" };
+    case "content_filter":
+      return { kind: "filtered" };
+    case "tool_calls":
+      return { kind: "wants-tools" };
+    case "error":
+      return { kind: "provider-failed" };
+    case "stop":
+      return { kind: "finished" };
+  }
+  /* A reason we do not have a name for is handed on as a fact, with the
+     terminator beside it, rather than resolved here — see the union member. */
+  if (end.finishReason) {
+    return {
+      kind: "unknown-finish-reason",
+      reason: end.finishReason,
+      terminated: end.terminated,
+    };
+  }
+  /* Nothing said why. The terminator is all there is to go on, and that is the
+     one case the guard this replaces could actually catch. */
+  return end.terminated ? { kind: "finished" } : { kind: "unterminated" };
+}
+
 
 /** Where OpenRouter lives. One string, so nobody has a fifth copy of it. */
 /* **Not exported, since 2026-08-28.** It was, and an exported base is the
@@ -787,6 +917,12 @@ export async function* openRouterStream(
     if (!response.ok || !response.body) await refuse(response);
     /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
     const stream = response.body as ReadableStream<Uint8Array>;
+    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
+       stream.** `converse` runs up to four requests in a turn; it builds a fresh
+       object for each, so nothing depends on this today — which is exactly when
+       to write it, because the next caller to loop will not know it had to. */
+    options.end.finishReason = null;
+    options.end.answered = false;
     for await (const chunk of sseChunks(
       stream,
       options.signal,
@@ -805,6 +941,16 @@ export async function* openRouterStream(
          work in that sentence, and overwriting with each one costs nothing and
          cannot be wrong about which was last. */
       if (chunk.usage) meter.saw(chunk.usage);
+      /* **The finish reason is recorded here, once, for everybody.** It used to
+         be scraped by each of the seven consumers with the same line, and a
+         consumer that forgot simply had `null` for ever — which reads exactly
+         like a provider that never said. `classifyEnd` above is what turns it
+         into a decision, and every caller keeps its own policy on that
+         decision. `answered` likewise: a stream that opened and said nothing is
+         a different failure from one that was cut off. */
+      options.end.answered = true;
+      const reason = chunk.choices?.[0]?.finish_reason;
+      if (reason) options.end.finishReason = reason;
       yield chunk;
     }
     ranToEnd = true;

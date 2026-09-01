@@ -71,13 +71,12 @@ import {
   type ReaderFacingFailure,
   saidNothing,
 } from "./messages.js";
-import { ProviderRefused, openRouterStream } from "./ai-call.js";
+import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import {
   type StreamEnd,
   type Usage,
   explainAbort,
   providerFailedMidAnswer,
-  readerAborted,
   stoppedByReader,
 } from "./openrouter-stream.js";
 import {
@@ -499,52 +498,6 @@ export function gradeWords(reply: string): number {
   return GRADE_WORDS.filter((w) => lower.includes(w)).length;
 }
 
-/**
- * **Does this `finish_reason` mean the reply is NOT whole?** `null` if it is
- * fine; the sentence to fail with if it is not.
- *
- * OpenRouter normalises the field to the OpenAI set — `stop`, `length`,
- * `content_filter`, `tool_calls`, `error` — and the provider's own word for it
- * arrives separately as `native_finish_reason`. Three of those five mean the
- * model was interrupted rather than finished, and both used to be read as
- * evidence that it *had* finished: the check after the loop accepted any
- * non-null reason as a second witness to completion. For `stop` that is right.
- * For `length` it is the exact opposite — the reply hit `MARK_MAX_TOKENS` and
- * stops mid-sentence — and the reader got a truncated mark with the question
- * ticked off and no way to ask again.
- *
- * **A deny-list, not an allow-list**, and that is the one decision here worth
- * defending. Refusing everything but `stop` is the tidier rule and is what
- * "fail closed" would suggest; the cost of being wrong is what settles it.
- * Wrong on a deny-list, some future reason slips through and we are back to
- * today's behaviour for that one case. Wrong on an allow-list, a provider or a
- * gateway that spells its clean stop differently — `end_turn`, `eos`, a capital
- * — fails *every* mark for that model, and it fails them by throwing away a
- * complete reply the reader has already watched arrive. The reason is on the
- * success log line either way, which is where a new spelling would show up.
- *
- * `tool_calls` is not here on purpose: this call sends no tools, so a model
- * asking for one is a provider bug rather than a truncation, and the reply it
- * did write is still a reply. Chat, which does send tools, treats that reason
- * as its own case (`converse.ts`).
- */
-function didNotFinish(finishReason: string | null): ReaderFacingFailure | null {
-  if (finishReason === "length") return MARK_CUT_OFF;
-  if (finishReason === "content_filter") return FILTER_STOPPED_IT;
-  /* **`error` was an oversight and not a decision**, and it is worth naming as
-     such: the paragraph above lists it among the five reasons OpenRouter
-     normalises to, and the first version of this function then walked past it —
-     the same bug this whole function exists to fix, with a different word in
-     it. GPT Sol's second review caught it. Partial text plus `error` plus a
-     terminator was still being filed as a whole mark.
-
-     The same sentence as the `chunk.error` throw in the loop, deliberately:
-     that is a provider failure arriving as data mid-answer and this is the same
-     failure arriving in a field, so telling a reader two different things about
-     one event would be a second copy of a fact rather than a second fact. */
-  if (finishReason === "error") return PROVIDER_FAILED_MID_ANSWER;
-  return null;
-}
 
 /**
  * Mark one answer, a few words at a time.
@@ -629,22 +582,12 @@ export async function* markAnswerStream({
 
   let text = "";
   let used = model;
-  let finishReason: string | null = null;
   /* Local, NOT module-scope: two readers answering two questions at once run
      two of these generators in one process, and a shared accumulator would
      report one reader's token counts against the other's log line. */
   let usage: Usage | undefined;
 
   const end: StreamEnd = { terminated: false };
-  let stopped = false;
-  /* One sentence for the two paths an abandonment can arrive by — a throw from
-     the loop, and a clean end after it — so they cannot come to say different
-     things about the same event. `used` and `text` are read at call time. */
-  const sayAbandoned = () =>
-    line.info(
-      { model: used, ms: since(started), replyChars: text.length },
-      `a quiz mark from ${used} was abandoned`,
-    );
   try {
     for await (const chunk of openRouterStream(
       "quiz-mark",
@@ -657,9 +600,10 @@ export async function* markAnswerStream({
       // failure. It arrives as data, not as a broken connection, so nothing
       // else would notice it.
       if (chunk.error) throw providerFailedMidAnswer();
-      const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
-      const piece = choice?.delta?.content;
+      /* No `finish_reason` scrape here any more: `sseChunks` writes it onto
+         `end` for every caller, and `classifyEnd` below is what reads it. This
+         line was one of seven identical copies. */
+      const piece = chunk.choices?.[0]?.delta?.content;
       if (typeof piece === "string" && piece.length > 0) {
         text += piece;
         yield { type: "delta", text: piece };
@@ -671,10 +615,12 @@ export async function* markAnswerStream({
   } catch (err) {
     if (stoppedByReader(err, signal, deadline, stall.signal)) {
       /* The caller gave up — the reader navigated away, or asked a different
-         question. Not an error, and not logged as one. */
-      stopped = true;
+         question. Not an error, and not logged as one. **Nothing is said or
+         decided here**: this falls through to `classifyEnd`, which reaches
+         `abandoned` from the same signals, so the throwing path and the
+         clean-end path cannot come to say different things about one event.
+         They used to be two branches with a shared helper between them. */
       clearTimeout(stallTimer);
-      sayAbandoned();
     } else if (err instanceof ProviderRefused) {
       /* The status, not the body. OpenRouter's error text is the one place a
          provider might echo part of what we sent back at us, and what we sent
@@ -702,88 +648,117 @@ export async function* markAnswerStream({
     clearTimeout(stallTimer);
   }
 
-  /* An abort can also end the loop *cleanly*, because `sseChunks` cancels the
-     reader on abort and a cancelled read resolves `{ done: true }` rather than
-     throwing. Without this a disconnect gets filed as "the answer stopped
-     arriving before it was finished". src/explain.ts has the longer account. */
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) {
-    stopped = true;
-    sayAbandoned();
-  }
+  /* **How did this stream end?** One question with one true answer, asked of
+     the shared classifier rather than re-derived here from three signals, a
+     boolean and a string. That re-derivation is what this file used to do, in
+     the same order as six other files, with the same broken guard in it —
+     docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
 
-  /* **And an abandoned mark ends here, yielding nothing.**
-     This is where quiz stops mirroring `explainStream`, which sets `stopped`
-     and then runs on to `yield { type: "done" }` with whatever text arrived.
-     That is defensible there — an explanation has a comment row to be written
-     to and no stop button, so a half answer is better than none. A mark has
-     neither: `done` is the single frame that ticks the question answered, and
-     `markAnswer` turns it into an eval's result. A reader who walked away has
-     not been marked, so there is nothing to tick and nothing to return.
-     The route's own frames go nowhere either way — the socket that aborted us
-     is the socket they would be written to — so this is invisible from the
-     client and visible only here. GPT Sol's finding 6 on the built code. */
-  if (stopped) return;
-
-  /* **And our own clocks can end it cleanly too.** When the stall timer fires,
-     `sseChunks` cancels the reader; if that cancel wins the race against the
-     pending read's rejection, the loop exits with no error at all — and the
-     check below would then file a twenty-second silence as "ended without
-     finishing". Both sentences end in "try again", so the reader never notices;
-     what is lost is the log line somebody reads when marks start failing and
-     they want to know whether to blame the network or the provider.
-
-     No `!stopped` on this or the checks below it: the early return above has
-     already dealt with that case, and a guard that can never be false reads as
-     though it could be. */
-  if (deadline.aborted || stall.signal.aborted) {
-    line.error(
-      {
-        model: used,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-        replyChars: text.length,
-      },
-      `stream from ${used} was cut off`,
-    );
-    throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
-  }
-
-  /* **The provider said why it stopped, and it was not "finished".**
-
-     Checked before the terminator and independently of it, because the guard
-     that used to stand here could not fire on a finish reason at all. It read
-     `!end.terminated && finishReason === null`, and a non-null finish reason
-     can only make a conjunction like that *less* likely to be true — so no
-     value of `finish_reason` could ever have failed a mark, whatever the
-     terminator did. The comment beside it described a loosening as though it
-     were a check. (Whether OpenRouter also writes `[DONE]` after a `length`
-     stop is very likely and is *not* claimed here: nobody has captured a real
-     one, and the reasoning above does not need it.)
-
-     `didNotFinish` is the whole rule now. */
-  const cutShort = didNotFinish(finishReason);
-  if (cutShort) {
+     What each ending *means* is still quiz's, and still differs from everybody
+     else's: a truncated mark is fatal here and merely flagged in chat, and an
+     abandoned one yields nothing here where explain keeps the half it has. The
+     classifier reports; this switch decides. */
+  const outcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+  const finishReason = end.finishReason ?? null;
+  const cutOff = (why: string, failure: ReaderFacingFailure): never => {
     line.error(
       { model: used, ms: since(started), replyChars: text.length, finishReason },
-      `${used} stopped before the mark was finished`,
+      `${why} — a quiz mark from ${used}`,
     );
-    throw new Error(cutShort.message);
-  }
+    throw new Error(failure.message);
+  };
 
-  /* **The stream stopped; did it finish?** `[DONE]` is the only clean end an
-     SSE response has, and without this an ordinary EOF looks exactly like one:
-     a connection cut two sentences in would be delivered as a complete mark,
-     with no error anywhere and the question ticked off. A finish reason counts
-     as a second witness only now that the check above has thrown out the
-     reasons that mean the opposite — before that, `finish_reason: "length"`
-     was itself accepted as evidence the reply was whole. */
-  if (!end.terminated && finishReason === null) {
-    line.error(
-      { model: used, ms: since(started), replyChars: text.length },
-      `stream from ${used} ended without finishing`,
-    );
-    throw new Error(ENDED_UNFINISHED.message);
+  switch (outcome.kind) {
+    case "abandoned":
+      /* **An abandoned mark ends here, yielding nothing.** This is where quiz
+         stops mirroring `explainStream`, which keeps whatever text arrived and
+         still yields `done`. That is defensible there — an explanation has a
+         comment row to be written to and no stop button, so half is better than
+         none. A mark has neither: `done` is the single frame that ticks the
+         question answered, and `markAnswer` turns it into an eval's result. A
+         reader who walked away has not been marked. */
+      line.info(
+        { model: used, ms: since(started), replyChars: text.length },
+        `a quiz mark from ${used} was abandoned`,
+      );
+      return;
+
+    case "timed-out":
+    case "went-quiet":
+      /* **Our own clocks can end the loop cleanly too.** When the stall timer
+         fires, `sseChunks` cancels the reader; if that cancel wins the race
+         against the pending read's rejection, the loop exits with no error at
+         all. Without this branch a twenty-second silence is filed as "ended
+         without finishing" — both sentences end in "try again", so the reader
+         never notices, and what is lost is the log line somebody reads when
+         marks start failing and they want to know whether to blame the network
+         or the provider. */
+      line.error(
+        {
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          replyChars: text.length,
+        },
+        `stream from ${used} was cut off`,
+      );
+      throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+
+    case "truncated":
+      /* Ran into `MARK_MAX_TOKENS` and stopped mid-sentence. Fatal here, where
+         chat flags it and carries on: a mark is short by design, so one that
+         hit the ceiling is not a long answer with the tail missing, and the
+         reader would otherwise have a half-sentence with the question ticked
+         off and no way to ask again. */
+      return cutOff("ran out of room", MARK_CUT_OFF);
+
+    case "filtered":
+      return cutOff("the safety filter stopped it", FILTER_STOPPED_IT);
+
+    case "provider-failed":
+      /* The same failure as the `chunk.error` throw in the loop, arriving in a
+         field instead of as data — so the same sentence, deliberately. */
+      return cutOff("the provider gave up", PROVIDER_FAILED_MID_ANSWER);
+
+    case "unterminated":
+      /* `[DONE]` is the only clean end an SSE response has, and without this an
+         ordinary EOF looks exactly like one: a connection cut two sentences in
+         delivered as a complete mark, with no error anywhere and the question
+         ticked off. */
+      return cutOff("it stopped without finishing", ENDED_UNFINISHED);
+
+    case "unknown-finish-reason":
+      /* **A reason nobody here has a name for is accepted as a clean stop, and
+         that is a deny-list on purpose.** Refusing everything but `stop` is the
+         tidier rule and is what "fail closed" would suggest; the cost of being
+         wrong settles it. Wrong this way, some future spelling slips through
+         and that one case behaves as it did before any of this existed. Wrong
+         the other way, a provider or gateway that says `end_turn` fails *every*
+         mark for that model — and fails them by throwing away a complete reply
+         the reader has already watched arrive. The reason is on the success log
+         line below, which is where a new spelling shows up.
+
+         The classifier deliberately does not make this choice for anybody:
+         see `StreamOutcome` in src/ai-call.ts. */
+      break;
+
+    case "wants-tools":
+      /* Accepted, and it is a decision rather than an omission: this request
+         sends no tools, so a model asking for one is a provider oddity rather
+         than a truncation, and the prose it did write is still prose. Chat,
+         which does send tools, treats this as a round to run. */
+      break;
+
+    case "finished":
+      break;
+
+    default: {
+      /* The point of the union. A ninth way for a stream to end becomes a
+         compile error here rather than a branch somebody forgot. */
+      const never: never = outcome;
+      throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+    }
   }
 
   const reply = text.trim();

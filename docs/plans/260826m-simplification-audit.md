@@ -481,7 +481,7 @@ article" that [granularity-zoom.md](../project/granularity-zoom.md) warns about.
 narrow and wide widths, reading and outline mode.
 **Effort** M · **Value** medium · **Risk** medium.
 
-### 3.4 A shared OpenRouter streaming transport — **scheduled; the first draft was wrong to decline**
+### 3.4 A shared OpenRouter streaming transport — **classification done 2026-09-01; transport still scheduled**
 The first draft kept `converse` and `explain` apart because a comment said to. **0.1 is the evidence
 that the comment is now documenting drift rather than protecting clarity**: the same clean-cancellation
 race is classified correctly in one path and wrongly in the other, and `explain`'s comment points at
@@ -512,6 +512,14 @@ the two verbs. Search belongs in this too.
 > union and each caller `switch`es on it with a `never` default — and leave the transport half
 > here. Classification is shared because *what happened* has one true answer; policy stays in the
 > caller because *what to do* legitimately differs.
+>
+> **Done, that quarter of it** —
+> [260901g-one-stream-end-classification-shared-by-five-callers.md](260901g-one-stream-end-classification-shared-by-five-callers.md).
+> `StreamOutcome` and `classifyEnd` live in `src/ai-call.ts`; `openRouterStream` records the finish
+> reason once for everybody; `quiz-mark.ts` is the first caller on it and lost its own copy in the
+> process. Six callers still hold theirs, and each is a small independent commit whenever its author
+> is free — the three referee modules were being written the same afternoon, which is why they were
+> left. **The transport half of this section is untouched** and still says what it said.
 
 ### 3.5 `summarise`'s concurrency pool — **do not change**
 The first draft suggested replacing the hand-rolled 20-line ordered pool with `p-queue`. Sol is
