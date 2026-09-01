@@ -260,6 +260,22 @@ not**, in the one command anybody runs after losing something. The refusal lives
 checked in two. [silent-success.md](../reusable/silent-success.md) ·
 [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md).
 
+**A table the exporter has never heard of behaves exactly like one it has nothing to say about**, and
+that is the other way this backup can look complete and not be. `db:export` reads a hand-written list
+of tables, so `referee_criteria` — added on 2026-08-31 — was dropped silently for a day, with the run
+reporting success and listing the files it *did* write. Nothing could have gone red: a file that is
+never written is a file the round-trip test never misses.
+
+So `ARTICLE_TABLE_COVERAGE` in [`src/store/export.ts`](../../src/store/export.ts) names every table
+with an `article_id` and says, for each, which file it goes into or **in words** why a rollback of
+`data/` does not need it.
+[`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) derives
+that list of tables *from the schema* rather than restating it, so the next table cannot arrive
+quietly either — it fails by name, with the sentence saying what to do. Note the limit: the guard
+sees a missing **table**, not a missing **column**. A new column on an exported table is still a
+hand-written line in `exportArticle`, which is how `tools`, `stance`, `shelf.purpose` and
+`comments.valence` each went missing once.
+
 | File | What it is |
 |---|---|
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |

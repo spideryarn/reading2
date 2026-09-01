@@ -73,6 +73,15 @@ function toComment(row: typeof commentsTable.$inferSelect): Comment {
     ...(row.body === null ? {} : { body: row.body }),
     ...(row.updatedAt === null ? {} : { updatedAt: row.updatedAt.toISOString() }),
     ...(row.threadId === null ? {} : { threadId: row.threadId }),
+    /* **The referee's own mark, and the read that has to survive a minus sign.**
+       Absent rather than null, like everything above. `valence` is copied
+       straight off the column — no clamp, no `??`, no coalesce to zero: a `0`
+       arriving here means the referee placed the passage at neither end, and a
+       −80 means they placed it at the far one. Anything that turned the second
+       into the first would read as "no strong feeling" and nothing would say
+       so. See `Comment.valence` in src/types.ts. */
+    ...(row.criterionId === null ? {} : { criterionId: row.criterionId }),
+    ...(row.valence === null ? {} : { valence: row.valence }),
     status: row.status as Comment["status"],
     ...(row.answer === null ? {} : { answer: row.answer }),
     ...(row.citations === null ? {} : { citations: row.citations }),
@@ -166,6 +175,12 @@ export const pgCommentStore: CommentStore = {
       quote: input.quote,
       start: input.start,
       body: input.body ?? null,
+      /* The referee's own mark. Null when there is none, so the row says
+         "ordinary reading note" rather than leaving it to a default — and
+         `comments_valence_needs_criterion` refuses the half-made pair the route
+         has already refused. */
+      criterionId: input.criterionId ?? null,
+      valence: input.valence ?? null,
       status: "none",
       answer: null,
       citations: null,
@@ -214,7 +229,14 @@ export const pgCommentStore: CommentStore = {
         stored.blockId === input.blockId &&
         stored.quote === input.quote &&
         stored.start === input.start &&
-        stored.body === input.body;
+        stored.body === input.body &&
+        /* The placement is part of what "the same Save" means, for the reason
+           the body is: a second POST under a stored id carrying a *different*
+           valence is a re-score, not a retry, and `create` overwriting it would
+           delete a judgement the referee already made. `sameMark` in
+           src/comments.ts is the filesystem half of this. */
+        stored.criterionId === input.criterionId &&
+        stored.valence === input.valence;
       if (!same) throw new CommentIdTaken(supplied);
       logger.info(
         { slug, id: stored.id, blockId: stored.blockId, repeat: true },

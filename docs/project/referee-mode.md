@@ -19,10 +19,14 @@ a test file:
   fixture corpus and passing tests, and **no production caller**. It does not run before a model,
   its findings cannot reach a referee, and its `coverage` cannot stop a panel saying "nothing
   found". Rule 5 below describes a defence that is not yet in the path.
-- The `comments.criterionId` and `comments.valence` columns are migrated and tested, and the
-  `Comment` type, the route and the Postgres reader and writer all ignore them — so the referee's
-  *own* judgement, which is the anchoring antidote in the design, cannot yet be recorded through the
-  real API.
+- The `comments.criterionId` and `comments.valence` columns **now cross the application boundary**,
+  as of 2026-09-01: `Comment` and `NewComment` carry them, `POST /api/comments/:slug` accepts and
+  validates them, and both stores write and read them. So the referee's *own* judgement — the
+  anchoring antidote in the design — can be recorded through the real API, and a **negative** one
+  survives it (`tests/comment-referee-mark.test.ts`). What is still missing is the **UI**: nothing
+  on screen offers a way to place a passage, and there is no route for *editing* a placement once
+  made — a second `create` under the same id carrying a different valence is a 409, not a re-score.
+  Sol's finding 5, and see § *The referee's own mark* below.
 
 **Plan**: [260831an-referee-mode-for-peer-reviewers.md](../plans/260831an-referee-mode-for-peer-reviewers.md).
 **Cross-family review**: [260831an-referee-mode-review-sol.md](../plans/260831an-referee-mode-review-sol.md)
@@ -104,10 +108,27 @@ points of each other), and the four text carriers stay fully legible. `DEFAULT_D
 [`src/referee-criteria.ts`](../../src/referee-criteria.ts) writes down the condition under which
 this default has to move to `br`: if the panel ever stops printing the direction in words.
 
+#### The referee's own mark <a id="the-referees-own-mark"></a>
+
 The referee can place a passage on the same scale themselves — a comment's own `valence` — and the
 two are never averaged, because the interesting thing is the *gap* between the model's judgement and
-the referee's own, not an agreement neither of them asked for. Not built: the route, the call, the
-marks, and the panel that would show any of this. The table and its validators are.
+the referee's own, not an agreement neither of them asked for (`valenceGap`,
+[`src/referee-criteria.ts`](../../src/referee-criteria.ts)). It also cannot be used to avoid
+reading: you cannot appear in a disagreement list without having placed the passage yourself first.
+
+**Their mark is a comment**, not a table of its own — their words, anchored to a passage, in the
+store that already has the anchoring discipline, the API and the export. That is also how a review
+comment is told from a reading note: a comment with a `criterionId` is a review comment, one without
+is a reading note, and nothing separate has to be kept in step.
+[comments.md § the referee's own placement](comments.md#the-referees-own-placement) has the wire
+shape and what the route refuses.
+
+**Built, as of 2026-09-01**: `Comment.criterionId` and `Comment.valence`, the create input, the
+validation on `POST /api/comments/:slug`, and both stores — so a **negative** placement survives the
+real API rather than arriving as `0`. `db:export` carries it, and carries the criteria themselves.
+**Not built**: any UI that offers to make one, and any route that *edits* one — a second `create`
+under a stored id carrying a different valence is a 409 rather than a re-score, deliberately, so
+that nothing can quietly overwrite a judgement already made.
 
 ### 2. Claims — where the paper addresses its own claims
 

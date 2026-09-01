@@ -133,6 +133,24 @@ export interface NewComment {
    * it collides with a *different* comment, and re-minted here if absent.
    */
   id?: string;
+  /**
+   * **The referee's mark on a passage, when there is one** — which of their
+   * criteria this note answers, and where they placed the passage on it.
+   *
+   * Absent on an ordinary reading note. Both are the reader's own, already
+   * checked by the route: `criterionId` names a criterion this reader has on
+   * this article, and `valence` has been through `markProblem`
+   * (src/referee-criteria.ts) rather than through anything that clamps a
+   * confidence. **Never `""` and never a fractional or out-of-range number** —
+   * the route refuses those rather than passing them down, so the two stores
+   * cannot disagree about what a placement is.
+   *
+   * A `valence` without a `criterionId` is refused for the same reason
+   * `comments_valence_needs_criterion` refuses it: a placement with nothing to
+   * place it on is a number against nothing.
+   */
+  criterionId?: string;
+  valence?: number;
 }
 
 /** Thrown when a client-minted id is already taken by a different comment. */
@@ -179,6 +197,19 @@ function sameAnchor(a: Comment, b: NewComment): boolean {
 }
 
 /**
+ * Is this the same referee mark? Part of what "the same Save arriving twice"
+ * means, for the same reason the body is.
+ *
+ * A second POST under a stored id carrying a **different** placement is not a
+ * retry — it is a re-score, and letting it through `create` would silently
+ * overwrite a judgement the referee already made. It gets `CommentIdTaken` and
+ * a 409, exactly as a changed body does.
+ */
+function sameMark(a: Comment, b: NewComment): boolean {
+  return (a.criterionId ?? undefined) === b.criterionId && (a.valence ?? undefined) === b.valence;
+}
+
+/**
  * Store a free comment — the reader's mark on a passage. **No model call, ever.**
  *
  * `status: "none"` says exactly that, and it is what keeps a bookmark out of
@@ -220,7 +251,8 @@ export async function createComment(
       if (
         existing.status !== "none" ||
         !sameAnchor(existing, input) ||
-        (existing.body ?? undefined) !== input.body
+        (existing.body ?? undefined) !== input.body ||
+        !sameMark(existing, input)
       ) {
         throw new CommentIdTaken(existing.id);
       }
@@ -239,6 +271,12 @@ export async function createComment(
       start: input.start,
       createdAt: now(),
       ...(input.body === undefined ? {} : { body: input.body }),
+      /* The referee's own mark, absent when there is none. Written here rather
+         than through a later patch because a placement is part of what the
+         referee saved, not a fact about a model call — nothing in `AnswerPatch`
+         may reach it. */
+      ...(input.criterionId === undefined ? {} : { criterionId: input.criterionId }),
+      ...(input.valence === undefined ? {} : { valence: input.valence }),
       status: "none",
     };
     return [...comments, stored];
@@ -289,6 +327,13 @@ export async function beginAnswer(slug: string, id: string): Promise<Comment> {
       ...(existing.body === undefined ? {} : { body: existing.body }),
       ...(existing.updatedAt === undefined ? {} : { updatedAt: existing.updatedAt }),
       ...(existing.threadId === undefined ? {} : { threadId: existing.threadId }),
+      /* **Carried, like everything else the reader owns.** This row is built
+         from named fields rather than spread, which is what keeps the answer
+         path away from the anchor — and it is also how a new field comes to be
+         quietly dropped by a retry. A referee's placement is theirs and has
+         nothing to do with the model call being replaced. */
+      ...(existing.criterionId === undefined ? {} : { criterionId: existing.criterionId }),
+      ...(existing.valence === undefined ? {} : { valence: existing.valence }),
       status: "pending",
     };
     return comments.map((c) => (c.id === id ? stored : c));

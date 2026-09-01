@@ -29,7 +29,12 @@ import { and, eq } from "drizzle-orm";
 
 import { CommentIdTaken, NotAnExplanation } from "../src/comments.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, blockIdentities, comments as commentsTable } from "../src/db/schema.js";
+import {
+  articles,
+  blockIdentities,
+  comments as commentsTable,
+  refereeCriteria,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
@@ -42,6 +47,15 @@ const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c0";
 const BLOCK_ID = "spya-aaa222";
 /** A block id that exists as an identity but is in no revision — see the last test. */
 const ORPHAN_BLOCK_ID = "spya-bbb333";
+/**
+ * A `diverging` criterion for the referee-placement cases below.
+ *
+ * A row rather than a bare string because `comments_criterion_fk` points at
+ * `referee_criteria`: a placement naming a criterion that is not there is
+ * refused by the database, which is the constraint working and not a test
+ * fixture to route around.
+ */
+const CRITERION_ID = "spya-ccc555";
 
 const { reachable } = await pgReady({
   suite: "tests/store-comments.test.ts",
@@ -66,6 +80,22 @@ when("the Postgres comment store", () => {
       ])
       .onConflictDoNothing();
     await db.delete(commentsTable).where(eq(commentsTable.articleId, ARTICLE_ID));
+    /* Comments first, then the criterion: `comments_criterion_fk` is `no
+       action`, so a criterion with comments still pointing at it refuses to be
+       deleted — which is the behaviour tests/db-referee-criteria.test.ts pins,
+       and which makes the order here load-bearing rather than stylistic. */
+    await db.delete(refereeCriteria).where(eq(refereeCriteria.articleId, ARTICLE_ID));
+    await db.insert(refereeCriteria).values({
+      articleId: ARTICLE_ID,
+      id: CRITERION_ID,
+      ownerId: currentOwnerId(),
+      kind: "diverging",
+      criterion: "Are the controls adequate?",
+      poleAgainst: "the controls are inadequate",
+      poleFavour: "the controls are adequate",
+      scale: "rg",
+      status: "done",
+    });
   });
 
   afterAll(async () => {
@@ -74,6 +104,8 @@ when("the Postgres comment store", () => {
     // a cleanup that depends on a cascade is a cleanup that stops working the
     // day somebody changes the cascade.
     await db.delete(commentsTable).where(eq(commentsTable.articleId, ARTICLE_ID));
+    // After the comments, for the `no action` reason given in `beforeAll`.
+    await db.delete(refereeCriteria).where(eq(refereeCriteria.articleId, ARTICLE_ID));
     await db.delete(blockIdentities).where(eq(blockIdentities.articleId, ARTICLE_ID));
     await db.delete(articles).where(eq(articles.id, ARTICLE_ID));
     await closeDb();
@@ -112,6 +144,109 @@ when("the Postgres comment store", () => {
     // column mapping on the read path is wrong.
     const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd234");
     expect(read?.body).toBe("this is the bit I doubt");
+  });
+
+  it("carries the referee's own placement, minus sign and all", async () => {
+    /* **The one assertion the Referee placement feature is for.**
+       `SearchHit.confidence` is a 0–100 match strength whose validator clamps
+       negatives to zero, so a placement that travelled any confidence-shaped
+       path arrives as `0` — "no strong feeling" — with nothing erroring. This
+       is the read-back that would notice.
+
+       It goes through `create` and then `load` rather than through SQL, which
+       is the difference between this and tests/db-referee-criteria.test.ts:
+       that one inserts `comments.valence` directly and so proves the CHECK
+       constraint and nothing at all about the store. GPT Sol's finding 5. */
+    const stored = await pgCommentStore.create(SLUG, {
+      id: "spya-bqd456",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      body: "the randomisation is not described anywhere",
+      criterionId: CRITERION_ID,
+      valence: -80,
+    });
+    expect(stored.valence).toBe(-80);
+    expect(stored.criterionId).toBe(CRITERION_ID);
+
+    // Off a fresh read, because `toComment` is the seam — a `returning()` row
+    // can be right while the column mapping on the read path is wrong.
+    const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd456");
+    expect(read?.valence).toBe(-80);
+    expect(read?.criterionId).toBe(CRITERION_ID);
+  });
+
+  it("keeps a placement of zero, and leaves an ordinary note with neither field", async () => {
+    /* Zero is a real placement — "counts neither way" — so it must survive as a
+       number rather than become an absent key, and an ordinary reading note
+       must carry no key at all rather than a null. `exactOptionalPropertyTypes`
+       makes those two different shapes, and tests/store-parity.test.ts compares
+       the two stores structurally. */
+    const placed = await pgCommentStore.create(SLUG, {
+      id: "spya-bqd567",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      criterionId: CRITERION_ID,
+      valence: 0,
+    });
+    expect(placed.valence).toBe(0);
+
+    const note = await pgCommentStore.create(SLUG, {
+      id: "spya-bqd678",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+    });
+    expect("criterionId" in note).toBe(false);
+    expect("valence" in note).toBe(false);
+  });
+
+  it("refuses a re-score under a stored id rather than overwriting it", async () => {
+    /* The same rule as a changed body: a second create carrying a *different*
+       placement is a re-score, not a retry, and `do update` here would delete a
+       judgement the referee already made. */
+    await pgCommentStore.create(SLUG, {
+      id: "spya-bqd789",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      criterionId: CRITERION_ID,
+      valence: -80,
+    });
+    await expect(
+      pgCommentStore.create(SLUG, {
+        id: "spya-bqd789",
+        blockId: BLOCK_ID,
+        quote: "a stretch of prose",
+        start: 12,
+        criterionId: CRITERION_ID,
+        valence: 40,
+      }),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
+    const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd789");
+    expect(read?.valence).toBe(-80);
+  });
+
+  it("carries the placement through a retry of the model call", async () => {
+    /* `beginAnswer` rebuilds the row from named fields in the filesystem store
+       and names columns in the `set` here, which is exactly how a new field
+       comes to be quietly dropped by a retry — `tools` and `stance` both went
+       missing from the chat export that way. The referee's placement is theirs
+       and has nothing to do with the attempt being replaced. */
+    await pgCommentStore.create(SLUG, {
+      id: "spya-bqd890",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      criterionId: CRITERION_ID,
+      valence: -80,
+    });
+    await pgCommentStore.patch(SLUG, "spya-bqd890", { status: "done", answer: "an explanation" });
+    const again = await pgCommentStore.beginAnswer(SLUG, "spya-bqd890");
+    expect(again.status).toBe("pending");
+    expect(again.valence).toBe(-80);
+    expect(again.criterionId).toBe(CRITERION_ID);
   });
 
   it("edits the body, and clearing it leaves the mark", async () => {

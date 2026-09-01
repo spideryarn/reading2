@@ -28,12 +28,45 @@ Three independent properties, and a comment may have any combination of them:
    the mark      always. blockId + quote + start, onto the permanent id spine.
    the words     optional — `body`. Nothing written is a bare bookmark.
    the answer    only on one made before 2026-08-28, or on a chat it started.
+   the placement optional — `criterionId` + `valence`, and only in Referee mode.
 ```
 
 `status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
 carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
 `sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer
 that never arrived, and the sweep needed no change at all to leave it alone.
+
+### The referee's own placement <a id="the-referees-own-placement"></a>
+
+**A comment with a `criterionId` is a review comment; one without is a reading note.** That is the
+whole distinction, and it falls out of the data rather than being a switch nothing keeps in step.
+The referee's mark on a passage *is* a comment, because a comment is already words anchored to a
+passage with an id spine, an API and an export under it —
+[referee-mode.md § the referee's own mark](referee-mode.md#the-referees-own-mark).
+
+`valence` is their own placement on that criterion's scale: **−100…+100, signed, integer**, and `0`
+is a real answer meaning "counts neither way". It is optional on top of `criterionId` — writing a
+sentence about a criterion without scoring it is the ordinary case — and `criterionId` is required
+under it, because a number with nothing to place it on is a number against nothing.
+
+Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/routes.ts)):
+
+- **A criterion that is not yours is refused, not stored.** `criterionId` comes off a request, so on
+  its own it names any string; it is checked against `refereeCriteriaStore.load(slug)`, which is
+  scoped to the article *and* the requesting owner.
+- **An out-of-range valence is a 400, never a clamp.** This is the one rule the feature exists for.
+  `SearchHit.confidence` is a 0–100 match strength whose validator clamps negatives to zero, so a
+  placement that travelled anything confidence-shaped arrives as `0` — *"no strong feeling"* — with
+  nothing erroring and the referee shown the opposite of what they said. So valence has its own
+  clamp (`clampValence`) and its own validator (`markProblem`), both in
+  [`src/referee-criteria.ts`](../../src/referee-criteria.ts), and the route uses neither of the
+  confidence ones. `tests/comment-referee-mark.test.ts` puts a −80 in through the real route and
+  reads it back off the store.
+
+There is **no operation that edits a placement**. A second `create` under a stored id carrying a
+different valence is a 409, exactly as a changed body is: a re-score is not a retry, and letting
+`create` mean both would silently overwrite a judgement the referee already made. When editing is
+wanted it gets an operation of its own, named, like the other four.
 
 ### The four operations, and why there are four
 
@@ -45,7 +78,7 @@ plan; it is the reason the store contract now names who may write what.
 
 | operation | writes | refuses |
 |---|---|---|
-| `create` | the anchor, `body`, `status: "none"` | a stored id whose anchor or body differs — **409**, never an overwrite |
+| `create` | the anchor, `body`, the placement, `status: "none"` | a stored id whose anchor, body **or placement** differs — **409**, never an overwrite |
 | `beginAnswer` | the answer fields only | anything not `done` or `error` — a bookmark was never a question, and a `pending` row already has an answer coming |
 | `patchBody` | `body`, `updatedAt` | — |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |

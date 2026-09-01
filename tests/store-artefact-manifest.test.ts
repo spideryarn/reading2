@@ -198,6 +198,18 @@ const HOMES: Record<string, string> = {
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",
+  /* `drizzle/0042_referee_criteria.sql`. `results` stays JSONB for the reason
+     `search_runs.hits` does — one model call's output, replaced together and
+     never edited a row at a time.
+
+     **Deliberately not in `ARTEFACTS` in tests/store-roundtrip.test.ts**, unlike
+     everything else on this list: no article in the committed corpus carries a
+     criterion, and an artefact no fixture has makes that suite's `preserves %s
+     exactly` row assert only that the export invented nothing — which is
+     exactly the hole its own "has at least one article carrying each artefact"
+     test exists to catch. The export is covered instead by
+     tests/store-export-referee.test.ts, which makes the rows it needs. */
+  "referee-criteria.json": "referee_criteria (results stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
