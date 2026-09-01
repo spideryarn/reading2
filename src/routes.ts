@@ -21,6 +21,7 @@
  *                                 → { profile, experimentalSince }, both always
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
+ *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
@@ -179,6 +180,11 @@ import { isStorableColour } from "./searches.js";
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
 import { CONTENT_TYPE } from "./store/blobs.js";
+/* The download's two halves: the zip itself, and the one error a route has to
+   turn into a 404 rather than let travel to the catch-all as a 500. Both come
+   straight from the store, so this file adds no data model of its own. */
+import { articleBundle } from "./store/export-bundle.js";
+import { ArticleNotFound } from "./store/article-rows.js";
 import {
   adminStore,
   commentStore,
@@ -488,6 +494,77 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      number whenever both exist, and the one that is true when they are not. */
   res.setHeader("Content-Length", String(source.bytes.byteLength));
   res.end(Buffer.from(source.bytes));
+}
+
+/**
+ * **One article's data as a zip the reader downloads.**
+ *
+ * The bundle is built in [`src/store/export-bundle.ts`](store/export-bundle.ts)
+ * and this function is only the HTTP half of it: a status, four headers and the
+ * bytes. Two decisions live here rather than there, both because they are about
+ * a response and not about a zip.
+ *
+ * **Ownership is not re-checked here, deliberately.** `articleBundle` →
+ * `readArticleRows` predicates on `ownedSlug(slug)`, which is slug *and* the
+ * current request owner in one `where`, so there is no window in which this
+ * route holds an article it may not have. A second check written here would be
+ * a second thing to get wrong, and `sendSource`'s belt-and-braces pair exists
+ * for a reason that does not apply: that route reads a bucket object through a
+ * store half of which has no owner column at all.
+ *
+ * What *does* have to happen here is the translation. `ArticleNotFound` is a
+ * plain throw as far as this file's status plumbing is concerned, and an
+ * untranslated one is a **500** — telling the reader the server is broken when
+ * the honest answer is that, as far as they can see, there is no such article.
+ * `httpError` is how every other route in this file says so.
+ *
+ * **`attachment`, not `inline`** — the opposite of `sendSource`'s answer, and
+ * the reason `contentDisposition` stopped defaulting. A zip has nothing to
+ * display, and the filename only survives the trip if the header carries it.
+ */
+async function sendExport(res: ServerResponse, slug: string): Promise<void> {
+  const bundle = await articleBundle(slug).catch((err: unknown) => {
+    /* Not this reader's article, or one with no current revision — the two are
+       deliberately one answer, because saying which would confirm that a slug
+       they cannot see exists. src/store/article-rows.ts. */
+    if (err instanceof ArticleNotFound) throw httpError(404, "No such article.");
+    throw err;
+  });
+
+  /* **Assembled, and too big to send.** A buffered Vercel response tops out at
+     4.5 MB and stored HTML artefacts may be 32 MiB, so this is a real outcome
+     rather than a defensive line — and the platform's own answer to it is a
+     truncated download, which is worse than a refusal because it looks like a
+     file. `overCap` is the flag `overBundleCap` set, read rather than
+     recomputed: two `>` in two files is how one of them ends up `>=`.
+
+     The prose is the reader's, not ours (docs/project/copy.md): it says what
+     happened, and that retrying is not the way out. Streaming is the named fix
+     if this ever fires. */
+  if (bundle.overCap) {
+    throw httpError(
+      413,
+      "This article is too big to download in one file. That is a limit on our side, " +
+        "not something you did, and trying again will not help — tell us about it and " +
+        "we will raise it.",
+    );
+  }
+
+  res.statusCode = 200;
+  /* A literal, and not a `CONTENT_TYPE` entry: that record is keyed by
+     `StoredKind` — the kinds the blob store holds — and a zip we assemble per
+     request is never stored, so widening it would put a type in the bucket's
+     vocabulary that nothing there can produce. */
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", contentDisposition(`${slug}.zip`, "attachment"));
+  /* A zip served from our own origin, holding the reader's own prose. `nosniff`
+     for the same reason `sendSource` sets it: the one place a wrong content
+     type becomes script. */
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  /* The bytes actually being written. `bundle.byteLength` is the same number,
+     and this is the one that stays true if it ever is not. */
+  res.setHeader("Content-Length", String(bundle.bytes.byteLength));
+  res.end(Buffer.from(bundle.bytes));
 }
 
 /** The two things a `Content-Disposition` can ask a browser to do with a file. */
@@ -5624,6 +5701,13 @@ export async function serveAuthenticatedApi(
      and then Drift pays for one article, not two. */
   const projection = /^\/api\/projection\/([\w.%-]+)$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
+  /* **Everything Spideryarn holds for one article, as a zip.** Its own
+     namespace rather than `/api/article/:slug/export`, because it is not a
+     representation of the article payload — it is a snapshot across ten tables
+     and two artefact columns, and the article route's response type is a thing
+     the client parses as JSON. `sendExport` has the rest.
+     docs/plans/260901h-export-article-data.md. */
+  const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(path);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Answering is its own sub-path rather than a field on the POST, because it
@@ -5851,6 +5935,15 @@ export async function serveAuthenticatedApi(
     }
     if (source && req.method === "GET") {
       await sendSource(res, slugPart(source, 1));
+      return;
+    }
+    /* `slugPart`, not `part` — the pattern above allows `%` and `.` and `part`
+       percent-decodes, so `..%2F..%2F…` would arrive at the store as a path.
+       Nothing here joins a slug onto a filesystem path, but the rule is that
+       the check goes on the capture rather than on what the capture happens to
+       reach today. See the note above `slugPart`. */
+    if (exportBundle && req.method === "GET") {
+      await sendExport(res, slugPart(exportBundle, 1));
       return;
     }
     if (metadata && req.method === "GET") {

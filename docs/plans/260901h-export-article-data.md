@@ -199,15 +199,40 @@ Ordered as the review recommended: the data contract first, docs before the butt
       "skip when equal" rule, because an absent file meaning *identical* is indistinguishable from
       one meaning *missing*.
 
-**Stage D — the route.** `GET /api/export/:slug`.
-- [ ] `slugPart`, not `part`. `contentDisposition(name, "attachment")` after the refactor above,
-      `application/zip`, `nosniff`, `Content-Length`.
-- [ ] Tests: owner downloads a valid zip; unauthenticated 401; **another owner 404** (with a
-      positive control — the test must be seen going red without the filter, or it is not evidence);
-      public-namespace 404; traversal and bad encoding 400; oversize 413.
+**Stage D — the route.** ✅ **Done.** `GET /api/export/:slug`, `sendExport` in
+[`src/routes.ts`](../../src/routes.ts), modelled on `sendSource`.
+- [x] `slugPart`, `application/zip`, `contentDisposition(…, "attachment")`, `nosniff`,
+      `Content-Length`. `Content-Type` is a literal, not a `CONTENT_TYPE` entry — that record is
+      keyed by `StoredKind` and a per-request zip is never stored.
+- [x] **No second ownership check, deliberately.** `readArticleRows` predicates on `ownedSlug()` —
+      slug and owner in one `where` — so there is no window where the route holds an article it may
+      not have. `sendSource`'s belt-and-braces pair exists for a reason that does not apply here.
+- [x] `ArticleNotFound` → 404, which was GPT Sol's flagged 500. Not-this-reader's and
+      no-current-revision are deliberately **one** answer, so the response cannot confirm that a
+      slug they cannot see exists.
+- [x] Over cap → 413 reading *"This article is too big to download in one file. That is a limit on
+      our side, not something you did, and trying again will not help…"* — reads `overCap` rather
+      than recomputing, because two `>` in two files is how one of them ends up `>=`. The platform's
+      own answer is a truncated download, which is worse than a refusal because it looks like a file.
+- [x] 10 tests. **The owner-isolation control was watched going red**: with the owner clause mocked
+      away, the stranger got the zip (`expected 200 to be 404`) and the other nine stayed green. The
+      404-translation and 413 branches were each proven live the same way, and `routes.ts` verified
+      byte-identical afterwards. The mock is recorded in the test's header, since it is not a control
+      that can safely live in the suite.
 
-**Stage E — docs.** `docs/project/export.md`: the format, the omissions and why, the relationship to
-`db:export`. Owned by [architecture.md](../project/architecture.md); `tests/doc-links.test.ts` green.
+**Stage E — docs.** ✅ **Done.** [`docs/project/export.md`](../project/export.md), 124 lines.
+- [x] Most of its length goes on why there are two exporters and why they cannot be one — the thing
+      a future reader would otherwise reverse-engineer. Also records why Sol's synthesized middle
+      model was turned down, and says plainly that the route and button are not built yet.
+- [x] `database.md`'s pointer to `ARTICLE_TABLE_COVERAGE` was stale the moment the record moved, and
+      its "why a rollback of `data/` does not need it" framing was wrong once it answered per
+      projection. Both fixed.
+- [x] Ownership is derived from the `↳` list in `AGENTS.md`, not from `architecture.md` — so the
+      orphan check could not have gone green on an `architecture.md` edit alone. Both got a line.
+      These are **signposts**, which `edit-important-docs.md` explicitly exempts from the approval
+      process (Greg, 2026-08-31: *"you don't need explicit authorisation just for adding minimal
+      signposts like these"*), so no approval was needed and none was sought.
+- [x] `doc-links` 8/8, and its orphan check watched going red against a throwaway doc first.
 
 **Stage F — the button.** `ExportSection` in `Metadata.tsx`, before "Delete this article".
 - [ ] Inline card button in the `DeleteArticle` style, not `IconButton`; a Lucide icon that is not
