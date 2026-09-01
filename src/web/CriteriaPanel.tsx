@@ -53,8 +53,10 @@
  * (`comments.criterion_id` + `comments.valence`, drizzle/0043), made from a
  * prose selection and never from this panel (src/web/PlaceOnCriterion.tsx says
  * why at length). Since 2026-09-01 this panel reads it back in two places:
- * `RefereeGap`, the second line on a row they both reached, and `Misses`, the
- * placements the model never returned.
+ * `RefereeGap`, the second line on a row they both reached, and `Yours`, the
+ * sub-lists of placements that are not beside a model result — the ones the
+ * model never returned, and the ones in a paragraph where block-level matching
+ * cannot say which passage is which (`pairPlacements`).
  *
  * **Two valences, never one.** Nothing here averages them, reconciles them,
  * splits the difference or prints a single number. The referee's line comes
@@ -536,26 +538,85 @@ function placementsOn(comments: readonly Comment[], criterionId: string): Placem
 }
 
 /**
- * **Matching is on criterion and block, and nothing finer.**
+ * Where each of the referee's placements goes on screen.
+ *
+ * Three homes and not two, and the third is the whole point of this function —
+ * see `pairPlacements`.
+ */
+interface Pairing {
+  /**
+   * The one placement that may be drawn beside the one model result on a block.
+   * A block is in here only when the pairing is unambiguous.
+   */
+  paired: Map<BlockId, Placement>;
+  /**
+   * Placements on a block the model *did* answer on, where which passage
+   * answers which is not decidable.
+   */
+  unpaired: Placement[];
+  /** Placements on a block the model returned nothing for. */
+  missed: Placement[];
+}
+
+/**
+ * **Matching is on criterion and block, and nothing finer — so it pairs only
+ * where a block holds one of each.**
  *
  * A model result and a referee's comment both anchor to a `blockId`, and the
  * comment additionally knows the offset of the words it was made on. Matching
  * on the overlap of the two spans would be more precise and is **deferred**
  * until same-block-different-passage is shown to be common: a paragraph is the
- * unit a referee argues about, two placements in one paragraph on one criterion
- * is not a shape anyone has produced yet, and the offsets on the two sides come
- * from different things (the model quotes, the referee selects) so an overlap
- * test would need `resolveCriterion`'s span arithmetic to mean anything.
+ * unit a referee argues about, and the offsets on the two sides come from
+ * different things (the model quotes, the referee selects) so an overlap test
+ * would need `resolveCriterion`'s span arithmetic to mean anything.
  *
- * Where the referee has placed the same block twice on one criterion, the first
- * wins and the rest fall into the misses list, which is visible rather than
- * silent — they are still on screen, under a heading that says the model did
- * not turn them up.
+ * What is *not* deferred is being honest about what block-level matching cannot
+ * decide. This used to keep the first placement on each block and hand it to
+ * every model result on that block, and send the rest to the misses list. Both
+ * halves of that were false statements about the referee's work, and GPT Sol's
+ * finding 4 on 2026-09-01 named them:
+ *
+ * - **Reusing one placement.** Two model results in one paragraph both drew the
+ *   same *"You: leans underpowered · −50"*, as though the referee had placed
+ *   each of the two passages. They placed one.
+ * - **Calling the leftovers misses.** A second placement in a paragraph the
+ *   model *had* answered on landed under *"Yours, that the model did not turn
+ *   up"* — a heading that is simply untrue there, and untrue in words rather
+ *   than in a number, which is the worse way to be wrong.
+ *
+ * So: one result and one placement on a block pair up; anything else on a block
+ * the model answered goes to `unpaired`, which says on screen that it is more
+ * than one passage and the panel cannot say which is which. Nothing is dropped
+ * and nothing is duplicated — every placement appears exactly once, in exactly
+ * one of the three.
+ *
+ * The alternative that was passed over is **pairing one-to-one in order**,
+ * first placement to first result. It is cheap and it invents an
+ * attribution: the ordering of the model's results is its own ranking and the
+ * referee's comments are in the order they were written, so the pairs would be
+ * an artefact of two unrelated sort orders, printed with the same confidence as
+ * a real match. Ambiguity that says it is ambiguous is the smaller lie, and it
+ * is the shape that stops being needed the day span-overlap matching lands.
  */
-function placementByBlock(placements: readonly Placement[]): Map<BlockId, Placement> {
-  const out = new Map<BlockId, Placement>();
-  for (const p of placements) if (!out.has(p.blockId)) out.set(p.blockId, p);
-  return out;
+function pairPlacements(
+  placements: readonly Placement[],
+  results: readonly RefereeResult[],
+): Pairing {
+  const theirs = new Map<BlockId, number>();
+  for (const r of results) theirs.set(r.blockId, (theirs.get(r.blockId) ?? 0) + 1);
+  const mine = new Map<BlockId, number>();
+  for (const p of placements) mine.set(p.blockId, (mine.get(p.blockId) ?? 0) + 1);
+
+  const paired = new Map<BlockId, Placement>();
+  const unpaired: Placement[] = [];
+  const missed: Placement[] = [];
+  for (const p of placements) {
+    const answers = theirs.get(p.blockId) ?? 0;
+    if (answers === 0) missed.push(p);
+    else if (answers === 1 && mine.get(p.blockId) === 1) paired.set(p.blockId, p);
+    else unpaired.push(p);
+  }
+  return { paired, unpaired, missed };
 }
 
 /**
@@ -570,20 +631,45 @@ function placementByBlock(placements: readonly Placement[]): Map<BlockId, Placem
  */
 const MODEL_MISSED = "Yours, that the model did not turn up";
 const MODEL_HAS_NOT_ANSWERED = "Yours, and the model has not answered this criterion yet";
+/**
+ * The third heading, and the one that exists because block-level matching has a
+ * state it cannot decide — `pairPlacements`.
+ */
+const MODEL_ALSO_HERE = "Yours, in a paragraph the model also answered on";
+const WHICH_IS_WHICH =
+  "More than one passage in this paragraph, so we cannot say which of yours goes with which of the model's.";
 
 /**
- * Do these two point opposite ways?
+ * **Do these two point opposite ways?** That is the whole of the question, and
+ * the sentence it draws says only that.
  *
- * Zero is a real answer meaning *neither way* (src/web/valence.ts), so it never
- * disagrees with anything — a referee who said "counts neither way" against a
- * model that said −64 has not contradicted it, they have declined to.
+ * It is not a measure of how far apart they are. A referee's −100 against a
+ * model's −5 returns `false` here, and that is *not* because the two are the
+ * same answer — they are not, and this comment used to say they were. The
+ * five-position instrument records **strength** deliberately
+ * (src/web/PlaceOnCriterion.tsx): *clearly underpowered* and *barely* are
+ * different judgements, and the difference is real. It is simply not what a
+ * predicate called `directionsDiffer` can see, and it is not lost either — the
+ * line above prints both judgements in the referee's own pole words with both
+ * numbers beside them, which is where a reader sees that one of them said it
+ * mildly.
  *
- * **Not `valenceGap`.** That function measures how far apart two judgements are
- * and is what a gap-*sorted* list would rank by; this sentence is about
- * direction, and −100 against −5 is a wide gap and the same answer. The plan
- * defers the sorted list, so `valenceGap` still has no caller — recorded here
- * rather than given a made-up one, since a call written to satisfy a search for
- * callers is worse than none.
+ * Zero is *"counts neither way"* — a real answer, the middle of the five, and
+ * the commonest one (src/web/valence.ts). It is **not** a refusal to judge, and
+ * this comment used to describe it as one. It points in neither direction, so
+ * it cannot point in the opposite one, so a referee who pressed the middle
+ * against a model's −64 gets no disagreement sentence. That gap is worth
+ * showing and is shown, in words, on the line above; a sentence saying they
+ * "disagree" would be describing a contradiction that is not there.
+ *
+ * **Still not `valenceGap`**, and the reason is now the honest one rather than
+ * the old "−100 and −5 are the same answer". Subtracting the two asserts they
+ * are measurements on one interval scale, and they are not: a referee's −50 is
+ * one of five pressed words, a model's −50 is a continuous estimate. Sol's
+ * finding 6 on 2026-09-01, recorded and deferred — before a gap-*sorted* list
+ * can rank by that distance, the two sides need shared bins or an explicit
+ * instrument on each number. So `valenceGap` still has no caller, which is
+ * better than one written to satisfy a search for callers.
  */
 function directionsDiffer(referee: number, model: number): boolean {
   return (referee < 0 && model > 0) || (referee > 0 && model < 0);
@@ -618,9 +704,7 @@ function CriterionRow({
      no poles to print one between. */
   const poles = row.config.kind === "diverging" ? row.config.poles : null;
   const placements = poles === null ? [] : placementsOn(comments, row.id);
-  const byBlock = placementByBlock(placements);
-  const answered = new Set(row.results.map((r) => r.blockId));
-  const missed = placements.filter((p) => byBlock.get(p.blockId) !== p || !answered.has(p.blockId));
+  const { paired, unpaired, missed } = pairPlacements(placements, row.results);
   return (
     <li className="crit-row">
       <div className="crit-head">
@@ -741,22 +825,29 @@ function CriterionRow({
             result={result}
             rank={i + 1}
             config={row.config}
-            placement={byBlock.get(result.blockId)}
+            placement={paired.get(result.blockId)}
             onJump={onJump}
           />
         ))}
       </ol>
 
+      {poles !== null && unpaired.length > 0 && (
+        <Yours placements={unpaired} poles={poles} list={{ kind: "unpaired" }} onJump={onJump} />
+      )}
+
       {poles !== null && missed.length > 0 && (
-        <Misses
+        <Yours
           placements={missed}
           poles={poles}
-          /* `done` is the only status under which "the model did not turn up"
-             is true. A run still streaming, or one that failed, has not looked
-             — and a row that says otherwise is the shape
-             docs/reusable/silent-success.md is about, with the referee told a
-             search came back empty when it never ran. */
-          answered={row.status === "done"}
+          list={{
+            kind: "missed",
+            /* `done` is the only status under which "the model did not turn up"
+               is true. A run still streaming, or one that failed, has not looked
+               — and a row that says otherwise is the shape
+               docs/reusable/silent-success.md is about, with the referee told a
+               search came back empty when it never ran. */
+            answered: row.status === "done",
+          }}
           onJump={onJump}
         />
       )}
@@ -765,37 +856,74 @@ function CriterionRow({
 }
 
 /**
- * **"Yours, that the model did not turn up"** — the mirror image of the gap,
- * and arguably the more valuable half.
- *
- * It exists only because the referee places a passage from the prose rather
- * than from this panel: a control beside each model result could only ever
- * collect judgements on passages the model had already surfaced, so the
- * model's *misses* would be unreachable by construction
- * (src/web/PlaceOnCriterion.tsx § it lives in the selection flow).
- *
- * No rank, deliberately. The number on a model row is that model's ordering of
- * its own answers; the referee's placements have no such ordering and inventing
- * one — by valence, by recency — would be this panel ranking the referee's
- * work, which is the thing the plan defers on purpose.
+ * Which of the two sub-lists this is. A union rather than two booleans, because
+ * *"the model has not answered yet"* is a fact about a missed placement and
+ * says nothing about an unpaired one — and a prop that is meaningless half the
+ * time is a prop somebody eventually reads in the half where it is.
  */
-function Misses({
+type YoursList = { kind: "missed"; answered: boolean } | { kind: "unpaired" };
+
+/**
+ * **The referee's placements that are not drawn beside a model result**, under
+ * a heading that says why.
+ *
+ * Two headings, two reasons, and they are different claims:
+ *
+ * - **"Yours, that the model did not turn up"** — the mirror image of the gap,
+ *   and arguably the more valuable half. It exists only because the referee
+ *   places a passage from the prose rather than from this panel: a control
+ *   beside each model result could only ever collect judgements on passages the
+ *   model had already surfaced, so the model's *misses* would be unreachable by
+ *   construction (src/web/PlaceOnCriterion.tsx § it lives in the selection
+ *   flow).
+ * - **"Yours, in a paragraph the model also answered on"** — not a miss at all.
+ *   The model was here; block-level matching just cannot say which passage is
+ *   which (`pairPlacements`). Saying "did not turn up" over these is the false
+ *   label Sol's finding 4 caught, so the heading changes rather than the truth
+ *   being rounded to fit the heading we already had.
+ *
+ * No rank in either, deliberately. The number on a model row is that model's
+ * ordering of its own answers; the referee's placements have no such ordering
+ * and inventing one — by valence, by recency — would be this panel ranking the
+ * referee's work, which is the thing the plan defers on purpose.
+ */
+function Yours({
   placements,
   poles,
-  answered,
+  list,
   onJump,
 }: {
   placements: readonly Placement[];
   poles: RefereePoles;
-  answered: boolean;
+  list: YoursList;
   onJump(blockId: BlockId): void;
 }) {
+  /* Separate class names on the two lists, not one shared name with a
+     modifier. Same reasoning as `crit-yours` below: tests/referee-gap.test.tsx
+     tells the lists apart by class, and a shared one would let a placement in
+     the wrong list pass every assertion written about the right one. */
+  const css =
+    list.kind === "missed"
+      ? { box: "crit-misses", head: "crit-misses-head", list: "crit-miss-list", one: "crit-miss" }
+      : {
+          box: "crit-unpaired",
+          head: "crit-unpaired-head",
+          list: "crit-unpaired-list",
+          one: "crit-unpaired-one",
+        };
   return (
-    <div className="crit-misses">
-      <p className="crit-misses-head">{answered ? MODEL_MISSED : MODEL_HAS_NOT_ANSWERED}</p>
-      <ul className="crit-miss-list">
+    <div className={css.box}>
+      <p className={css.head}>
+        {list.kind === "unpaired"
+          ? MODEL_ALSO_HERE
+          : list.answered
+            ? MODEL_MISSED
+            : MODEL_HAS_NOT_ANSWERED}
+      </p>
+      {list.kind === "unpaired" && <p className="crit-unpaired-why">{WHICH_IS_WHICH}</p>}
+      <ul className={css.list}>
         {placements.map((p) => (
-          <li className="crit-miss" key={p.id}>
+          <li className={css.one} key={p.id}>
             <button type="button" className="crit-jump" onClick={() => onJump(p.blockId)}>
               <span className="crit-quote">{p.quote}</span>
             </button>

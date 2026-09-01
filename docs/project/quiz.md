@@ -19,9 +19,12 @@ And, when asked whether an exchange should carry on:
 > Unlike the default freeform sub-mode, Quiz doesn't need to be a conversation — it's just a
 > question then answer.
 
-That answer is the whole shape. **A quiz is not a thread.** No `ChatThread`, no third `ThreadKind`,
-no rows in `chat_threads` — which is why this is one artefact, one route and one panel rather than a
-third arm through every place a thread kind is dispatched on.
+That answer is the whole shape. **A quiz is not a thread.** No `ChatThread`, no `ThreadKind` of its
+own, no rows in `chat_threads` — which is why this is one artefact, one route and one panel rather
+than another arm through every place a thread kind is dispatched on. (This said "no *third*
+`ThreadKind`" until 2026-09-01, when Referee mode's Candidates took that number and proved the point:
+it needed the CHECK constraint widened, both stores' normalisers, the route's validation and a branch
+in `converse` — [referee-mode.md § 4](referee-mode.md).)
 
 Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation, the sort),
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),

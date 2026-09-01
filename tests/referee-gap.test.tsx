@@ -20,16 +20,20 @@
  * An average, a difference or a rounded midpoint all fail it, and none of them
  * would fail a test that only looked for the strings it expected to find.
  *
+ * That assertion is over the *row* rather than over the gap line, and the
+ * difference is the point: the line was the wrong boundary, because the
+ * disagreement sentence sits one element outside it and is exactly where
+ * somebody would put a distance.
+ *
  * ## What is *not* here, on purpose
  *
  * The independence tripwire — *no model valence inside the referee's own
- * instrument* — already exists, rendered rather than scanned, at the bottom of
- * tests/referee-placement.test.tsx ("the model's judgement is nowhere near the
- * referee's instrument"). This stage is the first time the model's number and
- * the referee's are drawn together, so that tripwire is the one that had to
- * stay green through it; it is not copied here, because a second copy of an
- * assertion is a second thing to keep in step and the first one is stronger
- * (it drives the real dialog over the real hook).
+ * instrument* — lives in tests/referee-anchoring.test.tsx, which mounts this
+ * band and the placement dialog together, because that is the arrangement the
+ * claim is about and neither file alone can see it. This stage is the first
+ * time the model's number and the referee's are drawn together, so that
+ * tripwire is the one that had to stay green through it; it is not copied here,
+ * because a second copy of an assertion is a second thing to keep in step.
  *
  * Harness: tests/referee-criteria-panel.test.tsx's, which mounts the real
  * `CriteriaBand` over a stubbed `apiFetch` inside a `NuqsAdapter` because
@@ -122,7 +126,12 @@ function criterion(
     results: results.map((r, i) => ({
       kind: "diverging" as const,
       blockId: r.blockId,
-      quote: `model passage ${i}`,
+      /* Lettered rather than numbered, and that is load-bearing: "invents no
+         third number anywhere on the row" collects every digit-run in the row
+         and compares the set against the numbers that went in, so a quote
+         carrying a `0` would be a fourth number the assertion had to allow —
+         and every number it allows is a number a bug may hide behind. */
+      quote: `model passage ${String.fromCharCode(97 + i)}`,
       confidence: 80,
       reasoning: "why it bears on the criterion",
       valence: r.valence,
@@ -229,8 +238,23 @@ function misses(): HTMLElement[] {
   return [...host.querySelectorAll(".crit-miss")] as HTMLElement[];
 }
 
+/**
+ * The third home for a placement: a paragraph the model *did* answer on, where
+ * block-level matching cannot say which passage is which. Its own class, not
+ * `.crit-miss` with a modifier, so a placement that lands in the wrong list
+ * cannot pass an assertion written about the right one.
+ */
+function unpaired(): HTMLElement[] {
+  return [...host.querySelectorAll(".crit-unpaired-one")] as HTMLElement[];
+}
+
 function rows(): HTMLElement[] {
   return [...host.querySelectorAll(".crit-result")] as HTMLElement[];
+}
+
+/** How many times a sentence appears in the whole panel. */
+function occurrences(needle: string): number {
+  return flat(host.textContent).split(needle).length - 1;
 }
 
 function click(el: Element): void {
@@ -284,6 +308,38 @@ describe("a passage both the referee and the model placed", () => {
     expect(text.match(/\d+/g)).toEqual(["50", "64"]);
   });
 
+  it("invents no third number anywhere on the row, including where they disagree", async () => {
+    /* **The line is the wrong place to draw the boundary**, which is what the
+       one above did and all it did. GPT Sol's mutation on 2026-09-01: put
+       `Gap: {Math.abs(referee − model)}` in the *disagreement* paragraph — the
+       obvious place somebody would put it, one element outside `.crit-gap` —
+       and the assertion above stays green while the panel prints the single
+       number the whole feature refuses.
+
+       So this one takes the whole result row, and it needs the two judgements
+       to point opposite ways, because the paragraph the mutation lands in is
+       only drawn then.
+
+       Distinct digit-runs rather than a list, because the row says the model's
+       number three times over — once for the screen, once for a screen reader,
+       once inside the gap line — and none of those repetitions is a new claim.
+       A new *value* is. The three allowed here are the rank the model gave the
+       passage, the referee's number and the model's; 114 (the distance), 7
+       (the mean) and any rounding of either is a fourth. */
+    await paint(
+      [{ blockId: FOUND, valence: -64 }],
+      [comment({ blockId: FOUND, criterionId: CRIT, valence: 50 })],
+    );
+
+    const row = rows()[0];
+    expect(row, "there is no result row to look at").toBeTruthy();
+    const text = flat(row?.textContent);
+    expect(text, "the disagreement sentence is not on the row").toContain(
+      "You and the model disagree here.",
+    );
+    expect([...new Set(text.match(/\d+/g) ?? [])].sort()).toEqual(["1", "50", "64"]);
+  });
+
   it("says they disagree when the two point opposite ways", async () => {
     await paint(
       [{ blockId: FOUND, valence: -64 }],
@@ -334,6 +390,131 @@ describe("a passage both the referee and the model placed", () => {
     expect(gapLines()).toHaveLength(0);
     expect(misses()).toHaveLength(0);
     expect(flat(host.textContent)).not.toContain("−100");
+  });
+});
+
+/* ------------------------------- more than one passage in one paragraph -- */
+
+/**
+ * **What block-level matching cannot decide, and must not pretend it can.**
+ *
+ * Matching is on `criterionId` + `blockId`, so a paragraph holding two model
+ * results, or two of the referee's placements, has no answer to *which goes
+ * with which*. Until 2026-09-01 the panel answered anyway: the first placement
+ * on a block was handed to **every** model result on it, and every other
+ * placement on that block fell under *"Yours, that the model did not turn up"*.
+ * GPT Sol's finding 4 — one judgement drawn twice as though the referee had
+ * made two, and a placement the model **did** answer on labelled a miss in
+ * words.
+ *
+ * The old tests could not see either, because every fixture in this file had at
+ * most one result and one placement per block. These are the fixtures that
+ * distinguish the two behaviours, and the literal headings are written out here
+ * rather than imported, so a heading that changes meaning has to be changed in
+ * two places by somebody who reads both.
+ */
+describe("a paragraph the model answered on more than once", () => {
+  it("draws the referee's judgement beside neither result rather than beside both", async () => {
+    await paint(
+      [
+        { blockId: FOUND, valence: -64 },
+        { blockId: FOUND, valence: -20 },
+      ],
+      [comment({ blockId: FOUND, criterionId: CRIT, valence: -50 })],
+    );
+
+    expect(rows(), "the model's two passages are both still listed").toHaveLength(2);
+    /* Not "one gap line" — there is no way to tell which of the model's two
+       passages the referee placed, so a line beside either one is a claim
+       about the referee that nobody made. */
+    expect(gapLines(), "one placement was drawn as though it matched a passage").toHaveLength(0);
+    expect(
+      occurrences("You: leans underpowered · −50"),
+      "the referee's one judgement appears more than once",
+    ).toBe(1);
+  });
+
+  it("says the model was here, rather than calling the placement a miss", async () => {
+    await paint(
+      [
+        { blockId: FOUND, valence: -64 },
+        { blockId: FOUND, valence: -20 },
+      ],
+      [comment({ blockId: FOUND, criterionId: CRIT, valence: -50 })],
+    );
+
+    expect(unpaired()).toHaveLength(1);
+    expect(misses(), "an unmatched placement is not the same thing as a missed one").toHaveLength(0);
+    const text = flat(host.textContent);
+    expect(text).toContain("Yours, in a paragraph the model also answered on");
+    expect(text, "the model turned this paragraph up; the heading says it did not").not.toContain(
+      "did not turn up",
+    );
+  });
+
+  it("does the same when the referee placed one paragraph twice", async () => {
+    await paint(
+      [{ blockId: FOUND, valence: -64 }],
+      [
+        comment({ id: "spya-cmtaa2", blockId: FOUND, criterionId: CRIT, valence: -50 }),
+        comment({ id: "spya-cmtaa3", blockId: FOUND, criterionId: CRIT, valence: 100 }),
+      ],
+    );
+
+    expect(gapLines(), "one of two placements was picked to stand for both").toHaveLength(0);
+    expect(unpaired()).toHaveLength(2);
+    expect(misses()).toHaveLength(0);
+    const text = flat(host.textContent);
+    expect(text).toContain("You: leans underpowered · −50");
+    expect(text).toContain("You: clearly well powered · +100");
+    expect(text).not.toContain("did not turn up");
+  });
+
+  it("keeps every placement on screen exactly once, wherever it belongs", async () => {
+    /* One paragraph the model answered twice, one it answered once, one it
+       never reached. Every placement has exactly one home, and no placement
+       has two — which is the property the old code broke in both directions at
+       once. */
+    await paint(
+      [
+        { blockId: FOUND, valence: -64 },
+        { blockId: FOUND, valence: -20 },
+      ],
+      [
+        comment({ id: "spya-cmtaa2", blockId: FOUND, criterionId: CRIT, valence: -50 }),
+        comment({ id: "spya-cmtaa3", blockId: MISSED, criterionId: CRIT, valence: 100 }),
+      ],
+    );
+
+    expect(unpaired()).toHaveLength(1);
+    expect(misses()).toHaveLength(1);
+    expect(gapLines()).toHaveLength(0);
+    expect(occurrences("You: leans underpowered · −50")).toBe(1);
+    expect(occurrences("You: clearly well powered · +100")).toBe(1);
+    const text = flat(host.textContent);
+    expect(text).toContain("Yours, in a paragraph the model also answered on");
+    expect(text).toContain("Yours, that the model did not turn up");
+  });
+
+  it("still pairs the paragraphs that hold one of each", async () => {
+    /* The ambiguity is per paragraph, not per criterion: a row with one messy
+       block must not lose the referee's line on a clean one. */
+    await paint(
+      [
+        { blockId: FOUND, valence: -64 },
+        { blockId: MISSED, valence: 30 },
+        { blockId: MISSED, valence: 10 },
+      ],
+      [
+        comment({ id: "spya-cmtaa2", blockId: FOUND, criterionId: CRIT, valence: -50 }),
+        comment({ id: "spya-cmtaa3", blockId: MISSED, criterionId: CRIT, valence: 100 }),
+      ],
+    );
+
+    expect(gapLines(), "the unambiguous paragraph lost its referee line").toHaveLength(1);
+    expect(flat(gapLines()[0]?.textContent)).toContain("You: leans underpowered · −50");
+    expect(unpaired()).toHaveLength(1);
+    expect(misses()).toHaveLength(0);
   });
 });
 

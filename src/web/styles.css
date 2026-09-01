@@ -6445,16 +6445,25 @@ td.text.has-hit[data-hues="8"] {
 }
 .crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
 
-.crit-misses { margin: 0.3rem 0 0; }
-.crit-misses-head {
+/* Two sub-lists and not one, with two class names rather than a shared name and
+   a modifier — `Yours` in CriteriaPanel.tsx says why. They look identical on
+   purpose: the difference between them is the heading, which is the whole of
+   what each is claiming. */
+.crit-misses,
+.crit-unpaired { margin: 0.3rem 0 0; }
+.crit-misses-head,
+.crit-unpaired-head {
   margin: 0 0 0.15rem;
   font-size: 0.7rem;
   color: var(--ink-faint);
   border-top: 1px solid var(--rule);
   padding-top: 0.25rem;
 }
-.crit-miss-list { margin: 0; padding: 0; list-style: none; }
-.crit-miss { padding: 0.15rem 0; }
+.crit-unpaired-why { margin: 0 0 0.15rem; font-size: 0.68rem; color: var(--ink-faint); }
+.crit-miss-list,
+.crit-unpaired-list { margin: 0; padding: 0; list-style: none; }
+.crit-miss,
+.crit-unpaired-one { padding: 0.15rem 0; }
 /* Indented as the model's rows are, although there is no rank to indent past —
    the two lists read as one column rather than as two shapes. */
 .crit-yours {

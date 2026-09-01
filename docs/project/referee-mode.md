@@ -184,7 +184,16 @@ criterion's own pole words. [`src/web/PlaceOnCriterion.tsx`](../../src/web/Place
 carries the argument for that entry point over the obvious one, a control beside each model result:
 **a control that renders the model's judgement while soliciting the referee's is measuring their
 willingness to copy a number.** So the section shows no model valence at all, and
-`tests/referee-placement.test.tsx` renders it with loud ones in scope to check that it does not.
+`tests/referee-anchoring.test.tsx` mounts the criteria panel and the instrument **together** — the
+panel printing −87, the instrument printing no number at all — to check that it does not.
+
+**What that does not prove, and nothing currently does.** Both halves are on one screen. A referee
+may read the model's number in the panel, select the passage and then place it, and nothing records
+which came first, so *"independent"* here means *"made in a control that does not itself show the
+model's number"* — a real property, and a much weaker one than the mode's argument implies. Sol's
+one change, if it could only have one: a **sealed-envelope** state that keeps the first pre-reveal
+placement, or stop calling later placements independent. That is a product decision and it is Greg's;
+the last test in that file pins the gap where it runs, so whoever builds the envelope meets it.
 
 **Changing one is its own operation**: `PATCH /api/comments/:slug/:id/mark`, and
 `CommentStore.patchMark` beneath it on both stores — the fifth, added on 2026-09-01. Both fields
@@ -201,12 +210,23 @@ also placed grows a second line with **their judgement first** — *"You: leans 
 Model: counts against — underpowered — −64"* — and a plain sentence, *"You and the model disagree
 here"*, when the two point opposite ways. Below the model's results, **"Yours, that the model did not
 turn up"** lists the placements no result matched, which is the model's *misses* and only reachable
-because the referee places a passage from the prose. Matching is on criterion and block; span
-overlap is deferred until same-block-different-passage is shown to be common. Nothing is averaged
-and no third number is drawn — `valenceGap` still has no caller, because a gap-*sorted* list across
-all criteria is a ranking of the referee's own work and is **not built**.
+because the referee places a passage from the prose.
+
+Matching is on criterion and block, and **it pairs only where a paragraph holds one of each**; span
+overlap is deferred until same-block-different-passage is shown to be common. Where a paragraph
+holds two model results, or two of the referee's placements, there is no way to say which answers
+which, so a third sub-list says so — **"Yours, in a paragraph the model also answered on"**. It
+replaced a scheme that handed the first placement on a block to *every* result on it and called the
+rest misses: one judgement drawn twice as though the referee had made two, and a placement the model
+*had* answered on labelled a miss in words (GPT Sol on the built code, 2026-09-01).
+
+Nothing is averaged and no third number is drawn. `valenceGap` still has no caller, and the reason
+is that a referee's −50 is one of five pressed words while a model's −50 is a continuous estimate —
+subtracting them asserts a shared scale that does not exist, so a gap-*sorted* list needs shared
+bins or an instrument recorded on each number before it can rank by distance. It is **not built**,
+and it is also a ranking of the referee's own work, which wants thought first.
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
-which collects every digit in that line and compares it against the two that went in.
+which collects every digit on the row and compares it against the numbers that went in.
 
 ### 2. Claims — where the paper addresses its own claims
 

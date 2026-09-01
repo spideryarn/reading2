@@ -86,10 +86,13 @@ export const NO_MARK: Mark = { criterionId: null, valence: null };
  * **The five positions, and the only place the mapping from a pressed label to
  * a stored number is written down.**
  *
- * Exported because tests/referee-placement.test.tsx derives its cases from it:
- * a sixth position cannot be added without every one of those cases seeing it,
- * and the labels the test presses are the labels the instrument draws rather
- * than a second copy that can drift.
+ * Exported so that tests/referee-placement.test.tsx can check this table
+ * against the five it writes out by hand, in order — a sixth position, a
+ * renamed one or a reordered one reddens there. What that test does **not**
+ * take from here is the numbers: it presses literal labels and expects literal
+ * valences, because a case that reads its click and its expectation off the
+ * same table cannot see either of them change. It did until 2026-09-01, and
+ * changing the −50 below to −40 left all five green.
  *
  * `end` names the pole the position leans towards, or `null` for the middle —
  * which is a real answer meaning *neither way*, not an absence, and is the
@@ -248,12 +251,39 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
               value={value.criterionId ?? ""}
               onChange={(e) => {
                 const id = e.target.value;
-                /* Clearing the picker clears the number with it: a valence with
-                   nothing to place it on is a number against nothing, and the
-                   database says so as well (`comments_valence_needs_criterion`).
-                   Changing to a *different* criterion keeps it — re-placing on
-                   the right criterion should not mean starting again. */
-                onChange(id === "" ? NO_MARK : { criterionId: id, valence: value.valence });
+                /* **The number does not follow the criterion**, and this is the
+                   one place the five-position instrument could fabricate a
+                   judgement.
+
+                   −50 is not a quantity. It is the second of five positions,
+                   and what it *says* is "leans underpowered" — words that exist
+                   only because *this* criterion has those two ends. Carried
+                   onto a criterion whose ends are "the statistics are wrong"
+                   and "the statistics are sound", the same −50 records the
+                   referee as having said something they never read, about poles
+                   they never saw, and the panel then prints it beside the
+                   model's as an independent human judgement. Nothing errors and
+                   the database is content: the shape
+                   docs/reusable/silent-success.md is about.
+
+                   So a new criterion arrives unplaced and the referee is asked
+                   again, in its own words. `{ criterionId, valence: null }` is
+                   a state the route already calls legal — a note answering a
+                   criterion without a score — so this is not a new one.
+
+                   Clearing the picker clears both: a valence with nothing to
+                   place it on is a number against nothing, and the database says
+                   so too (`comments_valence_needs_criterion`).
+
+                   The `id === value.criterionId` arm is not reachable with a
+                   mouse — a browser fires `change` only when the value moves —
+                   but "the criterion changed" is a fact about the two values
+                   rather than about how the event arrived, and without it
+                   anything that re-selects the chosen option wipes a placement.
+                   GPT Sol, reviewing the built code, 2026-09-01. */
+                if (id === "") onChange(NO_MARK);
+                else if (id === value.criterionId) onChange({ criterionId: id, valence: value.valence });
+                else onChange({ criterionId: id, valence: null });
               }}
             >
               <option value="">Not placed</option>

@@ -256,8 +256,9 @@ Four decisions worth a second look, each of which went against a plausible alter
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) reads the placement back in two
 places. `RefereeGap` is the second line on a result row the referee also placed — *"You: leans
 underpowered · −50 — Model: counts against — underpowered — −64"*, their judgement first, plus
-*"You and the model disagree here."* when the two point opposite ways. `Misses` is the sub-list
-under the results: **"Yours, that the model did not turn up"**, each with a jump into the passage.
+*"You and the model disagree here."* when the two point opposite ways. `Yours` draws the sub-lists
+under the results — **"Yours, that the model did not turn up"** and, since the finding-4 fix below,
+**"Yours, in a paragraph the model also answered on"** — each with a jump into the passage.
 `CriteriaBand` grew a `comments` prop, threaded from `Reader` through `RefereeBand` and
 `RefereeSubMode`; the panel only reads it, because a placement is made from the prose and nowhere
 else. Two wording functions were exported rather than copied — `placementWords` out of
@@ -276,12 +277,21 @@ the row wholesale — which it does because it is drawn from the comments rather
 
 Four decisions worth a second look:
 
-- **`valenceGap` still has no caller, and that is deliberate.** The stage brief expected this to be
-  the thing that gave it one. It measures *how far apart* two judgements are, which is what a
-  gap-sorted list ranks by; the disagreement sentence is about *direction*, and −100 against −5 is a
-  wide gap and the same answer. So the panel has a three-line `directionsDiffer` instead, and the
-  gap's magnitude is still waiting for the sorted list the plan defers. A call written to satisfy a
-  search for callers is worse than no call.
+- **`valenceGap` still has no caller, and that is deliberate** — though the reason first written
+  down here was wrong, and Sol's finding 7 was right about it. The claim was that −100 against −5 is
+  "a wide gap and the same answer". It is not the same answer: the five-position instrument records
+  **strength** on purpose, and a referee saying *clearly* against a model saying *barely* is a real
+  difference. The same paragraph gave zero the wrong semantics too — *"counts neither way"* is one of
+  the five positions and a real answer, not a refusal to give one.
+
+  What survived is the predicate, and the honest version of its justification. `directionsDiffer`
+  asks one question and its name is the whole claim; the strength both sides gave is not lost,
+  because the line above prints both judgements in words with both numbers beside them. And the
+  reason not to reach for `valenceGap` is Sol's finding 6, not the old sentence: a referee's −50 is
+  one of five pressed words and a model's −50 is a continuous estimate, so subtracting them asserts
+  an interval scale the two do not share. A gap-*sorted* list needs shared bins, or the instrument
+  recorded beside each number, before it can rank by that distance. Corrected in the comment on
+  `directionsDiffer` on 2026-09-01, with the predicate left alone.
 - **"The model did not turn up" is said only when `status === "done"`.** A criterion still streaming,
   or one that failed, gets *"Yours, and the model has not answered this criterion yet"* — the referee
   may place passages before ever asking the model, which is the anchoring-friendly order, and calling
@@ -304,6 +314,113 @@ still deferred, and threading `comments` did **not** make it natural: it moves d
 The default needs the panel's *expanded criterion* — state `CriteriaPanel` does not lift and
 `AnnotateDialog` cannot see — and a defaulted criterion is a placement on the wrong one if the
 referee does not notice.
+
+### Stage 5 — findings 4 and 7, and the two tests that did not prove their claim
+
+**Finding 4, the matching.** `placementByBlock` kept the first placement on each block and handed it
+to *every* model result on that block, and sent every other placement on that block to
+**"Yours, that the model did not turn up"**. Both halves were false statements about the referee's
+work — one judgement drawn twice as though they had made two, and a placement on a paragraph the
+model *had* answered on labelled a miss, in words rather than in a number.
+
+`pairPlacements` replaces it and **pairs only where a paragraph holds one of each**. Anything else on
+a paragraph the model answered goes to a third sub-list, *"Yours, in a paragraph the model also
+answered on"*, which says on screen that there is more than one passage here and the panel cannot
+say which is which. Every placement appears exactly once, in exactly one of the three. The
+alternative passed over was **pairing one-to-one in order**: cheap, and it invents an attribution
+out of two unrelated sort orders — the model's ranking of its own answers against the order the
+referee happened to write in — printed with the same confidence as a real match. Ambiguity that says
+it is ambiguous is the smaller lie, and it is the shape that stops being needed the day span-overlap
+matching lands. This needed no span arithmetic, which is what made it a fix rather than a deferral.
+
+Sol's reproduction ran first: with the old semantics restored by hand, the five new cases in
+`tests/referee-gap.test.tsx` go red, one of them showing the exact false attribution — *"one
+placement was drawn as though it matched a passage: expected 2 to be 0"*.
+
+**Finding 7** changed the comment and not the predicate — see the `valenceGap` bullet under Stage 3
+above, now rewritten.
+
+**The two tests.** *"No third number"* scanned only `.crit-gap`, so adding
+`Gap: {Math.abs(referee − model)}` to the disagreement paragraph one element away left it green.
+There is now a second case over the whole `.crit-result` row, with the two judgements pointing
+opposite ways so the paragraph the mutation lands in is actually drawn; it compares the row's
+distinct digit-runs against the rank, the referee's number and the model's, and the mutation gives
+`['1','114','50','64']`. The fixture's model quotes had to lose their index digits to make that
+assertion sharp.
+
+*"The model's judgement is nowhere near the referee's instrument"* mounted `AnnotateDialog` alone.
+It is not quite theatre — a `PlaceOnCriterion` that printed `chosen.results[0].valence` would trip
+it — but it cannot speak to the claim in its name, because in the real reader the panel is mounted
+beside it. [`tests/referee-anchoring.test.tsx`](../../tests/referee-anchoring.test.tsx) mounts the
+band and the dialog **together** over one stubbed network, asserts first that the panel really does
+print −87 and +93 (a `not.toContain` over a fixture that never renders is how the old one became
+theatre), then that the instrument prints no number at all, that the picker names criteria by their
+own words and poles and nothing of their answers, and the same over `CommentDialog`'s edit path —
+where the one number allowed is the referee's own −50.
+
+**And it says what it cannot prove.** Both halves are on one screen; a referee may read the model's
+number and then place the passage, and nothing records which came first. So *"independent"* currently
+means *"made in a control that does not itself show the model's number"*. The file's last test pins
+that gap where it runs, with a note that when it goes red the fix is to delete it and write the test
+for whatever replaced it. **Sol's one change — a sealed-envelope state for the first placement, or
+dropping the word "independent" — is a product decision and is Greg's**, and is not built.
+
+### Stage 5 — findings 2 and 3, and the five-position test that moved with the code
+
+**Finding 3, the fabricated judgement.** Changing the criterion of a placed comment carried the old
+number across, so *"leans underpowered"* on *Is the study adequately powered?* silently became
+*"leans the statistics are wrong"* on the next criterion — a judgement the referee never made, about
+poles they never saw, printed by `RefereeGap` beside the model's as the independent human half. It
+now clears: a criterion that is not the one already chosen arrives with `valence: null`, which is
+the state the route has always called legal, and the five positions come back up blank in the new
+criterion's own words. The `id === value.criterionId` arm is unreachable with a mouse — a browser
+fires `change` only when the value moves — and is kept because *"the criterion changed"* is a fact
+about two values rather than about how the event arrived. Red first:
+`expected { criterionId: 'spya-crt2dd', valence: null } … + "valence": -50`.
+
+**Finding 2, the races.** Both PATCHes now go through one **per-comment chain** in `useComments` —
+the ref `useCriteria.recolour` and `useSearch` already keep, deliberately not a third invention of
+it — so there is never more than one write out for a comment. That one change answers both halves,
+which is why the merge-only-the-fields-you-own alternative was not built: with the writes ordered,
+every answer is a snapshot taken after every write this client has made, so replacing the whole row
+is correct again, and a merge would have to be maintained field by field beside a store allowlist
+that already exists. `send` is deliberately **not** on the chain — it streams for 15-25 seconds and
+putting an edit behind it would freeze the reader's own note for the length of a model call — and
+nor is the DELETE, which the tombstone already makes win.
+
+The buttons stay enabled through the wait. With the queue there is no order left to get wrong, and
+disabling them needs local state in an instrument whose whole design is that it has none.
+
+Four cases in `tests/referee-placement.test.tsx`, each watched red with the chain bypassed by hand.
+The fake server grew two moments where it had one — `process`, which changes the row and composes
+the answer out of what it holds *then*, and `deliver`, which hands that answer over — because the
+two reorderings are different and only one of them is visible with a single moment:
+
+- two placements whose requests reach the server backwards — `expected -100 to be 100`, the *first*
+  click stored and shown;
+- a note and a placement whose **answers** cross on the way back, each carrying the whole comment as
+  it stood when its own write ran — `expected -50 to be 100` one way round (the late note answer put
+  the old placement back) and `expected 'the arms are too small for this' to be 'a much better note'`
+  the other (the late placement answer put the old note back). Nothing is lost on disk here: the
+  columns are disjoint, and it is the browser that ends up disagreeing with Postgres;
+- and the invariant itself, that only one write is ever in flight — `expected [ …, … ] to have a
+  length of 1 but got 2`.
+
+**Server-side last-arrival-wins is left alone**, as Greg asked. It is defensible: the client can no
+longer produce the race on its own, and what is left is two tabs, where compare-and-set would have
+to answer *"somebody else changed this"* to a referee who cannot see the other tab and has no way to
+merge two five-position labels. A `valence_first` write-once column — already named in this plan —
+is the cheaper thing to reach for if that ever matters.
+
+**The five-position test.** It took its clicks *and* its expected numbers from the exported
+`PLACEMENT_STEPS`, so changing the production −50 to −40 left all five green. (Not the whole file:
+two neighbouring tests with literal −50 fixtures did redden, which is luck rather than design.)
+There is now a literal `EXPECTED_POSITIONS` table in the test — the numbers asserted against
+something the production code cannot move — plus one case checking that the labels
+`PLACEMENT_STEPS` actually draws are exactly those five, in that order, so a sixth position reddens
+rather than being skipped by a table that has never heard of it. Both properties, and they were
+never in conflict. With the mutation back in, the parameterised case now fails: `× sends -50 for
+"leans underpowered"`.
 
 ## The survey behind Stage 4
 

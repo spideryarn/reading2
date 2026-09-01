@@ -37,7 +37,7 @@
  * Harness copied from tests/use-comments-load-state.test.ts: React's own `act`
  * and `createRoot`, no testing library, a stubbed `apiFetch`.
  */
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -83,6 +83,30 @@ const SLUG = "a-paper";
 const POLES = { against: "underpowered", favour: "well powered" };
 
 /**
+ * **The five positions, written out by hand in `POLES`' own words.**
+ *
+ * A second copy of a production table, on purpose, and the one place in this
+ * file where that is right. `PLACEMENT_STEPS` is exported and the obvious thing
+ * is to loop over it — which this file did, and it meant every case took both
+ * its click and its expected number from the table it was checking, so changing
+ * the production −50 to −40 moved the assertion with it and the suite stayed
+ * green. An expectation the code under test can edit is not an expectation.
+ *
+ * So the numbers below are asserted against nothing but this file, and
+ * *"draws exactly the five positions written out below"* is what stops a sixth
+ * position slipping past a table that has never heard of it. Both properties,
+ * and they were never in conflict. GPT Sol, reviewing the built code,
+ * 2026-09-01.
+ */
+const EXPECTED_POSITIONS = [
+  { words: "clearly underpowered", valence: -100 },
+  { words: "leans underpowered", valence: -50 },
+  { words: "counts neither way", valence: 0 },
+  { words: "leans well powered", valence: 50 },
+  { words: "clearly well powered", valence: 100 },
+] as const;
+
+/**
  * **Loud model numbers**, none of which is one of the five the instrument
  * writes. If the panel ever starts echoing the model's judgement into the place
  * the referee makes theirs, these are what the tripwire sees.
@@ -113,6 +137,26 @@ const DIVERGING: SavedCriterion = {
       valence: MODEL_VALENCES[1] as number,
     },
   ],
+};
+
+/**
+ * **A second criterion with two ends, whose ends say something else entirely.**
+ *
+ * It exists so that changing the criterion of a placement can be tested at all.
+ * The poles are deliberately unrelated to `POLES`: a −50 that means *leans
+ * underpowered* on one criterion means *leans the statistics are wrong* on this
+ * one, and the whole point of the five positions is that the number only ever
+ * means what its criterion's two words say.
+ */
+const OTHER_POLES = { against: "the statistics are wrong", favour: "the statistics are sound" };
+
+const DIVERGING_TOO: SavedCriterion = {
+  id: "spya-crt2dd",
+  criterion: "Are the statistics right?",
+  config: { kind: "diverging", poles: OTHER_POLES, scale: "rg" },
+  createdAt: "2026-09-01T09:03:00.000Z",
+  status: "done",
+  results: [],
 };
 
 /** A criterion with no two ends. `markProblem` refuses a placement on it. */
@@ -165,10 +209,46 @@ interface Sent {
 let sent: Sent[];
 /** Criteria the GET serves. Posed per test. */
 let served: SavedCriterion[];
-/** Comments the GET serves. Posed per test. */
+/**
+ * **The comments the fake server holds**, which the writes below change.
+ *
+ * It is the article's rows rather than a fixture the GET reads once: the races
+ * further down turn on the difference between what the server ended up with and
+ * what the browser ended up showing, and a server that never changed could not
+ * tell them apart.
+ */
 let stored: Comment[];
 /** Whether the writes succeed. Posed per test. */
 let writesFail: boolean;
+
+/**
+ * One write the client has sent and not yet been answered for.
+ *
+ * Two moments, not one, because the whole of the bug is that they are two.
+ * `process` is the server running the write — the row changes, and the answer
+ * it will send is composed out of what it holds *then*. `deliver` is that
+ * answer reaching the browser. A test that can order those separately can stage
+ * both of the reorderings a network does: two requests arriving in the wrong
+ * order, and two answers crossing on the way back.
+ */
+interface InFlight {
+  process(): void;
+  deliver(): void;
+}
+
+/**
+ * Where writes park, when a test has asked them to. `null` means answer at
+ * once, which is what every test that is not about ordering wants.
+ */
+let held: InFlight[] | null = null;
+
+/** From here on, writes wait to be landed by hand. */
+function holdWrites(): void {
+  held = [];
+}
+
+/** The comment as the hook holds it — what every other panel in the app draws from. */
+let latest: Comment | undefined;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -198,6 +278,36 @@ function applyMark(comment: Comment, body: Record<string, unknown>): Comment {
   };
 }
 
+/** The reader's own words, changed by `PATCH /api/comments/:slug/:id`. */
+function applyBody(comment: Comment, body: Record<string, unknown>): Comment {
+  const { body: _wasBody, ...rest } = comment;
+  const next = body["body"];
+  return { ...rest, ...(typeof next === "string" ? { body: next } : {}) };
+}
+
+/**
+ * **The server running one write**: the row changes, and the answer is composed
+ * out of the row as it stands *now*.
+ *
+ * That last part is the whole of the second race. The real routes answer with
+ * the entire comment, so an answer is a snapshot of every field at the moment
+ * the write ran — and an old snapshot arriving late puts back every field a
+ * newer write has since changed. `patchBody` and `patchMark` touch disjoint
+ * columns, so nothing is lost on disk; it is the browser that ends up
+ * disagreeing with Postgres.
+ */
+function process(url: string, body: Record<string, unknown> | undefined): Response {
+  if (writesFail) return json({ error: "The server said no." }, 500);
+  const target = stored.find((c) => url.includes(c.id));
+  // A POST: the comment is in the body rather than the path.
+  if (!target) {
+    return json({ comment: applyMark(storedComment({ id: String(body?.["id"]) }), body ?? {}) });
+  }
+  const next = url.endsWith("/mark") ? applyMark(target, body ?? {}) : applyBody(target, body ?? {});
+  stored = stored.map((c) => (c.id === next.id ? next : c));
+  return json({ comment: next });
+}
+
 function answer(url: string, init: RequestInit): Promise<Response> {
   const method = init.method ?? "GET";
   const body = typeof init.body === "string"
@@ -208,9 +318,25 @@ function answer(url: string, init: RequestInit): Promise<Response> {
     return Promise.resolve(json({ criteria: served, sourceHash: "abc" }));
   }
   if (method === "GET") return Promise.resolve(json({ comments: stored }));
-  if (writesFail) return Promise.resolve(json({ error: "The server said no." }, 500));
-  const target = stored.find((c) => url.includes(c.id)) ?? storedComment({ id: String(body?.["id"]) });
-  return Promise.resolve(json({ comment: applyMark(target, body ?? {}) }));
+  if (!held) return Promise.resolve(process(url, body));
+
+  /* Parked. Nothing has reached the server yet — `process` runs when the test
+     says it does, which is what lets a test decide the order the writes land
+     in as well as the order their answers come back. */
+  let deliverWith!: (r: Response) => void;
+  const parked = new Promise<Response>((resolve) => {
+    deliverWith = resolve;
+  });
+  let composed: Response | null = null;
+  held.push({
+    process: () => {
+      composed = process(url, body);
+    },
+    deliver: () => {
+      deliverWith(composed ?? process(url, body));
+    },
+  });
+  return parked;
 }
 
 /** The one write we care about, whatever else the hook did on the way. */
@@ -262,6 +388,14 @@ function AnnotateHarness({ placing }: { placing: boolean }) {
 function CommentHarness({ placing, comment }: { placing: boolean; comment: Comment }) {
   const comments = useComments(SLUG);
   const live = comments.comments.find((c) => c.id === comment.id);
+  /* Reported out so a test can read the hook's own copy of the row. The dialog
+     shows the placement, but the reader's words live in a `<textarea>` with a
+     draft of its own — so a body the hook has quietly reverted is invisible on
+     screen and visible everywhere else in the app, which is the half of the
+     interleaving race that has to be asserted rather than looked at. */
+  useEffect(() => {
+    latest = live;
+  }, [live]);
   if (!live) return null;
   return createElement(CommentDialog, {
     comment: live,
@@ -278,7 +412,7 @@ function CommentHarness({ placing, comment }: { placing: boolean; comment: Comme
     onRetry: () => {},
     onDeepen: () => {},
     onDiscuss: () => {},
-    onEdit: () => {},
+    onEdit: (body) => void comments.edit(comment.id, body),
     onPlace: (mark) => void comments.place(comment.id, mark),
     error: comments.error,
   });
@@ -295,6 +429,88 @@ async function show(element: ReturnType<typeof createElement>): Promise<void> {
     root.render(element);
   });
   await settle();
+}
+
+/**
+ * Land everything the client has in flight, in rounds.
+ *
+ * Rounds, rather than one pass, because a queue sends its next write only once
+ * the last one has been answered — so a test that emptied the tray once would
+ * stop while the second half of what it asked for was still to come, and read
+ * the intermediate state as the final one.
+ */
+async function landInRounds(round: (batch: InFlight[]) => void): Promise<void> {
+  // A queued write is dispatched a microtask after the click, so let the clicks
+  // turn into requests before deciding there are none.
+  await settle();
+  if (!held) throw new Error("nothing is being held; call holdWrites() before the clicks");
+  for (let i = 0; i < 8; i += 1) {
+    const batch = held;
+    held = [];
+    if (batch.length === 0) return;
+    await act(async () => {
+      round(batch);
+    });
+    await settle();
+  }
+  throw new Error("the client was still writing after eight rounds");
+}
+
+/**
+ * **The writes reach the server in the opposite order to the clicks.**
+ *
+ * Two independent requests may always do this — different connections, and
+ * nothing in HTTP promises the one you sent first is the one that runs first —
+ * and when they do, the *earlier* click is what ends up in Postgres and on
+ * screen. A per-comment queue removes the possibility rather than narrowing it:
+ * with one write out at a time there is no order left to get wrong, and this
+ * helper then lands them one at a time in the order they were sent.
+ */
+async function landNewestFirst(): Promise<void> {
+  await landInRounds((batch) => {
+    for (const write of [...batch].reverse()) {
+      write.process();
+      write.deliver();
+    }
+  });
+}
+
+/**
+ * **The writes run in the order they were sent, and the answers cross on the
+ * way back.**
+ *
+ * The other reordering, and the one that needs no server-side disagreement at
+ * all: both writes land correctly on disjoint columns, and the older answer —
+ * a snapshot of the whole comment as it stood before the newer write ran —
+ * arrives last and puts the field it does not own back to what it was.
+ */
+async function landAnswersInReverse(): Promise<void> {
+  await landInRounds((batch) => {
+    for (const write of batch) write.process();
+    for (const write of [...batch].reverse()) write.deliver();
+  });
+}
+
+/**
+ * Type into the note box and leave it, which is how an edit commits.
+ *
+ * The native value setter, because React overrides the property on a controlled
+ * `<textarea>` and a plain assignment leaves its own state behind; and
+ * `focusout` rather than `blur`, because React delegates `onBlur` to the
+ * bubbling event and a non-bubbling `blur` never reaches the root listener
+ * (tests/sketch-zoom-and-peek.test.tsx says the same about `focusin`).
+ */
+function type(words: string): void {
+  const box = container.querySelector<HTMLTextAreaElement>("textarea.cmt-note");
+  if (!box) throw new Error("there is no note box on screen");
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  act(() => {
+    setter?.call(box, words);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  act(() => {
+    box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  });
 }
 
 /** Every button in the placement section, by its visible words. */
@@ -338,6 +554,8 @@ beforeEach(() => {
   served = [DIVERGING];
   stored = [];
   writesFail = false;
+  held = null;
+  latest = undefined;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -369,20 +587,41 @@ describe("the five positions, and the numbers they write", () => {
     });
   });
 
-  /* Derived from the exported table rather than written out, so a sixth
-     position cannot be added without this test seeing it — and so the labels
-     the test presses are the labels the instrument draws, not a second copy. */
-  for (const step of PLACEMENT_STEPS) {
-    it(`sends ${step.valence} for "${placementLabel(step, POLES)}"`, async () => {
+  /**
+   * **The membership check, which is the half `EXPECTED_POSITIONS` cannot do.**
+   *
+   * A literal table can only assert about the positions it knows about, so on
+   * its own a sixth position would simply be skipped — added, shipped, and
+   * never pressed by anything. This is what makes that impossible: the words
+   * the instrument actually draws, in order, against the words written out
+   * below. A position added, removed, renamed or reordered reddens here.
+   *
+   * The two together are the whole of what the brief asked for. Deriving the
+   * *numbers* from `PLACEMENT_STEPS` as well — which is what this file did
+   * until 2026-09-01 — meant the parameterised cases below took their clicks
+   * and their expectations from the same table, so changing the production −50
+   * to −40 left every one of them green. GPT Sol found it.
+   */
+  it("draws exactly the five positions written out below, in that order", () => {
+    expect(PLACEMENT_STEPS.map((s) => placementLabel(s, POLES))).toEqual(
+      EXPECTED_POSITIONS.map((p) => p.words),
+    );
+  });
+
+  /* One case per position, pressing a literal label and expecting a literal
+     number. Nothing here reads `PLACEMENT_STEPS`, which is the point: the
+     production table cannot move the target it is being measured against. */
+  for (const position of EXPECTED_POSITIONS) {
+    it(`sends ${position.valence} for "${position.words}"`, async () => {
       await show(createElement(AnnotateHarness, { placing: true }));
       pick(DIVERGING.id);
-      press(placementLabel(step, POLES));
+      press(position.words);
       save();
       await settle();
 
       expect(lastWrite().body).toMatchObject({
         criterionId: DIVERGING.id,
-        valence: step.valence,
+        valence: position.valence,
       });
     });
   }
@@ -464,6 +703,64 @@ describe("changing and clearing a placement that already exists", () => {
     expect(write.body).toEqual({ criterionId: null, valence: null });
   });
 
+  /**
+   * **The number does not travel to the new criterion**, and this is the one
+   * that fabricates a judgement if it goes wrong.
+   *
+   * −50 is not a quantity. It is the second of five positions, and what it
+   * *says* is "leans underpowered" — four words that exist only because *Is the
+   * study adequately powered?* has those two ends. Carry it onto *Are the
+   * statistics right?* and the referee is recorded as having said "leans the
+   * statistics are wrong", a sentence they never read, about a criterion they
+   * never placed. Nothing errors, the database is happy, and the panel prints
+   * it beside the model's as an independent human judgement.
+   *
+   * So the new criterion arrives with no placement on it, which the route
+   * already calls legal — `{ criterionId, valence: null }` is a note answering
+   * a criterion without a score — and the five positions come back up blank in
+   * the new criterion's own words. GPT Sol, reviewing the built code,
+   * 2026-09-01.
+   */
+  it("clears the number when the criterion changes, rather than carrying it across", async () => {
+    served = [DIVERGING, DIVERGING_TOO];
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+    expect(checked()).toBe(placementLabel(PLACEMENT_STEPS[1], POLES));
+
+    pick(DIVERGING_TOO.id);
+    await settle();
+
+    const write = lastWrite();
+    expect(write.method).toBe("PATCH");
+    expect(write.body).toEqual({ criterionId: DIVERGING_TOO.id, valence: null });
+    /* And on screen: no position is chosen on the new criterion, so the referee
+       is asked rather than told. Read off `aria-checked` rather than the text,
+       because all five labels are always drawn. */
+    expect(checked()).toBeNull();
+  });
+
+  /**
+   * The other half of the same rule, and the reason clearing is conditional on
+   * the criterion actually being a different one.
+   *
+   * A browser fires `change` only when the value moves, so this is not a thing
+   * a referee can do with a mouse — but "the criterion changed" is a fact about
+   * the two values, not about how the event got here, and a version that
+   * cleared on every `change` would blank a placement the moment anything
+   * re-selected the option that was already chosen.
+   */
+  it("does not wipe the placement when the picker lands on the criterion it is already on", async () => {
+    served = [DIVERGING, DIVERGING_TOO];
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+
+    pick(DIVERGING.id);
+    await settle();
+
+    expect(lastWrite().body).toEqual({ criterionId: DIVERGING.id, valence: -50 });
+    expect(checked()).toBe(placementLabel(PLACEMENT_STEPS[1], POLES));
+  });
+
   it("offers to place a plain reading note, so one can become a review comment", async () => {
     const note = storedComment();
     stored = [note];
@@ -481,6 +778,88 @@ describe("changing and clearing a placement that already exists", () => {
     await settle();
 
     expect(lastWrite().body).toEqual({ criterionId: DIVERGING.id, valence: -50 });
+  });
+});
+
+/**
+ * **Two writes on one comment, and the order they land in.**
+ *
+ * A referee changing their mind twice in a second is ordinary, and so is
+ * pressing a position and then tidying the note. Both used to launch their own
+ * request the moment they happened, and two requests in the air have no order:
+ * the *first* click could be the one stored, and an answer that crossed another
+ * on the wire put back a field its own write had never touched.
+ *
+ * These stage each reordering by hand and assert three things — the server's
+ * row, the hook's copy, and the position the instrument draws — because the bug
+ * shows in different ones depending on which way round it went, and a test that
+ * checked only the screen would call a browser that disagrees with Postgres a
+ * pass. GPT Sol found both, reviewing the built code, 2026-09-01.
+ */
+describe("two writes on one comment", () => {
+  const placed = storedComment({ criterionId: DIVERGING.id, valence: -50 });
+
+  it("has only one write out at a time, so there is no order to get wrong", async () => {
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+    holdWrites();
+
+    press("clearly underpowered");
+    press("clearly well powered");
+    await settle();
+
+    /* The second waited for the first. This is the fix itself rather than a
+       symptom of it: the reorderings below are things a network does, and the
+       only way to be sure of them is to have nothing to reorder. */
+    expect(held).toHaveLength(1);
+  });
+
+  it("stores and shows the last click when the two writes reach the server backwards", async () => {
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+    holdWrites();
+
+    press("clearly underpowered");
+    press("clearly well powered");
+    await landNewestFirst();
+
+    // What the referee last said, in all three places it is written down.
+    expect(stored[0]?.valence).toBe(100);
+    expect(latest?.valence).toBe(100);
+    expect(checked()).toBe("clearly well powered");
+  });
+
+  it("does not put the old placement back when a late note answer lands after it", async () => {
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+    holdWrites();
+
+    type("a much better note");
+    press("clearly well powered");
+    await landAnswersInReverse();
+
+    expect(latest?.body).toBe("a much better note");
+    /* The note's answer carries the whole comment, and the mark it carries is
+       the one the server held when the note was written — so arriving second it
+       is a judgement the referee has already replaced. */
+    expect(latest?.valence).toBe(100);
+    expect(checked()).toBe("clearly well powered");
+  });
+
+  it("does not put the old note back when a late placement answer lands after it", async () => {
+    stored = [placed];
+    await show(createElement(CommentHarness, { placing: true, comment: placed }));
+    holdWrites();
+
+    press("clearly well powered");
+    type("a much better note");
+    await landAnswersInReverse();
+
+    /* Read off the hook rather than the box: the `<textarea>` keeps a draft of
+       its own, so a reverted body is invisible there and visible in the gutter,
+       the criteria panel and the next dialog that opens. */
+    expect(latest?.body).toBe("a much better note");
+    expect(latest?.valence).toBe(100);
   });
 });
 

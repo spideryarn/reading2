@@ -56,6 +56,12 @@ a comment that already exists. Placing stays optional and saving without one is 
 [`src/web/PlaceOnCriterion.tsx`](../../src/web/PlaceOnCriterion.tsx) and
 [referee-mode.md § the referee's own mark](referee-mode.md#the-referees-own-mark).
 
+**Changing the criterion clears the number.** A position is not a quantity — it is one of five
+labels, and *"leans underpowered"* exists only because that criterion has those two ends. Carried
+onto a criterion whose ends say something else, the same −50 records a judgement the referee never
+made, about poles they never saw. So the new criterion arrives unplaced and they are asked again in
+its own words, which is the ordinary `{ criterionId, valence: null }` state below.
+
 Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/routes.ts)):
 
 - **A criterion that is not yours is refused, not stored.** `criterionId` comes off a request, so on

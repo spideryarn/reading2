@@ -228,11 +228,65 @@ export function useComments(slug: string): CommentsApi {
    */
   const deleted = useRef(new Set<string>());
 
+  /**
+   * The last PATCH in flight for each comment, so a second one waits for it.
+   *
+   * The same ref `useCriteria.recolour` and `useSearch` keep, for the same
+   * reason and deliberately not a third invention of it. Here it is doing two
+   * jobs at once, and the second is the one that is easy to miss:
+   *
+   * 1. **Two placements cannot land out of order.** Every click used to launch
+   *    its own PATCH, and two independent requests may reach the server in
+   *    either order — so the *first* click could be what ends up in Postgres,
+   *    with the browser showing whichever answer arrived last. A referee who
+   *    corrects themselves would be stored as having said the thing they
+   *    corrected.
+   * 2. **A late answer cannot restore a field the reader has since changed.**
+   *    Both PATCHes answer with the *whole* comment and both replace the whole
+   *    stored row (see `edit`), so a body answer that crosses a mark answer on
+   *    the wire puts the old mark back on screen, and the other way round. They
+   *    touch disjoint columns on the server, so nothing is lost on disk — but
+   *    the screen disagrees with it until the next reload, which is the shape
+   *    docs/reusable/silent-success.md is about.
+   *
+   * Only the two PATCHes queue here. `send` streams for 15-25 seconds and
+   * putting an edit behind it would freeze the reader's own note for the length
+   * of a model call; `forget` is a DELETE the tombstone already makes win.
+   * GPT Sol, reviewing the built code, 2026-09-01.
+   */
+  const patching = useRef(new Map<string, Promise<void>>());
+
   // Switching article throws the tombstones away with the comments they name.
   useEffect(() => {
     const gone = deleted.current;
-    return () => gone.clear();
+    const chains = patching.current;
+    return () => {
+      gone.clear();
+      chains.clear();
+    };
   }, [slug]);
+
+  /**
+   * Send a write behind whatever is already out for *this* comment.
+   *
+   * **The thing that keeps the chain alive is `write`'s own `try/catch`**: it
+   * swallows the failure, so the promise it returns never rejects and the next
+   * write is always sent. The second handler in `.then(write, write)` is a
+   * backstop for the day someone takes that `catch` out — it costs nothing, and
+   * it would then be the only thing standing between one dropped connection and
+   * that comment being unwritable for the rest of the session. It is not what
+   * is doing the work today. (The same note is on `useCriteria.recolour`, where
+   * it was got wrong the other way round first.)
+   *
+   * The chain is returned rather than swallowed, so `await comments.edit(…)`
+   * still means *this write is done* — which is what
+   * tests/refused-writes-are-reported.test.tsx waits on.
+   */
+  const queue = useCallback((id: string, write: () => Promise<void>): Promise<void> => {
+    const next = (patching.current.get(id) ?? Promise.resolve()).then(write, write);
+    patching.current.set(id, next);
+    return next;
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -545,40 +599,47 @@ export function useComments(slug: string): CommentsApi {
   /**
    * Change the reader's words on a comment they already made.
    *
-   * **The response is merged over the stored row, never substituted for it.**
-   * The server answers with the whole comment, so substituting would be
-   * harmless today — but the shape this must never take is "build an optimistic
-   * comment out of the body alone", which blanks the answer, the citations and
-   * the linked conversation in memory until the next reload. GPT Sol's review
-   * named this as the client half of the field-mutability rules.
+   * **The shape this must never take** is "build an optimistic comment out of
+   * the body alone", which blanks the answer, the citations and the linked
+   * conversation in memory until the next reload. GPT Sol's review named this
+   * as the client half of the field-mutability rules.
+   *
+   * **Queued per comment** — see `patching`. Replacing the whole row with the
+   * server's answer is only safe while the answers arrive in the order the
+   * writes were sent, and two independent PATCHes give no such promise.
    */
   const edit = useCallback(
-    async (id: string, body: string | null): Promise<void> => {
-      setError(null);
-      try {
-        const r = await fetchOk(
-          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ body }),
-          },
-        );
-        const { comment } = await readJson<{ comment: Comment }>(r);
-        /* **The server's comment replaces the stored one; it is not merged
-           over it.** A merge cannot express a *removal*: clearing the body
-           returns a comment with no `body` key, and `{ ...c, ...comment }`
-           keeps the old one — so a reader who emptied the box watched their
-           words come straight back. The response is the whole row, so replacing
-           is both correct and the only thing that can clear a field. The one
-           client-only field, `replacing`, deliberately does not survive an
-           edit. GPT Sol, reviewing the built code, 2026-08-28. */
-        setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
-      } catch (e) {
-        setError(describeFetchFailure(e as Error));
-      }
-    },
-    [slug],
+    (id: string, body: string | null): Promise<void> =>
+      queue(id, async () => {
+        setError(null);
+        try {
+          const r = await fetchOk(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ body }),
+            },
+          );
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          /* **The server's comment replaces the stored one; it is not merged
+             over it.** A merge cannot express a *removal*: clearing the body
+             returns a comment with no `body` key, and `{ ...c, ...comment }`
+             keeps the old one — so a reader who emptied the box watched their
+             words come straight back. The response is the whole row, so
+             replacing is both correct and the only thing that can clear a
+             field. The one client-only field, `replacing`, deliberately does
+             not survive an edit. GPT Sol, reviewing the built code, 2026-08-28.
+
+             Replacing is also why this had to be queued: it carries the mark
+             the server held when it answered, so out of order it is a mark the
+             referee has already changed. */
+          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+        } catch (e) {
+          setError(describeFetchFailure(e as Error));
+        }
+      }),
+    [slug, queue],
   );
 
   /**
@@ -601,31 +662,41 @@ export function useComments(slug: string): CommentsApi {
    * Same reason as `edit`: a merge cannot express a *removal*, and clearing a
    * placement returns a comment with no `criterionId` and no `valence` — so
    * `{ ...c, ...comment }` would put the cleared placement straight back.
+   *
+   * **Queued per comment** — see `patching`. Not showing the new value until
+   * the server has it is what keeps a failed write from looking like a success;
+   * it does nothing about a *succeeded* write being overtaken by an older one,
+   * and a referee pressing two positions in a second is the ordinary way to
+   * change your mind. The buttons stay enabled through the wait deliberately:
+   * with the queue there is no order left to get wrong, and disabling them
+   * would need local state in an instrument whose whole design is that it has
+   * none.
    */
   const place = useCallback(
-    async (id: string, mark: Mark): Promise<void> => {
-      setError(null);
-      try {
-        const r = await fetchOk(
-          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            /* **Both fields, always** — this route reads `null` as *clear it*,
-               which is the whole reason it is a route of its own rather than a
-               pair of optional fields on the body patch. Named rather than
-               spread, so a `Mark` that ever grows a third field cannot start
-               travelling by accident. */
-            body: JSON.stringify({ criterionId: mark.criterionId, valence: mark.valence }),
-          },
-        );
-        const { comment } = await readJson<{ comment: Comment }>(r);
-        setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
-      } catch (e) {
-        setError(describeFetchFailure(e as Error));
-      }
-    },
-    [slug],
+    (id: string, mark: Mark): Promise<void> =>
+      queue(id, async () => {
+        setError(null);
+        try {
+          const r = await fetchOk(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              /* **Both fields, always** — this route reads `null` as *clear
+                 it*, which is the whole reason it is a route of its own rather
+                 than a pair of optional fields on the body patch. Named rather
+                 than spread, so a `Mark` that ever grows a third field cannot
+                 start travelling by accident. */
+              body: JSON.stringify({ criterionId: mark.criterionId, valence: mark.valence }),
+            },
+          );
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+        } catch (e) {
+          setError(describeFetchFailure(e as Error));
+        }
+      }),
+    [slug, queue],
   );
 
   /**
