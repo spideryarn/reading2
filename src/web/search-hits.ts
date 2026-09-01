@@ -28,6 +28,7 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
+import type { RefereeResult } from "../referee-criteria.js";
 import type {
   Block,
   BlockId,
@@ -585,6 +586,73 @@ export function resolveTimelineEvent(
       start: o.start,
       confidence: null,
       reasoning: null,
+    });
+    if (one) out.push(one);
+  }
+  return out;
+}
+
+/**
+ * One referee criterion's results, resolved into the same `Found[]` everything
+ * downstream reads.
+ *
+ * **The fifth arm**, after the literal matcher, the meaning search, the ideas
+ * and the quotes — and it is the fifth for the reason the third one was: an
+ * entire sub-mode's worth of marking costs one function, because nothing below
+ * this line knows or cares which source produced a passage.
+ *
+ * Three of the arguments are decisions rather than plumbing:
+ *
+ * - **`confidence` is the result's own**, unlike ideas and quotes which pass
+ *   `null`. A referee criterion really does carry a 0–100 relevance the model
+ *   reported, in the same unit and with the same meaning as a `SearchHit`'s
+ *   (src/referee-criteria.ts § `Judged.confidence`), so the wash strength, the
+ *   `?conf=` bar and the confidence ordering all mean what they already mean.
+ * - **A real `slot`, and `runId` is the criterion's id.** One lane in the rail
+ *   per criterion, and a slot so the paragraph bar has a hue — `blockHues`
+ *   drops `null` slots, so a criterion without one would paint the rail and
+ *   leave the bar blank, which looks like a rendering bug and is not one.
+ * - **`start` is passed**, like a search hit's and an idea's and unlike a
+ *   quote's: these offsets come from a model naming a block, so the first
+ *   rendered occurrence is not necessarily the one meant.
+ *
+ * ## What is deliberately not here: the valence
+ *
+ * A `DivergingResult` carries a −100…+100 valence and **none of it reaches
+ * `Found`**. That is Sol's finding 7 and it is the visual rule this whole
+ * sub-mode is built around: the renderer has exactly two channels — the wash
+ * carries strength, the categorical stripe carries *which* source found the
+ * passage — and `annotateHtml` keeps every identity slot on an overlapping mark
+ * while collapsing strength to the strongest. Repainting the stripe by valence
+ * throws provenance away: two negative criteria over one phrase both go red and
+ * the reader, mid-sentence, cannot tell which criterion said what.
+ *
+ * So the prose keeps saying **which criterion**, and the panel row and the block
+ * gutter say **which way** — in words and a signed number as well as in colour.
+ * A `Found` with a valence field on it would be the first step back towards the
+ * version this refuses, which is why the type has none and this function drops
+ * it rather than carrying it "in case".
+ */
+export function resolveCriterion(
+  blocks: Block[],
+  criterion: { id: string; slot: number; results: RefereeResult[] },
+): Found[] {
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const [n, r] of criterion.results.entries()) {
+    const one = resolveOne(at, {
+      /* The same three-part key as a hit, an occurrence and a quote — one
+         criterion can match twice in the same paragraph, so `blockId` alone is
+         not an identity, and with several criteria switched on at once
+         `blockId:n` is not either. */
+      key: `${criterion.id}:${r.blockId}:${n}`,
+      blockId: r.blockId,
+      runId: criterion.id,
+      slot: criterion.slot,
+      quote: r.quote,
+      ...(r.start !== undefined && { start: r.start }),
+      confidence: r.confidence,
+      reasoning: r.reasoning,
     });
     if (one) out.push(one);
   }

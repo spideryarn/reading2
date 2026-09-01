@@ -166,6 +166,27 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Criteria — the referee's own questions run over the paper**
+     (src/referee-criteria-run.ts). Search's policy exactly, and for both of
+     search's reasons rather than one:
+
+     `order` is pinned because this call sends the whole (identity-stripped)
+     article behind a `cache_control` breakpoint, and a referee works through a
+     list of criteria one after another over the same paper. Landing on a
+     different upstream halfway down that list pays for the article again, and
+     the answer looks identical.
+
+     `require_parameters` is the half that is not a preference: a fallback that
+     silently dropped `cache_control` gives a full-price answer indistinguishable
+     from a cheap one, and on a `literature` criterion it would drop the web
+     search tool instead — which is worse, because the model then answers from
+     memory, cites nothing, and `validateResults` throws every uncited result
+     away. An empty panel is what a referee would see, and nothing would say the
+     tool never ran. */
+  "referee-criteria": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and

@@ -193,6 +193,26 @@ const SHARED = new Set([
      while `/read/x/metadata` is two and never does. Two copies of that
      predicate is a tab that changes at mount. See src/read-address.ts. */
   "read-address.js",
+  /* What a referee's criterion is, and what a result of one may say. On the
+     list because both modules qualify — `referee-criteria.js` imports
+     `quote-match.js`, `types.js` and `urls.js`, every one of them already here,
+     and `saved-criteria.js` imports only `referee-criteria.js` — and because
+     being on it is the point rather than a convenience.
+
+     The client needs them for the reason `sketch-scene.js` is here: **the
+     browser draws what the server validated, and it has to be the same
+     validation.** The panel prints a signed valence and a direction in words
+     off `DivergingResult`, and the marks in the prose are resolved from the
+     same `RefereeResult` the server checked with `findQuote` — a second
+     declaration of that shape in `src/web/` is how the panel and the paragraph
+     come to disagree about what a criterion found. The two clamps especially:
+     `clampConfidence` sends a negative to 0 and `clampValence` keeps it, and a
+     browser copy of that pair is the exact silent failure the whole module
+     exists to prevent.
+     See src/referee-criteria.ts and
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
+  "referee-criteria.js",
+  "saved-criteria.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
