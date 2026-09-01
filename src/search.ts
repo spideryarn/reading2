@@ -74,10 +74,9 @@ import {
   type Usage,
   explainAbort,
   providerFailedMidAnswer,
-  readerAborted,
   stoppedByReader,
 } from "./openrouter-stream.js";
-import { ProviderRefused, openRouterStream } from "./ai-call.js";
+import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { stripFence } from "./parse-json.js";
 import {
@@ -619,7 +618,6 @@ export async function* findPassagesStream({
      below. */
   const emittedIds: string[] = [];
   let used = model;
-  let finishReason: string | null = null;
   let usage: Usage | undefined;
   const end: StreamEnd = { terminated: false };
   /* Three deliberate outcomes when the reader disconnects, not two by
@@ -635,11 +633,10 @@ export async function* findPassagesStream({
          disconnect as the model's fault or invite a retry nobody asked for.
        - the initial fetch never replies before the reader leaves → the same
          rule, in the catch around it above.
-     `stopped` is what the second and third checks below share; see
-     `stoppedByReader`/`readerAborted` in openrouter-stream.ts, and chat's
-     own `stoppedByReader` in converse.ts, which this follows. */
-  let stopped = false;
-
+     `stopped` is what the checks below share. It is no longer a flag set in
+     two places: it is one reading of `classifyEnd`'s answer, taken once after
+     the loop — see the switch below, and
+     docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md. */
   try {
     // malformedFrames: "throw" — a dropped SSE frame here can drop a whole
     // hits-array element while leaving JSON either side that still parses,
@@ -660,7 +657,10 @@ export async function* findPassagesStream({
       // failure. It arrives as data, not as a broken connection.
       if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      /* No `finish_reason` scrape here any more: `openRouterStream` writes it
+         onto `end` for every caller, and `classifyEnd` below is what reads it.
+         This line was one of seven identical copies —
+         docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
       const piece = choice?.delta?.content;
       if (typeof piece === "string" && piece.length > 0) {
         // Fed unconditionally, cap or no cap — `text()` has to stay complete
@@ -685,17 +685,12 @@ export async function* findPassagesStream({
   } catch (err) {
     if (stoppedByReader(err, signal, deadline, stall.signal)) {
       /* The caller gave up — see explain.ts's note on the same check. Not an
-         error, and not logged as one. What's left in the extractor's buffer is
-         whatever text arrived before that, and the checks below decide what to
-         do with it. */
-      stopped = true;
+         error, and not logged as one. **Nothing is said or decided here**: this
+         falls through to `classifyEnd`, which reaches `abandoned` from the same
+         signals, so the throwing path and the clean-end path cannot come to say
+         different things about one event. They used to be two branches, and
+         only one of them logged. */
       clearTimeout(stallTimer);
-      line.info(
-        { model: used, ms: since(started), chars: extractor.text().length },
-        answered
-          ? `search from ${used} was abandoned`
-          : `search was abandoned before ${model} replied`,
-      );
     } else if (err instanceof ProviderRefused) {
       /* The status, not the body. OpenRouter's error text is the one place a
          provider might echo part of what we sent, and what we sent is the whole
@@ -726,31 +721,108 @@ export async function* findPassagesStream({
     clearTimeout(stallTimer);
   }
 
-  /* An abort can also end the loop cleanly — see the long comment on the same
-     two checks in explain.ts, which is where the bugs behind both of them were
-     found. */
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+  /* **How did this stream end?** One question with one true answer, asked of
+     the shared classifier rather than re-derived here from three signals, a
+     boolean and a string. This file used to do that re-derivation in the same
+     order as six others, with the same broken guard in it —
+     docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
 
-  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
-    line.error(
-      {
-        model: used,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-        chars: extractor.text().length,
-      },
-      `stream from ${used} was cut off`,
-    );
-    throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
-  }
+     What each ending *means* is still search's. It differs from everybody
+     else's in one way that matters: the payload is a single JSON object, so a
+     reply that stopped early usually fails the strict parse below and is caught
+     there, with a sentence about the answer rather than about the stream. */
+  const outcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+  const finishReason = end.finishReason ?? null;
+  /* The three deliberate outcomes described where this used to be declared, now
+     read once from the classifier instead of set in two places. */
+  const stopped = outcome.kind === "abandoned";
 
-  if (!stopped && !end.terminated && finishReason === null) {
-    line.error(
-      { model: used, ms: since(started), chars: extractor.text().length },
-      `stream from ${used} ended without finishing`,
-    );
-    throw new Error(ENDED_UNFINISHED.message);
+  switch (outcome.kind) {
+    case "abandoned":
+      /* **This line is new on one of the two paths, and that is the point.** A
+         reader-abort that *threw* was logged in the catch; one that ended the
+         loop cleanly — `sseChunks` cancels its reader, and a cancelled read
+         resolves `{ done: true }` — set a flag and said nothing. Same event,
+         two paths, one of them silent.
+
+         So a clean abort can now produce this line *and* one of the specific
+         abandonment lines below (duplicate key, empty text, unparseable). That
+         pairing is not new: it is what the throwing path has always done, and
+         the two carry different things — this one has `chars` and whether the
+         model ever answered, those have what the buffer turned out to be. */
+      line.info(
+        { model: used, ms: since(started), chars: extractor.text().length },
+        answered
+          ? `search from ${used} was abandoned`
+          : `search was abandoned before ${model} replied`,
+      );
+      break;
+
+    case "timed-out":
+    case "went-quiet":
+      line.error(
+        {
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          chars: extractor.text().length,
+        },
+        `stream from ${used} was cut off`,
+      );
+      throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+
+    case "provider-failed":
+      /* The same failure as the `chunk.error` throw in the loop, arriving in a
+         field instead of as data — so the same sentence, deliberately. This is
+         the one behaviour this migration changed: under the old guard a
+         non-null reason could only make the conjunction *less* likely to fire,
+         so a provider that said `error` was handed to the strict parse and
+         reported, if it happened to parse, as a finished search. */
+      line.error(
+        { model: used, ms: since(started), chars: extractor.text().length, finishReason },
+        `the provider gave up mid-search from ${used}`,
+      );
+      throw providerFailedMidAnswer();
+
+    case "unterminated":
+      line.error(
+        { model: used, ms: since(started), chars: extractor.text().length },
+        `stream from ${used} ended without finishing`,
+      );
+      throw new Error(ENDED_UNFINISHED.message);
+
+    case "truncated":
+    case "filtered":
+      /* **Left to the parse below, which is a better witness here than the
+         reason is.** A search reply is one JSON object: cut it off anywhere and
+         it does not parse, and the reader gets ANSWER_OVERFLOWED, which names
+         the actual problem. A `length` that lands *after* the object closed is
+         a legitimately short result — refusing it would throw away hits the
+         reader can already see. Quiz refuses both because a mark is prose with
+         no parse to fail. */
+      break;
+
+    case "unknown-finish-reason":
+      /* Accepted as a clean stop, on the deny-list reasoning quiz-mark spells
+         out: a gateway spelling `stop` as `end_turn` would otherwise fail every
+         search for that model. The reason is on the success log line. */
+      break;
+
+    case "wants-tools":
+      /* This request sends no tools. The web-search tool explain uses is not
+         offered here, so a model asking for one is a provider oddity. */
+      break;
+
+    case "finished":
+      break;
+
+    default: {
+      /* The point of the union. A tenth way for a stream to end becomes a
+         compile error here rather than a branch somebody forgot. */
+      const never: never = outcome;
+      throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+    }
   }
 
   /* Two top-level `hits` keys. `JSON.parse` keeps the last silently, and the

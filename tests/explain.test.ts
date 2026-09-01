@@ -152,14 +152,60 @@ describe("streaming", () => {
     await expect(ask()).rejects.toThrow(/stopped arriving before it was finished/);
   });
 
-  it("accepts a `finish_reason` as a second witness when the terminator is missing", async () => {
-    // A provider that reports why it stopped has told us the answer is whole.
-    // Requiring both witnesses would turn such a provider into a permanent
-    // failure; requiring neither is what produced the bug above.
+  it("accepts a `stop` with no terminator, because the provider said it finished", async () => {
+    /* **Not "a second witness", which is what the comment here used to say.**
+       That sentence described the old guard — `!end.terminated && finishReason
+       === null` — as a check, and it was a loosening: a conjunction cannot be
+       made *more* likely to fire by a non-null reason, so no value of
+       `finish_reason` ever failed an explanation here.
+       docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
+
+       What is being tested now is `classifyEnd` reading `stop` and answering
+       `finished`. Requiring `[DONE]` as well would turn a provider that omits
+       the terminator into a permanent failure; requiring neither is what
+       produced the bug above. */
     fetchMock.mockResolvedValue(
       sse(frame({ choices: [{ finish_reason: "stop", delta: { content: "Because of X." } }] })),
     );
     expect((await ask()).answer).toBe("Because of X.");
+  });
+
+  it("refuses one the provider itself said it errored out of", async () => {
+    /* **The one behaviour the shared classifier changed here**, and the shape
+       is the point: `[DONE]` arrives, the text is well-formed, and the only
+       thing saying otherwise is a field the old guard could not act on. It is
+       the same event as the `error` inside a 200 below, arriving in a field
+       rather than as data, so it gets the same sentence. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: "Because of" } }] }) +
+          frame({ choices: [{ finish_reason: "error", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    await expect(ask()).rejects.toThrow(/\[ai-interrupted\]/);
+  });
+
+  it("still yields a truncated answer whole, which is explain's decision and not the classifier's", async () => {
+    /* Quiz refuses a `length`; explain keeps it. There is nowhere on a
+       `Comment` to say "this trails off", and throwing would take back
+       paragraphs the reader already watched arrive. Pinned here because it is a
+       *decision* — the classifier reports `truncated` either way, and the next
+       person to read `case "truncated"` in explain.ts should find a test saying
+       the branch is deliberate rather than forgotten.
+
+       **What this observes is the generator's `done`, not a stored comment** —
+       the caller is what writes the row, and that is a different test. What it
+       pins is the only part explain.ts decides: that the answer survives the
+       switch. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: "Because of X and then" } }] }) +
+          frame({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    expect((await ask()).answer).toBe("Because of X and then");
   });
 });
 

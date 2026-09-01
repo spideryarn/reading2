@@ -614,8 +614,15 @@ Still NO-SHIP, and right again on all four. Three are small; one needs thought.
 **Stopped here, on a third review that says to.** *"Nothing here is unsafe to leave over the
 weekend."* It found one leftover worth a sentence and no code: a route whose reader has already gone
 still starts its `heartbeat` interval, which then runs unreferenced until the process exits. It
-spends nothing and cannot write, because `alive()` is already false. Recorded in `sse` so that
-nobody has to find it twice.
+spends nothing and cannot write, because `alive()` is already false.
+
+**Since fixed** (2026-09-01), because it turned out to be four words rather than a mechanism:
+`heartbeat` now asks the socket what it is — `if (res.destroyed || res.writableEnded) return () =>
+{}` — the same question, in the same words, that `sse` already asks two lines below it. The test is
+in `tests/sse-heartbeat.test.ts`, and it counts timers rather than bytes, which that file's header
+otherwise argues against: the claim here really is *"no interval exists"*, and a real socket cannot
+produce the case, because a handler only runs once a connection has been accepted. It has a negative
+control, and `vi.getTimerCount()` goes to 1 the moment the guard is removed.
 
 Two of the reviewer's test criticisms are dealt with and one is not, knowingly. `clearAttempt` now
 has a test that the request is **actually aborted** rather than that the function was called
@@ -623,17 +630,21 @@ has a test that the request is **actually aborted** rather than that the functio
 released slot lets the next answer through — defeated every shape tried: an `act` around a promise
 that never resolves leaves the hook somewhere the real panel never goes, and the failures were the
 harness rather than the code. The browser pass marks answers repeatedly and they arrive, so what is
-missing is a regression guard, not the behaviour. And **nothing yet asserts `gradeWords` is wired to
-a real mark's log line**, so deleting that field would leave every counter test green; it needs the
-`logLinesWhile` helper and its `vi.hoisted` LOG_LEVEL, which is a file-level change to a suite that
-is currently green.
+missing is a regression guard, not the behaviour.
 
-Two more the reviewer raised that are about the tests rather than the code, and it is right about
-both: **removing the `gradeWords` field from the log line would leave every counter test green**
-(nothing asserts the instrument is actually wired to a mark), and **the batch-replacement test would
-pass if `clearAttempt` were a no-op**, because it never mounts `useQuiz` or holds a live request.
-There is also no committed test for the eval's failure accounting at all — reintroducing the
-constant mark count would go unnoticed.
+**`gradeWords` is now asserted where it matters** (2026-09-01). The reviewer's point was that
+deleting the `gradeWords:` field from the success log would leave every counter test green — a rule
+with tests, an instrument with tests, and nothing joining them. Two cases in
+`tests/quiz-mark-stream.test.tsx` now drive a whole reply through the real generator and read what
+the logger actually wrote, via `logLinesWhile` and its `vi.hoisted` LOG_LEVEL. The assertion is a
+**number**, not a presence, so a field wired to a constant would not pass; there is a zero-counting
+control beside it; and deleting the field turns both red. The field itself now carries a line saying
+so, because it is the kind of thing a tidy-up deletes.
+
+One more the reviewer raised is about the tests rather than the code, and it is right: **the
+batch-replacement test would pass if `clearAttempt` were a no-op**, because it never mounts
+`useQuiz` or holds a live request. There is also no committed test for the eval's failure accounting
+at all — reintroducing the constant mark count would go unnoticed.
 
 ### The tests that would actually catch something
 

@@ -203,11 +203,34 @@ stop the seventh.
 the next copy will be spelled differently, and a rule that only matches a string is a rule about a
 string.
 
+## What has happened since
+
+Written 2026-09-01, and the counts above are as-found. Since then:
+
+- **`classifyEnd` and `StreamOutcome` exist**, in [`src/ai-call.ts`](../../src/ai-call.ts) rather
+  than `openrouter-stream.ts` — see the plan for why a parser should keep only framing facts.
+- **Three callers are on it**: `quiz-mark`, `explain`, `search`. Each kept its own policy, and in
+  each the migration went in with **no existing test rewritten**.
+- **The unfireable guard fired once on its way out.** `finish_reason: "error"` reached that
+  conjunction in both `explain` and `search`, where each already threw `providerFailedMidAnswer()`
+  for the same event arriving as `chunk.error` data — so a provider that said it had errored had its
+  half-answer stored as a whole one. Both now throw. That is the bug this postmortem predicted
+  rather than found.
+- **Four copies remain**: `converse` (which needs its per-round fold designed) and the three referee
+  files, which are somebody else's open work.
+- **`explain`'s truncation policy is unchanged and that is deliberate.** A truncated explanation is
+  still stored as a whole comment, now as a written `case "truncated"` with a comment and a test
+  saying it is a decision — which is exactly the distinction this postmortem argued the union would
+  buy. Changing what the reader is *shown* is Greg's call, not an agent's.
+
 ## Files
 
+- [`src/ai-call.ts`](../../src/ai-call.ts) — `StreamOutcome` and `classifyEnd`, and the
+  `openRouterStream` loop that populates `StreamEnd.finishReason` for every caller.
 - [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) — `StreamEnd`, `sseChunks`,
-  `readerAborted`, `stoppedByReader`, `explainAbort`. Where the union belongs.
-- The five callers: [`src/converse.ts`](../../src/converse.ts) (`:1683`, `:1931`),
+  `readerAborted`, `stoppedByReader`, `explainAbort`.
+- The five callers **as found**, with line numbers that were true when this was written and are not
+  now: [`src/converse.ts`](../../src/converse.ts) (`:1683`, `:1931`),
   [`src/explain.ts`](../../src/explain.ts) (`:677`, `:731`),
   [`src/search.ts`](../../src/search.ts) (`:748`),
   [`src/referee-mirror.ts`](../../src/referee-mirror.ts) (`:1608`),

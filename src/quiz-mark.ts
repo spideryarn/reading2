@@ -788,7 +788,11 @@ export async function* markAnswerStream({
         /* **Marks that graded the reader**, which the prompt forbids by name and
            which nothing else can see once the eval stops running. Non-zero here
            is not a failure of this call — it is the number somebody looks at
-           before deciding whether the ban needs teeth. See `GRADE_WORDS`. */
+           before deciding whether the ban needs teeth. See `GRADE_WORDS`.
+
+           **The field, not just the function, is what the wiring test in
+           tests/quiz-mark-stream.test.tsx asserts** — deleting this line used to
+           leave every counter test green. */
         gradeWords: gradeWords(reply),
         inputTokens: usage?.prompt_tokens ?? null,
         outputTokens: usage?.completion_tokens ?? null,

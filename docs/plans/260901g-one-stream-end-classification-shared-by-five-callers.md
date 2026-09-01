@@ -152,18 +152,64 @@ stubbing that one line out turns two quiz tests red, because they push a real
 *Abandonable as:* one caller on the shared truth and six on their own copies — which is where we
 already are, minus one.
 
-### Stage C — the other six — **not now**
-Left deliberately. `referee-mirror`, `referee-claims-run` and `referee-criteria-run` are being
-written this week by somebody else; `converse` needs its per-round fold designed; and `explain`'s
-truncation is a real behaviour change that wants its own decision. Migrating a caller is a small,
-independent commit, and the classifier does not care how long they take.
+### Stage C — the two quiet callers ✅, and four still to go
+- [x] **`explain.ts`** and **`search.ts`**, one commit later, on the same terms as Stage B: their
+      suites stayed green with **no existing test rewritten**, which is what "behaviour-preserving"
+      has to mean if it is to mean anything. Both lost their local `finishReason`, their in-loop
+      scrape and — in search's case — a `stopped` flag that was set in two places and is now one
+      reading of the classifier's answer. Cognitive complexity went **down** in both (explain 45→38,
+      search 69→61), which is the shape of the change: three chained `!stopped && …` conditionals
+      replaced by one `switch`.
+- [x] **One deliberate behaviour change in each, and it is the same one.** `finish_reason: "error"`
+      now throws `providerFailedMidAnswer()` rather than being handed on. Both files already threw
+      exactly that for the same event arriving as `chunk.error` **data**; the field form reached the
+      old guard, where a non-null reason could only make the conjunction less likely to fire, so a
+      provider that said it had errored got its half-answer stored as a whole one. New tests in
+      `tests/explain.test.ts` and `tests/search-stream.test.ts` cover it, and both go red if the
+      branch is turned back into a `break`.
+- [x] **What was deliberately *not* changed**, with a test pinning each so the next reader finds a
+      decision rather than an omission: explain stores a `truncated` or `filtered` answer whole,
+      because a `Comment` has nowhere to say otherwise and throwing would take back paragraphs the
+      reader already watched arrive; search leaves both to its strict parse, which is a better
+      witness — a truncated JSON object does not parse, and a `length` after the object closed is a
+      legitimately short result.
+- [x] The comment in `tests/explain.test.ts` that called `finish_reason` **"a second witness"** is
+      gone. That sentence is the one the postmortem is about, and it was still sitting in a test
+      name describing a loosening as a check. **This is the one existing test that changed** — its
+      name and its comment, with the fixture and the assertion untouched. "No existing assertion
+      changed" is the precise claim, and Stage B's is the same one.
+
+**Two things the review made explicit, and both were changes I had not named.**
+
+- **A clean reader-abort now logs where it used to be silent.** Both files logged "abandoned" from
+  the `catch`, and set a flag without logging when the same abort ended the loop *cleanly* — which
+  it does, because `sseChunks` cancels its reader and a cancelled read resolves `{ done: true }`.
+  One event, two paths, one of them mute. Unifying them is the whole point of the classifier, so the
+  line stays and now says so in both files. In search it means a clean abort can produce the generic
+  line *and* one of the specific ones below it; that pairing is not new, it is what the throwing path
+  always did. Nothing thrown or yielded changed. **No assertion noticed, which is the useful part**:
+  "no existing assertion changed" is evidence and not proof, and this is exactly what it misses.
+- **`classifyEnd` puts the reader ahead of a `finish_reason` that has already arrived.** A provider
+  that said `error` and then lost its reader before `[DONE]` classifies as `abandoned`, so the caller
+  applies its abandonment policy rather than its failure policy. Deliberate: it is what every caller
+  did before the function existed, and the alternative tells off a reader who has gone for the
+  provider's fault. It differs from an `error` arriving as `chunk.error` **data**, which every caller
+  throws on inside the loop and which never reaches the classifier. Written into `classifyEnd`'s
+  own comment, where the precedence lives.
+
+**Still on their own copies: four.** `converse` needs its per-round fold designed — it runs up to
+four requests per turn and a `length` on round 2 currently vanishes. `referee-mirror`,
+`referee-claims-run` and `referee-criteria-run` are somebody else's open work this week; all three
+are byte-identical to what `search.ts` had, so each is a mechanical commit once the file is free.
 
 ## What this is not
 
 **Not** the transport half of `§ 3.4` — key, endpoint, headers, clocks and accumulation stay where
 they are. **Not** a change to what any caller does today: Stage B must be behaviour-preserving, and
-the test that proves it is that no existing assertion changes. **Not** `explain`'s truncation bug,
-which is now written down in the postmortem and is somebody's next small piece of work.
+the test that proves it is that no existing assertion changes. **Not** `explain`'s truncation *policy* — Stage C made the
+provider's `error` fatal, which was never in doubt, and left "a truncated explanation is stored as a
+whole comment" exactly where it was, because that one is a product decision about what a reader is
+shown and it is Greg's, not an agent's.
 
 ## The simpler option passed over
 
@@ -171,3 +217,17 @@ which is now written down in the postmortem and is somebody's next small piece o
 days chose. The reason not to: the count went from five to seven *while the postmortem about it was
 being written*, and both new copies carry the unfireable guard. Fixing instances has lost this race
 twice; the classifier is what stops there being an eighth.
+
+## The reviews
+
+- Stage A and B: [260901g-…-review-sol.md](260901g-one-stream-end-classification-review-sol.md)
+  — reviewed the plan, and its one correction (`unknown-finish-reason`, rather than folding an
+  unrecognised reason into `finished`) is the member of the union that matters.
+- Stage C: [260901g-stage-c-review-sol.md](260901g-stage-c-review-sol.md) — *"the core migrations
+  are sound, and throwing on `provider-failed` is right in both callers"*, with four findings. All
+  four are dealt with above or in the code: a `LOG_LEVEL` that leaked into later test files (the
+  raise is now conditional and restored straight after the imports, copied from
+  `tests/all-skipped-publication-log.test.ts`); the two unnamed changes; and three test overclaims
+  worth fixing — the grade-word assertions now read **one** log line rather than the joined capture,
+  the search provider-error test now asserts a hit really streamed before the refusal, and the
+  explain truncation test no longer says "stores" for something it observes as a yield.

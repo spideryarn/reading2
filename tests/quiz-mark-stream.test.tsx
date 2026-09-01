@@ -45,12 +45,36 @@
  * it failed; docs/plans/260831al-review-quiz-sub-mode-stage4-review-sol.md
  * findings 3 and 6.
  */
+/* **The log level, before any import**, for the grade-word wiring tests at the
+   bottom. `level()` in src/log.ts reads `LOG_LEVEL` once, at that module's
+   load, and vitest's `NODE_ENV=test` otherwise makes the logger `silent` —
+   which writes nothing, which would satisfy every assertion those tests make.
+   So it has to go in `vi.hoisted`, inline, because a hoisted block runs before
+   every import and cannot call anything imported (tests/helpers/log-capture.ts).
+
+   Raised only if it is *below* what we need, so `LOG_LEVEL=debug npx vitest
+   run` still means debug; and put back immediately after the imports, because
+   vitest reuses workers and `process.env` is not reset between files. Copied
+   from tests/all-skipped-publication-log.test.ts, which had both of these
+   first. */
+const HOISTED = vi.hoisted(() => {
+  const previousLevel = process.env.LOG_LEVEL;
+  if (previousLevel === undefined || ["silent", "fatal", "error", "warn"].includes(previousLevel)) {
+    process.env.LOG_LEVEL = "info";
+  }
+  return { previousLevel };
+});
+
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useQuiz, type UseQuiz } from "../src/web/useQuiz.js";
 import { markAnswerStream, type QuizMarkEvent } from "../src/quiz-mark.js";
 import type { Block, Meta, Quiz } from "../src/types.js";
+import { logLinesWhile } from "./helpers/log-capture.js";
+
+if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
+else process.env.LOG_LEVEL = HOISTED.previousLevel;
 
 const SLUG = "an-article";
 const BATCH = "spya-batch1";
@@ -474,4 +498,97 @@ describe("giving up on a mark that is still running", () => {
      is missing is a regression guard, and the panel's own test still proves
      only that `clearAttempt` is called. Written down rather than left as a gap
      somebody has to rediscover. */
+});
+
+/**
+ * **The counter is only worth having if it reaches the log line.**
+ *
+ * `gradeWords` has its own unit tests, and they would all stay green if the
+ * `gradeWords:` field were deleted from the success log in `markAnswerStream` —
+ * GPT Sol's second review said exactly that, and it is the shape
+ * docs/reusable/silent-success.md is about: a rule with tests, an instrument
+ * with tests, and nothing joining them. The one thing nobody can see from a
+ * unit test is whether a real mark's reply ever gets counted.
+ *
+ * So this drives a whole reply through the real generator and reads what the
+ * logger actually wrote. The reply below contains two banned phrases
+ * ("correctly" and "not quite"), so the assertion is a number rather than a
+ * presence — a field wired to a constant would pass the weaker check.
+ */
+describe("the grade-word counter on a real mark", () => {
+  /**
+   * The **one** captured line that logs a finished mark.
+   *
+   * Not `expect(written).toContain(...)` twice: pino writes one JSON object per
+   * line and several lines per write, so two `toContain`s against the joined
+   * capture would pass on a `gradeWords` that landed on some other line
+   * entirely. Throwing when there is no such line is what keeps every
+   * assertion below from passing on an empty capture — the failure every
+   * misconfiguration of this helper produces.
+   */
+  function markLine(written: string): string {
+    const found = written.split("\n").filter((l) => l.includes("marked a quiz answer"));
+    if (found.length !== 1) {
+      throw new Error(
+        `expected exactly one "marked a quiz answer" line, got ${found.length} — is LOG_LEVEL still silent?`,
+      );
+    }
+    return found[0] as string;
+  }
+
+  it("puts what it counted on the line the mark is logged with", async () => {
+    providerSays(() =>
+      provider(
+        wire({
+          choices: [
+            {
+              delta: {
+                content:
+                  "You have the first half correctly. The second is not quite there — see [spya-aaaaaa].",
+              },
+            },
+          ],
+        }) +
+          wire({ choices: [{ finish_reason: "stop", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    const written = await logLinesWhile(async () => {
+      const events = await drain(markAnswerStream(MARK));
+      // The mark has to have succeeded, or the success line was never reached
+      // and every assertion below would pass on an empty capture.
+      expect(events.at(-1)?.type).toBe("done");
+    });
+
+    expect(markLine(written)).toContain('"gradeWords":2');
+  });
+
+  it("writes a zero for a mark that kept the rule", async () => {
+    /* The control that stops the above passing on a hard-coded 2, and the
+       reading somebody actually wants to see. */
+    providerSays(() =>
+      provider(
+        wire({
+          choices: [
+            {
+              delta: {
+                content:
+                  "The piece ties retraining cost to the claim at [spya-aaaaaa]; your answer does not mention it.",
+              },
+            },
+          ],
+        }) +
+          wire({ choices: [{ finish_reason: "stop", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    const written = await logLinesWhile(async () => {
+      const events = await drain(markAnswerStream(MARK));
+      expect(events.at(-1)?.type).toBe("done");
+    });
+
+    expect(markLine(written)).toContain('"gradeWords":0');
+  });
 });

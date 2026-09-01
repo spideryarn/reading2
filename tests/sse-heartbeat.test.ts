@@ -8,9 +8,9 @@
  * browser, where nobody is looking. So this drives a real socket and counts the
  * bytes on it, rather than asserting that a timer was scheduled.
  */
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { heartbeat } from "../src/routes.js";
 import { readEvents } from "../src/web/lib/sse.js";
 
@@ -99,5 +99,69 @@ describe("heartbeat", () => {
     const atClose = writes;
     await new Promise((r) => setTimeout(r, 120));
     expect(writes).toBe(atClose);
+  });
+});
+
+/**
+ * The one case a real socket cannot produce: the reader was already gone
+ * *before* `heartbeat` was called.
+ *
+ * A server handler runs after the connection is accepted, so a client cannot
+ * reliably be made to disappear in the gap between `writeHead` and `heartbeat`
+ * from out here — a delayed callback could get there, but only by racing, and a
+ * racing test is worse than a mocked one. And the claim under test is about the timer itself — "no interval
+ * exists" — not about bytes, so counting timers is the right instrument rather
+ * than the shortcut the header warns against. `vi.getTimerCount()` goes to 1
+ * the moment the guard in `heartbeat` is removed.
+ */
+describe("a heartbeat for a reader who has already left", () => {
+  /** Enough of a `ServerResponse` for `heartbeat`, with `close` already past. */
+  function closedResponse(): ServerResponse {
+    return {
+      destroyed: true,
+      writableEnded: false,
+      // The listener a live response would call. Nothing ever will.
+      on() {},
+      write() {
+        throw new Error("wrote to a destroyed response");
+      },
+    } as unknown as ServerResponse;
+  }
+
+  it("starts no interval, rather than one that runs until the process exits", () => {
+    vi.useFakeTimers();
+    try {
+      const before = vi.getTimerCount();
+      const stop = heartbeat(closedResponse(), () => false, 15);
+      expect(vi.getTimerCount()).toBe(before);
+      // The returned function is still safe to call, because every caller does.
+      stop();
+      expect(vi.getTimerCount()).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still starts one for a response that is merely quiet", () => {
+    /* The negative control. Without it the test above passes on a `heartbeat`
+       that never schedules anything, which is the bug this file exists for. */
+    vi.useFakeTimers();
+    try {
+      const live = {
+        destroyed: false,
+        writableEnded: false,
+        on() {},
+        write() {
+          return true;
+        },
+      } as unknown as ServerResponse;
+      const before = vi.getTimerCount();
+      const stop = heartbeat(live, () => true, 15);
+      expect(vi.getTimerCount()).toBe(before + 1);
+      stop();
+      expect(vi.getTimerCount()).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

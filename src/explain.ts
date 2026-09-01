@@ -63,11 +63,10 @@ import {
   collectCitations,
   explainAbort,
   providerFailedMidAnswer,
-  readerAborted,
   stoppedByReader,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
-import { ProviderRefused, openRouterStream } from "./ai-call.js";
+import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
@@ -539,14 +538,12 @@ export async function* explainStream({
   let searches = 0;
   let from: SearchUsagePath = "no-usage";
   let used = model;
-  let finishReason: string | null = null;
   /* Local, NOT module-scope: two readers asking about two passages at once run
      two of these generators in one process, and a shared accumulator would
      report one selection's token counts against the other's log line. */
   let usage: Usage | undefined;
 
   const end: StreamEnd = { terminated: false };
-  let stopped = false;
   try {
     for await (const chunk of openRouterStream("explain", request, {
       signal: composite,
@@ -560,7 +557,10 @@ export async function* explainStream({
       // else would notice it.
       if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      /* No `finish_reason` scrape here any more: `openRouterStream` writes it
+         onto `end` for every caller, and `classifyEnd` below is what reads it.
+         This line was one of seven identical copies —
+         docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
       /* The rules are in `collectCitations`, beside the wire shape they are
          about; the warning stays here because this `line` is a child logger
          carrying the blockId, and chat's is not. It says nothing about *which*
@@ -586,15 +586,11 @@ export async function* explainStream({
   } catch (err) {
     if (stoppedByReader(err, signal, deadline, stall.signal)) {
       /* The caller gave up — the reader closed the dialog, or navigated away.
-         Not an error, and not logged as one. Unlike chat there is no stop
-         button, so this is a disconnect rather than a decision, and there is no
-         partial answer worth keeping: it falls out below with whatever arrived. */
-      stopped = true;
+         Not an error, and not logged as one. **Nothing is said or decided
+         here**: this falls through to `classifyEnd`, which reaches `abandoned`
+         from the same signals, so the throwing path and the clean-end path
+         cannot come to say different things about one event. */
       clearTimeout(stallTimer);
-      line.info(
-        { model: used, ms: since(started), chars: text.length },
-        `explanation from ${used} was abandoned`,
-      );
     } else if (err instanceof ProviderRefused) {
       /* The status, not the body. OpenRouter's error text is the one place a
          provider might echo part of what we sent back at us, and what we sent is
@@ -627,59 +623,126 @@ export async function* explainStream({
     clearTimeout(stallTimer);
   }
 
-  /* An abort can also end the loop *cleanly*, because `sseChunks` cancels the
-     reader on abort and a cancelled read resolves `{ done: true }` rather than
-     throwing. Without this the reader's own disconnect gets filed as "the
-     answer stopped arriving before it was finished". See the same guard, and
-     the longer account of how it was found, in src/converse.ts. */
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+  /* **How did this stream end?** One question with one true answer, asked of
+     the shared classifier rather than re-derived here from three signals, a
+     boolean and a string. This file used to do that re-derivation in the same
+     order as six others, with the same broken guard in it —
+     docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md,
+     and docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md
+     for why the classifier reports and never decides.
 
-  /* **And our own clocks can end it cleanly too**, for the same reason and with
-     a worse consequence. When the stall timer fires, `sseChunks` cancels the
-     reader; if that cancel wins the race against the pending read's rejection,
-     the loop exits with no error at all — and the check immediately below then
-     files a 45-second silence as "the answer stopped arriving before it was
-     finished". Both sentences end in "try again", so the reader never notices;
-     what is lost is the log line, which says `ended without finishing` instead
-     of `stalled: true`, and that is the line somebody reads when explanations
-     start failing and they want to know whether to blame the network or the
-     provider.
+     What each ending *means* is still explain's, and it differs from quiz's on
+     three of them: an abandoned explanation keeps the half it has, and a
+     truncated or filtered one is stored whole. Those are decisions, and they
+     are made below rather than in the classifier. */
+  const outcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+  const finishReason = end.finishReason ?? null;
 
-     Caught by tests/explain.test.ts § says a silence is a silence — which is
-     the test that mocks a body that opens and then says nothing, i.e. the one
-     failure a mock made of whole frames cannot produce. */
-  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
-    line.error(
-      {
-        model: used,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-        chars: text.length,
-      },
-      `stream from ${used} was cut off`,
-    );
-    throw explainAbort(
-      new Error("aborted"),
-      deadline,
-      stall.signal,
-      timeoutMs,
-      stallMs,
-    );
-  }
+  switch (outcome.kind) {
+    case "abandoned":
+      /* The reader closed the dialog or navigated away. **Break, not return**:
+         unlike a quiz mark, half an explanation is worth keeping — there is a
+         comment row to write it to and no stop button, so a disconnect is not a
+         decision and the reader may well come back to what arrived.
 
-  /* **The stream stopped; did it finish?** `[DONE]` is the only clean end an
-     SSE response has, and without this an ordinary EOF looks exactly like one:
-     a connection cut two paragraphs in would be stored as a complete answer,
-     `status: "done"`, with no error anywhere. `finish_reason` counts as a
-     second witness — a provider that omits the terminator but says why it
-     stopped has still told us the answer is whole. */
-  if (!stopped && !end.terminated && finishReason === null) {
-    line.error(
-      { model: used, ms: since(started), chars: text.length },
-      `stream from ${used} ended without finishing`,
-    );
-    throw new Error(ENDED_UNFINISHED.message);
+         **This line is new on one of the two paths, and that is the point.** A
+         reader-abort that *threw* was logged here-ish before, in the catch; one
+         that ended the loop cleanly — `sseChunks` cancels its reader, and a
+         cancelled read resolves `{ done: true }` — set a flag and said nothing.
+         Same event, two paths, one of them silent. Nothing thrown or yielded
+         changed; there is simply now a line where there was a gap. */
+      line.info(
+        { model: used, ms: since(started), chars: text.length },
+        `explanation from ${used} was abandoned`,
+      );
+      break;
+
+    case "timed-out":
+    case "went-quiet":
+      /* **Our own clocks can end the loop cleanly too**, and that is worth a
+         branch rather than falling into `unterminated` below. When the stall
+         timer fires, `sseChunks` cancels the reader; if that cancel wins the
+         race against the pending read's rejection, the loop exits with no error
+         at all. Both sentences end in "try again", so the reader never notices;
+         what is lost is the log line, which would say `ended without finishing`
+         instead of `stalled: true` — and that is the line somebody reads when
+         explanations start failing and they want to know whether to blame the
+         network or the provider.
+
+         Caught by tests/explain.test.ts § says a silence is a silence, which
+         mocks a body that opens and then says nothing: the one failure a mock
+         made of whole frames cannot produce. */
+      line.error(
+        {
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          chars: text.length,
+        },
+        `stream from ${used} was cut off`,
+      );
+      throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+
+    case "provider-failed":
+      /* The same failure as the `chunk.error` throw in the loop, arriving in a
+         field instead of as data — so the same sentence, deliberately. This is
+         the one behaviour this migration changed: the old guard was a
+         conjunction (`!end.terminated && finishReason === null`), so a provider
+         that said `error` made it *less* likely to fire and the broken answer
+         was stored as a whole comment. */
+      line.error(
+        { model: used, ms: since(started), chars: text.length, finishReason },
+        `the provider gave up mid-explanation from ${used}`,
+      );
+      throw providerFailedMidAnswer();
+
+    case "unterminated":
+      /* `[DONE]` is the only clean end an SSE response has, and without this an
+         ordinary EOF looks exactly like one: a connection cut two paragraphs in
+         would be stored as a complete answer, `status: "done"`, with no error
+         anywhere. */
+      line.error(
+        { model: used, ms: since(started), chars: text.length },
+        `stream from ${used} ended without finishing`,
+      );
+      throw new Error(ENDED_UNFINISHED.message);
+
+    case "truncated":
+    case "filtered":
+      /* **Kept, and stored as a clean `done`, because there is nowhere on a
+         `Comment` to say otherwise.** Quiz refuses both; explain cannot, and
+         pretending otherwise would throw away paragraphs a reader has already
+         watched arrive and has no way to get back. What there is instead is
+         `finishReason` on the success line below, so "answers keep trailing
+         off" is a thing somebody can check rather than a thing somebody feels.
+         Making the reader-facing half of this honest is its own piece of work
+         and its own product decision, recorded in the postmortem above. */
+      break;
+
+    case "unknown-finish-reason":
+      /* A reason nobody here has a name for is accepted as a clean stop, on the
+         same deny-list reasoning quiz-mark spells out at length: wrong this way
+         and one case behaves as it did before, wrong the other way and a
+         gateway spelling `stop` as `end_turn` fails every explanation for that
+         model. The reason is on the success log line, which is where a new
+         spelling shows up. */
+      break;
+
+    case "wants-tools":
+      /* This request sends no tools, so a model asking for one is a provider
+         oddity rather than a truncation, and the prose it did write is prose. */
+      break;
+
+    case "finished":
+      break;
+
+    default: {
+      /* The point of the union. A tenth way for a stream to end becomes a
+         compile error here rather than a branch somebody forgot. */
+      const never: never = outcome;
+      throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+    }
   }
 
   const answer = text.trim();

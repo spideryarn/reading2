@@ -179,6 +179,21 @@ export function classifyEnd(
   signals: { signal: AbortSignal | undefined; deadline: AbortSignal; stalled: AbortSignal },
 ): StreamOutcome {
   const { signal, deadline, stalled } = signals;
+  /* **Our own clocks, then the reader, then what the provider said.** The first
+     two are the order every caller already had, and they have to come first
+     because a deadline or a stall aborts the reader's signal too — so all three
+     arrive as one aborted signal and only `readerAborted` tells them apart.
+     Mutating this order turns three tests in tests/openrouter-stream.test.ts red.
+
+     **The reader beats a `finish_reason` that has already arrived**, and that
+     is a real edge worth knowing: a provider that said `error` and *then* lost
+     its reader before `[DONE]` classifies as `abandoned`, so the caller applies
+     its abandonment policy rather than its failure policy. Deliberate — it is
+     what every caller did before this function existed, and the alternative
+     asks a reader who has gone to be told off for the provider's fault. Note it
+     differs from an `error` arriving as `chunk.error` *data*, which every caller
+     throws on inside the loop and which therefore never reaches here.
+     GPT Sol's review of Stage C, 2026-09-01. */
   if (deadline.aborted) return { kind: "timed-out" };
   if (stalled.aborted) return { kind: "went-quiet" };
   if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };

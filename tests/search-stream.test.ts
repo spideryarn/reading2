@@ -224,6 +224,66 @@ describe("the final `done` is authoritative, not a rollup of what streamed", () 
   });
 });
 
+/**
+ * What `classifyEnd` in src/ai-call.ts is allowed to decide here, and what it
+ * is not.
+ *
+ * Search reads the same shared classification every other streaming caller
+ * does, and then makes its own decisions from it — the reason the classifier
+ * reports rather than decides. Two of those decisions are worth pinning,
+ * because both look like omissions to somebody reading the switch cold.
+ */
+describe("what the provider says about how it stopped", () => {
+  it("refuses one the provider itself said it errored out of, even though it parses", async () => {
+    /* **The one behaviour the shared classifier changed here.** The object is
+       complete and `[DONE]` arrives, so every other witness says this is a good
+       search; only `finish_reason` disagrees, and the old guard was a
+       conjunction that a non-null reason could only make less likely to fire.
+       It is the same event as an `error` inside a 200, arriving in a field
+       rather than as data, so it gets the same sentence. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ hits: [HIT1] }) } }] }) +
+          frame({ choices: [{ finish_reason: "error", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    /* Collected rather than drained, so the assertion can be the expensive
+       half: a hit really did stream, so the reader really was shown a result,
+       and it is still refused. Without this the test would pass on a stream
+       that never produced anything — which is a much easier thing to refuse. */
+    const shown: SearchHit[] = [];
+    let thrown: Error | undefined;
+    try {
+      for await (const e of findPassagesStream(req())) {
+        if (e.type === "hit") shown.push(e.hit);
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(shown).toHaveLength(1);
+    expect(thrown?.message).toMatch(/\[ai-interrupted\]/);
+  });
+
+  it("accepts a `length` that landed after the object closed, rather than refusing a short answer", async () => {
+    /* The control for `case "truncated"` being a `break`. Quiz refuses every
+       `length`; search must not, because a model that fills its budget with
+       three good hits and stops has produced a legitimately short result — and
+       the test above already proves the parse catches the case where it has
+       not. Without this, "refuse every truncation" would pass the whole file. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ hits: [HIT1] }) } }] }) +
+          frame({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    const { done } = await drain(findPassagesStream(req()));
+    expect(done?.hits).toHaveLength(1);
+  });
+});
+
 describe("a provider error mid-stream", () => {
   it("throws without leaking what it said, and never produces a `done`", async () => {
     fetchMock.mockResolvedValue(sse(frame({ error: { message: "the whole article, verbatim: ..." } })));

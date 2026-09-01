@@ -517,9 +517,15 @@ the two verbs. Search belongs in this too.
 > [260901g-one-stream-end-classification-shared-by-five-callers.md](260901g-one-stream-end-classification-shared-by-five-callers.md).
 > `StreamOutcome` and `classifyEnd` live in `src/ai-call.ts`; `openRouterStream` records the finish
 > reason once for everybody; `quiz-mark.ts` is the first caller on it and lost its own copy in the
-> process. Six callers still hold theirs, and each is a small independent commit whenever its author
-> is free — the three referee modules were being written the same afternoon, which is why they were
-> left. **The transport half of this section is untouched** and still says what it said.
+> process. **`explain.ts` and `search.ts` followed the same day**, which is the pair this section was
+> originally written about — and migrating them turned up the bug the postmortem had predicted
+> rather than found: `finish_reason: "error"` reached the unfireable guard in both, where both
+> already threw for the same event arriving as data, so a provider that said it had errored had its
+> half-answer stored as a whole one. Complexity went **down** in both files (45→38, 69→61), which is
+> what replacing three chained `!stopped && …` conditionals with one `switch` looks like. Four
+> callers still hold their own copies: `converse`, which needs its per-round fold designed, and the
+> three referee modules, which are somebody else's open work. **The transport half of this section is
+> untouched** and still says what it said.
 
 ### 3.5 `summarise`'s concurrency pool — **do not change**
 The first draft suggested replacing the hand-rolled 20-line ordered pool with `p-queue`. Sol is
