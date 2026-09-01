@@ -418,15 +418,31 @@ One question, one answer, one streamed reply, visible in the browser.
 
 *Abandonable as:* a working quiz, one question at a time. This is the stage that carries the value.
 
-### Stage 3 — the rest of the band
+### Stage 3 — the rest of the band ✅ **done**
 
-- [ ] Show-all and pick; the collapsed reference answer; dictation via `useDictationField`; citation
+- [x] Show-all and pick; the collapsed reference answer; dictation via `useDictationField`; citation
       chips that jump the prose; the empty and stale states; CSS.
-- [ ] `tests/quiz-panel.test.tsx` on `review-panel.test.tsx`'s pattern.
-- [ ] Docs: new `docs/project/quiz.md`, linked from
-      [reading-view-overview.md](../project/reading-view-overview.md) and
-      [remember-mode.md](../project/remember-mode.md); `url-state.md` gains `?review=`;
-      `architecture.md` gains the step.
+- [x] `tests/quiz-panel.test.tsx` on `remember-panel.test.tsx`'s pattern — sixteen tests, and the
+      four rules that can fail quietly were each confirmed red under a mutation before being left
+      green: the reference answer shutting again on the next question, the list keeping the
+      artefact's order, a tick meaning `done` rather than a non-empty reply, and Answer refusing to
+      post while a transcript is still on its way.
+- [x] Docs: new [quiz.md](../project/quiz.md), linked from
+      [reading-view-overview.md](../project/reading-view-overview.md),
+      [remember-mode.md](../project/remember-mode.md) and AGENTS.md;
+      `architecture.md` gains `quiz` to the `articleWithIdsFingerprint` row; `dictation.md` counts
+      the fifth box. `url-state.md` already had the parameter, spelled `?remember=` after the
+      2026-09-01 rename.
+
+Two things the build turned up, both fixed here:
+
+- **`.quiz-answer` was painted with `var(--paper)`, which this stylesheet does not define.** The box
+  drew with whatever was behind it and looked right by accident against the band. Now `var(--page)`,
+  as `.chat-input` uses. Nothing would ever have gone red.
+- **`spya-aaa111` is not a block id.** The first draft of the panel test used it as a fixture; the
+  alphabet drops `1`, `i`, `l` and `o`, so `ID_PATTERN` rejected it and the citation chips were
+  never drawn. The test failed for a reason that had nothing to do with the panel — which is the
+  cheap version of the same mistake in production data.
 
 ### Stage 4 — hardening
 

@@ -76,6 +76,9 @@ of compression, down the page for position and across for detail. Read that firs
   the piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
   cross-family review said not to ship the first one, and the one mode that cannot be used to avoid
   reading.
+- **[quiz.md](quiz.md)** — the other half of Remember, where the questions come the other way: a
+  dozen short-answer questions cached per article, easy ones first and central ones within that, and
+  a marker told outright that the article outranks its own reference answer.
 
 ### Hovering and moving around
 

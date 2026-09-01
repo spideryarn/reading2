@@ -310,6 +310,8 @@ third claimant — is a keyboard problem nobody needs.
 
 ## See also
 
+- [quiz.md](quiz.md) — the band's other half, where the questions come the other way. Not a
+  conversation, and deliberately: *"it's just a question then answer"*
 - [260826a-chat-mode.md](../plans/260826a-chat-mode.md) — the mode band, the citation contract, the panel this reuses
 - [chat-tools.md](chat-tools.md) — the tools, and the rule about never claiming one you did not run
 - [dictation.md](dictation.md) — the microphone

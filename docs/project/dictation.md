@@ -1,8 +1,8 @@
 # Talking into a text box
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on four boxes today — both profile boxes, the chat composer, the comment follow-up —
-and adding it to a fifth is three lines.
+box. It is on five boxes today — both profile boxes, the chat composer, the comment follow-up, and
+the quiz answer box ([quiz.md](quiz.md)) — and adding it to a sixth is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -49,8 +49,9 @@ chat model **told what the words might be** got both right on every run — and 
 without that list made the same mistakes as everybody else.
 
 That matters more here than it would in most apps, because this is a reading tool whose vocabulary
-is the article in front of the reader. The chat box and the comment follow-up have that article's
-glossary loaded three feet away.
+is the article in front of the reader. The chat box, the comment follow-up and the quiz answer box
+have that article's glossary loaded three feet away — and the quiz box most of all, since a question
+set from the piece is asking the reader to say the piece's own words back.
 
 It cost the choice of route. OpenRouter has a purpose-built `POST /api/v1/audio/transcriptions`,
 which is cheaper and faster and would have been the obvious pick — and it has nowhere to put a
