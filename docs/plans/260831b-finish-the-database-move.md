@@ -928,7 +928,73 @@ an argument against the decision.
 **Write the failing test first.** It is four steps of fixture and it will not be obvious afterwards
 that it was ever wrong — a retry that reports success is exactly the shape that gets re-broken.
 
+#### What GPT Sol's flip-readiness review found, 2026-09-01
+
+Full text in [260901d-flip-readiness-sol.md](260901d-flip-readiness-sol.md). Verdict: **not ready as
+described**, for one reason, and it is a fault the flip would *introduce*.
+
+**The precondition holds.** Every step returns correct `parts`, checked declaration against return,
+and the `(step, kind)` mapping in `src/store/artifacts-pg.ts` covers every pair. So
+`LEGACY_UNCONVERTED_STEPS` being empty reflects reality rather than bookkeeping, and
+`publish-session.ts`'s header — which says `pgStoreSession` "cannot be the answer yet" for exactly
+this reason — is now stale and goes with the decorator. **Correction while we are here: the pipeline
+has 13 steps, not the eleven this document and several comments still say.**
+
+**The blocker: the replacement catches less than the thing it replaces.** `publishingSession`
+catches **every** non-stale publication failure on the all-skipped door, terminalizes the job with a
+sanitized error, fails the draft and rethrows (`src/store/publish-session.ts:377`). The `walkClaim`
+fix written for Sol's earlier finding 2 catches only `PublishRefused`. So after the flip a database
+error out of `settleJob(done)` escapes to the outer catch, which handles only `StaleAttemptError`,
+and **the job stays `running` holding its draft until the lease expires.**
+
+Two things make that worse than it sounds. A job stuck `running` is neither `error` nor `cancelled`,
+so the newly-restricted `retryJob` correctly refuses it and **the reader has no button**. And the
+failure is invisible on a laptop, because nothing throws there. Widen the catch, sanitize the
+non-`PublishRefused` wording through `guardDbStore` (a raw Drizzle message carries query text and
+bound parameters — one rendered on the homepage on 2026-08-27), and test it with a non-refusal
+`StoreFailure`.
+
+**Deleting `publish-session.ts` is not just deleting a file.** `tests/jobs-publish-finalizer.test.ts`
+and `tests/publish-session-cleanup-log.test.ts` import it directly, and docs link to it.
+**`copyArtefacts` stays** — fixture and test loaders still use it, and only its use *from the
+decorator* goes.
+
+**D2 is not a correctness prerequisite, and that is a real relief.** After the flip exactly two paths
+still write under `dataRoot()`: `pdf-chunks/<key>.json` and `labels-progress.json`, both checkpoints.
+Completed step products survive a handback because they live in the draft, not in `/tmp`. So the
+cost of skipping D2 is **money and latency on an interrupted transcription or labelling run**, not a
+wrong or missing article. Sol notes a laptop running Postgres masks this, because its repository-root
+scratch survives across jobs and a deployment's job-scoped `/tmp` does not.
+
+**The migration ordering is safe.** `0047` is additive and nullable, old code never names the column,
+and `scripts/deploy.ts` migrates before it pushes. A draft minted by old code inside the window gets
+`NULL` and the new code fails it closed rather than burying a revision — one wasted retry, which is
+the right way to be wrong.
+
+**And the corpus-readiness probe Sol could not run has since been run:** `✓ ready`, on a quiet
+machine, 2026-09-01. That was the one non-code precondition it had to leave open.
+
 #### Done means
+
+**This section used to say a deployment was required. Sol says otherwise, and it is right.** A
+deterministic local proof of the flip itself is available and is *stronger* than an ordinary laptop
+ingest: drive the real `claimSession` with `STORE=postgres` against real Postgres and a real
+deterministic stage, giving successive claims **different empty scratch roots** (or separate child
+processes) so that filesystem persistence cannot quietly do the work — that is the trick, because
+sharing a scratch root is precisely what makes a laptop unable to show these faults. Then exercise
+ingest, an all-skipped second claim, a late single-step job, and a failed forced job followed through
+`retryJob`, asserting the published revision, the step-run rows, the job's terminal state and a
+cleared draft pointer.
+
+What that still does **not** prove, and so what the deployed run remains a canary for: Vercel
+bundling, production environment variables, Supabase Storage credentials, route and auth wiring,
+migration state, and real external calls.
+
+Note `tests/pg-session-real-step.test.ts` deliberately injects `openPgStoreSession`, so it does not
+prove `claimSession`'s production selection — the thing the flip actually changes. That is the gap
+the local proof above closes.
+
+#### The original done-means, kept because the deployed canary still matters
 
 - A real ingest, a real single-step job (`{ steps: ["tweets"] }` on a published article) and a real
   retry, end to end against Postgres, **on a deployed instance** — the laptop cannot show this,
