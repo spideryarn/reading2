@@ -1,39 +1,42 @@
 # Finish the move from files to the database
 
-**Status, 2026-09-01 06:30, after an overnight run.** Stage 2.4 (new — `db:migrate` was applying
-nothing) is done and reviewed. Stage 3 items 1, 3, 4 and 5 are built, reviewed and committed; item 0
-is built and migrated but **held uncommitted**, waiting on another session. Stage 2.5 has still not
-been *measured* — the machine has not been quiet enough to trust a reading. Stage 4 was deliberately
-not started. Nine GPT Sol reviews so far; the two on tonight's work were both NO-SHIP and both right.
+**Status, 2026-09-01 07:00, resumed after the overnight run.** Stage 2.4 (new — `db:migrate` was
+applying nothing) is done and reviewed. Stage 2.5 is measured and passing. Stage 3 items 0, 1 and 5
+are done; items 3 and 4 are built but carry an unanswered GPT Sol NO-SHIP that is being answered
+now. **Only item 6 — the flip itself — and stage 4 remain.** Nine GPT Sol reviews so far; the two on
+the overnight work were both NO-SHIP and both right.
+
+**THREE THINGS WERE OWED at 06:30 and two are discharged** — the orphan migrations in `main` were
+fixed by another session, and stage 2.5 has now been measured on a quiet machine. The NO-SHIP is the
+one that remains.
 
 | item | state |
 |---|---|
 | 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem, NO-SHIP answered |
 | 3 item 1 — prove the coordinator | **done** (`132be8d`) — and it found the carry hazard below |
-| 3 item 3 — `forceForRetry` | **built and committed** in `265356b`; **Sol NO-SHIP outstanding** |
-| 3 item 4 — exact base | **built and committed** in `265356b`; **Sol says it does not close the race** |
+| 3 item 3 — `forceForRetry` | built in `265356b`; **Sol NO-SHIP being answered 2026-09-01** |
+| 3 item 4 — exact base | built in `265356b` but **did not close the race**; durable `based_on_revision_id` being added 2026-09-01 |
 | 3 item 5 — delete the importer | **done** (`b73ad74`) |
-| 3 item 0 — short-id slugs | **built, migration applied, HELD** — see below |
+| 3 item 0 — short-id slugs | **done** — landed via `74e2915`, `1010a60`; `freeUploadSlug` and `slugIsSpokenFor` gone, `src/store/find-article.ts` committed |
 | 3 item 6 — the flip | not started |
-| 2.5 refetch | not measured |
+| 2.5 refetch | **done** — measured 2026-09-01 on a quiet machine, `✓ ready` |
 | 4 | deliberately not started |
 
-**THREE THINGS ARE OWED BEFORE ANYONE TRUSTS THIS, and the first is live in `main` now.**
+**The three things that were owed, and where each stands:**
 
-1. **`main` currently carries two orphan migrations.** `drizzle/0044_article_short_id.sql` and
-   `0045_feedback_mirror_attempted.sql` are committed while `drizzle/meta/_journal.json` is not, so
-   the journal in `HEAD` stops at `0043` and **`db:migrate` on a fresh clone applies neither**. Worse,
-   `0044_snapshot.json` is committed with `short_id` while `src/db/schema.ts` is not, so
-   **snapshot is ahead of schema and the next `drizzle-kit generate` emits a `DROP COLUMN short_id`.**
-   The orphan check added in stage 2.4 catches this on a clean checkout but **not locally**, because
-   it reads the working tree, where the journal is complete. Fixing it means committing the journal,
-   which names an untracked `0046_quiz`, which needs the quiz session's whole type chain — so it
-   cannot be fixed by one session alone.
+1. ~~**`main` currently carries two orphan migrations.**~~ **Fixed by another session overnight.**
+   `drizzle/meta/_journal.json` is committed and runs to `0046_quiz`; `src/db/schema.ts` carries
+   `shortId` at `HEAD`, so the snapshot is no longer ahead of the schema. Verified 2026-09-01:
+   `db-repair-migration-ledger.ts` reports 47 journal entries, 47 ledger rows, nothing unreachable,
+   nothing pending, no orphans. The history is kept because the *class* is not fixed — the orphan
+   check still reads the working tree, so it cannot see this on the machine that causes it.
+
 2. **Sol's NO-SHIP on items 3 and 4 is unanswered**, and item 3's half created a money hole:
    `retryJob` checks only that the job exists, so POSTing `/retry` on a *successful* forced PDF
    refresh now re-runs and re-pays, repeatedly. See § *Stage 3 — the flip* item 3.
-3. **Stage 2.5 has never been measured on a quiet machine.** Every reading tonight was taken while
-   other sessions were writing to the same database.
+3. ~~**Stage 2.5 has never been measured on a quiet machine.**~~ **Measured 2026-09-01 06:35** at
+   load average 2.5, and it passes: 0 revisions with stamped-but-not-extracted HTML, 1 source
+   reference read back and 0 unreadable, over 15 articles and 4 revisions. `✓ ready`.
 
 | | what | commits |
 |---|---|---|
