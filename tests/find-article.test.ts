@@ -49,8 +49,18 @@ import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-/** Owns nothing at all, which is the strongest form of "not yours". */
-const OUTSIDER = "00000000-0000-4000-8000-0000000000c4" as OwnerId;
+/**
+ * Owns nothing at all, which is the strongest form of "not yours".
+ *
+ * This id and the two below are **random**, not the next free number in the
+ * `00000000-0000-4000-8000-…` block half the suite mints from. The first draft
+ * of this file took `…c4`, `…f1` and `…f2` by counting, and all three were
+ * already taken — by `source-store`, `chat-anchor` and
+ * `publish-session-cleanup-log`. Only the `…f1` clash could actually destroy a
+ * row, but a counted id has no way of knowing which kind it is.
+ * docs/project/testing.md § Mint a fixture id randomly, not by counting.
+ */
+const OUTSIDER = "75dcc8e4-56a0-4f74-88e4-f92d1431abb8" as OwnerId;
 
 const SHORT_ID = "spya-k3m9qt";
 /**
@@ -61,8 +71,8 @@ const SHORT_ID = "spya-k3m9qt";
  * first version of `slugForShortId` did.
  */
 const SLUG = "test-find-article-renamed-by-its-reader";
-const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f1";
-const REVISION_ID = "00000000-0000-4000-8000-0000000000f2";
+const ARTICLE_ID = "1b6dbaf2-4023-4a45-b999-af55d2052d72";
+const REVISION_ID = "5a5505bb-a401-4e48-8819-8ec32f46911f";
 /** Stored with `www.` and `https://`, so every spelling below is a real test. */
 const URL = "https://www.example.test/find-article";
 

@@ -624,3 +624,38 @@ disagreed this way, 2.5s and 43s, were both correct and neither was wrong to hav
 **A flake proved by re-running is not proved.** Reproduce it the way the numbers above were: two
 concurrent runs of the same files, and count. A fix for a flaky failure needs the flake demonstrated
 first, or you cannot tell serialisation from luck.
+
+## Mint a fixture id randomly, not by counting
+
+Every database-backed suite hard-codes its own uuids, inserts rows under them in `beforeAll` and
+deletes them by id in `afterAll`. Files run in parallel against **one** local Postgres, so two files
+holding the same id means one of them deletes the other's row mid-run and every remaining test in the
+loser 404s — while passing when run alone. It is the same shared-resource problem as the section
+above, minus the enforcement: no constraint, no lock, no error. The delete succeeds, the insert's
+`onConflictDoNothing` succeeds, and the only symptom appears in somebody else's file.
+
+**So generate them, don't count.** One line, and the ids are free by construction:
+
+```bash
+node -e 'for (let i = 0; i < 3; i++) console.log(crypto.randomUUID())'
+```
+
+Half the suite mints from the `00000000-0000-4000-8000-…` block, and that is exactly what makes
+counting inside it dangerous: the next number that *looks* free usually is not, and there is no way to
+tell a harmless clash from a destructive one by looking at the id. `tests/find-article.test.ts` took
+`…c4`, `…f1` and `…f2` on 2026-08-31 and collected three collisions at once — with `source-store`,
+`chat-anchor` and `publish-session-cleanup-log`. Only the `…f1` pair could actually destroy a row;
+that is not a distinction worth relying on, and the file now uses random ids.
+
+Leave the existing block-style ids alone. Rewriting them buys nothing and a shared *foreign key*
+written longhand is a different problem with a different fix — import the constant, the way the suite now
+does with `ADMIN_USER_ID_LOCAL` from [`src/admin.ts`](../../src/admin.ts).
+
+[`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) is what catches this, and its header is
+worth reading once: it parses **every** uuid literal rather than the `const <NAME>_ID = "…"` shape,
+because the first version matched only that shape and a GPT Sol review found a live collision written
+as an object property that it could not see. It therefore flags harmless overlaps too — a shared owner
+id, an article id against a revision id — deliberately, since it cannot know which table a literal is
+destined for. The fix for a flag is a fresh random id, not an exemption. `NOT_A_ROW` is only for ids
+**no** suite ever inserts, and it is keyed by uuid globally, so listing one there exempts every file
+that uses it.

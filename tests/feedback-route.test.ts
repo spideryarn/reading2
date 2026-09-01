@@ -458,7 +458,7 @@ describe("POST /api/feedback", () => {
           slug: `a${"b".repeat(198)}`,
           /* Longer than a real slug on purpose: it is dropped, and that is the
              point — this is the *body* at its largest, not the blob. */
-          revisionId: "11111111-2222-4333-8444-555555555555",
+          revisionId: "e3b57b27-3c1c-4522-b2ea-8c1dea44afab",
           view: "article",
           mode: "plain",
           level: 20,

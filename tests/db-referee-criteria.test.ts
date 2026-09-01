@@ -61,7 +61,10 @@ async function expectViolation(
   await c.query("rollback to savepoint attempt");
 }
 
-const OWNER = "11111111-1111-1111-1111-111111111111";
+/* Random, not the next number in the block — tests/db-schema.test.ts held
+   this file's previous id and both seed `auth.users` under it.
+   docs/project/testing.md § Mint a fixture id randomly, not by counting. */
+const OWNER = "7ac042a4-7c19-44a6-ab6d-448acc5909b8";
 const ART = "cccccccc-0000-0000-0000-000000000001";
 const BLOCK = "spya-aaaaaa";
 const CRIT = "spya-bbbbbb";
