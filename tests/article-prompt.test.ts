@@ -137,15 +137,46 @@ describe("articleWithIds identity", () => {
     );
   });
 
-  it("strips the byline, the publication and the URL, and keeps the title", () => {
-    const out = articleWithIds(meta, blocks, "anonymous");
+  it("strips the metadata labels, not the identity — a PDF title page defeats it", () => {
+    /* **This test is named after its own limitation, because the option's name
+       is not.** The previous version of it asserted `not.toContain("A. Writer")`
+       against the shared fixture, whose three blocks are about paragraphs
+       disagreeing and contain no identity at all. It would have passed with
+       `head()` deleted, and GPT Sol called it theatre —
+       docs/plans/260831an-referee-mode-code-review-sol.md § Missing tests.
+
+       So the block below is what a PDF actually arrives as. Stage 2's PDF
+       extraction gives us the title page as prose: the authors, their
+       institutions, their email addresses, and often the acknowledgements and
+       the funder as well. `articleWithIds` removes the three head *lines* and
+       nothing else — `articleText` and the body loop copy every byte of every
+       block (src/article-prompt.ts) — so all of that goes to the model anyway.
+
+       "Anonymous" therefore means *this app did not add a byline*, not *the
+       model cannot tell who wrote it*. Anyone reading the option's name as a
+       guarantee, or citing this test as evidence for one, is wrong, and the MIT
+       result behind the whole rule (docs/research/260831e-helping-peer-reviewers/)
+       is about what the model can see, not about what we prepended. Closing the
+       gap means changing extraction or the prompt, not this function. */
+    const titlePage: Block[] = [
+      block("spya-dddddd", "A. Writer — MIT. Correspondence: writer@mit.edu"),
+      block("spya-eeeeee", "The first paragraph says one thing."),
+    ];
+    const out = articleWithIds(meta, titlePage, "anonymous");
+
+    // The half that works: the three head lines we control are gone.
     expect(out).toContain("TITLE: An Example Article");
-    expect(out).not.toContain("A. Writer");
-    expect(out).not.toContain("Somewhere");
-    expect(out).not.toContain("example.com");
     expect(out).not.toContain("BY:");
     expect(out).not.toContain("PUBLISHED IN:");
     expect(out).not.toContain("URL:");
+    expect(out).not.toContain("Somewhere");
+    expect(out).not.toContain("example.com");
+
+    // The half that does not, asserted rather than hoped: the same name the
+    // `BY:` line was stripped for is still in the article, because it is in the
+    // article.
+    expect(out).toContain("A. Writer — MIT");
+    expect(out).toContain("writer@mit.edu");
   });
 
   it("keeps the whole body, ids included — this strips a head, not evidence", () => {

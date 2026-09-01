@@ -267,9 +267,44 @@ describe("a diverging result", () => {
     expect(dropped.clampedValence).toBe(2);
   });
 
-  it("defaults a missing valence to zero rather than to a judgement", () => {
-    const { results } = validateResults({ results: [hit()] }, "diverging", BLOCKS);
-    expect((results[0] as DivergingResult).valence).toBe(0);
+  it("drops a result that never said which way it cuts, and counts it", () => {
+    /* **The one place where a default is a lie.** This used to become `0`, and
+       the test above says why that is not a missing answer: zero is the real,
+       considered "neither end", so a fabricated one is indistinguishable from a
+       judgement the model actually made. A referee reading the panel would see
+       a row claiming the passage counts neither for nor against, on the
+       strength of the model having said nothing at all.
+
+       So it goes the way an uncited literature result goes — out of the
+       results, into a count — because this module never rescales and never
+       invents. GPT Sol's finding 6,
+       docs/plans/260831an-referee-mode-code-review-sol.md. */
+    const { results, dropped } = validateResults({ results: [hit()] }, "diverging", BLOCKS);
+    expect(results).toEqual([]);
+    expect(dropped.missingValence).toBe(1);
+  });
+
+  it("drops a valence that is not a finite number, rather than reading it as zero", () => {
+    /* `NaN` and a string are the two shapes a model actually produces when it
+       half-answers — `"valence": "against"` reads as a refusal to use the
+       scale, not as the middle of it. `Number.isFinite` is what separates them
+       from a real number, and it has to be the same gate for both or the
+       string arm quietly falls back to the fabricated neutral. */
+    const { results, dropped } = validateResults(
+      { results: [hit({ valence: "against" }), hit({ valence: Number.NaN })] },
+      "diverging",
+      BLOCKS,
+    );
+    expect(results).toEqual([]);
+    expect(dropped.missingValence).toBe(2);
+  });
+
+  it("does not count a missing valence against a criterion that never asked for one", () => {
+    // `single` and `literature` have no valence to miss. The counter is about
+    // an unanswered question, not an absent field.
+    const single = validateResults({ results: [hit()] }, "single", BLOCKS);
+    expect(single.results.length).toBe(1);
+    expect(single.dropped.missingValence).toBe(0);
   });
 });
 
