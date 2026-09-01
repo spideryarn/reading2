@@ -941,6 +941,77 @@ that it was ever wrong — a retry that reports success is exactly the shape tha
 
 ### Stage 4 — delete the files
 
+**Re-inventoried 2026-09-01 against `f5d6720`, and this stage's own description was wrong in eight
+places.** What follows below is the original reasoning, which still holds; these are the corrections
+to its facts. They are listed first because every one of them would have cost an agent time.
+
+- **`src/store/fs.ts` (533 lines) is missing from the deletion list entirely**, and it is the biggest
+  single item: **nine of the ten `guarded(...)` filesystem halves live there** (`fsArticleReader`,
+  `fsChatStore`, `fsSearchStore`, `fsRefereeCriteriaStore`, `fsGlossaryLookupStore`,
+  `fsCommentStore`, `fsShelfStore`, `fsLibrarySearch`, `fsReaderStore`); only `fsSourceStore` is in
+  `artifacts-fs.ts`. Two further `fs*` uses in `src/store/index.ts` are **not** `guarded()` pairs and
+  so would be missed by a sweep for that word: `fsGlossaryStore` in the `deleteGlossary` ternary, and
+  `fsAssertWritableGlossary`, which exists specifically to 403 the committed `example/` article —
+  **deleting `example/` and that function is one decision, not two.**
+- **`REVISION_CARRY_POLICY` is in [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts):182,
+  not `src/store/pg.ts`.** `pg.ts` holds a *different* exhaustive per-column map,
+  `REVISION_READ_POLICY`. Both are keyed on every column, so a column change touches both.
+  `tests/store-revision-policy.test.ts` asserts every declared column is classified, which is the
+  guard that makes "drop the column and forget the policy entry" impossible — good news, and the
+  reason to do the two together rather than carefully.
+- **`readArticleFromDir` is 13 call sites, 8 of them production** — `tweets`, `ideas`, `arc`,
+  `quotes`, `glossary`, `timeline`, `quiz`, `sketch` — not the tidy single seam this section implies.
+  Two more hide inside spawned-subprocess source strings (`tests/parse-json`, `tests/stop-details`)
+  where a grep for the import does not find them. It is still worth deleting; it is not a morning.
+- **`dataRoot()` has only two direct production importers** (`artifacts-fs.ts:41`,
+  `find-article.ts:56`), which is better than feared. But **`StepContext.htmlFile` is not
+  checkpoint-only** — stage 3 reads and writes ids into it and `src/api.ts:974` uses it — so the
+  claim above that "several stages still take a `dir` for checkpoints alone" is true of `dir` and
+  false of `htmlFile`.
+- **"28 of 400" is wrong and should never have been written down.** Recounted: the denominator is
+  **431** test files, and the numerator is **75** by the same method that produced the original 76
+  (non-comment lines naming `example/`, `data/` or `output/`). No method reproduces 28. The 76 was
+  right all along; the 28 was a mismeasurement that made this stage look four times smaller than it
+  is. Roughly **49** test files compute their own `ROOT/data` and so would not follow a
+  `SPIDERYARN_DATA_ROOT` change.
+- **The enumerator list above is half wrong.** Of the seven named, only `store-artefact-manifest`,
+  `store-parity` and `store-roundtrip` enumerate the *corpus*. `store-guarded`, `ai-call` and
+  `auth-users-fence` walk `src/`, and `glossary-lookups` readdirs one scratch slug it just made — a
+  shrinking corpus does nothing to any of them. Missed enumerators that do matter:
+  `store-export-raw`, `store-block-roles-pg`, `helpers-load-article`, `helpers-seed-reader-state`,
+  `chat-anchor`, `owner-isolation`, and eight over `data/_jobs`.
+- **Two of the four "names specific slugs" files are wrong.** `stage2c-raw-bytes` uses tmpdirs and
+  `example.test` URLs; `timeline-time:19` explicitly says it *avoids* reading the corpus because
+  `data/` is gitignored. The real list is 28 files, headed by `artefact-copy`, `block-roles`,
+  `chat-tools`, `quotes`, `router`, `slug`, `store-parity` and `timeline-resolve`.
+- **The deploy-gate trap is already fixed and is no longer part of this stage.** `scripts/deploy.ts`
+  no longer copies the laptop's `data/`+`output/`; it copies from the tracked fixture corpus inside
+  the gate worktree (`GATE_FIXTURE_ROOT`), and `deploy-checks.ts`'s 13 sentinels all live under
+  `tests/fixtures/data-root/`. Commit `30e2b1b`, *"The gate asked which laptop, not which commit"*.
+  What remains here is that the sentinel list needs rewriting **again** when the filesystem store
+  goes.
+
+**And the largest change: half of this stage's test work has already been done by somebody else.**
+[260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md) is **built and landed** —
+a committed corpus at `tests/fixtures/data-root/` (57 files, 1.14 MB, five slugs),
+`tests/helpers/require-fixture.ts` which fails closed at each consumption boundary, and
+`tests/fixture-corpus.test.ts`, which is exactly the *"declared inventory that a test asserts"* this
+section asked for. It **deliberately defers the ~76-file sweep to this stage**, on Greg's call, so
+that the same files are not moved twice. Three things it hands over:
+
+1. **A file collision to coordinate**: `scripts/deploy-checks.ts` §§ around 574–614 has to be
+   rewritten to match whatever lands, and this stage plans to touch the same file. Whoever goes
+   second must know.
+2. **Its Sol review already settled a question this section was going to ask.** A test-side article
+   loader **must not wrap `readArticleFromDir`**, because that function is on this deletion list —
+   the same conclusion this section reached independently, now confirmed and accepted there.
+   `fixtureArticle()` was deliberately not built.
+3. **Known-open, inherited**: `store-artefact-manifest` still fails against the corpus (`raw.pdf` and
+   `labels-progress.json` read as unhomed); `doc-links` is green only because `data/reader.json`
+   happens to exist on this laptop; and the gate symlinks `.env.local`, so a gate run writes
+   corpus-derived reader state into the laptop's local Postgres.
+
+
 Deletion, and it is the largest stage by file count and the least dangerous by consequence: every
 mistake here is a compile error rather than a wrong artefact.
 
@@ -999,6 +1070,18 @@ places nobody thinks of as storage:
   [the deploy test gate cannot pass](../project/deployment.md) because the gate worktree has no
   gitignored `output/`, so ~12 tests fail structurally and forcing became routine. **Fixing that is
   part of this stage**, because after it there is no `output/` to be missing.
+
+**`checkNoteFields` is a stage-4 question, and the answer is probably "delete".** `src/block-fields.ts`
+was rescued out of the importer at item 5 and has no production caller; its own header says the
+decision is Greg's. It is a stage-4 decision rather than a live one, and here is why: the only path
+that could want it is `copyArtefacts` → `writeBlocks`, which reads a `blocks.json` off a disk — the
+same "somebody else's JSON" the validator was written for. **That path is on this stage's deletion
+list.** Once it is gone, blocks only ever reach the store from `src/blocks.ts` in the same process
+that minted them, and a validator for untrusted block data has nothing untrusted left to validate.
+So: delete it with the disk-reading path, unless stage 4 finds a caller that survives. The database
+CHECKs it overlaps with (`revision_blocks_role` and friends) stay either way; what would be lost is
+the two id *shapes* and `footnote ⇒ supplement`, and `tests/block-roles.test.ts` records what those
+were.
 
 **Remove every application reference to `raw_bytes`, and drop the column in the same stage** —
 Greg's decision 9. It used to be two stages and two deploys; the paragraph under § *~~Stage 5~~*
