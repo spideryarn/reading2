@@ -66,20 +66,23 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { DECLARATIONS } from "../src/spend-declarations.js";
+import {
+  DECLARATIONS,
+  PAID_ENDPOINT_PATHS,
+  PROVIDER_HOSTS,
+} from "../src/spend-declarations.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-/** Hosts and paid endpoint paths. A literal containing one is a capability. */
-const ENDPOINTS = [
-  "openrouter.ai",
-  "api.anthropic.com",
-  "api.openai.com",
-  "api.voyageai.com",
-  "/v1/chat/completions",
-  "/v1/audio/transcriptions",
-  "/v1/embeddings",
-];
+/**
+ * Hosts and paid endpoint paths. A literal containing one is a capability.
+ *
+ * **Imported rather than written down here since 2026-09-01.** The same host
+ * list is what `tests/setup/no-provider-calls.ts` refuses outbound requests to,
+ * and two copies would drift the quiet way round — a provider added to this
+ * scan and not to the guard is one that tests may call for free.
+ */
+const ENDPOINTS = [...PROVIDER_HOSTS, ...PAID_ENDPOINT_PATHS];
 
 /** The packages whose exports can make a client. */
 const SDKS = ["@anthropic-ai/sdk", "openai"];
@@ -143,6 +146,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "A positive control for its own fetch spy — `globalThis.fetch` is mocked for the length of the assertion, so no request leaves. Listed by name because a test that really did reach a provider is a thing worth being told about.",
   "tests/declared-spend.test.ts":
     "Exercises the guarded transport against a stubbed global fetch. Listed by name rather than by a blanket tests/ exemption, because a test that really did reach a provider is a thing worth being told about.",
+  "tests/no-provider-calls-guard.test.ts":
+    "The positive control for tests/setup/no-provider-calls.ts. It calls `fetch` at openrouter.ai on purpose, and the whole assertion is that the guard refuses it before a byte leaves — so the capability this scan sees is exactly the capability being proved absent. Listed by name for the same reason as the two above.",
 
   /* **Nine that only ask whether the key is configured.** Each reads
      `OPENROUTER_API_KEY` to fail with a sentence a person can act on, and then

@@ -388,6 +388,47 @@ Map-backed fake rather than assuming jsdom provides one; in the app, don't let `
 only home for something the rest of a feature depends on (a Safari private window has it, and
 *throws on write*).
 
+## Nothing under `tests/` may call a paid provider
+
+[`vitest.config.ts`](../../vitest.config.ts) loads
+[`tests/setup/no-provider-calls.ts`](../../tests/setup/no-provider-calls.ts) into every test file.
+It wraps `globalThis.fetch` and **refuses, before the request is sent**, anything addressed to a host
+in `PROVIDER_HOSTS` ([`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the same list
+[`tests/no-undeclared-spend.test.ts`](../../tests/no-undeclared-spend.test.ts) reads, so there is one
+copy). Everything else, a local Supabase included, goes through untouched; this is not an offline
+switch.
+
+It exists because two tests made real OpenRouter calls and stayed green —
+[260901g-a-unit-test-that-bought-inference.md](../postmortems/260901g-a-unit-test-that-bought-inference.md).
+The file that did it carried a header saying the key was absent under vitest. It is not, and it never
+was: see [§ `.env.local` is loaded into tests](#envlocal-is-loaded-into-tests). **Any test that
+reaches a model call reaches a real one.**
+
+Three things follow:
+
+- **Stubbing `fetch` yourself still works, and is still the better answer.** `vi.stubGlobal("fetch",
+  spy)` replaces the guard for the length of the stub, and asserting on the spy makes *"no model was
+  asked"* something you measured rather than an error you did not see. The guard is the backstop for
+  the tests nobody thought to write one for.
+- **Refusing is not enough, so refusals are recorded.** An `afterEach` fails any test during which a
+  request was refused — even if the test, or the code it was driving, caught the error and carried
+  on reporting *"the model returned nothing"*. That is the case the guard is really for, because it
+  is the one that stays green.
+- **The opt-out is a function call**: `allowRealProviderCalls("reason")`, from
+  [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts). It prints the reason, so a
+  run that spends money says so in its own output. There is no environment variable, because one
+  exported in a shell profile exempts every run on that machine and says nothing.
+  `grep -rn allowRealProviderCalls tests/` is the audit; as of 2026-09-01 no test takes it.
+
+It is **a tripwire, not a boundary** — the same thing `no-undeclared-spend` says about itself.
+`node:http`, a subprocess and a host nobody has heard of all walk past.
+[`evals/`](#evals-are-not-tests-and-live-in-their-own-folder) is untouched: vitest's `include` is
+`tests/**` only, and evals are supposed to spend money.
+
+[`tests/no-provider-calls-guard.test.ts`](../../tests/no-provider-calls-guard.test.ts) is the
+positive control — it watches the refusal happen, watches the backstop throw, and goes red if
+`setupFiles` ever loses the line.
+
 ## Mocks and fixtures that manufacture green
 
 A test about a race, an ordering or a count is usually testing its own mock. Four shapes, all hit in

@@ -18,6 +18,42 @@
 import type { ProviderAccount } from "./ai-spend.js";
 import type { AiJob, Wire } from "./models.js";
 
+/**
+ * **Every hostname that can take our money**, in one place.
+ *
+ * Two things read this and used to keep their own copy: the capability scan in
+ * [`tests/no-undeclared-spend.test.ts`](../tests/no-undeclared-spend.test.ts),
+ * which asks which *source* files could spend, and the runtime guard in
+ * [`tests/setup/no-provider-calls.ts`](../tests/setup/no-provider-calls.ts),
+ * which refuses an outbound request from a *test*. A second copy is a list that
+ * goes stale in one place and not the other, and the direction it goes stale in
+ * is quiet: a new provider added to the scan but not to the guard is a provider
+ * tests may call for free.
+ *
+ * Hosts, not URLs. The guard matches a request's hostname against these exactly
+ * or as a suffix (`foo.openrouter.ai` counts), so a base URL moving from
+ * `/api/v1` to `/v2` does not need an edit here.
+ */
+export const PROVIDER_HOSTS: readonly string[] = [
+  "openrouter.ai",
+  "api.anthropic.com",
+  "api.openai.com",
+  "api.voyageai.com",
+];
+
+/**
+ * Paths that cost money wherever they are served from.
+ *
+ * Only the capability scan uses these — a *string* naming one is evidence a
+ * source file talks to a provider. The runtime guard does not, because it has
+ * the real hostname in front of it and does not need to guess from a path.
+ */
+export const PAID_ENDPOINT_PATHS: readonly string[] = [
+  "/v1/chat/completions",
+  "/v1/audio/transcriptions",
+  "/v1/embeddings",
+];
+
 export interface Declaration {
   /** Stable id. Appears on the row's `step_name`, so a row can be traced here. */
   readonly id: string;

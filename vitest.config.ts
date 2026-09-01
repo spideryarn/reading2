@@ -15,6 +15,17 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    /* **Loaded into every test file: a test may not spend money.** It wraps
+       `globalThis.fetch` and refuses a request to a provider host before it is
+       sent. Not a nicety — two tests in `tests/referee-mirror-route.test.ts`
+       made real, paid OpenRouter calls on 2026-08-31 and stayed green, because
+       an empty answer and no answer look the same from outside.
+
+       If this line goes away, `tests/no-provider-calls-guard.test.ts` goes red
+       twice: once because the wrapper is absent at run time, and once because
+       it reads this file and cannot find the path. See
+       docs/postmortems/260901g-a-unit-test-that-bought-inference.md. */
+    setupFiles: ["./tests/setup/no-provider-calls.ts"],
     /* `.tsx` as well as `.ts`, since 2026-08-27. Until then this was `.ts`
        only, which is why the repo had no component tests: a file that mounts a
        React component wants JSX, and a `.tsx` test was simply never collected —
