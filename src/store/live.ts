@@ -98,3 +98,98 @@ export function notMigrated(what: string): () => never {
     throw notMigratedError(what);
   };
 }
+
+/* ------------------------------------------- seams with only one side, declared -- */
+
+/**
+ * **A seam that deliberately has an implementation on only one side, said out
+ * loud so a test can tell it from a seam nobody has got to yet.**
+ *
+ * That distinction is the whole point of this record, and it is the thing that
+ * was missing when Claims shipped: `RefereeClaimsStore` had a filesystem
+ * implementation and a `notMigrated` refusal, which was a recorded decision — and
+ * a recorded decision written in a docstring is indistinguishable, to every check
+ * in this repo, from a store somebody forgot. Under `SPIDERYARN_STORE=postgres`
+ * every claims operation answered 501 for four hours in production while every
+ * test passed.
+ * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md.
+ *
+ * `tests/store-seams-have-two-implementations.test.ts` derives the seams from
+ * `contracts.ts` and the implementations from the source, so **this record is
+ * never a second list of the seams** — only of the exceptions, exactly as
+ * `ARTICLE_TABLE_COVERAGE` in [export.ts](export.ts) is only a list of what the
+ * rollback does about each table. An entry that stops being true fails that test
+ * too: build the missing side and the entry has to go.
+ *
+ * ## The two directions are not the same thing, and the type says so
+ *
+ * **`missing: "files"` is ordinary.** There is no user list, no visibility
+ * column and no feedback table on a filesystem, so those seams have a Postgres
+ * implementation and a filesystem *refusal*. Nothing is broken anywhere; the
+ * store that cannot answer is the one that does not deploy.
+ *
+ * **`missing: "postgres"` is a production outage with a date on it**, because
+ * `postgres` is what deploys. So it carries `productionGap` as well as `why`:
+ * one sentence naming what a reader cannot do on the deployed app. Writing that
+ * sentence is meant to be uncomfortable — it is the sentence nobody would have
+ * written and shipped about *"Pull the paper's claims"*, and having to write it
+ * is the check.
+ *
+ * Keyed by the interface name in [contracts.ts](contracts.ts).
+ */
+export type SeamAsymmetry =
+  | {
+      /** No filesystem implementation, and there should not be one. */
+      readonly missing: "files";
+      /** Why a filesystem adapter cannot or should not exist. In words. */
+      readonly why: string;
+    }
+  | {
+      /** No Postgres implementation **yet** — this is a gap, not a design. */
+      readonly missing: "postgres";
+      /** Why it has not been built, and who owns building it. In words. */
+      readonly why: string;
+      /**
+       * **What a reader cannot do on the deployed app**, in one plain sentence.
+       *
+       * Required, because `postgres` is the store production runs: this side
+       * missing means a 501 for everybody who is not a developer on a laptop.
+       */
+      readonly productionGap: string;
+    };
+
+export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
+  AdminStore: {
+    missing: "files",
+    why:
+      "There is no user list on a filesystem — data/ is one directory per slug and " +
+      "nothing in it records that a person exists. The files side is a loud refusal " +
+      "with its own sentence, in src/store/index.ts. docs/project/admin.md.",
+  },
+  VisibilityStore: {
+    missing: "files",
+    why:
+      "The filesystem store has no visibility column, so there is nowhere to record " +
+      "that a document is shared. A files adapter could only report success and share " +
+      "nothing. docs/plans/260827ai-public-read-only-access.md.",
+  },
+  FeedbackStore: {
+    missing: "files",
+    why:
+      "There is no feedback table on a filesystem, and a files adapter would be twenty " +
+      "lines written against a module docs/plans/260831b-finish-the-database-move.md " +
+      "deletes. A Feedback button that accepts a report and drops it is worse than none.",
+  },
+  GlossaryStore: {
+    missing: "postgres",
+    why:
+      "The SQL is trivial; what is not settled is whether it may run at all. " +
+      "deleteGlossary nulls article_revisions.glossary on a PUBLISHED revision, and " +
+      "whether a published revision may be mutated is the open decision step 11 of " +
+      "docs/plans/260826e-postgres-storage-implementation.md owns. Refused rather than " +
+      "made a quiet exception.",
+    productionGap:
+      "The glossary panel's 'start over' does not work on the deployed app: it answers " +
+      "501 and the reader is stuck with the glossary they have.",
+  },
+};

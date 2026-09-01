@@ -65,6 +65,38 @@ compared them.
   `SPIDERYARN_STORE=postgres`, run both, or something else — and make the choice visible rather than
   inherited.
 
+## What was built, 2026-09-01
+
+- **Stage 2** — [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts).
+  Both stores, the same script, compared as the wire form step by step. Two differences are asserted
+  **positively** rather than normalised away: a slug that is not an article (files answer `[]`/`null`,
+  Postgres 404s through `ownedSlug`) and a *young* abandoned claims run (files sweep it at once,
+  Postgres waits `CLAIMS_ORPHAN_GRACE_MS`). It was watched failing on a clamped valence, a dropped
+  `claimsOmitted`, a `null` where the other store answers a row, and a Postgres store that had lost
+  its grace window.
+
+- **Stage 3 — a separate suite, [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts),
+  and its header carries the argument.** Pinning the existing route suites would have cost
+  `referee-claims-routes.test.ts` the property its own header calls load-bearing — nothing in it
+  reaches a model — because those files build `data/<slug>/` fixtures and read the result back
+  through the *filesystem* functions, so pinning means rewriting every fixture in two files several
+  sessions are inside. Running them twice cannot be done in one process at all: `STORE` is read once
+  at module load, deliberately, so "twice" means a second vitest project. The separate suite leaves
+  the existing ones alone and owns one sentence: *these routes work under Postgres*. Its cost is
+  written down too — the route logic is asserted on files and the store wiring here, so a new guard
+  needs a case in both.
+
+- **The class-level fix the postmortem asked for** —
+  [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts).
+  Seams derived from `contracts.ts`, implementations derived from the source of `src/store/`,
+  neither written down. A deliberate one-sided seam declares itself in `SEAM_ASYMMETRIES`
+  ([`src/store/live.ts`](../../src/store/live.ts)), whose type makes the two directions different
+  things: a missing *files* side needs a reason (there is no user list on a filesystem), a missing
+  *postgres* side needs a reason **and** a sentence saying what a reader cannot do on the deployed
+  app — the sentence nobody would have written about *"Pull the paper's claims"*. Today it holds
+  four entries: `AdminStore`, `VisibilityStore`, `FeedbackStore`, and `GlossaryStore`, which is the
+  one live example of the direction that ships outages.
+
 ## What this plan is deliberately not doing
 
 **Flipping the local default to `postgres`.** That is the hinge in the middle of stage 4 of

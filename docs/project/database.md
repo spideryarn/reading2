@@ -43,6 +43,14 @@ admin's user list, the visibility switch, public reading — and each of them re
 sentence rather than returning a plausible default. Those branches are **scaffolding around a store
 that is going away**, and they get deleted rather than maintained.
 
+A one-sided seam now has to **declare itself** in `SEAM_ASYMMETRIES`
+([`src/store/live.ts`](../../src/store/live.ts)), because a refusal written only in a docstring is
+indistinguishable from a store somebody forgot — which is how Claims shipped filesystem-only and
+answered 501 in production for four hours with every test green
+([260901e](../postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md)).
+A missing *files* side needs a reason; a missing *postgres* side needs a reason **and** one plain
+sentence naming what a reader cannot do on the deployed app, because that is what it is.
+
 ## The filesystem era: files under `data/<slug>/`
 
 One directory per article, one file per pipeline stage:
@@ -307,6 +315,9 @@ column on an exported table is still a hand-written line in `exportArticle`, whi
 | [`src/store/export.ts`](../../src/store/export.ts) | the exporter that is the rollback. **There is no importer** — `npm run db:import` and `src/store/import.ts` were deleted on 2026-09-01, because a re-import wrote `raw_bytes` and left the source reference alone, describing two different acquisitions in one row. (That column was dropped on 2026-09-01; the document is an object in the `sources` bucket.) [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 |
 | [`src/owner.ts`](../../src/owner.ts) | who owns a row — the request-scoped owner, and the environment's when there is no request |
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
+| [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts) | the same, for Referee's two stores — the suite that would have caught Claims shipping filesystem-only |
+| [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts) | every seam in `contracts.ts` has both adapters, or declares its one-sidedness — see below |
+| [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven under `SPIDERYARN_STORE=postgres`, because every other route suite runs on the default |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
 
 Three rules that outrank convenience, all learned the expensive way:
