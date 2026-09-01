@@ -109,6 +109,16 @@ consumption site for the corpus *as a corpus*; the suites listed in the table ab
 consumption sites for the individual articles, and converting those onto `requireFixture` is part of
 the deferred sweep below.
 
+**Whether Postgres will publish an article is asserted for all five at once**, in *"says of every
+article whether Postgres will publish it, and is right"*. `publishRevision` compares
+`hashBlocks(blocks)` against the `hierarchy` step's `input_hash`, which on this path is
+`labels.json`'s `sourceHash` — so four of these articles must carry a stamp of their own blocks and
+`constitution` must carry none. That was checked for `writes` alone until 2026-09-01, which is the
+same "named slugs are not coverage" hole one rung down: the other four were unguarded, and the day
+one lost or outgrew its stamp the failure would have landed in whichever suite happened to load it,
+saying *"the tree was built from different blocks"*. The exception list is written out in that test
+rather than derived, so an article that quietly **lost** its stamp fails instead of joining it.
+
 The deploy gate's sentinel list (`GATE_FIXTURES` in
 [`scripts/deploy-checks.ts`](../../../scripts/deploy-checks.ts)) names thirteen of these files and
 deliberately not the rest — a list that names everything becomes noise people stop reading. The

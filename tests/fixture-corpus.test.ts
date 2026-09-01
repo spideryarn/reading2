@@ -136,6 +136,52 @@ describe("the committed fixture corpus", () => {
     expect(carrying).toEqual(["writes"]);
   });
 
+  it("says of every article whether Postgres will publish it, and is right", () => {
+    /* **The precondition every Postgres suite in the repo inherits, checked
+       once, over the whole corpus.**
+
+       `publishRevision` refuses a draft whose `hierarchy` step ran against
+       blocks it cannot prove it saw: it compares `hashBlocks(revision blocks)`
+       against the step's `input_hash`, which on the filesystem path comes from
+       `labels.json`'s `sourceHash` (`STAMP_SOURCE`, src/store/artifacts.ts).
+       An article whose stamp is absent, or is the hash of *different* blocks,
+       copies its steps fine and is then refused with *"the tree was built from
+       different blocks"* — three files away from `labels.json`.
+
+       This was `writes` only until 2026-09-01, and being `writes` only is what
+       made it useless as a guard: the other four were unchecked, and the day
+       one of them lost or outgrew its stamp the failure would have landed in
+       whichever suite happened to load it. Checked against `hashBlocks` rather
+       than a literal, so re-slicing an article can never leave a stale hash
+       looking right.
+
+       **`constitution` is the declared exception and the list is written out
+       rather than derived**, because a list computed from the bytes agrees
+       with any bytes: an article that quietly *lost* its stamp would join the
+       exception list instead of failing. Its `labels.json` predates stage 4
+       recording a `sourceHash` at all, so the gate has nothing to compare and
+       correctly refuses — that refusal is the property the slug is kept for
+       (tests/store-parity.test.ts § LEGACY_SLUG, and the README). If it ever
+       gains a stamp the fix is to retire the case, not to restore the file. */
+    const REFUSED_ON_PURPOSE = ["constitution"];
+
+    const wrong: string[] = [];
+    for (const slug of SLUGS) {
+      const labels = readIfThere<{ sourceHash?: string }>(slug, "labels.json");
+      const stamp = labels?.sourceHash;
+      if (REFUSED_ON_PURPOSE.includes(slug)) {
+        if (labels === null) wrong.push(`${slug}: labels.json is missing altogether`);
+        else if (stamp !== undefined) wrong.push(`${slug}: gained a sourceHash — retire the case`);
+        continue;
+      }
+      const want = hashBlocks(blocksOf(slug));
+      if (stamp !== want) {
+        wrong.push(`${slug}: labels say ${stamp ?? "(no sourceHash)"}, its blocks hash to ${want}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
   it("gives every article a meta.fetchedAt, because git does not keep mtimes", () => {
     /* tests/store-parity.test.ts dates a card by `meta.fetchedAt ?? mtime of
        blocks.json`. On a laptop the mtime is when the pipeline ran; in a fresh
@@ -156,17 +202,6 @@ describe("the committed fixture corpus", () => {
          a block that is not there. */
       expect(blocksOf("writes").length).toBeGreaterThanOrEqual(19);
     });
-
-    it("is publishable: its labels file is stamped with the hash of its own blocks", () => {
-      /* `publishRevision` refuses a draft whose `toc` step ran against blocks it
-         cannot prove it saw. Every suite that loads this article asserts
-         `published === true`, so the stamp is a precondition of all of them —
-         and it is checked against `hashBlocks` rather than against a literal,
-         so re-slicing the article can never leave a stale hash looking right. */
-      const labels = read<{ sourceHash?: string }>("writes", "labels.json");
-      expect(labels.sourceHash).toBe(hashBlocks(blocksOf("writes")));
-    });
-
 
     it("has a Remember thread carrying a stance", () => {
       /* Without one, tests/store-roundtrip.test.ts's Remember test warns and
@@ -304,16 +339,12 @@ describe("the committed fixture corpus", () => {
   });
 
   describe("constitution — the article the gate refuses", () => {
-    it("has a labels file with no sourceHash", () => {
-      /* The whole reason this slug is in the corpus.
-         tests/store-parity.test.ts and tests/store-roundtrip.test.ts each keep a
-         block for it, and scripts/deploy-checks.ts names the file as a gate
-         sentinel. If this ever gains a stamp the fix is to retire the case, not
-         to restore the file — store-parity says so in its own words. */
-      const labels = readIfThere<{ sourceHash?: string }>("constitution", "labels.json");
-      expect(labels).not.toBeNull();
-      expect(labels?.sourceHash).toBeUndefined();
-    });
+    /* **The refusal itself is asserted above**, in "says of every article
+       whether Postgres will publish it" — over the whole corpus, so that the
+       exception is declared in one place rather than kept as a case here that
+       the other four have no counterpart to. What is left in this block is the
+       damage the *slice* could have done, which is particular to this article
+       because it is the only one that was cut. */
 
     it("has a tree that still partitions its blocks after the slice", () => {
       /* This is the one article in the corpus that was cut down, so it is the

@@ -331,6 +331,19 @@ when("the filesystem and Postgres stores agree", () => {
            both halves stay on `data/` until those modules take a root.
            docs/plans/260901b-committed-fixture-corpus.md, stage 4 sub-stage A. */
         root: ROOT,
+        /* **This suite is one of the two that need `serialise`**, and the only
+           two: it enumerates the corpus under its *own* fixed slugs, so a
+           second copy of this file — a peer's `npm test` — reads and deletes
+           the same rows. It holds `CORPUS_LOCK` but not `RUN_LOCK`, and the
+           two are different resources; the run lock is what excludes the twelve
+           file-scope holders that also start jobs. Unconditional inside the
+           loader until 2026-09-01, when it became opt-in because it was making
+           every unique-slug seed in the run queue behind every other one
+           (tests/helpers/load-article.ts § `LoadOptions.serialise`). Taken here
+           by the *window* rather than by the file, because this suite is long
+           and holding the key across it would dominate the 120s budget —
+           tests/helpers/run-lock.ts says which suites take it which way. */
+        serialise: true,
       });
       loaded.set(slug, result);
       /* Reader state does not come through the artefact seam and must not be
@@ -546,14 +559,28 @@ when("the filesystem and Postgres stores agree", () => {
 
     it("copies its steps and is then refused publication, saying why", async () => {
       await forgetRevisions([LEGACY_SLUG]);
-      const result = await loadArticleIntoPg(LEGACY_SLUG, { publish: "try", root: ROOT });
+      /* `serialise` for the same reason as the loop in `beforeAll`: a fixed
+         corpus slug, and this file holds the corpus lock but not the run lock.
+         `publish: "try"` because the refusal below IS the assertion — the
+         article loads (three steps copied) and is then correctly refused. */
+      const result = await loadArticleIntoPg(LEGACY_SLUG, {
+        publish: "try",
+        root: ROOT,
+        serialise: true,
+      });
 
       // The copy worked: this is not "nothing happened".
       expect(result.basedOn).toBeNull();
       expect(result.copied).toContain("hierarchy");
       // And then the gate said no, for the one reason it should have.
       expect(result.published).toBe(false);
-      expect(result.refusedBecause.join(" | ")).toMatch(/toc ran against unstamped/);
+      /* **`hierarchy`, not `toc`.** `265356b` renamed the step in the database
+         and in this message, and this assertion was left naming the old one —
+         so it has been failing since, on a string that no longer exists. The
+         message is `src/store/pg-revisions.ts` § `reasonsNotToPublish`; matched
+         on the two words that carry the meaning rather than the whole sentence,
+         which also carries a hash that changes with the fixture. */
+      expect(result.refusedBecause.join(" | ")).toMatch(/hierarchy ran against unstamped/);
     });
 
     it("is therefore not an article either store will serve", async () => {

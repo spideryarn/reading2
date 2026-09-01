@@ -105,9 +105,17 @@
  * A file must take this **once**. Two takes in one file are two different
  * connections asking for the same key — Postgres re-entrancy does not apply
  * across sessions, so the second one polls until the deadline and then throws.
- * That is why there is no `withRunLock(body)` wrapper here and why the fixture
- * loader in `./load-article.ts` does not take it: several of its callers hold
- * this lock already, and a nested take would deadlock every one of them.
+ *
+ * That is what `withRunLock`'s early return below is for, and it is why the
+ * fixture loader in `./load-article.ts` takes this **only when its caller asks**
+ * (`LoadOptions.serialise`): several of its callers hold this lock for their
+ * file already, and an unconditional nested take would deadlock every one of
+ * them.
+ *
+ * (This paragraph said there was no `withRunLock` wrapper and that the loader
+ * never took the lock. Both halves stopped being true when the window-scoped
+ * take landed, and the correction sat unmade long enough for two other
+ * paragraphs here to contradict this one.)
  *
  * ## Why `store-roundtrip` and `store-parity` take this by the window, not the file
  *
@@ -118,13 +126,25 @@
  * and two concurrent runs would exceed the deadline outright — turning a flake
  * into a hard, confident failure, which is worse.
  *
- * So those two take it through `withRunLock` inside `loadArticleIntoPg`, for the
- * length of one fixture load rather than one suite. Same key, same exclusion,
- * a hold measured in hundreds of milliseconds.
+ * So those two take it through `withRunLock` inside `loadArticleIntoPg` — by
+ * passing `serialise: true` — for the length of one fixture load rather than
+ * one suite. Same key, same exclusion, a hold measured in hundreds of
+ * milliseconds. They are the only two callers that pass it, because they are
+ * the only two that load a fixed slug without holding this lock for their file.
  *
- * That is the rule for anything added later: **take this if you run a job;
- * take it by the file if your fixtures are named the same on every run, and by
- * the window if holding it for your whole file would dominate the budget.**
+ * That is the rule for anything added later: **take this if you run a job under
+ * a name something else also uses; take it by the file if your fixtures are
+ * named the same on every run, and by the window if holding it for your whole
+ * file would dominate the budget.**
+ *
+ * **And a seed under a slug nobody else uses does not take it at all.** That is
+ * `serialise`'s default, and it is a change of 2026-09-01 rather than an
+ * omission: unconditional, the loader made every seed in the run queue behind
+ * every other one at ~380ms a caller, which ~48 converted sub-stage B suites
+ * would have turned into ~24s of strictly serial demand against the 120s
+ * budget. The numbers, and **the one collision a unique slug does not
+ * separate**, are in `./load-article.ts` § `LoadOptions.serialise` and
+ * `tests/load-article-serialisation.test.ts`.
  *
  * ## Measuring this lock: read the `import` phase, not `tests`
  *
@@ -309,18 +329,25 @@ export async function takeRunLock(
  *
  * **The window-scoped take**, for code that needs to run a job briefly
  * rather than for a whole file — `loadArticleIntoPg` in `./load-article.ts` is
- * the caller it was written for. A fixture load is one insert, some artefact
- * writes and a delete; serialising *that* costs nothing, where serialising the
- * suite around it would cost 63 seconds in `tests/store-roundtrip.test.ts`.
+ * the caller it was written for, and reaches it only when asked
+ * (`LoadOptions.serialise`). A fixture load is one insert, some artefact writes
+ * and a delete; serialising *that* costs nothing, where serialising the suite
+ * around it would cost 63 seconds in `tests/store-roundtrip.test.ts`.
  *
- * **The early return is the whole point, and it is not an optimisation.** Five
- * of the twelve file-scope holders call `loadArticleIntoPg` while holding the
- * lock for their file. Taking it again would be a second *connection* asking
- * for a key the first connection holds; advisory locks are re-entrant within a
- * session and these are two sessions, so it would poll to the deadline and then
- * throw — in five files at once, blaming a sibling that does not exist. The
- * flag says "I already have it", which is true, and the body runs with the lock
- * genuinely held. `tests/run-lock.test.ts` drives exactly that path.
+ * **The early return is a guard, not an optimisation.** Taking the key again in
+ * a process that holds it would be a second *connection* asking for what the
+ * first connection has; advisory locks are re-entrant within a session and
+ * these are two sessions, so it would poll to the deadline and then throw,
+ * blaming a sibling that does not exist.
+ *
+ * **No caller reaches it today**, and saying so is better than the claim that
+ * was here. Until 2026-09-01 the loader took this lock unconditionally, so the
+ * five file-scope holders that also load a fixture went through it on every
+ * call; now `serialise` defaults to off and neither of the two suites that
+ * passes it holds the lock for its file. It stays because it is the difference
+ * between "somebody added `serialise: true` to a file-scope holder" and "a
+ * suite hangs for two minutes accusing its neighbour". `tests/run-lock.test.ts`
+ * drives the branch directly, which the old wording claimed and no test did.
  *
  * **Lock ordering.** This one is always the *inner* lock. `store-parity` and
  * `store-roundtrip` hold `CORPUS_LOCK` across their `beforeAll` and reach this

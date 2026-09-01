@@ -340,6 +340,19 @@ when("a round trip through Postgres", () => {
            stay on `data/` until those modules take a root.
            docs/plans/260901b-committed-fixture-corpus.md, stage 4 sub-stage A. */
         root: ROOT,
+        /* **This suite is one of the two that need `serialise`**, and the only
+           two: it enumerates the corpus under its *own* fixed slugs, so a
+           second copy of this file — a peer's `npm test` — reads and deletes
+           the same rows. It holds `CORPUS_LOCK` but not `RUN_LOCK`, and the
+           two are different resources; the run lock is what excludes the twelve
+           file-scope holders that also start jobs. Unconditional inside the
+           loader until 2026-09-01, when it became opt-in because it was making
+           every unique-slug seed in the run queue behind every other one
+           (tests/helpers/load-article.ts § `LoadOptions.serialise`). Taken here
+           by the *window* rather than by the file, because this suite is long
+           and holding the key across it would dominate the 120s budget —
+           tests/helpers/run-lock.ts says which suites take it which way. */
+        serialise: true,
       });
       /* Asserted here rather than in a test of its own, because everything
          below depends on it and a `beforeAll` that carried an article forward

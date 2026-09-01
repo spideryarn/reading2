@@ -18,7 +18,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
-import { RUN_LOCK, takeRunLock } from "./helpers/run-lock.js";
+import { RUN_LOCK, takeRunLock, withRunLock } from "./helpers/run-lock.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -108,6 +108,43 @@ when("the run lock", () => {
        failed releases in `afterAll` after having released explicitly, and a
        teardown that throws buries the real failure under its own. */
     await expect(lock.release()).resolves.toBeUndefined();
+    expect(await holders()).toBe(0);
+  });
+
+  it("lets a nested withRunLock through instead of deadlocking on its own key", async () => {
+    /* **The branch every claim about it was a claim about, and nothing drove.**
+       `withRunLock` returns early when this process already holds the key, and
+       run-lock.ts's own header said "tests/run-lock.test.ts drives exactly that
+       path" for two days while no such case existed. Without the early return
+       this is a second connection asking for what the first one holds — two
+       sessions, so no re-entrancy — and it polls for the full deadline and then
+       throws, blaming a sibling that is not there.
+
+       `waitMs: 1000` so that a regression costs a second rather than two
+       minutes: at the real number this case could not be afforded, and a branch
+       nobody can afford to run is one nobody has seen work. */
+    const lock = await takeRunLock("tests/run-lock.test.ts (nested)");
+    try {
+      let ran = false;
+      await withRunLock(
+        "tests/run-lock.test.ts (nested body)",
+        async () => {
+          ran = true;
+          /* And the key really is held while the body runs — the early return
+             is only correct because that is true. One holder, not two. */
+          expect(await holders()).toBe(1);
+        },
+        { waitMs: 1000 },
+      );
+      expect(ran, "the body must run").toBe(true);
+    } finally {
+      await lock.release();
+    }
+
+    /* The nested call must not have released the outer lock on its way out.
+       It did not take it, so it has nothing to give back — and a `finally`
+       that unlocked anyway would leave the file it is nested inside
+       unprotected for the rest of its run. */
     expect(await holders()).toBe(0);
   });
 

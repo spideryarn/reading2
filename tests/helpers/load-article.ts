@@ -178,6 +178,77 @@ export interface LoadOptions {
    * root it cloned into. Everything else should leave this alone.
    */
   readonly root?: string;
+  /**
+   * Take `RUN_LOCK` (./run-lock.ts) around the load, serialising it against
+   * every other suite that takes the same key.
+   *
+   * **Opt-in since 2026-09-01, and the default is `false`.** It used to be
+   * unconditional, and that made every fixture load in the whole test run queue
+   * behind every other one — including loads that share nothing. Measured
+   * 2026-09-01, K processes each seeding a *uniquely named* article, **worst
+   * seed of the K**, three to four repeats each:
+   *
+   * ```
+   *              K=1        K=8          K=16
+   * serialised   438–489ms  3307–3379ms  6455–6685ms
+   * not          374–425ms  1604–1747ms  3046–3463ms
+   * ```
+   *
+   * The serialised column is the queue: ~400ms a caller, so the Kth waits
+   * K × 400ms and the whole run's seeding is strictly serial. ~48 converted
+   * sub-stage B suites at that rate is ~19–24s of serial demand on top of the
+   * ~25s the twelve file-scope holders already total, against
+   * `RUN_LOCK_WAIT_MS` = 120s. One `npm test` fits; two concurrent ones nearly
+   * do not, and the failure is a hard timeout naming a *sibling* suite.
+   * docs/plans/260831b-finish-the-database-move.md § What the sub-stage B pilot
+   * measured.
+   *
+   * **The spawns have to be barrier-synchronised or the measurement lies.** The
+   * first run of this rig staggered its K processes by their own `tsx` startup
+   * and reported the unserialised arm as *faster than it is* and — worse —
+   * **zero** collisions in the case below, where a real barrier gives fifteen
+   * of sixteen. Load that arrives spread out is not the load a test run applies.
+   *
+   * ## When you must pass `true`
+   *
+   * **Two loads contend when they write the same row, and the slug is not the
+   * only row they share.** Both of these need the lock:
+   *
+   * 1. **A fixed slug.** `articles_slug_unique`, `jobs_active_slug` on
+   *    `(owner_id, slug)`, and every article-scoped table under it — two copies
+   *    of one suite, or two suites naming the same corpus article, are reading
+   *    and deleting each other's rows. This is `./run-lock.ts` § cause 2 and it
+   *    has not changed.
+   * 2. **The same raw document as somebody else**, which is *not* about the
+   *    slug and is the reason this option is not simply "is my slug unique".
+   *    `raw_sources` is keyed `(sha256, kind)` — one row per *document*, shared
+   *    by every article made from those bytes — and `writeRaw`
+   *    (src/store/artifacts-pg.ts) does `select … for update` then `insert`.
+   *    A `for update` over **no rows locks nothing**, so when the row is not
+   *    there yet two concurrent loads both miss and both insert, and the loser
+   *    gets `duplicate key value violates unique constraint
+   *    "raw_sources_sha256_kind_pk"`. Reproduced, not reasoned about: sixteen
+   *    unserialised clones of `writes` with the raw bytes freshened so the row
+   *    was absent gave **15, 7 and 15 failures of 16** over three runs; the same
+   *    sixteen with `serialise: true` gave none. With the corpus's real bytes —
+   *    the row long since present — both arms give zero, which is the reading a
+   *    laptop hands you. `tests/load-article-serialisation.test.ts` holds it as
+   *    a case.
+   *
+   *    It bites only on the *first* load of a given document, which is exactly
+   *    why it hides: on a laptop whose `raw_sources` row already exists — and
+   *    on the second run of anything — every caller takes the `for update`
+   *    branch and it is invisible. A fresh checkout, a `db:reset`, or CI is
+   *    where it would have surfaced.
+   *
+   *    `tests/helpers/scratch-article.ts` clones one corpus article N times, so
+   *    all N clones carry **identical** `raw.html` and one `raw_sources` row.
+   *    It is safe unlocked today only because that row is already in every
+   *    developer's database; it is not safe by construction. Either strip the
+   *    manifest from the clone, or fix `writeRaw` to insert conflict-tolerantly
+   *    — not this file's call to make.
+   */
+  readonly serialise?: boolean;
 }
 
 /** A job's step list has to be non-empty and well-formed; nothing reads these. */
@@ -237,21 +308,30 @@ async function storeRawBytesFor(slug: string, root: string): Promise<void> {
  * 2026-08-28 because a suite that had never met this grew the same failure:
  * one of it, not one per file that gets bitten.
  *
- * **And the job is started under `withRunLock`, not merely waited for.** Waiting
- * on the constraint is *unfair* — it polls, so under contention one caller
- * starves and spends the whole 20s budget. `./run-lock.ts` serialises the
- * suites properly; this is how the two callers that cannot afford a file-scope
- * hold — `store-parity`, and `store-roundtrip` at 63 seconds — join that queue
- * for the length of a fixture load instead of a suite.
+ * **And when `serialise` is set the job is started under `withRunLock`, not
+ * merely waited for.** Waiting on the constraint is *unfair* — it polls, so
+ * under contention one caller starves and spends the whole 20s budget.
+ * `./run-lock.ts` serialises the suites properly; this is how the two callers
+ * that cannot afford a file-scope hold — `store-parity`, and `store-roundtrip`
+ * at 63 seconds — join that queue for the length of a fixture load instead of a
+ * suite.
  *
- * The two are kept together on purpose. The lock excludes the suites that agree
- * to take it; `insertWhenSlotFree` still covers everything that never will — a
- * dev server mid-ingest, a real job. Neither replaces the other.
+ * `serialise` is the caller's, and it defaults to **off**: a load under a slug
+ * nobody else uses shares no row with anybody and queueing it behind every
+ * other seed in the run costs ~380ms per waiting caller for nothing. Which
+ * loads must ask for it, and the second reason that is not simply "is my slug
+ * unique", are in `LoadOptions.serialise`.
  *
- * **For the five callers that already hold the lock for their file**, the take
- * below is a no-op: `withRunLock` returns early when this process is the holder.
- * Without that it would be a second connection asking for its own key, and would
- * poll to the deadline. See `./run-lock.ts` and `tests/run-lock.test.ts`.
+ * The lock and the retry are kept together on purpose. The lock excludes the
+ * suites that agree to take it; `insertWhenSlotFree` still covers everything
+ * that never will — a dev server mid-ingest, a real job, and now every
+ * unserialised seed. Neither replaces the other, and the retry is the reason an
+ * unserialised load is not simply defenceless.
+ *
+ * **For the file-scope holders that pass `serialise`**, the take below is a
+ * no-op: `withRunLock` returns early when this process is the holder. Without
+ * that it would be a second connection asking for its own key, and would poll
+ * to the deadline. See `./run-lock.ts` and `tests/run-lock.test.ts`.
  *
  * **The job is deleted rather than marked done.** Marking it `done` in a
  * `finally` would claim success for a body that threw, and — worse — an
@@ -268,14 +348,11 @@ async function storeRawBytesFor(slug: string, root: string): Promise<void> {
 async function withRunningJob<T>(
   slug: string,
   ownerId: OwnerId,
+  serialise: boolean,
   body: (job: { id: string; attemptId: string }) => Promise<T>,
 ): Promise<T> {
   const db = getDb();
-  /* The lock wraps the whole window — insert, body, delete — and not just the
-     insert. Holding it only for the insert would let a sibling start its own
-     job on this article the moment this one had, which is the race
-     `jobs_active_slug` then reports as somebody else's failure. */
-  return await withRunLock(`loading ${slug}`, async () => {
+  const started = async (): Promise<T> => {
     const job = await insertWhenSlotFree(slug, async () => {
       const started = { id: mintId(), attemptId: mintAttempt() };
       await db.insert(jobs).values({
@@ -295,7 +372,13 @@ async function withRunningJob<T>(
     } finally {
       await db.delete(jobs).where(eq(jobs.id, job.id));
     }
-  });
+  };
+
+  /* The lock, when it is taken, wraps the whole window — insert, body, delete —
+     and not just the insert. Holding it only for the insert would let a sibling
+     start its own job on this article the moment this one had, which is the
+     race `jobs_active_slug` then reports as somebody else's failure. */
+  return serialise ? await withRunLock(`loading ${slug}`, started) : await started();
 }
 
 /**
@@ -310,7 +393,12 @@ export async function loadArticleIntoPg(
   slug: string,
   opts: LoadOptions = {},
 ): Promise<LoadedArticle> {
-  const { publish = true, ownerId = currentOwnerId(), root = FIXTURE_ROOT } = opts;
+  const {
+    publish = true,
+    ownerId = currentOwnerId(),
+    root = FIXTURE_ROOT,
+    serialise = false,
+  } = opts;
 
   return runAsOwner(ownerId, async () => {
     await storeRawBytesFor(slug, root);
@@ -318,7 +406,7 @@ export async function loadArticleIntoPg(
     const fs = createFsArtifactStore(locationsIn(root));
     const db = getDb();
 
-    return withRunningJob(slug, ownerId, async (job) => {
+    return withRunningJob(slug, ownerId, serialise, async (job) => {
       const draft = await openOrBeginJobDraft({ slug, job });
       const ref = {
         slug,
