@@ -163,7 +163,7 @@ same ground without a human eye.
 `scripts/gjd-remote-tab.ts` and its unit tests went in on their own, ahead of their caller, because a
 peer agent was holding `scripts/gjd-remote.ts` for their own `--wait` and `ssh <command>` work and
 could not commit until the module they now import existed. They then took the `runOnTheBox` and
-`requireTabColour` hunks and the `remote-box.md` section along in commit `654b4e7`, naming whose they
+`requireTabColour` hunks and the `hetzner-remote-server-box.md` section along in commit `654b4e7`, naming whose they
 were, because that file cannot be split. The lifecycle tests and this document followed once the
 flake above was fixed.
 

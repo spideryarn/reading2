@@ -232,7 +232,7 @@ Notification Center Alerts → Filter Alerts → "Send escape sequence-generated
 **Superseded, 2026-08-31.** The config below was never what shipped, and what shipped has since gone
 the other way: tmux on the box now has **no prefix and no key bindings at all**, because the keys
 were the problem rather than the ergonomics.
-[remote-box.md § tmux keeps sessions alive and does nothing else](../project/remote-box.md#tmux-keeps-sessions-alive-and-does-nothing-else)
+[hetzner-remote-server-box.md § tmux keeps sessions alive and does nothing else](../project/hetzner-remote-server-box.md#tmux-keeps-sessions-alive-and-does-nothing-else)
 is the decision and the measurement behind it; the live file is a managed block in
 [`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh). In particular `mouse on` and the
 wheel bindings below are exactly the sort of interception that was removed. The rest of this page —

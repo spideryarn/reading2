@@ -13,7 +13,7 @@
  * is exactly what a working status line prints when it has nothing to say. Every
  * assertion below therefore names a string that must be PRESENT.
  *
- * docs/project/remote-box.md § The status line.
+ * docs/project/hetzner-remote-server-box.md § The status line.
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";

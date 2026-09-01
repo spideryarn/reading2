@@ -13,7 +13,7 @@ check() { # expected_code  label  command
   local want="$1" label="$2" cmd="$3" got payload
   payload=$(EXTRA="$cmd" python3 -c '
 import json, os
-print(json.dumps({"session_id":"abc","cwd":"/Users/greg/Dropbox/dev/experim/spideryarn2",
+print(json.dumps({"session_id":"abc","cwd":"/Users/greg/dev/spideryarn/reading2",
                   "hook_event_name":"PreToolUse","tool_name":"Bash",
                   "tool_input":{"command":os.environ["EXTRA"],"description":"x"}}))')
   printf '%s' "$payload" | PATH="$EXTRA_PATH$PATH" "$HOOK" >/dev/null 2>&1
@@ -29,7 +29,7 @@ run_suite() { # $1 = expected code for the innocent controls
   check 2 "subcommand"             'git stash push -m wip'
   check 2 "compound, the real one" 'npm test -- toc 2>&1 | tail -5; git stash'
   check 2 "&&-joined"              'git stash && npx vitest run'
-  check 2 "global flag"            'git -C /Users/greg/Dropbox/dev/experim/spideryarn2 stash'
+  check 2 "global flag"            'git -C /Users/greg/dev/spideryarn/reading2 stash'
   check 2 "extra whitespace"       'git    stash'
   check 2 "newline before git"     'cd /tmp
 git stash'

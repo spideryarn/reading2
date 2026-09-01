@@ -9,7 +9,7 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 >
 > — Greg, 2026-08-24
 
-The product is **Spideryarn**; `spideryarn2` is just this working directory. `CLAUDE.md` is a
+The product is **Spideryarn**; `reading2` is just the directory and the repo. `CLAUDE.md` is a
 symlink to this file — there is only one of it, so edit either name freely.
 
 **This file is a signpost, not a spec**, and it is loaded into every agent's context on every turn,
@@ -73,7 +73,7 @@ listed here; the names under each are files in `docs/project/`.
   each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
   `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
   `feedback.md` (the Feedback button, and where a bug report goes) ·
-  `remote-box.md` (the always-on box, and `gjd-remote`) ·
+  `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
   `worktrees.md` (one tree per agent, one day; the runbooks nobody has run yet)
 
 Two of those are worth reading before you touch anything they bear on:
@@ -185,7 +185,7 @@ actually reaches is not always the one on its command line, and both mistakes pr
 ### Working in a tree several agents share
 
 - **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
-  on the Hetzner remote box — [remote-box.md](docs/project/remote-box.md); `/Users/greg/` means
+  on the Hetzner remote box — [hetzner-remote-server-box.md](docs/project/hetzner-remote-server-box.md); `/Users/greg/` means
   you are on Greg's Mac.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons

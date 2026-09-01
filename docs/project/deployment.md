@@ -266,7 +266,7 @@ link into gitignored `output/`, which nobody else can follow.
 
 This is also what closes the "article fixtures are not in git, so a fresh clone
 cannot run the suite" entry under Known in
-[remote-box.md](remote-box.md) — for the gate. The bare-`npm test` half of
+[hetzner-remote-server-box.md](hetzner-remote-server-box.md) — for the gate. The bare-`npm test` half of
 that entry stays open until the sweep above happens.
 
 ### Reading the logs is a poll, not a question

@@ -18,6 +18,7 @@ inventing a process.
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic and writing it up as a reference doc with its sources attached |
 | [third-party-library-selection.md](third-party-library-selection.md) | picking a dependency — favour long-lived, heavily-documented ones, then write the decision down |
 | [rename-or-move.md](rename-or-move.md) | `git mv`, then every reference — a rename is never one edit |
+| [find-previous-work.md](find-previous-work.md) | finding what was done before — the commit, the plan, the conversation — most durable source first, in a Sonnet subagent |
 | [get-ready-to-deploy.md](get-ready-to-deploy.md) | the sweep before shipping — commit, pull, resolve, check, fix, commit, deploy, in that order and for a reason |
 | [git-commit-changes.md](git-commit-changes.md) | sweeping up an uncommitted tree — batch it, oldest first, and commit only what you can vouch for |
 | [git-resolve-merge-conflicts.md](git-resolve-merge-conflicts.md) | a merge, rebase or pull left conflict markers — read both sides' history, propose before editing |

@@ -820,7 +820,7 @@ describe("buildSessionScript", () => {
  *
  * The rule the box now holds is that tmux binds NOTHING — no prefix, no keys —
  * so every keystroke reaches Claude Code. See
- * docs/project/remote-box.md § tmux keeps sessions alive and does nothing else.
+ * docs/project/hetzner-remote-server-box.md § tmux keeps sessions alive and does nothing else.
  *
  * The trap these tests are built around: a tmux server reads ~/.tmux.conf once,
  * when it starts, and the box's server outlives provisioning by weeks. So the

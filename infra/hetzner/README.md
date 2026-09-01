@@ -34,16 +34,30 @@ tofu apply
 tofu output                                    # ip, and the ssh/mosh/tunnel command lines
 ```
 
-**Then wait about eight minutes and check that provisioning actually worked.** `apply` returning is
-not evidence, and neither is `cloud-init: done` — both have reported success over a dead provision,
-which is why the status file exists:
+**`apply` gives you a bootstrapped box, not a built one.** cloud-init installs the packages, makes
+the user, hardens sshd and stops. Building it is a second command, from the repo root, and it takes
+about eight minutes:
+
+```
+npx tsx scripts/gjd-remote.ts provision
+```
+
+It waits for ssh and then for cloud-init, copies [`provision.sh`](provision.sh) up, checks its
+sha256 on the box before running anything, and runs it with the output streaming past. At the end it
+prints the verdict — and the verdict is not the exit code. See
+[Why provisioning is a separate command](#why-provisioning-is-a-separate-command).
+
+Safe to re-run at any time; that is how you move a pinned version or apply a change to the script.
+
+To read the state later, or after somebody else provisioned:
 
 ```
 ssh greg@<ip> 'cat /var/log/gjd-provision-status; tail -3 /var/log/provision.log'
 ```
 
 It must say `PROVISION OK`. `PROVISION INCOMPLETE` means it died partway and the log says where.
-Anything else — an empty file, no file — means it never got as far as writing one.
+`PROVISION NOT RUN` is a box that has only been bootstrapped. An empty file, or no file, means it
+never got as far as writing one.
 
 Then, in this order, from the repo root on the laptop:
 
@@ -103,42 +117,6 @@ It is mutation-tested — break the file any of those five ways and it goes red 
 than passes if its own parser stops finding things, because a preflight that quietly checks zero
 things is worse than none.
 
-### The preflight now says `user_data` is too big, and it is right
-
-`user_data` reaches the Hetzner API as one field with a hard cap — *"This field is limited to
-32KiB"*, enforced as `Length must be between 0 and 32768` — and both scripts ride inside it
-base64-encoded, which costs a third on top. As of 2026-09-01 the rendered file is **84.2 KiB**, so
-`tofu apply` would be rejected the moment it tried to create a server. (78.7 KiB of that predates
-the gjd-remote loopback block, which added about 4 KiB to a file already two and a half times over
-the line — it did not cause this and does not change what has to be done about it.)
-
-**This is not new and nothing is currently broken.** The live box was built when `provision.sh` still
-lived inside `cloud-init.yaml` and the whole thing was about 18 KiB; it went over the line when the
-script was extracted, and no apply has run since — see the replacement warning below. Every other
-path stayed green because re-running `provision.sh` on a live box does not go through `user_data` at
-all, and Terraform stores only a *hash* of the field, so `tofu plan` cannot see the size either. It
-would have been discovered by a rebuild, which is the worst moment to discover it.
-
-Adding the status line made it about 11 KiB worse, which is why the guard exists now rather than
-later. What it does **not** do is fix it. The options, none of them started:
-
-- **Gzip `user_data`.** cloud-init decompresses gzipped user-data in the guest, and shell compresses
-  hard. But `user_data` is a JSON string, so the gzip has to be base64'd, which gives a third of the
-  win straight back, and the 32 KiB is measured on the base64. Probably still enough; not measured.
-  Cheapest, and the thing to try first. Note this is a **cloud-init** feature — neither Hetzner nor
-  the hcloud provider documents it as a supported workaround, and the provider sends `user_data`
-  through untouched.
-- **Fetch `provision.sh` instead of embedding it** — a tiny cloud-init that curls the script from a
-  URL. Removes the ceiling entirely, adds a network dependency to first boot and a place for the
-  script to live.
-- **Shrink it.** It is mostly comments, and the comments are the point.
-
-Until one of those lands, **a rebuild will fail at the API**, and the preflight says so before you
-spend a box on finding out.
-
-Not covered: anything that needs the machine to actually boot. The next step up, if this stops being
-enough, is `multipass launch --cloud-init` locally before touching Hetzner.
-
 **Then read the plan, and read it for a replacement.** As of 2026-08-31 `tofu plan` reports
 `hcloud_server.box must be replaced`, because the live box was built before a round of cloud-init
 fixes and the `user_data` hash in state no longer matches the repo. That is expected and will stay
@@ -149,6 +127,37 @@ survive.
 
 Do not silence this with `ignore_changes = [user_data]`. We want cloud-init edits to take effect on
 the next build. Check what the plan says before you apply, every time:
+
+### Why provisioning is a separate command
+
+`user_data` — this whole cloud-init file, rendered — is capped at **32 KiB** by the Hetzner API
+(*"This field is limited to 32KiB"*, enforced as `Length must be between 0 and 32768`).
+`provision.sh` alone is 67 KiB once base64'd. So it does not travel in cloud-init:
+[`gjd-remote provision`](../../scripts/gjd-remote.ts) copies it up over ssh and runs it, and
+cloud-init writes `PROVISION NOT RUN` so a bootstrapped box says what it is.
+
+It used to fit. It stopped fitting on 2026-08-31, when the script was carved out of the YAML and
+went on growing, and **nothing could see it**: the live box was built before that, `provision.sh` is
+normally re-run over ssh where there is no size limit, and Terraform stores only a SHA-1 *hash* of
+`user_data`, so `tofu plan` is blind too. A rebuild would simply have been rejected at server
+creation. `check-cloud-init.ts` measures it now, and the current file renders to **14.0 KiB**.
+
+The four cheaper options — compress each file, compress the whole payload, strip the comments, fetch
+the script from a URL — and why none of them works, are in
+[the plan](../../docs/plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md).
+The short version is that compression gets to 34,516 bytes against 32,768, and the variant that does
+fit has about 1.2 KiB of headroom, which is the same failure rescheduled.
+
+**Two consequences worth holding on to.**
+
+`cloud-init: done` now means *bootstrapped*, not *built*. `gjd-remote doctor` says
+`bootstrapped but never provisioned` when it sees the marker, rather than counting zero failures and
+looking pleased.
+
+And **cloud-init owns the bootstrap dependencies**, forever: it is baked into the machine at
+creation and never runs again, so a new `provision.sh` can meet an old box that was never given
+something the script now assumes. `provision.sh` checks for them up front and refuses by name.
+Anything newly needed is installed by the script itself, or wants a rebuild.
 
 ### "Can I just apply the missing bits?" — no, and the reason is Hetzner, not OpenTofu
 
@@ -374,6 +383,15 @@ marking it tainted and finding out at apply time.
 The volume detaches, the server is recreated, cloud-init re-seeds nothing (it sees an existing
 `/mnt/data/home`) and the box comes back as itself.
 
+**Then provision it**, because `apply` only bootstraps —
+[Why provisioning is a separate command](#why-provisioning-is-a-separate-command):
+
+```
+npx tsx scripts/gjd-remote.ts forget-key      # a new machine on the old address
+npx tsx scripts/gjd-remote.ts provision
+npx tsx scripts/gjd-remote.ts doctor
+```
+
 The volume has two locks: `prevent_destroy` (Terraform refuses to replace or destroy it) and
 `delete_protection` (Hetzner refuses, so it also covers the console and the API). Retiring the data
 means removing both deliberately, in their own commit. Note that `prevent_destroy` makes a
@@ -505,7 +523,7 @@ It widens nothing: whoever can read that key already has a shell here. The verif
 **connection**, not the files, and checks the address separately — the ssh can be perfect and
 `gjd-remote ls` still die on "could not read the server address from Terraform state".
 
-Full reasoning in [../../docs/project/remote-box.md § Running `gjd-remote` from the box](../../docs/project/remote-box.md#running-gjd-remote-from-the-box).
+Full reasoning in [../../docs/project/hetzner-remote-server-box.md § Running `gjd-remote` from the box](../../docs/project/hetzner-remote-server-box.md#running-gjd-remote-from-the-box).
 
 ## mosh does not carry the tunnel
 

@@ -10,13 +10,14 @@ working tree.
 | Remote | `git@github.com:spideryarn/reading2.git` — **private**, in the `spideryarn` org |
 | Web | <https://github.com/spideryarn/reading2> |
 | Branch | `main`, and only `main`. No branch protection, no PRs, no CI |
-| Local | `/Users/greg/Dropbox/dev/experim/spideryarn2` — inside Dropbox, which matters, see below |
+| Local | `/Users/greg/dev/spideryarn/reading2`, beside the original app's `reading`. Out of Dropbox since 2026-09-01, see below |
 | Since | 2026-08-26. The first 239 commits, back to 2026-08-24, were pushed in one go when the remote was created |
 
 Created with `gh repo create spideryarn/reading2 --private --source=. --remote=origin --push`.
 Private because the whole history went up in a single push and unpublishing is not a thing you get
-to do. The name is Greg's call: `reading2`, beside the original app's `spideryarn/reading`, rather
-than `spideryarn2`, which is only ever the name of this directory.
+to do. The name is Greg's call: `reading2`, beside the original app's `spideryarn/reading`. The
+directory was `spideryarn2` until 2026-09-01, when it was renamed to match —
+[260901e](../plans/260901e-move-repo-out-of-dropbox-to-dev-spideryarn-reading2.md).
 
 **A push to `main` IS a deploy.** Vercel's git integration is connected, `vercel.json` sets
 `git.deploymentEnabled` to `{"**": false, "main": true}`, and a push to `main` builds on Vercel's
@@ -772,12 +773,17 @@ something you import is in it, it is yours to add.
 Also `node_modules/`, `dist/`, `api-dist/`, `.vercel`, and `scratch-bakeoff` (tens of megabytes of
 transcribed prose — the numbers worth keeping are committed under `evals/pdf/baselines/`).
 
-## Dropbox
+## Dropbox, until 2026-09-01
 
-The repository lives inside Dropbox, which means `.git/` — 38 MB of it — is synced continuously.
-That is a CPU tax, and syncing a directory mid-write is a known way to corrupt a repository. It has
-not bitten us. Since 2026-08-26 there is at least a remote, so a corrupted `.git` costs you the
-uncommitted work rather than the project.
+The repository used to live inside Dropbox, which meant `.git/` — 128 MB of it by the end — was
+synced continuously, along with `data/`, `output/` and `evals/`. That is a CPU tax, and syncing a
+directory mid-write is a known way to corrupt a repository. It never bit us.
+
+Only `node_modules/` and `dist/` carried the **two** xattrs Dropbox needs to leave a directory
+alone, and the cost grew with every worktree, so the checkout moved out to `~/dev/spideryarn/` —
+[260901e](../plans/260901e-move-repo-out-of-dropbox-to-dev-spideryarn-reading2.md), which also has
+what a move like this breaks. What has not changed: since 2026-08-26 there is a remote, so a
+corrupted `.git` costs you the uncommitted work rather than the project.
 
 ## The other repo, and the move that hasn't happened
 

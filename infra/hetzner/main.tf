@@ -118,8 +118,11 @@ resource "hcloud_server" "box" {
     # injected byte-for-byte; Terraform never parses its contents, so shell syntax
     # in it cannot break a plan. Base64 also sidesteps every YAML indentation and
     # special-character question at the same time.
-    provision_b64 = filebase64("${path.module}/provision.sh")
-    helper_b64    = filebase64("${path.module}/github-owner-credential-helper.sh")
+    #
+    # provision.sh is NOT here. user_data is capped at 32 KiB and that file is
+    # 67 KiB base64'd; `gjd-remote provision` copies it up over ssh instead. See
+    # cloud-init.yaml, where the absence is explained at the point of the hole.
+    helper_b64 = filebase64("${path.module}/github-owner-credential-helper.sh")
   })
 
   public_net {
@@ -152,12 +155,14 @@ resource "hcloud_volume_attachment" "data" {
   volume_id = hcloud_volume.data.id
   server_id = hcloud_server.box.id
 
-  # We write our own fstab entries in cloud-init, with nofail, so a volume that
-  # fails to attach leaves a reachable box rather than an unbootable one.
+  # provision.sh writes our own fstab entries, with nofail, so a volume that fails
+  # to attach leaves a reachable box rather than an unbootable one.
   #
-  # Note the ordering this forces: the attachment happens AFTER the server is
-  # created and has begun booting, so cloud-init genuinely races it. provision.sh
-  # waits up to 300s for the device and then fails loudly rather than carrying
-  # on without it.
+  # The attachment happens AFTER the server is created and has begun booting. That
+  # used to be a genuine race with cloud-init; now that provisioning is an
+  # explicit command run afterwards, the volume is long since attached by the time
+  # anything looks for it. provision.sh still waits up to 300s for the device and
+  # then fails loudly rather than carrying on without it — belt and braces, and
+  # the thing that makes it re-runnable on a box whose volume was replaced.
   automount = false
 }

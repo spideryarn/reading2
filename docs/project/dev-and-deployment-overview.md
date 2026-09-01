@@ -67,7 +67,7 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   prose is deliberately allowed out, which is why the rule for adding a field is written down.
 - **[logging.md](logging.md)** — why Pino, what the levels mean here, why path-based redaction makes
   the message string a rule, and why the CLI's `console.log` is not logging and is staying.
-- **[remote-box.md](remote-box.md)** — the always-on Hetzner box and `gjd-remote`, the one command
+- **[hetzner-remote-server-box.md](hetzner-remote-server-box.md)** — the always-on Hetzner box and `gjd-remote`, the one command
   that starts a Claude session on it and gets you back into one. Read it before you run anything
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh

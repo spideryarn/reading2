@@ -43,10 +43,10 @@ const TEMPLATE_VARS: Record<string, string> = {
   node_major: "26",
   swap_gb: "16",
   ssh_public_key: "ssh-ed25519 AAAAC3Nz test@example",
-  // filebase64(provision.sh). Its value is irrelevant here — what matters is
-  // that the variable is declared, because Terraform errors at plan time on
-  // one that is not.
-  provision_b64: "IyEvYmluL2Jhc2gK",
+  // filebase64(the credential helper). Its value is irrelevant here — what
+  // matters is that the variable is declared, because Terraform errors at plan
+  // time on one that is not. There is no provision_b64 any more; section 0
+  // fails if one comes back.
   helper_b64: "IyEvYmluL3NoCg==",
 };
 
@@ -110,28 +110,29 @@ const raw = readFileSync(FILE, "utf8");
 const provision = readFileSync(PROVISION, "utf8");
 const mainTf = readFileSync(MAIN_TF, "utf8");
 
-// 0. The wiring, first: everything below checks provision.sh as it sits on
-//    disk, and that is only meaningful while that file is the one the box
-//    boots. Two links, and both have a wrong version that still "works":
-//    injecting it through templatefile() (which would put every ${...} in the
-//    shell script back in front of Terraform's parser — the exact trap that
-//    broke a previous build), or the YAML quietly writing something else to
-//    /usr/local/sbin/provision.sh.
-if (!/provision_b64\s*=\s*filebase64\([^)]*provision\.sh"?\)/.test(mainTf)) {
-  fail("main.tf does not inject provision.sh via filebase64() — the file checked here may not be the file that boots");
+// 0. The wiring, first, and it INVERTED on 2026-09-01: provision.sh no longer
+//    travels in user_data at all, because the rendered file is capped at 32 KiB
+//    and the script is 67 KiB base64'd. So what has to be asserted now is the
+//    absence — that nothing has quietly put it back — and that the file this
+//    script checks is still the file `gjd-remote provision` uploads.
+//
+//    The absence needs a check precisely because putting it back would LOOK
+//    like a fix: a self-provisioning cloud-init is the obvious shape, it would
+//    pass every other check in this file, and it would fail only at the API,
+//    months later, on the one day anyone rebuilds.
+if (/provision_b64/.test(mainTf) || /provision_b64/.test(raw)) {
+  fail("provision.sh is back in user_data — it is 67 KiB base64'd against a 32 KiB cap, and a rebuild would be rejected at the API. `gjd-remote provision` copies it up instead");
 }
-if (/templatefile\([^)]*provision\.sh/.test(mainTf)) {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: it is Terraform's syntax being described, in a plain string, on purpose
-  fail("main.tf passes provision.sh through templatefile() — every ${...} in the shell script would be Terraform's, which is the trap that broke a previous build");
+if (/\/usr\/local\/sbin\/provision\.sh/.test(raw)) {
+  fail("cloud-init.yaml mentions /usr/local/sbin/provision.sh — provisioning is `gjd-remote provision` now, and a cloud-init that also does it would run an unknown version of the script");
 }
-if (!/- path: \/usr\/local\/sbin\/provision\.sh\n\s+permissions: "0700"\n\s+encoding: b64\n\s+content: \$\{provision_b64\}/.test(raw)) {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: it is Terraform's syntax being described, in a plain string, on purpose
-  fail("cloud-init.yaml does not write ${provision_b64} to /usr/local/sbin/provision.sh with encoding: b64 and mode 0700");
+if (!/PROVISION NOT RUN/.test(raw)) {
+  fail("cloud-init.yaml never writes PROVISION NOT RUN — a bootstrapped box would have no status file, and `gjd-remote doctor` cannot tell that from one somebody deleted");
 }
-if (!raw.includes("bash /usr/local/sbin/provision.sh")) {
-  fail("cloud-init.yaml's runcmd never runs /usr/local/sbin/provision.sh");
+if (!/cmdProvision|gjd-remote provision/.test(readFileSync(path.join(REPO, "scripts/gjd-remote.ts"), "utf8"))) {
+  fail("scripts/gjd-remote.ts has no provision command — nothing would ever run the script this file checks");
 }
-note("provision.sh on disk is the file cloud-init injects and runs");
+note("provision.sh is not in user_data, and gjd-remote provision is what runs it");
 
 // 1. Every ${...} must name a declared variable. Terraform errors at plan time
 //    on an unknown one, and templatefile() reads comments too.
@@ -162,7 +163,6 @@ rendered = rendered.replaceAll("$${", "${"); // the escape Terraform consumes
 {
   const real: Record<string, string> = {
     ...TEMPLATE_VARS,
-    provision_b64: readFileSync(PROVISION).toString("base64"),
     helper_b64: readFileSync(path.join(INFRA, "github-owner-credential-helper.sh")).toString("base64"),
   };
   let full = raw;

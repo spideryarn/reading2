@@ -1,4 +1,4 @@
-# The remote box, and `gjd-remote`
+# The Hetzner remote server box, and `gjd-remote`
 
 A Hetzner server that runs Claude Code sessions in tmux so they keep working when the laptop sleeps.
 You drive it from **[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts)**, and if you read one
@@ -27,8 +27,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `kill`, `doctor`, `clone`, `push-env`, `ssh`, `tunnel`, `forget-key`.
-  `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`,
+  `tunnel`, `forget-key`. `--help` is long on purpose.
+- [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
+  actually succeeded, which is not the same question as whether it exited 0. Split out for the same
+  reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
+  See [Building a box](#building-a-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
@@ -39,6 +43,11 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list.
   Split out so it can be tested without a network:
   [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
+- [`scripts/gjd-remote-resume-all.ts`](../../scripts/gjd-remote-resume-all.ts) — `resume-all`: one
+  new iTerm tab per session, each attached to its own. The AppleScript, and which of it may be
+  retried. Split out so the scripts and the guards can be asserted without a terminal:
+  [`tests/gjd-remote-resume-all.test.ts`](../../tests/gjd-remote-resume-all.test.ts). The reasoning
+  is in [../plans/260901f-gjd-remote-resume-all-opens-every-session-in-its-own-iterm-tab.md](../plans/260901f-gjd-remote-resume-all-opens-every-session-in-its-own-iterm-tab.md).
 - [`scripts/gjd-remote-tab.ts`](../../scripts/gjd-remote-tab.ts) — which iTerm tabs are on the box,
   below. Split out so the byte sequences and the guards can be tested without a terminal:
   [`tests/gjd-remote-tab.test.ts`](../../tests/gjd-remote-tab.test.ts). The paint/un-paint lifecycle
@@ -88,6 +97,35 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md](../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md)
   — the timings below, and the bugs found underneath them.
 
+## Building a box
+
+`tofu apply` gives you a **bootstrapped** box, not a built one. cloud-init makes the user, installs
+the packages and hardens sshd; then:
+
+```
+npx tsx scripts/gjd-remote.ts provision
+```
+
+copies [`provision.sh`](../../infra/hetzner/provision.sh) up and runs it. Safe to re-run — that is
+how a change to the script, or a moved pin, reaches the box.
+
+The split exists because `user_data` is capped at 32 KiB by the Hetzner API and that script is 67 KiB
+base64'd. It used to fit, and stopped when the script was carved out of the YAML on 2026-08-31; a
+rebuild would have been rejected at the API, and nothing could see it, because Terraform stores only
+a hash of `user_data` and the script is normally re-run over ssh where there is no limit. The four
+cheaper fixes and why none works are in
+[../plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md](../plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md).
+
+**The verdict is not the exit code.** The status file on the box holds the *last* run's answer, so a
+run that dies before `provision.sh` starts leaves the previous `PROVISION OK` in place, looking
+exactly like this one's. Every run therefore carries an attempt id that the script writes into the
+file, and the answer needs all four of: the wrapper exited 0, the status file names **this** attempt,
+its `script-sha256` matches what we sent, and it says `PROVISION OK` with no `FAIL` lines.
+
+Two things follow, and both are in
+[infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
+`cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
+because it is baked into the machine at creation and never runs again.
 ## Running `gjd-remote` from the box
 
 `gjd-remote` is written to run **from the laptop**, and for a while that was the only place it ran.
@@ -226,6 +264,14 @@ iTerm 3.6.6 has no tab-colour property in its dictionary at all.
 The reasoning, the options passed over, and how it was checked against a live terminal are in
 [../plans/260831ae-gjd-remote-iterm-tab-colour.md](../plans/260831ae-gjd-remote-iterm-tab-colour.md).
 
+`gjd-remote resume-all` opens one new tab per session on the box and types `gjd-remote resume <name>`
+into each, so every tab paints itself by the mechanism above rather than a second one — which is why
+a tab is its profile colour for the second or two before mosh connects. It has to drive iTerm rather
+than write to its own tab, so AppleScript is unavoidable there, and everywhere the colour merely
+skips itself, `resume-all` refuses outright and says which condition it was. It leaves
+**already-attached** sessions alone, because `resume` runs `tmux attach -d` and taking a session over
+blanks the tab you already had it in; `--include-attached` says you meant it.
+
 ## The status line
 
 The box shows the same status line as the laptop — model, directory, git branch, and a ten-cell bar
@@ -340,8 +386,9 @@ Four things about it, each of which is a decision rather than a detail:
   renames a session to Claude's title and the name you kill is usually not the name it was launched
   under.
 - **It is not in the repo**, though "git-ignored" is what was asked for: worktrees would split the
-  record across checkouts, and the repo is inside Dropbox, so an append-only file there syncs on
-  every command.
+  record across checkouts. It was also inside Dropbox when this was written, so an append-only
+  file there synced on every command; that half stopped being true on 2026-09-01 and the first
+  half still holds.
 - **It never holds the prompt** — no argv field, no prompt field, only the length and the path on
   the box. It does hold the session *name*, and for an unnamed session that name is the first five
   words of the prompt, so the file is `0600` in a `0700` directory and is not as harmless as it
@@ -491,10 +538,8 @@ written before the keys turned out to be the problem, and it is superseded here.
 immediate Claude failure — a bad option, an auth problem — leaves a live login shell and still
 prints `✓ started`. Undecided; raised with Greg 2026-08-31.
 
-**A rebuild would currently fail at the Hetzner API.** `user_data` is capped at 32 KiB and ours
-renders to about 79, because `provision.sh` rides inside it base64-encoded and has grown for weeks
-along a path — re-running it on the live box — that has no size limit. Nothing is broken today and
-nothing else could have seen it: Terraform keeps only a hash of the field, so `tofu plan` cannot
-either. `scripts/check-cloud-init.ts` now measures it and fails; the options for fixing it are in
-[infra/hetzner/README.md § The preflight now says `user_data` is too big](../../infra/hetzner/README.md#the-preflight-now-says-user_data-is-too-big-and-it-is-right).
-Raised with Greg 2026-09-01.
+**The fresh-boot path has not been run since provisioning was split out of cloud-init**
+(2026-09-01). `gjd-remote provision` has been exercised against the live box; what has not is a
+server built from the new `cloud-init.yaml`, because that needs creating one. Until somebody
+rebuilds, or spends a few cents on a throwaway box, the bootstrap half is verified only by the
+preflight and by reading.

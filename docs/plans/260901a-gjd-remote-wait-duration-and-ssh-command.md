@@ -4,7 +4,7 @@ Two small additions to [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts), l
 The interesting part of this doc is not either of them — it is the much larger thing Greg asked for
 first, and why almost none of it was built.
 
-Reference: [remote-box.md](../project/remote-box.md). Cross-family review by GPT Sol before the
+Reference: [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md). Cross-family review by GPT Sol before the
 build, quoted throughout.
 
 ## What was asked
@@ -28,7 +28,7 @@ build, quoted throughout.
 
 **`--wait DURATION`** on `new-claude`. Units `s m h d`, one required. The session is created now and
 `claude` starts later, from a `sleep` in the job script. Behaviour, and why, is in
-[remote-box.md § Starting it later](../project/remote-box.md#starting-it-later---wait).
+[hetzner-remote-server-box.md § Starting it later](../project/hetzner-remote-server-box.md#starting-it-later---wait).
 
 **`gjd-remote ssh <command>`.** It ran a login shell and ignored its arguments, so
 `gjd-remote ssh 'free -g'` printed the MOTD and exited 0.

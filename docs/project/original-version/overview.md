@@ -1,6 +1,6 @@
 # The original version — Spideryarn Reading
 
-`spideryarn2` is an experimental offshoot of an existing, much larger project. **This folder is the
+`reading2` is an experimental offshoot of an existing, much larger project. **This folder is the
 map to it**: where it is, what we've already taken, what's worth reading before you rebuild
 something it already solved, and what we're deliberately leaving behind.
 

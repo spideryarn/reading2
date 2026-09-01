@@ -312,6 +312,17 @@ not RLS. That is the safe default and it should stay until something specific ne
   and you get the old repo's stack, with a confident answer and the wrong ports. The two are told
   apart by `project_id` — ours is `spideryarn2`, theirs is `syr` — which is also what every container
   is named after (`supabase_db_spideryarn2`).
+- **`project_id` is still `spideryarn2`, and the directory is `reading2`. Leave the mismatch
+  alone.** The field names a *local Docker stack*, not the checkout; it is set explicitly in
+  `config.toml` so that the stack is decoupled from wherever the directory lives, which is what let
+  the repo move out of Dropbox on 2026-09-01 without touching the database
+  ([260901e](../plans/260901e-move-repo-out-of-dropbox-to-dev-spideryarn-reading2.md)).
+  Tidying it to `reading2` looks like it works and is a data loss: new `project_id` means new
+  container names and **new empty volumes**, so `supabase start` comes up green and healthy with no
+  articles, no auth identities and no storage objects, while the real ones sit in the
+  `supabase_db_spideryarn2` volume that nothing now points at. Run `npm run setup` afterwards and it
+  looks healthier still — schema applied, accounts seeded. Changing it is a volume migration with
+  its own plan, not a rename.
 - **Upgrading the CLI and re-running `supabase init --force` rewrites `config.toml`.** The port block
   goes, and `major_version` goes back to whatever the CLI defaults to — which matches the remote
   today only by coincidence. It reports success and `supabase start` works, so the collision shows up

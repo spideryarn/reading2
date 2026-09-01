@@ -2,26 +2,53 @@
 set -euo pipefail
 
 # Extracted from cloud-init.yaml on 2026-08-31 so it can be shellcheck'd, diffed,
-# and re-run on a live box. It is injected into cloud-init LITERALLY (filebase64),
-# never through templatefile() -- so every ${...} below is bash's, and there is no
-# such thing as a Terraform escape in this file. Getting that backwards is what
-# broke a previous build: an unescaped ${...} inside a *comment* failed planning.
+# and re-run on a live box. It does NOT travel in cloud-init any more:
+# `user_data` is capped at 32 KiB and this file alone is 67 KiB base64'd, so
+# `gjd-remote provision` copies it up and runs it --
+# docs/plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md.
+# Nothing here is ever parsed by Terraform, so every ${...} below is bash's.
 #
-# The four values Terraform knows arrive in this file instead, written by cloud-init.
-# Stamp the status file as INCOMPLETE before anything fallible runs.
+# The four values Terraform knows arrive in /etc/gjd-provision.env, written by
+# cloud-init. Stamp the status file as INCOMPLETE before anything fallible runs.
 #
 # It used to be written only at the very end. A run that died in the middle
 # therefore left the PREVIOUS run's `PROVISION OK` in place, and `gjd-remote
 # doctor` read that as the current state -- a stale success, which is the one
 # thing this file exists to make impossible. Now the only way to see
 # PROVISION OK is for a run to reach the end and overwrite this.
+#
+# GJD_ATTEMPT is the caller's id for THIS run, and it is what makes the status
+# file evidence rather than decoration. Without it the caller cannot tell a run
+# that succeeded from one that never started and left the last run's verdict in
+# place -- the same stale-success failure, moved one level out.
 STATUS=/var/log/gjd-provision-status
+ATTEMPT=${GJD_ATTEMPT:-none}
 {
   echo "ran: $(date -Is)"
+  echo "attempt: $ATTEMPT"
   echo "script-sha256: $(sha256sum "$0" 2>/dev/null | cut -d" " -f1)"
   echo "PROVISION INCOMPLETE (started, has not finished)"
 } > "$STATUS" 2>/dev/null || true
 chmod 0644 "$STATUS" 2>/dev/null || true
+
+# The packages this script assumes somebody else installed. They come from
+# cloud-init, which is baked into the machine at creation and never runs again --
+# so a NEW copy of this script can meet an OLD box that was never given something
+# it now needs. That reads as a confusing failure hundreds of lines down, in a
+# step that has nothing to do with the missing tool.
+#
+# The rule this enforces: bootstrap dependencies are FIXED in cloud-init.
+# Anything newly needed is installed by this script, or wants a rebuild.
+missing=""
+for c in rsync curl gpg jq git flock; do
+  command -v "$c" >/dev/null 2>&1 || missing="$missing $c"
+done
+if [ -n "$missing" ]; then
+  echo "FATAL: cloud-init did not leave these behind:$missing" >&2
+  echo "This box was created by an older cloud-init.yaml than this script expects." >&2
+  echo "Install them by hand to carry on, or rebuild the box." >&2
+  exit 1
+fi
 
 CONF=/etc/gjd-provision.env
 if [ ! -r "$CONF" ]; then
@@ -978,6 +1005,7 @@ check "root login off"           'sshd -T 2>/dev/null | grep -qi "^permitrootlog
 # last, so a reader always gets the latest answer and can see when it was.
 {
   echo "ran: $(date -Is)"
+  echo "attempt: $ATTEMPT"
   echo "script-sha256: $(sha256sum "$0" 2>/dev/null | cut -d" " -f1)"
   printf '%b' "$REPORT"
   if [ "$fail" -ne 0 ]; then echo "PROVISION INCOMPLETE"; else echo "PROVISION OK"; fi

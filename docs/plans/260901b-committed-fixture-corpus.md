@@ -161,7 +161,7 @@ have each stepped around:
 | | |
 |---|---|
 | [`scripts/deploy.ts:592`](../../scripts/deploy.ts) | The gate worktree lacked both directories: "13 failures and 202 cascade-skips at every commit, so `--force-gate=test` became the only way anyone deployed. **An override that is required every time is not an override.**" |
-| [remote-box.md:225](../project/remote-box.md) · [260831x:445](260831x-remote-box-dev-environment.md) | ~19 test files need an article a fresh clone does not have. "Worth fixing at the source; recorded rather than done, because Greg's call was to sync the fixtures and keep moving." Still open. |
+| [hetzner-remote-server-box.md:225](../project/hetzner-remote-server-box.md) · [260831x:445](260831x-remote-box-dev-environment.md) | ~19 test files need an article a fresh clone does not have. "Worth fixing at the source; recorded rather than done, because Greg's call was to sync the fixtures and keep moving." Still open. |
 | `gjd-remote doctor` | Proves the browser stack with a committed smoke script rather than the suite, because the box cannot run the suite from a clean checkout. |
 | [260828r-worktrees.md](260828r-worktrees.md) | Every git worktree would need a 75 MB copy of gitignored data. This is what brought it to a head. |
 
@@ -363,7 +363,7 @@ Found by survey, not guessed: [deployment.md](../project/deployment.md) §"the g
 [architecture.md](../project/architecture.md) (125-326),
 [database.md](../project/database.md) (41-88), [setup-dev.md](../project/setup-dev.md) (363-366,
 454-458), [supabase-local.md](../project/supabase-local.md) (line 7), `evals/README.md`, and
-[remote-box.md](../project/remote-box.md)'s "Known" bullet at 225, which this work closes.
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md)'s "Known" bullet at 225, which this work closes.
 
 ## How to check you have not broken anything
 

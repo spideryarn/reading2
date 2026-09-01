@@ -32,6 +32,7 @@ import {
   parseSessions,
   sessionState,
 } from "./gjd-remote-tmux.js";
+import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
@@ -53,6 +54,18 @@ import {
   colourSequence,
   wantedColour,
 } from "./gjd-remote-tab.js";
+import {
+  type Here,
+  isSessionUuid,
+  newTabScript,
+  openTabsRefusal,
+  parseHere,
+  planTabs,
+  resolveScript,
+  resumeCommand,
+  selectScript,
+  selfSessionUuid,
+} from "./gjd-remote-resume-all.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
@@ -1008,6 +1021,133 @@ function cmdLs(): void {
 }
 
 /**
+ * Run one AppleScript, with its data in argv and never in the script text.
+ *
+ * Interpolating a shell variable into a quoted AppleScript literal is an
+ * injection hole: a `"` in the value closes the literal and the rest runs AS
+ * AppleScript. Nothing here builds a script around a value.
+ *
+ * `retry` is for the read-only walks only. A walk over every window can be
+ * invalidated by a peer closing a tab mid-flight — AppleScript raises -1719 and
+ * aborts the whole script — and the only cure is to run it again. That cure is
+ * poison for the script that creates a tab, which is why that one is addressed
+ * by window id and never retried.
+ *
+ * stderr is folded into stdout so a permission failure (-1743) can be reported
+ * rather than swallowed. Every caller therefore validates the SHAPE of what
+ * comes back instead of trusting it.
+ */
+function osa(script: string, args: string[], opts: { retry: boolean }): { ok: boolean; out: string } {
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync("osascript", ["-", ...args], { input: script, encoding: "utf8" });
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+    const transient = /-1719|Invalid index|-1728/.test(out);
+    if (r.status === 0 || !opts.retry || !transient || attempt >= 3) return { ok: r.status === 0, out };
+    // Deliberately blocking: this is a whole-tree race that clears in
+    // milliseconds, and there is nothing else for this process to do.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
+  }
+}
+
+/**
+ * The `gjd-remote` to type into a new tab.
+ *
+ * Resolved to an absolute path here rather than left as a bare name, because
+ * the tab gets a fresh login shell whose PATH is not necessarily this one's.
+ * `GJD_REMOTE_BIN` overrides it; the last resort is this very checkout, run the
+ * way the shim in ~/bin runs it — absolute both times, because `npx tsx`
+ * resolves tsx from the CURRENT directory and a new tab starts in the home
+ * directory.
+ */
+function resumeBin(): string {
+  const override = process.env.GJD_REMOTE_BIN;
+  if (override) return shq(override);
+  // `sh -c`, not `shell: true`: `command` is a shell builtin so it needs a
+  // shell, but passing an args array WITH shell:true concatenates them onto the
+  // command line unescaped, and Node warns about it (DEP0190) on stderr — which
+  // is the command's own output, in front of the person who ran it.
+  const which = spawnSync("/bin/sh", ["-c", "command -v gjd-remote"], { encoding: "utf8" });
+  const found = (which.stdout ?? "").trim().split("\n")[0] ?? "";
+  if (which.status === 0 && found.startsWith("/") && existsSync(found)) return shq(found);
+  return `${shq(path.join(REPO, "node_modules/.bin/tsx"))} ${shq(path.join(REPO, "scripts/gjd-remote.ts"))}`;
+}
+
+/**
+ * A tab per session, each one attached to it.
+ *
+ * The colour is not set here. Every tab is handed the ordinary
+ * `gjd-remote resume <name>` line and paints itself violet the way it does when
+ * you type it — one mechanism for "this tab is on the box", in
+ * scripts/gjd-remote-tab.ts, rather than a second one that could disagree.
+ *
+ * Order of operations, and each part is load-bearing:
+ *  1. read the box's sessions FIRST, so a box that is down costs nothing and
+ *     opens no tabs;
+ *  2. find my own window, and which tab is selected in it, BEFORE creating
+ *     anything — `create tab` selects the new tab, so afterwards `current tab`
+ *     is already the new one and "restoring" it is a no-op that looks like a fix;
+ *  3. one tab at a time, stopping at the first failure rather than spraying;
+ *  4. put the keyboard back.
+ */
+function cmdResumeAll(opts: { includeAttached: boolean; transport?: "ssh" | undefined }): void {
+  const refusal = openTabsRefusal(process.env, Boolean(process.stdout.isTTY));
+  if (refusal) {
+    die(
+      `resume-all opens iTerm tabs, and I cannot: ${refusal}.\n` +
+        `  'gjd-remote ls' lists the sessions; 'gjd-remote resume <name>' attaches to one here.`,
+    );
+  }
+  const me = selfSessionUuid(process.env);
+  if (!me) return die("ITERM_SESSION_ID is unset or malformed"); // openTabsRefusal already checked; this is for the types.
+
+  const plan = planTabs(adoptTitles(sessions()), { includeAttached: opts.includeAttached });
+  for (const s of plan.skipped) console.log(dim(`skipped ${s.name} — ${s.why}`));
+  if (plan.open.length === 0) {
+    console.log(dim(plan.skipped.length > 0 ? "nothing left to open." : "no sessions. `gjd-remote new-claude` to start one."));
+    return;
+  }
+
+  const resolved = osa(resolveScript(), [me], { retry: true });
+  const here: Here | undefined = resolved.ok ? parseHere(resolved.out) : undefined;
+  if (!here) {
+    die(
+      `could not find my own iTerm window (session ${me}).\n` +
+        (resolved.out ? `  osascript said: ${resolved.out}\n` : "") +
+        `  If this is a permissions problem, System Settings → Privacy & Security → Automation.`,
+    );
+  }
+
+  const bin = resumeBin();
+  const opened: string[] = [];
+  for (const name of plan.open) {
+    // No retry: this creates a tab, and a retried create is two tabs for one
+    // session. It addresses the window by id, so the -1719 that retries exist
+    // for cannot arise here.
+    const made = osa(newTabScript(), [String(here.windowId), resumeCommand(bin, name, opts.transport), "0.4"], {
+      retry: false,
+    });
+    if (!made.ok || !isSessionUuid(made.out)) {
+      console.error(red(`✗ opening a tab for ${name} failed: ${made.out || "no output"}`));
+      break;
+    }
+    opened.push(name);
+    console.log(`${green("✓")} ${name}`);
+  }
+
+  // Last, and unconditional: a run that stopped halfway has stolen the keyboard
+  // just as thoroughly as one that finished.
+  const back = osa(selectScript(), [here.selectedSession], { retry: true });
+  if (!back.ok) console.error(dim(`could not select the tab you were in: ${back.out}`));
+
+  const missed = plan.open.length - opened.length;
+  console.log(
+    missed === 0
+      ? dim(`${opened.length} tab${opened.length === 1 ? "" : "s"} — each attaches on its own; they go violet as they connect.`)
+      : red(`${opened.length} of ${plan.open.length} opened; ${missed} not started.`),
+  );
+}
+
+/**
  * `-p -` means "the prompt is on stdin".
  *
  * `-p "…"` is fine for a sentence, but the text is prose and the local shell
@@ -1187,7 +1327,7 @@ function cmdNewClaude(
     // nobody is watching. Both guards are one round trip and both fail loudly,
     // so they run while the person who typed the command is still reading the
     // output. Proved by reading the generated job back off the box, not by
-    // trusting this comment: see docs/project/remote-box.md.
+    // trusting this comment: see docs/project/hetzner-remote-server-box.md.
     opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
     // One line on the box, one instant before Claude starts, and it is the ONLY
     // trustworthy answer to "did this job ever run?". The laptop cannot know:
@@ -1893,7 +2033,7 @@ function cmdDoctor(): void {
 
   // tmux on this box binds NOTHING -- no prefix, no keys -- so every keystroke
   // reaches Claude Code. That is a rule rather than a preference:
-  // docs/project/remote-box.md, "tmux keeps sessions alive and does nothing else".
+  // docs/project/hetzner-remote-server-box.md, "tmux keeps sessions alive and does nothing else".
   //
   // Checked here, live, rather than left to the provisioning report, because the
   // two facts come apart. provision.sh rewrites ~/.tmux.conf, but a tmux server
@@ -1957,20 +2097,157 @@ function cmdDoctor(): void {
   const ranAt = /^ran:\s*(\S+)/m.exec(report)?.[1];
   const provisionOk = /^PROVISION OK$/m.test(report);
   const failedLines = report.split("\n").filter((l) => l.startsWith("FAIL"));
+  // PROVISION NOT RUN is what cloud-init leaves on a box it has only
+  // bootstrapped. It needs a branch of its own: it has no FAIL lines in it, so
+  // the counting branch below would render it as "0 failed" — an un-provisioned
+  // box reported in the words of a healthy one.
+  const notRun = /^PROVISION NOT RUN/m.test(report);
   check(
     "provisioning",
     provisionOk && failedLines.length === 0,
     report.trim() === ""
       ? "no status file — provision.sh has never completed on this box"
-      : provisionOk && failedLines.length === 0
-        ? `all checks ok, last run ${ranAt ?? "unknown"}`
-        : `${failedLines.length} failed: ${failedLines.map((l) => l.replace(/^FAIL\s+/, "")).join(", ")}`,
+      : notRun
+        ? "bootstrapped but never provisioned — run: gjd-remote provision"
+        : provisionOk && failedLines.length === 0
+          ? `all checks ok, last run ${ranAt ?? "unknown"}`
+          : `${failedLines.length} failed: ${failedLines.map((l) => l.replace(/^FAIL\s+/, "")).join(", ")}`,
   );
   if (failedLines.length) console.log(dim(report.trim()));
 
   const list = sessions();
   console.log(bold(`\nsessions: ${list.length}`));
   finish();
+}
+
+/**
+ * Build the box: copy `provision.sh` up and run it.
+ *
+ * This exists because `user_data` is capped at 32 KiB and `provision.sh` is
+ * 67 KiB base64'd, so it cannot ride in cloud-init any more —
+ * docs/plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md.
+ * cloud-init bootstraps; this builds.
+ *
+ * Almost all of what follows is about not reporting a success that did not
+ * happen. The status file on the box holds the LAST run's verdict, so a run
+ * that never started leaves the previous `PROVISION OK` sitting there looking
+ * exactly like this run's. Hence the attempt id, and hence four conditions
+ * rather than one.
+ */
+function cmdProvision(opts: { waitSeconds?: number | undefined; runMinutes?: number | undefined } = {}): void {
+  const ip = host();
+  console.log(bold(`gjd-remote provision → ${ip}`));
+
+  const local = path.join(REPO, "infra/hetzner/provision.sh");
+  if (!existsSync(local)) die(`missing locally: ${local}`);
+
+  // The preflight, first, on this laptop. A provision.sh that will not parse
+  // should cost seconds here rather than a round trip and a half-built box —
+  // and it is the same check that guards a `tofu apply`.
+  const pre = spawnSync("npx", ["tsx", path.join(REPO, "scripts/check-cloud-init.ts")], { encoding: "utf8" });
+  if (pre.status !== 0) {
+    console.log((pre.stdout ?? "").trim());
+    die("the cloud-init preflight failed — fix that before provisioning");
+  }
+  console.log(green("✓ preflight"));
+
+  // Two waits, not one. Straight after `tofu apply` the machine may not answer
+  // ssh at all, and once it does, cloud-init's final stage may still be running:
+  // sshd comes up early. Provisioning against a half-bootstrapped box is how you
+  // get a failure in a step that has nothing to do with the real problem.
+  waitForSsh(opts.waitSeconds ?? 300);
+  waitForCloudInit(opts.waitSeconds ?? 300);
+
+  // Staged in /tmp and installed from there, NOT run from where it lands.
+  // provision.sh bind-mounts the volume over /home partway through its own run,
+  // so a script executing from under /home would have the ground move beneath
+  // it — and root should not be running code out of a user-writable directory.
+  const staged = `/tmp/gjd-provision.${process.pid}.sh`;
+  const body = readFileSync(local, "utf8");
+  const want = createHash("sha256").update(readFileSync(local)).digest("hex");
+  writeRemote(body, staged);
+
+  // An id for THIS run. `provision.sh` writes it into the status file, and the
+  // verdict below refuses to read a status file that does not carry it.
+  const attempt = randomUUID();
+
+  console.log(dim(`  ${(Buffer.byteLength(body) / 1024).toFixed(1)} KiB → ${staged}`));
+  console.log(dim(`  attempt ${attempt}`));
+  console.log(bold("\nprovisioning — this takes several minutes\n"));
+
+  // Every clause of this is load-bearing and every one of them is quoting —
+  // see buildProvisionRunner, where it is built and tested.
+  const runner = buildProvisionRunner({
+    staged,
+    installed: "/usr/local/sbin/provision.sh",
+    sha256: want,
+    attempt,
+    lock: "/var/lock/gjd-provision.lock",
+    log: "/var/log/provision.log",
+  });
+
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), "sudo bash -s"], {
+    input: runner,
+    stdio: ["pipe", "inherit", "inherit"],
+    timeout: (opts.runMinutes ?? 45) * 60_000,
+  });
+
+  const verdict = provisionVerdict(ssh("sudo cat /var/log/gjd-provision-status 2>/dev/null || true", { check: false }), {
+    attempt,
+    sha256: want,
+    exitOk: r.status === 0,
+  });
+  console.log("");
+  if (!verdict.ok) {
+    console.log(red(`✗ ${verdict.why}`));
+    console.log(dim("  the whole log:  gjd-remote ssh 'sudo tail -100 /var/log/provision.log'"));
+    process.exit(1);
+  }
+  console.log(green(`✓ ${verdict.why}`));
+  console.log(dim("  then:  gjd-remote doctor"));
+}
+
+/** Block until ssh answers, or give up and say so. Refuses immediately on the
+ *  two errors that retrying cannot fix: a changed host key, and a rejected key. */
+function waitForSsh(seconds: number): void {
+  const deadline = Date.now() + seconds * 1000;
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
+    if (r.status === 0) {
+      console.log(green(`✓ ssh${attempt > 1 ? ` (after ${attempt} tries)` : ""}`));
+      return;
+    }
+    const err = r.stderr ?? "";
+    if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(err)) {
+      die("the host key changed — if you just rebuilt:  gjd-remote forget-key");
+    }
+    if (/Permission denied|Too many authentication failures/i.test(err)) {
+      die(`ssh refused the key: ${err.trim().split("\n").slice(-1)[0]}`);
+    }
+    if (Date.now() >= deadline) die(`ssh never answered in ${seconds}s: ${err.trim().split("\n").slice(-1)[0]}`);
+    process.stdout.write(dim(`\r  waiting for ssh (${attempt})…`));
+    spawnSync("sleep", ["5"]);
+  }
+}
+
+/**
+ * Block until cloud-init has finished bootstrapping.
+ *
+ * Its exit codes carry meaning and are not interchangeable: 0 is done, 2 is
+ * "done, but with recoverable errors", which is a refusal here — a box whose
+ * packages half-installed is not one to build on top of.
+ */
+function waitForCloudInit(seconds: number): void {
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cloud-init status --wait --long 2>&1; echo "rc=$?"`], {
+    encoding: "utf8",
+    timeout: (seconds + 30) * 1000,
+  });
+  const verdict = cloudInitVerdict(`${r.stdout ?? ""}`);
+  if (verdict.ok) {
+    console.log(green(`✓ ${verdict.why}`));
+    return;
+  }
+  die(`${verdict.why} — provisioning on top of that would fail obscurely.\n  look:  gjd-remote ssh 'cloud-init status --long'`);
 }
 
 /**
@@ -2027,6 +2304,8 @@ ${bold("SESSIONS")}
   new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
   resume [name]           reattach; with no name, the most recent session
+  resume-all              one new iTerm tab per session, each attached to its own
+      --include-attached    take over sessions something else is already in
   kill <name>             end a session
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
@@ -2036,6 +2315,12 @@ ${bold("SESSIONS")}
 ${bold("THE BOX")}
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
+  provision               build a bootstrapped box: copy provision.sh up, run it
+                          cloud-init no longer does this — user_data is capped at
+                          32 KiB and the script is 67 KiB base64'd
+                          safe to re-run; that is how you move a pinned version
+      --wait-seconds N      how long to wait for ssh and cloud-init ${dim("(default 300)")}
+      --run-minutes N       cap on the run itself ${dim("(default 45)")}
   clone <repo>            clone one of Greg's repos onto the box, over HTTPS
       --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
       --name DIR-NAME       directory name, if not the repo's own
@@ -2167,6 +2452,14 @@ ${bold("WHICH TABS ARE ON THE BOX")}
   back to your profile when it lets go. It is skipped, silently, anywhere the
   sequence might be printed instead of obeyed: not a terminal, not iTerm, or
   inside tmux or screen.
+  ${dim("resume-all")} opens the tabs and types ${dim("gjd-remote resume <name>")} into each, so every
+  one paints itself the same way — there is no second colouring mechanism. It
+  needs to drive iTerm rather than write to its own tab, so it refuses outright
+  in all of those places instead of carrying on uncoloured, and it leaves
+  ALREADY-ATTACHED sessions alone: attaching detaches whoever is there, which
+  would blank the tab you already had it in. ${dim("--include-attached")} to say you meant it.
+  The tab you were in gets the keyboard back at the end, but not during — the
+  new tab steals it each time, so let it finish before typing.
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
@@ -2243,6 +2536,21 @@ function main(): void {
       return attach(name, rest.includes("--ssh") ? "ssh" : undefined);
     }
 
+    case "resume-all": {
+      const { values } = parseArgs({
+        args: rest,
+        allowPositionals: false,
+        options: {
+          "include-attached": { type: "boolean", default: false },
+          ssh: { type: "boolean", default: false },
+        },
+      });
+      return cmdResumeAll({
+        includeAttached: values["include-attached"],
+        transport: values.ssh ? "ssh" : undefined,
+      });
+    }
+
     case "kill": {
       const name = rest[0];
       if (!name || !SLUG.test(name)) die("gjd-remote kill <name>");
@@ -2276,6 +2584,23 @@ function main(): void {
 
     case "doctor":
       return cmdDoctor();
+
+    case "provision": {
+      const { values } = parseArgs({
+        args: rest,
+        options: { "wait-seconds": { type: "string" }, "run-minutes": { type: "string" } },
+      });
+      const num = (v: string | undefined, name: string) => {
+        if (v === undefined) return undefined;
+        const n = Number(v);
+        if (!Number.isFinite(n) || n <= 0) die(`--${name} wants a positive number, got ${v}`);
+        return n;
+      };
+      return cmdProvision({
+        waitSeconds: num(values["wait-seconds"], "wait-seconds"),
+        runMinutes: num(values["run-minutes"], "run-minutes"),
+      });
+    }
 
     case "push-env": {
       const { values } = parseArgs({ args: rest, options: { file: { type: "string" } } });
@@ -2371,7 +2696,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "push-env", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
