@@ -67,6 +67,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   ReaderStore,
+  RefereeClaimsStore,
   RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
@@ -84,6 +85,7 @@ import {
   fsGlossaryStore,
   fsLibrarySearch,
   fsReaderStore,
+  fsRefereeClaimsStore,
   fsRefereeCriteriaStore,
   fsSearchStore,
   fsShelfStore,
@@ -256,6 +258,38 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded(
   pgRefereeCriteriaStore,
   fsRefereeCriteriaStore,
 );
+
+/**
+ * **A paper's claims run** — the one store here with a filesystem side and no
+ * Postgres side, and the second thing ever to sit behind `notMigrated`.
+ *
+ * Not an oversight and not a to-do that slipped. A claims run is an
+ * article-derived, reusable artefact, and the plan
+ * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2) is explicit that
+ * its right home is a **pipeline artefact** — `StepName`, `ArtifactKind`, an
+ * `article_revisions` column — rather than a bespoke table beside the criteria.
+ * It was built route-shaped because the artefact layer was being rewritten
+ * underneath it, and building a bespoke Postgres table for something already
+ * scheduled to be replaced would be two migrations to reach the same place.
+ *
+ * So under `SPIDERYARN_STORE=postgres` every method refuses, loudly, with a 501.
+ * That is the rule this file's header states and the reason it states it: a
+ * write that lands in the store nobody is reading is the worst available
+ * outcome, because it reports success and loses the data. Claims is therefore
+ * **files-only today**, which is written down here, in
+ * docs/project/referee-mode.md and in contracts.ts, rather than waiting to be
+ * discovered by a referee whose panel is empty on a deployed server.
+ */
+export const refereeClaimsStore: RefereeClaimsStore =
+  STORE === "postgres"
+    ? {
+        load: notMigrated("Reading a claims run"),
+        sourceHash: notMigrated("Fingerprinting a paper for a claims run"),
+        begin: notMigrated("Starting a claims run"),
+        finish: notMigrated("Recording a claims run"),
+        sweep: notMigrated("Sweeping a claims run"),
+      }
+    : fsRefereeClaimsStore;
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded(
   "lookups",

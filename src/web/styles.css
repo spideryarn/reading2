@@ -6349,6 +6349,92 @@ td.text.has-hit[data-hues="8"] {
 .crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
 .crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.72rem; }
 
+/* --- Claims, the second sub-mode. src/web/ClaimsPanel.tsx.
+
+   What the paper says about itself, and where it takes each claim up.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
+
+   **There is deliberately nothing here that could carry a ranking.** No rank
+   badge, no count chip, no bar, no ordering affordance — the criteria panel's
+   `.crit-rank` has no counterpart, because a claim's place in this list is where
+   the paper makes it and there is nothing to number. If a future edit wants a
+   number on one of these rows, read § 2 of the plan first: a count of passages
+   is one glance from a ranking, and the ranking is what the review removed.
+
+   The empty state is the same weight as a full one — it is an answer about the
+   run, not a fault. */
+
+.clm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What a row is and is not, above the button, because it is the thing a referee
+   is likeliest to read past: linkage, never adequacy. */
+.clm-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+
+.clm-run {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.clm-run:hover:not(:disabled) { border-color: var(--ink-faint); }
+.clm-run:disabled { opacity: 0.6; cursor: default; }
+.clm-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.clm-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
+.clm-retry {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Both of these are quiet lines rather than warnings: one says the paper has
+   moved since the run, the other says what the order means. Neither is a fault. */
+.clm-stale, .clm-order { margin: 0; font-size: 0.7rem; color: var(--ink-faint); }
+
+.clm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
+.clm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+
+/* The claim in one line, and the paper's own sentence under it — the label and
+   the evidence that the paper said it, in that order. */
+.clm-claim { margin: 0 0 0.15rem; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+
+.clm-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.clm-jump:hover .clm-quote { text-decoration: underline; }
+.clm-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.clm-quote { font-size: 0.78rem; color: var(--ink); }
+
+.clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.7rem; color: var(--ink-faint); cursor: pointer; }
+.clm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+
+/* **Not an error colour and not an error shape.** A claim the model found no
+   passage for is an ordinary answer about the run, and dressing it as a warning
+   is how it comes to be read as a finding about the paper. */
+.clm-none { margin: 0.2rem 0 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+
+.clm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.clm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
+.clm-why { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--ink-faint); }
+
 /* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
 
    **The evidence label is text, and these rules must not be the thing that

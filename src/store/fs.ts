@@ -82,6 +82,12 @@ import {
   recolourCriterion,
   update as updateCriteria,
 } from "../referee-criteria-store.js";
+import {
+  beginClaimsRun,
+  finishClaimsRun,
+  loadClaimsRun,
+  sweepClaimsRun,
+} from "../referee-claims-store.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import { loadShelf, patchShelf, recordOpen } from "../shelf.js";
 import type {
@@ -92,6 +98,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   ReaderStore,
+  RefereeClaimsStore,
   RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
@@ -511,6 +518,31 @@ export const fsRefereeCriteriaStore: RefereeCriteriaStore = {
       "swept abandoned criteri(a)",
     );
     return swept;
+  },
+};
+
+/**
+ * A paper's claims run, on files. Four functions and almost no adaptation —
+ * src/referee-claims-store.ts already does the atomic write, the serialised
+ * read-modify-write and the sweep.
+ *
+ * The one line of adaptation is `begin`, which reads the fingerprint **before**
+ * it writes, for the reason `fsRefereeCriteriaStore` gives above: the store's
+ * write queue is process-wide, and a disk read inside it stalls every other
+ * write for the length of that read.
+ */
+export const fsRefereeClaimsStore: RefereeClaimsStore = {
+  load: loadClaimsRun,
+  /* The same `currentSourceHash` everything else uses — imported, not
+     reimplemented. Two fingerprints of one article can only ever disagree
+     (src/source-hash.ts). */
+  sourceHash: currentSourceHash,
+  finish: finishClaimsRun,
+  sweep: sweepClaimsRun,
+
+  async begin(slug, now) {
+    const sourceHash = await currentSourceHash(slug);
+    return beginClaimsRun(slug, now, sourceHash);
   },
 };
 

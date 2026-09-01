@@ -28,6 +28,7 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
+import type { ClaimPassage } from "../referee-claims.js";
 import type { RefereeResult } from "../referee-criteria.js";
 import type {
   Block,
@@ -653,6 +654,67 @@ export function resolveCriterion(
       ...(r.start !== undefined && { start: r.start }),
       confidence: r.confidence,
       reasoning: r.reasoning,
+    });
+    if (one) out.push(one);
+  }
+  return out;
+}
+
+/**
+ * One claim's passages, resolved into the same `Found[]` everything downstream
+ * reads.
+ *
+ * **The sixth arm**, after the literal matcher, the meaning search, the ideas,
+ * the quotes and the referee's criteria — and it is the sixth for the reason the
+ * third one was: an entire sub-mode's worth of marking costs one function,
+ * because nothing below this line knows or cares which source produced a
+ * passage.
+ *
+ * Three of the arguments are decisions rather than plumbing, and all three are
+ * the same decision:
+ *
+ * - **`confidence: null`**, like an idea's and a quote's and unlike a
+ *   criterion's. There is no number on a `ClaimPassage` and there is not going
+ *   to be one (src/referee-claims.ts § `ClaimPassage`): the row asserts that a
+ *   passage takes a claim up, never how well. `null` is what a literal
+ *   word-match already carries, so the threshold, the ordering and the wash all
+ *   already know what to do with it — `keepAbove` reads it as certain rather
+ *   than as zero, which is the behaviour a passage with no opinion attached
+ *   should have. Inventing a 100 here would put a number on the screen that
+ *   means something different from the number beside it.
+ * - **The claim itself is not marked, only its passages.** The claim's own
+ *   sentence is where the paper *states* the thing; painting it in the same hue
+ *   as the passages would say the abstract is evidence for the abstract. The
+ *   panel row jumps to it; the prose does not wear it.
+ * - **A real `slot`, and `runId` is the claim's id.** One lane in the rail per
+ *   claim, and a slot so the paragraph bar has a hue — `blockHues` drops `null`
+ *   slots, so a claim without one would paint the rail and leave the bar blank,
+ *   which looks like a rendering bug and is not one.
+ *
+ * **`start` is passed**, like a search hit's and a criterion's and unlike a
+ * quote's: these offsets come from a model naming a block, so the first rendered
+ * occurrence is not necessarily the one meant.
+ */
+export function resolveClaim(
+  blocks: Block[],
+  claim: { id: string; slot: number; passages: ClaimPassage[] },
+): Found[] {
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const [n, p] of claim.passages.entries()) {
+    const one = resolveOne(at, {
+      /* The same three-part key as a hit, an occurrence, a quote and a
+         criterion's result: one claim can be taken up twice in the same
+         paragraph, so `blockId` alone is not an identity, and with several
+         claims switched on at once `blockId:n` is not either. */
+      key: `${claim.id}:${p.blockId}:${n}`,
+      blockId: p.blockId,
+      runId: claim.id,
+      slot: claim.slot,
+      quote: p.quote,
+      start: p.start,
+      confidence: null,
+      reasoning: p.reasoning,
     });
     if (one) out.push(one);
   }

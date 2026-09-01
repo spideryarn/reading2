@@ -32,14 +32,29 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { CLAIMS_UNUSABLE } from "../src/referee-claims-run.js";
+import {
+  DOCUMENT_ORDER_NOTE,
+  NO_PASSAGE_FOUND,
+  PASSAGES_UNUSABLE,
+} from "../src/referee-claims.js";
 import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
 
 const ROOT = join(import.meta.dirname, "..");
 
 /**
  * Every surface that can render a Referee null result. Add the panel here when
- * you build it — Claims is the one still to come, and it has a "found nothing"
- * state by construction.
+ * you build one.
+ *
+ * **Claims joined on 2026-09-01**, and it is the sub-mode this whole test was
+ * written for: the cross-family review made "the model did not find a passage
+ * for this" — never "none", never "unsupported", never "the paper does not
+ * address this" — the condition of Claims surviving at all. Most of its copy
+ * lives in src/referee-claims.ts as values rather than as strings inside the
+ * panel, and those are checked below as values, which is the stronger of the two
+ * checks. The panel is scanned as well, because the sentences it writes for
+ * *itself* — the run-level "no claims at all" branch — are exactly where the
+ * shorter, wrong version would be typed.
  *
  * **Mirror joined on 2026-09-01**, and it is the harder case rather than a
  * second easy one. Its null result is not about the paper at all: an empty
@@ -49,7 +64,11 @@ const ROOT = join(import.meta.dirname, "..");
  * in this paper bears on that criterion" is the shorter sentence and a claim
  * Mirror has no standing whatever to make, since it was never given the paper.
  */
-const REFEREE_SURFACES = ["src/web/CriteriaPanel.tsx", "src/web/MirrorPanel.tsx"];
+const REFEREE_SURFACES = [
+  "src/web/CriteriaPanel.tsx",
+  "src/web/MirrorPanel.tsx",
+  "src/web/ClaimsPanel.tsx",
+];
 
 /**
  * Comments are stripped before the scan, because the rule is about what a
@@ -106,6 +125,54 @@ describe("what Referee says when the answer it got was unusable", () => {
   it("carries a bracketed code, so a referee can quote four characters", () => {
     // docs/project/copy.md § The bracketed code.
     expect(ANSWER_UNUSABLE).toMatch(/\[[a-z0-9-]+\]$/);
+  });
+});
+
+/**
+ * **Claims' own copy, checked as values.**
+ *
+ * Four sentences, and each is a rule rather than a phrasing:
+ *
+ * - `NO_PASSAGE_FOUND` is the second outcome — the model looked and named
+ *   nothing — and it has to put the model in the subject position, because a
+ *   zero-passage row is evidence about a search rather than about a paper.
+ * - `PASSAGES_UNUSABLE` is the **third** outcome, which Criteria did not have a
+ *   sentence for until GPT Sol's finding 4: the model named passages and none of
+ *   them could be found in the paper. It must not be readable as "did not find",
+ *   because those two call for different actions.
+ * - `CLAIMS_UNUSABLE` is the same distinction at the level of the whole run.
+ * - `DOCUMENT_ORDER_NOTE` is the other half of the review's finding: the list is
+ *   in the paper's order and is not a ranking, and a reader who assumes
+ *   best-first reads the top and stops.
+ */
+describe("what Claims says about an empty answer", () => {
+  it("makes the model the subject of both empty states", () => {
+    for (const sentence of [NO_PASSAGE_FOUND, PASSAGES_UNUSABLE, CLAIMS_UNUSABLE]) {
+      expect(sentence.toLowerCase()).toMatch(/^the model /);
+      for (const phrase of ABOUT_THE_PAPER) {
+        expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
+      }
+    }
+  });
+
+  it("keeps 'found nothing' and 'found things I could not use' apart", () => {
+    /* The whole reason there are three sentences and not two. Both of these
+       would be false about the other's state, and the panel picks between them
+       on `Claim.discarded`. */
+    expect(NO_PASSAGE_FOUND).toMatch(/did not find/i);
+    expect(PASSAGES_UNUSABLE).not.toMatch(/did not find/i);
+    expect(CLAIMS_UNUSABLE).not.toMatch(/did not find/i);
+  });
+
+  it("carries a bracketed code on the run-level failure", () => {
+    // docs/project/copy.md § The bracketed code.
+    expect(CLAIMS_UNUSABLE).toMatch(/\[[a-z0-9-]+\]$/);
+  });
+
+  it("says the order is not a ranking, which is the other half of the finding", () => {
+    expect(DOCUMENT_ORDER_NOTE.toLowerCase()).toContain("ranked");
+    // And says nothing that could be read as one claim being weaker than another.
+    expect(DOCUMENT_ORDER_NOTE.toLowerCase()).not.toMatch(/weakest|strongest|least supported/);
   });
 });
 

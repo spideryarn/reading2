@@ -48,6 +48,7 @@ import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { AnswerPatch, NewComment } from "../comments.js";
+import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import type {
@@ -132,8 +133,9 @@ export interface ArticleReader {
    * view's *"view the original"* control is behind. Each adapter answers from
    * where **its own** store keeps them and never from the other's: the
    * filesystem one from `data/<slug>/`, the Postgres one from the object store
-   * the revision names — falling back, inside itself, to the legacy `raw_bytes`
-   * column for rows written before references existed. A Postgres deployment
+   * the revision names. (It used to fall back, inside itself, to a legacy
+   * `raw_bytes` column for rows written before references existed; that column
+   * was dropped on 2026-09-01.) A Postgres deployment
    * reaching for a local file is how this feature spent its life 404ing on
    * Vercel while working on a laptop.
    */
@@ -852,6 +854,59 @@ export interface RefereeCriteriaStore {
 
   /** Turn abandoned `pending` criteria into `error`. See `SweepOptions`. */
   sweepPending(slug: string, opts: SweepOptions): Promise<SavedCriterion[]>;
+}
+
+/**
+ * **The claims a paper makes up front, and where it takes each one up.**
+ *
+ * Referee mode's second sub-mode
+ * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2), and the one
+ * contract in this file with **no id in it**: there is one claims run per
+ * article, because a referee writes several criteria and asks the paper what
+ * *it* claims exactly once. Running it again replaces what is there.
+ *
+ * **It has a filesystem implementation and no Postgres one, and that is
+ * recorded rather than pending.** A claims run belongs in the pipeline as an
+ * artefact — the plan says so and lists the surface — and building a bespoke
+ * table for something already scheduled to be replaced is the gold-plating the
+ * plan's own § 2 argues against. Under `SPIDERYARN_STORE=postgres` every method
+ * here refuses through `notMigrated` (src/store/index.ts), loudly, rather than
+ * writing a file no Postgres read will ever return. src/store/live.ts §
+ * `notMigratedError` is the rule and this is the second thing under it.
+ */
+export interface RefereeClaimsStore {
+  /** The stored run, or `null` when this paper has never been asked. */
+  load(slug: string): Promise<ClaimsRun | null>;
+
+  /** The article's fingerprint right now — see `SearchStore.sourceHash`. */
+  sourceHash(slug: string): Promise<string | undefined>;
+
+  /**
+   * Record a `pending` run before the model is called, **replacing** whatever
+   * was stored.
+   *
+   * There is no `wantedId` and no retry rule, because there is nothing to
+   * collide with: a second run is a run, and the answer it overwrites was about
+   * the same paper. src/referee-claims-store.ts § What differs.
+   */
+  begin(slug: string, now?: () => string): Promise<ClaimsRun>;
+
+  /**
+   * Write the answer over the `pending` run.
+   *
+   * `null` when there is no run on disk any more — the article's data went away
+   * underneath the call — rather than resurrecting a row nobody has.
+   */
+  finish(slug: string, patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>): Promise<ClaimsRun | null>;
+
+  /**
+   * Turn an abandoned `pending` run into an `error`, so it can be run again.
+   *
+   * `live` is whether *this process* is running it now. Narrower than
+   * `SweepOptions`, which carries a set of ids and a grace window, because there
+   * is one run and the filesystem has no other processes to be wrong about.
+   */
+  sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
 }
 
 /**

@@ -339,6 +339,8 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
 | `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Remember's quiz |
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
+| `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
+| `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
@@ -346,6 +348,10 @@ copy is why two rows were missing until 2026-09-01: `quiz-mark` had been added a
 `referee-mirror` an hour before this line was written, and neither arrival touched the table. A
 variable that exists and is not written down here reads as a variable that does not exist, so the
 rule is the one this repo already keeps — when you add a row there, add it here in the same change.
+**And it went wrong again the same day**: `referee-criteria` had landed with the paragraph above
+already written and still did not reach the table, so it was added alongside `referee-claims` rather
+than found later. Three misses in one day is a copy asking to be derived, and the honest fix is a
+test that reads `MODEL_ENV_VAR` and this table and compares them.
 
 ## The database, locally
 

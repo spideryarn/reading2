@@ -187,6 +187,25 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Claims — what the paper says about itself, and where it takes it up**
+     (src/referee-claims-run.ts). Criteria's policy, and the caching half of it
+     is stronger here rather than weaker.
+
+     `order` is pinned because this call sends the whole (identity-stripped)
+     article behind the *same* `cache_control` breakpoint a criterion run sends —
+     byte for byte, because both render `articleWithIds(meta, blocks,
+     "anonymous")` as the first content part and nothing else. A referee who
+     pulls the claims and then works down a list of criteria over the same paper
+     is landing on one cached prefix all afternoon, and a different upstream
+     halfway through pays for the paper again while the answer looks identical.
+
+     `require_parameters` is the half that is not a preference: a fallback that
+     silently dropped `cache_control` gives a full-price answer indistinguishable
+     from a cheap one, and this is the largest single prompt in the mode. */
+  "referee-claims": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and

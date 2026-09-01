@@ -1,6 +1,6 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
-**Status, 2026-09-01: two sub-modes of four are built.**
+**Status, 2026-09-01: three sub-modes of four are built.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
 ranked in the panel, and on a `diverging` criterion each passage carries a signed valence. Verified
@@ -16,7 +16,21 @@ shape** — see § *What the evidence says* below, and
 [`tests/referee-mirror-panel.test.tsx`](../../tests/referee-mirror-panel.test.tsx), which counts
 both halves so "the two are distinguishable" is a claim rather than a hope.
 
-**Claims and Candidates are placeholders** that say "Not built yet".
+**Claims works end to end** as of 2026-09-01 — press Pull, the paper's claims stream in, each one
+carrying the passages where the paper takes it up, and ticking a claim marks those passages in the
+prose. `GET`/`POST /api/referee/claims/:slug`,
+[`src/referee-claims.ts`](../../src/referee-claims.ts) for what a claim is,
+[`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
+
+**Claims is files-only.** Its store has a filesystem implementation and no Postgres one, so under
+`SPIDERYARN_STORE=postgres` every method refuses with a 501 rather than writing a file no Postgres
+read will return ([`src/store/index.ts`](../../src/store/index.ts) § `refereeClaimsStore`). That is a
+decision rather than a gap: a claims run is an article-derived reusable artefact whose right home is
+a **pipeline artefact**, which the plan says out loud, and a bespoke table for something already
+scheduled to be replaced is two migrations to reach one place. It is also why the journal is still at
+0048 — Claims added no migration.
+
+**Candidates is a placeholder** that says "Not built yet".
 
 **Two things are built and not connected**, and both are the kind of thing that looks finished from
 a test file:
@@ -144,9 +158,36 @@ supporting passages they had and called an empty row "a finding made of structur
 judgement". The review's second finding said that was wrong on both counts: deciding what the
 claims are, which passages count, and that nothing supports one are all judgements, and a
 zero-result row may just mean the extractor missed a table, a figure, or a differently-worded
-sentence. So Claims, as designed, keeps document order rather than ranking by thinness, says "the
-model did not find a passage for this" rather than "none" or "unsupported", and asserts *linkage*
-only, never adequacy. None of it is built: no route, no call, no panel.
+sentence. So Claims keeps document order rather than ranking by thinness, says "the model did not
+find a passage for this" rather than "none" or "unsupported", and asserts *linkage* only, never
+adequacy.
+
+**Built, as of 2026-09-01, and here is where each of the three rules actually lives** — because two
+of them are properties of the code and the third is only a prompt rule, and the difference matters:
+
+- **Document order** is enforced twice, and neither comparator can see how many passages a claim has.
+  `validateClaims` ([`src/referee-claims.ts`](../../src/referee-claims.ts)) sorts the authoritative
+  answer by block position; `inDocumentOrder` ([`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx))
+  sorts what the panel is *holding*, which is what keeps the order right during the stream — a
+  streamed claim cannot be placed by the server, because the claims after it have not arrived. There
+  is no sort control and no number anywhere on a claim row, which
+  [`tests/referee-claims-panel.test.tsx`](../../tests/referee-claims-panel.test.tsx) asserts: a count
+  is one glance from a ranking.
+- **"The model did not find a passage for this"** is a constant the model never sees, and there are
+  **three** empty states rather than two. A claim carries `discarded`, a count of the passages named
+  for it that could not be found in the paper, so *the model named none* and *the model named some
+  and none of them were there* print different sentences. That distinction is the one that went wrong
+  in Criteria and needed a second review to catch (finding 4); it is built in here rather than
+  retrofitted. The same split exists for a whole run: `CLAIMS_UNUSABLE` is a **failed** run with a
+  Try again, not an empty one.
+- **Linkage, never adequacy** is asked for in the prompt and said in words at the top of the panel,
+  and it is **only a prompt rule** — `reasoning` is free text and no validator reads English. The
+  eval that would measure it is not built.
+
+**One run per article**, not a list — a referee writes several criteria and asks the paper what *it*
+claims once — so there is no id, no colour and no delete, and a second POST replaces the first. The
+route reads the article and refuses a paper with no blocks before a header goes out, because a model
+asked to find claims in an empty article does not fail: it invents.
 
 ### 3. Mirror — the model reads the referee's own notes, never the paper
 
@@ -349,8 +390,9 @@ feedback of this shape*, which is a different question from how confident anyone
   research behind both: what journals and funders will let AI touch, the prior art and its cognitive
   offloading evidence, and the editor's side of the desk.
 - [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the four sub-modes, named once.
-- [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts)
-  — the two model-facing modules built so far.
+- [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
+  [`src/referee-claims.ts`](../../src/referee-claims.ts) — the three model-facing modules built so
+  far.
 - [`src/injection-scan.ts`](../../src/injection-scan.ts) — the deterministic scan.
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.

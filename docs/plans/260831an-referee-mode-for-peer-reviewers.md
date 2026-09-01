@@ -440,10 +440,37 @@ is a fair description of what shipped.
   promised to rank first; coverage can be asserted when the one comment bearing on a criterion was
   dropped as an orphan; the delimiter is forgeable; and the input caps do not cap criterion length,
   passage length, or the same block copied once per comment.
-- **Stage 4 — Claims.** Route-shaped, sharing Stage 2's table conventions and Stage 3's resolver.
-  Sol's finding 8 is that the placeholder's own copy still promises the framing the plan rejected —
-  it says where a claim is "actually delivered" and ranks "by how thin the delivery is". The
-  placeholder has to stop making a promise the built thing will refuse to keep.
+- ~~**Stage 4 — Claims.**~~ **Done, 2026-09-01.** `GET`/`POST /api/referee/claims/:slug`,
+  [`src/referee-claims.ts`](../../src/referee-claims.ts),
+  [`src/referee-claims-run.ts`](../../src/referee-claims-run.ts),
+  [`src/referee-claims-store.ts`](../../src/referee-claims-store.ts),
+  [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx), and `resolveClaim` joining the five
+  resolvers already in `src/web/search-hits.ts`. Sol's finding 8 is fixed: the placeholder's code
+  comment promising a ranking "by how thin the delivery is" and its visible "actually delivered" are
+  both gone with the placeholder.
+
+  **Three things about it were decided in the building and are worth carrying forward.**
+
+  **It has no table and no migration**, which is a departure from the brief it was built to and the
+  reason is worth having. `tests/store-export-covers-tables.test.ts` derives every article-scoped
+  table from `src/db/schema.ts` and requires an `ARTICLE_TABLE_COVERAGE` entry in
+  `src/store/export.ts`, because a table `db:export` has never heard of is dropped in silence — which
+  is what happened to `referee_criteria` on 2026-08-31. `src/store/export.ts` was being rewritten by
+  another session, so a table could only have landed *without* that entry, i.e. as the exact
+  postmortem the repo already carries. So the store is filesystem-only and refuses through
+  `notMigrated` under `SPIDERYARN_STORE=postgres`. That is also the cheaper answer to the plan's own
+  § 2: this artefact's real home is a pipeline artefact, and a bespoke table for it would be two
+  migrations to reach one place.
+
+  **There are three empty states, not two, and the third is per claim.** `Claim.discarded` counts the
+  passages named for a claim that could not be found in the paper, so *the model named none* and *the
+  model named some and none of them were there* print different sentences. That is finding 4's
+  distinction, built in at the start rather than retrofitted after a panel lied for a day.
+
+  **The quote check runs `"spaced"`, not the default.** `findQuote`'s forgiving second pass deletes
+  whitespace and would accept a word the model split in two, which is fine for deciding which
+  characters to wash and wrong for deciding whether the model copied the text. `validateHits` and
+  `validateResults` still pass the default; this does not copy them.
 - **Stage 6 — Candidates as a third thread kind.** The migration widening `chat_threads_kind`, the
   route's kind check, the `converse` branch and its system prompt, the scoping box, and the fit
   brief as the thread's opening message. Web search on for this kind.

@@ -64,6 +64,7 @@ import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
+import { ClaimsBand } from "./ClaimsPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
 import { MirrorBand } from "./MirrorPanel.js";
 import { SearchPanel } from "./SearchPanel.js";
@@ -2644,8 +2645,8 @@ function Reader({
         />
       )}
       {/* **`owner &&`, like every other mode that spends money**, and it is
-          the gate rather than a decoration: Criteria and Mirror both call a
-          model now and Claims will, so a band a visitor could open would be
+          the gate rather than a decoration: Criteria, Claims and Mirror all
+          call a model, so a band a visitor could open would be
           spend on somebody else's paper with nobody's press behind it. `visitorGap`
           fails closed and already answers `owners-only` for this mode, so a
           visitor pressing the button gets the boundary sentence and not a blank
@@ -4329,9 +4330,9 @@ function DiagramBand({
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
  * stage 1 — the confidentiality notice, the four buttons, and a line per panel
- * saying what that panel will do — and it still calls no model. **Two of the
- * four panels underneath it now do**: Criteria (stage 3) and Mirror (stage 5b).
- * Claims and Candidates are still their stage 1 placeholders.
+ * saying what that panel will do — and it still calls no model. **Three of the
+ * four panels underneath it now do**: Criteria (stage 3), Claims (stage 4) and
+ * Mirror (stage 5b). Candidates is still its stage 1 placeholder.
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -4519,7 +4520,11 @@ function RefereeSubMode({
          visual rules it is under. */
       return <CriteriaBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
     case "claims":
-      return <ClaimsPanel />;
+      /* **Stage 4.** What the paper claims about itself and where it takes each
+         claim up, in the paper's own order and never ranked by how much was
+         found. src/web/ClaimsPanel.tsx is the whole of it, including the three
+         rules and where each one is enforced rather than asked for. */
+      return <ClaimsBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
     case "mirror":
       /* **Stage 5b**, and the second sub-mode to become reachable. It takes no
          `blocks` and pushes nothing up: a Mirror remark is about a sentence the
@@ -4534,21 +4539,6 @@ function RefereeSubMode({
       throw new Error(`unknown referee view: ${String(unknown)}`);
     }
   }
-}
-
-/**
- * **Stage 3.** What the piece promises up front, against the passages meant to
- * deliver it — ranked by how thin the delivery is. Linkage, never adequacy:
- * whether one page of results carries the abstract's sentence is the referee's
- * job, and it is the interesting part.
- */
-function ClaimsPanel() {
-  return (
-    <p className="gloss-quiet">
-      What the piece claims up front, and where in it each claim is actually delivered. Not built
-      yet.
-    </p>
-  );
 }
 
 /**

@@ -354,7 +354,17 @@ export type Task =
      rather than `search`'s for the reason `referee-mirror` above states, which
      is the reason `quiz-mark` exists to have stopped making: a call billed
      under another job's name is spend nobody can find later. */
-  | "referee-criteria";
+  | "referee-criteria"
+  /* The claims a paper makes about itself, and where it takes each one up —
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2. Its own task
+     rather than `referee-criteria`'s for the reason that one gives about
+     `search`, which is the reason `quiz-mark` exists to have stopped making: a
+     call billed under another job's name is spend nobody can find later. It is
+     also the referee job with the biggest single answer — one read of the paper
+     and up to twenty claims of quoted passages out of it — so a cost report that
+     folded it into criteria would report the wrong shape as well as the wrong
+     name. */
+  | "referee-claims";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -456,6 +466,10 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* Capable, like search — this reads a whole paper and answers with quoted
      block ids, which is the same job of work. */
   "referee-criteria": "capable",
+  /* Capable, like the two beside it. This reads a whole paper, decides what it
+     claims about itself, and answers with quoted block ids — the same job of
+     work as a criterion, over more of the paper at once. */
+  "referee-claims": "capable",
 };
 
 /**
@@ -545,6 +559,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   search: "chat",
   "referee-mirror": "chat",
   "referee-criteria": "chat",
+  "referee-claims": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -615,6 +630,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   search: "SPIDERYARN_SEARCH_MODEL",
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
   "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
+  "referee-claims": "SPIDERYARN_REFEREE_CLAIMS_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */
