@@ -153,8 +153,38 @@ export interface NewComment {
   valence?: number;
 }
 
-/** Thrown when a client-minted id is already taken by a different comment. */
+/**
+ * Thrown when a client-minted id is already taken by a different comment.
+ *
+ * **The `status` is the whole of it, and it is here because of a live 500.**
+ * Both comment stores throw this, but only the Postgres one — which is what
+ * production runs — sits behind `guardDbStore` (src/store/db-errors.ts), and
+ * that wrapper replaces every error it has not been told to keep. So the
+ * `instanceof` in src/routes.ts never matched, and an ordinary "somebody
+ * already has that id" conflict reached the reader as a 500. It went unseen for
+ * as long as the suite covering it ran against the *filesystem* store, where
+ * nothing wraps the throw. docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+ *
+ * A numeric `status` is the door that wrapper already holds open, and it is
+ * what every other store-side refusal in this codebase uses —
+ * `PublishRefused`, `NotTheLiveAttempt`, `StepRunNotHeld`, `NoStoredDocument`,
+ * `JobConflict`. The rejected alternative was a sixth `instanceof` line in
+ * `mayPassThrough`: it works, and it leaves the trap exactly where it was,
+ * because that list is an allowlist of *classes* and every new refusal type has
+ * to remember to join it. This one did not, and it is the second not to.
+ *
+ * src/routes.ts still has a matching `instanceof` branch. It is a second door
+ * to the same number and is now unreachable — the `status` line above it wins —
+ * but the number lives here, so the two cannot disagree about the answer.
+ *
+ * **The message may contain only words we chose**, which is the test
+ * src/store/db-errors.ts sets for anything it lets through. This one is a fixed
+ * sentence and an id: no quote, no body, no title. Both callers gate the id
+ * with `isSpideryarnId` before the store sees it (`createFree` and `answer` in
+ * src/routes.ts), so `spya-k3m9qt` is the most it can ever be.
+ */
 export class CommentIdTaken extends Error {
+  readonly status = 409;
   constructor(readonly id: string) {
     super(`A different comment already has the id ${id}`);
     this.name = "CommentIdTaken";
@@ -168,8 +198,16 @@ export class CommentIdTaken extends Error {
  * is a 404, `free` is a bookmark that was never a question, and `running` is an
  * answer already on its way. Collapsing them would make a deleted comment read
  * as "you cannot answer that".
+ *
+ * **So `status` is computed rather than fixed**, and it is on the class for the
+ * same reason `CommentIdTaken`'s is — read the note there; behind Postgres this
+ * class was answering 500 where the route means 404. Assigned in the body from
+ * the parameter rather than as a field initialiser, because the order in which
+ * TypeScript emits parameter properties and field initialisers is not something
+ * a reader of this file should have to know.
  */
 export class NotAnExplanation extends Error {
+  readonly status: number;
   constructor(readonly id: string, readonly why: "missing" | "free" | "running") {
     super(
       why === "missing"
@@ -179,6 +217,7 @@ export class NotAnExplanation extends Error {
           : `Comment ${id} was never a question, so there is nothing to answer`,
     );
     this.name = "NotAnExplanation";
+    this.status = why === "missing" ? 404 : 409;
   }
 }
 

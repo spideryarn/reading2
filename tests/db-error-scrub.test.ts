@@ -59,6 +59,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { kindOfMessage, STORAGE_BUSY, STORAGE_FAILED, worthRetrying } from "../src/messages.js";
+import { CommentIdTaken, NotAnExplanation } from "../src/comments.js";
 import { guardDbStore } from "../src/store/db-errors.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -372,6 +373,109 @@ describe("the guard, without a database", () => {
     });
 
     expect(await failureFrom(tagged)).toBe(tagged);
+  });
+
+  /**
+   * **The two refusals the comment store makes, asked of the guard directly.**
+   *
+   * This is the cheap pin for a bug that cost a route test, an article fixture
+   * and a database to notice: from the day `pgCommentStore` went behind the
+   * guard until 2026-09-01, `CommentIdTaken` and `NotAnExplanation` were
+   * scrubbed to `StoreFailure`, so `src/routes.ts` could not match them and a
+   * 409 and a 404 reached the reader as 500s — in production only, because only
+   * the Postgres store is wrapped. Every test that covered them ran against the
+   * filesystem store, where there is no wrapper, so the coverage existed and
+   * proved nothing. docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+   *
+   * `toBe`, not `toBeInstanceOf`: the object itself has to arrive, because
+   * `routes.ts` reads `why` off it as well as the class.
+   */
+  describe("a refusal the comment store makes", () => {
+    /* A real one. `isSpideryarnId` gates the id at both call sites in
+       src/routes.ts before the store ever sees it, so this is the shape the
+       message can carry and there is not another. */
+    const ID = "spya-k3m9qt";
+
+    it("arrives at the route as itself, so an id clash is a 409", async () => {
+      const clash = new CommentIdTaken(ID);
+
+      expect(await failureFrom(clash)).toBe(clash);
+      expect(clash.status).toBe(409);
+    });
+
+    it("arrives as itself for a comment that is not there, so it is a 404", async () => {
+      const gone = new NotAnExplanation(ID, "missing");
+
+      expect(await failureFrom(gone)).toBe(gone);
+      expect(gone.status).toBe(404);
+    });
+
+    it("tells the two conflicts apart from the missing one", async () => {
+      /* Three reasons, two answers. A bookmark pushed down the retired
+         explanation path and an answer already arriving are both 409s; only
+         `missing` is a 404. Sharing one code would make a deleted comment read
+         as "you cannot answer that". */
+      for (const why of ["free", "running"] as const) {
+        const refusal = new NotAnExplanation(ID, why);
+        expect(await failureFrom(refusal)).toBe(refusal);
+        expect(refusal.status).toBe(409);
+      }
+    });
+
+    it("carries an id and words we chose, and nothing of the reader's", async () => {
+      /* The test the guard's header sets for anything it lets through, applied
+         to the two classes this file just let through. The id is the only
+         interpolated value in either message, and it is `spya`-shaped by the
+         time the store is called — so a quote, a body, a title or a model's
+         answer cannot be in here however the throw site is rewritten. If one
+         ever is, the fix is the message rather than the `status`. */
+      const messages = [
+        new CommentIdTaken(ID).message,
+        ...(["missing", "free", "running"] as const).map((why) => new NotAnExplanation(ID, why).message),
+      ];
+
+      for (const message of messages) {
+        expect(message).toContain(ID);
+        /* Everything that is not the id is ours: letters, spaces and the two
+           punctuation marks these four sentences use. Anything a reader typed
+           would have to get past this. */
+        expect(message.replaceAll(ID, "")).toMatch(/^[A-Za-z ,.]*$/);
+      }
+    });
+  });
+
+  it("still scrubs a Drizzle failure with the reader's words bound into it", async () => {
+    /* **The other direction, and the one that must never be widened by
+       accident.** The two `toBe` assertions above are a hole in a wall built to
+       keep reader text in; this is the wall, driven with the exact shape
+       `drizzle-orm` produces — the failed statement, every bound parameter, and
+       a `pg` cause that quotes the offending value back — asserted across
+       everything that leaves: the message, the stack, and the enumerable
+       properties `errorFields` would put in a log line — `everyStringIn`, the
+       same union the database-backed cases above assert over.
+
+       Watch it fail by making `mayPassThrough` return `true`. */
+    const drizzled = new Error(
+      `Failed query: insert into "comments" ("id", "quote", "body") values ($1, $2, $3)\n` +
+        `params: spya-k3m9qt,${SENTINEL},${SENTINEL}`,
+      {
+        cause: Object.assign(new Error(`invalid input syntax for type integer: "${SENTINEL}"`), {
+          code: "22P02",
+          detail: `Failing row contains (${SENTINEL}).`,
+          hint: SENTINEL,
+          where: SENTINEL,
+        }),
+      },
+    );
+
+    const failure = await failureFrom(drizzled);
+
+    expect(failure.name).toBe("StoreFailure");
+    expect(failure.message).toBe(STORAGE_FAILED.message);
+    for (const text of everyStringIn(failure)) expect(text).not.toContain(SENTINEL);
+    /* And the SQLSTATE survives, so scrubbing has not also thrown away the one
+       field worth logging. */
+    expect((failure as { code?: unknown }).code).toBe("22P02");
   });
 
   it("catches a throw that happens before anything is awaited", async () => {

@@ -90,6 +90,25 @@
  * message can contain a URL, a title, a quote or a model's answer, it does not
  * belong on this list however well-behaved its class is.
  *
+ * ## Adding a sixth: don't. Give the class a `status` instead.
+ *
+ * Door 1 is the one to use. A refusal a *route* answers with a number should
+ * carry that number as `readonly status`, the way `PublishRefused`,
+ * `NotTheLiveAttempt`, `StepRunNotHeld`, `NoStoredDocument` and `JobConflict`
+ * already do — then it passes here without this file learning its name, and
+ * both store adapters give the reader the same answer.
+ *
+ * The class list below is an allowlist of *classes*, so every new refusal type
+ * has to remember to join it, and two did not: `CommentIdTaken` and
+ * `NotAnExplanation` were scrubbed to `StoreFailure` from the day
+ * `pgCommentStore` went behind this guard, which turned a 409 and a 404 into
+ * 500s in production. Nothing was red, because the tests covering them ran
+ * against the filesystem store, where there is no wrapper. Both now carry a
+ * `status` (src/comments.ts), and
+ * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md is why. The same
+ * message test applies either way: a `status` is not a licence to leak, and
+ * tests/db-error-scrub.test.ts pins that for both of them.
+ *
  * The cost is real and is worth saying out loud: a plain bug in a Postgres store
  * (a `TypeError`, say) now reaches the log without its message. **The stack
  * survives** — the frames are kept and only the message line is dropped — so

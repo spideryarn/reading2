@@ -385,30 +385,33 @@ when("a second Save under a stored id", () => {
   });
 
   /**
-   * **This is red on purpose, and it is a production bug rather than a fixture
-   * problem.** It passed for as long as this file ran against the filesystem
-   * store, and going to Postgres — which is what production runs — is what
-   * uncovered it.
+   * **This was red on purpose for a day, and it was a production bug rather
+   * than a fixture problem.** It passed for as long as this file ran against
+   * the filesystem store, and going to Postgres — which is what production runs
+   * — is what uncovered it.
    *
    * `pgCommentStore.create` throws `CommentIdTaken`, exactly as
-   * `src/comments.ts` does, and `src/routes.ts` maps that class to a 409. But
-   * every Postgres store is wrapped by `guardDbStore` (src/store/db-errors.ts),
-   * and its `mayPassThrough` allowlist names `ChatConflict` and four others and
-   * **not** `CommentIdTaken` — nor does the class carry a numeric `status`,
-   * which is the allowlist's other door. So the throw is scrubbed into a generic
-   * `StoreFailure`, the `instanceof` in routes.ts never matches, and the reader
-   * gets **500 where the route intends 409**. `NotAnExplanation` has the same
-   * shape, so answering a comment that is not there is a 500 where routes.ts
-   * intends a 404.
+   * `src/comments.ts` does, and `src/routes.ts` answers 409 to it. But every
+   * Postgres store is wrapped by `guardDbStore` (src/store/db-errors.ts), whose
+   * `mayPassThrough` was an allowlist of five class names that did not include
+   * this one — and the class carried no numeric `status`, which is that
+   * allowlist's other door. So the throw was scrubbed into a generic
+   * `StoreFailure`, the `instanceof` in routes.ts could not match, and the
+   * reader got **500 where the route intends 409**.
    *
-   * `it.fails` rather than an assertion of `500`: 500 is not the answer this
-   * route means to give, and writing it down as if it were would turn a bug
-   * into a specification. This case goes red again — loudly — the day somebody
-   * fixes it, which is when this wrapper should come off.
+   * Fixed 2026-09-01 by putting `status = 409` on the class, which is the door
+   * the guard already holds open and what every other store-side refusal here
+   * uses. `NotAnExplanation` had the same fault and the same fix — its
+   * `missing` case was a 500 where routes.ts intends a 404.
+   * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
    *
-   * Not fixed here: src/ was outside this landing's file set.
+   * **The cheap version of this assertion lives in
+   * tests/db-error-scrub.test.ts**, which asks the guard directly rather than
+   * paying for a route and an article to find out. This one stays because it is
+   * the end-to-end proof: it is the test that found the bug, and it is the only
+   * one here that would notice the guard, the route and the store disagreeing.
    */
-  it.fails("refuses a re-score, rather than overwriting the judgement already made", async () => {
+  it("refuses a re-score, rather than overwriting the judgement already made", async () => {
     /* A second POST carrying a *different* valence is not a retry, and `create`
        taking it would delete a judgement the referee had already recorded —
        which is the same reason a changed body is refused here. Editing a
