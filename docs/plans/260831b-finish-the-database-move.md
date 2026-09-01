@@ -21,7 +21,10 @@ local proof reaches.
 | 3 item 4 — exact base | **done**, and the guard now lives in `publishRevisionIn` rather than in the one caller that remembered to ask (`5618365`) |
 | 3 item 5 — delete the importer | **done** (`b73ad74`) |
 | **3 item 6 — the flip** | **DONE** (`c42c940`) |
-| 4 | **not started** — and it is now the only thing left |
+| 4a — `raw_bytes` | **done** — column dropped locally (`0049`), every reference gone, the `readPdf` legacy query with it |
+| 4b — the dead seams | **done** — `revisionLifecycle`, the checkpoint fs adapter, `checkNoteFields`; 510 lines |
+| 4A — fixtures read the corpus | in progress |
+| 4B–4J | **not started** — see § *How stage 4 actually goes* |
 
 ### What the three Sol reviews found, and where each finding ended up
 
@@ -50,8 +53,23 @@ it); the NO-SHIP is answered above; and stage 2.5 is measured. The seam failure 
 during stage 3 — `src/store/job-fence.ts` untracked while three committed files imported it, and a
 pathspec commit taking the `publishRevisionIn` guard without the projection it reads, which would
 have refused every publication including an article's first. **Simulate the commit against a clean
-`HEAD` before landing anything with a seam in it**; `git archive HEAD | tar -x -C $SIM`, symlink
-`node_modules`, overlay exactly the files you mean to commit, then `tsc --noEmit`. It caught both.
+`HEAD` before landing anything with a seam in it.** It caught both, and it has since caught more.
+
+```
+git archive HEAD | tar -x -C $SIM
+ln -s <repo>/node_modules $SIM/node_modules
+# overlay exactly the files you would commit; delete exactly the ones you would delete
+cd $SIM && ./node_modules/.bin/tsc --version && ./node_modules/.bin/tsc --noEmit -p tsconfig.json
+```
+
+**Three details, each of which has silently produced a false pass.** Use
+`./node_modules/.bin/tsc`, **never `npx tsc`** — inside a scratch directory `npx` has downloaded the
+joke `tsc` package, replaced the `node_modules` symlink with a real directory, printed *"This is not
+the tsc command you are looking for"* and exited **0**; two agents were caught by this on 2026-09-01,
+so it is the recipe's fault rather than theirs. **Print `--version` first**, so you know a compiler
+ran at all. And **verify the overlay landed byte-for-byte** — a `cp` loop has silently not taken
+while the loop's own check printed `OK`. A simulation that reports clean without running is exactly
+the failure this repo keeps meeting; see [silent-success.md](../reusable/silent-success.md).
 
 | | what | commits |
 |---|---|---|
