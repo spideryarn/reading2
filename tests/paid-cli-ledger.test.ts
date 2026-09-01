@@ -117,7 +117,7 @@
  *
  * Four tests, and each is narrower than the sentence people will remember:
  *
- * - **`wraps every listed stage CLI entrypoint`** checks the ten modules in
+ * - **`wraps every listed stage CLI entrypoint`** checks the three modules in
  *   `PAID_CLIS`, and nothing else. It says nothing about evals, which open the
  *   ledger with the `"eval"` scope.
  * - **`names every package.json entry module that imports a provider seam`**
@@ -134,8 +134,8 @@
  *   and `npm run cost` prints it every run. `ADMITTED` below has to agree with
  *   that list in both directions, so a second one cannot arrive quietly.
  * - **`stageCli itself opens the ledger`** checks one function in one file. It
- *   is what the three migrated CLIs stopped saying for themselves, and it says
- *   nothing about the five that have not moved.
+ *   is what the two migrated CLIs stopped saying for themselves, and it says
+ *   nothing about `src/hierarchy.ts`, which still carries the old tail.
  *
  * This is a tripwire, not a boundary — the same thing
  * `tests/no-undeclared-spend.test.ts` says about itself. The ordinary case is
@@ -160,17 +160,25 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * about entrypoints. The completeness check below stops the list going stale.
  */
 const PAID_CLIS: Readonly<Record<string, string>> = {
-  "src/arc.ts": "npm run arc — streamMessage per part",
-  "src/glossary.ts": "npm run glossary — streamMessage per batch",
-  "src/ideas.ts": "npm run ideas — streamMessage",
+  "src/hierarchy.ts": "npm run hierarchy — streamMessage",
   "src/labels.ts": "npm run labels — streamMessage per batch",
   "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
-  "src/quotes.ts": "npm run quotes — streamMessage",
-  "src/timeline.ts": "npm run timeline — streamMessage",
-  "src/quiz.ts": "npm run quiz — streamMessage",
-  "src/hierarchy.ts": "npm run hierarchy — streamMessage",
-  "src/tweets.ts": "npm run tweets — streamMessage",
 };
+
+/**
+ * **It was ten until 2026-09-01, and seven of them were deleted rather than
+ * fixed.** `arc`, `tweets`, `glossary`, `ideas`, `quotes`, `timeline` and
+ * `quiz` each had a folder-reading command line that was a *second* way to do
+ * what `{ slug, steps: ["arc"], force: ["arc"] }` on the queue already does —
+ * and the queue is the one that exercises the store writes. So the entrypoints
+ * went, and with them their exposure to the leak this file exists for.
+ * docs/project/ingest-queue.md § The pipeline is a list, not a function;
+ * docs/plans/260831b-finish-the-database-move.md § sub-stage I.
+ *
+ * The three that remain are the three whose CLI still earns its place: two
+ * stages of the default ingest that a developer really does run against a
+ * folder, and the PDF reader.
+ */
 
 /** The two modules that can reach a provider. Naming one is spending money. */
 const SEAMS = ["/ai-call.js", "/messages-stream.js"];
@@ -1381,11 +1389,12 @@ describe("the listed stage CLIs open the ledger", () => {
      * the file.
      *
      * **Both tails, because the migration is deliberately partial.**
-     * `src/hierarchy.ts` still ends with the guard-and-`withLedger` pair; the three
-     * files that could be edited on 2026-08-28 end with
-     * `await stageCli(import.meta.url, main)`. Five of the eight were dirty with
-     * other agents' work, which is why this list is not eight long — and holding
-     * both here is what stops the second tail arriving on a loosened rule.
+     * `src/hierarchy.ts` still ends with the guard-and-`withLedger` pair;
+     * `src/labels.ts` and `src/pdf-read.ts` end with
+     * `await stageCli(import.meta.url, main)`. The five stage CLIs that were on
+     * the new tail were deleted with their commands on 2026-09-01, so what is
+     * left is two files rather than three — and holding both tails here is what
+     * stops the second one arriving on a loosened rule.
      */
     interface RealControl {
       readonly file: string;
@@ -1414,7 +1423,7 @@ describe("the listed stage CLIs open the ledger", () => {
           ],
         ],
       },
-      ...(["src/labels.ts", "src/pdf-read.ts", "src/tweets.ts"] as const).map((file) => ({
+      ...(["src/labels.ts", "src/pdf-read.ts"] as const).map((file) => ({
         file,
         tail: "await stageCli(import.meta.url, main);",
         mutations: [
