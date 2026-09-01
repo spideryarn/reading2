@@ -8428,6 +8428,145 @@ line.diag-now {
   color: var(--ink-faint);
 }
 
+/* --------------------------------------------- placing a passage yourself --
+   `PlaceOnCriterion` — the referee's own judgement, in the two dialogs a
+   selection and a stored comment open. Its header carries the argument for why
+   it lives here rather than beside the model's valence in `CriteriaPanel`.
+
+   **Every position is legible with `.place-swatch` deleted.** The words carry
+   the direction and the colour decorates them, which is the condition
+   docs/project/colour-scales.md attaches to the red↔green ramp being permitted
+   at all — see src/web/valence.ts. Nothing in here may become colour-only. */
+.place {
+  display: block;
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.place-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.place-title {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.place-optional {
+  font-size: 0.64rem;
+  color: var(--ink-faint);
+}
+
+.place-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+.place-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.place-pick-label {
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* `min-width: 0` so a long criterion shrinks the control rather than pushing
+   the dialog wider — these boxes are `position: fixed` at a capped width. */
+.place-pick select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+}
+
+/* What is stored now, shown before it is overwritten — v1 keeps no history of
+   placements, so this line is the whole of "an overwrite is never invisible".
+   Words, then the number, then the colour. */
+.place-current {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.place-current-number {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.place-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.45rem;
+}
+
+/* One row per position, in order, so the sequence itself says which way the
+   scale runs — position is the third non-colour carrier, after the words and
+   the sign. */
+.place-step {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.22rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+.place-step:hover { background: var(--page); }
+.place-step.on {
+  border-color: var(--highlight);
+  background: var(--page);
+  color: var(--ink);
+}
+
+.place-swatch {
+  flex: 0 0 auto;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.place-clear {
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
+}
+
+/* A write that did not land, said out loud in the dialog that made it. */
+.cmt-write-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+
 /* A conversation wants a steady frame; the ask box is three controls and should
    not open as a 34rem rectangle. `.chat-scroll` is `Conversation`'s own
    transcript element, so this is "there is a conversation in here" said in CSS

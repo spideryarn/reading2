@@ -20,6 +20,7 @@ import type { BlockId, Comment } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import type { Mark } from "./PlaceOnCriterion.js";
 
 /**
  * What to say when the request never reached the server.
@@ -84,6 +85,16 @@ export interface NewCommentInput {
    * the built code, 2026-08-28.
    */
   id: string;
+  /**
+   * **The referee's own placement of this passage**, if they made one.
+   *
+   * Absent on every ordinary reading note, which is nearly all of them. Both
+   * fields go over the wire only when they are really there: a `valence: 0`
+   * sent because a `Mark` had a null in it would be a fabricated *"counts
+   * neither way"* — a judgement the referee did not make — and nothing would
+   * error. See `create` below for the check that keeps `0` and *nothing* apart.
+   */
+  mark?: Mark;
 }
 
 export interface CommentsApi {
@@ -138,6 +149,18 @@ export interface CommentsApi {
   /** Change the reader's words, or clear them back to a bare bookmark. */
   edit(id: string, body: string | null): Promise<void>;
   /**
+   * **Change the referee's placement on a comment that already exists**, or
+   * clear it with both fields `null`.
+   *
+   * Its own operation and its own route, for the reason
+   * docs/project/comments.md gives about all five: `PATCH …/:id` takes
+   * `{ body }`, and folding the placement into it would put partial-update
+   * semantics on the wire — absent means *leave alone*, `null` means *clear* —
+   * one missing branch away from a plain body edit silently deleting a
+   * judgement. A named path cannot express the ambiguity.
+   */
+  place(id: string, mark: Mark): Promise<void>;
+  /**
    * Remember locally that this comment started that conversation.
    *
    * **Not a request.** The link is written server-side from inside the chat
@@ -155,6 +178,34 @@ export interface CommentsApi {
   remove(id: string): void;
   /** A failure of the *transport*, not of the model. Model failures live on the comment. */
   error: string | null;
+}
+
+/**
+ * A placement as a **request body** carries it: present, or absent — never
+ * `null`.
+ *
+ * The wire has two shapes for this and they are not interchangeable. `POST`
+ * takes the fields as optional, so absent means *there is no placement*; the
+ * `mark` route takes both always, so `null` means *clear the one that is
+ * there*. This turns the second into the first.
+ *
+ * Two traps, both of which would fail silently:
+ *
+ * - **`valence !== null`, never truthiness.** `0` is a real placement meaning
+ *   "counts neither way", and it is the commonest of the five. A `mark.valence
+ *   && …` here would drop exactly that answer and store a review comment with
+ *   no number under it.
+ * - **A valence with no criterion is dropped whole**, rather than sent for the
+ *   server to refuse. It is not reachable from the instrument — the five
+ *   buttons only exist once a criterion is chosen — and a number against
+ *   nothing is not a thing to ask about.
+ */
+function markFields(mark: Mark | undefined): { criterionId?: string; valence?: number } {
+  if (!mark || mark.criterionId === null) return {};
+  return {
+    criterionId: mark.criterionId,
+    ...(mark.valence !== null ? { valence: mark.valence } : {}),
+  };
 }
 
 export function useComments(slug: string): CommentsApi {
@@ -439,6 +490,10 @@ export function useComments(slug: string): CommentsApi {
         start: input.start,
         createdAt: new Date().toISOString(),
         ...(input.body ? { body: input.body } : {}),
+        /* The placement goes on the optimistic row too, so the dialog that
+           opens over it is already showing the judgement the referee just
+           made rather than catching up a beat later. */
+        ...markFields(input.mark),
         status: "none",
       };
       /* What was under this id before, if anything, so a failure can put it
@@ -464,6 +519,7 @@ export function useComments(slug: string): CommentsApi {
             quote: input.quote,
             start: input.start,
             ...(input.body ? { body: input.body } : {}),
+            ...markFields(input.mark),
           }),
         });
         const { comment } = await readJson<{ comment: Comment }>(r);
@@ -517,6 +573,53 @@ export function useComments(slug: string): CommentsApi {
            is both correct and the only thing that can clear a field. The one
            client-only field, `replacing`, deliberately does not survive an
            edit. GPT Sol, reviewing the built code, 2026-08-28. */
+        setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+      } catch (e) {
+        setError(describeFetchFailure(e as Error));
+      }
+    },
+    [slug],
+  );
+
+  /**
+   * Change the referee's placement on a comment, or clear it.
+   *
+   * **Deliberately not optimistic**, which is the opposite call from `create`
+   * and from `recolour` in useCriteria.ts, so it is worth saying why. A colour
+   * that flicked back would read as the app arguing with the referee; a
+   * *judgement* that flicked back is the app telling the truth. The rule this
+   * hook keeps everywhere is that a failed write must not leave the screen
+   * showing success — and here the cheapest way to keep it is to not show the
+   * new value until the server has it. The write costs no model call, so the
+   * wait is a round trip rather than a spinner.
+   *
+   * That only works because the instrument is controlled by the stored comment
+   * rather than by state of its own. If it ever grows local state, this becomes
+   * optimistic-with-rollback and the rule moves into the component.
+   *
+   * **The server's comment replaces the stored one; it is not merged over it.**
+   * Same reason as `edit`: a merge cannot express a *removal*, and clearing a
+   * placement returns a comment with no `criterionId` and no `valence` — so
+   * `{ ...c, ...comment }` would put the cleared placement straight back.
+   */
+  const place = useCallback(
+    async (id: string, mark: Mark): Promise<void> => {
+      setError(null);
+      try {
+        const r = await fetchOk(
+          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            /* **Both fields, always** — this route reads `null` as *clear it*,
+               which is the whole reason it is a route of its own rather than a
+               pair of optional fields on the body patch. Named rather than
+               spread, so a `Mark` that ever grows a third field cannot start
+               travelling by accident. */
+            body: JSON.stringify({ criterionId: mark.criterionId, valence: mark.valence }),
+          },
+        );
+        const { comment } = await readJson<{ comment: Comment }>(r);
         setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
       } catch (e) {
         setError(describeFetchFailure(e as Error));
@@ -594,5 +697,17 @@ export function useComments(slug: string): CommentsApi {
     [forget],
   );
 
-  return { comments, loaded, loadFailed, create, edit, noteThread, retry, deepen, remove, error };
+  return {
+    comments,
+    loaded,
+    loadFailed,
+    create,
+    edit,
+    place,
+    noteThread,
+    retry,
+    deepen,
+    remove,
+    error,
+  };
 }

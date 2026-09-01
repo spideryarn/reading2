@@ -38,6 +38,14 @@
  * the whole "just mark this passage" case, so the button is never disabled.
  * With the tick-box on and nothing written, chat is asked to explain the
  * passage — which is what the old ask box did with an empty composer.
+ *
+ * ## And a fourth, since 2026-09-01: it is where a referee places a passage
+ *
+ * In Referee mode the box grows a *"Place on a criterion"* section
+ * (PlaceOnCriterion.tsx, which carries the argument for why it is here and not
+ * beside the model's own valence in `CriteriaPanel`). It changes nothing about
+ * the three decisions above: placing is optional, saving with no placement is
+ * the ordinary case, and it stays one press.
  */
 import { useEffect, useRef, useState } from "react";
 import { MessageSquarePlus, X } from "lucide-react";
@@ -45,6 +53,7 @@ import { MessageSquarePlus, X } from "lucide-react";
 import type { ChatAnchor } from "../types.js";
 import { mintId } from "../ids.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
 
@@ -52,18 +61,35 @@ interface Props {
   /** The passage, and the block it sits in. Always a selection, never a bare block. */
   anchor: Extract<ChatAnchor, { quote: string }>;
   /**
+   * **Referee mode is open**, so this passage can be placed on a criterion.
+   *
+   * A prop rather than something read from the address, because the mode lives
+   * in `App`'s state and this box has no business parsing it. False everywhere
+   * else, and then nothing here fetches a criterion — the hook that does is
+   * inside the section, so an ordinary reader's selection makes no request.
+   */
+  placing: boolean;
+  /**
    * Save it. `ask` is the tick-box: the caller stores the comment either way,
    * and opens a conversation as well when it is true.
    *
    * `id` is this draft's, minted once — see the note on `draftId` below.
+   *
+   * `mark` is the referee's placement, `NO_MARK` when they made none — which is
+   * the ordinary case and the one this dialog is mostly used for.
    */
-  onSave(id: string, body: string, ask: boolean): void;
+  onSave(id: string, body: string, ask: boolean, mark: Mark): void;
   onCancel(): void;
 }
 
-export function AnnotateDialog({ anchor, onSave, onCancel }: Props) {
+export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
   const [body, setBody] = useState("");
   const [ask, setAsk] = useState(false);
+  /* The placement, as a draft. Nothing is stored until Save, so unlike
+     `CommentDialog`'s — which is controlled by the stored comment because a
+     failed write must not look like a successful one — this one is local:
+     there is nothing on a server yet for it to disagree with. */
+  const [mark, setMark] = useState<Mark>(NO_MARK);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -110,6 +136,10 @@ export function AnnotateDialog({ anchor, onSave, onCancel }: Props) {
   useEffect(() => {
     setBody("");
     setAsk(false);
+    /* The placement goes with the words, and for the same reason: a placement
+       carried from one selection to the next is a judgement about a passage the
+       referee is no longer looking at. */
+    setMark(NO_MARK);
     draftId.current = mintId();
     sending.current = false;
   }, [anchor.blockId, anchor.start, anchor.quote]);
@@ -135,7 +165,7 @@ export function AnnotateDialog({ anchor, onSave, onCancel }: Props) {
     if (dictate.readOnly) return;
     if (sending.current) return;
     sending.current = true;
-    onSave(draftId.current, body.trim(), ask);
+    onSave(draftId.current, body.trim(), ask, mark);
   };
 
   return (
@@ -191,6 +221,15 @@ export function AnnotateDialog({ anchor, onSave, onCancel }: Props) {
             aria-label="Your comment on this passage"
             rows={3}
           />
+
+          {/* Above the tick-box rather than below it, because the tick-box is
+              the paid/free decision and belongs next to the button whose label
+              it changes. Referee mode only, and `route` is what says which
+              article — the same read `useDictationField` above is already
+              making, for the reason this file's header gives. */}
+          {placing && route.kind === "read" && (
+            <PlaceOnCriterion slug={route.slug} value={mark} onChange={setMark} />
+          )}
 
           <label className="annotate-ask">
             <input

@@ -2328,8 +2328,12 @@ function Reader({
       {owner && annotating && (
         <AnnotateDialog
           anchor={annotating}
+          /* **Referee mode only**, and all four of its sub-modes: the criteria
+             are fetched inside the section rather than lifted out of the
+             Criteria panel, which only mounts on one of them. */
+          placing={mode === "referee"}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask) => {
+          onSave={(id, body, ask, mark) => {
             const anchor = annotating;
             setAnnotating(null);
             /* **The free thing is stored first, and the paid thing waits for
@@ -2343,6 +2347,9 @@ function Reader({
               quote: anchor.quote,
               start: anchor.start,
               ...(body ? { body } : {}),
+              /* The referee's placement rides along with the free save, so a
+                 placement is never a second request that can fail on its own. */
+              mark,
             }).then((stored) => {
               if (!ask || !stored) return;
               /* The conversation opens on the same words, pre-filled with what
@@ -2421,6 +2428,9 @@ function Reader({
           onRetry={() => owner.comments.retry(openComment.id)}
           onDeepen={() => owner.comments.deepen(openComment.id)}
           onEdit={(body) => void owner.comments.edit(openComment.id, body)}
+          placing={mode === "referee"}
+          onPlace={(mark) => void owner.comments.place(openComment.id, mark)}
+          error={owner.comments.error}
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
              note — so the summary list, not the stored id, decides whether

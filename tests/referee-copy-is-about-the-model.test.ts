@@ -27,10 +27,12 @@
  *
  * Deterministic, no network, no model call, like everything under tests/.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 import { CLAIMS_UNUSABLE } from "../src/referee-claims-run.js";
 import {
@@ -48,53 +50,183 @@ import {
 } from "../src/referee-claims.js";
 import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
 import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
+import { REFEREE_VIEWS } from "../src/web/referee-views.js";
 
 const ROOT = join(import.meta.dirname, "..");
 
+const WEB = join(ROOT, "src", "web");
+
 /**
- * Every surface that can render a Referee null result. Add the panel here when
- * you build one.
+ * **Every surface that can render a Referee null result — derived, never
+ * listed.**
  *
- * **Claims joined on 2026-09-01**, and it is the sub-mode this whole test was
- * written for: the cross-family review made "the model did not find a passage
- * for this" — never "none", never "unsupported", never "the paper does not
- * address this" — the condition of Claims surviving at all. Most of its copy
- * lives in src/referee-claims.ts as values rather than as strings inside the
- * panel, and those are checked below as values, which is the stronger of the two
- * checks. The panel is scanned as well, because the sentences it writes for
- * *itself* — the run-level "no claims at all" branch — are exactly where the
- * shorter, wrong version would be typed.
+ * This used to be five paths typed out by hand, each added on the day its panel
+ * shipped and each with a dated comment saying why. That is the exact shape
+ * docs/reusable/silent-success.md warns about — *"never write a 'should I emit
+ * this?' condition as a second list beside the data"* — and its failure mode is
+ * the quiet one: a sixth panel is scanned only if somebody remembers, and a
+ * scanner that is not pointed at a file reports nothing rather than reporting
+ * that it looked nowhere. `tests/store-seams-have-two-implementations.test.ts`
+ * is the same move for store seams and has the longer version of the argument.
  *
- * **Mirror joined on 2026-09-01**, and it is the harder case rather than a
- * second easy one. Its null result is not about the paper at all: an empty
- * remark list means *the model had nothing to say about your comments*, and its
- * `coverage` remark means *your notes have not taken this criterion up*. Both
- * are one careless rewrite away from being about the paper instead — "nothing
- * in this paper bears on that criterion" is the shorter sentence and a claim
- * Mirror has no standing whatever to make, since it was never given the paper.
+ * Two rules, and the union of them, because either alone has a hole the other
+ * closes:
+ *
+ * - **What the referee band renders.** `RefereeBand` and `RefereeSubMode` in
+ *   src/web/App.tsx are the only places a referee sub-mode reaches the screen,
+ *   and the `never` in that switch means a fifth `RefereeView` cannot exist
+ *   without a panel named there. This catches a panel that imports nothing with
+ *   "referee" in the name.
+ * - **What imports the referee domain.** Any `.tsx` under src/web that imports
+ *   a `src/referee-*` or `src/injection-scan*` module. This catches a surface
+ *   that is not a sub-mode panel at all — a dialog that grows a referee section,
+ *   say — which the first rule cannot see.
+ *
+ * A parser rather than a regular expression, for the reason
+ * tests/helpers/ts-ast.ts gives: both of this repo's earlier source scans were
+ * wrong in both directions, and the direction that matters is a scan that
+ * quietly stops matching.
+ *
+ * ## What the five dated comments said, kept because the reasons are not the same
+ *
+ * **Criteria** is the original, and the branch the scan is aimed at is its
+ * zero-result one. **Claims** is the sub-mode this whole file was written for:
+ * the cross-family review made *"the model did not find a passage for this"* —
+ * never "none", never "unsupported", never "the paper does not address this" —
+ * the condition of Claims surviving at all. **Mirror** is the harder case: its
+ * null result is not about the paper at all, since it was never given the
+ * paper, so *"nothing in this paper bears on that criterion"* is a claim it has
+ * no standing whatever to make. **Candidates**' null result is about neither
+ * the paper nor the notes but about *people*, which makes the wrong sentence a
+ * larger claim — "no suitable reviewers were found" is about the field — and
+ * the phrase list below cannot catch that one, so `ALL_DROPPED` and
+ * `NO_NAMES_YET` are checked as values in a block of their own. **The source
+ * scan** is the one surface whose null result comes from no model at all
+ * (src/injection-scan.ts is deterministic); it is in scope because its failure
+ * is the same one in a worse place — a referee reading *nothing found* as *this
+ * manuscript is clean*, when what was checked was one HTML string with no
+ * stylesheet fetched, no script run and a PDF not opened at all.
  */
-const REFEREE_SURFACES = [
-  "src/web/CriteriaPanel.tsx",
-  "src/web/MirrorPanel.tsx",
-  "src/web/ClaimsPanel.tsx",
-  /* **Candidates joined on 2026-09-01**, and its null result is about neither
-     the paper nor the referee's notes but about *people*. That makes the wrong
-     sentence a different and larger claim: "no suitable reviewers were found" is
-     about the field, and this app — which has no scholarly identity graph and
-     ran a handful of web searches — has no standing whatever to make it. The
-     phrase list below does not catch that one, so `ALL_DROPPED` and
-     `NO_NAMES_YET` are checked as values in their own block further down. */
-  "src/web/CandidatesPanel.tsx",
-  /* **The source scan joined on 2026-09-01**, and it is the one surface here
-     whose null result comes from no model at all — src/injection-scan.ts is
-     deterministic. It is on the list anyway, because the failure it can produce
-     is the same one in a worse place: a referee reading *nothing found* as *this
-     manuscript is clean*, when what was actually checked was one HTML string
-     with the cascade approximated, no stylesheet fetched, no script run and a
-     PDF not opened at all. The phrases below are the wrong sentences for it too.
-     tests/source-scan-notice.test.tsx holds the rules that are its own. */
-  "src/web/SourceScanNotice.tsx",
-];
+
+/** Which `src/web` file an import specifier points at, if it is one of ours. */
+function localTarget(specifier: string): string | null {
+  if (!specifier.startsWith("./")) return null;
+  const stem = basename(specifier).replace(/\.js$/, "");
+  for (const ext of [".tsx", ".ts"]) {
+    if (existsSync(join(WEB, stem + ext))) return `src/web/${stem}${ext}`;
+  }
+  return null;
+}
+
+/** `localName` → specifier, for every `import` in one module. */
+function importedNames(ast: AstNode): Map<string, string> {
+  const found = new Map<string, string>();
+  walkAst(ast, (node) => {
+    if (node.type !== "ImportDeclaration") return;
+    const from = (node.source as { value?: string } | undefined)?.value;
+    if (typeof from !== "string") return;
+    for (const spec of (node.specifiers ?? []) as AstNode[]) {
+      const local = (spec.local as { name?: string } | undefined)?.name;
+      if (typeof local === "string") found.set(local, from);
+    }
+  });
+  return found;
+}
+
+/** Every `<Component>` written inside one named function declaration. */
+function componentsRenderedBy(ast: AstNode, fnName: string): string[] | null {
+  let body: AstNode | null = null;
+  walkAst(ast, (node) => {
+    if (node.type !== "FunctionDeclaration") return;
+    if ((node.id as { name?: string } | undefined)?.name !== fnName) return;
+    body = node;
+  });
+  if (body === null) return null;
+  const names = new Set<string>();
+  walkAst(body, (node, parent, key) => {
+    if (node.type !== "JSXIdentifier" || key !== "name") return;
+    if (parent?.type !== "JSXOpeningElement" && parent?.type !== "JSXClosingElement") return;
+    const name = node.name as string;
+    // Lower-case is an HTML tag; upper-case is a component.
+    if (/^[A-Z]/.test(name)) names.add(name);
+  });
+  return [...names];
+}
+
+const APP = parseSource(readFileSync(join(WEB, "App.tsx"), "utf8")) as unknown as AstNode;
+const APP_IMPORTS = importedNames(APP);
+
+/** Rule one: the panels the referee band actually puts on screen. */
+const RENDERED_BY_THE_BAND: string[] = (() => {
+  const out = new Set<string>();
+  for (const fn of ["RefereeBand", "RefereeSubMode"]) {
+    const names = componentsRenderedBy(APP, fn);
+    if (names === null) {
+      throw new Error(
+        `src/web/App.tsx has no function called ${fn}. This derivation is anchored ` +
+          `on it, and a rename that went unnoticed here would silently stop scanning ` +
+          `every referee panel — so it is an error rather than an empty list.`,
+      );
+    }
+    for (const name of names) {
+      const target = localTarget(APP_IMPORTS.get(name) ?? "");
+      if (target?.endsWith(".tsx")) out.add(target);
+    }
+  }
+  return [...out];
+})();
+
+/** Rule two: anything under src/web that speaks the referee domain. */
+const IMPORTS_THE_DOMAIN: string[] = readdirSync(WEB)
+  .filter((f) => f.endsWith(".tsx"))
+  .filter((f) => {
+    const ast = parseSource(readFileSync(join(WEB, f), "utf8")) as unknown as AstNode;
+    for (const specifier of importedNames(ast).values()) {
+      if (/^(referee-|injection-scan)/.test(basename(specifier))) return true;
+    }
+    return false;
+  })
+  .map((f) => `src/web/${f}`);
+
+const REFEREE_SURFACES = [...new Set([...RENDERED_BY_THE_BAND, ...IMPORTS_THE_DOMAIN])].sort();
+
+/**
+ * **The scanner that scans nothing passes**, so the derivation is checked
+ * before anything derived from it is believed. Floors rather than exact counts:
+ * a sixth panel must not turn this file red for the wrong reason.
+ */
+describe("the list of surfaces is derived, and the derivation found something", () => {
+  it("finds panels by both rules, and neither rule comes back empty", () => {
+    expect(RENDERED_BY_THE_BAND.length, "nothing is rendered by the referee band").toBeGreaterThan(
+      3,
+    );
+    expect(IMPORTS_THE_DOMAIN.length, "nothing imports the referee domain").toBeGreaterThan(2);
+    expect(REFEREE_SURFACES.length).toBeGreaterThan(4);
+  });
+
+  it("finds files that exist and have something in them after the comments come off", () => {
+    /* A path that does not resolve, or a file that is all comment, scans
+       clean — which is indistinguishable from a file with nothing wrong. */
+    for (const rel of REFEREE_SURFACES) {
+      const source = withoutComments(readFileSync(join(ROOT, rel), "utf8"));
+      expect(source.length, `${rel} has no code left to scan`).toBeGreaterThan(500);
+    }
+  });
+
+  it("finds at least one panel per sub-mode, and that floor moves on its own", () => {
+    /* Not the list back again, and not a naming convention either: `RefereeView`
+       is the vocabulary the switch is exhaustive over, so a fifth sub-mode
+       raises this floor by itself. The band also renders the source-scan notice
+       above the chips, so the real number is one higher — the inequality is
+       what makes that harmless. */
+    expect(
+      RENDERED_BY_THE_BAND.length,
+      `${REFEREE_VIEWS.length} referee sub-modes exist and only ` +
+        `${RENDERED_BY_THE_BAND.length} panels could be resolved from App.tsx — one of ` +
+        `them is being scanned by nothing.`,
+    ).toBeGreaterThanOrEqual(REFEREE_VIEWS.length);
+  });
+});
 
 /**
  * Comments are stripped before the scan, because the rule is about what a

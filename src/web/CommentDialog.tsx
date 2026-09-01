@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react"
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
@@ -54,6 +55,29 @@ interface Props {
   /** Save the reader's own words, or `null` to clear them back to a bookmark. */
   onEdit(body: string | null): void;
   /**
+   * **Referee mode is open**, so this comment's placement can be seen and
+   * changed — see the prop of the same name on `AnnotateDialog`.
+   *
+   * When it is false the section is not drawn at all, including for a comment
+   * that already carries a placement. That is a simplification with a cost
+   * worth naming: an ordinary reader's dialog stays exactly as it was, and a
+   * referee who has left the mode cannot see a judgement that is still stored.
+   * The alternative — a read-only line outside the mode — needs the criteria
+   * fetched anyway to print the pole words, so it buys nothing but a branch.
+   * Reopen it if a referee is ever surprised by the absence.
+   */
+  placing: boolean;
+  /** Change this comment's placement, or clear it with both fields `null`. */
+  onPlace(mark: Mark): void;
+  /**
+   * The last transport failure, or `null` — `CommentsApi.error`.
+   *
+   * Here for one reason: a placement that did not save must say so. The dialog
+   * shows the *old* placement in that case, which is correct and, on its own,
+   * indistinguishable from nothing having been pressed.
+   */
+  error?: string | null;
+  /**
    * Open the conversation this comment started, if it still exists.
    *
    * Absent when there is nothing to open — either the comment never started one
@@ -80,6 +104,9 @@ export function CommentDialog({
   onRetry,
   onEdit,
   onOpenThread,
+  placing,
+  onPlace,
+  error,
 }: Props) {
   const [followUp, setFollowUp] = useState("");
   const followUpBox = useRef<HTMLInputElement>(null);
@@ -220,6 +247,36 @@ export function CommentDialog({
         body={comment.body ?? ""}
         onSave={onEdit}
       />
+
+      {/* **The referee's own placement, and the instrument to change it.**
+          Offered on a comment with no criterion too, because a reading note
+          becoming a review comment is an ordinary thing to want and the only
+          difference between the two is this field
+          (docs/project/comments.md § the referee's own placement).
+
+          **Controlled by the stored comment**, never by state of its own. That
+          is what makes a failed PATCH show the old placement rather than the
+          new one — `useComments.place` writes nothing to the list until the
+          server has answered, and a component holding its own copy would paint
+          the new value over the top and call a failure a success. */}
+      {placing && route.kind === "read" && (
+        <PlaceOnCriterion
+          slug={route.slug}
+          showCurrent
+          value={{
+            criterionId: comment.criterionId ?? null,
+            valence: comment.valence ?? null,
+          }}
+          onChange={onPlace}
+        />
+      )}
+
+      {/* Said out loud rather than swallowed. Every write this dialog makes —
+          the note, the placement — reports its failure through one string on
+          the hook, and until this line existed a PATCH that 500d left the
+          reader looking at a panel that had simply not changed. That is the
+          shape docs/reusable/silent-success.md is about. */}
+      {error && <p className="cmt-write-error">{error}</p>}
 
       {onOpenThread && (
         <button type="button" className="linky cmt-open-thread" onClick={onOpenThread}>

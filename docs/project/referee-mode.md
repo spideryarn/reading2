@@ -73,8 +73,9 @@ test file:
   as of 2026-09-01: `Comment` and `NewComment` carry them, `POST /api/comments/:slug` accepts and
   validates them, and both stores write and read them. So the referee's *own* judgement — the
   anchoring antidote in the design — can be recorded through the real API, and a **negative** one
-  survives it (`tests/comment-referee-mark.test.ts`). What is still missing is the **UI**: nothing
-  on screen offers a way to place a passage, and there is no route for *editing* a placement once
+  survives it (`tests/comment-referee-mark.test.ts`). **And it is reachable, as of 2026-09-01**:
+  select a passage in Referee mode and the comment box offers five labelled positions on one of your
+  `diverging` criteria (§ *The referee's own mark*). What is still missing is a route for *editing* a placement once
   made — a second `create` under the same id carrying a different valence is a 409, not a re-score.
   Sol's finding 5, and see § *The referee's own mark* below.
 
@@ -176,9 +177,24 @@ shape and what the route refuses.
 **Built, as of 2026-09-01**: `Comment.criterionId` and `Comment.valence`, the create input, the
 validation on `POST /api/comments/:slug`, and both stores — so a **negative** placement survives the
 real API rather than arriving as `0`. `db:export` carries it, and carries the criteria themselves.
-**Not built**: any UI that offers to make one, and any route that *edits* one — a second `create`
-under a stored id carrying a different valence is a 409 rather than a re-score, deliberately, so
-that nothing can quietly overwrite a judgement already made.
+**The referee makes one from the prose, not from the panel.** Select a passage in Referee mode and
+the comment box grows a *"Place on a criterion"* section: a picker of their `diverging` criteria —
+only those, because `markProblem` refuses the rest — and five labelled positions written in that
+criterion's own pole words. [`src/web/PlaceOnCriterion.tsx`](../../src/web/PlaceOnCriterion.tsx)
+carries the argument for that entry point over the obvious one, a control beside each model result:
+**a control that renders the model's judgement while soliciting the referee's is measuring their
+willingness to copy a number.** So the section shows no model valence at all, and
+`tests/referee-placement.test.tsx` renders it with loud ones in scope to check that it does not.
+
+**Changing one is its own operation**: `PATCH /api/comments/:slug/:id/mark`, and
+`CommentStore.patchMark` beneath it on both stores — the fifth, added on 2026-09-01. Both fields
+travel every time, each a value or `null`, and both `null` clears the placement back to a plain
+reading note with the referee's words and passage untouched. It is a path of its own rather than two
+more fields on the body patch, because a route that has to decide what an absent key means is one
+missing branch away from destroying a judgement nobody mentioned
+([comments.md § the referee's own placement](comments.md#the-referees-own-placement)). A second
+`create` under a stored id carrying a different valence is still a 409 rather than a re-score,
+deliberately: an edit has to say it is one.
 
 ### 2. Claims — where the paper addresses its own claims
 
