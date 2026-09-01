@@ -74,6 +74,20 @@ const NOT_A_ROW: Record<string, string> = {
     "the “no such row” sentinel. `tests/upload-records.test.ts` hands it to `claimUpload` in " +
     "order to be told “unknown”, and `tests/store-artefacts-pg.test.ts` uses it as the job id " +
     "of a fixture that deliberately has no job. Neither one inserts it.",
+  "00000000-0000-4000-8000-00000000c0de":
+    "the job card's owner, in six component and unit tests — `blocking-job-band`, " +
+    "`interrupted-job-card`, `job-card-progress`, `job-progress-band`, `job-state` and " +
+    "`step-job-driver-stalled`. Every one of them builds a `Job` object in memory and renders " +
+    "it; not one imports a store or a database module, so there is no row to delete. Six " +
+    "different owner ids would say that these fixtures differ in a way they do not.",
+  "11111111-2222-3333-4444-555555555555":
+    "two unrelated things that are both not rows: the signed-in reader in a stubbed Supabase " +
+    "session in `feedback-mirror.test.ts`, and a provisioning attempt id inside a status file " +
+    "in `gjd-remote-provision.test.ts`. Neither file reaches Postgres at all.",
+  "3c67234f-2da6-4208-8473-9b5ee58be82a":
+    "a tmux session uuid, shared by `gjd-remote-tmux.test.ts` and its script twin because they " +
+    "describe the same `agents.json` fixture. It names a terminal session, not a row.",
+  "49348111-df07-44ac-a204-f2e168f46de5": "the second session uuid in that same fixture pair.",
 };
 
 function parse(file: string, source: string): Claim[] {
@@ -217,13 +231,20 @@ describe("fixture rows", () => {
        above could never fire on the case it exists for. It passed anyway,
        which is what made it worth testing over made-up claims rather than
        over the disk. */
-    const exempt = Object.keys(NOT_A_ROW)[0] as string;
-    const twoUsers: Claim[] = [
-      { file: "a.test.ts", name: "SENTINEL", id: exempt },
-      { file: "b.test.ts", name: "SENTINEL", id: exempt },
-    ];
+    /* Two users for **every** exemption, rather than for the first one. Written
+       against a single entry, this said `Object.keys(NOT_A_ROW)[0]` and asserted
+       one stale entry — so the fifth exemption to be added reddened the control
+       instead of the thing it controls, and the honest reading of that failure
+       is "the control counts", not "the table is wrong". */
+    const ids = Object.keys(NOT_A_ROW);
+    const twoUsers: Claim[] = ids.flatMap((id) => [
+      { file: "a.test.ts", name: "SENTINEL", id },
+      { file: "b.test.ts", name: "SENTINEL", id },
+    ]);
     expect(staleExemptions(twoUsers)).toEqual([]);
-    expect(staleExemptions(twoUsers.slice(0, 1)), "one user is not a collision").toHaveLength(1);
-    expect(staleExemptions([]), "no users at all").toHaveLength(1);
+    /* Take one file's claim away from one exemption: that entry, and only that
+       entry, goes stale. */
+    expect(staleExemptions(twoUsers.slice(1)), "one user is not a collision").toHaveLength(1);
+    expect(staleExemptions([]), "no users at all").toHaveLength(ids.length);
   });
 });

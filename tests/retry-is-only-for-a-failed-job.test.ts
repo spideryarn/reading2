@@ -84,7 +84,7 @@ import { mintId } from "../src/ids.js";
 import { stageFailure } from "../src/job-failure.js";
 import { advanceJobWith, cancelJob, forgetJob, getJob, retryJob } from "../src/jobs.js";
 import type { AdvanceParts } from "../src/jobs.js";
-import { DEV_OWNER_ID } from "../src/owner.js";
+import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import type {
   ArtifactKind,
@@ -100,6 +100,22 @@ import type { Job, JobStep, StepName } from "../src/types.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 const OWNER = DEV_OWNER_ID;
+
+/**
+ * **`it`, with this file's owner in scope for the whole body.**
+ *
+ * `getJob`, `retryJob` and `cancelJob` are all owner-scoped, and outside a
+ * request they ask `currentOwnerId()` — which answers with
+ * `SPIDERYARN_OWNER_ID` where `.env.local` sets one, and the fixtures here are
+ * queued under `DEV_OWNER_ID`. On a machine that has run
+ * `scripts/setup-local.ts` the two disagree and every case fails with *"the
+ * fixture job is not in the store"*, which reads as a broken fixture rather
+ * than as two owners. Scoping the body rather than each call keeps the tests
+ * readable and covers the ones added next. Same reason as `advanceAsOwner` in
+ * tests/jobs-walk.test.ts.
+ */
+const itAsOwner = (name: string, body: () => Promise<void>) =>
+  it(name, () => runAsOwner(OWNER, body));
 
 /** Its own slug stem, so nothing here meets another suite's fixtures. */
 const SLUG_PREFIX = "test-retry-guard-";
@@ -244,7 +260,13 @@ async function runToTheEnd(
   const steps = Object.fromEntries(
     names.map((name) => [name, fakeStep(name, bodies[name])]),
   ) as Partial<Record<StepName, PipelineStep>>;
-  const advanced = await advanceJobWith(job.id, partsFor(memoryArtifacts(), steps));
+  /* Inside this file's owner: `advanceJobWith` asks `currentOwnerId()`, which
+     outside a request is `SPIDERYARN_OWNER_ID` where `.env.local` sets one, and
+     the fixture above is queued under `DEV_OWNER_ID`. Without the scope the
+     claim answers `gone` on a machine that has run scripts/setup-local.ts. */
+  const advanced = await runAsOwner(OWNER, () =>
+    advanceJobWith(job.id, partsFor(memoryArtifacts(), steps)),
+  );
   expect(advanced?.done, "the fixture job has to have finished for the case to mean anything").toBe(
     true,
   );
@@ -310,7 +332,7 @@ describe("retrying a job", () => {
    * that only covered unforced jobs would leave the exploit exactly where it
    * was.
    */
-  it("refuses a job that finished, however it was asked for", async () => {
+  itAsOwner("refuses a job that finished, however it was asked for", async () => {
     const slug = `${SLUG_PREFIX}done`;
     const finished = await runToTheEnd(slug, ["fetch", "extract"], { force: true });
     expect(finished.status, "the fixture has to be a success for this to be the case").toBe("done");
@@ -333,7 +355,7 @@ describe("retrying a job", () => {
    * reason: it has not failed at anything yet. The card offers Stop here, not
    * Retry.
    */
-  it("refuses a job that has not finished", async () => {
+  itAsOwner("refuses a job that has not finished", async () => {
     const slug = `${SLUG_PREFIX}queued`;
     const job = await queueJob(slug, ["fetch"], false);
 
@@ -362,7 +384,7 @@ describe("retrying a job", () => {
    * not fit its blocks. `jobWorthRetrying` is what the card reads, and it is now
    * what this reads.
    */
-  it("refuses a failure another attempt cannot change", async () => {
+  itAsOwner("refuses a failure another attempt cannot change", async () => {
     const slug = `${SLUG_PREFIX}permanent`;
     const failed = await runToTheEnd(slug, ["fetch"], {
       bodies: () => ({
@@ -404,7 +426,7 @@ describe("retrying a job", () => {
    * and the thread the reader explicitly asked to redo would quietly not be
    * redone.
    */
-  it("queues the retry of a real failure with the whole forced set on the new record", async () => {
+  itAsOwner("queues the retry of a real failure with the whole forced set on the new record", async () => {
     const slug = `${SLUG_PREFIX}refresh`;
     const names: StepName[] = ["fetch", "extract", "blocks", "hierarchy", "tweets"];
     const failed = await runToTheEnd(slug, names, {
@@ -446,7 +468,7 @@ describe("retrying a job", () => {
    * afterwards is the ordinary thing to do next — nothing failed, so nothing
    * says another attempt would go the same way.
    */
-  it("allows a job the reader stopped", async () => {
+  itAsOwner("allows a job the reader stopped", async () => {
     const slug = `${SLUG_PREFIX}cancelled`;
     const stopped = await runToTheEnd(slug, ["fetch", "extract"], {
       /* Stop pressed while the first step is running, which is where a real one

@@ -356,6 +356,23 @@ In any test that reads `process.env`, stub **every** name explicitly with `vi.st
 the ones you expect to be absent (stub those to `""`), and `vi.unstubAllEnvs()` in `afterEach`.
 Never rely on a variable being unset.
 
+**The one that bit hardest is `SPIDERYARN_OWNER_ID`**, because nothing in the failure mentions an
+owner. `scripts/setup-local.ts` writes it into `.env.local`, so on any machine that has run the
+local setup — the remote box since 2026-08-31 — `currentOwnerId()` outside a request is a seeded
+admin user rather than `DEV_OWNER_ID`. A test that queues a fixture under the constant and then
+calls owner-scoped code gets `store.claim` answering `gone`, or *"the fixture job is not in the
+store"*: thirteen cases across `tests/jobs-walk.test.ts`, `tests/jobs.test.ts` and
+`tests/retry-is-only-for-a-failed-job.test.ts` failed this way on 2026-09-01, all of them green on a
+laptop that had never run the setup.
+
+**Put the owner in scope rather than assuming it.** `runAsOwner(OWNER, body)` beats the environment
+— that is what [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) pins — and
+`tests/claim-session-files.test.ts` has advanced that way since it was written. Where a claim has to
+be the fixture's *own*, ask `currentOwnerId()` instead of writing the constant. Pinning the variable
+for the whole suite is the fix that looks obvious and is wrong: the corpus in the local database
+belongs to the machine's owner, so it makes `store-parity`, `store-roundtrip` and
+`store-shelf-reads` fail instead. Tried on 2026-09-01 and taken back out.
+
 ### A failed `beforeAll` reports its tests as *skipped*
 
 A pg fixture whose `beforeAll` threw on a foreign-key violation printed:

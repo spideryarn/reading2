@@ -56,7 +56,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { mintId } from "../src/ids.js";
 import { currentJobId } from "../src/job-scope.js";
 import { advanceJobWith, LEASE_MS, STEP_BUDGET_MS, type AdvanceParts } from "../src/jobs.js";
-import { DEV_OWNER_ID } from "../src/owner.js";
+import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import type {
   ArtifactKind,
@@ -72,6 +72,21 @@ import type { Job, JobStep, StepName } from "../src/types.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 const OWNER = DEV_OWNER_ID;
+
+/**
+ * **The advance, inside this file's owner.**
+ *
+ * `advanceJobWith` asks `currentOwnerId()`, which outside a request answers
+ * with `SPIDERYARN_OWNER_ID` — set in `.env.local` by `scripts/setup-local.ts`
+ * on any machine that has run it, and unset on one that has not. The fixtures
+ * above are queued under `DEV_OWNER_ID`, so without this scope the two disagree
+ * on exactly the machines that have a seeded admin user: `store.claim` answers
+ * `gone`, every case here reports that no step ran, and nothing in the failure
+ * mentions an owner. `tests/claim-session-files.test.ts` already advances this
+ * way for the same reason.
+ */
+const advanceAsOwner = (id: string, parts: AdvanceParts) =>
+  runAsOwner(OWNER, () => advanceJobWith(id, parts));
 
 /** Every job this file made, so the shared `data/_jobs/` is left as it was. */
 const MADE: string[] = [];
@@ -258,7 +273,7 @@ describe("one claim walks the whole job", () => {
       return await realNote(id, attempt, steps);
     });
 
-    const advanced = await advanceJobWith(job.id, parts);
+    const advanced = await advanceAsOwner(job.id, parts);
 
     expect(ran.names, "all three steps, in order, inside one call").toEqual(names);
     expect(advanced?.done).toBe(true);
@@ -292,7 +307,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    const advanced = await advanceJobWith(job.id, parts);
+    const advanced = await advanceAsOwner(job.id, parts);
 
     /* **Asserted first, and it is the load-bearing line.** Under the mutation
        this case is for — a release between steps — `extract` never runs at all
@@ -320,7 +335,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    await advanceJobWith(job.id, parts);
+    await advanceAsOwner(job.id, parts);
 
     expect(seen.first, "the stored row says step one is done while step two runs").toBe("done");
   });
@@ -333,7 +348,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    const advanced = await advanceJobWith(job.id, parts);
+    const advanced = await advanceAsOwner(job.id, parts);
 
     expect(ran.names, "the step after the failure must not run").toEqual(["fetch", "extract"]);
     expect(advanced?.done).toBe(true);
@@ -360,7 +375,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    const advanced = await advanceJobWith(job.id, parts);
+    const advanced = await advanceAsOwner(job.id, parts);
 
     expect(ran.names, "the step after the Stop must not run").toEqual(["fetch"]);
     expect(advanced?.done).toBe(true);
@@ -395,7 +410,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    const advanced = await advanceJobWith(job.id, parts);
+    const advanced = await advanceAsOwner(job.id, parts);
 
     expect(ran.names, "the step that would not have fitted did not start").toEqual(["fetch"]);
     expect(advanced?.done, "there is still work to do, so the client comes back").toBe(false);
@@ -407,7 +422,7 @@ describe("one claim walks the whole job", () => {
     /* Resumable, which is the whole difference between a handback and a kill:
        time moves on, the claim is free, and the next request finishes the job. */
     vi.useRealTimers();
-    const second = await advanceJobWith(job.id, parts);
+    const second = await advanceAsOwner(job.id, parts);
     expect(second?.done).toBe(true);
     expect(second?.job.status).toBe("done");
     expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "hierarchy"]);
@@ -433,7 +448,7 @@ describe("one claim walks the whole job", () => {
       },
     });
 
-    await advanceJobWith(job.id, parts);
+    await advanceAsOwner(job.id, parts);
 
     expect(seen.before, "nothing outside a claim is in a job scope").toBeNull();
     expect(seen.inside, "and the step ran inside this job's").toBe(job.id);

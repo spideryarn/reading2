@@ -51,7 +51,7 @@ import {
 import { mintAttempt } from "../src/store/jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
-import { DEV_OWNER_ID } from "../src/owner.js";
+import { currentOwnerId, DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
@@ -881,7 +881,15 @@ describe("running a job", () => {
        notice without anybody sweeping on its behalf. */
     const orphan = mintAttempt();
     /* A cap high enough to be beside the point: this case is not about it. */
-    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000, 4)).kind).toBe("claimed");
+    /* `currentOwnerId()`, not `DEV_OWNER_ID`: this claim has to be the *job's
+       own*, and `enqueue` above wrote it under whoever this process is. Those
+       are the same value only while `SPIDERYARN_OWNER_ID` is unset, so writing
+       the constant here made the claim answer `gone` on any machine that has
+       run scripts/setup-local.ts — and the case then failed on its setup line
+       rather than on the sweep it is about. */
+    expect(
+      (await fsJobStore.claim(job.id, currentOwnerId(), orphan, 60_000, 4)).kind,
+    ).toBe("claimed");
     expireLeaseForTests(job.id);
 
     try {
