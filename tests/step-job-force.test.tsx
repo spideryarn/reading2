@@ -65,7 +65,13 @@ vi.mock("../src/web/useJobs.js", () => ({
     jobs: [],
     loaded: true,
     error: null,
+    /* Per-job `/advance` failures. Empty, because nothing here has a driver at
+       all — but a whole-module mock that omits a field leaves `undefined` where
+       `useStepJob` reads it (src/job-state.ts § `driverStalled`), which is the
+       landmine this file's siblings already note about `lastFailure`. */
+    driverFailures: {},
     lastFailure: () => null,
+    lastBlocker: () => null,
     run: async (request: Posted) => {
       posted.push(request);
       return { id: "job1" };

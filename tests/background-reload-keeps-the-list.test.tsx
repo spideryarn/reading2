@@ -163,7 +163,13 @@ vi.mock("../src/web/useJobs.js", () => ({
          `tests/refused-job-reason-survives.test.tsx` exists to say, and it is
          why this mock has to carry both rather than only the one it is asked
          for. */
+      /* Per-job `/advance` failures. Empty, because nothing here has a driver at
+         all — but a whole-module mock that omits a field leaves `undefined` where
+         `useStepJob` reads it (src/job-state.ts § `driverStalled`), which is the
+         landmine this file's siblings already note about `lastFailure`. */
+        driverFailures: {},
       lastFailure: () => queueError,
+      lastBlocker: () => null,
       run: async () => runResult,
       cancel: async () => {},
     };

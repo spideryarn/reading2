@@ -125,7 +125,7 @@ function article(): { root: SummaryNode; blocks: Block[] } {
       },
     },
   } as unknown as Tree;
-  const root = buildSummaryTree(tree, blocks, null);
+  const root = buildSummaryTree(tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
   return { root, blocks };
 }

@@ -67,7 +67,13 @@ vi.mock("../src/web/useJobs.js", () => ({
     error: null,
     /* The durable half of `error` — src/web/useJobs.ts § `lastFailure`. Reached
        only if a run fails, which is what a refused reset must never get to. */
+    /* Per-job `/advance` failures. Empty, because nothing here has a driver at
+       all — but a whole-module mock that omits a field leaves `undefined` where
+       `useStepJob` reads it (src/job-state.ts § `driverStalled`), which is the
+       landmine this file's siblings already note about `lastFailure`. */
+    driverFailures: {},
     lastFailure: () => null,
+    lastBlocker: () => null,
     run: async (_slug: string, _steps: string[], force?: boolean) => {
       ran.push(force ?? false);
       return null;

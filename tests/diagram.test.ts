@@ -340,7 +340,7 @@ describe("paragraphStops", () => {
     return Array.from({ length: 8 }, (_, i) => ({
       id: `spya-p${i}` as BlockId,
       tag: "p",
-      kind: "prose" as const,
+      kind: "text" as const,
       text: `paragraph ${i}`,
       words: 3,
       html: `<p>paragraph ${i}</p>`,

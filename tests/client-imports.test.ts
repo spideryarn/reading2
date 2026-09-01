@@ -289,6 +289,37 @@ const SHARED = new Set([
      would be the one a referee reads.
      See src/injection-scan-types.ts and docs/project/referee-mode.md § rule 5. */
   "injection-scan-types.js",
+  /* Where in a model's answer a block id counts as a citation. On the list
+     because it qualifies: it imports `urls.js`, already here, plus
+     `mdast-util-from-markdown` — which is the dompurify case exactly, a package
+     the client already bundles directly (src/web/Cited.tsx § fromMarkdown), so
+     there is no leaf to move a copy into and the only alternative is a second
+     parser.
+
+     Being on it is the point rather than a convenience, and this module was
+     written for it. The chip on the reader's screen and `citedBlockIds` in the
+     log are one question asked on two sides of the wire — how many ids did this
+     answer cite — and they drifted for as long as the client parsed Markdown
+     while the server matched a regex: on four inputs GPT Sol found, a citation
+     the reader never saw or a hallucination that never happened. `citations.ts`
+     calling this is what makes the counter true.
+     See src/citable.ts and docs/plans/chat-markdown.md. */
+  "citable.js",
+  /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
+     so stage 3 can read them back. On the list because it imports **nothing at
+     all**, deliberately and for this reason: its own header says so, since a
+     module that decides what is trusted should not be able to pull anything in
+     behind it.
+
+     The browser needs it because the stamps outlive everything else. Stage 2
+     mints an attribute, the stored html carries it through a database, and
+     `src/web/notes-view.ts` reads it back months later to find a footnote's
+     marker and its back-link — so a spelling written twice is a spelling that
+     can drift with nothing going red on either side. One namespace, one file.
+     See src/reserved.ts, tests/reserved.test.ts (which enforces that only this
+     file names the prefix) and
+     docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+  "reserved.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

@@ -616,7 +616,7 @@ describe("the public article payload", () => {
             id: "c-0123456789",
             type: "callout",
             ownerOnly: "PRIVATE-CONTEXT-CANARY",
-          } as Block["context"],
+          } as NonNullable<Block["context"]>,
         },
       ],
       tree: TREE,
