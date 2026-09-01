@@ -19,26 +19,85 @@
  * tests/chat-route.test.ts, because everything under test happens before the
  * first model call.
  */
-import { cp, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { handleApi } from "../src/routes.js";
-import { loadThreads } from "../src/chat.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. See the
+ * same block in tests/chat-route.test.ts for what an ordinary assignment costs.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
 
 const SLUG = "test-remember-route-fixture";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-/* The committed fixture's artefacts, copied in so the turn has an article. This
-   slug used to get them for nothing — an unknown slug fell through to
-   `example/` — and that fallback is gone (src/api.ts § `candidateDirs`), which
-   is why the block ids asserted below are still the fixture's own. */
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
-beforeEach(async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
+
+const { reachable } = await pgReady({
+  suite: "tests/remember-route.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
-afterAll(() => rm(DIR, { recursive: true, force: true }));
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* A flag that failed to take looks exactly like the suite working: the
+       filesystem store answers happily, against an article nothing creates. */
+    expect(STORE).toBe("postgres");
+  });
+});
+
+/**
+ * A throwaway copy of the committed corpus, in Postgres, so the turn has an
+ * article — see tests/helpers/scratch-article.ts.
+ *
+ * **`ANCHOR` is read off it rather than written down.** It used to be
+ * `spya-tgnssb`, a real block of `example/blocks.json`, and the comment beside
+ * it explained that a *genuine* id was the whole point: `checkAnchor` refuses an
+ * id the article does not have, so a made-up one produced the 400 whether or not
+ * the rule under test existed. That argument is why the literal cannot simply be
+ * carried over to a different source article — it has to keep being genuine.
+ */
+let article: ScratchArticle | undefined;
+let ANCHOR = "";
+
+beforeAll(async () => {
+  if (!reachable) return;
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  expect(article.copied).toContain("blocks");
+  ANCHOR = article.blocks[0]?.id ?? "";
+  expect(ANCHOR).toMatch(/^spya-/);
+});
+
+/** The article's conversations, and nothing a previous test wrote. */
+beforeEach(async () => {
+  if (!article) return;
+  await asTestOwner(async () => {
+    for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+  });
+});
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
+});
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {
@@ -93,7 +152,7 @@ async function seedRemember(threadId: string) {
   await post({ threadId, question: "what I took from it", kind: "remember", stance: "socratic" });
 }
 
-describe("a stance the server does not know is refused, not ignored", () => {
+when("a stance the server does not know is refused, not ignored", () => {
   it("400s an unknown stance", async () => {
     const { status } = await post({
       threadId: "spya-r4v3wz",
@@ -133,24 +192,24 @@ describe("a stance the server does not know is refused, not ignored", () => {
   });
 });
 
-describe("a Remember turn cannot be anchored to a passage", () => {
+when("a Remember turn cannot be anchored to a passage", () => {
   /* There is no gesture that starts one from a selection — both the
      paragraph button and the selection open a chat — so an anchor arriving with
      `kind: "remember"` is a confused client. It is refused rather than dropped
      because an unanchored Remember turn draws no mark in the prose, which is the
      property the reading view's overlay relies on. */
   it("400s an anchor sent with the Remember kind", async () => {
-    /* `spya-tgnssb` is a REAL block of the fixture article (example/blocks.json),
-       and that matters: the first version of this test used a made-up id and
-       passed for the wrong reason — `checkAnchor` rejects an id the article
-       does not have, so the 400 arrived whether or not the Remember rule existed.
-       With a genuine block, the only thing that can refuse this is the rule
-       under test. */
+    /* `ANCHOR` is a REAL block of the fixture article, and that matters: the
+       first version of this test used a made-up id and passed for the wrong
+       reason — `checkAnchor` rejects an id the article does not have, so the 400
+       arrived whether or not the Remember rule existed. With a genuine block,
+       the only thing that can refuse this is the rule under test. Which is why
+       it is read off the seeded article rather than written down here. */
     const { status } = await post({
       threadId: "spya-r4v3wz",
       question: "what I took",
       kind: "remember",
-      anchor: { blockId: "spya-tgnssb" },
+      anchor: { blockId: ANCHOR },
     });
     expect(status).toBe(400);
   });
@@ -159,13 +218,13 @@ describe("a Remember turn cannot be anchored to a passage", () => {
     const { status } = await post({
       threadId: "spya-r4v4wz",
       question: "what does this mean?",
-      anchor: { blockId: "spya-tgnssb" },
+      anchor: { blockId: ANCHOR },
     });
     expect(status).not.toBe(400);
   });
 });
 
-describe("a thread's kind belongs to the thread", () => {
+when("a thread's kind belongs to the thread", () => {
   it("409s a send whose kind contradicts the stored thread", async () => {
     /* Two layers answer this, and the test passes on either — which is the
        design rather than a weakness. The route's check is there for the status
@@ -190,7 +249,7 @@ describe("a thread's kind belongs to the thread", () => {
     await seedRemember(id);
     const { status } = await post({ threadId: id, question: "and also" });
     expect(status).not.toBe(409);
-    const threads = await loadThreads(SLUG);
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
     expect(threads.find((t) => t.id === id)?.kind).toBe("remember");
   });
 
@@ -226,11 +285,11 @@ describe("a thread's kind belongs to the thread", () => {
   });
 });
 
-describe("what actually gets stored", () => {
+when("what actually gets stored", () => {
   it("writes the kind and the stance on the very first turn", async () => {
     const id = "spya-r8m2wz";
     await post({ threadId: id, question: "what I took from it", kind: "remember", stance: "signposts" });
-    const thread = (await loadThreads(SLUG)).find((t) => t.id === id);
+    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
     expect(thread?.kind).toBe("remember");
     /* **And the answer here has FAILED**, because `fetch` is stubbed to reject
        — which makes this the sharpest version of the test rather than an
@@ -246,7 +305,7 @@ describe("what actually gets stored", () => {
   it("stores no stance for an ordinary chat", async () => {
     const id = "spya-r8m3wz";
     await post({ threadId: id, question: "an ordinary question" });
-    const thread = (await loadThreads(SLUG)).find((t) => t.id === id);
+    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
     expect(thread?.kind).toBe("chat");
     expect(thread?.messages.at(-1)).not.toHaveProperty("stance");
   });

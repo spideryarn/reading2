@@ -13,32 +13,85 @@
  * its first call — which is fine and is deliberate, because the frame under
  * test is written before it. See tests/routes.test.ts for the same fake
  * request/response pair without the streaming parts.
+ *
+ * ## Why this runs against Postgres
+ *
+ * It used to `cp(example/ → data/test-chat-route-fixture/)` and read the
+ * conversation back with `loadThreads` from src/chat.ts. Stage 4 deletes both
+ * halves of that — the filesystem store and `src/chat.ts`
+ * (docs/plans/260831b-finish-the-database-move.md). The article is now a
+ * throwaway copy of the committed corpus in Postgres
+ * (tests/helpers/scratch-article.ts), and the conversation is read back through
+ * `chatStore`, which is the same object src/routes.ts writes it with.
  */
-import { cp, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { handleApi } from "../src/routes.js";
-import { loadThreads } from "../src/chat.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-/* This throwaway slug is given the committed fixture's artefacts, so the turn
-   has blocks to cite. It used to get them for nothing — an unknown slug fell
-   through to `example/` — which is the fallback src/api.ts § `candidateDirs`
-   took away, because it also answered a reader's own half-built article with
-   the fixture's prose. The chat file is written under this slug too, which is
-   why it is a throwaway and why the directory is rebuilt between tests. */
+/**
+ * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
+ *
+ * `vi.hoisted` and not a plain statement: `src/store/live.ts` reads the flag
+ * once, the first time anything imports it, and imports are hoisted above every
+ * statement in a module. An ordinary assignment would run after `src/routes.ts`
+ * below had already settled the answer to `files` — and the suite would then
+ * pass against a store it was not testing. See
+ * tests/store-writes-land-in-postgres.test.ts, where this happened.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
 const SLUG = "test-chat-route-fixture";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
-/** Article artefacts, and nothing a previous test wrote beside them. */
-const reseed = async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
-};
-beforeAll(reseed);
-afterEach(reseed);
-afterAll(() => rm(DIR, { recursive: true, force: true }));
+
+const { reachable } = await pgReady({
+  suite: "tests/chat-route.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   test files and does not reset `process.env` between them. */
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+let article: ScratchArticle | undefined;
+
+beforeAll(async () => {
+  if (!reachable) return;
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  /* **The seed is asserted, not assumed.** A clone that copied nothing would
+     leave every test below failing on a 404 that reads like a broken route.
+     `blocks` is the one this file actually needs — the turn has to have
+     something to cite. */
+  expect(article.copied).toContain("blocks");
+});
+
+/** The article's own conversations, and nothing a previous test wrote. */
+afterEach(async () => {
+  if (!article) return;
+  await asTestOwner(async () => {
+    for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+  });
+});
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
+});
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {
@@ -95,18 +148,27 @@ async function ask(body: unknown): Promise<Frame[]> {
     });
 }
 
-describe("the begin frame names both rows of the turn", () => {
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Without this, a flag that failed to take looks exactly like the suite
+       working: the filesystem store answers every call happily, against an
+       article this file no longer creates. */
+    expect(STORE).toBe("postgres");
+  });
+});
+
+when("the begin frame names both rows of the turn", () => {
   it("gives the client the question's id, not only the answer's", async () => {
     const frames = await ask({ threadId: "spya-t7r4wz", question: "what is this about?" });
     const begin = frames[0];
     expect(begin?.event).toBe("begin");
 
-    /* The ids in the frame are the ids on disk. That is the whole assertion:
-       the client renders rows under names it invented, and an id in this frame
-       that does not match the file is a row the reader can see and no later
-       request can address — which is what "That message is not in this
+    /* The ids in the frame are the ids in the store. That is the whole
+       assertion: the client renders rows under names it invented, and an id in
+       this frame that does not match the store is a row the reader can see and
+       no later request can address — which is what "That message is not in this
        conversation." was. */
-    const threads = await loadThreads(SLUG);
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
     const stored = threads.find((t) => t.id === begin?.data.threadId);
     expect(stored?.messages).toHaveLength(2);
     expect(begin?.data.questionId).toBe(stored?.messages[0]?.id);
@@ -116,8 +178,8 @@ describe("the begin frame names both rows of the turn", () => {
   });
 
   it("names the question a retry is answering again", async () => {
-    // A retry mints no new question: the id in the frame is the one already on
-    // disk, and the client — which may still be holding its own invented name
+    // A retry mints no new question: the id in the frame is the one already
+    // stored, and the client — which may still be holding its own invented name
     // for that row — takes this one.
     const first = await ask({ threadId: "spya-t7r4wz", question: "what is this about?" });
     const threadId = first[0]?.data.threadId as string;
@@ -127,7 +189,7 @@ describe("the begin frame names both rows of the turn", () => {
     expect(again[0]?.event).toBe("begin");
     expect(again[0]?.data.messageId).toBe(answerId);
 
-    const threads = await loadThreads(SLUG);
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
     const stored = threads.find((t) => t.id === threadId);
     expect(again[0]?.data.questionId).toBe(stored?.messages[0]?.id);
   });
@@ -144,7 +206,7 @@ describe("the begin frame names both rows of the turn", () => {
     expect(edited[0]?.data.questionId).toBe(questionId);
     expect(edited[0]?.data.messageId).not.toBe(first[0]?.data.messageId);
 
-    const threads = await loadThreads(SLUG);
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
     const stored = threads.find((t) => t.id === threadId);
     expect(stored?.messages).toHaveLength(2);
     expect(stored?.messages[0]?.text).toBe("what is it really about?");

@@ -71,9 +71,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+
+/** Which corpus article stands in. Small, and complete through `ideas`. */
+const SOURCE = "writes";
 
 /** A module of `src/`, as a quoted absolute path for the child's `import()`. */
 const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
@@ -122,13 +126,21 @@ let stderr = "";
 let dir = "";
 
 beforeAll(async () => {
-  /* A throwaway copy of `example/`, which already holds a real blocks.json,
-     tree.json and meta.json — everything these stages read before they call a
-     model. Under the OS temp directory rather than `data/`, because nothing
-     walks it: the stages here are all given their directory explicitly, so
-     none of them needs to be findable by slug. */
+  /* A throwaway copy of one **committed corpus** article, which already holds a
+     real blocks.json, tree.json and meta.json — everything these stages read
+     before they call a model. Under the OS temp directory rather than `data/`,
+     because nothing walks it: the stages here are all given their directory
+     explicitly, so none of them needs to be findable by slug.
+
+     It was `example/` until 2026-09-01. Nothing about this file wanted that
+     directory in particular — it was the smallest complete article lying
+     around — and `example/` goes with the filesystem store
+     (docs/plans/260831b-finish-the-database-move.md § sub-stage I). The corpus
+     is committed, so `requireFixture` can say plainly when it is not there
+     rather than letting a stage fail three frames later on a missing file. */
+  requireFixture(SOURCE, ["blocks.json", "tree.json", "meta.json"]);
   dir = await mkdtemp(path.join(tmpdir(), "stop-details-"));
-  await cp(path.join(ROOT, "example"), dir, { recursive: true });
+  await cp(path.join(FIXTURE_ROOT, "data", SOURCE), dir, { recursive: true });
 
   const body = `void (async () => {
     const { log, errorFields } = await import(${src("log.ts")});
