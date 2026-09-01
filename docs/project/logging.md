@@ -582,18 +582,25 @@ gap is where the sixth instance of this class lived, found by GPT Sol reviewing 
 finalizer on 2026-08-30 ([the review](../plans/260830ad-v1-publish-finalizer-review-sol.md), critical 1).
 
 [`finishIn`](../../src/store/pg-jobs.ts) binds a job's whole `steps` array and its title — a step's
-`detail` may be article prose and the title *is* the article's. When it failed,
-[`publish-session.ts`](../../src/store/publish-session.ts) caught the Drizzle error and put its
-message into the `reason` it handed `failRevision`, which logs `reason` **verbatim**
+`detail` may be article prose and the title *is* the article's. When it failed, the publish finalizer
+(`publish-session.ts`, a decorator that has since been deleted — see below) caught the Drizzle error
+and put its message into the `reason` it handed `failRevision`, which logs `reason` **verbatim**
 (`logDraftFailure` in [`pg-revisions.ts`](../../src/store/pg-revisions.ts)). By the time
 `guardDbStore` scrubbed anything, the line was already on stdout. There was a second copy of it one
 branch along: if the compensating cleanup itself failed, `errorFields(cleanup)` handed a raw driver
 error to `safeError`, which keeps `message` on purpose.
 
-Both are now fixed strings and class names — `nameOf(err)`, never `err.message`. **The general rule
-this leaves is worth more than the fix:** a wrapper that translates on egress cannot cover a callee
-that logs on the way to throwing, so any `log` call inside a guarded store must build its own line
-from values it chose, exactly as if there were no seam at all.
+Both are now fixed strings and class names — the error's `name`, never its `message`. **The general
+rule this leaves is worth more than the fix:** a wrapper that translates on egress cannot cover a
+callee that logs on the way to throwing, so any `log` call inside a guarded store must build its own
+line from values it chose, exactly as if there were no seam at all.
+
+**Where the surviving statement is, since 2026-09-01.** The decorator was deleted at the flip
+([260831b](../plans/260831b-finish-the-database-move.md) § Stage 3 — the flip), and its compensating
+cleanup went with it: [`pgStoreSession`](../../src/store/pg-session.ts) fails its draft *inside* the
+transaction that rolls back, so there is no second call to fail. The reader outside the seam that
+remains is [`walkClaim`](../../src/jobs.ts), which catches every non-stale failure of the
+all-skipped ending and writes a line about it — `{ errorType: err.name }`, and the same rule.
 
 ### Proving redaction, not assuming it
 
@@ -649,9 +656,9 @@ must do, and the second is the one that matters: raise `LOG_LEVEL` inside `vi.ho
 **assert that the capture caught a line you expected before asserting that it lacks a sentinel**,
 because every way this can go wrong produces an *empty* capture, and an empty capture satisfies every
 `not.toContain` ever written. Used by
-[`tests/jobs-publish-finalizer.test.ts`](../../tests/jobs-publish-finalizer.test.ts) and
-[`tests/publish-session-cleanup-log.test.ts`](../../tests/publish-session-cleanup-log.test.ts) for
-the sixth shape above.
+[`tests/all-skipped-publication-log.test.ts`](../../tests/all-skipped-publication-log.test.ts) for
+the sixth shape above — which fakes both the skip and the failure, because nothing a real database
+raises on that path carries article content, so a test built on a real failure could never go red.
 
 ### `JSON.parse` quotes the file back at you
 

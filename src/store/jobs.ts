@@ -28,8 +28,10 @@
  *
  * ## What an expired lease means, and what it deliberately does not
  *
- * It means *nobody is coming back*, and the job is failed so a reader can press
- * Retry. It does **not** mean another claimant may take the job over. That
+ * It means *nobody is coming back*, and the job is settled so a reader can
+ * press Retry — as `error` ordinarily, or as `cancelled` if they had already
+ * pressed Stop (`settleExpired`). It does **not** mean another claimant may
+ * take the job over. That
  * would be safe only if every durable write were fenced, and the artefacts are
  * still files: a stage writes its output and *then* calls `finishStep`, so a
  * stale claimant's files land before its token is refused, and `beginStep`'s own
@@ -67,6 +69,19 @@ export type ClaimOutcome = { kind: "claimed"; job: Job } | ClaimRefusal;
 export interface StepOutcome {
   /** Extraction is the step that learns the article's real title. */
   title?: string;
+}
+
+/**
+ * One job the expiry sweep settled, and which way it went.
+ *
+ * A pair rather than an id, because `settleExpired` stopped always failing —
+ * a row carrying `cancelling` ends `cancelled` — so a caller that logged
+ * "failed" over the ids alone would be saying something untrue about half of
+ * them. GPT Sol, 2026-09-01.
+ */
+export interface ExpirySettlement {
+  id: string;
+  status: Extract<JobStatus, "error" | "cancelled">;
 }
 
 /** How a job ended, and everything the card needs to say so. */
@@ -199,20 +214,35 @@ export interface JobStore {
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job>;
 
   /**
-   * Fail every job whose lease has run out, and say **which**.
+   * Settle every job whose lease has run out, and say **which, and how**.
    *
-   * **Not a takeover.** The job is marked `error` with a sentence saying it was
-   * interrupted, and Retry is the reader's to press — which costs a click and
+   * **Not a takeover.** Retry is the reader's to press — which costs a click and
    * removes the whole class of two-claimants-one-article. See the header.
    *
-   * **The ids, not a count.** A sweep is the only account there is of a claimant
-   * that stopped answering — the process that was inside the job is gone and
-   * logged nothing on its way out — and `failed 1 job(s)` cannot be joined to
-   * anything. Both stores already have the ids in hand: the `UPDATE` returns
-   * them, and the filesystem adapter is looping over them. GPT Sol, 2026-08-30,
-   * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points.
+   * **It does not always fail, which is why it is no longer called
+   * `failExpired`.** A row carrying `cancelling` is a reader who pressed Stop
+   * and whose claimant then walked away; ending that as `error` /
+   * `INTERRUPTED` tells them their own action was an interruption. It settles
+   * as `cancelled` instead, which makes three mechanisms agree rather than
+   * adding a fourth: `releaseStepIn` already settles a live claimant's release
+   * on a `cancelling` job as cancelled, and the filesystem adapter's
+   * `sweepStopped` does the same on restart.
+   *
+   * **The outcomes, not a count.** A sweep is the only account there is of a
+   * claimant that stopped answering — the process that was inside the job is
+   * gone and logged nothing on its way out — and `failed 1 job(s)` cannot be
+   * joined to anything, nor is it true of every row it counted. Both stores
+   * already have both fields in hand: the `UPDATE` returns them, and the
+   * filesystem adapter is looping over them. GPT Sol, 2026-08-30,
+   * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points,
+   * and 2026-09-01 on the rename.
+   *
+   * **`now` is for tests only.** With nothing passed, both adapters compare the
+   * lease against their own store's clock — SQL `now()` on Postgres — because a
+   * lease written by one instance and read by another is only a deadline if
+   * both are reading the same clock.
    */
-  failExpired(now?: Date): Promise<string[]>;
+  settleExpired(now?: Date): Promise<ExpirySettlement[]>;
 
   /**
    * The job queued or running for this slug, if there is one.
@@ -234,9 +264,25 @@ export interface JobStore {
    * Stop, and **decide in one statement which kind of stop this is**.
    *
    * A queued job is over immediately: nobody is inside it to notice a flag, so
-   * the transition happens here or never. A running job is asked — cancelling
-   * it out from under a claimant would leave that claimant writing artefacts
-   * for a job the reader has been told is finished.
+   * the transition happens here or never. A running job whose **lease has
+   * lapsed** is over immediately too, and for the same reason — the claimant
+   * set its own deadline inside the lease and aborted itself, so an expired
+   * lease says *the process is gone* rather than *the process is slow*, and
+   * there is provably nobody left to read a flag. A running job whose lease is
+   * still live is asked — cancelling it out from under a claimant would leave
+   * that claimant writing artefacts for a job the reader has been told is
+   * finished.
+   *
+   * **There is no "force stop" short of that**, deliberately. A live claim may
+   * genuinely be working, and clearing it is how two writers get one article.
+   *
+   * **The lapsed branch copies `settleExpired`'s field set, not the running
+   * one's.** In particular it nulls `draftRevisionId`: the running branch
+   * leaves the pointer alone because the claimant disposes of it, and a job
+   * that goes terminal still holding one is a draft `sweepAbandonedDrafts`
+   * spares for ever, since it reads any job's pointer as ownership. That is the
+   * exact leak GPT Sol's 2026-08-30 finding closed in the sweep. Fable, on the
+   * plan, 2026-09-01.
    *
    * It was two methods until 2026-08-27, `cancelIdle` then this, and the gap
    * between them was a permanent stuck state: a claimant releasing in that gap

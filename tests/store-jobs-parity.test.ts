@@ -20,17 +20,17 @@
  * through the same cases is how "the same rules, differently enforced" stays a
  * claim somebody checked.
  */
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { ID_PREFIX, mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import type { JobStore } from "../src/store/jobs.js";
+import type { ExpirySettlement, JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
 import {
   expireLeaseForTests,
@@ -97,7 +97,7 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
  * A private owner is not enough on its own, because the two rules that matter
  * most here are not scoped to an owner at all: `jobs_only_one_running` is a
  * unique index on `(true)` over every running row in the table, and
- * `failExpired` sweeps the whole table and returns the ids this file asserts
+ * `settleExpired` sweeps the whole table and returns the ids this file asserts
  * exactly. So a second copy holding a claim makes this one's `claimed` come
  * back `busy`, and its expiries are added to this one's total. Measured with
  * the lock taken out and the owner already unique per run: two copies at once,
@@ -163,7 +163,7 @@ if (process.env.DATABASE_URL) {
          and both of the rules this file leans on are global. A leftover
          `running` row makes every claim here answer `busy` through
          `jobs_only_one_running`, and a leftover expired one is counted by
-         `failExpired`, which two cases below assert exactly.
+         `settleExpired`, which two cases below assert exactly.
 
          Safe to take the lot because the lock is already held, so no sibling
          copy can be using any of them; and scoped by the stem, so it can only
@@ -210,6 +210,18 @@ const CAP = 4;
 const MINE = "test-store-jobs-";
 
 /**
+ * The ids out of a settlement, for the cases that only care which jobs moved.
+ *
+ * `settleExpired` returns `{ id, status }` pairs rather than ids, because since
+ * 2026-09-01 it does not always fail: a row carrying `cancelling` ends
+ * `cancelled`. The cases that are *about* which ending it chose assert the
+ * whole pair.
+ */
+function settledIds(settled: ExpirySettlement[]): string[] {
+  return settled.map((one) => one.id);
+}
+
+/**
  * **Each store, plus the two states its own API cannot reach.**
  *
  * A lease that has passed, and a job that has ended while still carrying its
@@ -252,11 +264,17 @@ const ADAPTERS: Adapter[] = [
     available: reachable,
     /* Written straight to the column rather than by claiming with a tiny lease,
        because a lease short enough to expire during a test is short enough to
-       expire between two of the assertions that follow. */
+       expire between two of the assertions that follow.
+
+       **`now()`, not `Date.now()`.** The store creates and compares leases on
+       the database's clock since 2026-09-01, so a helper reaching for the
+       application's would be testing the two against each other — green on a
+       laptop where they are the same clock, and quietly wrong exactly where
+       Vercel and Supabase are not. */
     async expire(id) {
       await getDb()
         .update(jobs)
-        .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+        .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
         .where(eq(jobs.id, id));
     },
     async reattach(id, attempt) {
@@ -675,7 +693,7 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       await adapter.expire(job.id);
-      expect(await store.failExpired()).toContain(job.id);
+      expect(settledIds(await store.settleExpired())).toContain(job.id);
       await adapter.reattach(job.id, attempt);
 
       // id matches, attempt matches. Only `status = 'running'` refuses this.
@@ -706,9 +724,9 @@ for (const adapter of ADAPTERS) {
     /**
      * **The fence's third condition, tested on the state that needs it.**
      *
-     * The first version of this failed a job with `failExpired` and asserted the
+     * The first version of this failed a job with `settleExpired` and asserted the
      * old token was refused — and it **passed with `status = 'running'` removed
-     * from the fence**, because `failExpired` clears the token too, so the second
+     * from the fence**, because `settleExpired` clears the token too, so the second
      * condition was doing all the work. A test that cannot fail proves nothing,
      * and this one nearly shipped with a comment saying it had been watched red.
      *
@@ -725,7 +743,7 @@ for (const adapter of ADAPTERS) {
 
       // Its lease runs out and the sweep fails it. The claimant does not know.
       await adapter.expire(job.id);
-      expect(await store.failExpired()).toContain(job.id);
+      expect(settledIds(await store.settleExpired())).toContain(job.id);
       expect((await store.get(job.id, OWNER))?.status).toBe("error");
 
       await adapter.reattach(job.id, attempt);
@@ -764,7 +782,7 @@ for (const adapter of ADAPTERS) {
          it failed, and this case is precisely about one job being swept while a
          live one is left alone — so naming the id is the assertion, and the
          count never was. */
-      expect(await store.failExpired()).toEqual([dead.id]);
+      expect(await store.settleExpired()).toEqual([{ id: dead.id, status: "error" }]);
       const failed = await store.get(dead.id, OWNER);
       expect(failed?.status).toBe("error");
       /* `retry`, said rather than left to the absent-means-yes rule — both offer
@@ -777,8 +795,108 @@ for (const adapter of ADAPTERS) {
       const alive = aJob();
       await store.enqueueOrGet(alive, "k2");
       await store.claim(alive.id, OWNER, mintAttempt(), LEASE, CAP);
-      expect(await store.failExpired()).toEqual([]);
+      expect(await store.settleExpired()).toEqual([]);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
+    });
+
+    /**
+     * **Stop, and then the claimant walks away.**
+     *
+     * The sweep used to settle *every* lapsed claim as `error` / `INTERRUPTED`,
+     * including a row already carrying `cancelling` — so a reader who pressed
+     * Stop was told, twelve minutes later, that their import had been
+     * interrupted. It was the odd one out: `releaseStepIn` settles a live
+     * claimant's release on a `cancelling` job as cancelled, and `sweepStopped`
+     * does the same on restart. This makes three mechanisms agree.
+     */
+    it("settles a stopped job as cancelled, rather than telling the reader they were interrupted", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = mintAttempt();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+
+      /* Stop while the claim is still live: the flag goes on and the claimant
+         is asked, which is the right answer at that moment. */
+      expect((await store.requestCancel(job.id, OWNER))?.cancelling).toBe(true);
+      // And then it never comes back.
+      await adapter.expire(job.id);
+
+      expect(await store.settleExpired()).toContainEqual({ id: job.id, status: "cancelled" });
+      const settled = await store.get(job.id, OWNER);
+      expect(settled?.status).toBe("cancelled");
+      expect(settled?.cancelling).toBeFalsy();
+      /* **No sentence and no kind.** Nothing failed — the reader stopped it —
+         and a job that failed a step, was retried and is then stopped would
+         otherwise carry the old sentence under a `cancelled` status. */
+      expect(settled?.error).toBeUndefined();
+      expect(settled?.failureKind).toBeUndefined();
+    });
+
+    /**
+     * **Stop on a claimant that is provably gone is over, right now.**
+     *
+     * The claimant sets its own deadline *inside* the lease and aborts itself
+     * (src/jobs.ts § `LEASE_MS`), so a lapsed lease says the process is gone
+     * rather than slow. Writing `cancelling` and waiting there is waiting for
+     * somebody who cannot arrive: the card showed a disabled "Stopping…" for up
+     * to 12.67 minutes and then reported the wrong reason.
+     *
+     * There is deliberately no force-stop *before* the lease lapses — a live
+     * claim may genuinely be working, and clearing it is how two writers get one
+     * article.
+     */
+    it("stops a job whose claimant is provably gone in one statement, rather than waiting out a lease nobody holds", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+      await adapter.expire(job.id);
+
+      const stopped = await store.requestCancel(job.id, OWNER);
+      expect(stopped?.status).toBe("cancelled");
+      expect(stopped?.cancelling).toBeFalsy();
+      expect(stopped?.finishedAt).toBeTruthy();
+
+      /* Really over: nothing is left for the sweep to find, and no later claim
+         gets in — which is what separates this from writing the flag. */
+      expect(settledIds(await store.settleExpired())).not.toContain(job.id);
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("finished");
+    });
+
+    /**
+     * **A job that is over must not still be showing a spinner.**
+     *
+     * Both expiry paths end a job nobody is inside, so if the statement that
+     * ends it does not settle the step that was running, nothing ever will:
+     * `StepRow` draws `LoaderCircle` for a `running` step regardless of what the
+     * job says. Back to `pending`, which is what `sweepStopped` already writes
+     * for a step whose process went away.
+     */
+    it("settles the step that was running, so a finished job never draws a spinner", async () => {
+      /** Claim it and leave one step visibly running, as any long step does. */
+      async function midStep(job: Job, key: string): Promise<void> {
+        await store.enqueueOrGet(job, key);
+        const attempt = mintAttempt();
+        expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+        await store.noteProgress(job.id, attempt, [
+          { ...job.steps[0]!, status: "running", startedAt: new Date().toISOString() },
+        ]);
+        await adapter.expire(job.id);
+      }
+
+      const swept = aJob();
+      await midStep(swept, "k1");
+      await store.settleExpired();
+      const afterSweep = await store.get(swept.id, OWNER);
+      expect(afterSweep?.status).toBe("error");
+      expect(afterSweep?.steps.map((step) => step.status)).toEqual(["pending"]);
+      expect(afterSweep?.steps[0]?.startedAt).toBeUndefined();
+
+      const stopped = aJob();
+      await midStep(stopped, "k2");
+      const cancelled = await store.requestCancel(stopped.id, OWNER);
+      expect(cancelled?.status).toBe("cancelled");
+      expect(cancelled?.steps.map((step) => step.status)).toEqual(["pending"]);
+      expect(cancelled?.steps[0]?.startedAt).toBeUndefined();
     });
 
     it("cancels a queued job outright, and only asks a running one — in one call", async () => {
@@ -835,7 +953,7 @@ for (const adapter of ADAPTERS) {
     /**
      * **The lease had a deadline and nothing enforced it.**
      *
-     * `failExpired` was written with the store and had no production caller at
+     * `settleExpired` was written with the store and had no production caller at
      * all — GPT Sol's first finding on the built queue, and the worst of them,
      * because it is a regression rather than a gap. The old in-memory queue
      * self-healed on restart: a dead process left an empty `Map`, so the next
@@ -861,7 +979,7 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE, 1)).kind).toBe("busy");
 
       await adapter.expire(dead.id);
-      expect(await store.failExpired()).toContain(dead.id);
+      expect(settledIds(await store.settleExpired())).toContain(dead.id);
 
       const after = await store.get(dead.id, OWNER);
       expect(after?.status).toBe("error");
@@ -966,6 +1084,84 @@ for (const adapter of ADAPTERS) {
     });
   });
 }
+
+/**
+ * **The lease is the database's arithmetic, end to end** — Postgres only,
+ * because on the filesystem adapter the store's clock and the application's are
+ * the same clock and there is nothing to disagree.
+ *
+ * The lease says whether a claimant may still write, and it is written by one
+ * instance and read by another. Until 2026-09-01 both ends used `Date.now()`,
+ * which is fine on a laptop and is two clocks the moment Vercel is talking to
+ * Supabase: an instance running fast writes a deadline the sweep will not act
+ * on for as long as the skew, and one running slow has its live claim swept out
+ * from under it.
+ *
+ * **The skew is what makes this a test rather than a tautology.** Every
+ * assertion below is true of the old code on a machine whose clocks agree, so
+ * the case moves the *application's* clock an hour forward and leaves the
+ * database's alone. Only `Date` is faked — timers stay real, or the pool's own
+ * work would never resolve.
+ */
+describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    const ids = made.splice(0);
+    if (ids.length > 0) await getDb().delete(jobs).where(inArray(jobs.id, ids));
+  });
+
+  /** Run `body` with this process believing it is `skewMs` later than it is. */
+  async function skewed<T>(skewMs: number, body: () => Promise<T>): Promise<T> {
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + skewMs });
+    try {
+      return await body();
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("dates the lease and the ending from the database, not from whatever this instance thinks the time is", async () => {
+    const id = mintId();
+    made.push(id);
+    const job: Job = {
+      id,
+      ownerId: OWNER,
+      slug: `${MINE}${id}`,
+      steps: [{ name: "fetch", label: "Fetching the page", status: "pending" }],
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    };
+    await pgJobStore.enqueueOrGet(job, "clock");
+
+    const attempt = mintAttempt();
+    const HOUR = 60 * 60_000;
+    await skewed(HOUR, async () => {
+      expect((await pgJobStore.claim(id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+    });
+
+    const [claimed] = await getDb()
+      .select({ lease: jobs.leaseExpiresAt })
+      .from(jobs)
+      .where(eq(jobs.id, id));
+    /* An hour-fast instance writing `Date.now() + LEASE` puts the deadline an
+       hour and a minute out, and the sweep would leave a dead claimant holding
+       the article for that whole hour. */
+    expect(claimed?.lease).toBeTruthy();
+    expect(claimed!.lease!.getTime() - Date.now()).toBeLessThan(LEASE + 30_000);
+
+    await skewed(HOUR, async () => {
+      await pgJobStore.finish(id, attempt, { status: "done", steps: job.steps });
+    });
+    const [ended] = await getDb()
+      .select({ finishedAt: jobs.finishedAt })
+      .from(jobs)
+      .where(eq(jobs.id, id));
+    /* The same for the ending. A job stamped an hour in the future sorts above
+       everything the reader did afterwards, and retention orders by time. */
+    expect(ended?.finishedAt).toBeTruthy();
+    expect(ended!.finishedAt!.getTime() - Date.now()).toBeLessThan(30_000);
+  });
+});
 
 /**
  * Take the seeded person away again, and their jobs first.

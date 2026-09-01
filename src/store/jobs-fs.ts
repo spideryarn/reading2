@@ -39,6 +39,7 @@ import { environmentOwnerId } from "../owner.js";
 import type { Job, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
+  type ExpirySettlement,
   type JobEnding,
   type JobStore,
   StaleAttemptError,
@@ -157,6 +158,45 @@ export function sweepStopped(job: Job): boolean {
     changed = true;
   }
   return changed;
+}
+
+/**
+ * **End a job nobody is inside any more**, the way both expiry paths need it.
+ *
+ * One function because `settleExpired` and the lapsed-claim branch of
+ * `requestCancel` must write the *same* fields — the bug that costs most here
+ * is one of them forgetting a field the other clears, which is what
+ * `draftRevisionId` was in the Postgres adapter. The two Postgres statements
+ * share a `case` for the same reason.
+ *
+ * `as` forces the cancelled ending for the reader who is pressing Stop right
+ * now, since `cancelling` is not on the record yet and never will be.
+ *
+ * **A running step goes back to `pending`**, exactly as `sweepStopped` writes
+ * it: a terminal job holding a running step draws a spinner on a card that has
+ * finished. Not `error` — the step was abandoned rather than failed, and the
+ * job's own sentence is the account of that.
+ */
+function settleAbandoned(job: Job, as?: "cancelled"): void {
+  const cancelled = as === "cancelled" || job.cancelling === true;
+  for (const step of job.steps) {
+    if (step.status !== "running") continue;
+    step.status = "pending";
+    delete step.startedAt;
+  }
+  job.status = cancelled ? "cancelled" : "error";
+  if (cancelled) {
+    /* Cleared rather than left, so the record always describes *this* ending.
+       A job that failed a step, was retried and is then stopped would otherwise
+       carry the old sentence under a status saying the reader stopped it. */
+    delete job.error;
+    delete job.failureKind;
+  } else {
+    job.error = INTERRUPTED.message;
+    job.failureKind = INTERRUPTED.kind;
+  }
+  job.finishedAt = new Date().toISOString();
+  delete job.cancelling;
 }
 
 let loaded: Promise<void> | null = null;
@@ -374,23 +414,28 @@ export const fsJobStore: JobStore = {
     return structuredClone(job);
   },
 
-  async failExpired(now: Date = new Date()): Promise<string[]> {
+  /**
+   * The Postgres `settleExpired`, on one process's `attempts` map.
+   *
+   * **It does not always fail**, which is why it is no longer called
+   * `failExpired`: a job carrying `cancelling` is a reader who pressed Stop and
+   * whose claimant then went away without ever reading the flag, so it settles
+   * as `cancelled`. `sweepStopped` above already answers that way on restart;
+   * this is the same answer for the same state, reached a different way.
+   */
+  async settleExpired(now: Date = new Date()): Promise<ExpirySettlement[]> {
     await ready();
-    const failed: string[] = [];
+    const settled: ExpirySettlement[] = [];
     for (const [id, held] of attempts) {
       if (held.expires > now.getTime()) continue;
       const job = index.get(id);
       attempts.delete(id);
       if (!job || TERMINAL.has(job.status)) continue;
-      job.status = "error";
-      job.error = INTERRUPTED.message;
-      job.failureKind = INTERRUPTED.kind;
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
+      settleAbandoned(job);
       await persist(job);
-      failed.push(id);
+      settled.push({ id, status: job.status as ExpirySettlement["status"] });
     }
-    return failed;
+    return settled;
   },
 
   async activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined> {
@@ -406,14 +451,24 @@ export const fsJobStore: JobStore = {
     const job = ownedBy(id, owner);
     if (!job || TERMINAL.has(job.status)) return undefined;
     /* Queued means over, right now: nobody is inside it to notice a flag, so
-       the transition happens here or never. Running means ask the claimant —
-       cancelling it out from under one would leave it writing artefacts for a
-       job the reader has been told is finished. One decision rather than two
-       calls; see the Postgres adapter for the gap the two-call version had. */
-    if (job.status === "queued") {
-      job.status = "cancelled";
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
+       the transition happens here or never. Running with a live claim means ask
+       the claimant — cancelling it out from under one would leave it writing
+       artefacts for a job the reader has been told is finished. One decision
+       rather than two calls; see the Postgres adapter for the gap the two-call
+       version had.
+
+       **Running with a lapsed claim means over too**, and it is the same branch
+       as queued. The claimant aborts itself inside its own lease, so a lapsed
+       claim says the process is gone rather than slow, and there is provably
+       nobody left to read a flag. Two dev tabs is the local way to reach it.
+       A `running` job with no entry in `attempts` at all is the same state:
+       nothing here holds it. That cannot happen in one process — `claim` writes
+       the entry and `sweepStopped` requeues anything running at load — which
+       is the analogue of `jobs_running_is_fenced` refusing a running row with
+       no lease. */
+    const held = attempts.get(id);
+    if (job.status === "queued" || held === undefined || held.expires <= Date.now()) {
+      settleAbandoned(job, "cancelled");
       attempts.delete(id);
     } else {
       job.cancelling = true;
@@ -464,7 +519,7 @@ export const fsJobStore: JobStore = {
  * The job this attempt still holds, or a refusal.
  *
  * The same three conditions the Postgres fence uses, and for the same reason:
- * without `status === "running"` a job already failed by `failExpired` would
+ * without `status === "running"` a job already failed by `settleExpired` would
  * accept its own former claimant's write. Throwing rather than returning,
  * because zero-changes-reads-as-success is the failure this exists to prevent.
  */

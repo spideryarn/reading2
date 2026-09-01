@@ -4,7 +4,7 @@
  * `LEASE_MS - DEADLINE_MARGIN_MS` is when a claimant aborts its own step.
  * `maxDuration` in vercel.json is when the platform kills the function. The
  * first must happen before the second, or the lease stops meaning *the process
- * is gone* — the one reading `failExpired` is safe to act on.
+ * is gone* — the one reading `settleExpired` is safe to act on.
  *
  * **This test exists because raising either constant alone is a silent
  * regression.** Raise `LEASE_MS` without `maxDuration` and the self-abort moves

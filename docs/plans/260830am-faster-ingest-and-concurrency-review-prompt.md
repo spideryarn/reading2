@@ -205,7 +205,7 @@ has a column in `article_revisions`.
 **What is not converted is who writes them.** All ten pipeline steps are on
 `LEGACY_UNCONVERTED_STEPS` ([`src/pipeline.ts:405`](../../src/pipeline.ts)) and write their own files;
 a decorator, `publishingSession`
-([`src/store/publish-session.ts`](../../src/store/publish-session.ts), landed 2026-08-30), copies
+(`src/store/publish-session.ts`, landed 2026-08-30), copies
 those files into a revision and publishes at the end of the job.
 [database.md](../project/database.md) calls this *"a carry-across, not the end state: an ingest still
 needs a writable disk for the length of the job."*

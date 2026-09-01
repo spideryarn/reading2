@@ -30,8 +30,9 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 >    `publishRevision` was called only from `revisions.ts`, the fixture loader and tests — **never
 >    from the job path**. So a job could run every stage, write every file, go `done`, and leave
 >    `articles.current_revision_id` exactly where it was. A green job, an empty shelf, and every
->    check reporting success. [`src/store/publish-session.ts`](../../src/store/publish-session.ts)
->    is the finalizer that closed it.
+>    check reporting success. `src/store/publish-session.ts` is the finalizer that closed it. (That
+>    decorator was deleted on 2026-09-01; the publication is now `pgStoreSession`'s own — see
+>    *A finished job publishes the article* below.)
 >
 > **What still does not work, found within a minute of the first success:** re-running a *single*
 > step against an existing article. Opening an article starts an `arc` job, which gets its own job
@@ -920,6 +921,21 @@ body is a receipt to poll. Retry creates a new job rather than mutating the old 
 wrong the first time is worth keeping, and overwriting it would erase the only evidence at exactly
 the moment somebody is trying to work out what happened.
 
+**Retry answers 409 for anything the card would not have offered**, and until 2026-08-31 it checked
+nothing but ownership. That was harmless while a retry of a finished job forced nothing — every step
+found its artefacts current and skipped — and it stopped being harmless the same day, when
+[`forceForRetry`](../../src/jobs.ts) began re-forcing everything the original forced. A *successful*
+forced refresh could then be POSTed to its own `/retry`, re-force every step, pay for the PDF
+transcription again, and be done to each completed replacement job in turn for as long as somebody
+kept asking. GPT Sol,
+[260831b-stage3-items3and4-review-sol.md](../plans/260831b-stage3-items3and4-review-sol.md) finding 3.
+So [`retryJob`](../../src/jobs.ts) now refuses a job that is not `error` or `cancelled`, and one that
+`jobWorthRetrying` says would fail the same way — the same two questions the button already asks
+(`src/web/AddArticle.tsx`). The rule is written twice deliberately: the button asks what to draw,
+the server asks whether to spend, and a client is not where a spending rule lives. Somebody else's
+job stays a **404** (`null`), because *no such job of yours* and *that job is not a candidate* are
+different answers.
+
 Cancelling stops a queued job outright, and a running one as fast as the step it is in allows. Every
 step gets the `AbortSignal`: the fetch layer folds it into its own deadline, and the Anthropic SDK
 takes one directly, so a model call stops mid-stream. The tokens already streamed are paid for
@@ -1018,38 +1034,43 @@ job hidden by mistake is a failure the reader never learns about and nothing on 
 `done` — and `articles.current_revision_id` never moved, so the reader's shelf stayed empty after an
 ingest whose every step was green. Publication was a human running `npm run db:import`.
 
-What closes it is [`src/store/publish-session.ts`](../../src/store/publish-session.ts): a decorator
-round the store session that, on a `done` ending, copies what the stages wrote into a fresh draft
-and publishes it — the copy, the publication and the job's own `finish` in **one transaction**.
+What closes it is the **session a claim runs on**: [`claimSession`](../../src/jobs.ts) picks
+[`pgStoreSession`](../../src/store/pg-session.ts) under `SPIDERYARN_STORE=postgres`, every step
+writes its product into that claim's own draft revision, and a `done` ending publishes the draft and
+finishes the job in **one transaction**.
 
 Four things about it are worth knowing before touching it.
 
-- **It wraps the session rather than sitting in the coordinator.** A `done` ending reaches the store
+- **It is the session, not something bolted onto the coordinator.** A `done` ending reaches the store
   through two doors: `commit`, when the last step ran, and `settleJob`, when every step skipped. A
-  finalizer bolted on after the walk would see only the second — and for the first it would arrive
-  *after* the job row already said `done`, which is the crash gap
-  ([260830a-v1-imports-review-sol.md](../plans/260830a-v1-imports-review-sol.md) critical 2): a kill between the two
-  leaves the article published and its job failed, with Retry blocked by a guard that now sees an
-  article.
+  finalizer after the walk would see only the second — and for the first it would arrive *after* the
+  job row already said `done`, which is the crash gap
+  ([260830a-v1-imports-review-sol.md](../plans/260830a-v1-imports-review-sol.md) critical 2): a kill
+  between the two leaves the article published and its job failed, with Retry blocked by a guard that
+  now sees an article.
 - **Only `done` publishes.** A job that failed, was cancelled or was interrupted publishes nothing
-  and leaves the reader on the revision they already had. The draft is opened *lazily*, at the moment
-  of publication, so a job that never gets there has no draft to fail or leak.
-- **A copy that moved nothing is refused.** Opening a draft carries the published revision's blocks,
-  tree and step runs forward, so publishing after copying zero steps would republish the old article
-  and report the job done — a silent success in the path built to prevent them
-  ([silent-success.md](../reusable/silent-success.md)).
-- **It only exists under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session is
-  exactly what it was before: no draft, no publication, nothing new.
-  [`tests/jobs-publish-finalizer-files.test.ts`](../../tests/jobs-publish-finalizer-files.test.ts) is
-  that half of the claim, and it proves it by taking `DATABASE_URL` away.
+  and leaves the reader on the revision they already had; its draft is failed in the same transaction
+  and the job's pointer to it is cleared, so nothing is left for the sweeper to spare for ever.
+- **The draft is opened when the claim starts**, not at the moment of publication, and that is what
+  lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
+  request ran `fetch` and handed the claim back holds that work in the draft, so the second request
+  can skip the step and still publish it.
+- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session
+  is the filesystem one and behaves exactly as it always has: no draft, no publication, no database.
+  [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
+  claim, and it proves it by taking `DATABASE_URL` away.
 
-This is a stepping stone with a known end: it is the vertical slice of D1b that
-[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) eventually replaces, at the same seam. When
-D3–D5 convert the stages so they return their products instead of writing their own files,
-[`src/store/pg-session.ts`](../../src/store/pg-session.ts) — already written and tested — becomes the
-session and this decorator is deleted. The copy it performs is
-[`copyArtefacts`](../../src/store/copy-artefacts.ts), which the fixture loader drives too, so the
-ingest and the tests move an article across by the same calls.
+**A decorator held this seam from 2026-08-30 to 2026-09-01**, and it is worth a paragraph because
+several plans and reviews are about it. `publishingSession` wrapped the *filesystem* session and, at
+the end of a `done` job, copied the files the stages had written into a draft and published that. It
+existed because the stages wrote their own files inside `run()` and returned nothing a session could
+write, so `pgStoreSession` would have refused every one of them by name. Every step returns its
+product now, so the copy has nothing left to do, and the flip
+([260831b](../plans/260831b-finish-the-database-move.md) § Stage 3 — the flip) deleted it.
+[`copyArtefacts`](../../src/store/copy-artefacts.ts) stays, as the fixture loader it started life as.
+[`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is the proof,
+and the trick that makes it evidence is a **fresh empty scratch root per claim**, so filesystem
+persistence cannot quietly do the work Postgres is supposed to be doing.
 
 ## When this becomes Postgres
 

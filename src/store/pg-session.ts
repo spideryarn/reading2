@@ -50,7 +50,7 @@
  * the first is always preceded here by a publication or a failure that clears it
  * on its own fence, and the second is the statement that hands the same draft to
  * the next request. The two endings that happen to a job *nobody is inside* —
- * `failExpired` and a queued `requestCancel` — clear it themselves, since no
+ * `settleExpired` and a queued `requestCancel` — clear it themselves, since no
  * session will ever run for them (src/store/pg-jobs.ts; GPT Sol, 2026-08-30,
  * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1).
  *
@@ -226,11 +226,12 @@ export function draftBaseOf(draft: OpenDraftResult): DraftBase {
  * job's finish back with it, so nothing is left half-done and the job records a
  * failure a person can act on.
  *
- * `PublishRefused` rather than a plain `Error`, for the reason
- * src/store/publish-session.ts gives about the other refusal on this path:
- * `guardDbStore` scrubs anything without a numeric `status`, and this is a 409 —
- * a draft not fit to publish, not a server fault. No article text in the
- * message, only revision ids (docs/project/logging.md).
+ * `PublishRefused` rather than a plain `Error`, and the reason is the wrapper
+ * rather than taste: `guardDbStore` scrubs anything without a numeric `status`,
+ * so a plain error would reach the reader's job card as *"this app asked its
+ * database for something it would not do"*, which is neither true nor
+ * actionable. This is a 409 — a draft not fit to publish, not a server fault.
+ * No article text in the message, only revision ids (docs/project/logging.md).
  */
 export function refuseIfBaseMoved(args: {
   readonly slug: string;

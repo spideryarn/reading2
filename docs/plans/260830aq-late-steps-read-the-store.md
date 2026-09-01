@@ -165,7 +165,7 @@ is obvious:
 - **A1, the job's own draft** (`openOrBeginJobDraft`). Correct — carry-forward means the draft
   already holds the published revision's blocks, tree and step runs. But drafts are opened
   *lazily, at publication*, precisely so a job that fails never mints one
-  ([`src/store/publish-session.ts`](../../src/store/publish-session.ts)); opening one at claim
+  (`src/store/publish-session.ts`); opening one at claim
   time reverses that decision and leaves `sweepAbandonedDrafts` a draft per failed job.
 - **A2, the current published revision.** No draft is minted and no decision is reversed, but it
   needs a ref built from `articles.current_revision_id` rather than from a job, and I have not

@@ -464,7 +464,7 @@ export function fsStoreSession(options: {
       if (transition.kind === "keep") return { kind: "kept" };
       /* **Last, and inside the same call.** Under D1b this is the statement that
          has to share a transaction with the three above it: without that there
-         is a window in which `failExpired` invalidates the attempt after the
+         is a window in which `settleExpired` invalidates the attempt after the
          artefacts have committed, and the revision says done while the job says
          interrupted. On the filesystem it is simply the next write. */
       return await settleJob(transition);

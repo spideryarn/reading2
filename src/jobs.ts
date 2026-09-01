@@ -46,13 +46,14 @@ import {
   spendFields,
 } from "./ai-spend.js";
 import { mintId } from "./ids.js";
-/* The store the pipeline reads and writes through. Named for the role rather
-   than imported under its own name, because the role is what changes: the
-   stages still write files themselves, so this is the filesystem one until
-   step 11 half B moves the writes behind the seam, at which point this is the
-   single line that picks Postgres instead. Deliberately not routed through
-   src/store/index.ts — that file is the *reader's* store, and switching the
-   pipeline over is a separate decision from switching reads over. */
+/* The artefact store the **filesystem** session writes through, and nothing
+   else uses it: under Postgres a claim's session writes into its own draft and
+   never touches a disk (`claimSession`). Named for the role rather than imported
+   under its own name, because that is what the role was — the one line that
+   would pick Postgres instead — and it is kept so while the filesystem branch
+   is still what every laptop runs. Stage 4 deletes the branch and this import
+   with it. Deliberately not routed through src/store/index.ts, which is the
+   *reader's* store. */
 import { costStore, totalRows } from "./store/ai-calls.js";
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
 import { fsJobStore } from "./store/jobs-fs.js";
@@ -74,7 +75,7 @@ import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
-import { publishingSession } from "./store/publish-session.js";
+import { openPgStoreSession } from "./store/pg-session.js";
 import {
   contextPaths,
   DEFAULT_INGEST_STEPS,
@@ -135,7 +136,7 @@ const aborts = new Map<string, AbortController>();
  *
  * The self-abort has to fire **before** the host kills the function, or the
  * lease stops meaning *the process is gone* — which is the one reading
- * `failExpired` is safe to act on. Raise `LEASE_MS` on its own and the deadline
+ * `settleExpired` is safe to act on. Raise `LEASE_MS` on its own and the deadline
  * moves past the kill, so it never fires: instead of a step that ends itself
  * cleanly as interrupted, the function dies mid-step with a live lease and the
  * job sits `running` until a later advance sweeps it. That is strictly worse
@@ -1040,43 +1041,59 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
 /**
  * The session one claim runs on, and **the one place a finished job publishes.**
  *
- * Async only because the interface is; the filesystem session needs nothing
- * awaited to build. `src/jobs.ts:57` still picks the filesystem artefact store,
- * and this line is where `pgStoreSession` goes once D3–D5 have converted the
- * stages.
+ * Two stores, one seam. Which one a claim gets is decided here and nowhere else,
+ * on the live flag and nothing else — `SPIDERYARN_STORE` unset is a laptop and
+ * gets the filesystem session it has always had; `postgres` gets a session over
+ * this claim's own draft revision, whose `commit` is one transaction.
  *
- * ## Why the wrapper, and why the flag rather than a parameter
+ * ## The Postgres side
  *
- * Until 2026-08-30 a job that ran every step to completion published nothing:
- * `grep -c publishRevision src/jobs.ts` answered 0, and
- * `articles.current_revision_id` never moved, so the reader's shelf stayed empty
- * after a perfectly successful ingest. `publishingSession` is the fix and it is
- * described in src/store/publish-session.ts — including why it wraps the session
- * rather than living in `walkClaim`, which is that a `done` ending reaches the
- * store through `commit` *and* through `settleJob` and only one of those two is
- * here.
+ * `openPgStoreSession` opens — or reopens — the draft this claim writes into,
+ * and returns a session that writes every step's product straight into it
+ * (src/store/pg-session.ts). A `done` ending publishes that draft and finishes
+ * the job in the same transaction, through whichever of the two doors the
+ * ending arrives at: `commit`, when the last step ran, and `settleJob`, when
+ * every step skipped.
+ *
+ * **This replaced a decorator on 2026-09-01, and the decorator is worth one
+ * sentence because its absence is the whole of stage 3.** `publishingSession`
+ * wrapped the filesystem session and, at the end of a `done` job, copied the
+ * files the stages had written into a draft and published that. It existed
+ * because the stages wrote their own files inside `run()` and returned nothing a
+ * session could write, so `pgStoreSession` would have refused every one of them
+ * by name (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts). That list is empty:
+ * every one of the thirteen steps returns its product, so the copy has nothing
+ * left to do and the files it copied from are not written at all under Postgres.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 3 — the flip.
+ *
+ * **Async because opening the draft is a database call**, which is new: the
+ * filesystem session needs nothing awaited to build, and this signature was
+ * async for the interface's sake before it was async for a reason.
+ *
+ * ## The filesystem side, which is unchanged
  *
  * **Gated on the live store, and nothing else.** With `SPIDERYARN_STORE` unset
- * the session is byte-for-byte what it was before: no draft, no publication,
- * nothing new. That is what every laptop runs and what `data/` is for, and this
- * change must not alter it. Under `postgres` the files the stages wrote become
- * the revision a reader opens.
+ * the session is byte-for-byte what it was: no draft, no publication, no
+ * database. That is what every laptop runs and what `data/` is for, and the flip
+ * must not alter it — tests/claim-session-files.test.ts is that half of
+ * the claim, and it proves it by taking `DATABASE_URL` away, so any database
+ * call at all would throw. `pipelineStore` — the aliased `fsArtifacts` import at
+ * the top of this file — is the artefact store that branch writes through, and
+ * nothing else uses it.
  *
  * **Exported so a test can drive the real one.** `advanceJobWith` takes a
- * session because a test must be able to supply fake *steps* — the ten real ones
- * cost money and reach the network — but the session under them has to be
- * production's, or a test of the finalizer would be a test of its own wiring.
- * See `AdvanceParts` for how narrow "narrow" is.
+ * session because a test must be able to supply fake *steps* — the thirteen real
+ * ones cost money and reach the network — but the session under them has to be
+ * production's, or a test of the publication would be a test of its own wiring.
+ * See `AdvanceParts` for how narrow "narrow" is, and
+ * tests/claim-session-postgres.test.ts for the proof that this line selects what
+ * it says it selects.
  */
 export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
-  const inner = fsStoreSession({ artifacts: pipelineStore, jobs: store });
-  if (STORE !== "postgres") return inner;
-  return publishingSession(inner, {
-    job: { id: job.id, attemptId: attempt },
+  if (STORE !== "postgres") return fsStoreSession({ artifacts: pipelineStore, jobs: store });
+  return await openPgStoreSession({
     slug: job.slug,
-    /* The same store the stages just wrote to, named rather than reached for —
-       see `PublishingSessionOptions.from`. */
-    from: pipelineStore,
+    job: { id: job.id, attemptId: attempt },
   });
 }
 
@@ -1088,13 +1105,12 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
  * — the job's `steps` and its title, which is the article's. See `walkClaim`,
  * and src/store/db-errors.ts for the rule this is one end of.
  *
- * **The same sentence as `COULD_NOT_PUBLISH` in src/store/publish-session.ts,
- * deliberately, and the duplication is temporary in one direction.** That
- * decorator exists only until `pgStoreSession` takes the session seam
- * (docs/plans/260831b-finish-the-database-move.md § the flip); its copy goes
- * with the file, and this is the one that survives. Two copies of a sentence a
- * reader sees is worse than one, so if the flip is delayed, move it to
- * src/messages.ts rather than leaving them to drift.
+ * **There is one of these now, and there were two until 2026-09-01.**
+ * `publishingSession` carried the same sentence, deliberately, for as long as it
+ * owned the other end of this path; the duplication ended when the flip deleted
+ * that file (docs/plans/260831b-finish-the-database-move.md § Stage 3 — the
+ * flip). If a second copy is ever wanted, move this one to src/messages.ts
+ * rather than writing the sentence out twice and leaving them to drift.
  */
 const COULD_NOT_PUBLISH =
   "Everything ran, but putting the finished article on your shelf did not go through. " +
@@ -1115,7 +1131,7 @@ export async function advanceJobWith(
   /**
    * **The lease's enforcement, and it lives here rather than on a timer.**
    *
-   * `failExpired` existed from the day the store was written and **nothing
+   * `settleExpired` existed from the day the store was written and **nothing
    * called it** — GPT Sol's first finding on the built queue, and the worst of
    * them, because it turned the lease from a deadline into a note. Kill an
    * instance mid-step and its job stays `running` for ever with a token nobody
@@ -1130,22 +1146,27 @@ export async function advanceJobWith(
    * slot, so a sweep that never runs is a sweep nobody needed. And it is one
    * indexed `UPDATE` over rows that are almost always none.
    *
-   * It fails the job rather than taking it over — see the header — so the
+   * It settles the job rather than taking it over — see the header — so the
    * reader sees a job that stopped and a Retry button, not a job that silently
    * restarted somewhere else.
    */
-  /* **The ids, and this line is the only account of them there is.** The
+  /* **The outcomes, and this line is the only account of them there is.** The
      claimant that held these jobs is gone and logged nothing on its way out, so
-     `failed 1 job(s)` is a fact that can be joined to nothing — which job, whose
+     `settled 1 job(s)` is a fact that can be joined to nothing — which job, whose
      article, how far it had got. GPT Sol asked for it by name
      (docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points), and it
      matters more now that one claim covers a whole ingest: a sweep here is
-     up to twelve minutes of somebody's work ending. */
-  const swept = await store.failExpired();
+     up to twelve minutes of somebody's work ending.
+
+     **"settled", not "failed".** Since 2026-09-01 a row carrying `cancelling`
+     comes back `cancelled` rather than `error`, so a line saying *failed* would
+     be untrue of exactly the jobs a reader chose to stop — and the statuses are
+     in the object beside the ids, so the log can say which was which. */
+  const swept = await store.settleExpired();
   if (swept.length > 0) {
     log("jobs").warn(
-      { count: swept.length, jobIds: swept },
-      `failed ${swept.length} job(s) whose claimant stopped answering`,
+      { count: swept.length, settled: swept },
+      `settled ${swept.length} job(s) whose claimant stopped answering`,
     );
   }
 
@@ -1264,7 +1285,7 @@ async function walkClaim(
    * **The claimant's own deadline, and it has to fire before the lease.**
    *
    * Without this the lease is a promise nobody keeps: a local model call can
-   * run for as long as it likes, the lease lapses, `failExpired` marks the job
+   * run for as long as it likes, the lease lapses, `settleExpired` marks the job
    * interrupted — and the step is still running, still spending, about to write
    * artefacts for a job that has been failed. Aborting ourselves first makes an
    * expired lease mean *the process is gone*, which is the only reading it is
@@ -1275,7 +1296,7 @@ async function walkClaim(
    * lease, so a per-step timer would let the lease expire underneath a claimant
    * that is still working, and renewing the lease instead would turn it into a
    * heartbeat — after which an expired lease means *probably dead* rather than
-   * *definitely over its own deadline*, and `failExpired` stops being safe.
+   * *definitely over its own deadline*, and `settleExpired` stops being safe.
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md § 3. What bounds a *step* is
    * `STEP_BUDGET_MS`, checked before the step starts rather than while it runs.
    */
@@ -1495,7 +1516,7 @@ async function walkClaim(
      * anything that is not a `StaleAttemptError`, and the job row is `running` with
      * its draft pointer held until the lease lapses — every advance until then
      * answering `busy`, the local pump stopping at once, and the eventual
-     * `failExpired` recording a generic interruption rather than the conflict a
+     * `settleExpired` recording a generic interruption rather than the conflict a
      * person could act on. GPT Sol, 2026-08-31,
      * docs/plans/260831b-stage3-items3and4-review-sol.md finding 2.
      *
@@ -1504,22 +1525,20 @@ async function walkClaim(
      * settlement that fails the draft and clears the pointer. One rule for a
      * publication that did not happen, reached through either door.
      *
-     * **Every failure, not only `PublishRefused`.** A narrower catch would be
-     * right today and a regression at the flip: `publishingSession` — the
-     * decorator this replaces — terminalises the job for *any* non-stale failure
-     * on this path, so catching only the refusal would leave a database error
-     * doing exactly what the finding describes, and it would be this change that
-     * put it there. GPT Sol, 2026-09-01. The reader's position makes it worse
+     * **Every failure, not only `PublishRefused`.** A narrower catch was written
+     * first and would have been a regression at the flip, which is why it is
+     * wide: `publishingSession` — the decorator `pgStoreSession` replaced on
+     * 2026-09-01 — terminalised the job for *any* non-stale failure on this
+     * path, and catching only the refusal would have left a database error doing
+     * exactly what the finding describes, put there by the change that removed
+     * the decorator. GPT Sol, 2026-09-01. The reader's position makes it worse
      * rather than better: a job stuck `running` is neither `error` nor
      * `cancelled`, so `retryJob` now refuses it and there is no button either.
      *
      * **`StaleAttemptError` keeps going.** It does not mean the publication
      * failed, it means this claimant no longer owns the job — the settlement
      * below is fenced on the same attempt and could only be refused too. The
-     * walk's outer `catch` answers `busy` and the client asks again. It arrives on
-     * the ordinary path as well as the rare one: `publishingSession.settleJob`
-     * records the ending itself before rethrowing, so by the time we try, the
-     * job is terminal and this claim is over.
+     * walk's outer `catch` answers `busy` and the client asks again.
      *
      * **A second failure is not swallowed.** An `error` ending publishes
      * nothing, so the recovery cannot fail the same way; if it fails anyway the
@@ -1544,11 +1563,11 @@ async function walkClaim(
         `could not publish a claim where every step skipped — ${job.slug}`,
       );
       job.status = "error";
-      /* **`PublishRefused`'s own words, or nothing**, and the rule is the same
-         one `publishingSession` states: that message is ours — a slug and a list
-         of reasons naming revision ids — and it is the one a person can act on.
-         Anything else may be a driver error with the article in it, and this
-         string goes onto the job card and into the `jobs` row. */
+      /* **`PublishRefused`'s own words, or nothing.** That message is ours — a
+         slug and a list of reasons naming revision ids — and it is the one a
+         person can act on. Anything else may be a driver error with the article
+         in it, and this string goes onto the job card and into the `jobs` row.
+         src/store/db-errors.ts is the rule this is one end of. */
       job.error = err instanceof PublishRefused ? err.message : COULD_NOT_PUBLISH;
       /* `retry` for anything that is not the refusal, because another go really
          is the right move — a database that was briefly unreachable is exactly

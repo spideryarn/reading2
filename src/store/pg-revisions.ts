@@ -810,7 +810,7 @@ export async function openOrBeginJobDraft(opts: {
      * it took job-then-article while `publishRevision` and `failRevision` took
      * article-then-job. The inversion was narrowly safe, on facts nobody could
      * check from here — the claim fence stops one job opening and committing
-     * concurrently, and `failExpired` cannot make the cycle because a
+     * concurrently, and `settleExpired` cannot make the cycle because a
      * replacement job is a different row. D1b needs a single transaction that
      * opens a draft *and* publishes it, so the invariant is now enforceable
      * rather than argued: take the article first and no path can invert them.
@@ -843,10 +843,10 @@ export async function openOrBeginJobDraft(opts: {
      * taken in.
      *
      * It also closes the second race in that finding: an unlocked read could
-     * see a live attempt and then have `failExpired` fail the job while this
+     * see a live attempt and then have `settleExpired` fail the job while this
      * transaction waited for a lock, after which the reopen branch returned a
      * draft belonging to a job that was already over. Still closed with the
-     * article taken first: `failExpired` may commit while we wait for the
+     * article taken first: `settleExpired` may commit while we wait for the
      * article row, but then this statement's own `status = 'running'` no longer
      * holds, no row comes back, and the call throws instead of proceeding.
      */
@@ -1109,7 +1109,7 @@ export async function finishStepRun(
 
   /* **The job's own fence, before the row's.** The step row only knows which
      token wrote it; it cannot know whether that token is still the live claim.
-     `failExpired` clears a lapsed job's token and marks it errored without
+     `settleExpired` clears a lapsed job's token and marks it errored without
      touching its step runs, so a swept worker that keeps going finds its row
      still `running/A`, matches on both of the conditions below, and commits
      `done` for a job that has already failed.

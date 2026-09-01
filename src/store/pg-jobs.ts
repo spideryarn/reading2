@@ -15,7 +15,7 @@
  *
  * The third is not decoration. The schema lets a terminal row keep its token,
  * so `id` + `attempt_id` alone means a job already marked `error` by
- * `failExpired` would accept its own former claimant's write and report one row
+ * `settleExpired` would accept its own former claimant's write and report one row
  * affected — success, reported, with the wrong output. Zero rows throws
  * `StaleAttemptError` rather than returning quietly, because
  * zero-rows-reads-as-success is the failure this whole mechanism exists to
@@ -47,6 +47,7 @@ import type { FailureKind } from "../messages.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
+  type ExpirySettlement,
   type JobEnding,
   type JobStore,
   StaleAttemptError,
@@ -184,7 +185,13 @@ async function claimIn(
         .set({
           status: "running",
           attemptId: attempt,
-          leaseExpiresAt: new Date(Date.now() + leaseMs),
+          /* **The database's clock, not this instance's.** The lease is what
+             says whether a claimant is still allowed to write, and it is
+             written by one instance and read by another — so an app-clock
+             deadline is only a deadline while every instance agrees what time
+             it is. `settleExpired` compares against `now()` from the same
+             clock, which makes the whole lease one clock's arithmetic. */
+          leaseExpiresAt: sql`now() + make_interval(secs => ${leaseMs} / 1000.0)`,
           // A resumed job started once already, and the card's "how long has
           // this been going" should not restart every time a tab picks it up.
           startedAt: sql`coalesce(${jobs.startedAt}, now())`,
@@ -230,6 +237,43 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
     .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
     .limit(1);
   return row ? toJob(row) : undefined;
+}
+
+/**
+ * **The steps of a job that is going terminal with one of them still running.**
+ *
+ * A `running` step on a job that is over draws a spinner on a card that has
+ * finished, which is the one thing a progress list must never do. Both expiry
+ * paths could leave one: nobody is inside the job to write the step out, so if
+ * the statement that ends the job does not settle it, nothing ever will.
+ *
+ * **Back to `pending`, with `startedAt` dropped** — which is exactly what
+ * `sweepStopped` (src/store/jobs-fs.ts) already does to a step whose process
+ * went away, so this is a third mechanism agreeing rather than a new rule. Not
+ * `error`: the step did not fail, it was abandoned, and the job's own sentence
+ * is the account of that. Giving the step a copy of it would print the same
+ * paragraph twice on the card, since `StepRow` renders `step.error` in full
+ * under the label.
+ *
+ * One correlated subquery rather than a read-then-write, so this file keeps its
+ * rule that every transition is a single conditional statement. `jobs.steps` on
+ * the right-hand side of a `SET` is the row as it was before the update.
+ */
+function settledSteps() {
+  return sql`(
+    select coalesce(
+      jsonb_agg(
+        case
+          when step.value->>'status' = 'running'
+            then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
+          else step.value
+        end
+        order by step.ordinality
+      ),
+      '[]'::jsonb
+    )
+    from jsonb_array_elements(${jobs.steps}) with ordinality as step(value, ordinality)
+  )`;
 }
 
 /**
@@ -424,44 +468,71 @@ const rawPgJobStore: JobStore = {
     return finishIn(getDb(), id, attempt, ending);
   },
 
-  async failExpired(now: Date = new Date()): Promise<string[]> {
+  /**
+   * **One statement, and it decides which kind of ending this is** — the same
+   * shape `requestCancel` has, and for the same reason.
+   *
+   * A row carrying `cancelling` is a reader who pressed Stop and whose claimant
+   * then walked away without ever reading the flag. Failing it as
+   * `INTERRUPTED` would tell that reader their own Stop was an interruption, so
+   * it settles as `cancelled`, and the sentence and the kind that go with a
+   * failure are **cleared** rather than left: a job that failed a step and was
+   * then stopped would otherwise carry the old sentence under a `cancelled`
+   * status. GPT Sol, 2026-09-01.
+   */
+  async settleExpired(now?: Date): Promise<ExpirySettlement[]> {
     const db = getDb();
-    const failed = await db
+    const settled = await db
       .update(jobs)
       .set({
-        status: "error",
+        status: sql`case when ${jobs.cancelling} then 'cancelled' else 'error' end`,
+        steps: settledSteps(),
         attemptId: null,
         leaseExpiresAt: null,
         cancelling: false,
-        finishedAt: new Date(),
+        finishedAt: sql`now()`,
         /* **The draft goes with the claim, and a terminal job may not keep a
            pointer.** `sweepAbandonedDrafts` spares a revision that *any* job
-           row names, terminal ones included — so a job failed here while
+           row names, terminal ones included — so a job settled here while
            holding a pointer is a draft nothing will ever publish and nothing
            will ever reclaim. The path is ordinary rather than exotic: a step
            releases, the next advance never comes, the lease lapses, and this
            statement is what ends the job. GPT Sol, 2026-08-30,
            docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1. */
         draftRevisionId: null,
-        error: INTERRUPTED.message,
+        /* Nulled on the cancelled branch rather than left alone, so the field
+           always describes *this* ending — the same rule `finishIn` follows.
+           A stale sentence under a `cancelled` status is a job telling the
+           reader something that did not happen. */
+        error: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.message}::text end`,
         /* `retry`, said out loud rather than left to the absent-means-yes rule.
            Both offer the button; only one of them says why, and a kind that is
            merely missing is indistinguishable from a failure nobody classified.
            An interrupted job really is worth another go — `stepIsDone` derives
            what is finished from the artefacts, so a retry resumes. */
-        failureKind: INTERRUPTED.kind,
+        failureKind: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.kind}::text end`,
       })
       .where(
         and(
           eq(jobs.status, "running"),
           isNotNull(jobs.leaseExpiresAt),
-          lt(jobs.leaseExpiresAt, now),
+          /* **Database time, unless a test says otherwise.** The lease is
+             written by `claim` as `now() + leaseMs` on this same clock, so the
+             deadline is one clock's arithmetic end to end. It used to be
+             `Date.now()` at both ends, which is fine on a laptop and is a
+             different clock from the one holding the row the moment there are
+             two instances. */
+          now === undefined ? sql`${jobs.leaseExpiresAt} < now()` : lt(jobs.leaseExpiresAt, now),
         ),
       )
-      .returning({ id: jobs.id });
-    /* The ids the statement already returns. It has selected them since the day
-       it was written — only the count was being kept. */
-    return failed.map((row) => row.id);
+      .returning({ id: jobs.id, status: jobs.status });
+    /* What the statement already returns, and both fields of it. `RETURNING`
+       hands back the row *after* the update, so the status here is the ending
+       the `case` chose rather than the one it started from. */
+    return settled.map((row) => ({
+      id: row.id,
+      status: row.status as ExpirySettlement["status"],
+    }));
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
@@ -498,36 +569,63 @@ const rawPgJobStore: JobStore = {
      * `stopping` for ever while the reader's Stop button is already disabled.
      *
      * A `case` inside one `UPDATE` cannot have a gap. Queued means over, right
-     * now; running means ask the claimant, because cancelling it out from under
-     * one would leave that claimant writing artefacts for a job the reader has
-     * been told is finished.
+     * now; running with a live lease means ask the claimant, because cancelling
+     * it out from under one would leave that claimant writing artefacts for a
+     * job the reader has been told is finished.
+     *
+     * **Running with a lease that has lapsed means over, right now, too**, and
+     * that third branch is what makes Stop mean what it says. The claimant sets
+     * its own deadline *inside* the lease and aborts itself (src/jobs.ts §
+     * `LEASE_MS`), so a lapsed lease says the process is gone rather than slow:
+     * there is provably nobody to read a flag. Without this branch, Stop on a
+     * dead claimant showed a disabled "Stopping…" for up to 12.67 minutes and
+     * then reported the job **interrupted**, which is not what the reader did.
+     *
+     * There is deliberately no force-stop short of the lease. A live claim may
+     * genuinely be working, and clearing it is how two writers get one article.
      *
      * Not fenced: the reader pressing Stop is not a claimant, and a Stop that
      * needed the running attempt's token could only be pressed by the process
      * it is meant to interrupt.
      */
+    /* **The two branches that end the job, as one condition.** They settle
+       identically, and writing the condition once is what stops the seven
+       `case`s below drifting apart — which is the shape of the bug the lapsed
+       branch was added to fix. */
+    const over = sql`coalesce(${jobs.status} = 'queued' or ${jobs.leaseExpiresAt} < now(), false)`;
     const [row] = await db
       .update(jobs)
       .set({
-        status: sql`case when ${jobs.status} = 'queued' then 'cancelled' else ${jobs.status} end`,
-        cancelling: sql`${jobs.status} <> 'queued'`,
-        attemptId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.attemptId} end`,
-        leaseExpiresAt: sql`case when ${jobs.status} = 'queued' then null else ${jobs.leaseExpiresAt} end`,
-        /* **Only on the branch that ends the job**, and that asymmetry is the
-           whole of it. A queued job is terminal one statement later, and a
-           terminal job holding a pointer is a draft `sweepAbandonedDrafts`
-           spares for ever — it treats any job's pointer as ownership. A
-           *running* job's pointer belongs to the claimant that is still inside
-           a step: taking it away here would leave that claimant's next fenced
-           write refused for a reason nothing could explain, and the claimant is
-           the one that disposes of the draft when its release resolves to a
-           cancellation (src/store/pg-session.ts, case 4). The pointer really
+        status: sql`case when ${over} then 'cancelled' else ${jobs.status} end`,
+        /* Every step is settled on the branches that end the job, so a stopped
+           job never keeps a spinner. On the *asking* branch the steps are the
+           claimant's to write and this leaves them alone. */
+        steps: sql`case when ${over} then ${settledSteps()} else ${jobs.steps} end`,
+        cancelling: sql`not ${over}`,
+        attemptId: sql`case when ${over} then null else ${jobs.attemptId} end`,
+        leaseExpiresAt: sql`case when ${over} then null else ${jobs.leaseExpiresAt} end`,
+        /* **Only on the branches that end the job**, and that asymmetry is the
+           whole of it. A queued job — or one whose claimant is provably gone —
+           is terminal one statement later, and a terminal job holding a pointer
+           is a draft `sweepAbandonedDrafts` spares for ever, since it treats any
+           job's pointer as ownership. A *live* claimant's pointer belongs to the
+           claimant that is still inside a step: taking it away here would leave
+           its next fenced write refused for a reason nothing could explain, and
+           it is the one that disposes of the draft when its release resolves to
+           a cancellation (src/store/pg-session.ts, case 4). The pointer really
            can be set on a queued job: `releaseStepIn` leaves it alone
            deliberately, so the next request continues into the same draft.
            GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md
-           finding 1. */
-        draftRevisionId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.draftRevisionId} end`,
-        finishedAt: sql`case when ${jobs.status} = 'queued' then now() else ${jobs.finishedAt} end`,
+           finding 1; Fable, 2026-09-01, on the lapsed branch needing the same
+           field set rather than the running one's. */
+        draftRevisionId: sql`case when ${over} then null else ${jobs.draftRevisionId} end`,
+        /* Cleared, so a `cancelled` job never carries the sentence of a failure
+           it recovered from. A job that failed a step, was retried and is then
+           stopped would otherwise say why it failed under a status saying the
+           reader stopped it. GPT Sol, 2026-09-01. */
+        error: sql`case when ${over} then null else ${jobs.error} end`,
+        failureKind: sql`case when ${over} then null else ${jobs.failureKind} end`,
+        finishedAt: sql`case when ${over} then now() else ${jobs.finishedAt} end`,
       })
       .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
       .returning();
@@ -675,7 +773,10 @@ export async function finishIn(
       attemptId: null,
       leaseExpiresAt: null,
       cancelling: false,
-      finishedAt: new Date(),
+      /* Database time, as `releaseStepIn` and `requestCancel` already use — one
+         clock stamps every one of a job's timestamps, so two endings written by
+         two instances can still be ordered against each other. */
+      finishedAt: sql`now()`,
       error: ending.error ?? null,
       /* Deleted rather than left alone when there is no kind, so the field
          always describes *this* failure. A stale kind hides a button rather
@@ -693,7 +794,7 @@ export async function finishIn(
  * **The fence, in one place so that no transition can be written without it.**
  *
  * All three conditions, and `status = 'running'` is the one to watch: without
- * it a job already failed by `failExpired` accepts its own former claimant's
+ * it a job already failed by `settleExpired` accepts its own former claimant's
  * write and reports success. See the file header.
  */
 function fence(id: string, attempt: string) {

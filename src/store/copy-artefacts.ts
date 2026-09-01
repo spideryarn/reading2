@@ -3,26 +3,29 @@
  *
  * ## Why this exists
  *
- * Because the ten pipeline stages still write their own files inside `run()`
- * (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts), and a job that has finished
- * running them has an article on a disk and nothing in Postgres. Something has
- * to carry it across, and this is that thing: a loop over `produces` between two
- * `ArtifactStore`s, so every byte of it goes through the interface production
- * ships on.
+ * Because an article can exist in one store and be wanted in another: a fixture
+ * on a disk that a Postgres test needs in the database. It is a loop over
+ * `produces` between two `ArtifactStore`s, so every byte of it goes through the
+ * interface production ships on.
  *
  * **The rejected answer was a stripped-down importer.** It would be a second
  * implementation of files → Postgres, free to drift from the production write
  * path — and `db:import` is being deleted precisely because it is that
  * (docs/plans/260827aa-delete-the-importer.md).
  *
- * ## It was a test helper until 2026-08-30
+ * ## It is a fixture loader again, and it was briefly more than that
  *
  * It lived at `tests/helpers/artefacts.ts` and was written to replace `db:import`
- * as a fixture loader for three suites. `src/store/publish-session.ts` now calls
- * it on the real ingest path — a finished job's files become the revision a
- * reader opens through exactly these calls — so it is production code and lives
- * here. `tests/helpers/load-article.ts` still uses it, and that is the point:
- * the fixture loader and the ingest run the same copy.
+ * as a fixture loader for three suites. Between 2026-08-30 and 2026-09-01 it was
+ * also the real ingest path: `publishingSession` copied a finished job's files
+ * into a draft and published that, because the stages wrote their own files and
+ * returned nothing a session could write. They all return their products now, so
+ * a claim under Postgres writes straight into its draft and copies nothing
+ * (`claimSession` in src/jobs.ts, docs/plans/260831b-finish-the-database-move.md
+ * § Stage 3 — the flip). **It stays here rather than going back to `tests/`**:
+ * `tests/helpers/load-article.ts` and the fixture suites still drive it, and it
+ * is the one piece of machinery that moves an article between two stores through
+ * the production interface.
  *
  * ## What it deliberately does not do
  *

@@ -53,7 +53,7 @@
  * 10. A stage that threw leaves its step run `error`, not `running` — nothing
  *     else ever revisits the row `beginStep` committed.
  * 11 and 12. The two endings that reach a job **nobody is inside** —
- *     `failExpired` and Stop on a *queued* job — clear the draft pointer, and
+ *     `settleExpired` and Stop on a *queued* job — clear the draft pointer, and
  *     Stop on a *running* one does not.
  * 13. A commit that **rolled back** leaves the step open, and the failure
  *     settled one line later has to close it — the ordering case 10 cannot see.
@@ -83,9 +83,9 @@
  *
  * ## Why it takes tests/store-jobs-parity.test.ts's advisory lock
  *
- * A global resource, scoped to no owner: `advanceJob` calls `failExpired`,
+ * A global resource, scoped to no owner: `advanceJob` calls `settleExpired`,
  * which sweeps **every** expired job and returns a count the parity suite
- * asserts exactly — and since 2026-08-30 a case here calls `failExpired` itself,
+ * asserts exactly — and since 2026-08-30 a case here calls `settleExpired` itself,
  * which is the same collision from the other side. A lock only excludes the
  * holders that agree to take it, so this file takes the same key rather than a
  * key of its own — the point is to exclude *that file*, which is the only other
@@ -160,7 +160,7 @@
  *   does case 1.
  * - 10: delete the `finishStepRun(… "error")` from `settleIn` → the run row is
  *   still `running` after the job has ended.
- * - 11 and 12: delete `draftRevisionId` from `failExpired`'s and
+ * - 11 and 12: delete `draftRevisionId` from `settleExpired`'s and
  *   `requestCancel`'s `set` → the pointer survives the ending. Both fixtures
  *   start from a **real** pointer; over a job with no draft the same assertions
  *   pass with the fix deleted.
@@ -1767,7 +1767,7 @@ when("the transactional session", () => {
   /**
    * A lapsed claim is swept, and **the draft pointer goes with it.**
    *
-   * `failExpired` is the one ending that happens to a job with nobody inside it:
+   * `settleExpired` is the one ending that happens to a job with nobody inside it:
    * there is no session, no claimant and no later statement, so if this
    * statement does not clear the pointer nothing ever will —
    * `sweepAbandonedDrafts` spares a revision that *any* job row names, terminal
@@ -1792,14 +1792,15 @@ when("the transactional session", () => {
       .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
       .where(eq(jobsTable.id, claimed.jobId));
 
-    /* **Named, not counted.** `failExpired` returns the ids it moved rather
+    /* **Named, not counted.** `settleExpired` returns the ids it moved rather
        than how many (src/store/jobs.ts), and a count could only say that *some*
        job was swept — on a shared database, with peers' rows lapsing beside
        this one, `>= 1` was true whether or not this job was in it. */
-    const swept = await pgJobStore.failExpired();
-    expect(swept, "this job's lease had expired, so the sweep had to move it").toContain(
-      claimed.jobId,
-    );
+    const swept = await pgJobStore.settleExpired();
+    expect(
+      swept.map((s) => s.id),
+      "this job's lease had expired, so the sweep had to move it",
+    ).toContain(claimed.jobId);
 
     const job = await jobRow(claimed.jobId);
     expect(job?.status).toBe("error");
@@ -1810,6 +1811,46 @@ when("the transactional session", () => {
     /* The draft itself is left alone: it is the evidence of what was
        half-finished, and reclaiming it is the sweeper's business and not this
        statement's. */
+    expect((await revisionRow(claimed.revisionId))?.status).toBe("draft");
+  });
+
+  /**
+   * **Stop, landing on a claim that has already lapsed — and the pointer goes
+   * with that one too.**
+   *
+   * `requestCancel` ends such a job on the spot rather than writing `cancelling`
+   * and waiting for a claimant that is provably gone. Which puts it in the same
+   * position as the sweep above: the job goes terminal with nobody inside it, so
+   * this statement is the last thing that will ever touch the row, and a pointer
+   * left behind is a draft `sweepAbandonedDrafts` spares for ever.
+   *
+   * It is the hazard the plan named before the branch was written, because the
+   * obvious way to write it is to copy `requestCancel`'s *running* branch — and
+   * that branch deliberately keeps the pointer, since a live claimant is the one
+   * that disposes of it. Fable, 2026-09-01. It starts from a real pointer for
+   * the reason the case above gives: a job with no draft satisfies the assertion
+   * before the fix as well as after it.
+   */
+  mine("clears the draft pointer when Stop lands on a claim that has lapsed", async () => {
+    const slug = `${SLUG_PREFIX}stopped-lapsed`;
+    await publishArticle(slug, "the carried arc");
+    const claimed = await claimWithSession(slug, ["arc", "tweets"]);
+    expect((await jobRow(claimed.jobId))?.draftRevisionId).toBe(claimed.revisionId);
+
+    await db()
+      .update(jobsTable)
+      .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+      .where(eq(jobsTable.id, claimed.jobId));
+
+    const stopped = await pgJobStore.requestCancel(claimed.jobId, OWNER);
+    expect(stopped?.status, "the claimant is gone, so Stop is over right now").toBe("cancelled");
+
+    const job = await jobRow(claimed.jobId);
+    expect(job?.status).toBe("cancelled");
+    expect(
+      job?.draftRevisionId,
+      "a terminal job holding a pointer is a draft the sweeper spares for ever",
+    ).toBeNull();
     expect((await revisionRow(claimed.revisionId))?.status).toBe("draft");
   });
 

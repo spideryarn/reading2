@@ -137,7 +137,7 @@ has a column in `article_revisions`.
 **What is not converted is who writes them.** All ten pipeline steps are on
 `LEGACY_UNCONVERTED_STEPS` ([`src/pipeline.ts:405`](../../src/pipeline.ts)) and write their own files;
 a decorator, `publishingSession`
-([`src/store/publish-session.ts`](../../src/store/publish-session.ts), landed 2026-08-30), copies
+(`src/store/publish-session.ts`, landed 2026-08-30), copies
 those files into a revision and publishes at the end of the job.
 [database.md](../project/database.md) calls this *"a carry-across, not the end state: an ingest still
 needs a writable disk for the length of the job."*
@@ -254,7 +254,7 @@ completed `toc`.**
 
 **3. A failure between the two publications leaves an unfinished article published for ever.**
 The finalizer couples publication and terminal job settlement in one transaction on purpose
-([`src/store/publish-session.ts:219`](../../src/store/publish-session.ts)); an early publication
+(`src/store/publish-session.ts:219`); an early publication
 breaks that. Cancellation, lease expiry, a ToC failure or an asset failure all leave the provisional
 revision live while the job says `error`. That needs product answers, not code: is a provisional
 article a success or a failed ingest, what does the shelf say, what does Retry upgrade, may a public

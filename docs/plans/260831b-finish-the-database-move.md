@@ -1,9 +1,11 @@
 # Finish the move from files to the database
 
-**Status, 2026-09-01 07:00, resumed after the overnight run.** Stage 2.4 (new — `db:migrate` was
-applying nothing) is done and reviewed. Stage 2.5 is measured and passing. Stage 3 items 0, 1 and 5
-are done; items 3 and 4 are built but carry an unanswered GPT Sol NO-SHIP that is being answered
-now. **Only item 6 — the flip itself — and stage 4 remain.** Nine GPT Sol reviews so far; the two on
+**Status, 2026-09-01 08:00. THE FLIP HAS LANDED.** Stage 2.4 (new — `db:migrate` was applying
+nothing) is done and reviewed. Stage 2.5 is measured and passing. Every item of stage 3 is done,
+including item 6: `claimSession` selects `pgStoreSession`, `src/store/publish-session.ts` is
+deleted, and the local proof Sol asked for is
+[`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts). **Only stage 4
+remains, plus the deployed canary, which is Greg's to run.** Nine GPT Sol reviews so far; the two on
 the overnight work were both NO-SHIP and both right.
 
 **THREE THINGS WERE OWED at 06:30 and two are discharged** — the orphan migrations in `main` were
@@ -18,7 +20,7 @@ one that remains.
 | 3 item 4 — exact base | built in `265356b` but **did not close the race**; durable `based_on_revision_id` being added 2026-09-01 |
 | 3 item 5 — delete the importer | **done** (`b73ad74`) |
 | 3 item 0 — short-id slugs | **done** — landed via `74e2915`, `1010a60`; `freeUploadSlug` and `slugIsSpokenFor` gone, `src/store/find-article.ts` committed |
-| 3 item 6 — the flip | not started |
+| 3 item 6 — **the flip** | **done, 2026-09-01** — `claimSession` → `openPgStoreSession`, `publish-session.ts` deleted, proved locally with a fresh scratch root per claim |
 | 2.5 refetch | **done** — measured 2026-09-01 on a quiet machine, `✓ ready` |
 | 4 | deliberately not started |
 
@@ -787,13 +789,17 @@ exactly like one that worked.
 
 ### Stage 3 — the flip
 
+**Done, 2026-09-01.** What actually landed is at the end of this section, under
+*§ What the flip changed, and what turned out not to be true*. Everything between here and there is
+the reasoning that got it there, kept.
+
 **This heading did not exist until 2026-08-31 and its absence was doing damage:** every bullet below
 was sitting under stage 2.5, so the document read as though refetching the corpus and switching the
 store were one piece of work. They are not, and the whole staging argument turns on their being
 separate.
 
-**The flip itself is one line** — `fsStoreSession` becomes `pgStoreSession` at
-[`src/jobs.ts:1048`](../../src/jobs.ts), where line 57 also imports `fsArtifacts` directly. Stage 2
+**The flip itself is one line** — `fsStoreSession` becomes `pgStoreSession` in `claimSession`
+([`src/jobs.ts`](../../src/jobs.ts)), where line 57 also imports `fsArtifacts` directly. Stage 2
 exists so that this line is the only one that has to change; everything before it was making that
 true.
 
@@ -843,7 +849,8 @@ first — in particular the adoption test, because that is the one this change c
 
 #### The line itself, exactly
 
-[`src/jobs.ts`](../../src/jobs.ts) § `claimSession` currently reads:
+**Historic — this is what it read before 2026-09-01, and what it now reads is in
+[`src/jobs.ts`](../../src/jobs.ts).** `claimSession` was:
 
 ```ts
 export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
@@ -898,7 +905,7 @@ columns untouched, and the active-job guard no longer covers a finished job. *"D
 does not make a revision whose metadata and referenced object describe different acquisitions
 correct. `db:import` has **no non-test callers** — checked 2026-08-31 — so this breaks nothing.
 
-**6. Then flip**, and only then.
+**6. Then flip**, and only then. **Done 2026-09-01** — § *What the flip changed* below.
 
 #### The fourth fault, which item 3 above is about
 
@@ -976,6 +983,9 @@ machine, 2026-09-01. That was the one non-code precondition it had to leave open
 
 #### Done means
 
+**Discharged 2026-09-01 by `tests/claim-session-postgres.test.ts`** — every bullet of it; see
+§ *What the flip changed* below.
+
 **This section used to say a deployment was required. Sol says otherwise, and it is right.** A
 deterministic local proof of the flip itself is available and is *stronger* than an ordinary laptop
 ingest: drive the real `claimSession` with `STORE=postgres` against real Postgres and a real
@@ -1004,6 +1014,58 @@ the local proof above closes.
   not prove; the others need writing.
 - Tests for handback, a warm instance, retry, and all-skipped — the four job-lifecycle shapes that
   behave differently once a draft exists.
+
+#### What the flip changed, and what turned out not to be true
+
+**Landed 2026-09-01.** `claimSession` is two lines: the filesystem session when `SPIDERYARN_STORE` is
+unset, and `openPgStoreSession({ slug, job })` otherwise. `src/store/publish-session.ts` (447 lines)
+is deleted. `copyArtefacts` stays and is a fixture loader again — `tests/helpers/load-article.ts` and
+the fixture suites drive it, and its header says so.
+
+**Sol's blocker was already discharged before the flip started.** The review said the replacement
+caught less than the decorator: only `PublishRefused` on the all-skipped door. By the time the flip
+was built, `walkClaim`'s catch was already wide — every non-stale failure, sanitized through
+`COULD_NOT_PUBLISH` — with `tests/all-skipped-publication-refusal.test.ts` case 3 covering a
+non-refusal `StoreFailure` and its own red reading recorded. Nothing was left to do for it.
+
+**Three things in the handover turned out to be false, and none of them mattered much:**
+
+- `tests/jobs-publish-finalizer-files.test.ts` was said to *import* `publish-session.ts`. It does not
+  — its three mentions are all in prose. It compiled throughout.
+- The `COULD_NOT_PUBLISH` duplication was said to be the only thing keeping two copies of one
+  sentence. True, and now one.
+- `publish-session.ts:~180`'s stale `how: "unknown"` comment resolved itself by deletion, as
+  predicted.
+
+**Where the three test files went:**
+
+| was | now | why |
+|---|---|---|
+| `tests/jobs-publish-finalizer.test.ts` | `tests/claim-session-postgres.test.ts` | rewritten as the flip's proof. Three of its six cases were about the decorator's own machinery and went with it: the zero-copy refusal (obsolete — there is no copy), the atomicity of publication and finish (`tests/store-pg-session.test.ts` § *takes the artefacts and the publication back when the settlement fails* is the same claim against `pgStoreSession`), and the all-skipped door ending the job (`tests/all-skipped-publication-refusal.test.ts` cases 1 and 3, which are stronger — they drive real Postgres through `advanceJobWith`) |
+| `tests/publish-session-cleanup-log.test.ts` | `tests/all-skipped-publication-log.test.ts` | the decorator's compensating cleanup does not exist — `pgStoreSession` fails its draft inside the transaction that rolls back — but the *rule* survives one layer up, in `walkClaim`'s catch. Rewritten against that, hermetically, with no database at all |
+| `tests/jobs-publish-finalizer-files.test.ts` | `tests/claim-session-files.test.ts` | kept whole. It is the claim that the filesystem branch is unchanged, and it proves it by taking `DATABASE_URL` away |
+
+**The proof, and it is the local one Sol said was stronger.**
+`tests/claim-session-postgres.test.ts` drives the real `claimSession` through `advanceJobWith`
+against real Postgres, giving **every claim its own empty temporary `data/` root** and asserting the
+root is *still empty afterwards*. Six cases: an ingest; a second claim on the same article where
+every step skips; a late single-step job whose stage reads the article through `session.reads` from
+an empty scratch; a forced refresh that fails at `hierarchy` and is followed through the real
+`retryJob` until the refreshed text is what a reader opens; a claim handed back mid-job; and a
+control that the store flag took. Watched red with the decorator restored — five of the six fail,
+and the first reading is the flip in one line: *"the ingest wrote to its scratch root: expected
+[ 'data', 'output' ] to deeply equal []"*.
+
+**Two behaviours genuinely changed, and both are `pgStoreSession` opening its draft eagerly where the
+decorator opened one lazily.** A claim that is handed back mid-job now leaves an article row and a
+`draft` revision behind — which is the point, because that is how the next claim adopts its work —
+where the decorator left nothing at all. And a job with no `DATABASE_URL` now fails in
+`claimSession` itself rather than on the last step's commit. Both are recorded in the tests that
+asserted the old behaviour.
+
+**What is still not proved, and the deployed canary remains warranted for it:** Vercel bundling,
+production environment variables, Supabase Storage credentials, route and auth wiring, migration
+state, and real external calls.
 
 ### Stage 4 — delete the files
 

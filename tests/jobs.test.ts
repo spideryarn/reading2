@@ -863,9 +863,9 @@ describe("running a job", () => {
   /**
    * **The sweep, through `advanceJob` rather than through the store.**
    *
-   * `tests/store-jobs-parity.test.ts` proves `failExpired` frees the slot, and
+   * `tests/store-jobs-parity.test.ts` proves `settleExpired` frees the slot, and
    * GPT Sol pointed out that it proves nothing about the *wiring*: delete the
-   * `store.failExpired()` line from `advanceJob` and that test stays green,
+   * `store.settleExpired()` line from `advanceJob` and that test stays green,
    * because it calls the sweep itself. Which is the whole shape of the original
    * bug — the function existed and nothing called it — so the test has to be
    * the one that goes through the caller.

@@ -213,7 +213,7 @@ when("who may finish a step", () => {
   });
 
   it("refuses a claimant whose job has been swept, however good its row looks", async () => {
-    /* The **job** fence, which the row conditions cannot supply. `failExpired`
+    /* The **job** fence, which the row conditions cannot supply. `settleExpired`
        clears a lapsed job's token and marks it errored without touching its
        step runs, so a swept worker that keeps going finds its own row still
        `running/A` — both row conditions satisfied — and would otherwise commit

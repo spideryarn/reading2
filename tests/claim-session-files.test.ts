@@ -1,14 +1,19 @@
 /**
- * With the filesystem store, the finalizer does not exist.
+ * With the filesystem store, none of Postgres happens.
  *
- * The other half of `tests/jobs-publish-finalizer.test.ts`, and it is a separate
+ * The other half of `tests/claim-session-postgres.test.ts`, and it is a separate
  * file because `src/store/live.ts` reads `SPIDERYARN_STORE` **once**, at module
  * load — so one file cannot be both stores.
  *
- * The claim: on a laptop with the flag unset, a job behaves exactly as it did
- * before the finalizer landed. No draft, no publication, no database, nothing
- * new. That is what local development runs, and it must not change under people
- * (docs/plans/260830d-v1-imports-on-vercel.md).
+ * The claim: on a laptop with the flag unset, a job behaves exactly as it always
+ * has. No draft, no publication, no database, nothing new. That is what local
+ * development runs and it must not change under people
+ * (docs/plans/260830d-v1-imports-on-vercel.md) — which mattered when
+ * `publishingSession` was bolted onto this seam on 2026-08-30, and mattered
+ * again when `pgStoreSession` replaced it on 2026-09-01
+ * (docs/plans/260831b-finish-the-database-move.md § Stage 3 — the flip). The
+ * filesystem branch of `claimSession` is the one line stage 4 will delete, and
+ * until then this file is what says it is untouched.
  *
  * ## How this proves it without a database, and why that matters
  *
@@ -24,13 +29,29 @@
  * below checks that `getDb()` really does throw, because a control that cannot
  * fire is not a control (docs/reusable/silent-success.md).
  *
- * ## The mutation that reddened it, watched on 2026-08-30
+ * ## The mutation that reddened it, watched on 2026-08-30 and again on 2026-09-01
  *
- * Delete the `if (STORE !== "postgres") return inner;` line from `claimSession`
- * in src/jobs.ts. Two of the three cases go red: the walk reaches
- * `publishingSession`, which asks for `getDb()`, which throws `DATABASE_URL is
- * not set` at `src/store/publish-session.ts:135` — so the job ends `error`, and
- * the session it ran on is guarded rather than plain.
+ * Delete the `if (STORE !== "postgres") return …` line from `claimSession` in
+ * src/jobs.ts, so that every claim takes the Postgres branch. Two of the three
+ * cases go red. The 2026-09-01 reading, against the flipped code:
+ *
+ * ```
+ * × runs on the plain filesystem session, with no Postgres session round it
+ * × ends done having published nothing and touched no database
+ *
+ * Error: DATABASE_URL is not set. …
+ *  ❯ getDb src/db/client.ts:98:15
+ *  ❯ openOrBeginJobDraft src/store/pg-revisions.ts:804:10
+ *  ❯ openPgStoreSession src/store/pg-session.ts:282:23
+ *  ❯ Module.claimSession src/jobs.ts:1092:16
+ * ```
+ *
+ * **Both now throw out of `claimSession` itself**, which is a change worth
+ * noticing: the decorator opened its draft lazily and died on the last step's
+ * commit, so the second case used to fail as `expected 'error' to be 'done'` —
+ * a job that ran three steps and then could not publish. `pgStoreSession` opens
+ * the draft when the claim starts, so it dies before a single step runs. An
+ * earlier failure, and a better one.
  */
 import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -53,7 +74,7 @@ const HOISTED = vi.hoisted(() => {
      is read at the moment a path is wanted, and the filesystem store makes its
      directories on the way past. */
   const tmp = (process.env.TMPDIR ?? "/tmp").replace(/\/$/, "");
-  const root = `${tmp}/spya-finalizer-files-${process.pid}-${Date.now()}`;
+  const root = `${tmp}/spya-claim-session-files-${process.pid}-${Date.now()}`;
   process.env.SPIDERYARN_DATA_ROOT = root;
   return { previousStore, previousRoot, root };
 });
@@ -74,7 +95,7 @@ import type { Block, Job, JobStep, StepName, Tree } from "../src/types.js";
 
 if (HOISTED.previousStore !== undefined) process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
-const SLUG = "finalizer-files-only";
+const SLUG = "claim-session-files-only";
 
 /* -------------------------------------------------------------- the article -- */
 
@@ -108,7 +129,7 @@ const TREE: Tree = {
       children: ["n1", "n2"],
       range: [BLOCKS[0]!.id, BLOCKS[1]!.id],
       title: "A fixture article",
-      gist: "A fixture built by tests/jobs-publish-finalizer-files.test.ts and nothing else.",
+      gist: "A fixture built by tests/claim-session-files.test.ts and nothing else.",
     },
     ...Object.fromEntries(
       BLOCKS.map((b, i) => [
@@ -180,7 +201,7 @@ async function queueJob(names: StepName[]): Promise<Job> {
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, `finalizer-files-${wanted.id}`);
+  const { job } = await fsJobStore.enqueueOrGet(wanted, `claim-session-files-${wanted.id}`);
   MADE.push(job.id);
   return job;
 }
@@ -223,13 +244,14 @@ describe("a job under the filesystem store", () => {
     expect(() => getDb()).toThrow(/DATABASE_URL is not set/);
   });
 
-  it("runs on the plain filesystem session, with no publishing wrapper round it", async () => {
+  it("runs on the plain filesystem session, with no Postgres session round it", async () => {
     const job = await queueJob(["blocks", "hierarchy"]);
     const session = await claimSession(job, "not-a-real-attempt");
-    /* `guardDbStore` marks what it wrapped, and the publishing session is the
-       only thing in this path that is wrapped. Structural, and it is here as the
-       *reason* the behavioural case below passes rather than as the case itself
-       — a session that merely happened not to publish would satisfy that one. */
+    /* `guardDbStore` marks what it wrapped, and every Postgres session goes out
+       through it (`pgStoreSession`) while the filesystem one does not. Structural,
+       and it is here as the *reason* the behavioural case below passes rather
+       than as the case itself — a session that merely happened not to publish
+       would satisfy that one. */
     expect(isGuardedStore(session)).toBeUndefined();
   });
 
@@ -243,8 +265,8 @@ describe("a job under the filesystem store", () => {
       }),
     );
 
-    /* If the gate went, `publishingSession` would ask for `getDb()` on the last
-       step's commit, throw `DATABASE_URL is not set`, and this would be
+    /* If the gate went, `openPgStoreSession` would ask for `getDb()` before the
+       walk started at all, throw `DATABASE_URL is not set`, and this would be
        `"error"` with `done` still true. So the status is the assertion and
        `done` is not. */
     expect(advanced?.job.status).toBe("done");

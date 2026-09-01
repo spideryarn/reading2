@@ -128,7 +128,7 @@ accidental cross-job warm cache that is currently the only thing that could resc
 job.
 
 **Stage 4 is built, 2026-08-30, and it is a decorator rather than a new session.**
-[`src/store/publish-session.ts`](../../src/store/publish-session.ts) wraps the filesystem session:
+`src/store/publish-session.ts` wraps the filesystem session:
 on a `done` ending it copies what the stages wrote into a fresh draft with
 [`copyArtefacts`](../../src/store/copy-artefacts.ts) — promoted out of `tests/helpers/` because it is
 production code now — publishes it, and finishes the job, all in one transaction.
