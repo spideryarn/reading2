@@ -29,6 +29,7 @@ import {
   buildSessionScript,
   parseSessions,
 } from "./gjd-remote-tmux.js";
+import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
@@ -1824,20 +1825,157 @@ function cmdDoctor(): void {
   const ranAt = /^ran:\s*(\S+)/m.exec(report)?.[1];
   const provisionOk = /^PROVISION OK$/m.test(report);
   const failedLines = report.split("\n").filter((l) => l.startsWith("FAIL"));
+  // PROVISION NOT RUN is what cloud-init leaves on a box it has only
+  // bootstrapped. It needs a branch of its own: it has no FAIL lines in it, so
+  // the counting branch below would render it as "0 failed" — an un-provisioned
+  // box reported in the words of a healthy one.
+  const notRun = /^PROVISION NOT RUN/m.test(report);
   check(
     "provisioning",
     provisionOk && failedLines.length === 0,
     report.trim() === ""
       ? "no status file — provision.sh has never completed on this box"
-      : provisionOk && failedLines.length === 0
-        ? `all checks ok, last run ${ranAt ?? "unknown"}`
-        : `${failedLines.length} failed: ${failedLines.map((l) => l.replace(/^FAIL\s+/, "")).join(", ")}`,
+      : notRun
+        ? "bootstrapped but never provisioned — run: gjd-remote provision"
+        : provisionOk && failedLines.length === 0
+          ? `all checks ok, last run ${ranAt ?? "unknown"}`
+          : `${failedLines.length} failed: ${failedLines.map((l) => l.replace(/^FAIL\s+/, "")).join(", ")}`,
   );
   if (failedLines.length) console.log(dim(report.trim()));
 
   const list = sessions();
   console.log(bold(`\nsessions: ${list.length}`));
   finish();
+}
+
+/**
+ * Build the box: copy `provision.sh` up and run it.
+ *
+ * This exists because `user_data` is capped at 32 KiB and `provision.sh` is
+ * 67 KiB base64'd, so it cannot ride in cloud-init any more —
+ * docs/plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md.
+ * cloud-init bootstraps; this builds.
+ *
+ * Almost all of what follows is about not reporting a success that did not
+ * happen. The status file on the box holds the LAST run's verdict, so a run
+ * that never started leaves the previous `PROVISION OK` sitting there looking
+ * exactly like this run's. Hence the attempt id, and hence four conditions
+ * rather than one.
+ */
+function cmdProvision(opts: { waitSeconds?: number | undefined; runMinutes?: number | undefined } = {}): void {
+  const ip = host();
+  console.log(bold(`gjd-remote provision → ${ip}`));
+
+  const local = path.join(REPO, "infra/hetzner/provision.sh");
+  if (!existsSync(local)) die(`missing locally: ${local}`);
+
+  // The preflight, first, on this laptop. A provision.sh that will not parse
+  // should cost seconds here rather than a round trip and a half-built box —
+  // and it is the same check that guards a `tofu apply`.
+  const pre = spawnSync("npx", ["tsx", path.join(REPO, "scripts/check-cloud-init.ts")], { encoding: "utf8" });
+  if (pre.status !== 0) {
+    console.log((pre.stdout ?? "").trim());
+    die("the cloud-init preflight failed — fix that before provisioning");
+  }
+  console.log(green("✓ preflight"));
+
+  // Two waits, not one. Straight after `tofu apply` the machine may not answer
+  // ssh at all, and once it does, cloud-init's final stage may still be running:
+  // sshd comes up early. Provisioning against a half-bootstrapped box is how you
+  // get a failure in a step that has nothing to do with the real problem.
+  waitForSsh(opts.waitSeconds ?? 300);
+  waitForCloudInit(opts.waitSeconds ?? 300);
+
+  // Staged in /tmp and installed from there, NOT run from where it lands.
+  // provision.sh bind-mounts the volume over /home partway through its own run,
+  // so a script executing from under /home would have the ground move beneath
+  // it — and root should not be running code out of a user-writable directory.
+  const staged = `/tmp/gjd-provision.${process.pid}.sh`;
+  const body = readFileSync(local, "utf8");
+  const want = createHash("sha256").update(readFileSync(local)).digest("hex");
+  writeRemote(body, staged);
+
+  // An id for THIS run. `provision.sh` writes it into the status file, and the
+  // verdict below refuses to read a status file that does not carry it.
+  const attempt = randomUUID();
+
+  console.log(dim(`  ${(Buffer.byteLength(body) / 1024).toFixed(1)} KiB → ${staged}`));
+  console.log(dim(`  attempt ${attempt}`));
+  console.log(bold("\nprovisioning — this takes several minutes\n"));
+
+  // Every clause of this is load-bearing and every one of them is quoting —
+  // see buildProvisionRunner, where it is built and tested.
+  const runner = buildProvisionRunner({
+    staged,
+    installed: "/usr/local/sbin/provision.sh",
+    sha256: want,
+    attempt,
+    lock: "/var/lock/gjd-provision.lock",
+    log: "/var/log/provision.log",
+  });
+
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), "sudo bash -s"], {
+    input: runner,
+    stdio: ["pipe", "inherit", "inherit"],
+    timeout: (opts.runMinutes ?? 45) * 60_000,
+  });
+
+  const verdict = provisionVerdict(ssh("sudo cat /var/log/gjd-provision-status 2>/dev/null || true", { check: false }), {
+    attempt,
+    sha256: want,
+    exitOk: r.status === 0,
+  });
+  console.log("");
+  if (!verdict.ok) {
+    console.log(red(`✗ ${verdict.why}`));
+    console.log(dim("  the whole log:  gjd-remote ssh 'sudo tail -100 /var/log/provision.log'"));
+    process.exit(1);
+  }
+  console.log(green(`✓ ${verdict.why}`));
+  console.log(dim("  then:  gjd-remote doctor"));
+}
+
+/** Block until ssh answers, or give up and say so. Refuses immediately on the
+ *  two errors that retrying cannot fix: a changed host key, and a rejected key. */
+function waitForSsh(seconds: number): void {
+  const deadline = Date.now() + seconds * 1000;
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
+    if (r.status === 0) {
+      console.log(green(`✓ ssh${attempt > 1 ? ` (after ${attempt} tries)` : ""}`));
+      return;
+    }
+    const err = r.stderr ?? "";
+    if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(err)) {
+      die("the host key changed — if you just rebuilt:  gjd-remote forget-key");
+    }
+    if (/Permission denied|Too many authentication failures/i.test(err)) {
+      die(`ssh refused the key: ${err.trim().split("\n").slice(-1)[0]}`);
+    }
+    if (Date.now() >= deadline) die(`ssh never answered in ${seconds}s: ${err.trim().split("\n").slice(-1)[0]}`);
+    process.stdout.write(dim(`\r  waiting for ssh (${attempt})…`));
+    spawnSync("sleep", ["5"]);
+  }
+}
+
+/**
+ * Block until cloud-init has finished bootstrapping.
+ *
+ * Its exit codes carry meaning and are not interchangeable: 0 is done, 2 is
+ * "done, but with recoverable errors", which is a refusal here — a box whose
+ * packages half-installed is not one to build on top of.
+ */
+function waitForCloudInit(seconds: number): void {
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cloud-init status --wait --long 2>&1; echo "rc=$?"`], {
+    encoding: "utf8",
+    timeout: (seconds + 30) * 1000,
+  });
+  const verdict = cloudInitVerdict(`${r.stdout ?? ""}`);
+  if (verdict.ok) {
+    console.log(green(`✓ ${verdict.why}`));
+    return;
+  }
+  die(`${verdict.why} — provisioning on top of that would fail obscurely.\n  look:  gjd-remote ssh 'cloud-init status --long'`);
 }
 
 /**
@@ -1903,6 +2041,12 @@ ${bold("SESSIONS")}
 ${bold("THE BOX")}
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
+  provision               build a bootstrapped box: copy provision.sh up, run it
+                          cloud-init no longer does this — user_data is capped at
+                          32 KiB and the script is 67 KiB base64'd
+                          safe to re-run; that is how you move a pinned version
+      --wait-seconds N      how long to wait for ssh and cloud-init ${dim("(default 300)")}
+      --run-minutes N       cap on the run itself ${dim("(default 45)")}
   clone <repo>            clone one of Greg's repos onto the box, over HTTPS
       --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
       --name DIR-NAME       directory name, if not the repo's own
@@ -2144,6 +2288,23 @@ function main(): void {
     case "doctor":
       return cmdDoctor();
 
+    case "provision": {
+      const { values } = parseArgs({
+        args: rest,
+        options: { "wait-seconds": { type: "string" }, "run-minutes": { type: "string" } },
+      });
+      const num = (v: string | undefined, name: string) => {
+        if (v === undefined) return undefined;
+        const n = Number(v);
+        if (!Number.isFinite(n) || n <= 0) die(`--${name} wants a positive number, got ${v}`);
+        return n;
+      };
+      return cmdProvision({
+        waitSeconds: num(values["wait-seconds"], "wait-seconds"),
+        runMinutes: num(values["run-minutes"], "run-minutes"),
+      });
+    }
+
     case "push-env": {
       const { values } = parseArgs({ args: rest, options: { file: { type: "string" } } });
       return cmdPushEnv({ file: values.file });
@@ -2238,7 +2399,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "push-env", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`

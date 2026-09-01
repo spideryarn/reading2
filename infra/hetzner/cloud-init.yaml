@@ -118,35 +118,44 @@ write_files:
       GJD_NODE_MAJOR=${node_major}
       GJD_SWAP_GB=${swap_gb}
 
-  # provision.sh lives at infra/hetzner/provision.sh and is injected here base64
-  # encoded, via filebase64() -- NOT templatefile(). Terraform therefore never
-  # parses it, so a dollar sign or a dollar-brace in the shell script means what
-  # bash says it means. A previous build died because an unescaped dollar-brace
-  # in a *comment* was interpreted by Terraform; that whole class is gone now --
-  # and this very comment had to be reworded for the same reason, which tells you
-  # how easy the mistake is to make.
-  # Same literal-injection trick as provision.sh below: base64 via filebase64(),
-  # so Terraform never parses the shell. The tokens it reads are NOT here and
-  # never will be -- they are pasted by hand into /etc/github-tokens/, which is
-  # the one step of this box's setup that a human has to do.
+  # Injected base64 via filebase64() -- NOT templatefile(). Terraform therefore
+  # never parses it, so a dollar sign or a dollar-brace in the shell script means
+  # what bash says it means. A previous build died because an unescaped
+  # dollar-brace in a *comment* was interpreted by Terraform; that whole class is
+  # gone now -- and this very comment had to be reworded for the same reason,
+  # which tells you how easy the mistake is to make.
+  # The tokens this helper reads are NOT here and never will be -- they are pasted
+  # by hand into /etc/github-tokens/, which is one of the steps of this box's
+  # setup that a human has to do.
   - path: /usr/local/bin/github-owner-credential-helper.sh
     permissions: "0755"
     encoding: b64
     content: ${helper_b64}
 
-  - path: /usr/local/sbin/provision.sh
-    permissions: "0700"
-    encoding: b64
-    content: ${provision_b64}
+# provision.sh IS NOT HERE, and that is the design.
+#
+# `user_data` -- this whole file, rendered -- is capped at 32 KiB by the Hetzner
+# API, and provision.sh alone is 67 KiB once base64'd. It used to fit; it stopped
+# fitting when the script was carved out of this file and kept growing, and
+# nothing could see it, because Terraform stores only a HASH of user_data and the
+# script is normally re-run on a live box over ssh, which has no size limit at
+# all. A rebuild would simply have been rejected at server creation.
+#
+# So this file bootstraps, and `gjd-remote provision` builds. The whole reasoning,
+# and the four cheaper options that do not work, are in
+# docs/plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md.
 runcmd:
-  # `bash -o pipefail -c`, not a bare pipeline. A string runcmd entry is
-  # interpreted by sh, so the pipeline's status is TEE's -- always zero. That is
-  # exactly why the first build reported `cloud-init: done` after provisioning
-  # had already died at line 55. The failure was never hidden in the log; it was
-  # hidden from cloud-init.
-  - bash -o pipefail -c 'bash /usr/local/sbin/provision.sh 2>&1 | tee /var/log/provision.log'
+  # `cloud-init: done` now means BOOTSTRAPPED, not BUILT, and this is the line
+  # that says so. Written here rather than left absent, because an absent status
+  # file is ambiguous -- a box nobody has provisioned and a box whose status file
+  # someone deleted look identical -- and `gjd-remote doctor` reads this file.
+  #
+  # `PROVISION NOT RUN` is an exact string doctor matches. A friendlier sentence
+  # with no marker in it would have read as a report with zero failures in it,
+  # which is to say as a healthy box.
+  - bash -o pipefail -c 'printf "ran: %s\nattempt: none\nPROVISION NOT RUN (cloud-init bootstrapped this box; run: gjd-remote provision)\n" "$(date -Is)" > /var/log/gjd-provision-status && chmod 0644 /var/log/gjd-provision-status'
 
 final_message: |
-  Box up after $UPTIME s.
-  Check provisioning actually succeeded:  sudo tail -20 /var/log/provision.log
-  It must end with PROVISION OK. Then run `claude` and log in with /login.
+  Box up after $UPTIME s. It is BOOTSTRAPPED, not built: no node, no Claude, no
+  docker, and /home is not mounted yet.
+  Next, from the laptop:  npx tsx scripts/gjd-remote.ts provision

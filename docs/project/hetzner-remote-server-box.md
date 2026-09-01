@@ -27,8 +27,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `kill`, `doctor`, `clone`, `push-env`, `ssh`, `tunnel`, `forget-key`.
-  `--help` is long on purpose.
+  `new-shell`, `resume`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`, `tunnel`,
+  `forget-key`. `--help` is long on purpose.
+- [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
+  actually succeeded, which is not the same question as whether it exited 0. Split out for the same
+  reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
+  See [Building a box](#building-a-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
@@ -87,6 +91,36 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   the plan the box came out of.
 - [../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md](../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md)
   — the timings below, and the bugs found underneath them.
+
+## Building a box
+
+`tofu apply` gives you a **bootstrapped** box, not a built one. cloud-init makes the user, installs
+the packages and hardens sshd; then:
+
+```
+npx tsx scripts/gjd-remote.ts provision
+```
+
+copies [`provision.sh`](../../infra/hetzner/provision.sh) up and runs it. Safe to re-run — that is
+how a change to the script, or a moved pin, reaches the box.
+
+The split exists because `user_data` is capped at 32 KiB by the Hetzner API and that script is 67 KiB
+base64'd. It used to fit, and stopped when the script was carved out of the YAML on 2026-08-31; a
+rebuild would have been rejected at the API, and nothing could see it, because Terraform stores only
+a hash of `user_data` and the script is normally re-run over ssh where there is no limit. The four
+cheaper fixes and why none works are in
+[../plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md](../plans/260901d-split-provisioning-out-of-cloud-init-to-fit-the-user-data-cap.md).
+
+**The verdict is not the exit code.** The status file on the box holds the *last* run's answer, so a
+run that dies before `provision.sh` starts leaves the previous `PROVISION OK` in place, looking
+exactly like this one's. Every run therefore carries an attempt id that the script writes into the
+file, and the answer needs all four of: the wrapper exited 0, the status file names **this** attempt,
+its `script-sha256` matches what we sent, and it says `PROVISION OK` with no `FAIL` lines.
+
+Two things follow, and both are in
+[infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
+`cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
+because it is baked into the machine at creation and never runs again.
 
 ## Which tabs are on the box
 
@@ -352,10 +386,8 @@ written before the keys turned out to be the problem, and it is superseded here.
 immediate Claude failure — a bad option, an auth problem — leaves a live login shell and still
 prints `✓ started`. Undecided; raised with Greg 2026-08-31.
 
-**A rebuild would currently fail at the Hetzner API.** `user_data` is capped at 32 KiB and ours
-renders to about 79, because `provision.sh` rides inside it base64-encoded and has grown for weeks
-along a path — re-running it on the live box — that has no size limit. Nothing is broken today and
-nothing else could have seen it: Terraform keeps only a hash of the field, so `tofu plan` cannot
-either. `scripts/check-cloud-init.ts` now measures it and fails; the options for fixing it are in
-[infra/hetzner/README.md § The preflight now says `user_data` is too big](../../infra/hetzner/README.md#the-preflight-now-says-user_data-is-too-big-and-it-is-right).
-Raised with Greg 2026-09-01.
+**The fresh-boot path has not been run since provisioning was split out of cloud-init**
+(2026-09-01). `gjd-remote provision` has been exercised against the live box; what has not is a
+server built from the new `cloud-init.yaml`, because that needs creating one. Until somebody
+rebuilds, or spends a few cents on a throwaway box, the bootstrap half is verified only by the
+preflight and by reading.
