@@ -24,7 +24,7 @@ local proof reaches.
 | 4a — `raw_bytes` | **done** — column dropped locally (`0049`), every reference gone, the `readPdf` legacy query with it |
 | 4b — the dead seams | **done** — `revisionLifecycle`, the checkpoint fs adapter, `checkNoteFields`; 510 lines |
 | 4A — fixtures read the corpus | **done** — proved on a simulated fresh clone with no `data/` at all |
-| 4B — the ~48 route suites | pilot in progress: convert six, **measure**, then decide |
+| 4B — the route suites | pilot done and measured (5 converted); ~11 genuine ones remain, 4 need a decision |
 | 4B–4J | **not started** — see § *How stage 4 actually goes* |
 
 ### What the three Sol reviews found, and where each finding ended up
@@ -1339,6 +1339,54 @@ starts requiring Postgres**: there is no longer a configuration without it.
    `store-artefact-manifest`, `store-export-raw`, `fixture-corpus`, `chat-anchor`. Several previously
    named do not; **this is the third time a list in this document has been wrong, so re-derive rather
    than inherit, including from this paragraph.**
+
+#### What the sub-stage B pilot measured, 2026-09-01
+
+Five suites converted and timed, rather than 48 converted on faith. Full reasoning in the commit
+*"Five suites seeded from the corpus, and the lock is the cost"*.
+
+**The list of 23 was wrong — the fourth wrong list in this document, so re-derive before briefing
+anybody, including from this paragraph.** Only **16** of them write into `data/<scratch-slug>` and
+are genuine sub-stage B. The other seven — `block-policy-prompts`, `glossary-ideas-baseline`,
+`hierarchy-write-guard`, `late-step-on-a-cold-instance`, `quiz-step-registration`,
+`stage-stamp-agreement`, `stop-details` — build under `mkdtemp` and never touch the store at all.
+They are **sub-stage C's** shape, and they break only through `example/`, which is **sub-stage I**.
+
+**The lock is the cost, not the copy.** A seed is ~280 ms, two-thirds of it `copyArtefacts`. But
+`loadArticleIntoPg` takes `RUN_LOCK` unconditionally, and it is exactly linear: at sixteen concurrent
+seeds the worst wait is **4.9–6.1 s locked against 1.0–2.0 s unlocked**, because every caller queues
+behind every other *even though none of them shares a slug*. Extrapolated to ~48 suites that is ~24 s
+of strictly serial demand on top of the ~25 s already there, against a 120 s budget — one run fits
+with little margin, two concurrent runs nearly do not, and the failure mode is a confident hard
+timeout naming a **sibling** suite.
+
+**So: no second seeder yet.** Making the lock opt-in for unique-slug seeds cuts the tail four- to
+six-fold for one deliberate change; a direct-SQL seeder would save 68 ms of 280 and would need its own
+zero-copy refusal. **The strongest argument the other way, recorded because it is genuinely strong:**
+25 suites need only *an* article to exist, not eight pipeline steps and 24 round trips — and **20 test
+files already hand-roll `db.insert(articles)`**, so a second seeder would consolidate duplication that
+exists rather than introduce a second way, exactly as `seed-reader-state.ts` did on Sol's ruling.
+
+**Four suites do not convert and want a decision, not a conversion.** `shelf` and `library-search`
+test `src/shelf.ts` and `src/library-search.ts`, which stage 4 **deletes** rather than converts; four
+of `parse-json`'s six scenarios drive `loadComments`/`loadThreads`/`loadRuns` likewise; and
+`library.test.ts`'s `listArticles` half tests filesystem-only behaviour (a half-built directory,
+`meta.json` absent so fall back to mtime) that has **no Postgres equivalent**. Each is a deletion or a
+rewrite, and somebody has to choose.
+
+**A conversion trap, because the filesystem store checked none of it and fixtures of this shape have
+worked for a year.** Any fixture that rewrites `blocks.json` must keep **every block id** (the tree
+names them by range, and the guard reports `range end "spya-…" not in blocks.json`), leave **heading
+blocks** alone (`sourceHeading` must still match inside its range), and **restamp `labels.json`'s
+`sourceHash`** with `hashBlocks(blocks)`.
+
+**And the pilot found a live production bug while measuring.** `CommentIdTaken` (a 409) and
+`NotAnExplanation`'s missing case (a 404) are not on `mayPassThrough`'s allowlist in
+`src/store/db-errors.ts` and carry no numeric `status`, so `guardDbStore` scrubs them to
+`StoreFailure`, the route's `instanceof` never matches, and **the reader gets a 500**. It is live,
+because only the Postgres path is wrapped — and it went unseen because the suite covering it ran
+against the filesystem store, so the coverage existed and proved nothing. Being fixed separately,
+with a postmortem.
 
 #### Sub-stage I is a product decision and needs Greg
 
