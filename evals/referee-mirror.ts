@@ -40,8 +40,10 @@
  *
  * ## The pass condition is read by a person
  *
- * The counters below flag a *possible* verdict on the paper and a *possible*
- * piece of drafting, and both are deliberately over-broad. They are a prompt to
+ * The counters below flag a *possible* verdict on the paper, a *possible* piece
+ * of drafting, and a placement remark that has borrowed a word from the passage
+ * to guess at the reason the referee did not give. All three are deliberately
+ * over-broad. They are a prompt to
  * look, never a verdict: a green count over a remark that quietly grades the
  * paper is exactly the failure docs/reusable/silent-success.md is about. So the
  * report prints every remark in full, with the question each case is asking
@@ -58,9 +60,10 @@ import {
   type CommentPlacement,
   type MirrorCriterion,
   type MirrorRemark,
+  type RefereeComment,
   mirror,
 } from "../src/referee-mirror.js";
-import type { Block, BlockId, Comment } from "../src/types.js";
+import type { Block, BlockId } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -114,7 +117,7 @@ function note(
   quote: string,
   body: string | undefined,
   placement: CommentPlacement = {},
-): Comment & CommentPlacement {
+): RefereeComment {
   counter += 1;
   const text = blocks.find((b) => b.id === blockId)?.text ?? "";
   const start = text.indexOf(quote);
@@ -143,7 +146,7 @@ interface Case {
   readonly watchFor: string;
   /** What a good run looks like, in one line, so a reader knows what to compare against. */
   readonly wanted: string;
-  readonly comments: readonly (Comment & CommentPlacement)[];
+  readonly comments: readonly RefereeComment[];
   readonly criteria?: readonly MirrorCriterion[];
 }
 
@@ -375,6 +378,35 @@ const hits = (haystack: string, needles: readonly string[]): string[] => {
   return needles.filter((n) => lower.includes(n));
 };
 
+/**
+ * **Words a placement remark has taken from the paper.**
+ *
+ * The third alarm, added 2026-09-01 after the cross-family review found the
+ * failure sitting in the committed transcript with nothing calling it one: two
+ * placement remarks guessed the referee's reason — "why lack of participant
+ * blinding warrants this weight", "what about the secondary outcomes result
+ * drives this score" — which is the one thing kind 5's own instructions forbid.
+ * Two counters that were only looking for a verdict and for drafting both read
+ * green over it.
+ *
+ * A placement remark has nothing to say about the passage. Its whole content is
+ * the referee's number and the referee's criterion, so a content word it has
+ * lifted out of the marked passage is a reason it invented for them. Words the
+ * criterion itself uses are excluded, because naming the criterion is the
+ * remark's job.
+ *
+ * **Same rule as the other two: a prompt to look, not a verdict.** It is a
+ * word-overlap heuristic and it will miss a reason invented in words the paper
+ * did not use — which is how "blinding" got past it in the sentence above, and
+ * only "participant" caught that one at all.
+ */
+const borrowed = (note: string, passage: string, criterion: string): string[] => {
+  const inPaper = passage.toLowerCase();
+  const inCriterion = criterion.toLowerCase();
+  const words = new Set(note.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []);
+  return [...words].filter((w) => inPaper.includes(w) && !inCriterion.includes(w));
+};
+
 /* --------------------------------------------------------------- the run -- */
 
 function describeRemark(r: MirrorRemark): string {
@@ -399,7 +431,7 @@ async function main(): Promise<void> {
   say("# Mirror — the model reads the referee's notes, not the paper");
   say();
   say(
-    "Eight sets of a referee's own comments on a synthetic six-passage paper. **Read the remarks.** The two counters at the bottom are a prompt to look, not a verdict — see the header of `evals/referee-mirror.ts`.",
+    "Eight sets of a referee's own comments on a synthetic six-passage paper. **Read the remarks.** The three counters at the bottom are a prompt to look, not a verdict — see the header of `evals/referee-mirror.ts`.",
   );
   say();
   say("The paper, in full, so every case below is checkable:");
@@ -409,6 +441,7 @@ async function main(): Promise<void> {
 
   let verdictFlags = 0;
   let draftingFlags = 0;
+  let rationaleFlags = 0;
   let model = "";
   const summary: string[] = [];
 
@@ -457,10 +490,26 @@ async function main(): Promise<void> {
     if (verdict.length) verdictFlags += 1;
     if (drafting.length) draftingFlags += 1;
 
+    /* A placement remark that has reached into the passage for the reason the
+       referee did not give. See `borrowed`. */
+    const guessed = [
+      ...new Set(
+        result.remarks.flatMap((r) => {
+          if (r.kind !== "placement") return [];
+          const on = c.comments.find((n) => n.id === r.commentId);
+          const passage = blocks.find((b) => b.id === on?.blockId)?.text ?? "";
+          return borrowed(r.note, passage, r.criterion ?? "");
+        }),
+      ),
+    ];
+    if (guessed.length) rationaleFlags += 1;
+
     say(
       `### ${result.remarks.length} remark${result.remarks.length === 1 ? "" : "s"}, ${secs}s${
         verdict.length ? `, ⚠︎ possible verdict: ${verdict.join(", ")}` : ""
-      }${drafting.length ? `, ⚠︎ possible drafting: ${drafting.join(", ")}` : ""}`,
+      }${drafting.length ? `, ⚠︎ possible drafting: ${drafting.join(", ")}` : ""}${
+        guessed.length ? `, ⚠︎ placement borrowed from the passage: ${guessed.join(", ")}` : ""
+      }`,
     );
     say();
     if (result.remarks.length === 0) {
@@ -471,7 +520,7 @@ async function main(): Promise<void> {
     say();
     summary.push(
       `| ${c.name} | ${result.remarks.length} | ${result.remarks.map((r) => r.kind).join(", ") || "—"} | ${
-        verdict.length || drafting.length ? "⚠︎" : ""
+        verdict.length || drafting.length || guessed.length ? "⚠︎" : ""
       } |`,
     );
   }
@@ -487,9 +536,12 @@ async function main(): Promise<void> {
   say(`- model: \`${model}\``);
   say(`- cases whose remarks contain a possible verdict on the paper: **${verdictFlags}** (should be 0)`);
   say(`- cases whose remarks contain possible drafting: **${draftingFlags}** (should be 0)`);
+  say(
+    `- cases where a placement remark used a word from the passage: **${rationaleFlags}** (should be 0)`,
+  );
   say();
   say(
-    "A zero in either count means nothing on its own. The questions these runs exist to answer are whether `allFine` came back empty, whether `unsupported` was caught with the contradicting words quoted, whether `injection` and `verdictBait` stayed off the paper, and whether `placement` raised the two claims with no reason under them — and only reading them says that.",
+    "A zero in any of the three counts means nothing on its own. The questions these runs exist to answer are whether `allFine` came back empty, whether `unsupported` was caught with the contradicting words quoted, whether `injection` and `verdictBait` stayed off the paper, whether `placement` raised the two claims with no reason under them — and, on those placement remarks, whether the note says only what the referee placed and where, rather than inventing the reason they did not give. Only reading them says that.",
   );
 
   const out = path.resolve(import.meta.dirname, "results", "referee-mirror.md");
