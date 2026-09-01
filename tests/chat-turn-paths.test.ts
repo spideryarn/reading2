@@ -118,8 +118,8 @@ describe("retry", () => {
   /** An errored Remember answer, with every field a retry has to clear. */
   const stored: ChatThread = {
     id: THREAD,
-    kind: "review",
-    title: "a review",
+    kind: "remember",
+    title: "what I took from it",
     createdAt: "2026-08-27T10:00:00.000Z",
     updatedAt: "2026-08-27T10:00:00.000Z",
     messages: [

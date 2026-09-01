@@ -33,7 +33,9 @@
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
- *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
+ *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }
+ *                                → the stored comment. `criterionId` + `valence` are the referee's
+ *                                  own placement of the passage — `tidyMark`
  *   DELETE /api/comments/:slug/:id
  *   GET    /api/chat/:slug       every stored conversation for the article
  *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
@@ -130,6 +132,13 @@ import {
   type DivergingScale,
   isDivergingScale,
   isRefereeCriterionKind,
+  /* **The referee's own placement, checked by the function that knows it is
+     signed.** Deliberately not anything on the confidence path: `validateHits`
+     clamps a negative to zero, so a −80 sent that way arrives as "no strong
+     feeling" and the referee is shown the opposite of what they said.
+     `markProblem` is the same rule `comments_valence_needs_criterion` and
+     `comments_valence_range` hold in the database. */
+  markProblem,
   type RefereeCriterionConfig,
   type RefereeResult,
 } from "./referee-criteria.js";
@@ -774,6 +783,89 @@ function tidyBody(body: unknown): string | null {
 const MAX_BODY_CHARS = 4000;
 
 /**
+ * **The referee's own mark on a passage, as the store may hold it** — which
+ * criterion, and where on its scale they put the passage.
+ *
+ * Greg, 2026-08-31: *"I'm keen to also include some kind of ranked red, green,
+ * and/or red-green-spectrum … perhaps harmonising with the ability for the user
+ * to comment (perhaps quantitatively) on things."* This is the second half of
+ * that — the referee's own quantitative judgement, which is the anchoring
+ * antidote in the design: they record what *they* think rather than only
+ * reading what the model thought.
+ *
+ * ## The one rule this function exists to keep
+ *
+ * **A negative valence must survive.** `SearchHit.confidence` is a 0–100 match
+ * strength whose validator clamps negatives to zero (`validateHits`,
+ * src/search.ts), so a placement that travelled any confidence-shaped path
+ * would arrive as `0` — *"no strong feeling"* — with nothing erroring and
+ * nothing looking odd. So there is **no clamp here at all**: an out-of-range
+ * number is a bad request, not a rounded one. Rejecting is the honest answer
+ * because the referee typed a number and clamping silently answers a different
+ * question. `markProblem` (src/referee-criteria.ts) is the rule, and it is the
+ * same one `comments_valence_range` and `comments_valence_needs_criterion` hold
+ * in the database.
+ *
+ * ## And the criterion has to be theirs
+ *
+ * `criterionId` comes off a request, so on its own it names any string. It is
+ * checked against `refereeCriteriaStore.load(slug)`, which is scoped to this
+ * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
+ * criterion belonging to somebody else — or to another article, or to nothing —
+ * is refused rather than stored. `comments_criterion_fk` refuses it a second
+ * time, but a foreign-key error is a 500 with a Postgres message in it, and the
+ * filesystem store has no constraint at all: the two stores agree only because
+ * this check is above both of them.
+ *
+ * No message built here may contain the reader's prose — same rule as
+ * `createFree` below, whose header says why.
+ */
+async function tidyMark(
+  slug: string,
+  raw: Record<string, unknown>,
+): Promise<{ criterionId?: string; valence?: number }> {
+  const { criterionId, valence } = raw;
+
+  /* Absent and `null` both mean "no mark"; anything else is a bad request.
+     Coercing here is what made `{ body: {…} }` silently mean "bookmark this" —
+     see `tidyBody`. */
+  if (criterionId !== undefined && criterionId !== null && typeof criterionId !== "string") {
+    throw httpError(400, "criterionId must be a criterion id or null [cmt-criterion-type]");
+  }
+  if (valence !== undefined && valence !== null && typeof valence !== "number") {
+    throw httpError(400, "valence must be a number or null [cmt-valence-type]");
+  }
+  const id = typeof criterionId === "string" ? criterionId : null;
+  /* `Number.isFinite` before `markProblem`, because a NaN compares false
+     against every bound and would slip through the range test as valid. */
+  const placed = typeof valence === "number" && Number.isFinite(valence) ? valence : null;
+  if (typeof valence === "number" && placed === null) {
+    throw httpError(400, "valence must be a finite number [cmt-valence-type]");
+  }
+  if (id !== null && !isSpideryarnId(id)) {
+    throw httpError(400, "criterionId must be a criterion id [cmt-criterion-type]");
+  }
+
+  /* The pure rules — a placement needs a criterion, and it is a whole number
+     from −100 to +100 — from the module that owns them, so the route and the
+     database cannot drift into two different definitions of a placement. */
+  const problem = markProblem({ criterionId: id, valence: placed });
+  if (problem) throw httpError(400, `${problem} [cmt-valence-range]`);
+
+  if (id !== null) {
+    const criteria = await refereeCriteriaStore.load(slug);
+    if (!criteria.some((c) => c.id === id)) {
+      throw httpError(400, "criterionId is not one of your criteria on this article");
+    }
+  }
+
+  return {
+    ...(id === null ? {} : { criterionId: id }),
+    ...(placed === null ? {} : { valence: placed }),
+  };
+}
+
+/**
  * Store a **free** comment — the reader's mark on a passage. No model call.
  *
  * This is what selecting text does since 2026-08-28. Until then, selecting text
@@ -798,13 +890,8 @@ const MAX_BODY_CHARS = 4000;
  * is not putting it in. Same rule as the top of src/comments.ts.
  */
 async function createFree(slug: string, body: unknown): Promise<Comment> {
-  const {
-    id,
-    blockId,
-    quote,
-    start,
-    body: text,
-  } = (body ?? {}) as Record<string, unknown>;
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const { id, blockId, quote, start, body: text } = raw;
 
   if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
     throw httpError(400, "Expected { blockId, quote, start }");
@@ -835,12 +922,18 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
     throw httpError(400, "quote is not in that block");
   }
 
+  /* After the anchor checks, so a request that is wrong about the passage does
+     not first pay for a criteria read — and before the write, so a bad
+     placement leaves nothing behind. */
+  const mark = await tidyMark(slug, raw);
+
   return commentStore.create(slug, {
     blockId,
     quote,
     start,
     ...(tidied === null ? {} : { body: tidied }),
     ...(typeof id === "string" ? { id } : {}),
+    ...mark,
   });
 }
 
@@ -1480,15 +1573,14 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
     throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
   }
-  /* **`review` is the wire value Remember mode still sends**, and it is still
-     that on purpose: `chat_threads.kind` carries a live CHECK constraint that
-     accepts only `chat|review`, so Stage B of the rename maps mode `remember`
-     onto kind `review` and Stage C moves the literal, the schema and the rows
-     together. The message names the wire value because that is what a client
-     has to send.
+  /* The message names the wire value, because that is what a client has to send.
+     `remember` was spelled `review` until 2026-09-01 and there is no alias: the
+     rename moved the wire value, the CHECK constraint and the rows in one step
+     (drizzle/0048_rename_review_thread_kind.sql), so an old client sending
+     `review` gets this 400 rather than a thread of the wrong kind.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
-  if (kind !== undefined && kind !== "chat" && kind !== "review") {
-    throw httpError(400, "kind must be 'chat' or 'review'");
+  if (kind !== undefined && kind !== "chat" && kind !== "remember") {
+    throw httpError(400, "kind must be 'chat' or 'remember'");
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -1537,10 +1629,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      creates one. GPT Sol's review of the built code, finding 5.
 
      Cheap: `chatStore.load` is called a few lines down anyway. And a smuggled
-     `kind: "review"` on a thread that is a chat buys nothing — the 409 below
+     `kind: "remember"` on a thread that is a chat buys nothing — the 409 below
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
-  const askingRemember = (storedKind ?? wantedKind) === "review";
+  const askingRemember = (storedKind ?? wantedKind) === "remember";
   const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
@@ -1582,11 +1674,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* **A Remember turn is about the whole piece, so it has nothing to anchor to.**
      There is no gesture that starts one from a selection — the paragraph and
      selection buttons both open a chat — so an anchor arriving with
-     `kind: "review"` is a client that has confused the two. Refused rather than
+     `kind: "remember"` is a client that has confused the two. Refused rather than
      dropped, and worth more than tidiness: an unanchored Remember turn draws no mark
      in the prose, which is what lets the reading view go on treating every mark
      it draws as a chat. */
-  if (wantedKind === "review" && anchor !== undefined) {
+  if (wantedKind === "remember" && anchor !== undefined) {
     throw httpError(400, "Remembering is about the whole article and cannot be anchored");
   }
   const wanted = parseAnchor(anchor);

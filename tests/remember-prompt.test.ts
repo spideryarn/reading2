@@ -59,23 +59,20 @@ describe("the article message is the same bytes whatever the mode", () => {
      silently, and the only symptom would be a larger bill. */
   it("chat and remember send an identical article block", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    /* `kind: "review"` is the persisted thread kind, which Stage B of the
-       Remember rename deliberately leaves spelled the old way — src/types.ts §
-       ThreadKind. */
-    const remember = buildConverseMessages({ ...base, kind: "review" });
+    const remember = buildConverseMessages({ ...base, kind: "remember" });
     expect(articleMessage(remember)).toEqual(articleMessage(chat));
   });
 
   it("every stance sends an identical article block", () => {
     const stances: RememberStance[] = ["balanced", "respond", "socratic", "signposts"];
-    const first = articleMessage(buildConverseMessages({ ...base, kind: "review", stance: "balanced" }));
+    const first = articleMessage(buildConverseMessages({ ...base, kind: "remember", stance: "balanced" }));
     for (const stance of stances) {
-      expect(articleMessage(buildConverseMessages({ ...base, kind: "review", stance }))).toEqual(first);
+      expect(articleMessage(buildConverseMessages({ ...base, kind: "remember", stance }))).toEqual(first);
     }
   });
 
   it("keeps its cache_control marker in Remember mode", () => {
-    const remember = buildConverseMessages({ ...base, kind: "review" });
+    const remember = buildConverseMessages({ ...base, kind: "remember" });
     const article = articleMessage(remember);
     expect(Array.isArray(article?.content)).toBe(true);
     const parts = article?.content as { cache_control?: unknown }[];
@@ -86,7 +83,7 @@ describe("the article message is the same bytes whatever the mode", () => {
 describe("the kind chooses the system prompt", () => {
   it("sends a different system message for remember than for chat", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const remember = buildConverseMessages({ ...base, kind: "review" });
+    const remember = buildConverseMessages({ ...base, kind: "remember" });
     expect(remember[0]?.content).not.toEqual(chat[0]?.content);
   });
 
@@ -101,7 +98,7 @@ describe("the kind chooses the system prompt", () => {
      not otherwise find out that it was deliberate. */
   it("greets somebody recollecting differently from a questioner, below the breakpoint", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const remember = buildConverseMessages({ ...base, kind: "review" });
+    const remember = buildConverseMessages({ ...base, kind: "remember" });
     expect(remember[2]?.content).not.toEqual(chat[2]?.content);
     expect(String(remember[2]?.content)).toMatch(/tell me what you took from it/i);
   });
@@ -113,7 +110,7 @@ describe("the stance lands below the breakpoint and nowhere else", () => {
      OpenRouter bill arrives. */
   it("is not in the system prompt", () => {
     for (const stance of ["respond", "socratic", "signposts"] as RememberStance[]) {
-      const messages = buildConverseMessages({ ...base, kind: "review", stance });
+      const messages = buildConverseMessages({ ...base, kind: "remember", stance });
       expect(String(messages[0]?.content).toUpperCase()).not.toContain(
         `STANCE FOR THIS TURN: ${stance.toUpperCase()}`,
       );
@@ -121,19 +118,19 @@ describe("the stance lands below the breakpoint and nowhere else", () => {
   });
 
   it("is in the final user message", () => {
-    const messages = buildConverseMessages({ ...base, kind: "review", stance: "socratic" });
+    const messages = buildConverseMessages({ ...base, kind: "remember", stance: "socratic" });
     expect(String(messages.at(-1)?.content)).toContain("Stance for this turn: SOCRATIC.");
   });
 
   it("changes nothing above the final message", () => {
-    const a = buildConverseMessages({ ...base, kind: "review", stance: "respond" });
-    const b = buildConverseMessages({ ...base, kind: "review", stance: "signposts" });
+    const a = buildConverseMessages({ ...base, kind: "remember", stance: "respond" });
+    const b = buildConverseMessages({ ...base, kind: "remember", stance: "signposts" });
     expect(a.slice(0, -1)).toEqual(b.slice(0, -1));
     expect(a.at(-1)).not.toEqual(b.at(-1));
   });
 
   it("says balanced when no stance was chosen", () => {
-    const messages = buildConverseMessages({ ...base, kind: "review" });
+    const messages = buildConverseMessages({ ...base, kind: "remember" });
     expect(String(messages.at(-1)?.content)).toContain("Stance for this turn: BALANCED.");
   });
 
@@ -146,14 +143,14 @@ describe("the stance lands below the breakpoint and nowhere else", () => {
   });
 
   it("keeps the reader's own words last, after the stance", () => {
-    const messages = buildConverseMessages({ ...base, kind: "review", stance: "respond" });
+    const messages = buildConverseMessages({ ...base, kind: "remember", stance: "respond" });
     const content = String(messages.at(-1)?.content);
     expect(content.indexOf("Stance for this turn")).toBeLessThan(content.indexOf(base.question));
   });
 });
 
 describe("the Remember prompt itself", () => {
-  const system = String(buildConverseMessages({ ...base, kind: "review" })[0]?.content);
+  const system = String(buildConverseMessages({ ...base, kind: "remember" })[0]?.content);
 
   /* Not a style check. Each of these is a rule GPT Sol's review of the plan
      required, and each is the fix for a specific way the first draft would have

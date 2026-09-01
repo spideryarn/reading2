@@ -222,7 +222,7 @@ async function rememberOnce(
     /* The **persisted** thread kind, still spelled the old way until Stage C of
        docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md
        migrates the column. src/types.ts § ThreadKind. */
-    kind: "review",
+    kind: "remember",
     stance,
     /* Our own tools off. They would make the run slower, dearer and
        non-comparable between passes, and every one of these cases is answerable

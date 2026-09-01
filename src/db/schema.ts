@@ -2078,13 +2078,23 @@ export const chatThreads = spideryarn.table(
      *
      * **Written on insert only**, and `upsertThread`'s conflict clause does not
      * name it, for a sharper version of the reason it does not name the anchor
-     * columns: every later turn of a review thread comes through that upsert,
-     * so a stale tab sending `kind: "chat"` would turn a review into a chat on
-     * its second question. The prompt would change, the list tag would change,
-     * and the transcript would still read as one conversation.
+     * columns: every later turn of a Remember thread comes through that upsert,
+     * so a stale tab sending `kind: "chat"` would turn a Remember thread into a
+     * chat on its second question. The prompt would change, the list tag would
+     * change, and the transcript would still read as one conversation.
      *
-     * `default 'chat'` is what makes the migration additive: every thread that
-     * existed before review mode is a chat, and no backfill is needed.
+     * `default 'chat'` is what makes the original migration additive: every
+     * thread that existed before the mode is a chat, and no backfill was needed.
+     *
+     * **The second value was `'review'` until 2026-09-01**, when the mode was
+     * renamed to Remember. `drizzle-kit generate` cannot see a check expression
+     * on its own, and it cannot see a data movement at all, so
+     * drizzle/0048_rename_review_thread_kind.sql was hand-completed: DROP the
+     * constraint, UPDATE the rows, then re-ADD it. Re-adding a narrowed CHECK
+     * validates it against the rows already there, so the order is the whole
+     * point — the other order passes on an empty container and fails wherever
+     * there is history.
+     * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md.
      */
     kind: text("kind").notNull().default("chat"),
   },
@@ -2118,7 +2128,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','review')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','remember')`),
   ],
 );
 

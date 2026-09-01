@@ -246,7 +246,7 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
       /* A `chat.json` written before Remember mode has no `kind`, and the column
          is `not null`. `"chat"` is the default `normaliseKind` applies in
          src/chat.ts and the one the column declares. */
-      kind: thread.kind === "review" ? "review" : "chat",
+      kind: thread.kind === "remember" ? "remember" : "chat",
     });
     for (const [ordinal, message] of thread.messages.entries()) {
       await db.insert(chatMessages).values({

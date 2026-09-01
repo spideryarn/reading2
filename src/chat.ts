@@ -86,7 +86,7 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
  * assume, and JSON on disk is not bound by it.
  */
 function normaliseKind(thread: ChatThread): ChatThread {
-  return thread.kind === "review" || thread.kind === "chat"
+  return thread.kind === "remember" || thread.kind === "chat"
     ? thread
     : { ...thread, kind: "chat" };
 }

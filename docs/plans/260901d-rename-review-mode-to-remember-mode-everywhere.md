@@ -302,6 +302,48 @@ Plus:
 - Production migrated, row counts reported.
 - A reader can open Remember mode in the running app and complete a turn — checked in a browser.
 
+## What landed
+
+**Stages A and B, commit `0286766`** — 61 files. Docs, mode key, sub-mode param and both its URL
+registrations, components, CSS, copy, dictation vocabulary, tests, eval, npm script. The persisted
+thread kind stayed `'review'` throughout, deliberately.
+
+**Stage C** — the discriminant, `schema.ts`, `drizzle/0048_rename_review_thread_kind.sql`, the
+fixture corpus and its generator, and Greg's local snapshot.
+
+`db:generate` emitted the DROP and the ADD and **no UPDATE**, exactly as this plan predicted; it was
+hand-inserted between them. Local result, `chat` 27 → 27, `review` 1 → 0, `remember` 0 → 1, total 28
+unchanged, and the live CHECK now reads `('chat','remember')`.
+
+One simplification fell out and was taken: `App.tsx`'s
+`onMode(target.kind === "review" ? "remember" : "chat")` became an identity function once both
+vocabularies agreed, and is now `onMode(target.kind)`.
+
+### The evidence for the prompt, end to end
+
+The fully-built model messages were captured **before any edit** with `kind: "review"`, and again
+after the whole rename with `kind: "remember"`: **byte-identical** across all four stances. The
+`kind: "chat"` control is 7,045 bytes against Remember's 16,232, so a mis-selected prompt would have
+shown — the check can fail, which is what makes it evidence. Captured twice, independently, by the
+orchestrator and by the Stage B agent using different fixtures.
+
+The Stage C agent also proved the typecheck could fail, by reverting one comparison and watching
+`TS2367: types 'ThreadKind' and '"review"' have no overlap` appear.
+
+**And one check that was passing vacuously until Greg's snapshot moved.** `store-roundtrip`'s
+"includes at least one Remember thread with a stance" `console.warn`s and returns green when it finds
+none. It passes *without* the warning only because his migrated thread is there. Had finding 4 not
+been caught, that test would have stayed green while covering nothing.
+
+### Still open
+
+- **Production is not migrated.** This machine has no production credentials: `SUPABASE_URL` and the
+  Supabase MCP connection both point at `127.0.0.1`, and there is no `REMOTE_DATABASE_URL`. Greg
+  pre-approved the migration; it could not be run from here. The runbook is in the handover.
+- **Not deployed.** `main` was 9 commits ahead of `origin/main`, most of them other agents'. Pushing
+  to deploy would have shipped their unfinished work, so the maintenance window is Greg's to choose.
+- **The browser check is owed** — a reader opening Remember and completing a turn.
+
 ## What the review changed
 
 Nine findings taken, one part-taken. Recorded so the next reader sees the plan's own error rate.

@@ -346,7 +346,7 @@ async function sliceStampedHtml(blockIds: Set<string>): Promise<void> {
  *
  * Three properties here are load-bearing and each has a test that needs it:
  *
- * - a thread with `kind: "review"` whose assistant message carries a `stance`,
+ * - a thread with `kind: "remember"` whose assistant message carries a `stance`,
  *   or tests/store-roundtrip.test.ts covers neither field and says so;
  * - a comment anchored to `zzzz00`, which is not a `spya-` id — the seeder
  *   drops it and the filesystem store counts it, and that permitted difference
@@ -429,26 +429,26 @@ const SYNTHESISED: Record<string, Record<string, unknown>> = {
         },
         {
           id: "spya-fxc300",
-          title: "Fixture thread: a review",
+          title: "Fixture thread: remembering",
           createdAt: "2026-08-26T09:00:00.000Z",
           updatedAt: "2026-08-26T09:01:00.000Z",
           /* `kind` and `stance` together are what tests/store-roundtrip.test.ts
              checks the export still carries. Without this thread that test
              warns and covers nothing. */
-          kind: "review",
+          kind: "remember",
           anchor: { blockId: "spya-z7zzwv" },
           messages: [
             {
               id: "spya-fxc303",
               role: "user",
-              text: "Fixture review. Stands in for the reader saying what they took from it.",
+              text: "Fixture Remember turn. Stands in for the reader saying what they took from it.",
               createdAt: "2026-08-26T09:00:00.000Z",
               status: "done",
             },
             {
               id: "spya-fxc304",
               role: "assistant",
-              text: "Fixture response to a review, in the balanced stance.",
+              text: "Fixture response to a Remember turn, in the balanced stance.",
               createdAt: "2026-08-26T09:01:00.000Z",
               status: "done",
               stance: "balanced",

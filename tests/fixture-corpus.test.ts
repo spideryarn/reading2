@@ -168,17 +168,17 @@ describe("the committed fixture corpus", () => {
     });
 
 
-    it("has a review thread carrying a stance", () => {
-      /* Without one, tests/store-roundtrip.test.ts's review test warns and
+    it("has a Remember thread carrying a stance", () => {
+      /* Without one, tests/store-roundtrip.test.ts's Remember test warns and
          covers nothing: `kind` and `stance` could vanish from
          src/store/export.ts and the round trip would stay green. */
       const chat = read<{ threads: { kind?: string; messages: { stance?: string }[] }[] }>(
         "writes",
         "chat.json",
       );
-      const reviews = chat.threads.filter((t) => t.kind === "review");
-      expect(reviews.length).toBeGreaterThan(0);
-      expect(reviews.flatMap((t) => t.messages).filter((m) => m.stance).length).toBeGreaterThan(0);
+      const remembered = chat.threads.filter((t) => t.kind === "remember");
+      expect(remembered.length).toBeGreaterThan(0);
+      expect(remembered.flatMap((t) => t.messages).filter((m) => m.stance).length).toBeGreaterThan(0);
     });
 
     it("has a comment anchored to something block_identities cannot hold", () => {
@@ -220,7 +220,7 @@ describe("the committed fixture corpus", () => {
       }
 
       const { threads } = read<{ threads: ChatThread[] }>("writes", "chat.json");
-      expect(threads.map((t) => t.kind).sort()).toEqual(["chat", "review"]);
+      expect(threads.map((t) => t.kind).sort()).toEqual(["chat", "remember"]);
       for (const t of threads) {
         expect(t.messages.length).toBeGreaterThan(0);
         for (const m of t.messages) {

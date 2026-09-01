@@ -337,6 +337,13 @@
       "when": 1788241363734,
       "tag": "0047_based_on_revision_id",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788251106639,
+      "tag": "0048_rename_review_thread_kind",
+      "breakpoints": true
     }
   ]
 }

@@ -344,11 +344,7 @@ export function ChatPanel({
   onStartLive,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* `"review"` is the **persisted** spelling of the Remember thread kind, kept
-     while the `chat_threads.kind` CHECK constraint still says so — Stage C of
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md moves
-     it. src/types.ts § ThreadKind. */
-  const remember = kind === "review";
+  const remember = kind === "remember";
   const open = threads.find((t) => t.id === threadId) ?? null;
 
   /**
@@ -794,11 +790,9 @@ function ThreadList({
                         chat is the older and commoner kind, and tagging both
                         would put a label on every row to distinguish a minority.
 
-                        `t.kind === "review"` is the **persisted** thread kind,
-                        still spelled the old way until Stage C migrates the
-                        column — src/types.ts § ThreadKind. The tag the reader
-                        sees is the new name. */}
-                    {t.kind === "review" && <span className="chat-thread-kind">remember</span>}
+                        `t.kind` is the **persisted** thread kind —
+                        src/types.ts § ThreadKind. */}
+                    {t.kind === "remember" && <span className="chat-thread-kind">remember</span>}
                     <span className="chat-thread-count">{turns(t)}</span>
                     {/* Recency, because the question a list of conversations
                         answers is "which was I in?". The exact time is in the
@@ -1065,7 +1059,7 @@ export function Conversation({
         }}
       >
         {thread.messages.length === 0 &&
-          (kind === "review" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
+          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1860,7 +1854,7 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  const remember = kind === "review";
+  const remember = kind === "remember";
   const box = useRef<HTMLTextAreaElement>(null);
   const hasProfile = useHasProfile(slug);
   /* Per turn, and it stays where the reader left it for the rest of the

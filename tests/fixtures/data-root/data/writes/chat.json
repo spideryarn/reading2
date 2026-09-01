@@ -27,10 +27,10 @@
     },
     {
       "id": "spya-fxc300",
-      "title": "Fixture thread: a review",
+      "title": "Fixture thread: remembering",
       "createdAt": "2026-08-26T09:00:00.000Z",
       "updatedAt": "2026-08-26T09:01:00.000Z",
-      "kind": "review",
+      "kind": "remember",
       "anchor": {
         "blockId": "spya-z7zzwv"
       },
@@ -38,14 +38,14 @@
         {
           "id": "spya-fxc303",
           "role": "user",
-          "text": "Fixture review. Stands in for the reader saying what they took from it.",
+          "text": "Fixture Remember turn. Stands in for the reader saying what they took from it.",
           "createdAt": "2026-08-26T09:00:00.000Z",
           "status": "done"
         },
         {
           "id": "spya-fxc304",
           "role": "assistant",
-          "text": "Fixture response to a review, in the balanced stance.",
+          "text": "Fixture response to a Remember turn, in the balanced stance.",
           "createdAt": "2026-08-26T09:01:00.000Z",
           "status": "done",
           "stance": "balanced",

@@ -93,11 +93,10 @@ vi.mock("../src/web/QuizPanel.js", () => ({
 
 const STORED: ChatThread = {
   id: "spya-k3m9qt",
-  /* The **persisted** thread kind, which Stage B of the rename deliberately
-     leaves spelled the old way: the live `chat_threads.kind` CHECK constraint
-     still says `chat|review`, and Stage C moves the literal, the schema and the
-     rows together. src/types.ts § ThreadKind. */
-  kind: "review",
+  /* The **persisted** thread kind — src/types.ts § ThreadKind. Spelled `review`
+     until 2026-09-01; the column moved with it in
+     drizzle/0048_rename_review_thread_kind.sql. */
+  kind: "remember",
   title: "What I took from it",
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-01T10:00:00.000Z",
@@ -189,7 +188,7 @@ async function mount(search: string, band: "remember" | "conversation"): Promise
               slug: "a-piece",
               blocks: new Map<string, string>(),
               onJump: () => {},
-              kind: "review" as const,
+              kind: "remember" as const,
               onMode: () => {},
             }),
       ),

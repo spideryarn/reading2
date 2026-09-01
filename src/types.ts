@@ -1809,6 +1809,47 @@ export interface Comment {
   threadId?: string;
 
   /**
+   * **Which referee criterion this note is answering** — absent on an ordinary
+   * reading note, which is every comment written before 2026-08-31.
+   *
+   * The referee's own mark **is a comment**: their words, anchored to a
+   * passage, in the store that already has the anchoring discipline, the
+   * gutter, the API and the export. It also answers, better than a boolean
+   * would, how to tell a review comment from a reading note — a comment with a
+   * criterion is a review comment, one without is a reading note.
+   *
+   * The route refuses an id that is not one of this reader's criteria on this
+   * article, and `comments_criterion_fk` refuses it again
+   * (docs/project/database.md § `restrict` and `no action`).
+   */
+  criterionId?: string;
+
+  /**
+   * **The referee's own placement of this passage on that criterion's scale**,
+   * −100…+100, integer, and signed. Absent when they wrote prose and did not
+   * score it, which is the ordinary case.
+   *
+   * **This is not the model's valence and must never be reconciled with it.**
+   * The model's lives on a `DivergingResult` in a criterion's `results`; this
+   * one is the person's. The whole value is in the gap — a passage the referee
+   * put at +70 and the model at −40 is a disagreement about the paper, and it
+   * is the row worth opening. `valenceGap` in src/referee-criteria.ts.
+   *
+   * **And it is not a confidence.** `SearchHit.confidence` is a 0–100 match
+   * strength whose validator clamps negatives to zero, so a placement routed
+   * through anything shaped like one arrives as `0` — "no strong feeling" —
+   * and every negative judgement the referee made is gone with nothing to see.
+   * That failure is the reason this is its own field with its own clamp
+   * (`clampValence`), and the reason the route validates it with `markProblem`
+   * rather than with anything that touches a confidence.
+   *
+   * Never without `criterionId`: a placement with nothing to place it on is a
+   * number against nothing, and `comments_valence_needs_criterion` says so in
+   * the database as well.
+   */
+  valence?: number;
+
+  /**
    * How the *model call* went, and only that.
    *
    * `none` is every comment made from 2026-08-28: no call was ever attempted,
@@ -2194,16 +2235,17 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * like its `anchor`. See docs/plans/260827ah-review-mode.md § `kind` belongs to the
  * thread.
  *
- * **`"review"` here is the old name of the Remember mode, and it is still
- * `"review"` on purpose.** The mode was renamed on 2026-09-01, but this value is
- * persisted: `chat_threads.kind` carries a live CHECK constraint
- * `kind in ('chat','review')`, so renaming the discriminant before the database
- * moves would fail every Remember insert with `23514`. Stage C renames the
- * literal, the schema and the data together — until then the mapping is
- * deliberately `mode "remember"` → `kind "review"`.
+ * **This value is persisted, so renaming it was a migration and not an edit.**
+ * The mode was called Review until 2026-09-01, and `chat_threads.kind` carried a
+ * CHECK constraint `kind in ('chat','review')`. Narrowing a CHECK before the rows
+ * move fails every Remember insert with `23514`, so the discriminant, the schema
+ * and the data moved in one step: drizzle/0048_rename_review_thread_kind.sql
+ * drops the constraint, updates the rows, then re-adds it with `'remember'`.
+ * Anything else that speaks this wire value — `src/routes.ts`'s validation, the
+ * export/import shapes, the committed fixture corpus — moved with it.
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
  */
-export type ThreadKind = "chat" | "review";
+export type ThreadKind = "chat" | "remember";
 
 /**
  * One conversation, and there may be several per article.

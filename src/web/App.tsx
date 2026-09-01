@@ -30,7 +30,9 @@ import { useJobSession } from "./useJobs.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { type ArticleView, LIBRARY_HREF, navigate, useRoute } from "./router.js";
+import { type ArticleView, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
+import type { User } from "@supabase/supabase-js";
+import { FeedbackButton } from "./FeedbackButton.js";
 import { Metadata } from "./Metadata.js";
 import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
@@ -176,6 +178,7 @@ import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./Public
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
 import { REFEREE_DECLARE_IT, REFEREE_TEXT_ALREADY_SENT } from "../messages.js";
+import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "./feedback-context.js";
 
 /**
  * The owner's `marked` map: nothing is marked, and it is one object for the
@@ -291,6 +294,47 @@ export function App() {
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
 
+  /* **Everything below this line is a signed-in reader, and that is the whole
+     visibility rule for the Feedback button** — written here, next to the gate
+     that decides everything else about being signed in, rather than as a
+     condition inside the button.
+
+     A stranger reading a shared article has nowhere for a report to go: the row
+     is owner-scoped, and `POST /api/feedback` answers them 401 whatever the
+     client draws. **A hidden button is not a gate**, so both halves are tested
+     rather than only the visible one — GPT Sol asked for that, and it is the
+     difference between a rule and an appearance. See FeedbackButton.tsx and
+     docs/project/feedback.md. */
+  return (
+    <>
+      <SignedIn route={route} user={user} />
+      <FeedbackButton readerEmail={user.email ?? null} />
+    </>
+  );
+}
+
+/**
+ * The pages a signed-in reader can be on.
+ *
+ * Split out of `App` so that the Feedback button has somewhere to be mounted
+ * **once**. Every branch here is an early `return`, so before this split there
+ * was no point in the signed-in tree that ran on every page — the same shape
+ * that had `useJobs` driving imports only on the pages that happened to mount
+ * it (see `useJobSession` above). One wrapper, one button, one rule.
+ */
+function SignedIn({
+  route,
+  user,
+}: {
+  /* **Not `Route`, and the compiler is the reason.** `App` answers `callback`
+     before the gate above — it has to, because the reader coming back from an
+     auth redirect is by definition not signed in yet — so it cannot reach here.
+     Saying that in the type rather than in a comment means the last branch below
+     narrows to `read` on its own, instead of needing a `kind === "callback"`
+     arm that nothing can ever run. */
+  route: Exclude<Route, { kind: "callback" }>;
+  user: User;
+}) {
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
@@ -1342,6 +1386,40 @@ function Reader({
   const { at, jumpTo } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
+   * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
+   *
+   * Module state rather than props: the button is at the top level of the
+   * window and every fact here is eight components down, so the alternative is
+   * drilling six values up through the whole tree for one dialog. Ids only —
+   * the slug, the tree's first block and the run of blocks around the reading
+   * position — never a word of the article; the reasoning is
+   * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md
+   * § Article identifiers, not article prose.
+   *
+   * The view is `"article"` by construction: `OwnedArticle` and its visitor
+   * twin answer `metadata` and `tweets` with their own pages, so this component
+   * is only ever mounted for the reading view.
+   *
+   * The cleanup clears it, so a report filed from the shelf a moment later does
+   * not name an article the reader has already left.
+   */
+  useEffect(() => {
+    const row = at === null ? -1 : article.blocks.findIndex((b) => b.id === at);
+    const from = row < 0 ? 0 : row;
+    setFeedbackArticleContext({
+      slug,
+      revisionId: null,
+      view: "article",
+      mode,
+      level: fit.columns.length,
+      blockCount: article.blocks.length,
+      rootBlockId: article.tree.nodes[article.tree.rootId]?.range[0] ?? null,
+      blockIds: article.blocks.slice(from, from + FEEDBACK_BLOCK_IDS).map((b) => b.id),
+    });
+    return () => setFeedbackArticleContext(null);
+  }, [slug, article, mode, fit.columns.length, at]);
+
+  /**
    * Where the reader is, for the outline band — the same sampler the gist
    * columns' panels use, so the two can never disagree about which section is
    * under the focus line.
@@ -1464,7 +1542,8 @@ function Reader({
            nothing,
            which is the same thing a stale id already did. GPT Sol's review of
            docs/plans/260827ah-review-mode.md, finding 7. */
-        /* **A positive test, not a negative one.** `?.kind !== "review"` was
+        /* **A positive test, not a negative one.** `?.kind !== "remember"`
+           (spelled `review` at the time) was
            the first version and had its default backwards: an *unknown* thread
            — summaries not fetched yet, or a stale id — came out as a chat, so a
            Remember URL opened the floating chat dialog for a moment on every
@@ -3136,7 +3215,8 @@ export function RememberBand({
     />
   );
 
-  if (remember === "quiz") return <QuizSubBand slug={slug} subMode={toggle} />;
+  if (remember === "quiz")
+    return <QuizSubBand slug={slug} subMode={toggle} blocks={blocks} onJump={onJump} />;
   return (
     <ConversationBand
       /* Keyed so that leaving Quiz and coming back starts clean rather than
@@ -3146,10 +3226,8 @@ export function RememberBand({
       slug={slug}
       blocks={blocks}
       onJump={onJump}
-      /* The **persisted thread kind**, which is still spelled `review` while
-         the `chat_threads.kind` CHECK constraint says so — src/types.ts §
-         ThreadKind. Stage C renames it with the migration. */
-      kind="review"
+      /* The **persisted thread kind** — src/types.ts § ThreadKind. */
+      kind="remember"
       onMode={onMode}
       subMode={toggle}
     />
@@ -3166,9 +3244,19 @@ export function RememberBand({
  * hooks cannot be called conditionally, so the condition has to be a component
  * boundary.
  */
-function QuizSubBand({ slug, subMode }: { slug: string; subMode: React.ReactNode }) {
+function QuizSubBand({
+  slug,
+  subMode,
+  blocks,
+  onJump,
+}: {
+  slug: string;
+  subMode: React.ReactNode;
+  blocks: Map<string, string>;
+  onJump(id: BlockId): void;
+}) {
   const owner = useQuiz(slug);
-  return <QuizPanel owner={owner} subMode={subMode} />;
+  return <QuizPanel owner={owner} subMode={subMode} blocks={blocks} onJump={onJump} />;
 }
 
 /**
@@ -3452,11 +3540,12 @@ export function ConversationBand({
        */
       onThread={(id) => {
         const target = id ? threads.find((t) => t.id === id) : null;
-        /* `target.kind === "review"` is the *thread kind*, which Stage B
-           deliberately leaves spelled the old way (src/types.ts § ThreadKind);
-           the mode it maps to is `remember`. Stage C closes that gap.
-           docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
-        if (target && target.kind !== kind) onMode(target.kind === "review" ? "remember" : "chat");
+        /* `ThreadKind` and `Mode` are separate vocabularies (src/types.ts,
+           src/modes.ts) that agree on both of the kind's values — since
+           2026-09-01, when `review` became `remember` in the column as well as
+           the URL. `Mode` is the wider of the two, so this assigns rather than
+           maps, and the compiler is what keeps that true. */
+        if (target && target.kind !== kind) onMode(target.kind);
         /* **Rule 3**: opening a Remember conversation lands on the Recall half,
            because a conversation is what Recall is and Quiz has nowhere to put
            one. Set unconditionally rather than only when crossing from chat,
@@ -3466,7 +3555,7 @@ export function ConversationBand({
            rely on — so this is still one entry on the Back stack, not three.
            `rememberParam` defaults to `recall`, so this writes nothing to the URL
            in the ordinary case. */
-        if (!target || target.kind === "review") void setRemember("recall");
+        if (!target || target.kind === "remember") void setRemember("recall");
         void setThread(id);
       }}
       onNew={startNew}
@@ -3494,7 +3583,7 @@ export function ConversationBand({
           (corrected) => void setThread(corrected),
           undefined,
           sendKind,
-          sendKind === "review" ? stance : undefined,
+          sendKind === "remember" ? stance : undefined,
         );
         if (id !== thread) void setThread(id);
       }}
@@ -3516,7 +3605,7 @@ export function ConversationBand({
           (corrected) => void setThread(corrected),
           undefined,
           kind,
-          kind === "review" ? stance : undefined,
+          kind === "remember" ? stance : undefined,
         );
         void setThread(id);
         setFocusNonce((n) => n + 1);

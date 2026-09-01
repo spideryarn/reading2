@@ -24,17 +24,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { ChatConflict, withEdit, withRetry, withTurn } from "../src/chat.js";
-/* Every `"review"` below is the **persisted thread kind**, which Stage B of the
-   Remember rename deliberately leaves spelled the old way — the live
-   `chat_threads.kind` CHECK constraint still says `chat|review`, and Stage C
-   moves the literal, the schema and the rows together.
-   docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
 import type { ChatMessage, ChatThread, RememberStance } from "../src/types.js";
 
 const AT = "2026-08-27T12:00:00.000Z";
 
 /** A thread as the store would hold it after `turns` question-and-answer pairs. */
-function threadWith(kind: "chat" | "review", stances: (RememberStance | undefined)[]): ChatThread {
+function threadWith(kind: "chat" | "remember", stances: (RememberStance | undefined)[]): ChatThread {
   const messages: ChatMessage[] = [];
   stances.forEach((stance, i) => {
     messages.push({ id: `spya-usr${i}aa`, role: "user", text: `q${i}`, createdAt: AT, status: "done" });
@@ -52,8 +47,8 @@ function threadWith(kind: "chat" | "review", stances: (RememberStance | undefine
 
 describe("a thread is one kind for life", () => {
   it("takes its kind from the turn that creates it", () => {
-    const { thread } = withTurn([], { threadId: "spya-newone", question: "q", kind: "review" }, AT);
-    expect(thread.kind).toBe("review");
+    const { thread } = withTurn([], { threadId: "spya-newone", question: "q", kind: "remember" }, AT);
+    expect(thread.kind).toBe("remember");
   });
 
   it("is a chat when no kind is offered — what every pre-Remember caller means", () => {
@@ -65,29 +60,29 @@ describe("a thread is one kind for life", () => {
      succeeds and every later answer in a Remember conversation is written with
      chat's prompt. Nothing errors and nothing on screen disagrees. */
   it("refuses a second turn that contradicts it", () => {
-    const existing = [threadWith("review", ["balanced"])];
+    const existing = [threadWith("remember", ["balanced"])];
     expect(() =>
       withTurn(existing, { threadId: "spya-thread", question: "q2", kind: "chat" }, AT),
     ).toThrow(ChatConflict);
   });
 
   it("accepts a second turn that agrees with it, so a retried send is harmless", () => {
-    const existing = [threadWith("review", ["balanced"])];
-    const { thread } = withTurn(existing, { threadId: "spya-thread", question: "q2", kind: "review" }, AT);
-    expect(thread.kind).toBe("review");
+    const existing = [threadWith("remember", ["balanced"])];
+    const { thread } = withTurn(existing, { threadId: "spya-thread", question: "q2", kind: "remember" }, AT);
+    expect(thread.kind).toBe("remember");
     expect(thread.messages).toHaveLength(4);
   });
 
   it("accepts a second turn that names no kind at all", () => {
-    const existing = [threadWith("review", ["balanced"])];
+    const existing = [threadWith("remember", ["balanced"])];
     const { thread } = withTurn(existing, { threadId: "spya-thread", question: "q2" }, AT);
-    expect(thread.kind).toBe("review");
+    expect(thread.kind).toBe("remember");
   });
 
   it("survives a retry and an edit untouched", () => {
-    const threads = [threadWith("review", ["socratic"])];
-    expect(withRetry(threads, "spya-thread", "spya-ans0aa", AT).thread.kind).toBe("review");
-    expect(withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT).thread.kind).toBe("review");
+    const threads = [threadWith("remember", ["socratic"])];
+    expect(withRetry(threads, "spya-thread", "spya-ans0aa", AT).thread.kind).toBe("remember");
+    expect(withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT).thread.kind).toBe("remember");
   });
 });
 
@@ -99,7 +94,7 @@ describe("the stance is written on the pending row, not on the finished one", ()
   it("is on the empty assistant row the moment the turn is stored", () => {
     const { reply } = withTurn(
       [],
-      { threadId: "spya-newone", question: "q", kind: "review", stance: "socratic" },
+      { threadId: "spya-newone", question: "q", kind: "remember", stance: "socratic" },
       AT,
     );
     expect(reply.status).toBe("pending");
@@ -110,7 +105,7 @@ describe("the stance is written on the pending row, not on the finished one", ()
   it("never lands on the reader's own message", () => {
     const { user } = withTurn(
       [],
-      { threadId: "spya-newone", question: "q", kind: "review", stance: "respond" },
+      { threadId: "spya-newone", question: "q", kind: "remember", stance: "respond" },
       AT,
     );
     expect(user).not.toHaveProperty("stance");
@@ -132,14 +127,14 @@ describe("a retry re-asks the question the way it was asked", () => {
      instruction that produced it, and "have another go at that" has to mean
      another go at the same question asked the same way. */
   it("carries the replaced answer's stance onto the new pending row", () => {
-    const threads = [threadWith("review", ["socratic"])];
+    const threads = [threadWith("remember", ["socratic"])];
     const { reply } = withRetry(threads, "spya-thread", "spya-ans0aa", AT);
     expect(reply.stance).toBe("socratic");
     expect(reply.status).toBe("pending");
   });
 
   it("still drops everything else the old attempt had", () => {
-    const threads = [threadWith("review", ["respond"])];
+    const threads = [threadWith("remember", ["respond"])];
     const target = threads[0]!.messages[1]!;
     Object.assign(target, { model: "some/model", searches: 3, error: "old" });
     const { reply } = withRetry(threads, "spya-thread", "spya-ans0aa", AT);
@@ -163,7 +158,7 @@ describe("an edit inherits from the answer it replaces, not from the tail", () =
      would answer a rewritten early question in the voice of a later turn that
      no longer exists. */
   it("takes the stance of the answer under the question being rewritten", () => {
-    const threads = [threadWith("review", ["socratic", "respond", "signposts"])];
+    const threads = [threadWith("remember", ["socratic", "respond", "signposts"])];
     const { reply, discarded } = withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT);
     expect(reply.stance).toBe("socratic");
     // and it really did discard the later turns whose stances differed:
@@ -172,13 +167,13 @@ describe("an edit inherits from the answer it replaces, not from the tail", () =
   });
 
   it("does not take the stance of the last answer in the thread", () => {
-    const threads = [threadWith("review", ["socratic", "respond", "signposts"])];
+    const threads = [threadWith("remember", ["socratic", "respond", "signposts"])];
     const { reply } = withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT);
     expect(reply.stance).not.toBe("signposts");
   });
 
   it("editing the last question keeps that turn's own stance", () => {
-    const threads = [threadWith("review", ["socratic", "respond"])];
+    const threads = [threadWith("remember", ["socratic", "respond"])];
     const { reply } = withEdit(threads, "spya-thread", "spya-usr1aa", "rewritten", AT);
     expect(reply.stance).toBe("respond");
   });

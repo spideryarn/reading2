@@ -372,7 +372,7 @@ when("a round trip through Postgres", () => {
    * withdraws two artefacts from this suite.
    *
    * So the coverage is asserted rather than assumed — the same argument the
-   * review test below already makes for Remember threads, made once for the whole list.
+   * Remember test below already makes, made once for the whole list.
    * docs/plans/260901b-committed-fixture-corpus.md, ranked silent failure 3.
    */
   it("has at least one article carrying each artefact it claims to preserve", async () => {
@@ -414,12 +414,13 @@ when("a round trip through Postgres", () => {
   });
 
   /**
-   * **Does this suite actually exercise a review at all?**
+   * **Does this suite actually exercise a Remember thread at all?**
    *
    * The chat.json comparison below is what would catch `kind` or `stance` going
    * missing from src/store/export.ts — the way `tools` once did, which that
    * file's own comment records. But it can only catch it if some article's
-   * conversations include a review, and `data/` is gitignored working data that
+   * conversations include a Remember thread, and `data/` is gitignored working
+   * data that
    * varies per machine. On a laptop with none, every assertion below passes
    * while covering nothing, and nothing says so.
    *
@@ -430,9 +431,6 @@ when("a round trip through Postgres", () => {
    *
    * To create one: open an article in Remember mode and say something.
    */
-  /* `kind !== "review"` below is the **persisted** thread kind, which Stage B of
-     the Remember rename deliberately leaves spelled the old way — src/types.ts §
-     ThreadKind. */
   it("includes at least one Remember thread with a stance, or says it could not", async () => {
     let remembered = 0;
     let stances = 0;
@@ -441,7 +439,7 @@ when("a round trip through Postgres", () => {
         | { threads?: { kind?: string; messages?: { stance?: string }[] }[] }
         | undefined;
       for (const t of file?.threads ?? []) {
-        if (t.kind !== "review") continue;
+        if (t.kind !== "remember") continue;
         remembered += 1;
         stances += (t.messages ?? []).filter((m) => m.stance).length;
       }

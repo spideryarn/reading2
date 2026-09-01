@@ -660,7 +660,7 @@ when("the Postgres chat store", () => {
   });
 
   /* ----------------------------------------------------- Remember mode ----
-     The two fields review added, against the two ways Postgres could lose them
+     The two fields the mode added, against the two ways Postgres could lose them
      that the filesystem store cannot. Both are silent failures: no error, no
      visible symptom, and a transcript that still reads as one conversation.
      docs/plans/260827ah-review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
@@ -674,29 +674,30 @@ when("the Postgres chat store", () => {
        Be exact about what this does NOT catch, because the first version of
        this comment claimed otherwise and was wrong: naming `kind` in
        `upsertThread`'s `set` clause does not make it red. `withTurn` derives
-       the value from the existing thread, so the upsert writes `"review"` over
-       `"review"`. The omission from `set` is defence in depth against a future
+       the value from the existing thread, so the upsert writes `"remember"`
+       over `"remember"`. The omission from `set` is defence in depth against a future
        caller that supplies a kind from somewhere else; the test below is the
        one that catches a kind actually changing. */
-    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "review" });
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "remember" });
     await pgChatStore.begin(SLUG, { threadId: THREAD, question: "and also" });
     const rows = await getDb()
       .select()
       .from(chatThreads)
       .where(and(eq(chatThreads.articleId, ARTICLE_ID), eq(chatThreads.id, THREAD)));
-    expect(rows[0]?.kind).toBe("review");
+    expect(rows[0]?.kind).toBe("remember");
   });
 
   it("refuses a second turn that contradicts the thread's kind", async () => {
     /* **The one that matters.** Remove the guard in `withTurn` and this goes
-       red — and a review's second question is then answered with chat's prompt,
+       red — and a Remember thread's second question is then answered with
+       chat's prompt,
        its list tag changes, and the transcript still reads as one
        conversation. Nothing else in the suite notices. */
-    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "review" });
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "remember" });
     await expect(
       pgChatStore.begin(SLUG, { threadId: THREAD, question: "sneaky", kind: "chat" }),
     ).rejects.toBeInstanceOf(ChatConflict);
-    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("review");
+    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("remember");
   });
 
   it("defaults a thread with no kind to chat", async () => {
@@ -708,7 +709,7 @@ when("the Postgres chat store", () => {
     const { reply } = await pgChatStore.begin(SLUG, {
       threadId: THREAD,
       question: "what I took",
-      kind: "review",
+      kind: "remember",
       stance: "socratic",
     });
     expect(reply.status).toBe("pending");
@@ -725,7 +726,7 @@ when("the Postgres chat store", () => {
     const { reply, attempt } = await pgChatStore.begin(SLUG, {
       threadId: THREAD,
       question: "what I took",
-      kind: "review",
+      kind: "remember",
       stance: "respond",
     });
     await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "error", error: "nope" }, { attempt });
@@ -736,7 +737,7 @@ when("the Postgres chat store", () => {
     const { reply, attempt } = await pgChatStore.begin(SLUG, {
       threadId: THREAD,
       question: "what I took",
-      kind: "review",
+      kind: "remember",
       stance: "signposts",
     });
     await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "done", text: "a" }, { attempt });

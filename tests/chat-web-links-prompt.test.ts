@@ -6,7 +6,7 @@
  * a sentence in the prompt, and a sentence in a prompt is exactly the kind of
  * thing that gets written once and forgotten in the other one.
  *
- * That is not hypothetical here: a **review** thread can search the web, its
+ * That is not hypothetical here: a **Remember** thread can search the web, its
  * answers go through the same renderer, and the first version of this feature
  * put the rule in `SYSTEM` only. A GPT Sol review found it on 2026-08-27, which
  * is why the block is a shared constant and why this file exists rather than a
@@ -22,7 +22,7 @@ const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" }
 const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
 
 /** The system message a turn of this kind is sent. */
-const system = (kind: "chat" | "review"): string => {
+const system = (kind: "chat" | "remember"): string => {
   const messages = buildConverseMessages({ meta, blocks, history: [], question: "q", kind });
   const found = messages.find((m) => m.role === "system");
   if (!found) throw new Error(`no system message for a ${kind} turn`);
@@ -30,7 +30,7 @@ const system = (kind: "chat" | "review"): string => {
 };
 
 describe("the rule about linking to the web", () => {
-  it.each(["chat", "review"] as const)("is in the %s prompt", (kind) => {
+  it.each(["chat", "remember"] as const)("is in the %s prompt", (kind) => {
     const prompt = system(kind);
     expect(prompt).toContain("LINKING TO THE WEB");
     expect(prompt).toContain("NEVER invent a URL");
@@ -42,7 +42,7 @@ describe("the rule about linking to the web", () => {
   it("is the same text in both, because it is one constant", () => {
     const clip = (prompt: string) =>
       prompt.slice(prompt.indexOf("LINKING TO THE WEB")).split("\n\n").slice(0, 3).join("\n\n");
-    expect(clip(system("review"))).toBe(clip(system("chat")));
+    expect(clip(system("remember"))).toBe(clip(system("chat")));
   });
 
   it("shows the shape the parser actually reads", () => {

@@ -18,11 +18,6 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-/* Every `kind: "review"` below is the **persisted thread kind**, which Stage B
-   of the Remember rename deliberately leaves spelled the old way — the live
-   `chat_threads.kind` CHECK constraint still says `chat|review`, and Stage C
-   moves the literal, the schema and the rows together.
-   docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
 import type { ChatThread, RememberStance } from "../src/types.js";
 
 /* The profile hook fetches on mount, and none of this is about the profile. */
@@ -39,7 +34,7 @@ function rememberThread(stance?: RememberStance): ChatThread {
     title: "What I took from it",
     createdAt: AT,
     updatedAt: AT,
-    kind: "review",
+    kind: "remember",
     messages: [
       { id: "spya-usr2aa", role: "user", text: "what I took", createdAt: AT, status: "done" },
       {
@@ -59,7 +54,7 @@ let root: Root;
 
 const sent: { question: string }[] = [];
 
-function paint(thread: ChatThread, kind: "chat" | "review" = "review", stance: RememberStance = "balanced") {
+function paint(thread: ChatThread, kind: "chat" | "remember" = "remember", stance: RememberStance = "balanced") {
   act(() => {
     root.render(
       createElement(ChatPanel, {

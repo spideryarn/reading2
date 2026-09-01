@@ -88,15 +88,9 @@ async function post(body: unknown): Promise<{ status: number; body: string }> {
   return { status: (res as { statusCode: number }).statusCode, body: written };
 }
 
-/** A stored Remember thread, so the "already a different kind" cases have one to hit.
-
-    `kind: "review"` is the **persisted** thread kind, which Stage B of the
-    Remember rename deliberately leaves spelled the old way — the live
-    `chat_threads.kind` CHECK constraint still says `chat|review`, and Stage C
-    moves the literal, the schema and the rows together.
-    docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+/** A stored Remember thread, so the "already a different kind" cases have one to hit. */
 async function seedRemember(threadId: string) {
-  await post({ threadId, question: "what I took from it", kind: "review", stance: "socratic" });
+  await post({ threadId, question: "what I took from it", kind: "remember", stance: "socratic" });
 }
 
 describe("a stance the server does not know is refused, not ignored", () => {
@@ -104,7 +98,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
     const { status } = await post({
       threadId: "spya-r4v3wz",
       question: "what I took",
-      kind: "review",
+      kind: "remember",
       stance: "socratik",
     });
     expect(status).toBe(400);
@@ -114,7 +108,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
     const { body } = await post({
       threadId: "spya-r4v3wz",
       question: "q",
-      kind: "review",
+      kind: "remember",
       stance: "nonsense",
     });
     for (const s of ["balanced", "respond", "socratic", "signposts"]) expect(body).toContain(s);
@@ -125,7 +119,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
       const { status } = await post({
         threadId: `spya-s${stance.slice(0, 5)}`,
         question: "what I took",
-        kind: "review",
+        kind: "remember",
         stance,
       });
       // 200: the turn is written and the stream opens before the model is called.
@@ -142,7 +136,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
 describe("a Remember turn cannot be anchored to a passage", () => {
   /* There is no gesture that starts one from a selection — both the
      paragraph button and the selection open a chat — so an anchor arriving with
-     `kind: "review"` is a confused client. It is refused rather than dropped
+     `kind: "remember"` is a confused client. It is refused rather than dropped
      because an unanchored Remember turn draws no mark in the prose, which is the
      property the reading view's overlay relies on. */
   it("400s an anchor sent with the Remember kind", async () => {
@@ -155,7 +149,7 @@ describe("a Remember turn cannot be anchored to a passage", () => {
     const { status } = await post({
       threadId: "spya-r4v3wz",
       question: "what I took",
-      kind: "review",
+      kind: "remember",
       anchor: { blockId: "spya-tgnssb" },
     });
     expect(status).toBe(400);
@@ -187,7 +181,7 @@ describe("a thread's kind belongs to the thread", () => {
   it("accepts a send that agrees, so a duplicate request is harmless", async () => {
     const id = "spya-r7k3wz";
     await seedRemember(id);
-    const { status } = await post({ threadId: id, question: "and also", kind: "review" });
+    const { status } = await post({ threadId: id, question: "and also", kind: "remember" });
     expect(status).not.toBe(409);
   });
 
@@ -197,7 +191,7 @@ describe("a thread's kind belongs to the thread", () => {
     const { status } = await post({ threadId: id, question: "and also" });
     expect(status).not.toBe(409);
     const threads = await loadThreads(SLUG);
-    expect(threads.find((t) => t.id === id)?.kind).toBe("review");
+    expect(threads.find((t) => t.id === id)?.kind).toBe("remember");
   });
 
   /* **Refused before anything is read, let alone settled.** A retry's thread
@@ -208,7 +202,7 @@ describe("a thread's kind belongs to the thread", () => {
   it("400s a retry that carries a kind", async () => {
     const id = "spya-r7k5wz";
     await seedRemember(id);
-    const { status } = await post({ threadId: id, retry: "spya-whatever", kind: "review" });
+    const { status } = await post({ threadId: id, retry: "spya-whatever", kind: "remember" });
     expect(status).toBe(400);
   });
 
@@ -235,9 +229,9 @@ describe("a thread's kind belongs to the thread", () => {
 describe("what actually gets stored", () => {
   it("writes the kind and the stance on the very first turn", async () => {
     const id = "spya-r8m2wz";
-    await post({ threadId: id, question: "what I took from it", kind: "review", stance: "signposts" });
+    await post({ threadId: id, question: "what I took from it", kind: "remember", stance: "signposts" });
     const thread = (await loadThreads(SLUG)).find((t) => t.id === id);
-    expect(thread?.kind).toBe("review");
+    expect(thread?.kind).toBe("remember");
     /* **And the answer here has FAILED**, because `fetch` is stubbed to reject
        — which makes this the sharpest version of the test rather than an
        inconvenience. The stance was written onto the pending row before the
@@ -268,7 +262,7 @@ describe("what actually gets stored", () => {
     const asRemember = await post({
       threadId: "spya-r9m3wz",
       question: long,
-      kind: "review",
+      kind: "remember",
       stance: "balanced",
     });
     expect(asChat.status).toBe(413);
@@ -277,7 +271,7 @@ describe("what actually gets stored", () => {
 
   it("still has a ceiling on a Remember turn", async () => {
     const absurd = "x".repeat(20_001);
-    const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "review" });
+    const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "remember" });
     expect(status).toBe(413);
   });
 });

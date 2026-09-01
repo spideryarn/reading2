@@ -512,10 +512,9 @@ export function useChat(slug: string): ChatApi {
              pressing Remember is a small lie, and it is the row they are about
              to type into. The real title arrives with the first thing they say.
 
-             `kind === "review"` is the **persisted** thread kind, still spelled
-             the old way until Stage C migrates the column — src/types.ts §
+             `kind` here is the **persisted** thread kind — src/types.ts §
              ThreadKind. */
-          title: kind === "review" ? "Remembering" : "New chat",
+          title: kind === "remember" ? "Remembering" : "New chat",
           createdAt: at,
           updatedAt: at,
           /* An empty thread exists only in this tab, so this kind is a promise
@@ -646,7 +645,7 @@ export function useChat(slug: string): ChatApi {
             /* Sent only when it is a Remember turn. A body with no `kind` means chat,
                which is what every caller written before this feature meant, and
                what keeps an old tab working. */
-            ...(kind === "review" ? { kind } : {}),
+            ...(kind === "remember" ? { kind } : {}),
             ...(stance ? { stance } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
           },

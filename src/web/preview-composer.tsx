@@ -104,7 +104,7 @@ function Page() {
                   focused={{ current: 0 }}
                   draft=""
                   onDraft={() => {}}
-                  kind={w.px > 500 ? "review" : "chat"}
+                  kind={w.px > 500 ? "remember" : "chat"}
                   live={still(p.phase, p.over ?? {})}
                   onStartLive={() => {}}
                 />

@@ -671,14 +671,9 @@ ${PROFILE_RULES}`;
  * thread has one, and the two are the same thing only when the request was
  * right.
  *
- * **`"review"` is the persisted spelling of Remember**, and it is still that on
- * purpose — the `chat_threads.kind` CHECK constraint has not moved yet, so
- * Stage B maps mode `remember` onto kind `review`. Stage C renames the literal,
- * the schema and the rows together.
- * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
  */
 const systemFor = (kind: ThreadKind): string =>
-  kind === "review" ? REMEMBER_SYSTEM : SYSTEM;
+  kind === "remember" ? REMEMBER_SYSTEM : SYSTEM;
 
 /**
  * The assistant's canned line between the article and the conversation.
@@ -689,7 +684,7 @@ const systemFor = (kind: ThreadKind): string =>
  * put in the mouth of a conversation where the reader is the one about to talk.
  */
 const readItFor = (kind: ThreadKind): string =>
-  kind === "review"
+  kind === "remember"
     ? "I've read it. Tell me what you took from it."
     : "Read it. What would you like to know?";
 
@@ -710,7 +705,7 @@ function stanceLine(
   kind: ThreadKind,
   stance: RememberStance | undefined,
 ): string {
-  if (kind !== "review") return "";
+  if (kind !== "remember") return "";
   return `Stance for this turn: ${(stance ?? "balanced").toUpperCase()}.`;
 }
 

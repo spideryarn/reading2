@@ -226,7 +226,7 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
        to the union — but the default lives in exactly two places on purpose,
        and this is the second. `ChatThread.kind` is required so that nothing
        downstream has to remember a fallback. */
-    kind: t.kind === "review" ? "review" : "chat",
+    kind: t.kind === "remember" ? "remember" : "chat",
     messages: byThread.get(t.id) ?? [],
   }));
 }

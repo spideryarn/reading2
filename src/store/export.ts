@@ -40,9 +40,15 @@ import {
   chatThreads,
   comments as commentsTable,
   glossaryLookups,
+  refereeCriteria,
   revisionBlocks,
   searchRuns,
 } from "../db/schema.js";
+/* Pure — it reaches for `quote-match` and `urls` and nothing else — so naming
+   the union's two spellings in one place costs this file no dependency it did
+   not already have. */
+import { configFromRow } from "../referee-criteria.js";
+import type { SavedCriterion } from "../saved-criteria.js";
 import { blocksArtefact } from "../blocks.js";
 import { type RawManifest, sniffKind } from "../fetch.js";
 import { metaRawSha256 } from "./artifacts.js";
@@ -83,6 +89,79 @@ export interface ExportResult {
   readonly slug: string;
   readonly files: readonly string[];
 }
+
+/**
+ * What this export does about one table, and **why a declaration exists at all.**
+ *
+ * A table is either written into a named file, or deliberately left out for a
+ * reason somebody wrote down. There is no third state, and in particular there
+ * is no *silence* — which is what `referee_criteria` got when it was added on
+ * 2026-08-31. This file simply did not know the table existed, so `db:export`
+ * dropped every criterion a referee had written, reported success, and listed
+ * the files it had written as though that were all of them. Nobody could have
+ * noticed from here: an exporter that has never heard of a table looks exactly
+ * like one that has nothing to say about it.
+ *
+ * `tests/store-export-covers-tables.test.ts` derives the list of article-scoped
+ * tables **from `src/db/schema.ts`** and requires this record to name every one
+ * of them, so the *next* table cannot arrive quietly either. That is the actual
+ * fix; adding `referee_criteria` below is only the instance.
+ */
+export type TableCoverage =
+  /** Written into this artefact file, whose name must appear in a `put(…)` here. */
+  | { readonly exported: true; readonly into: string }
+  /** Deliberately not part of a rollback of `data/`, for this stated reason. */
+  | { readonly exported: false; readonly why: string };
+
+/**
+ * **Every table that hangs off an article, and what this export does with it.**
+ *
+ * Keyed by the SQL table name, because that is what the schema and a migration
+ * both call it. A table with no `article_id` is not in scope: an export is one
+ * article's `data/<slug>/` directory, and something not scoped to an article
+ * has nowhere in it to go.
+ */
+export const ARTICLE_TABLE_COVERAGE: Readonly<Record<string, TableCoverage>> = {
+  /* The article itself — its columns become meta.json, tree.json and the rest,
+     through the join at the top of `exportArticle`. */
+  article_revisions: { exported: true, into: "meta.json" },
+  revision_blocks: { exported: true, into: "blocks.json" },
+  comments: { exported: true, into: "comments.json" },
+  chat_threads: { exported: true, into: "chat.json" },
+  chat_messages: { exported: true, into: "chat.json" },
+  search_runs: { exported: true, into: "searches.json" },
+  referee_criteria: { exported: true, into: "referee-criteria.json" },
+  glossary_lookups: { exported: true, into: "glossary-lookups.json" },
+
+  block_identities: {
+    exported: false,
+    why:
+      "Recovered from output/<slug>.html, which this export writes. Stage 3 reads " +
+      "the ids back out of that file rather than re-minting them, which is the " +
+      "whole of docs/project/block-ids.md's preservation promise.",
+  },
+  checkpoints: {
+    exported: false,
+    why:
+      "A cache of work a failed attempt already paid for, keyed by content hash — " +
+      "docs/project/database.md § Checkpoints. Losing it costs money on the next " +
+      "run and loses nothing the reader made.",
+  },
+  ai_calls: {
+    exported: false,
+    why:
+      "The spend ledger, and it is not article state: src/store/ai-calls-fs.ts " +
+      "writes it to data/_ai-calls.jsonl, one file for the whole library, not to " +
+      "any data/<slug>/. An article's directory has nowhere to put it.",
+  },
+  article_visibility_changes: {
+    exported: false,
+    why:
+      "An append-only audit of who made an article public and when " +
+      "(src/store/pg-visibility.ts). The filesystem store has no public sharing " +
+      "at all, so a rollback to data/ has nothing that could read it back.",
+  },
+};
 
 /**
  * Where the source documents come from, or a refusal — **never `data/_blobs`**.
@@ -474,6 +553,21 @@ export async function exportArticle(
         body: row.body,
         updatedAt: row.updatedAt?.toISOString() ?? null,
         threadId: row.threadId,
+        /* **The referee's own mark, and the sign is the whole content of it.**
+           `compact` drops a null, so an ordinary reading note exports without
+           either key — which is what both stores write. There is no clamp and
+           no `?? 0` anywhere on this line: a valence of −80 that came back as
+           `0` would read as "the referee felt neither way", and a rollback is
+           the one moment nobody is in a position to notice.
+           These two were added to the table on 2026-08-31 and were missing here
+           from the day they existed — the same way `tools` and `stance` went
+           missing from the chat export, and for the same reason: this row is
+           built from named fields. `tests/store-export-covers-tables.test.ts`
+           now fails when a new article-scoped table appears; it cannot see a
+           new *column*, so this comment is the reminder that the row above is a
+           hand-written list. */
+        criterionId: row.criterionId,
+        valence: row.valence,
         status: row.status,
         answer: row.answer,
         citations: row.citations,
@@ -524,14 +618,15 @@ export async function exportArticle(
            file written before this field existed is read — so the next write of
            that file has it too.
 
-           Emitting it only for reviews was the first attempt and was wrong:
+           Emitting it only for Remember threads was the first attempt and was
+           wrong:
            tests/store-roundtrip.test.ts compares this file against the one the
            filesystem store wrote, byte for byte, and that one carries
            `"kind": "chat"`. A file that predates the field and has not been
            written since is the one case where the two differ, and it converges
            the moment anything touches it — the same transitional state `tools`
            passed through. */
-        kind: thread.kind === "review" ? ("review" as const) : ("chat" as const),
+        kind: thread.kind === "remember" ? ("remember" as const) : ("chat" as const),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
@@ -593,6 +688,65 @@ export async function exportArticle(
       }) as SearchRun,
     );
     await put("searches.json", { runs });
+  }
+
+  /* referee-criteria.json — the referee's own criteria and what each turned up.
+     `src/referee-criteria-store.ts` writes this file, and it is exported here
+     for the reason everything else is: without it a rollback loses the criteria
+     silently, and a criterion is the referee's own words about somebody else's
+     unpublished paper.
+
+     **The config comes back through `configFromRow`**, not by copying four
+     columns into an object: the kind, the two poles and the scale are a
+     discriminated union in TypeScript and a `referee_criteria_diverging_shape`
+     check in Postgres, and there is exactly one function that knows how the two
+     spellings correspond. A row it cannot read — a kind from a later version —
+     is skipped and counted rather than exported half-formed, because a
+     criterion whose `config` is nonsense reads back as one the panel cannot
+     draw.
+
+     `comments.criterion_id` points at these rows, so an export that wrote the
+     comments and dropped the criteria would produce a `data/` directory whose
+     referee marks name criteria that are not there. */
+  const criterionRows = await db
+    .select()
+    .from(refereeCriteria)
+    .where(eq(refereeCriteria.articleId, article.id))
+    .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id));
+  if (criterionRows.length) {
+    const criteria: SavedCriterion[] = [];
+    let unreadable = 0;
+    for (const row of criterionRows) {
+      const config = configFromRow(row);
+      if (!config) {
+        unreadable++;
+        continue;
+      }
+      criteria.push(
+        compact({
+          id: row.id,
+          criterion: row.criterion,
+          config,
+          createdAt: row.createdAt.toISOString(),
+          status: row.status,
+          /* Not `compact`ed away by accident: `results` is `not null default
+             []`, and an empty array is a real answer — "this criterion ran and
+             found nothing" — which is a different fact from a criterion that
+             never ran. `compact` drops only null and undefined, so `[]` stays. */
+          results: row.results,
+          model: row.model,
+          error: row.error,
+          sourceHash: row.sourceHash,
+          colour: row.colour,
+        }) as SavedCriterion,
+      );
+    }
+    if (unreadable) {
+      /* Loud, because the alternative is a rollback quietly one criterion
+         short. Ids and a count only — a criterion is prose. */
+      logger.warn({ slug, unreadable }, "criteria skipped: config could not be read");
+    }
+    if (criteria.length) await put("referee-criteria.json", { criteria });
   }
 
   const lookupRows = await db

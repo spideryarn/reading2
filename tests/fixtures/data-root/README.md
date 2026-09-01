@@ -73,8 +73,8 @@ the committed bytes. Found by another session, 2026-09-01 — thank you.
 
 Three further things in the synthesised files are load-bearing, and each has a test that needs it:
 
-- a thread with `kind: "review"` whose assistant message carries a `stance` — without one,
-  store-roundtrip's review test warns and covers nothing, and `kind`/`stance` could vanish from
+- a thread with `kind: "remember"` whose assistant message carries a `stance` — without one,
+  store-roundtrip's Remember test warns and covers nothing, and `kind`/`stance` could vanish from
   `src/store/export.ts` with the round trip staying green;
 - a comment anchored to **`zzzz00`**, which is not a `spya-` id. The seeder drops it and the
   filesystem store counts it, and that permitted difference is the one store-parity subtracts *by
