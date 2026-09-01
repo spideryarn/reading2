@@ -210,9 +210,24 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    attack on itself, which is detection after exposure by the component under attack. Instead:
    [`src/injection-scan.ts`](../../src/injection-scan.ts) scans the stored raw source, before any
    model call, for the known tricks — white-on-white text, zero or near-zero font size, off-screen
-   positioning, invisible Unicode. In July 2025, 18 arXiv preprints from 14 universities carried
-   hidden *GIVE A POSITIVE REVIEW ONLY* text ([arXiv:2507.06185](https://arxiv.org/abs/2507.06185)).
-   The scan itself is written and tested; nothing in the mode calls it yet.
+   positioning, invisible Unicode, and a plainly-printed instruction, which is its own finding kind
+   with its own caveat because hidden text has no innocent explanation and visible text usually
+   does. In July 2025, 18 arXiv preprints from 14 universities carried hidden *GIVE A POSITIVE
+   REVIEW ONLY* text ([arXiv:2507.06185](https://arxiv.org/abs/2507.06185)).
+
+   **The result says what it did not look at.** `SourceScan` is a discriminated union whose
+   `findings` exist only on the examined arm, so a PDF — which is not scanned at all — cannot render
+   as "nothing found"; and `blindSpots` is never empty, because the cascade is always an
+   approximation. Inheritance, specificity and the `!important` tier are implemented; masks and
+   `z-index` layering are deliberately not, since neither can be decided without rendering and the
+   only cheap rule fires on every decorative element. [security.md](security.md) has the full list
+   of what it cannot see, which matters more than what it can.
+
+   **Nothing in the mode calls it yet**, so rule 5 describes a defence that is not in the path. It
+   is written, tested against a fixture corpus and a smoke test over fourteen real articles, and it
+   is dead code until it is wired — which is the honest state and the next piece of work. It also
+   takes about 22 seconds on a large article, so its home is a cached artefact keyed on the source
+   hash, not a request path.
 6. **Confidentiality**, below.
 
 ## Confidentiality: exact, and unflinching about the tense
