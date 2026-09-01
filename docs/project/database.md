@@ -199,13 +199,19 @@ serves every article, the library, the metadata page and the reader's comments f
 instead of from disk; `files` remains the default. The work, and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
-**Writes still go to disk first, and since 2026-08-30 they are carried across at the end.** Every
-pipeline stage still writes `data/<slug>/*.json` directly. What changed is what happens when the job
-is over: under `SPIDERYARN_STORE=postgres` a `done` ending copies those files into a fresh draft and
-publishes it, in one transaction with the job's own finish
+**Writes go straight into Postgres now — no disk in between.** Since 2026-09-01 every pipeline stage
+returns its product — `{ detail, parts, stamp }` — instead of writing a file, and the claim's own
+session (`pgStoreSession`, [`src/store/pg-session.ts`](../../src/store/pg-session.ts)) writes each
+one into that claim's draft revision as the job runs. A `done` ending publishes the draft and
+finishes the job in **one transaction**
 ([ingest-queue.md § A finished job publishes the article](ingest-queue.md#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not)).
-Before that the ingest produced files on disk and an empty draft revision that `publishRevision`
-refused, and the reader's shelf stayed empty.
+Under `files` (the default) the same stages, through the same interface, write `data/<slug>/*.json`
+instead — there is no draft and nothing to publish.
+
+Until 2026-09-01 a decorator, `publishingSession`, stood in the gap: the stages wrote their own files
+and it copied a finished job's into a draft after the fact. That is gone —
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
+write-up, and it is worth reading once because several other plans and reviews refer back to it.
 
 **A draft may only replace the revision it was copied from.** `beginDraftIn` copies whatever is
 published when the draft opens, and the job then runs for minutes; if something else publishes in
@@ -213,26 +219,25 @@ between, moving the pointer to that draft buries work nobody meant to lose, and 
 reports success. So the revision records its own base in `based_on_revision_id`, set once when the
 draft is minted and never touched again — a recorded lineage, not a value recomputed from whatever
 happens to be current at the moment something asks for it. Publication compares that recorded base
-with the revision it is about to replace, and refuses if they differ — `refuseIfBaseMoved` in
-[`src/store/pg-session.ts`](../../src/store/pg-session.ts), whose `DraftBase` reads the column rather
-than reasking the question, including for a draft a later request only reopened
-([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3).
+with the revision it is about to replace, and refuses if they differ — inside `publishRevisionIn` in
+[`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts), before the pointer moves, so every
+caller is checked and not just the pipeline. It lived in the session until 2026-09-01, and standalone
+`publishRevision` walked past it
+([260901d-stage3-code-review-sol.md](../plans/260901d-stage3-code-review-sol.md) finding 1). A `null`
+base publishes only over an article serving nothing, which is fail-closed for a draft minted before
+the column existed.
 
-That is a carry-across, not the end state: an ingest still needs a writable disk for the length of
-the job, so the host question is unchanged and only the *publication* has moved. The plan for the
-other half — stages that return their products instead of writing files — is
-[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) § D3–D5, and
-[260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md) is the design it came from.
-
-**`ArtifactStore.write()` has one caller and most of the pipeline now reaches it.** Since 2026-08-29
-a step returns a *product* — `{ detail, parts?, stamp? }` — and the commit after it
+**A writable disk is still what the `files` store *is*** — that host question is unchanged — but it
+is no longer a waypoint Postgres writes pass through, because `ArtifactStore.write()` has one caller
+and every step reaches it. Since 2026-08-29 a step returns a *product* —
+`{ detail, parts?, stamp? }` — and the commit after it
 ([`src/store/session.ts`](../../src/store/session.ts)) writes that product, checks it, and finishes
 the step. The boundary landed empty on purpose, so that the stages could move behind it one at a
-time; since 2026-08-31 every stage that *reads* an article and writes something about it has moved.
-`LEGACY_UNCONVERTED_STEPS` in [`src/pipeline.ts`](../../src/pipeline.ts) is the list of the ones that
-have not, and each conversion deletes a name from it. A step **off** that list must return `parts` —
-the type says so as well as the commit, so a new stage is converted by default and the exemption has
-to be asked for. [260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
+time; by 2026-08-31 every one of them had. `LEGACY_UNCONVERTED_STEPS` in
+[`src/pipeline.ts`](../../src/pipeline.ts) is the list of steps still exempted from returning
+`parts` — **empty**, and kept rather than deleted, because a step off it must return `parts` or the
+type checker refuses it: the exemption has to be asked for by name, not fallen into.
+[260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
 [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ```bash

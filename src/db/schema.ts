@@ -3,13 +3,14 @@
  *
  * Written ahead of the storage contracts (step 3 of
  * docs/plans/260825f-postgres-migration.md) because it is the artefact everything else
- * is judged against. **These tables are now live for reads**: src/store/pg.ts
+ * is judged against. **These tables are live for both reads and writes**: src/store/pg.ts
  * serves the reading view and the library out of them when
- * `SPIDERYARN_STORE=postgres`, and src/store/pg-comments.ts writes to them.
- * The pipeline still writes JSON files under `data/<slug>/`, and the two are
- * kept in step by src/store/import.ts. docs/project/database.md says which is
- * true of what today; docs/plans/260826e-postgres-storage-implementation.md tracks the
- * rest of the cutover.
+ * `SPIDERYARN_STORE=postgres`, src/store/pg-comments.ts writes to them, and a
+ * pipeline job under Postgres commits its steps straight into a draft revision
+ * here instead of writing `data/<slug>/*.json` — there is no importer keeping
+ * the two in step any more (docs/project/database.md). Under the `files`
+ * default these tables sit unused and the pipeline writes JSON as it always
+ * has. docs/plans/260826e-postgres-storage-implementation.md tracks the rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
  *
@@ -410,10 +411,12 @@ export const articleRevisions = spideryarn.table(
      *
      * `beginDraftIn` copies whichever revision is current at that moment
      * (src/store/pg-revisions.ts), and this column is that value. It is the
-     * lineage a publication is checked against: `refuseIfBaseMoved`
-     * (src/store/pg-session.ts) refuses to move `articles.current_revision_id`
-     * off anything but the revision the draft actually saw, so a job that ran
-     * for minutes cannot bury a publication that landed while it ran.
+     * lineage a publication is checked against: `publishRevisionIn` refuses to
+     * move `articles.current_revision_id` off anything but the revision the
+     * draft actually saw, so a job that ran for minutes cannot bury a
+     * publication that landed while it ran. The check is in the publication
+     * primitive rather than in one of its callers, since 2026-09-01 — GPT Sol,
+     * finding 1 of docs/plans/260901d-stage3-code-review-sol.md.
      *
      * **It exists because reading the article's current revision instead is not
      * the same question.** A job runs one step per HTTP request and reopens its

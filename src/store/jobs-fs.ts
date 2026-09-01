@@ -172,17 +172,28 @@ export function sweepStopped(job: Job): boolean {
  * `as` forces the cancelled ending for the reader who is pressing Stop right
  * now, since `cancelling` is not on the record yet and never will be.
  *
- * **A running step goes back to `pending`**, exactly as `sweepStopped` writes
- * it: a terminal job holding a running step draws a spinner on a card that has
- * finished. Not `error` — the step was abandoned rather than failed, and the
- * job's own sentence is the account of that.
+ * **The running step settles differently on the two endings**, and the
+ * Postgres `settledSteps` says why at length. Cancelled: back to `pending`
+ * with `startedAt` dropped, as `sweepStopped` writes it, and no sentence —
+ * nothing failed. Interrupted: `error`, carrying `INTERRUPTED.message` and a
+ * `finishedAt`, exactly as `runStep` records a step that threw, **because the
+ * card renders `step.error` and never `job.error`** — settling both endings to
+ * `pending` left an expired job showing a muted step and a Retry button with
+ * no explanation anywhere. GPT Sol, 2026-09-01, finding 2.
  */
 function settleAbandoned(job: Job, as?: "cancelled"): void {
   const cancelled = as === "cancelled" || job.cancelling === true;
+  const stamp = new Date().toISOString();
   for (const step of job.steps) {
     if (step.status !== "running") continue;
-    step.status = "pending";
-    delete step.startedAt;
+    if (cancelled) {
+      step.status = "pending";
+      delete step.startedAt;
+    } else {
+      step.status = "error";
+      step.error = INTERRUPTED.message;
+      step.finishedAt = stamp;
+    }
   }
   job.status = cancelled ? "cancelled" : "error";
   if (cancelled) {
@@ -195,7 +206,7 @@ function settleAbandoned(job: Job, as?: "cancelled"): void {
     job.error = INTERRUPTED.message;
     job.failureKind = INTERRUPTED.kind;
   }
-  job.finishedAt = new Date().toISOString();
+  job.finishedAt = stamp;
   delete job.cancelling;
 }
 
@@ -518,15 +529,27 @@ export const fsJobStore: JobStore = {
 /**
  * The job this attempt still holds, or a refusal.
  *
- * The same three conditions the Postgres fence uses, and for the same reason:
- * without `status === "running"` a job already failed by `settleExpired` would
- * accept its own former claimant's write. Throwing rather than returning,
- * because zero-changes-reads-as-success is the failure this exists to prevent.
+ * The same four conditions the Postgres fence uses (src/store/job-fence.ts),
+ * and for the same reasons. Without `status === "running"` a job already
+ * settled by `settleExpired` would accept its own former claimant's write. And
+ * **without the lease, expiry revokes nothing** — the claim is only safe to
+ * act on as expired because the claimant aborts itself first, and a fence that
+ * ignores the deadline is what makes that a promise nobody keeps.
+ *
+ * `held.expires > Date.now()`, so the boundary matches Postgres: at the
+ * instant of expiry the claim is over, not live. Throwing rather than
+ * returning, because zero-changes-reads-as-success is the failure this exists
+ * to prevent.
  */
 function fenced(id: string, attempt: string): Job {
   const job = index.get(id);
   const held = attempts.get(id);
-  if (!job || job.status !== "running" || held?.attempt !== attempt) {
+  if (
+    !job ||
+    job.status !== "running" ||
+    held?.attempt !== attempt ||
+    held.expires <= Date.now()
+  ) {
     throw new StaleAttemptError(id);
   }
   return job;

@@ -341,15 +341,23 @@ const REVISION_READ_POLICY: Record<
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
   status: { publish: "value" },
-  /* **No reader, and that is the whole intent of the column.** The lineage a
-     draft records at mint (src/db/schema.ts, drizzle/0047) is read by exactly
-     one place — `openOrBeginJobDraft` in src/store/pg-revisions.ts, inside the
-     transaction that reopens the draft — and handed to the publication guard as
-     a `DraftBase` (src/store/pg-session.ts). That read is the store's own
-     lifecycle, not one of these projections, and nothing a reader draws depends
-     on which revision a draft was copied from. A grant here would widen a
-     projection for a fact no page prints. */
-  basedOnRevisionId: {},
+  /* **`publish`, and only `publish`.** The lineage a draft records at mint
+     (src/db/schema.ts, drizzle/0047) is what `publishRevisionIn` compares with
+     the pointer it is about to move — a draft may replace the revision it was
+     copied from and nothing else — so the publication's own projection has to
+     be able to see it.
+
+     It was `{}` until 2026-09-01, when the guard lived in `pgStoreSession` and
+     read the column through `openOrBeginJobDraft` instead. That was a guard in
+     one caller, which the next caller forgets: standalone `publishRevision`
+     never read the column and buried whatever had published while a draft sat
+     there. GPT Sol, finding 1 of docs/plans/260901d-stage3-code-review-sol.md.
+
+     Still no *reader* grant, and that is deliberate: nothing a page draws
+     depends on which revision a draft was copied from, so a grant to `article`,
+     `library` or `metadata` would widen a projection for a fact nobody
+     prints. */
+  basedOnRevisionId: { publish: "value" },
 
   /* `metaFrom` — the reading view's masthead and the library card. */
   /* `metadata` reads these three because the freshness fingerprint of every
@@ -723,6 +731,9 @@ export const REVISION_PROJECTIONS = {
     id: articleRevisions.id,
     articleId: articleRevisions.articleId,
     status: articleRevisions.status,
+    /* The lineage the publication checks itself against — see the policy entry
+       above, and `publishRevisionIn` in src/store/pg-revisions.ts. */
+    basedOnRevisionId: articleRevisions.basedOnRevisionId,
     tree: articleRevisions.tree,
     excerpt: articleRevisions.excerpt,
   },

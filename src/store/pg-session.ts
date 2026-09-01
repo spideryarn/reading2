@@ -100,7 +100,6 @@ import type { JobEnding } from "./jobs.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
   NotTheLiveAttempt,
-  PublishRefused,
   failRevisionIn,
   finishStepRun,
   lockOrCreateArticle,
@@ -108,7 +107,6 @@ import {
   logPublication,
   publishRevisionIn,
   openOrBeginJobDraft,
-  type OpenDraftResult,
   type PublishRevisionResult,
 } from "./pg-revisions.js";
 import {
@@ -142,128 +140,35 @@ interface Announcement {
 }
 
 /**
- * **The revision this draft was copied from** — the base a publication may
- * replace, and nothing else.
+ * **The lineage check is not here any more, and this note is where it was.**
  *
- * `beginDraftIn` copies whichever revision is current at the moment the draft is
- * minted, and then the job runs for minutes. If something publishes this article
- * in the meantime, the draft's blocks, columns and step runs describe the *old*
- * article, and publishing it moves `articles.current_revision_id` back over work
- * nobody asked to lose — silently, because `publishRevisionIn` checks the
- * revision's article, its status and its tree, and never asks what it was based
- * on. That is stage 3 item 4 of docs/plans/260831b-finish-the-database-move.md,
- * carried forward through five reviews since GPT Sol's first one.
+ * `DraftBase`, `draftBaseOf` and `refuseIfBaseMoved` lived in this file until
+ * 2026-09-01. They compared the revision a draft was copied from with the
+ * pointer `publishRevisionIn` had just moved, one statement after it returned,
+ * and refused a job that would bury a publication landing while it ran.
  *
- * ## `how` is here because the three answers are not equally strong
+ * They were deleted rather than kept, because a guard in one caller is a guard
+ * the next caller forgets: standalone `publishRevision` moved the same pointer
+ * without ever reading `based_on_revision_id`, so a script or `db:import` could
+ * do exactly what this session was stopped from doing. The comparison now lives
+ * **inside `publishRevisionIn`** (src/store/pg-revisions.ts), before the pointer
+ * moves, reading the column and the pointer in one transaction under one lock —
+ * which is strictly stronger than reading the base when the claim opened. GPT
+ * Sol, finding 1 of docs/plans/260901d-stage3-code-review-sol.md.
  *
- * - **`minted`** — this claim created the draft, so `beginDraftIn` handed back
- *   the id it actually copied. Exact.
- * - **`reopened`** — this claim found a draft an *earlier request of the same
- *   job* had minted, and the draft's own `based_on_revision_id` says what that
- *   request copied. Also exact, and read under the article lock inside
- *   `openOrBeginJobDraft`'s transaction. It says the same thing `minted` says:
- *   **this is the revision the draft's blocks, columns and step runs came
- *   from.**
- * - **`unknown`** — nobody could answer, and the check is skipped. It carries a
- *   `why` because a guard that turns itself off has to say when, and the one
- *   caller is named there.
+ * Nothing about this session's behaviour changed: the refusal is still
+ * `PublishRefused`, still raised inside `commit`'s transaction, so it still
+ * takes the publication, the step completion and the job's ending back with it.
+ * tests/pg-session-exact-base.test.ts still proves that, cases 1 to 4 through
+ * this file and case 5 through the primitive.
  *
- * ## The column, and what it replaced
- *
- * Until 2026-09-01 there was no `based_on_revision_id`, and a reopened draft was
- * given *the article's current revision read at reopen*. That is the number the
- * publication is about to compare itself against, so the guard agreed with
- * itself and passed the exact race it exists to refuse: mint from R1, hand the
- * claim back, R2 publishes, the next claim reopens and records R2 as the base,
- * and the R1 copy buries R2. GPT Sol, finding 1 of
- * docs/plans/260831b-stage3-items3and4-review-sol.md. The column is written once
- * by `beginDraftIn` and is `mint` in `REVISION_CARRY_POLICY`
- * (src/store/pg-revisions.ts) — carried, a draft would inherit its parent's base
- * and the hole would reopen one generation along.
- *
- * A draft minted before that column existed carries `null`, which is
- * indistinguishable from "this article's first draft" and is refused whenever
- * the article is serving anything. That is fail-closed and it costs at most one
- * re-run of a job that was in flight at the deploy.
+ * `openOrBeginJobDraft` still returns `basedOn`, and it is still worth having —
+ * tests/helpers/load-article.ts reports it — but nothing here reads it.
  */
-export type DraftBase =
-  | {
-      readonly how: "minted" | "reopened";
-      /**
-       * **The revision the draft was actually copied from** — `null` for an
-       * article's first draft, and for one minted before the column existed.
-       *
-       * True of `reopened` as well as `minted` since 2026-09-01: both read
-       * `article_revisions.based_on_revision_id`, which is written at mint and
-       * never changed. It is not "what the article is serving now", and the two
-       * being confused is the bug this type is here to make impossible to
-       * repeat.
-       */
-      readonly revisionId: string | null;
-    }
-  | { readonly how: "unknown"; readonly why: string };
-
-/**
- * What `openOrBeginJobDraft` just answered, read as a base.
- *
- * **One line, and no query.** It was a second *statement* — a SELECT of
- * `articles.current_revision_id` — for as long as the reopen branch had nothing
- * to say about lineage, and that was two faults rather than one: the number was
- * the wrong number, and it was read outside the transaction that had just
- * decided which draft this is, so a publication landing in between was read as
- * the base too. Both close the same way: `openOrBeginJobDraft` returns the
- * lineage it read under the article lock, and this only labels it.
- */
-export function draftBaseOf(draft: OpenDraftResult): DraftBase {
-  return { how: draft.created ? "minted" : "reopened", revisionId: draft.basedOn };
-}
-
-/**
- * Refuse a publication that would bury a revision this draft never saw.
- *
- * Called **inside** the publishing transaction, with the pointer
- * `publishRevisionIn` just moved off (`previousRevisionId`, read under the
- * article lock). The throw rolls the publication, the step completion and the
- * job's finish back with it, so nothing is left half-done and the job records a
- * failure a person can act on.
- *
- * `PublishRefused` rather than a plain `Error`, and the reason is the wrapper
- * rather than taste: `guardDbStore` scrubs anything without a numeric `status`,
- * so a plain error would reach the reader's job card as *"this app asked its
- * database for something it would not do"*, which is neither true nor
- * actionable. This is a 409 — a draft not fit to publish, not a server fault.
- * No article text in the message, only revision ids (docs/project/logging.md).
- */
-export function refuseIfBaseMoved(args: {
-  readonly slug: string;
-  readonly revisionId: string;
-  readonly base: DraftBase;
-  readonly publishedOver: string | null;
-}): void {
-  /* The one way past this guard, and it is a value a caller had to construct on
-     purpose rather than a default. See `DraftBase`. */
-  if (args.base.how === "unknown") return;
-  if (args.base.revisionId === args.publishedOver) return;
-  throw new PublishRefused(args.slug, [
-    `this draft (${args.revisionId}) was copied from revision ${args.base.revisionId ?? "none"} ` +
-      `(${args.base.how}), but the article is now serving ${args.publishedOver ?? "none"} — ` +
-      "something else published while this job ran, and publishing now would discard it. " +
-      "Nothing was published; run the job again against what is there.",
-  ]);
-}
 
 export interface PgStoreSessionOptions {
   /** The draft this claim owns — `openOrBeginJobDraft`'s answer, plus the claim. */
   readonly ref: JobDraftRef;
-  /**
-   * The revision the draft was copied from, so the publication can check that it
-   * is still the one being replaced. See `DraftBase`.
-   *
-   * **Required, and there is no "do not check" value.** An optional base would
-   * be a guard that is off by default in exactly the callers that forgot it, and
-   * this one has been forgotten for five reviews already.
-   */
-  readonly base: DraftBase;
   /** Overridable so a test can drive two sessions down one connection. */
   readonly db?: Db;
 }
@@ -289,12 +194,6 @@ export async function openPgStoreSession(opts: {
       jobId: opts.job.id,
       attemptId: opts.job.attemptId,
     },
-    /* The draft's own record of what it was made from, carried straight off
-       `openOrBeginJobDraft`'s answer. The question is never "what is the
-       article serving" — by the time this draft publishes the article may be
-       serving something else, and that is precisely the case the guard refuses.
-       See `DraftBase`. */
-    base: draftBaseOf(draft),
   });
 }
 
@@ -316,7 +215,7 @@ export async function openPgStoreSession(opts: {
  * rather than collapsed to `unknown`.
  */
 export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
-  const { ref, base } = options;
+  const { ref } = options;
   const db = options.db ?? getDb();
   const job = { id: ref.jobId, attemptId: ref.attemptId };
 
@@ -481,19 +380,17 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          nothing has published. Discarding would lose it and report the job done:
          a silent success, in the path built to prevent them.
          `publishRevisionIn` fences on the live attempt and clears the draft
-         pointer as it goes. */
+         pointer as it goes.
+
+         **And it refuses to bury a publication that landed while this job
+         ran**, by comparing the draft's `based_on_revision_id` with the pointer
+         it is about to move. That check used to be a call from right here,
+         after `publishRevisionIn` returned; it is inside the primitive since
+         2026-09-01, so every caller gets it and not just this one — see the note
+         above `PgStoreSessionOptions`. The throw is still `PublishRefused`
+         inside this transaction, so it still takes the publication, the step
+         and the job's ending back with it. */
       const published = await publishRevisionIn(tx, { slug, revisionId: ref.revisionId, job });
-      /* **After the publication, and inside its transaction.**
-         `previousRevisionId` is `articles.current_revision_id` read under the
-         article lock a statement before it moved, which is the only reading of
-         it that cannot be stale. A mismatch throws and takes the whole
-         transaction — publication, step, job ending — back with it. */
-      refuseIfBaseMoved({
-        slug,
-        revisionId: ref.revisionId,
-        base,
-        publishedOver: published.previousRevisionId,
-      });
       announce = { published };
     } else {
       /* **The step that was begun and never finished is marked `error` first.**

@@ -84,6 +84,7 @@ import { deriveLibraryScalars } from "../library-scalars.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
+import { liveAttempt } from "./job-fence.js";
 
 const logger = log("store");
 
@@ -142,9 +143,9 @@ export const REVISION_CARRY_POLICY: Record<
    *
    * The new row's value is the revision *this* mint copied from — `basedOn`
    * below — which is the whole content of the column (src/db/schema.ts). A
-   * carry would give a draft its grandparent, quietly, and `refuseIfBaseMoved`
-   * (src/store/pg-session.ts) would then wave through the publication it is
-   * there to refuse.
+   * carry would give a draft its grandparent, quietly, and the lineage check in
+   * `publishRevisionIn` would then wave through the publication it is there to
+   * refuse.
    */
   basedOnRevisionId: "mint",
   /**
@@ -530,12 +531,20 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
  * Point the job at its draft, or take the pointer away, **fenced**.
  *
  * One `UPDATE`, whose `WHERE` carries the whole condition: this job, this
- * attempt, and `status = 'running'`. Checking the token and then writing
- * separately recreates exactly the race the token exists to prevent.
+ * attempt, `status = 'running'`, and a lease that has not lapsed. Checking the
+ * token and then writing separately recreates exactly the race the token
+ * exists to prevent.
  *
  * `AND status = 'running'` is not decoration. Without it, a rescued job's stale
  * worker publishes a draft the queue has already given up on — and reports
  * success.
+ *
+ * **Nor is the lease**, and this file was missing it until 2026-09-01: a
+ * claimant whose deadline had passed could still move the pointer, and on the
+ * publication path (`publishRevision` → `fenceJob(…, null)`) could still
+ * publish, as long as it got there before the sweep. `liveAttempt` is that
+ * whole condition, shared with src/store/pg-jobs.ts so the two cannot drift.
+ * GPT Sol, 2026-09-01, finding 1 on the built stage 2.
  */
 async function fenceJob(
   tx: Tx,
@@ -546,7 +555,7 @@ async function fenceJob(
   const result = await tx
     .update(jobs)
     .set({ draftRevisionId })
-    .where(and(eq(jobs.id, jobId), eq(jobs.attemptId, attemptId), eq(jobs.status, "running")));
+    .where(liveAttempt(jobId, attemptId));
   // `rowCount === 1`, never `>= 1` and never ignored: zero rows here is the
   // fence doing its job, and it must reach the caller as a failure.
   if (result.rowCount !== 1) throw new NotTheLiveAttempt(jobId);
@@ -849,11 +858,18 @@ export async function openOrBeginJobDraft(opts: {
      * article taken first: `settleExpired` may commit while we wait for the
      * article row, but then this statement's own `status = 'running'` no longer
      * holds, no row comes back, and the call throws instead of proceeding.
+     *
+     * **And now the same is true when nothing has swept it yet**, which is the
+     * case that condition could not cover. `liveAttempt` compares the lease
+     * against `clock_timestamp()` rather than `now()` — deliberately, because
+     * `now()` is frozen at transaction start and a transaction that crossed the
+     * deadline *while waiting for these very locks* would otherwise be judged
+     * on the time before it waited. src/store/job-fence.ts.
      */
     const [row] = await tx
       .select({ draftRevisionId: jobs.draftRevisionId, slug: jobs.slug })
       .from(jobs)
-      .where(and(eq(jobs.id, job.id), eq(jobs.attemptId, job.attemptId), eq(jobs.status, "running")))
+      .where(liveAttempt(job.id, job.attemptId))
       .limit(1)
       .for("update");
     if (!row) throw new NotTheLiveAttempt(job.id);
@@ -885,9 +901,14 @@ export async function openOrBeginJobDraft(opts: {
              is what makes the reopen branch's answer as exact as the mint's:
              nothing can publish between this read and the caller's use of it
              without taking the same lock. Reading it after the transaction —
-             which is what `draftBaseOf` used to do against
+             which is what the session used to do against
              `articles.current_revision_id` — left a gap in which a publication
-             was mistaken for this draft's own base. */
+             was mistaken for this draft's own base.
+
+             **Nothing publishes on this answer any more**, and it is still
+             worth returning: `publishRevisionIn` reads the column for itself,
+             inside the transaction that moves the pointer, and
+             tests/helpers/load-article.ts reports this as `LoadedArticle.basedOn`. */
           basedOn: articleRevisions.basedOnRevisionId,
         })
         .from(articleRevisions)
@@ -975,14 +996,7 @@ export async function requireLiveJobOwnsDraft(
   const [live] = await tx
     .select({ id: jobs.id })
     .from(jobs)
-    .where(
-      and(
-        eq(jobs.id, job.id),
-        eq(jobs.attemptId, job.attemptId),
-        eq(jobs.status, "running"),
-        eq(jobs.draftRevisionId, revisionId),
-      ),
-    )
+    .where(and(liveAttempt(job.id, job.attemptId), eq(jobs.draftRevisionId, revisionId)))
     .for("update")
     .limit(1);
   if (!live) throw new NotTheLiveAttempt(job.id);
@@ -1276,6 +1290,28 @@ async function reasonsNotToPublish(
   return reasons;
 }
 
+/**
+ * **There is no "skip the lineage check" option here, on purpose.**
+ *
+ * The guard it would turn off is the one in `publishRevisionIn`, and the reason
+ * that guard exists at all is that its predecessor lived in a single caller and
+ * every other caller walked past it. An opt-out is that same hole with a name:
+ * the caller who most needs the check is the one who has not thought about it,
+ * and a field is what a passing agent reaches for when a fixture goes red.
+ *
+ * The session's `DraftBase` did carry one — a deliberate `how: "unknown"` arm —
+ * and it is worth recording that **nothing ever constructed it**. It was built
+ * for drafts whose lineage could not be recovered; the column made that case
+ * impossible, and the arm went with the type on 2026-09-01.
+ *
+ * A caller that legitimately has no lineage is not stuck. `beginRevision` — the
+ * one thing that mints a revision — records the base itself, so any draft made
+ * the ordinary way can answer. Everything that publishes today goes through it:
+ * the pipeline, tests/helpers/load-article.ts, the fixture corpus. If something
+ * one day genuinely cannot, the answer is to give it a lineage rather than a
+ * licence to bury a publication. GPT Sol, finding 1 of
+ * docs/plans/260901d-stage3-code-review-sol.md.
+ */
 export interface PublishRevisionOptions {
   readonly slug: string;
   readonly revisionId: string;
@@ -1319,6 +1355,14 @@ export interface PublishRevisionResult {
  *    labels **with no stale banner anywhere** — the tree is structurally
  *    perfect and describes an article nobody can read any more. A missing `hierarchy`
  *    row is refused too, because "I cannot tell" is not "it is fine".
+ *
+ * 4. **A draft whose base has moved.** `article_revisions.based_on_revision_id`
+ *    records the revision the draft was copied from, and a publication may only
+ *    move the pointer *off that revision*. Something else publishing while the
+ *    draft was written — a job running for minutes, `db:import`, a script —
+ *    means the draft's blocks, columns and step runs describe the old article,
+ *    and moving the pointer now discards work nobody asked to lose, silently.
+ *    Written up where it is enforced, in `publishRevisionIn`.
  *
  * **The third is a behaviour change and it is worth saying out loud:** a job of
  * `{ steps: ["blocks"] }` alone now fails where today it succeeds and quietly

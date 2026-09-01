@@ -1128,7 +1128,7 @@ What closes it is the **session a claim runs on**: [`claimSession`](../../src/jo
 writes its product into that claim's own draft revision, and a `done` ending publishes the draft and
 finishes the job in **one transaction**.
 
-Four things about it are worth knowing before touching it.
+Five things about it are worth knowing before touching it.
 
 - **It is the session, not something bolted onto the coordinator.** A `done` ending reaches the store
   through two doors: `commit`, when the last step ran, and `settleJob`, when every step skipped. A
@@ -1148,6 +1148,13 @@ Four things about it are worth knowing before touching it.
   is the filesystem one and behaves exactly as it always has: no draft, no publication, no database.
   [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
   claim, and it proves it by taking `DATABASE_URL` away.
+- **Opening it is a database call, so it can fail — and that failure ends the job.** Two doors reach
+  the same recovery in [`src/jobs.ts`](../../src/jobs.ts) (`endAsStorageFailure`): the publication
+  that goes wrong when every step skipped, and the session that would not open at all. Both fail the
+  draft, clear the job's pointer to it and terminalise the job in one transaction, because a job left
+  `running` holds the global slot until its lease lapses and offers the reader no Retry either. The
+  kind the database boundary gave the failure is **kept** rather than rewritten as `retry`, so a
+  permanent refusal does not reach the card promising that another go is safe.
 
 **A decorator held this seam from 2026-08-30 to 2026-09-01**, and it is worth a paragraph because
 several plans and reviews are about it. `publishingSession` wrapped the *filesystem* session and, at

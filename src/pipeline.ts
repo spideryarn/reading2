@@ -452,7 +452,7 @@ export interface StepProduct {
  *
  * **Empty since 2026-08-31, and it is kept rather than deleted.**
  *
- * Every one of the eleven steps now returns its artefacts and writes no file of
+ * Every one of the thirteen steps now returns its artefacts and writes no file of
  * its own (docs/plans/260831b-finish-the-database-move.md § Stage 2). The exemption has
  * no members, which means `LegacyUnconvertedStep` is `never` and `run` must
  * return a `ConvertedProduct` for every step in the pipeline — so the mechanism
@@ -2635,9 +2635,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * a step that writes `<dir>/sketch.json` inside `run` works on a laptop and
    * cannot work through a store that puts the artefact in a Postgres column,
    * and `PipelineStep`'s types make the safe answer the one you get by doing
-   * nothing. Every other article-reading stage followed it on 2026-08-31; the
-   * four still on `LEGACY_UNCONVERTED_STEPS` are the ones that acquire and cut
-   * the article rather than read it.
+   * nothing. Every other article-reading stage followed it on 2026-08-31, and
+   * the stages that acquire and cut the article rather than read it — `fetch`,
+   * `extract`, `blocks` and `hierarchy` — converted the same day, so
+   * `LEGACY_UNCONVERTED_STEPS` is now empty
+   * (docs/plans/260831b-finish-the-database-move.md § Stage 2).
    */
   sketch: {
     name: "sketch",

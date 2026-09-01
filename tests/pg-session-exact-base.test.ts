@@ -29,26 +29,33 @@
  *
  * ## What the guard is, and what it is not
  *
- * `refuseIfBaseMoved` (src/store/pg-session.ts) compares the base recorded when
- * the draft was opened against `articles.current_revision_id` read under the
- * article lock a statement before the publication moves it. A mismatch throws
- * `PublishRefused`, and the throw takes the publication, the step completion and
- * the job's ending back with it.
+ * `publishRevisionIn` (src/store/pg-revisions.ts) compares the draft's own
+ * `based_on_revision_id` against `articles.current_revision_id`, both read
+ * inside the transaction that is about to move the pointer and under the article
+ * lock it takes first. A mismatch throws `PublishRefused`, and on the session's
+ * path that throw takes the publication, the step completion and the job's
+ * ending back with it.
  *
- * It is exact for a draft this claim **minted**, and since 2026-09-01 it is
- * exact for one it **reopened** too — a job handed back between steps — because
- * the draft records what it was copied from in
- * `article_revisions.based_on_revision_id` (drizzle/0047) and the reopen reads
- * that column rather than asking the article what it is serving now. Cases 3 and
- * 4 below are the reopened pair, and case 3 is the race Sol's finding 1 named:
- * the old code recorded *the publication that landed in the gap* as the draft's
- * own base, so the guard compared a number with itself and let R1's copy bury
- * R2. See `DraftBase` in src/store/pg-session.ts.
+ * **It is in the primitive, and it was in the session until 2026-09-01.** A
+ * guard in one caller is a guard the next caller forgets: standalone
+ * `publishRevision` moved the same pointer and never read the column, which is
+ * case 5 below. GPT Sol, finding 1 of
+ * docs/plans/260901d-stage3-code-review-sol.md.
+ *
+ * It is exact for a draft a claim **minted**, and since 2026-09-01 it is exact
+ * for one it **reopened** too — a job handed back between steps — because the
+ * draft records what it was copied from in
+ * `article_revisions.based_on_revision_id` (drizzle/0047), which nothing
+ * recomputes. Cases 3 and 4 below are the reopened pair, and case 3 is the race
+ * Sol's earlier finding 1 named: the old code recorded *the publication that
+ * landed in the gap* as the draft's own base, so the guard compared a number
+ * with itself and let R1's copy bury R2. See `basedOnRevisionId` in src/db/schema.ts.
  *
  * ## The two mutations, watched red on 2026-08-31
  *
- * Both by deleting the `refuseIfBaseMoved` call from `settleIn` in
- * src/store/pg-session.ts — the state before this work:
+ * Both by deleting the guard's call, which then lived in `settleIn` in
+ * src/store/pg-session.ts — the state before this work. Deleting the lineage
+ * check from `publishRevisionIn` reproduces them today:
  *
  * ```
  * AssertionError: promise resolved "{ kind: 'ended', job: { …(8) }, …(1) }" instead of rejecting
@@ -766,5 +773,156 @@ when("publishing a draft whose base has moved", () => {
     expect(await currentRevisionOf(slug), "the reopened draft is what got published").toBe(draftId);
     expect(await arcTextOf(draftId as string)).toBe(ARC_JOB);
     expect(await draftOf(first.jobId)).toBeNull();
+  });
+
+  /* ------------------------------------------------------------------ 5 -- */
+
+  /**
+   * **The same race with no job anywhere near it** — GPT Sol's finding 1 of
+   * docs/plans/260901d-stage3-code-review-sol.md, and the reason the guard
+   * moved out of the session and into `publishRevisionIn`.
+   *
+   * Cases 1 and 3 drive the session, so they proved the guard the session
+   * called. Nothing proved the *publication*, and there was nothing to prove:
+   * `publishRevisionIn` validated the article, the status, the blocks and the
+   * tree and never read `based_on_revision_id`. Anybody calling
+   * `publishRevision` directly — a script, `revisionLifecycle`
+   * (src/store/revisions.ts), the fixture loader, a future caller nobody has
+   * written yet — walked straight past it and buried R2.
+   *
+   * The three cases above could not see it, and it is worth saying why: they
+   * *use* standalone `publishRevision` to publish R2, so it was exercised on
+   * every run — as the publication that gets buried, never as the one doing
+   * the burying.
+   *
+   * Watched red on 2026-09-01, against the guard living only in the session:
+   *
+   * ```
+   * AssertionError: a draft copied from R1 published over R2 through
+   *   standalone publishRevision:
+   *   promise resolved "{ revisionId: '…', previousRevisionId: '…', …(1) }"
+   *   instead of rejecting
+   * AssertionError: the stale draft was published over R2:
+   *   expected '3fa0…' to be 'c1d7…'
+   * AssertionError: R2's work is gone:
+   *   expected 'the arc the job wrote' to be 'the arc R2 published'
+   * AssertionError: expected 'published' to be 'draft'
+   * ```
+   */
+  mine("refuses a stale draft published through standalone publishRevision", async () => {
+    const slug = `${SLUG_PREFIX}standalone-moved`;
+    const fixture = await publishR1(slug);
+
+    /* D, minted by hand from R1 — no job, no claim, no session. `beginRevision`
+       records the lineage whoever calls it, which is what makes the check
+       possible here at all. */
+    const draft = await beginRevision({ slug });
+    expect(
+      await basedOnOf(draft.revisionId),
+      "the draft does not record the revision it was copied from",
+    ).toBe(fixture.publishedRevisionId);
+    await db()
+      .update(articleRevisions)
+      .set({ arc: arcSaying(slug, fixture.blocks, ARC_JOB) })
+      .where(eq(articleRevisions.id, draft.revisionId));
+
+    /* R2 lands while D sits there. */
+    const r2 = await publishR2(fixture);
+    expect(await currentRevisionOf(slug)).toBe(r2);
+
+    await expect(
+      publishRevision({ slug, revisionId: draft.revisionId }),
+      "a draft copied from R1 published over R2 through standalone publishRevision",
+    ).rejects.toMatchObject({ name: "PublishRefused", status: 409 });
+
+    /* The same two soft assertions cases 1 and 3 use: the pointer, and the work
+       behind it. Different facts, and a partial fix could get one of them. */
+    expect.soft(await currentRevisionOf(slug), "the stale draft was published over R2").toBe(r2);
+    expect
+      .soft(await arcTextOf((await currentRevisionOf(slug)) as string), "R2's work is gone")
+      .toBe(ARC_R2);
+
+    const [row] = await db()
+      .select()
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, draft.revisionId))
+      .limit(1);
+    expect(row?.status).toBe("draft");
+  });
+
+  /* ------------------------------------------------------------------ 6 -- */
+
+  /**
+   * **The positive control for the standalone path, and it covers both
+   * meanings of `null`.**
+   *
+   * A guard in the publication primitive is a guard on the way to *every*
+   * article this app has ever published, so "refuse everything" would pass case
+   * 5 and leave nothing readable. Two ordinary publications here, and the first
+   * is the one the null case rests on:
+   *
+   * - **R1 is an article's first revision.** It was copied from nothing, so its
+   *   base is `null` — and the article is serving nothing, which is also
+   *   `null`. They match, and it publishes. That is the first of the two things
+   *   `null` means.
+   * - **D is copied from R1 with nothing landing in between**, which is what
+   *   every re-extraction looks like.
+   */
+  mine("publishes through standalone publishRevision when nothing moved", async () => {
+    const slug = `${SLUG_PREFIX}standalone-unmoved`;
+
+    /* The first publication — and `publishR1` is only able to return at all
+       because the primitive let a null base over a null pointer through. */
+    const fixture = await publishR1(slug);
+    expect(
+      await basedOnOf(fixture.publishedRevisionId),
+      "an article's first revision was copied from nothing",
+    ).toBeNull();
+    expect(await currentRevisionOf(slug)).toBe(fixture.publishedRevisionId);
+
+    const draft = await beginRevision({ slug });
+    await db()
+      .update(articleRevisions)
+      .set({ arc: arcSaying(slug, fixture.blocks, ARC_JOB) })
+      .where(eq(articleRevisions.id, draft.revisionId));
+
+    const published = await publishRevision({ slug, revisionId: draft.revisionId });
+    expect(published.previousRevisionId).toBe(fixture.publishedRevisionId);
+    expect(await currentRevisionOf(slug)).toBe(draft.revisionId);
+    expect(await arcTextOf(draft.revisionId)).toBe(ARC_JOB);
+  });
+
+  /* ------------------------------------------------------------------ 7 -- */
+
+  /**
+   * **The other meaning of `null`, and it is refused.**
+   *
+   * A draft minted before `based_on_revision_id` existed (drizzle/0047) carries
+   * `null` for "nobody recorded it", which is indistinguishable on the row from
+   * "copied from nothing". The rule is fail-closed: `null` publishes only over
+   * an article serving nothing. It costs at most one re-run of a job that was
+   * in flight at the deploy, and the alternative — treating an unrecorded
+   * lineage as a licence — is the bug this whole file is about.
+   *
+   * The column is nulled by hand here because that is the only way to make a
+   * pre-migration draft now.
+   */
+  mine("refuses a draft with no recorded lineage while the article serves something", async () => {
+    const slug = `${SLUG_PREFIX}legacy-null`;
+    const fixture = await publishR1(slug);
+
+    const draft = await beginRevision({ slug });
+    await db()
+      .update(articleRevisions)
+      .set({ basedOnRevisionId: null })
+      .where(eq(articleRevisions.id, draft.revisionId));
+    expect(await basedOnOf(draft.revisionId)).toBeNull();
+
+    await expect(
+      publishRevision({ slug, revisionId: draft.revisionId }),
+      "a draft whose lineage nobody recorded published over a live article",
+    ).rejects.toMatchObject({ name: "PublishRefused", status: 409 });
+
+    expect(await currentRevisionOf(slug)).toBe(fixture.publishedRevisionId);
   });
 });

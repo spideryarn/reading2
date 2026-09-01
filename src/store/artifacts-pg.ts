@@ -516,8 +516,8 @@ async function readBlocks(
  * (drizzle/0047), written by `beginDraftIn` and never carried, and reading it
  * off `ref.revisionId` would answer this question exactly rather than nearly —
  * closing the concurrent-first-ingest case above. It is deliberately not done
- * here: the column landed to close the publication race
- * (`DraftBase` in src/store/pg-session.ts), the current answer is already wrong
+ * here: the column landed to close the publication race (the lineage check in
+ * `publishRevisionIn`, src/store/pg-revisions.ts), the current answer is already wrong
  * only in the safe direction, and changing what a stage decides to skip deserves
  * its own change and its own test.
  */

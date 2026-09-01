@@ -9,17 +9,23 @@
  * so the database decides rather than the order two requests happened to
  * arrive in, and a loser learns it lost instead of overwriting a winner.
  *
- * ## The fence is three conditions and this project has dropped one twice
+ * ## The fence is four conditions and this project has dropped one three times
  *
  *     where id = $id and attempt_id = $attempt and status = 'running'
+ *       and lease_expires_at > clock_timestamp()
  *
- * The third is not decoration. The schema lets a terminal row keep its token,
- * so `id` + `attempt_id` alone means a job already marked `error` by
+ * Neither of the last two is decoration. The schema lets a terminal row keep
+ * its token, so `id` + `attempt_id` alone means a job already marked `error` by
  * `settleExpired` would accept its own former claimant's write and report one row
- * affected — success, reported, with the wrong output. Zero rows throws
- * `StaleAttemptError` rather than returning quietly, because
+ * affected — success, reported, with the wrong output. And without the lease,
+ * **expiry revokes nothing**: a claimant that wakes up after its deadline can
+ * still commit, as long as it gets to the row before Stop or the sweep does.
+ * Zero rows throws `StaleAttemptError` rather than returning quietly, because
  * zero-rows-reads-as-success is the failure this whole mechanism exists to
  * prevent (docs/reusable/silent-success.md).
+ *
+ * All four live in src/store/job-fence.ts, shared with the draft fences in
+ * src/store/pg-revisions.ts, which had dropped the same condition.
  *
  * ## `23505` is an answer, not an error
  *
@@ -37,10 +43,11 @@
  * still did would be dead code reading as a live guard.
  */
 
-import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable } from "./db-errors.js";
+import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
@@ -189,9 +196,19 @@ async function claimIn(
              says whether a claimant is still allowed to write, and it is
              written by one instance and read by another — so an app-clock
              deadline is only a deadline while every instance agrees what time
-             it is. `settleExpired` compares against `now()` from the same
-             clock, which makes the whole lease one clock's arithmetic. */
-          leaseExpiresAt: sql`now() + make_interval(secs => ${leaseMs} / 1000.0)`,
+             it is. `settleExpired` and the fence compare against the same
+             clock, which makes the whole lease one clock's arithmetic.
+
+             **`clock_timestamp()`, not `now()`.** `now()` is transaction start
+             time, and this claim is inside a transaction that has already
+             taken the `queue_state` lock and counted the running rows — so
+             `now()` back-dates the lease by however long that took, and the
+             claimant, whose self-abort timer starts when the claim *returns*,
+             would still be alive after the row said it was gone. The gap is
+             small on a good day and is exactly the window finding 1 is about.
+             GPT Sol, 2026-09-01; the whole reasoning is in
+             src/store/job-fence.ts. */
+          leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${leaseMs} / 1000.0)`,
           // A resumed job started once already, and the card's "how long has
           // this been going" should not restart every time a tab picks it up.
           startedAt: sql`coalesce(${jobs.startedAt}, now())`,
@@ -247,26 +264,52 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  * paths could leave one: nobody is inside the job to write the step out, so if
  * the statement that ends the job does not settle it, nothing ever will.
  *
- * **Back to `pending`, with `startedAt` dropped** — which is exactly what
- * `sweepStopped` (src/store/jobs-fs.ts) already does to a step whose process
- * went away, so this is a third mechanism agreeing rather than a new rule. Not
- * `error`: the step did not fail, it was abandoned, and the job's own sentence
- * is the account of that. Giving the step a copy of it would print the same
- * paragraph twice on the card, since `StepRow` renders `step.error` in full
- * under the label.
+ * ## The two endings settle it differently, and that is the point
+ *
+ * **Cancelled — the reader asked.** Back to `pending`, `startedAt` dropped,
+ * and no sentence: nothing failed, and the step is simply one the reader chose
+ * not to run. That is exactly what `sweepStopped` (src/store/jobs-fs.ts)
+ * writes for a step whose process went away, so this is mechanisms agreeing
+ * rather than a new rule.
+ *
+ * **Interrupted — nobody asked.** `error`, carrying `INTERRUPTED.message` and
+ * a `finishedAt`, exactly as `runStep` records a step that threw. The first
+ * version of this settled *both* endings to `pending`, on the argument that
+ * `StepRow` renders `step.error` in full so a copy of the job's sentence would
+ * print the same paragraph twice. **That was wrong about the built UI**:
+ * `JobCard` (src/web/AddArticle.tsx) renders `step.error` and the shared poll
+ * error and never `job.error` at all — so an expired job showed a muted
+ * `pending` step and a Retry button with nothing anywhere saying why. Silent
+ * success with the reader as the thing that fails quietly. GPT Sol, 2026-09-01,
+ * finding 2; `tests/interrupted-job-card.test.tsx` is what holds it.
+ *
+ * `cancelled` is an SQL predicate rather than a boolean because
+ * `settleExpired` does not know which ending it is choosing until the row is
+ * read — it is `jobs.cancelling`, evaluated per row inside the same statement.
  *
  * One correlated subquery rather than a read-then-write, so this file keeps its
  * rule that every transition is a single conditional statement. `jobs.steps` on
  * the right-hand side of a `SET` is the row as it was before the update.
  */
-function settledSteps() {
+function settledSteps(cancelled: SQL) {
   return sql`(
     select coalesce(
       jsonb_agg(
         case
-          when step.value->>'status' = 'running'
+          when step.value->>'status' <> 'running' then step.value
+          when ${cancelled}
             then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
-          else step.value
+          else step.value || jsonb_build_object(
+                 'status', 'error',
+                 'error', ${INTERRUPTED.message}::text,
+                 /* ISO 8601 with milliseconds and a literal Z. JobStep's
+                    finishedAt is a string the browser parses, and every other
+                    writer of it is new Date().toISOString(); casting the
+                    timestamptz straight to jsonb would render +00:00 and a
+                    space, a different string for the same instant. */
+                 'finishedAt', to_char(
+                   clock_timestamp() at time zone 'utc',
+                   'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
         end
         order by step.ordinality
       ),
@@ -486,7 +529,10 @@ const rawPgJobStore: JobStore = {
       .update(jobs)
       .set({
         status: sql`case when ${jobs.cancelling} then 'cancelled' else 'error' end`,
-        steps: settledSteps(),
+        /* The same `case` the status is chosen by, so the step's ending and the
+           job's cannot disagree: `pending` and silent for a Stop, `error` and
+           INTERRUPTED for an interruption nobody asked for. */
+        steps: settledSteps(sql`${jobs.cancelling}`),
         attemptId: null,
         leaseExpiresAt: null,
         cancelling: false,
@@ -515,14 +561,23 @@ const rawPgJobStore: JobStore = {
       .where(
         and(
           eq(jobs.status, "running"),
-          isNotNull(jobs.leaseExpiresAt),
           /* **Database time, unless a test says otherwise.** The lease is
-             written by `claim` as `now() + leaseMs` on this same clock, so the
-             deadline is one clock's arithmetic end to end. It used to be
-             `Date.now()` at both ends, which is fine on a laptop and is a
-             different clock from the one holding the row the moment there are
-             two instances. */
-          now === undefined ? sql`${jobs.leaseExpiresAt} < now()` : lt(jobs.leaseExpiresAt, now),
+             written by `claim` as `clock_timestamp() + leaseMs` on this same
+             clock, so the deadline is one clock's arithmetic end to end. It
+             used to be `Date.now()` at both ends, which is fine on a laptop
+             and is a different clock from the one holding the row the moment
+             there are two instances.
+
+             **The exact expression the fence refuses on**, imported rather
+             than written again: what `liveAttempt` will no longer let a
+             claimant write to is precisely what this may settle, with no
+             instant in between where a job is neither. That includes the
+             NULL-lease row `jobs_running_is_fenced` makes impossible — see
+             src/store/job-fence.ts for why *over* is the better answer for a
+             state that cannot happen. */
+          now === undefined
+            ? leaseIsOver
+            : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
         ),
       )
       .returning({ id: jobs.id, status: jobs.status });
@@ -591,8 +646,18 @@ const rawPgJobStore: JobStore = {
     /* **The two branches that end the job, as one condition.** They settle
        identically, and writing the condition once is what stops the seven
        `case`s below drifting apart — which is the shape of the bug the lapsed
-       branch was added to fix. */
-    const over = sql`coalesce(${jobs.status} = 'queued' or ${jobs.leaseExpiresAt} < now(), false)`;
+       branch was added to fix.
+
+       **No `coalesce` any more, and its going is a decision.** It used to be
+       `coalesce(…, false)`, to answer for a `running` row with a NULL lease —
+       a state `jobs_running_is_fenced` makes impossible. But *false* there
+       means "ask the claimant", and there is no claimant: the row would sit
+       disabled at "Stopping…" for ever, because neither this nor the sweep
+       could ever move it. `leaseIsOver` answers *over* for a missing lease, so
+       the expression is never NULL and a corrupt row is recoverable by the
+       machinery that already exists. GPT Sol raised it, 2026-09-01;
+       src/store/job-fence.ts carries the reasoning. */
+    const over = sql`(${jobs.status} = 'queued' or ${leaseIsOver})`;
     const [row] = await db
       .update(jobs)
       .set({
@@ -600,7 +665,11 @@ const rawPgJobStore: JobStore = {
         /* Every step is settled on the branches that end the job, so a stopped
            job never keeps a spinner. On the *asking* branch the steps are the
            claimant's to write and this leaves them alone. */
-        steps: sql`case when ${over} then ${settledSteps()} else ${jobs.steps} end`,
+        /* **`pending`, always, on this path.** Every branch that ends a job
+           here ends it as *cancelled* — the reader asked — so the step gets no
+           sentence. `settleExpired` is the path that can also end a job nobody
+           asked to stop, and there the step ends `error`. */
+        steps: sql`case when ${over} then ${settledSteps(sql`true`)} else ${jobs.steps} end`,
         cancelling: sql`not ${over}`,
         attemptId: sql`case when ${over} then null else ${jobs.attemptId} end`,
         leaseExpiresAt: sql`case when ${over} then null else ${jobs.leaseExpiresAt} end`,
@@ -793,12 +862,15 @@ export async function finishIn(
 /**
  * **The fence, in one place so that no transition can be written without it.**
  *
- * All three conditions, and `status = 'running'` is the one to watch: without
- * it a job already failed by `settleExpired` accepts its own former claimant's
- * write and reports success. See the file header.
+ * All four conditions, and it is `src/store/job-fence.ts` rather than a local
+ * `and(...)` because the draft and publication fences in
+ * src/store/pg-revisions.ts are the same question asked in another file, and
+ * this repo has now dropped a condition from one copy of it three times: first
+ * `status = 'running'` (twice), then the lease. See that file for the whole
+ * argument.
  */
 function fence(id: string, attempt: string) {
-  return and(eq(jobs.id, id), eq(jobs.attemptId, attempt), eq(jobs.status, "running"));
+  return liveAttempt(id, attempt);
 }
 
 /**

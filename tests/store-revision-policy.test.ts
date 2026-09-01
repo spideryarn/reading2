@@ -71,8 +71,8 @@ describe("the carry-forward policy", () => {
        resurrect-dead-data bug the split exists to prevent. */
     /* `basedOnRevisionId` joined them on 2026-09-01, and it is the one where
        carrying is worst: a draft would inherit its *parent's* base, so
-       `refuseIfBaseMoved` (src/store/pg-session.ts) would compare the wrong
-       pair and publish over work nobody asked to lose. */
+       the lineage check in `publishRevisionIn` (src/store/pg-revisions.ts) would
+       compare the wrong pair and publish over work nobody asked to lose. */
     const of = (policy: string) => classified.filter((k) => REVISION_CARRY_POLICY[k as never] === policy).sort();
     expect(of("mint")).toEqual(["articleId", "basedOnRevisionId", "createdAt", "id", "status"]);
     expect(of("derive")).toEqual([

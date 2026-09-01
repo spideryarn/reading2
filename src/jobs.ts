@@ -786,6 +786,116 @@ async function endJob(
 }
 
 /**
+ * The answer a claimant gives once the row says the job is somebody else's.
+ *
+ * Not a step failure and not ours to record: any write we made would be refused
+ * anyway, so it is reported the way a losing claimant is reported and the client
+ * asks again. Three places reach it — the session that would not open, the
+ * settlement of that failure, and the walk's own outer catch — and they said the
+ * same four lines three times until 2026-09-01.
+ */
+async function lostTheClaim(
+  job: Job,
+  owner: OwnerId,
+  jlog: Log,
+  where: string,
+): Promise<Advanced | null> {
+  jlog.warn({ jobId: job.id }, `lost the claim ${where} — ${job.slug}`);
+  const now = await store.get(job.id, owner);
+  return now ? { job: now, ran: null, busy: true, done: false } : null;
+}
+
+/**
+ * **One rule for a claim that could not reach the store, wherever it met it.**
+ *
+ * Two doors lead here and both are the same event: the claim held a job, the
+ * database would not do the thing that was asked of it, and nothing else is
+ * going to record an ending. The job is marked failed in memory and then ended
+ * through the session — which, under Postgres, is the transaction that fails the
+ * draft, clears `jobs.draft_revision_id` and moves the row to `error` together.
+ * A plain `store.finish` is **not** enough: it terminalises the job while
+ * leaving the pointer, and `sweepAbandonedDrafts` spares a revision any job row
+ * names, so the draft would be immortal. GPT Sol, 2026-09-01,
+ * docs/plans/260901d-stage3-code-review-sol.md § Shortest path to SHIP 2.
+ *
+ * The two doors:
+ *
+ * - **The publication**, when every step skipped — `walkClaim`'s final
+ *   `endJob(...done)`, which has no `runStep` around it to record its failure.
+ * - **The session itself**, which since the flip is a database call and can fail
+ *   before a single step has run. That opening is new: the decorator
+ *   `pgStoreSession` replaced wrapped a *filesystem* session and could not fail
+ *   during construction.
+ *
+ * It was written for the first and reached one transaction earlier by the
+ * second, so it is one function rather than two that will drift.
+ *
+ * ## The message, and the kind
+ *
+ * **`PublishRefused`'s own words, or one of ours.** That message is ours — a
+ * slug and a list of reasons naming revision ids — and it is the one a person
+ * can act on. Anything else may be a driver error with the article in it, and
+ * this string goes onto the job card and into the `jobs` row.
+ * src/store/db-errors.ts is the rule this is one end of.
+ *
+ * **`failureKindOf(err)` is preserved rather than overwritten.** It used to be
+ * hard-coded `retry` for everything that was not the refusal, which threw away
+ * the distinction the database boundary had already drawn correctly one layer
+ * down: a transient failure is scrubbed to `STORAGE_BUSY` (`retry`) and a
+ * permanent one to `STORAGE_FAILED` (`bug`, and its own sentence says another go
+ * will not help). Persisting the second as `retry` put a Retry button, and a
+ * promise that pressing it was safe, on a job that could only fail identically.
+ * GPT Sol, docs/plans/260901d-stage3-code-review-sol.md finding 3.
+ *
+ * **`?? "retry"` for an error that said nothing**, said out loud rather than
+ * left to the absent-means-yes rule in src/job-failure.ts — the same choice
+ * `settleExpired` makes, and for the same reason: a kind that is merely missing
+ * is indistinguishable from a failure nobody classified. Both offer the button;
+ * only one of them says why. Note the direction this must not be tightened in —
+ * src/job-failure.ts § *Which way to be wrong*.
+ */
+async function endAsStorageFailure(args: {
+  readonly job: Job;
+  readonly attempt: string;
+  readonly err: unknown;
+  readonly jlog: Log;
+  readonly startedMs: number;
+  readonly session: StoreSession;
+  /** Which door this came through — the log line, and the opening sentence. */
+  readonly door: "publish" | "open-session";
+}): Promise<Job> {
+  const { job, attempt, err, jlog, startedMs, session, door } = args;
+  captureFailure(err, { slug: job.slug, jobId: job.id, phase: door });
+  /* **The class, never the message.** A raw driver error carries the failed
+     statement's bound parameters — the job's `steps` and the article's title —
+     and `errorFields` puts the message straight into the line, where redaction
+     cannot reach it. `guardDbStore` has already logged the SQLSTATE, the table
+     and the constraint on the way out, and `captureFailure` above has the
+     stack. src/store/db-errors.ts, docs/project/logging.md.
+
+     `openOrBeginJobDraft` is a free function rather than a guarded store
+     method, so on the `open-session` door there may have been no scrubbing at
+     all — which makes the rule stricter here, not looser. */
+  jlog.error(
+    { errorType: err instanceof Error ? err.name : typeof err },
+    door === "publish"
+      ? `could not publish a claim where every step skipped — ${job.slug}`
+      : `could not open the draft this claim writes into — ${job.slug}`,
+  );
+  job.status = "error";
+  /* Before the sentence, because the sentence's last clause is read back off
+     the field this writes. See `RETRY_IS_SAFE`. */
+  recordFailureKind(job, failureKindOf(err) ?? "retry");
+  job.error =
+    err instanceof PublishRefused
+      ? err.message
+      : endingSentence(job, door === "publish" ? COULD_NOT_PUBLISH : COULD_NOT_OPEN);
+  job.finishedAt = new Date().toISOString();
+  delete job.cancelling;
+  return await endJob(job, attempt, endingFrom(job, "error"), jlog, startedMs, session);
+}
+
+/**
  * The log line and the retention sweep that follow **any** ending.
  *
  * Split out of `endJob` because the successful last step ends the job from
@@ -1114,7 +1224,42 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
  */
 const COULD_NOT_PUBLISH =
   "Everything ran, but putting the finished article on your shelf did not go through. " +
-  "Nothing was published and your library is unchanged. Trying again is safe.";
+  "Nothing was published and your library is unchanged.";
+
+/**
+ * The same failure, met one transaction earlier: the claim could not open the
+ * draft it was going to write into, so **no step ran at all**.
+ *
+ * A separate sentence rather than a reuse of the one above, because that one
+ * opens with *"Everything ran"* and here nothing did. One recovery, two true
+ * sentences, is better than one recovery and a sentence that is false on one of
+ * its doors — the card is the only account of this the reader gets.
+ */
+const COULD_NOT_OPEN =
+  "This app could not open the place it keeps an article while it works on it, so none of " +
+  "this run happened. Nothing was published and your library is unchanged.";
+
+/**
+ * The last clause of both, and **it is not unconditional.**
+ *
+ * It was, until 2026-09-01: every non-`PublishRefused` failure on this path was
+ * labelled `retry` and shown the first of these two sentences, so a permanent
+ * constraint violation — SQLSTATE `23514`, say — reached the reader as *"trying
+ * again is safe"* under a Retry button that could only fail the same way. GPT
+ * Sol, docs/plans/260901d-stage3-code-review-sol.md finding 3.
+ *
+ * The kind decides which clause, and `jobWorthRetrying` is the one authority on
+ * that (src/job-failure.ts) — asked of the job *after* `recordFailureKind` has
+ * written the field, so the sentence and the button can never disagree.
+ */
+const RETRY_IS_SAFE = " Trying again is safe.";
+const RETRY_WILL_NOT_HELP =
+  " Trying again will not help until somebody fixes it. It has been recorded.";
+
+/** One of the two openings, with the clause the failure's kind has earned. */
+function endingSentence(job: Job, opening: string): string {
+  return opening + (jobWorthRetrying(job) ? RETRY_IS_SAFE : RETRY_WILL_NOT_HELP);
+}
 
 const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS };
 
@@ -1177,6 +1322,19 @@ export async function advanceJobWith(
   /* The cap is read here, at the moment somebody wants a slot, rather than
      frozen at import — see `jobConcurrency`. The store enforces it; deciding it
      is not the store's business, the same division `LEASE_MS` already has. */
+  /**
+   * **When the lease started, as near as this side can know it.**
+   *
+   * Read *before* the claim rather than after, and that is the safe direction:
+   * the store stamps the lease from the database's clock somewhere inside the
+   * call, so anything measured here is at or before the real start, and a
+   * deadline computed from it fires at or before the real one. The other way
+   * round — the old `Date.now()` at the top of `walkClaim` — put the claimant's
+   * deadline *after* the lease's, by however long the claim and everything
+   * after it took, and that gap is the window where the process is alive and
+   * the row says it is gone. GPT Sol, 2026-09-01.
+   */
+  const claimedMs = Date.now();
   const outcome = await store.claim(id, owner, attempt, LEASE_MS, jobConcurrency());
 
   switch (outcome.kind) {
@@ -1214,7 +1372,9 @@ export async function advanceJobWith(
    * is known to be *ours*, and a scope opened around a claim that was refused
    * would name a job somebody else is inside.
    */
-  return await runInJob(outcome.job.id, () => walkClaim(outcome.job, attempt, owner, parts));
+  return await runInJob(outcome.job.id, () =>
+    walkClaim(outcome.job, attempt, owner, parts, claimedMs),
+  );
 }
 
 /**
@@ -1250,6 +1410,8 @@ async function walkClaim(
   attempt: string,
   owner: OwnerId,
   parts: AdvanceParts,
+  /** When the claim was asked for — the anchor for this claimant's own deadline. */
+  claimedMs: number,
 ): Promise<Advanced | null> {
   /**
    * **The session, built here and nowhere else** — immediately after the claim
@@ -1270,16 +1432,28 @@ async function walkClaim(
    * (src/store/session.ts). `PRODUCTION` above is what supplies it, and it still
    * picks the filesystem artefact store; that is the line the Postgres session
    * replaces in D2, and this one does not change.
+   *
+   * ## And building it can fail, which is why it is inside a recovery
+   *
+   * Under Postgres this line is `openOrBeginJobDraft` — two row locks, possibly
+   * a minted revision and a block copy. A connection failure or a pool timeout
+   * out of it used to **escape the request**: the job stayed `running` holding
+   * its attempt and the global slot, every later advance answered `busy`, the
+   * local pump stopped, and nothing terminalised it until a much later sweep
+   * recorded a generic interruption rather than the real failure. That is the
+   * same externally visible hang the all-skipped catch below exists to remove,
+   * reached one transaction earlier — and it was **introduced by the flip**,
+   * because the decorator this replaced wrapped a filesystem session and could
+   * not fail during construction. GPT Sol, 2026-09-01,
+   * docs/plans/260901d-stage3-code-review-sol.md finding 2.
    */
-  const session = await parts.session(job, attempt);
   /* A child logger, made here and used locally — never a module-level "current
      job". Rule 4 at the top of src/log.ts, and it matters more here than
      anywhere: several advance requests for *different* jobs really can be in
-     flight in one instance at once. */
+     flight in one instance at once. Above the session now, because the recovery
+     for a session that would not open writes a line through it. */
   const jlog = log("jobs").child({ jobId: job.id, slug: job.slug });
   const startedMs = Date.now();
-  const controller = new AbortController();
-  aborts.set(job.id, controller);
 
   /**
    * **The claimant's own deadline, and it has to fire before the lease.**
@@ -1291,6 +1465,21 @@ async function walkClaim(
    * expired lease mean *the process is gone*, which is the only reading it is
    * safe to act on. See `LEASE_MS`.
    *
+   * **Armed here, before the session opens, and anchored on the claim.** It
+   * used to be built after `parts.session(…)` had been awaited, and dated from
+   * a `Date.now()` taken after the claim returned. Both halves are the same
+   * mistake — the deadline belongs to the *claim*, not to whatever the claimant
+   * got round to afterwards — and both push the moment this claimant stops
+   * *later* than the lease assumes: for the whole of the session open there was
+   * no deadline at all, and under Postgres that open is two row locks and
+   * possibly a block copy. A claimant that waited there past its lease came out
+   * with nothing having told it to stop, which is how "the process is gone"
+   * quietly became "the process might be slow". GPT Sol, 2026-09-01, finding 1.
+   *
+   * The `AbortController` moves up with it, which is worth having on its own:
+   * `cancelJob` reaches for `aborts.get(id)`, and until now a Stop pressed
+   * while the session was opening had nothing to pull.
+   *
    * **One timer for the whole claim, not one per step**, and it is not reset
    * between them. It cannot be: `noteProgress` deliberately does not renew the
    * lease, so a per-step timer would let the lease expire underneath a claimant
@@ -1300,13 +1489,93 @@ async function walkClaim(
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md § 3. What bounds a *step* is
    * `STEP_BUDGET_MS`, checked before the step starts rather than while it runs.
    */
+  const controller = new AbortController();
+  aborts.set(job.id, controller);
   let overran = false;
   /** When this claimant stops, on the clock `Date.now()` reads. */
-  const deadlineAt = startedMs + (parts.leaseMs ?? LEASE_MS) - DEADLINE_MARGIN_MS;
+  const deadlineAt = claimedMs + (parts.leaseMs ?? LEASE_MS) - DEADLINE_MARGIN_MS;
   const deadline = setTimeout(() => {
     overran = true;
     controller.abort(new Error(INTERRUPTED.message));
   }, deadlineAt - Date.now());
+  /**
+   * Put the timer and the abort entry down.
+   *
+   * The walk's own `finally` is one caller. The others are the four exits of
+   * the session-opening recovery below, every one of which leaves this
+   * function *before* that `try` is entered — so without them a session that
+   * would not open leaves a timer running and an entry in `aborts` for a job
+   * nobody is inside. Idempotent, because being called twice is cheaper than
+   * reasoning about whether it can be.
+   */
+  const standDown = (): void => {
+    clearTimeout(deadline);
+    // Only ours. `aborts` is keyed by job id and this call put the entry there,
+    // so deleting it here cannot take another claimant's — it has none in this
+    // process, because the claim is what stops two of us being inside one job.
+    aborts.delete(job.id);
+  };
+
+  let session: StoreSession;
+  try {
+    session = await parts.session(job, attempt);
+  } catch (err) {
+    if (err instanceof StaleAttemptError) {
+      standDown();
+      return await lostTheClaim(job, owner, jlog, "opening");
+    }
+    /**
+     * **The recovery needs a session, and asking for one again is how it gets
+     * it** — not a second rule, the same one, through a door that has to be
+     * opened before it can be walked through.
+     *
+     * Nothing else can fail the draft. `store.finish` would terminalise the job
+     * and leave `jobs.draft_revision_id` pointing at a revision
+     * `sweepAbandonedDrafts` spares for ever, which is a worse state than the
+     * one being fixed; only the session's own transaction fails the draft,
+     * clears the pointer and moves the row together.
+     *
+     * **A second open is not a retry of the work.** `openOrBeginJobDraft`
+     * reopens the draft the job already points at and copies nothing
+     * (`blocksCopied: 0`); it mints one only for a job that had none, and that
+     * draft is failed by the very next statement.
+     *
+     * **When it fails too, the original goes out, and that is the honest
+     * answer.** Under Postgres the `jobs` row *is* in the database, so a
+     * database nothing can reach is one where no ending can be recorded at all
+     * — by this code or any other. The lease is what covers that case, and it
+     * is the only thing that can. What this closes is every failure where the
+     * database is reachable and the open was not: those are the ones that could
+     * have been recorded and were not.
+     */
+    let after: Job;
+    try {
+      const recovery = await parts.session(job, attempt);
+      after = await endAsStorageFailure({
+        job,
+        attempt,
+        err,
+        jlog,
+        startedMs,
+        session: recovery,
+        door: "open-session",
+      });
+    } catch (settling) {
+      if (settling instanceof StaleAttemptError) {
+        standDown();
+        return await lostTheClaim(job, owner, jlog, "while recording an open that failed");
+      }
+      /* **The original goes out, not this one.** What failed here is a
+         consequence of what failed above, and the first is the one somebody
+         reading the report needs. Nothing has been recorded, so the job is left
+         to the lease — see the note above on why that is the only thing that can
+         cover it. */
+      standDown();
+      throw err;
+    }
+    standDown();
+    return { job: after, ran: null, busy: false, done: true };
+  }
 
   /**
    * Write what the card should say, **without letting go of the claim.**
@@ -1520,10 +1789,12 @@ async function walkClaim(
      * person could act on. GPT Sol, 2026-08-31,
      * docs/plans/260831b-stage3-items3and4-review-sol.md finding 2.
      *
-     * So it is recorded here **the same way `runStep` records the one that comes
-     * out of `commit`** — the job failed, and the second `endJob` is the
-     * settlement that fails the draft and clears the pointer. One rule for a
-     * publication that did not happen, reached through either door.
+     * So it is recorded **the same way `runStep` records the one that comes out
+     * of `commit`** — the job failed, and the second `endJob` is the settlement
+     * that fails the draft and clears the pointer. That is `endAsStorageFailure`
+     * above, which is one rule and is also what the session-opening failure at
+     * the top of this function goes through: two doors onto the same event, and
+     * the sentence and the failure kind are decided in one place.
      *
      * **Every failure, not only `PublishRefused`.** A narrower catch was written
      * first and would have been a regression at the flip, which is why it is
@@ -1550,35 +1821,15 @@ async function walkClaim(
       after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs, session);
     } catch (err) {
       if (err instanceof StaleAttemptError) throw err;
-      captureFailure(err, { slug: job.slug, jobId: job.id, phase: "publish" });
-      /* **The class, never the message.** A raw driver error carries the failed
-         statement's bound parameters — the job's `steps` and the article's title
-         — and `errorFields` puts the message straight into the line, where
-         redaction cannot reach it. `guardDbStore` has already logged the
-         SQLSTATE, the table and the constraint on the way out, and
-         `captureFailure` above has the stack. src/store/db-errors.ts,
-         docs/project/logging.md. */
-      jlog.error(
-        { errorType: err instanceof Error ? err.name : typeof err },
-        `could not publish a claim where every step skipped — ${job.slug}`,
-      );
-      job.status = "error";
-      /* **`PublishRefused`'s own words, or nothing.** That message is ours — a
-         slug and a list of reasons naming revision ids — and it is the one a
-         person can act on. Anything else may be a driver error with the article
-         in it, and this string goes onto the job card and into the `jobs` row.
-         src/store/db-errors.ts is the rule this is one end of. */
-      job.error = err instanceof PublishRefused ? err.message : COULD_NOT_PUBLISH;
-      /* `retry` for anything that is not the refusal, because another go really
-         is the right move — a database that was briefly unreachable is exactly
-         what re-running fixes. The refusal keeps `failureKindOf`, which reads
-         `undefined` and so offers the retry as well; naming them separately is
-         what keeps a *future* refusal that declares itself `bug` from being
-         quietly relabelled. */
-      recordFailureKind(job, err instanceof PublishRefused ? failureKindOf(err) : "retry");
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
-      after = await endJob(job, attempt, endingFrom(job, "error"), jlog, startedMs, session);
+      after = await endAsStorageFailure({
+        job,
+        attempt,
+        err,
+        jlog,
+        startedMs,
+        session,
+        door: "publish",
+      });
     }
     return { job: after, ran: lastRan, busy: false, done: true };
   } catch (err) {
@@ -1586,18 +1837,10 @@ async function walkClaim(
        failure and not ours to record: the row says somebody else owns this job,
        so any write we made would be refused anyway. Report it the way a losing
        claimant is reported, and let the client ask again. */
-    if (err instanceof StaleAttemptError) {
-      jlog.warn({ jobId: job.id }, `lost the claim mid-step — ${job.slug}`);
-      const now = await store.get(job.id, owner);
-      return now ? { job: now, ran: null, busy: true, done: false } : null;
-    }
+    if (err instanceof StaleAttemptError) return await lostTheClaim(job, owner, jlog, "mid-step");
     throw err;
   } finally {
-    clearTimeout(deadline);
-    // Only ours. `aborts` is keyed by job id and this call put the entry there,
-    // so deleting it here cannot take another claimant's — it has none in this
-    // process, because the claim is what stops two of us being inside one job.
-    aborts.delete(job.id);
+    standDown();
   }
 }
 

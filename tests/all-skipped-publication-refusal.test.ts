@@ -36,7 +36,7 @@
  *    which is the moment after the draft is minted and before the walk starts —
  *    the same order production would see, minutes apart instead of milliseconds.
  * 4. The step skips, the walk reaches `endJob(...done)`, and the publication is
- *    refused by `refuseIfBaseMoved` because the base moved.
+ *    refused by `publishRevisionIn`'s lineage check because the base moved.
  *
  * ## The mutation, watched red on 2026-09-01
  *
@@ -102,6 +102,7 @@ import { runAsOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import type { PipelineStep } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
+import { STORAGE_BUSY, STORAGE_FAILED } from "../src/messages.js";
 import { STORE } from "../src/store/live.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
@@ -436,6 +437,51 @@ async function jobRow(jobId: string) {
   return row;
 }
 
+/**
+ * One whole claim whose publication throws `thrown`, and the rows it left.
+ *
+ * The fixture of case 3, taken out of it so that case 4 can run it twice with
+ * two different failures and compare the answers. Everything is real except the
+ * one settlement: `openPgStoreSession` opens the draft, the `arc` step skips,
+ * and the `error` ending the coordinator sends afterwards goes through the real
+ * session — so what disposes of the draft is production's statement.
+ */
+async function failThePublication(
+  suffix: string,
+  thrown: Error,
+): Promise<{
+  readonly advanced: Awaited<ReturnType<typeof advanceWhenSlotFree>>;
+  readonly row: Awaited<ReturnType<typeof jobRow>>;
+  readonly draftId: string;
+}> {
+  const slug = `${SLUG_PREFIX}${suffix}`;
+  await publishR1(slug);
+  const jobId = await queueJob(slug, ["arc"]);
+
+  let draftId = "";
+  const advanced = await advanceWhenSlotFree(jobId, {
+    session: async (job, attempt) => {
+      const real = await openPgStoreSession({
+        slug: job.slug,
+        job: { id: job.id, attemptId: attempt },
+      });
+      draftId = (await jobRow(job.id))?.draftRevisionId ?? "";
+      expect(draftId, "the claim did not open a draft").toBeTruthy();
+      return {
+        ...real,
+        settleJob: async (transition: JobEndTransition) => {
+          if (transition.ending.status !== "done") return await real.settleJob(transition);
+          throw thrown;
+        },
+      } satisfies StoreSession;
+    },
+    steps: { ...STEPS, arc: fakeArc() },
+  });
+
+  expect(advanced?.done, "the job has to be over, in this request").toBe(true);
+  return { advanced, row: await jobRow(jobId), draftId };
+}
+
 const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOwner(OWNER, body));
 
 /* ------------------------------------------------------------------ tests -- */
@@ -663,5 +709,102 @@ when("a claim where every step skips and the publication does not happen", () =>
     expect(row?.error).toMatch(/putting the finished article on your shelf/);
     expect(row?.error, "a database error's parameters reached the jobs row").not.toContain(MARKER);
     expect(advanced?.job.error).not.toContain(MARKER);
+  });
+
+  /* ------------------------------------------------------------------ 4 -- */
+
+  /**
+   * **A permanent database failure must not be recorded as a retryable one**,
+   * and the two halves of that are the field and the sentence.
+   *
+   * GPT Sol's finding 3 of docs/plans/260901d-stage3-code-review-sol.md:
+   *
+   * > `jobs.ts:1578` labels every non-`PublishRefused` error `"retry"`. That
+   * > overwrites the distinction already made by the database boundary:
+   * > transient `STORAGE_BUSY` is `"retry"`; permanent `STORAGE_FAILED` is
+   * > `"bug"` and explicitly says retrying will not help.
+   *
+   * `guardDbStore` has already done the classifying by the time the coordinator
+   * sees the failure — it scrubs a transient SQLSTATE to `STORAGE_BUSY` and
+   * everything else to `STORAGE_FAILED`, both of which carry their kind in a
+   * trailing `[db-*]` code that `failureKindOf` reads (src/store/db-errors.ts,
+   * src/messages.ts). Hard-coding `"retry"` threw that away one layer up, so a
+   * constraint violation reached the reader as a Retry button under the words
+   * *"Trying again is safe"*, on a job that could only fail identically.
+   *
+   * **Both, in one case, asserting they differ.** One of them alone can be made
+   * to pass by a constant: a version that labels everything `"bug"` passes the
+   * `STORAGE_FAILED` half and is just as wrong. What has to be true is that the
+   * two inputs come out different, so the case runs both and compares.
+   *
+   * ## The mutation, watched red on 2026-09-01
+   *
+   * `recordFailureKind(job, failureKindOf(err) ?? "retry")` in
+   * `endAsStorageFailure` put back as the hard-coded
+   * `err instanceof PublishRefused ? failureKindOf(err) : "retry"`, and the
+   * sentence back to one unconditional string:
+   *
+   * ```
+   * × keeps the kind the database boundary gave a failed publication
+   * AssertionError: a permanent database failure was recorded as retryable:
+   *   expected 'retry' to be 'bug' // Object.is equality
+   * ```
+   *
+   * and, with the kind restored and only the sentence hard-coded back to one
+   * unconditional string:
+   *
+   * ```
+   * AssertionError: the card promised a safe retry under a failure that cannot
+   *   come out differently: expected 'Everything ran, but putting the finis…'
+   *   not to contain 'Trying again is safe'
+   * ```
+   *
+   * Two mutations rather than one, because the field and the sentence are two
+   * halves of the same lie and either can be fixed without the other.
+   */
+  mine("keeps the kind the database boundary gave a failed publication", async () => {
+    /* The two failures exactly as `guardDbStore` builds them: the scrubbed
+       sentence, `StoreFailure` as the name, and nothing else — because nothing
+       else survives that seam, and the kind has to be readable from what does.
+       See `scrubDbError` in src/store/db-errors.ts. */
+    const storeFailure = (message: string): Error =>
+      Object.assign(new Error(message), { name: "StoreFailure" });
+
+    const busy = await failThePublication("busy", storeFailure(STORAGE_BUSY.message));
+    const failed = await failThePublication("failed", storeFailure(STORAGE_FAILED.message));
+
+    /* **They differ**, which is the finding. A version that hard-codes either
+       answer passes one line below and fails this one. */
+    expect(
+      busy.row?.failureKind,
+      "a database that was briefly unreachable is worth another go",
+    ).toBe("retry");
+    expect(
+      failed.row?.failureKind,
+      "a permanent database failure was recorded as retryable",
+    ).toBe("bug");
+    expect(busy.row?.failureKind).not.toBe(failed.row?.failureKind);
+
+    /* And the button follows the field, which is the reader's half of it. */
+    expect(jobWorthRetrying(busy.advanced?.job as Job)).toBe(true);
+    expect(jobWorthRetrying(failed.advanced?.job as Job)).toBe(false);
+
+    /* **The sentence, and it is the half a field alone would not fix.** The
+       card is where the reader meets this, and it promised a safe retry
+       unconditionally. */
+    expect(busy.row?.error).toContain("Trying again is safe");
+    expect(
+      failed.row?.error,
+      "the card promised a safe retry under a failure that cannot come out differently",
+    ).not.toContain("Trying again is safe");
+    expect(failed.row?.error).toContain("Trying again will not help");
+
+    /* Both are still terminal with the draft disposed of — the fix to the kind
+       must not cost the fix to the hang. */
+    for (const { row, draftId } of [busy, failed]) {
+      expect(row?.status).toBe("error");
+      expect(row?.draftRevisionId).toBeNull();
+      expect((await revisionRow(draftId))?.status).toBe("failed");
+    }
   });
 });

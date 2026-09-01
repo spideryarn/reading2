@@ -747,11 +747,12 @@ export function sameStamp(recorded: StepStamp | null, expected: StepStamp): bool
 /**
  * Where artefacts live, behind one interface, so the pipeline can stop knowing.
  *
- * Two implementations are planned and the seam is the point: the file adapter
- * (src/store/artifacts-fs.ts) writes `data/<slug>/…` exactly as the stages do
- * today, and the Postgres one writes columns on a draft revision. Landing the
- * seam file-backed first means nothing on disk changes and the swap really is
- * one adapter.
+ * Two implementations, and the seam is the point: the file adapter
+ * (src/store/artifacts-fs.ts) writes `data/<slug>/…`, and the Postgres one
+ * (src/store/artifacts-pg.ts) writes columns on a draft revision. Every stage
+ * returns a product now and calls `write()` rather than writing a file itself
+ * (docs/project/database.md), so the two adapters are the only place that
+ * choice is made.
  *
  * `slug` identifies the article in both; the Postgres adapter resolves it to
  * the draft revision the current job owns.

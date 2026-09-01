@@ -168,6 +168,7 @@ const SLUGS = {
   handback: "claim-session-pg-handback",
   late: "claim-session-pg-late-step",
   retry: "claim-session-pg-retry",
+  openFailure: "claim-session-pg-open-failure",
 } as const;
 
 /* ------------------------------------------------------- the scratch roots -- */
@@ -196,13 +197,26 @@ async function withFreshScratch<T>(body: () => Promise<T>): Promise<{ result: T;
 }
 
 /**
- * **Nothing was written to a disk**, which under Postgres is the claim rather
- * than a tidiness check.
+ * **This claim committed no artefact through a filesystem store**, which under
+ * Postgres is the thing being shown rather than a tidiness check.
  *
  * `dataRoot()` is consulted for `ctx.dir` and `ctx.htmlFile` on every step of
- * every job, and nothing on the job path creates a directory — so a claim that
- * publishes through its draft leaves this root exactly as `mkdtemp` made it. A
- * claim that went through the filesystem session leaves the whole article here.
+ * every job, and the *session* is what turns a step's product into bytes — so a
+ * claim publishing through its draft leaves this root exactly as `mkdtemp` made
+ * it, and a claim that went through the filesystem session leaves the whole
+ * article here. That is the difference this file exists to show, and the
+ * mutation in the header is the proof it is load-bearing.
+ *
+ * **What it does not prove, and the stated scope was wrong about this until
+ * 2026-09-01.** It is not evidence that a real Postgres ingest writes nothing to
+ * scratch. Every step below is a fixture with no body, and real stages
+ * legitimately write checkpoints under `ctx.dir`: `hierarchy` is handed it as
+ * its checkpoint directory (src/pipeline.ts, and src/hierarchy.ts creates it),
+ * and PDF extraction creates `pdf-chunks` (src/pdf-read.ts). Nor would it catch
+ * a real stage that dual-wrote its artefact to disk while still returning
+ * correct `parts`. Catching that wants a deterministic real-stage case through
+ * `claimSession` allowing only the documented checkpoint paths, which is not
+ * built. GPT Sol, docs/plans/260901d-stage3-code-review-sol.md finding 4.
  */
 async function assertScratchUntouched(root: string, what: string): Promise<void> {
   expect(await readdir(root), `${what} wrote to its scratch root`).toEqual([]);
@@ -863,5 +877,145 @@ when("a claim under Postgres", () => {
     await db()
       .delete(jobsTable)
       .where(and(eq(jobsTable.id, job.id), eq(jobsTable.status, "queued")));
+  }, 120_000);
+
+  /* ------------------------------------------------------------------ 6 -- */
+
+  /**
+   * **A session that will not open ends the job, and lets go of the draft the
+   * job was already holding.**
+   *
+   * GPT Sol's finding 2 of docs/plans/260901d-stage3-code-review-sol.md:
+   *
+   * > The job becomes `running`, the Postgres session is then opened, while the
+   * > encompassing `try` starts only later. A connection failure or other error
+   * > from `openOrBeginJobDraft` therefore escapes the request; leaves the job
+   * > `running` with its attempt and global slot; is not terminalised until a
+   * > later advance notices the expired lease; appears as a generic interruption
+   * > rather than the real failure.
+   *
+   * **The flip is what opened it.** Until 2026-09-01 this seam built a decorator
+   * over a *filesystem* session, which could not fail during construction; since
+   * the flip it is `openOrBeginJobDraft` — two row locks and possibly a minted
+   * revision. So it is the same externally visible hang the all-skipped catch
+   * was written to remove (tests/all-skipped-publication-refusal.test.ts),
+   * reached one transaction earlier, and put there by this stage.
+   *
+   * ## Why the job holds a draft before the failing claim
+   *
+   * Because that is the state the fix has to be right about, and the state a
+   * plain `store.finish` gets wrong: a job that goes terminal still pointing at
+   * a revision is a draft `sweepAbandonedDrafts` spares for ever, since it reads
+   * any job row's pointer as ownership. So the case builds it the way production
+   * does — case 5's handback, which deliberately leaves the draft for the next
+   * claim — and then breaks that next claim's session.
+   *
+   * ## Why the injected failure is transient rather than permanent
+   *
+   * Because a permanent one is not recoverable and saying so is the honest
+   * answer. Under Postgres the `jobs` row is *in* the database, so a database
+   * nothing can reach is one where no ending can be written by this code or any
+   * other; the lease is what covers that, and it is the only thing that can.
+   * What the fix closes is every failure where the database is reachable and the
+   * open was not — a pool timeout, a lost connection, a deadlock — and this
+   * injects exactly that: the first open fails, the second is production's own.
+   *
+   * ## The mutation, watched red on 2026-09-01
+   *
+   * `src/jobs.ts` put back to `const session = await parts.session(job, attempt);`
+   * outside any recovery, which is the state this work found:
+   *
+   * ```
+   * × ends the job when the session will not open, and lets the draft go
+   * Error: connect ETIMEDOUT — THE POOL TIMEOUT A DRIVER WOULD HAVE QUOTED
+   *  ❯ Object.session tests/claim-session-postgres.test.ts:972:32
+   *  ❯ walkClaim src/jobs.ts:1421:31
+   *  ❯ runInJob src/job-scope.ts:53:16
+   *  ❯ Module.advanceJobWith src/jobs.ts:1342:16
+   * ```
+   *
+   * The failure leaves `advanceJobWith` altogether. The rows it left were read
+   * in that same run rather than reasoned about, by catching the throw and
+   * printing them:
+   *
+   * ```
+   * {"status":"running","attemptId":"5ad12990-5a3f-477e-b073-033367844279",
+   *  "draftRevisionId":"20531bbf-87de-4a0a-8f66-42b23f93a6cb","draftStatus":"draft"}
+   * ```
+   *
+   * That is the hang — the claim still held, the slot still taken, the draft
+   * still owned — and it is what the assertions below are against.
+   */
+  it("ends the job when the session will not open, and lets the draft go", async () => {
+    const slug = SLUGS.openFailure;
+    const { steps } = articleSteps(slug, "ofa", "the open-failure article");
+    const job = await queueJob(slug, INGEST);
+
+    /* The first claim hands the job back mid-ingest, which is what leaves a
+       draft pointer on a `queued` job — case 5 is the same arrangement, asserted
+       rather than assumed. */
+    const { result: released } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: { ...STEPS, ...steps } as never,
+      leaseMs: DEADLINE_MARGIN_MS + 2_000,
+    });
+    expect(released?.done).toBe(false);
+    const held = (await jobRow(job.id))?.draftRevisionId;
+    expect(held, "the released claim was supposed to leave its draft behind").toBeTruthy();
+
+    /**
+     * What a pool timeout looks like, and **the marker stands for article
+     * content**.
+     *
+     * `openOrBeginJobDraft` is a free function rather than a guarded store
+     * method, so nothing has scrubbed this by the time the coordinator sees it
+     * — a raw Drizzle error here carries the failed statement's bound
+     * parameters. None of it may reach the job card or the `jobs` row.
+     */
+    const MARKER = "THE POOL TIMEOUT A DRIVER WOULD HAVE QUOTED";
+    let opens = 0;
+    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+      session: async (claimed, attempt) => {
+        opens += 1;
+        if (opens === 1) throw new Error(`connect ETIMEDOUT — ${MARKER}`);
+        return await claimSession(claimed, attempt);
+      },
+      steps: { ...STEPS, ...steps } as never,
+    });
+
+    /* The recovery asked for a session of its own, which is the only thing that
+       can fail this job's draft. One ask and one recovery ask, no more. */
+    expect(opens, "the recovery did not open a session to settle through").toBe(2);
+
+    /* **Immediate and terminal**, which is the whole finding: no waiting for a
+       lease, and an answer the browser's loop stops on. */
+    expect(advanced?.done, "the job has to be over, in this request").toBe(true);
+    expect(advanced?.ran, "no step can have run: the session never opened").toBeNull();
+    expect(advanced?.job.status).toBe("error");
+
+    /* The rows, because the answer above is in memory and the next request reads
+       these. The pointer being gone is what stops `sweepAbandonedDrafts`
+       treating this draft as owned for ever. */
+    const row = await jobRow(job.id);
+    expect(row?.status, "the job was left running until its lease lapsed").toBe("error");
+    expect(row?.attemptId, "the claim was never let go").toBeNull();
+    expect(row?.draftRevisionId, "the draft pointer is still held").toBeNull();
+    expect(
+      (await revisionRow(held!))?.status,
+      "the draft was orphaned rather than failed",
+    ).toBe("failed");
+
+    /* Nothing was published, and the card says something a person can act on
+       without any of what the driver put in its message. */
+    expect(await currentRevisionOf(slug)).toBeNull();
+    expect(row?.error).toContain("none of this run happened");
+    expect(row?.error, "a driver error's parameters reached the jobs row").not.toContain(MARKER);
+    expect(advanced?.job.error).not.toContain(MARKER);
+    /* Nobody classified this one, so it is worth another go — and the sentence
+       says so, which is the pair src/job-failure.ts keeps together. */
+    expect(row?.failureKind).toBe("retry");
+    expect(row?.error).toContain("Trying again is safe");
+
+    await assertScratchUntouched(root, "the claim whose session would not open");
   }, 120_000);
 });
