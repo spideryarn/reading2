@@ -88,6 +88,18 @@ export interface ExportTarget {
 export interface ExportResult {
   readonly slug: string;
   readonly files: readonly string[];
+  /**
+   * **Which tables this run actually took rows out of** — observed, not declared.
+   *
+   * `ARTICLE_TABLE_COVERAGE` below is a claim about what the export does; this
+   * is what it did. They are checked against each other in
+   * tests/store-export-covers-tables.test.ts, which is the whole point: the
+   * first version of that check searched this file's *source text* for
+   * `put("<filename>"`, which a comment satisfies and which a table declared
+   * into somebody else's file satisfies too. A set the code appends to while
+   * writing cannot be satisfied by either. GPT Sol, 2026-09-01.
+   */
+  readonly tables: readonly ExportedTable[];
 }
 
 /**
@@ -103,12 +115,28 @@ export interface ExportResult {
  * like one that has nothing to say about it.
  *
  * `tests/store-export-covers-tables.test.ts` derives the list of article-scoped
- * tables **from `src/db/schema.ts`** and requires this record to name every one
- * of them, so the *next* table cannot arrive quietly either. That is the actual
- * fix; adding `referee_criteria` below is only the instance.
+ * tables **from `src/db/schema.ts`** — following foreign keys, so a child table
+ * that reaches an article only through its parent is in scope too — and requires
+ * this record to name every one of them, so the *next* table cannot arrive
+ * quietly either. That is the actual fix; adding `referee_criteria` below is
+ * only the instance.
+ *
+ * ## `into` is a promise something checks by running the export
+ *
+ * A declaration that says "exported" while nothing writes the file is worse than
+ * no declaration, because it reads as the check having been done. The first
+ * version of the test held `into` against the *source text* of this file, which
+ * two edits satisfy without exporting a row: declaring a new table into an
+ * existing file such as `comments.json`, or writing `// TODO: put("new.json", …)`
+ * inside a comment. So the check now inserts a row in every declared table, runs
+ * the export, and looks for that row **in the file named here**. GPT Sol raised
+ * it, 2026-09-01.
  */
 export type TableCoverage =
-  /** Written into this artefact file, whose name must appear in a `put(…)` here. */
+  /**
+   * Written into this artefact file — and a row of this table must actually
+   * come back out of that file when the export runs.
+   */
   | { readonly exported: true; readonly into: string }
   /** Deliberately not part of a rollback of `data/`, for this stated reason. */
   | { readonly exported: false; readonly why: string };
@@ -117,12 +145,30 @@ export type TableCoverage =
  * **Every table that hangs off an article, and what this export does with it.**
  *
  * Keyed by the SQL table name, because that is what the schema and a migration
- * both call it. A table with no `article_id` is not in scope: an export is one
- * article's `data/<slug>/` directory, and something not scoped to an article
- * has nowhere in it to go.
+ * both call it. In scope is anything that reaches an article at all: an
+ * `article_id` column, or a foreign key to something that has one. The second
+ * half was missing until 2026-09-01 and `revision_step_runs` was the table it
+ * missed — keyed by `revision_id` alone, article-scoped in substance, and
+ * invisible to a collector that only looked for `articleId`. A future child of
+ * `referee_criteria` or `chat_threads` would have been invisible the same way.
+ *
+ * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
+ * only the ones that mean ownership, so `jobs` arrives here because it points at
+ * the draft revision it is building, and `queue_state` because it points at
+ * `jobs`. Narrowing it — identifying keys only, or non-null keys only — would
+ * drop those two and would also drop the next child table that happens to hold a
+ * nullable parent id, which is the silence this record exists to prevent. The
+ * cost of over-reach is one written-down sentence per table; the cost of
+ * under-reach is a rollback that quietly loses somebody's work. So the entries
+ * below are not all "article data": some are here to say, on the record, that
+ * they are not.
  */
-export const ARTICLE_TABLE_COVERAGE: Readonly<Record<string, TableCoverage>> = {
-  /* The article itself — its columns become meta.json, tree.json and the rest,
+export const ARTICLE_TABLE_COVERAGE = {
+  /* The article's own row — the shelf state the reader made, which is the only
+     thing on `articles` that is not either an identifier or a pointer at the
+     revision. `purpose` went missing from this file once already. */
+  articles: { exported: true, into: "shelf.json" },
+  /* The current revision — its columns become meta.json, tree.json and the rest,
      through the join at the top of `exportArticle`. */
   article_revisions: { exported: true, into: "meta.json" },
   revision_blocks: { exported: true, into: "blocks.json" },
@@ -161,7 +207,46 @@ export const ARTICLE_TABLE_COVERAGE: Readonly<Record<string, TableCoverage>> = {
       "(src/store/pg-visibility.ts). The filesystem store has no public sharing " +
       "at all, so a rollback to data/ has nothing that could read it back.",
   },
-};
+  jobs: {
+    exported: false,
+    why:
+      "The ingest queue's own state, reachable from here only because a job " +
+      "points at the draft revision it is building (`draft_revision_id`). It is " +
+      "not one article's data: the filesystem store keeps jobs in data/_jobs, " +
+      "one file for the whole library, and a finished job is scaffolding.",
+  },
+  queue_state: {
+    exported: false,
+    why:
+      "One row saying which job is running, reachable from an article only " +
+      "through `jobs` above. It describes this machine at this moment, not any " +
+      "article, and a rollback that restored it would name a job that is not " +
+      "running.",
+  },
+  revision_step_runs: {
+    exported: false,
+    why:
+      "Whether a pipeline step's output is CURRENT, keyed by input hash — the " +
+      "same class of thing as checkpoints, and derived from artefacts this " +
+      "export does write. A rollback to data/ recovers currency the way the " +
+      "filesystem store always has, by looking at the files.",
+  },
+} as const satisfies Readonly<Record<string, TableCoverage>>;
+
+/** A table name this record knows about. */
+export type ArticleTable = keyof typeof ARTICLE_TABLE_COVERAGE;
+
+/**
+ * A table the record says is **exported** — and the only thing `put` will take.
+ *
+ * The compiler half of the promise above. Attributing a write to a table
+ * declared `exported: false`, or to one the record has never heard of, does not
+ * compile; and every write that does compile lands in `ExportResult.tables`, so
+ * the test can ask what the export touched rather than reading its source.
+ */
+export type ExportedTable = {
+  [K in ArticleTable]: (typeof ARTICLE_TABLE_COVERAGE)[K]["exported"] extends true ? K : never;
+}[ArticleTable];
 
 /**
  * Where the source documents come from, or a refusal — **never `data/_blobs`**.
@@ -375,9 +460,27 @@ export async function exportArticle(
   const dir = path.join(target.dataRoot, slug);
   await mkdir(dir, { recursive: true });
   const written: string[] = [];
-  const put = async (name: string, value: unknown) => {
+  /**
+   * Write an artefact, and **say which table it came out of**.
+   *
+   * `from` is not decoration and it is not a comment: it is the runtime half of
+   * `ARTICLE_TABLE_COVERAGE`. It goes into `ExportResult.tables`, which is what
+   * tests/store-export-covers-tables.test.ts asks — instead of asking this
+   * file's source text, which said `put("comments.json"` whether or not the call
+   * ran, and whether or not the table declaring that file was the one writing it.
+   */
+  const wroteFrom = new Set<ExportedTable>();
+  const put = async (
+    /* An array where one file is built from two tables — `chat.json` is threads
+       and their messages — so that "which tables did this run write?" stays an
+       honest answer rather than the first table that happened to name the file. */
+    from: ExportedTable | readonly ExportedTable[],
+    name: string,
+    value: unknown,
+  ) => {
     await writeJson(path.join(dir, name), value);
     written.push(name);
+    for (const table of typeof from === "string" ? [from] : from) wroteFrom.add(table);
   };
 
   /* meta.json — rebuilt from the columns, with absent fields absent. `slug`
@@ -410,7 +513,7 @@ export async function exportArticle(
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,
   });
-  if (revision.title) await put("meta.json", meta);
+  if (revision.title) await put("article_revisions", "meta.json", meta);
 
   /* blocks.json — `order by ordinal`, which is the whole ballgame. Ids are
      random and carry no position, so a missing ORDER BY here silently exports
@@ -442,27 +545,27 @@ export async function exportArticle(
      rollback, and a rollback that writes artefacts the pipeline would not have
      written is not one. Without the stamp every exported article reads back
      stale. */
-  if (blocks.length) await put("blocks.json", blocksArtefact(blocks));
+  if (blocks.length) await put("revision_blocks", "blocks.json", blocksArtefact(blocks));
 
-  if (revision.tree) await put("tree.json", revision.tree);
-  if (revision.arc) await put("arc.json", revision.arc);
+  if (revision.tree) await put("article_revisions", "tree.json", revision.tree);
+  if (revision.arc) await put("article_revisions", "arc.json", revision.arc);
   /* The manifest only. The image bytes it names are content-addressed objects in
      the `sources` bucket, and this export writes an article's *artefacts* — the
      document's own bytes come back through `writeRawDocument` below and nothing
      else does. An exported article therefore names objects it can only fetch
      from the bucket it came from, which is the same contract `raw_source_sha256`
      already has. docs/plans/260829b-hosting-the-articles-images.md. */
-  if (revision.assets) await put("assets.json", revision.assets);
-  if (revision.tweets) await put("tweets.json", revision.tweets);
-  if (revision.glossary) await put("glossary.json", revision.glossary);
+  if (revision.assets) await put("article_revisions", "assets.json", revision.assets);
+  if (revision.tweets) await put("article_revisions", "tweets.json", revision.tweets);
+  if (revision.glossary) await put("article_revisions", "glossary.json", revision.glossary);
   /* No `summary.json`: stage 5e, the `summary` artefact kind and the column
      that held it all went on 2026-08-31 (docs/plans/260831s-gist-only-summaries.md). */
-  if (revision.ideas) await put("ideas.json", revision.ideas);
-  if (revision.quotes) await put("quotes.json", revision.quotes);
-  if (revision.timeline) await put("timeline.json", revision.timeline);
-  if (revision.quiz) await put("quiz.json", revision.quiz);
-  if (revision.sketch) await put("sketch.json", revision.sketch);
-  if (revision.labels) await put("labels.json", revision.labels);
+  if (revision.ideas) await put("article_revisions", "ideas.json", revision.ideas);
+  if (revision.quotes) await put("article_revisions", "quotes.json", revision.quotes);
+  if (revision.timeline) await put("article_revisions", "timeline.json", revision.timeline);
+  if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
+  if (revision.sketch) await put("article_revisions", "sketch.json", revision.sketch);
+  if (revision.labels) await put("article_revisions", "labels.json", revision.labels);
 
   written.push(...(await writeRawDocument(dir, slug, revision, sources)));
 
@@ -506,7 +609,7 @@ export async function exportArticle(
     purpose: article.purpose,
   });
   if (article.opens > 0 || Object.keys(shelf).some((key) => key !== "opens")) {
-    await put("shelf.json", shelf);
+    await put("articles", "shelf.json", shelf);
   }
 
   /* Reader state. Each file wraps its payload in a single-key object, and
@@ -576,7 +679,7 @@ export async function exportArticle(
         error: row.error,
       }) as Comment,
     );
-    await put("comments.json", { comments });
+    await put("comments", "comments.json", { comments });
   }
 
   const threadRows = await db
@@ -586,6 +689,12 @@ export async function exportArticle(
     .orderBy(asc(chatThreads.createdAt), asc(chatThreads.id));
   if (threadRows.length) {
     const threads = [];
+    /* Counted rather than assumed. `chat.json` is written from two tables and a
+       thread with no messages is a real state, so an export that recorded
+       `chat_messages` on the strength of a thread row would be claiming coverage
+       it had not exercised — which is the shape of thing this whole record
+       exists to stop. */
+    let messagesSeen = 0;
     for (const thread of threadRows) {
       /* `article_id` AND `thread_id`, never `thread_id` alone. A thread id is
          unique only within its article — `chat_threads`'s primary key is
@@ -600,6 +709,7 @@ export async function exportArticle(
         .from(chatMessages)
         .where(and(eq(chatMessages.articleId, article.id), eq(chatMessages.threadId, thread.id)))
         .orderBy(chatMessages.ordinal);
+      messagesSeen += messageRows.length;
       threads.push({
         id: thread.id,
         title: thread.title,
@@ -658,7 +768,11 @@ export async function exportArticle(
         ),
       });
     }
-    await put("chat.json", { threads });
+    await put(
+      messagesSeen ? (["chat_threads", "chat_messages"] as const) : "chat_threads",
+      "chat.json",
+      { threads },
+    );
   }
 
   const runRows = await db
@@ -687,7 +801,7 @@ export async function exportArticle(
         colour: row.colour,
       }) as SearchRun,
     );
-    await put("searches.json", { runs });
+    await put("search_runs", "searches.json", { runs });
   }
 
   /* referee-criteria.json — the referee's own criteria and what each turned up.
@@ -746,7 +860,7 @@ export async function exportArticle(
          short. Ids and a count only — a criterion is prose. */
       logger.warn({ slug, unreadable }, "criteria skipped: config could not be read");
     }
-    if (criteria.length) await put("referee-criteria.json", { criteria });
+    if (criteria.length) await put("referee_criteria", "referee-criteria.json", { criteria });
   }
 
   const lookupRows = await db
@@ -765,11 +879,11 @@ export async function exportArticle(
         at: row.at.toISOString(),
       };
     }
-    await put("glossary-lookups.json", { lookups });
+    await put("glossary_lookups", "glossary-lookups.json", { lookups });
   }
 
-  logger.info({ slug, files: written.length }, "article exported");
-  return { slug, files: written };
+  logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
+  return { slug, files: written, tables: [...wroteFrom] };
 }
 
 /** Every article Postgres can export: one with a current revision. */

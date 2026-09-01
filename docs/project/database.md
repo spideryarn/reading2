@@ -267,14 +267,36 @@ reporting success and listing the files it *did* write. Nothing could have gone 
 never written is a file the round-trip test never misses.
 
 So `ARTICLE_TABLE_COVERAGE` in [`src/store/export.ts`](../../src/store/export.ts) names every table
-with an `article_id` and says, for each, which file it goes into or **in words** why a rollback of
+that reaches an article and says, for each, which file it goes into or **in words** why a rollback of
 `data/` does not need it.
-[`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) derives
-that list of tables *from the schema* rather than restating it, so the next table cannot arrive
-quietly either — it fails by name, with the sentence saying what to do. Note the limit: the guard
-sees a missing **table**, not a missing **column**. A new column on an exported table is still a
-hand-written line in `exportArticle`, which is how `tools`, `stance`, `shelf.purpose` and
-`comments.valence` each went missing once.
+[`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) checks
+that record two ways, and they fail differently:
+
+- **Is the list complete?** The tables come *from the schema*, never from a second copy of the names,
+  and the walk follows **foreign keys** as well as `article_id` columns — so a child table keyed only
+  by `criterion_id`, `thread_id` or `revision_id` is in scope for the same reason its parent is.
+  `revision_step_runs` was already such a table and was invisible until 2026-09-01. The walk
+  deliberately over-reaches: it pulls in `jobs`, because a job points at the draft revision it is
+  building, and `queue_state` behind it. Over-reach costs one written-down sentence; under-reach
+  costs a rollback that quietly loses somebody's work. No database needed.
+- **Is the list true?** Every table the record calls exported gets a row with a sentinel string in it,
+  `exportArticle` runs, and that string has to come back out of the file the record names. This half
+  needs Postgres and skips (loudly) without it.
+
+The second half used to search `src/store/export.ts` for `put("<filename>"`, and GPT Sol was right
+that this was theatre — it tied a table to a *string in the source*, not to a query or a serialized
+value, so declaring a new table into an existing file such as `comments.json`, or writing
+`// TODO: put("new-file.json", …)`, satisfied it while exporting nothing. Trading an always-running
+check that proves nothing for a sometimes-skipped one that proves something is the right way round:
+the first reads as the check having been done.
+
+`put` in `exportArticle` now takes the table it is writing from, and `ExportResult.tables` is what
+the run actually touched — an observed fact rather than a claim, and the only thing that catches a
+file built from the right rows by code that never names the table.
+
+Note the limit that remains: the guard sees a missing **table**, not a missing **column**. A new
+column on an exported table is still a hand-written line in `exportArticle`, which is how `tools`,
+`stance`, `shelf.purpose` and `comments.valence` each went missing once.
 
 | File | What it is |
 |---|---|
