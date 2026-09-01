@@ -169,16 +169,16 @@ jargon where an ordinary word will do, no hedging padding.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
-Anything that changes it — an insert, an update, a delete, `db:migrate`, `db:import`, any script
-pointed at the remote — **ask Greg first, every time**, even mid-task, even when it looks routine.
-Before you run it, read the `Target:` line rather than the success line: which database a command
+Anything that changes it — an insert, an update, a delete, any script pointed at the remote —
+**ask Greg first when it is major, destructive or risky**, even mid-task. An ordinary additive
+migration is none of those: read it, apply it, and say what you ran. What still needs asking is
+anything that wipes or overwrites data you did not create — `npm run db:reset` empties the database
+and puts nothing back ([supabase-local.md](docs/project/supabase-local.md)) — and anything
+destructive on the remote, a dropped column included.
+Whatever you run, read its `Target:` line rather than its success line: which database a command
 actually reaches is not always the one on its command line, and both mistakes print
 `✓ migrations applied` —
 [database.md § `DATABASE_URL=… npm run db:migrate` does not do what it looks like](docs/project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
-Locally the bar is lower: **apply a migration yourself** once you have read it and are confident it
-is sensible — additive, reversible in practice, not destructive — and say what you ran. Still ask
-before you wipe or overwrite data you did not create; `npm run db:reset` empties the database and
-puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 
 ### Working in a tree several agents share
 

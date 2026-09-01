@@ -149,13 +149,15 @@ Postgres. [sql.md](sql.md) is the shape we want that schema to have — real col
 foreign keys rather than good intentions, and a nullable timestamp wherever a boolean would throw
 away when it happened.
 
-**Half-moved, as of 2026-08-31.** Every *reader* store is Postgres under `SPIDERYARN_STORE=postgres`,
-which is what production runs; the *pipeline* still writes the filesystem layout below, because
-[`src/jobs.ts`](../../src/jobs.ts) imports `fsArtifacts` directly and never joins that selection. The
-gap between the two halves is not cosmetic — it is where three live faults came from, including one
-that mints new block ids over an article that already had them. Finishing it is
-[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md); the reasoning is
-[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md).
+**Moved, as of 2026-09-01.** Every store — reader and pipeline alike — is Postgres under
+`SPIDERYARN_STORE=postgres`, which is what production runs: a pipeline job commits each step's
+product into a draft revision and publishes it in one transaction with the job's own finish, rather
+than writing the filesystem layout below. Under the `files` default — a laptop with the flag unset —
+the same stages write that layout, unchanged, until stage 4 deletes it.
+[database.md](database.md) has the mechanism;
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
+write-up, and [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) the
+reasoning.
 
 The layout the pipeline writes, one directory per article:
 
@@ -219,7 +221,7 @@ heads exist today and the list grows as stages arrive:
 | function | stages | what its head prints |
 |---|---|---|
 | `articleFingerprint` | `arc`, `tweets`, `glossary`, `summary`, `quotes` | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
-| `articleWithIdsFingerprint` | `ideas`, `sketch` | those three **and `URL:`** (`articleWithIds`) |
+| `articleWithIdsFingerprint` | `ideas`, `sketch`, `quiz` | those three **and `URL:`** (`articleWithIds`) |
 | `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
 
 The last two also hash the synthetic `TITLE: <tree.slug>` those two stages fall back to when there is
