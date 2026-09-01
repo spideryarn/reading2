@@ -162,6 +162,6 @@ none handle browser WebRTC, so none of them solve the problem we actually have.
 - [realtime-voice-vercel-transport.md](../research/realtime-voice-vercel-transport.md) — why there is
   no poll-afterwards, and what Vercel can and cannot hold open
 - [ai-gateway.md](../project/ai-gateway.md) — the rule this feature has to restate
-- [ai-cost-tracking.md](ai-cost-tracking.md) — the ledger this has to fit
-- [ai-spend-outside-the-gateway.md](ai-spend-outside-the-gateway.md) — the declared-bypass register,
-  and why this is deliberately not one
+- [260827q-ai-cost-tracking.md](260827q-ai-cost-tracking.md) — the ledger this has to fit
+- [260828g-ai-spend-outside-the-gateway.md](260828g-ai-spend-outside-the-gateway.md) — the
+  declared-bypass register, and why this is deliberately not one
