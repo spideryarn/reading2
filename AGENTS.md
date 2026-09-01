@@ -45,7 +45,7 @@ listed here; the names under each are files in `docs/project/`.
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
   `live-conversation.md` (talking to the article out loud) ·
-  `review-mode.md` (say what you took from it, and find out) ·
+  `remember-mode.md` (say what you took from it, and find out) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
@@ -155,6 +155,11 @@ the other docs and to the code. Not descriptions of code, which the code already
 The rules are here; the reasons are behind the links. Several exist because of a specific accident,
 and the write-up is worth reading once.
 
+**This is an alpha, and speed wins.** There are no real users yet, so we optimise for how fast we
+can move. It is not the end of the world if something is briefly broken. What we are not trading
+away is design: write code that will still be good to work with in six months. It loosens nothing
+in **Real data belongs to the reader** below.
+
 **Explain plainly.** Whenever you explain, summarise or ask a question — in chat, in a doc, in a
 commit message — use plain words and short sentences. Say the thing itself, not a gesture at it. No
 jargon where an ordinary word will do, no hedging padding.
@@ -174,6 +179,10 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 
 ### Working in a tree several agents share
 
+- **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
+  against one local Supabase and one dev server. Files change under you, tests go red for reasons
+  that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
+  don't try to fence yourself off.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
@@ -198,11 +207,11 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
   whatever a peer had staged.
 
   **If a peer has unfinished work inside a file you are committing**, the pathspec form takes their
-  hunks too — check with `git diff HEAD -- <file>`, never bare `git diff`, which is index-relative
-  and lies in both directions here. Then either commit it and say in the message whose work rode
-  along, or leave that file out and ship the rest. Both are cheap and nothing is lost. Waiting is
-  fine too. **There is no third option**: the private-index recipe (`GIT_INDEX_FILE`, `commit-tree`,
-  `update-ref`) was removed on 2026-08-30 after it silently staged a revert of other people's work
+  hunks too. That is usually fine: commit it and say in the message whose work rode along. Nothing
+  is lost and it is not worth stalling over — leave the file out only if their half-done change
+  would break the build. Look first with `git diff HEAD -- <file>`, never bare `git diff`, which is
+  index-relative and lies in both directions here. **There is no third option**: the private-index
+  recipe (`GIT_INDEX_FILE`, `commit-tree`, `update-ref`) was removed on 2026-08-30 after it silently staged a revert of other people's work
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
