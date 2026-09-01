@@ -257,6 +257,76 @@ Built by Fable, tests first and each one watched go red before it went green.
 
 Stage 5's per-job advance-failure health is already in the snapshot as `driverFailures` — counted,
 reset on success, dropped when a job goes terminal. Nothing renders it yet; that is still stage 5.
+### Stage 1b — the session holes the engine still had
+
+**Sol's review of the built Stage 1 code**
+([here](260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear-stage1-review-sol.md)) approved the
+design against the corrected diagnosis — *"the browser is the production worker, so its driver should
+not depend on an unrelated feature hook"* — and then found three session holes.
+
+- [x] **HIGH — an old drive loop deletes the new session's marker.** `stop()` clears `driving`, so a
+      restarted session may legitimately drive the same durable job; when the *old* loop exits, its
+      unconditional `finally` deletes the **new** session's marker, and a later poll starts a second
+      current-generation loop. The lease stops two writers, so nothing corrupts — but "one drive loop
+      per job" becomes false, requests double, and `driverFailures`, which Stage 5 wants to build on,
+      stops being trustworthy. A per-loop token, deleted only if the map still holds *that* loop's.
+- [x] **HIGH — hook actions are not generation-fenced.** An action fired by reader A can resolve
+      after reader B's engine has started, and its continuation writes into B's error and auth state
+      and pokes B's queue. The promise was implemented for polls and advances and not for actions.
+- [x] **HIGH — the final-401 rule is half built.** Three holes: `again` set during a failing poll
+      restarts one despite `authFailed`, and if that poll succeeds it clears `error` while leaving
+      `authFailed` true — **a silently paused engine**, the shape
+      [silent-success.md](../reusable/silent-success.md) is entirely about; a later token event for
+      the same reader does not resume it, because App's effect depends only on the unchanged id; and
+      an action's `HttpError.status` is discarded by `act`.
+- [x] **MEDIUM — `started || subscribers > 0` weakens the contract.** A subscriber can run the
+      engine with no authenticated session binding. No visitor route mounts `useJobs`, so the
+      signed-out guarantee holds *today* — but the engine no longer enforces it and instead trusts
+      every future component to preserve that topology. Make `started` the authority and update the
+      four old hook tests to call `start()`: *"test compatibility should not define production
+      authentication semantics."*
+- [x] **LOW, and the one that stings — the disproved diagnosis is still asserted in the code.** The
+      docs were corrected; `jobEngine.ts:7`, `useJobs.ts:5`, `App.tsx:241` and
+      `job-engine-drives-with-no-view.test.ts:4` still state the false shelf→reading-view story as
+      fact. Stale mount accounting in a comment is what produced the original misdiagnosis, so this
+      is the same trap being reset.
+- [x] **Test gaps.** The completion test's repeated-list assertion passes with `sameJobs` removed;
+      the hidden-poke "reader comes back" case calls `poke()` by hand and would pass with
+      `watchVisibility` broken; the Strict Mode test **copies App's effect rather than importing
+      App**, so App can drift while it stays green; there is no two-subscriber poll-count test though
+      the plan says to keep one; and `HttpError`'s status has no direct test.
+
+**What it approved**, kept for the same reason as Stage 2's: `receive` as a synchronous test seam,
+the 200-event cap and its failure direction, the extra band-open poll, the completion cursor
+captured at first render (*"the seven-step behavioral test is convincing"*), `useSyncExternalStore`
+correctness with no `getServerSnapshot` needed, the `HttpError` duck-typing at this seam, and that
+sign-out is correctly not a cancellation. Every legacy invariant survived the move except "one drive
+loop per job", and that only across teardown and restart.
+
+**For later stages:** `driverFailures: Readonly<Record<id, count>>` is a reasonable Stage 5 shape but
+is not exposed through `UseJobs` yet, and the duplicate-loop bug has to be fixed first or the count
+cannot be trusted. Stage 6 must give `HttpError` typed details or bypass ordinary `readJson`, since
+it currently discards the structured 409 fields that stage depends on.
+
+**Landed 2026-09-01.** `driving` became `Map<string, symbol>`, each loop minting its own token and
+releasing only its own. `poll()` gained an `authFailed` guard, so a queued poke can no longer restart
+the poller past a pause. `epoch()` fences both action outcomes, and a 401 from an action now pauses
+the engine like one from a poll. New `resume()`, and the App effect moved into an exported
+`useJobSession(readerId, accessToken)` — **with the token deliberately absent from the start/stop
+effect's deps**, because putting it there would tear the session down on every hourly refresh.
+`awake()` is now `started` alone.
+
+Two things beyond Sol's list. `stop()`'s early return also consulted `subscribers.size`, which became
+incoherent once `started` was the authority — so `stop()` now reliably removes the visibility
+listener, which was the unstated second half of finding 4. And the **drive** path's 401 was already
+correct but untested; it is the path that runs while the tab is hidden, so it is the one that would
+fail where nobody can see. Pinned now.
+
+The Strict Mode test no longer copies App's effect — `tests/job-session-effect.test.tsx` renders the
+shipped hook, so App can no longer drift while the test stays green. Seven test files, each new case
+watched red by a named reversion.
+
+
 ### Stage 2 — Stop means what it says
 
 - [x] **Rename the contract.** `failExpired` will no longer always fail, so its name, its `JobStore`
@@ -320,6 +390,57 @@ renders `step.error` in full so `INTERRUPTED.message` would print the same parag
 `runStep`'s in-process interruption sets `error`, so one event now has two spellings depending on
 which path noticed it.
 
+
+### Stage 2b — the lease has to mean something
+
+**Sol's review of the built Stage 2 code**
+([here](260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear-stage2-review-sol.md)) requested
+changes before Stage 3, and it was right about the thing that matters most: *"the atomic SQL
+transitions are sound and I found no new permanently stuck legal state, but lease expiry does not
+actually revoke the claimant's write authority."*
+
+- [ ] **HIGH — expiry revokes nothing.** `fence(id, attempt)` checks `id`, `attempt_id` and
+      `status = 'running'`, and no lease freshness; the filesystem fence and the draft and
+      publication fences in `pg-revisions.ts` repeat the omission. So a claimant whose lease lapsed
+      can still commit, provided it gets there before Stop or `settleExpired` wins the row — and in
+      the ignored-abort path it can commit an `error`/INTERRUPTED ending over a reader's Stop, which
+      is the exact class of bug Stage 2 existed to close. One live-attempt predicate everywhere,
+      lease freshness included.
+- [ ] **`now()` is transaction-start time**, so a claim that waited behind locks gets a *backdated*
+      lease. `clock_timestamp()` for minting and fencing.
+- [ ] **The self-abort timer starts after the awaited session setup**, so the claimant's real
+      deadline drifts past the arithmetic that makes an expired lease safe to act on. Start it when
+      the claim does.
+- [ ] **MEDIUM — an interrupted job now explains nothing.** Stage 2 settles the abandoned step to
+      `pending` for both endings, on the argument that `StepRow` renders `step.error` so
+      `INTERRUPTED.message` would print twice. **That was wrong about the built UI**, and Sol
+      checked: `AddArticle.tsx` renders `step.error` and `queue.error` and **never `job.error`**, so
+      an expired job shows a muted pending step and a Retry button with no explanation at all. The
+      endings must differ — `pending` and no error for a cancellation the reader asked for, `error`
+      with `INTERRUPTED.message` for an interruption nobody asked for. With a test that renders the
+      card, because a green store test is not evidence that a reader can see anything.
+- [ ] **The tests claim more than they pin.** Sol's table gives, for each Stage 2 test, a broken
+      implementation that still passes it. The clock test never invokes `settleExpired` or
+      `requestCancel` under skew and asserts only upper bounds, so an epoch timestamp passes it.
+      The three that would have caught the HIGH: expire without sweeping and prove claimant writes
+      are stale; cross expiry while blocked on a database lock; simultaneous Stop / sweep / release.
+- [ ] **The adapters disagree on the boundary** — Postgres `<`, filesystem effectively `<=`.
+- [ ] **Judgment call:** `coalesce(over, false)` leaves a corrupt NULL-lease running row in
+      "Stopping…" for ever, since neither claimant nor sweep can resolve it. Schema-unreachable, so
+      hardening rather than a bug — make the impossible state explicit, or treat NULL as abandoned.
+
+**Noted, not fixed here.** The same application-clock-versus-database-timestamp shape lives in
+`pg-searches.ts`, `pg-chat.ts`, `pg-referee-criteria.ts` and the latent draft sweeper in
+`pg-revisions.ts`. Different area, other agents in those files, and worth its own piece of work.
+
+**Sol's answers that confirmed Stage 2 rather than faulting it**, kept because a review that only
+records complaints is a review that reads worse than it was: `over` is correct for every legal
+`ACTIVE` state; the `CASE` expressions all see the pre-update row, so keying status, error and
+failure kind off the original `cancelling` is right; `requestCancel` does mirror every terminal
+field including the draft pointer; row locking makes Stop, release and sweep linearizable; and no
+legal interleaving leaves an immovable job. Also: *"two dev tabs"* was a misleading comment in the
+filesystem adapter — tabs share one server process, so *no entry in `attempts`* is safe within that
+adapter's single-process model for a better reason than the one given.
 
 ### Stage 3 — reconcile where the reader already is
 

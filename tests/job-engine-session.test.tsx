@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 /**
  * **A reply from the previous session may not land in this one.**
  *
@@ -11,24 +10,25 @@
  * truthy user, and why every request captures a generation and every callback
  * checks it.
  *
- * ## Strict Mode is not a special case, it is the ordinary one
+ * ## Three things carry that generation, and two of them were added afterwards
  *
- * React runs mount effects twice in development, so `App`'s effect really does
- * fire `start → stop → start` on every load, with the first poll still in
- * flight across the middle. That is the same sequence as a fast sign-out and
- * sign-in, and if the fence is wrong it shows up as a snapshot that flickers
- * back to a stale list — which reads as a race and is deterministic.
+ * The poll was fenced from the start. GPT Sol's review of the built code found
+ * the other two, and each has a case below:
  *
- * Both halves are here: the sequence at the engine's own seam, and the effect
- * `App.tsx` actually writes, rendered under `<StrictMode>`.
+ * - a **drive loop** claims its job id, and used to release it unconditionally
+ *   — so an old loop waking up late handed the *new* session's job back to be
+ *   driven a second time;
+ * - an **action** is fired by a mounted component rather than by the engine, so
+ *   there is no local for it to capture and the epoch has to travel with it.
+ *
+ * The third half of this — `App`'s own effect, under Strict Mode — is
+ * `tests/job-session-effect.test.tsx`, which renders the shipped hook. It used
+ * to be a copy of that effect written out here, and a copy stays green while
+ * the original drifts.
  */
-import { act, createElement, StrictMode, useEffect } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Job } from "../src/types.js";
-import { createJobEngine, type JobEngineDeps } from "../src/web/jobEngine.js";
-
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { type Advanced, createJobEngine, type JobEngineDeps } from "../src/web/jobEngine.js";
 
 const job = (id: string, status: Job["status"]): Job =>
   ({ id, slug: id, status, steps: [] }) as unknown as Job;
@@ -119,55 +119,113 @@ describe("a session that ends while a poll is in flight", () => {
   });
 });
 
-describe("the effect App.tsx writes, under Strict Mode", () => {
-  let host: HTMLDivElement;
-  let root: Root;
+/**
+ * **The stale loop's `finally`**, which is the one legacy invariant the
+ * refactor silently lost: *one drive loop per job*.
+ *
+ * `stop` clears the whole `driving` map — it has to, because the next session
+ * is entitled to drive the same durable job — so after `stop → start` there are
+ * legitimately two loops for one id, one of them fenced and merely waiting for
+ * its `/advance` to answer. When it did, its `finally` deleted the id, and the
+ * next poll found the job unclaimed and started a *third* loop. The server
+ * lease keeps two writers from corrupting anything, which is exactly why this
+ * was invisible: nothing failed, requests just doubled and `driverFailures`
+ * stopped meaning anything.
+ *
+ * The `/advance` is held rather than the poll, which is the difference between
+ * this and the cases above — deferring only the poll never reaches the loop.
+ */
+describe("a drive loop that outlives the session that started it", () => {
+  let advances: string[] = [];
+  let held: ((advanced: Advanced) => void)[] = [];
+  let list: Job[] = [];
 
-  beforeEach(() => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
+  const driving: JobEngineDeps = {
+    listJobs: async () => list,
+    advance: (id) => {
+      advances.push(id);
+      return new Promise<Advanced>((resolve) => held.push(resolve));
+    },
+    visible: () => true,
+    watchVisibility: () => () => {},
+  };
+
+  /** Real timers here, so the engine's own one-second retry cannot fire. */
+  const flush = () => new Promise((go) => setTimeout(go, 0));
+
+  it("gives the job back to nobody when it finally exits", async () => {
+    advances = [];
+    held = [];
+    list = [job("j1", "running")];
+
+    const engine = createJobEngine(driving);
+    engine.start("reader-a");
+    await flush();
+    expect(advances, "the first session never started driving").toEqual(["j1"]);
+
+    /* Sign out and back in — or Strict Mode. The first loop is still parked
+       inside its `/advance`, and the second one is not a bug. */
+    engine.stop();
+    engine.start("reader-a");
+    await flush();
+    expect(advances).toEqual(["j1", "j1"]);
+
+    // The old session's advance answers at last, and its loop unwinds.
+    held[0]?.({ job: job("j1", "running"), ran: "fetch", busy: false, done: false });
+    await flush();
+
+    /* Anything that finds the job from here on must see it as already driven.
+       `receive` is a poll's answer without the timer, which is what the next
+       tick of the clock would have done anyway. */
+    engine.receive([job("j1", "running")]);
+    await flush();
+
+    expect(advances, "a third loop started on a job already being driven").toEqual(["j1", "j1"]);
+    engine.stop();
   });
+});
 
-  afterEach(async () => {
-    await act(async () => root.unmount());
-    host.remove();
-  });
-
-  it("ends with exactly one live session after start → stop → start", async () => {
+/**
+ * **An action is the one request the engine did not start**, so it is the one
+ * whose fence has to be handed to it.
+ *
+ * `useJobs.act` captures `epoch()` before the fetch goes out and hands it back
+ * with the outcome. Without that, an add reader A pressed a moment before
+ * signing out resolves inside reader B's engine and clears B's error, lifts B's
+ * authentication pause and pokes B's queue — none of which A's add knows
+ * anything about.
+ */
+describe("an action that resolves after the session it belongs to has ended", () => {
+  it("cannot write into the next reader's engine", () => {
     const engine = createJobEngine(deps);
-    const Gate = ({ readerId }: { readerId: string | null }) => {
-      useEffect(() => {
-        if (!readerId) return;
-        engine.start(readerId);
-        return () => engine.stop();
-      }, [readerId]);
-      return null;
-    };
+    engine.start("reader-a");
+    const epochA = engine.epoch();
 
-    await act(async () => {
-      root.render(
-        createElement(StrictMode, null, createElement(Gate, { readerId: "reader-a" })),
-      );
+    engine.stop();
+    engine.start("reader-b");
+
+    /* B is paused on a final 401 of its own, with the server's sentence on
+       screen. Both halves are what the stale action would overwrite. */
+    engine.actionFailed("Your session has expired.", 401, engine.epoch());
+    expect(engine.getSnapshot()).toMatchObject({
+      authFailed: true,
+      error: "Your session has expired.",
     });
 
-    /* Two polls, because Strict Mode really did mount twice — and the released
-       first one must not be able to write. */
-    const first = pending.shift();
-    const second = pending.shift();
-    if (!first || !second) throw new Error(`expected two polls, saw ${polls}`);
-
-    second.release([job("live", "running")]);
-    await act(async () => {
-      await Promise.resolve();
+    // A's add finally answers. It does not speak for B.
+    engine.actionSucceeded(epochA);
+    expect(engine.getSnapshot()).toMatchObject({
+      authFailed: true,
+      error: "Your session has expired.",
     });
-    first.release([job("stale", "done")]);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    engine.actionFailed("A's add was refused", null, epochA);
+    expect(engine.getSnapshot().error).toBe("Your session has expired.");
 
-    expect(engine.getSnapshot().jobs.map((j) => j.id)).toEqual(["live"]);
-    // And the stale reply announced nothing to anybody.
-    expect(engine.drainCompletions(0).jobs).toEqual([]);
+    /* The control, without which the assertions above would also pass on an
+       engine that had simply stopped listening to actions: B's own action does
+       lift B's pause. */
+    engine.actionSucceeded(engine.epoch());
+    expect(engine.getSnapshot()).toMatchObject({ authFailed: false, error: null });
+    engine.stop();
   });
 });

@@ -170,10 +170,19 @@ describe("telling a subscriber that a job finished", () => {
     expect(heard1).toEqual(["B", "C"]);
     expect(heard2).toEqual(["C"]);
 
-    // 7. The same list again says nothing new to anybody.
+    /* 7. The same list again says nothing new to anybody — **and changes
+          nothing at all**, which is the second half and is the one `sameJobs`
+          pays for. Every poll parses a fresh array, so without that comparison
+          the snapshot's identity changes on every response and React repaints
+          the panel 450 times an hour to show the same pixels. The `toBe` is
+          what makes this line about `sameJobs`; the announcement counts below
+          would pass with it deleted. */
+    const settled = jobEngine.getSnapshot();
     await act(async () => {
-      jobEngine.receive([A_DONE, B_DONE, C_DONE]);
+      jobEngine.receive([job("A", "done"), job("B", "done"), job("C", "done")]);
     });
+    expect(jobEngine.getSnapshot(), "an identical list made a new snapshot").toBe(settled);
+    expect(jobEngine.getSnapshot().jobs, "and a new array inside it").toBe(settled.jobs);
     expect(heard1).toEqual(["B", "C"]);
     expect(heard2).toEqual(["C"]);
   });

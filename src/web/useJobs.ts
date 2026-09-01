@@ -3,10 +3,12 @@
  *
  * **The polling and the driving are not here any more.** They moved to
  * src/web/jobEngine.ts on 2026-09-01, because a mount is the wrong owner for
- * them: `App()` is a chain of early returns, so every route change unmounted
- * this hook, and the browser is the only thing that advances a job on Vercel —
- * clicking from the shelf into an article stopped the import. Read that file
- * for the design; this one is the subscription over it, plus the actions.
+ * them: the browser is the only thing that advances a job on Vercel, and
+ * `App()` is a chain of early returns, so whether an import kept moving
+ * depended on whether the route the reader happened to open mounted this hook
+ * from `Library`, `AddPage` or `useStepJob`. On `/profile`, `/design`,
+ * `/admin` and the landing page it did not, and the import stopped. Read that
+ * file for the design; this one is the subscription over it, plus the actions.
  *
  * Polling, not server-sent events, and that is a decision rather than a
  * shortcut. A job is five steps over one or two minutes, so a one-second poll
@@ -21,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
+import { statusOf } from "./lib/api.js";
 
 export interface UseJobs {
   jobs: Job[];
@@ -117,6 +120,46 @@ export interface UseJobs {
 }
 
 /**
+ * **Where the tab's job engine begins and ends.** Called once, by `App`.
+ *
+ * Not inside `App` itself. Testing it there means either rendering the whole
+ * app behind a router — `tests/public-network-trace.test.tsx` does, and it is a
+ * three-hundred-line harness — or copying the effect into the test, which is
+ * what `tests/job-engine-session.test.tsx` did. GPT Sol's note on that copy is
+ * right: it stays green while the original drifts, and the original is an
+ * effect whose *dependency array* is the whole contract. Out here it can be
+ * rendered as itself (tests/job-session-effect.test.tsx). That `App` still
+ * calls it is a separate fact, pinned behaviourally by the one `GET /api/jobs`
+ * a signed-in reader makes in that network trace.
+ *
+ * @param readerId `user.id`, or null when nobody is signed in. **The id, not a
+ *   truthy user**: a public job carries no `ownerId`, so the engine cannot work
+ *   out for itself that the list it holds belongs to the reader who just signed
+ *   out — the key is the only thing that knows. The cleanup is not a Stop; the
+ *   durable job is left as it is and reconciled when its owner comes back.
+ * @param accessToken the current JWT, or null. **A separate effect on purpose.**
+ *   Putting the token in the first effect's dependencies would tear the whole
+ *   session down and rebuild it on every hourly refresh — fencing an `/advance`
+ *   mid-flight and dropping the job list — to achieve nothing. What a new token
+ *   is actually for is `resume`: the one way out of an authentication pause
+ *   that costs the reader nothing. Supabase re-emits `SIGNED_IN` whenever a tab
+ *   regains focus (useSession.ts), so this must depend on the token *string*
+ *   and not on the session object, or it would fire on every alt-tab.
+ */
+export function useJobSession(readerId: string | null, accessToken: string | null): void {
+  useEffect(() => {
+    if (!readerId) return;
+    jobEngine.start(readerId);
+    return () => jobEngine.stop();
+  }, [readerId]);
+
+  useEffect(() => {
+    if (!readerId || !accessToken) return;
+    jobEngine.resume();
+  }, [readerId, accessToken]);
+}
+
+/**
  * @param onFinished called once per job that reaches `done` **after this
  *   subscriber began observing**, so the caller can reload whatever that job
  *   changed. The library list, in practice: an article appears on the shelf the
@@ -177,17 +220,30 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
    * A success is also the "explicit successful recovery" that lifts an
    * authentication pause: the engine stopped because the server said no, and
    * this is the server saying yes.
+   *
+   * **Fenced to the session it started in.** The engine fences its own polls
+   * and advances by keeping the generation in a local; an action is fired from
+   * here, so the epoch has to travel with it. Without that, an add that reader
+   * A pressed just before signing out resolves inside reader B's engine and
+   * clears B's error, lifts B's auth pause and pokes B's queue. `lastFailure`
+   * is deliberately *not* fenced — it belongs to this subscriber, and a
+   * subscriber does not outlive its own tab's mount.
+   *
+   * **And the status travels with it too**, because a final 401 from an action
+   * is the same "stop asking" as a final 401 from a poll, and passing only
+   * `err.message` threw away the one field that says which refusal it was.
    */
   const lastFailure = useRef<string | null>(null);
   const act = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+    const epoch = jobEngine.epoch();
     try {
       const value = await fn();
       lastFailure.current = null;
-      jobEngine.actionSucceeded();
+      jobEngine.actionSucceeded(epoch);
       return value;
     } catch (err) {
       lastFailure.current = (err as Error).message;
-      jobEngine.actionFailed((err as Error).message);
+      jobEngine.actionFailed((err as Error).message, statusOf(err), epoch);
       return null;
     }
   }, []);

@@ -11,12 +11,14 @@
  * time, that nothing had changed.
  *
  * **The poller moved out of `useJobs` on 2026-09-01** and into the tab-level
- * engine (src/web/jobEngine.ts), so what this file drives is a mounted
- * subscriber rather than a mounted poller. Every assertion below survived the
- * move unchanged, which is the point of keeping them: the visibility contract
- * is about the tab, and the tab is what now owns it. What did change is the
- * bookkeeping — the engine is a module singleton, so each test resets it, and
- * `driving` belongs to the engine rather than to this module.
+ * engine (src/web/jobEngine.ts), so what this file drives is a signed-in reader
+ * with a subscriber mounted, rather than a mounted poller. Every assertion
+ * below survived the move unchanged, which is the point of keeping them: the
+ * visibility contract is about the tab, and the tab is what now owns it. What
+ * changed is the bookkeeping — the engine is a module singleton, so each test
+ * resets it and then starts a session, `driving` belongs to the engine rather
+ * than to this module, and a mounted subscriber alone no longer wakes anything
+ * (see `beforeEach`).
  *
  * ## Why a test rather than a measurement
  *
@@ -60,7 +62,7 @@ let advanceFailures = 0;
 
 /** The id of the job in `queue`, unique per test.
  *
- * The engine keeps one `driving` set for the tab — deliberately, so that two
+ * The engine keeps one `driving` map for the tab — deliberately, so that two
  * mounted subscribers do not both drive the same job — and this module is
  * imported once for the whole file. `reset()` in `beforeEach` fences the
  * previous test's loops, and a fresh id on top of it means a straggler can
@@ -176,6 +178,13 @@ beforeEach(() => {
   jobId = `j${++jobCounter}`;
   vi.useFakeTimers();
   setVisibility("visible");
+  /* **A session, because a mounted subscriber is no longer enough to wake the
+     engine.** It used to be `started || subscribers.size > 0`, which meant a
+     component could make the app poll with no authenticated session bound —
+     the signed-out guarantee was then a property of the router rather than of
+     the engine. GPT Sol, 2026-09-01: *"test compatibility should not define
+     production authentication semantics."* So the test signs somebody in. */
+  jobEngine.start("reader-1");
 });
 
 afterEach(async () => {

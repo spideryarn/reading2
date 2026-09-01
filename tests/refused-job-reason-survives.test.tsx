@@ -152,6 +152,13 @@ beforeEach(() => {
       return new Response(null, { status: 404 });
     }),
   );
+  /* **A session, because a mounted subscriber is no longer enough to wake the
+     engine.** It used to be `started || subscribers.size > 0`, which meant a
+     component could make the app poll with no authenticated session bound —
+     the signed-out guarantee was then a property of the router rather than of
+     the engine. GPT Sol, 2026-09-01: *"test compatibility should not define
+     production authentication semantics."* So the test signs somebody in. */
+  jobEngine.start("reader-1");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);

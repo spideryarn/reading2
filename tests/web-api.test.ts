@@ -20,7 +20,7 @@
  * Deterministic — no network. docs/project/testing.md.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { failure, readJson } from "../src/web/lib/api.js";
+import { failure, readJson, statusOf } from "../src/web/lib/api.js";
 
 /** Vercel's body when a serverless function throws. Verbatim, 2026-08-26. */
 const VERCEL_500 = "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n";
@@ -132,5 +132,54 @@ describe("failure", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const err = await failure(json({ error: "Nothing to change" }, 400));
     expect(err.message).toBe("Nothing to change");
+  });
+});
+
+/**
+ * **The status a rejection carries**, which is what `src/web/jobEngine.ts`
+ * reads to tell one refusal from another: it stops dead on a final 401 and
+ * keeps polling through a 500, and as `Error.message` those two are the same
+ * kind of sentence. Added with the engine on 2026-09-01; the assertions above
+ * check only the message, so GPT Sol was right that the new half had no test.
+ *
+ * Every rejection out of this module carries one, including the ones whose
+ * message came from the server rather than from here — otherwise the check
+ * would be right about the cases nobody sends and wrong about the polite 401
+ * that `src/routes.ts` actually writes.
+ */
+describe("the status on a thrown error", () => {
+  it("is on the rejection, whoever wrote the message", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const polite = await readJson(json({ error: "Sign in again." }, 401)).catch((e: unknown) => e);
+    expect({ message: (polite as Error).message, status: statusOf(polite) }).toEqual({
+      message: "Sign in again.",
+      status: 401,
+    });
+
+    // And the reply that was not JSON at all, where the message is ours.
+    const rude = await readJson(new Response(VERCEL_500, { status: 500 })).catch(
+      (e: unknown) => e,
+    );
+    expect(statusOf(rude)).toBe(500);
+
+    // `failure`, the other door into the same builder.
+    expect(statusOf(await failure(new Response(VERCEL_404, { status: 404 })))).toBe(404);
+  });
+
+  it("is absent rather than wrong when nothing gave one", async () => {
+    /* The distinction the engine depends on. A 200 that is not JSON is a
+       genuine failure with no *refusal* behind it, and a dropped connection
+       throws a `TypeError` from `fetch` itself — neither may be read as a
+       status, or the engine would pause a session over a flaky network. */
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const shell = new Response("<!doctype html>", { status: 200 });
+    expect(statusOf(await readJson(shell).catch((e: unknown) => e))).toBeNull();
+    expect(statusOf(new TypeError("Failed to fetch"))).toBeNull();
+    expect(statusOf(null)).toBeNull();
+    expect(statusOf(undefined)).toBeNull();
+    // Duck-typed on purpose, so a test's own stand-in counts — see `statusOf`.
+    expect(statusOf({ status: 401 })).toBe(401);
+    expect(statusOf({ status: "401" })).toBeNull();
   });
 });

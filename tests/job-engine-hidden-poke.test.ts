@@ -31,6 +31,15 @@ let jobs: Job[] = [];
 let polls = 0;
 let advances = 0;
 let visible = true;
+/**
+ * The engine's own visibility listener, kept so a test can fire it.
+ *
+ * It used to be `watchVisibility: () => () => {}`, and the "reader comes back"
+ * case called `poke()` by hand — so it would have passed on an engine that had
+ * stopped subscribing to `visibilitychange` at all, which is the only thing
+ * that makes stopping the clock dead safe. GPT Sol, 2026-09-01.
+ */
+let onVisibility: (() => void) | null = null;
 
 const deps: JobEngineDeps = {
   listJobs: async () => {
@@ -45,14 +54,27 @@ const deps: JobEngineDeps = {
     return { job: job(id, "running"), ran: null, busy: true, done: false };
   },
   visible: () => visible,
-  watchVisibility: () => () => {},
+  watchVisibility: (onChange) => {
+    onVisibility = onChange;
+    return () => {
+      onVisibility = null;
+    };
+  },
 };
+
+/** What the browser does: change the fact, then tell whoever is listening. */
+function look(at: boolean): void {
+  visible = at;
+  if (!onVisibility) throw new Error("the engine is not watching visibility at all");
+  onVisibility();
+}
 
 beforeEach(() => {
   jobs = [];
   polls = 0;
   advances = 0;
   visible = true;
+  onVisibility = null;
   vi.useFakeTimers();
 });
 
@@ -71,7 +93,7 @@ describe("a poke from a hidden tab", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(polls).toBe(1);
 
-    visible = false;
+    look(false);
     polls = 0;
 
     /* The action's own `finally`, which is all `poke` is. The job it created is
@@ -103,17 +125,50 @@ describe("a poke from a hidden tab", () => {
     engine.subscribe(() => {});
     await vi.advanceTimersByTimeAsync(0);
 
-    visible = false;
+    look(false);
     await vi.advanceTimersByTimeAsync(60_000);
     polls = 0;
 
-    visible = true;
-    engine.poke();
+    /* **Through the listener, not by calling `poke` by hand.** The reader
+       switching back is a `visibilitychange` event and nothing else, so a test
+       that pokes for it proves the poke and leaves the subscription untested —
+       and the subscription is the whole safety net under a clock that stops
+       dead. */
+    look(true);
     await vi.advanceTimersByTimeAsync(0);
     expect(polls).toBe(1);
 
     // And now the clock is running again, because somebody is looking.
     await vi.advanceTimersByTimeAsync(60_000);
     expect(polls).toBeGreaterThan(3);
+  });
+});
+
+describe("two mounted subscribers", () => {
+  it("still make one poll between them", async () => {
+    /* Carried over from the hook this engine replaced, and worth keeping now
+       that the subscribers are no longer the thing doing the polling: the shelf
+       and a band can be on screen at once, and the reader should not pay twice
+       for the same list. Nothing else in the suite counts this. */
+    const engine = createJobEngine(deps);
+    engine.start("reader-1");
+    engine.subscribe(() => {});
+    engine.subscribe(() => {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(polls).toBe(1);
+
+    /* And on the cadence afterwards, where a second timer would show up as a
+       doubled count rather than as a doubled first request. */
+    await vi.advanceTimersByTimeAsync(60_000);
+    const both = polls;
+
+    engine.stop();
+    polls = 0;
+    const alone = createJobEngine(deps);
+    alone.start("reader-1");
+    alone.subscribe(() => {});
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(both).toBe(polls);
+    alone.stop();
   });
 });

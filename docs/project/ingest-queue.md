@@ -696,19 +696,38 @@ service's job.
 Three things about it are worth knowing before touching it, and each was argued out rather than
 chosen:
 
-- **When it polls.** At the active cadence while any job is active, wherever the reader is;
-  otherwise only while at least one `useJobs` subscriber is mounted; with neither, it sleeps until
-  poked. So making the driver route-independent did not buy every owner an unbounded idle poll on
-  every reading view.
+- **When it polls, and what grants permission to ask.** `start()` is the only thing that wakes it,
+  and `start()` comes from the reader's session. A mounted subscriber chooses the *cadence* — the
+  active rate while any job is running, wherever the reader is; otherwise it sleeps until poked — but
+  it does not grant permission. That distinction is deliberate and it was looser for a day: waking on
+  *"started, or anything is subscribed"* let four old tests keep working without a session, and it
+  meant the signed-out-reader-asks-nothing guarantee held only because no visitor route happens to
+  mount `useJobs`. A guarantee that rests on nobody ever changing the component tree is not a
+  guarantee. GPT Sol, 2026-09-01: *"test compatibility should not define production authentication
+  semantics."*
 - **Completion is a monotonic cursor, not a set.** A subscriber captures the engine's completion
   sequence during its **first render** and consumes events past it. A per-subscriber `Set` seeded in
   the subscription effect — which is what the old code did, correctly, while the poll belonged to
   the mount — would baseline away a job that finished between render and effect, and the engine now
   polls whether or not anything is mounted.
-- **The session is fenced on `user.id`.** A public job carries no `ownerId`, so the engine cannot
-  tell from the list that it belongs to the reader who just signed out. Every request captures a
-  generation and every callback checks it. Signing out is **not** Stop: the durable job is left
-  alone and reconciled when its owner returns.
+- **The session is fenced on `user.id`, in three places rather than one.** A public job carries no
+  `ownerId`, so the engine cannot tell from the list that it belongs to the reader who just signed
+  out. Every request captures a generation and every callback checks it — and the fence has to cover
+  the **poll**, the **drive loop's claim on its job id**, and the **actions**. The middle one was
+  missed first time round and is the subtle one: `stop()` clears the driving map, so a restarted
+  session may rightly drive the same durable job, and the old loop's `finally` would then delete the
+  *new* session's claim and let a second loop start. Each loop now carries its own token and releases
+  only its own. Actions capture `jobEngine.epoch()` in `useJobs`'s `act`, or a fetch fired by one
+  reader lands in the next one's error state.
+
+  Signing out is **not** Stop: the durable job is left alone and reconciled when its owner returns.
+- **A final 401 pauses everything, and there are exactly two ways out.** From a poll, an advance or
+  an action — `apiFetch` refreshes and retries once on its own, so only the *final* one counts. The
+  reader is not signed out and keeps the server's sentence on screen. It resumes on a new access
+  token (`resume()`, wired through `useJobSession`) or on an action that succeeds. The hole worth
+  remembering: a queued poke used to restart the poller straight past the pause, and if that poll
+  succeeded it cleared the error while leaving the engine paused — a stopped queue with nothing on
+  screen saying so, which is [silent-success.md](../reusable/silent-success.md) exactly.
 
 The plan and both reviews are
 [260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md](../plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md).

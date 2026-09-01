@@ -5,14 +5,24 @@
  * `if (process.env.VERCEL) return`, and the browser is what calls
  * `POST /api/jobs/:id/advance` once per step. Until 2026-09-01 that loop lived
  * inside `useJobs`, which is mounted from `Library`, `AddPage` and
- * `useStepJob` — and `App()` is a chain of early returns, so **every route
- * change unmounts all three**. Paste a URL, click into an article to read while
- * you wait, and the import stopped. It resumed when you went back to the shelf,
- * which is why it read as flakiness rather than as a rule.
+ * `useStepJob` — and `App()` is a chain of early returns, so **whether an
+ * import kept moving depended on whether the page you happened to open mounted
+ * one of those three**. `/profile`, `/design`, `/admin` and the landing page
+ * mount none of them, and on those the import stopped dead.
  *
- * So the driver cannot belong to a mount. This module is the tab-level service
- * it belongs to instead: one poll timer, one job list, one drive loop per job,
- * for the whole tab, independent of which page is on screen.
+ * **Not the reading view**, which is what the first version of this comment
+ * said: `useArc` runs on every owned reading view and reaches `useJobs` through
+ * `useStepJob`, so clicking from the shelf into an article kept driving. That
+ * claim was mount accounting done from memory rather than from the code — the
+ * same mistake, in the same file, that made the original bug hard to see in the
+ * first place. Check the imports before you write a sentence like it.
+ *
+ * The justification that survives is the one that did not depend on the count:
+ * driving belonged to whichever unrelated feature hook the current route
+ * happened to mount, which is working by accident. So the driver cannot belong
+ * to a mount. This module is the tab-level service it belongs to instead: one
+ * poll timer, one job list, one drive loop per job, for the whole tab,
+ * independent of which page is on screen.
  * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 1.
  *
  * ## A module singleton, not a React provider
@@ -37,8 +47,15 @@
  *
  * So an owner reading an article with nothing running costs one poll at session
  * start and then silence. `tests/public-network-trace.test.tsx` pins that, and
- * pins the half that did not change: a signed-out visitor polls nothing at all,
- * because nothing calls `start()` for them.
+ * pins the half that did not change: a signed-out visitor polls nothing at all.
+ *
+ * **`start()` is the only thing that wakes the engine**, and a subscriber alone
+ * cannot. It used to be `started || subscribers.size > 0`, which made the
+ * signed-out guarantee a property of the router — true only for as long as no
+ * visitor route ever mounts `useJobs` — rather than of the engine. GPT Sol,
+ * 2026-09-01: *"test compatibility should not define production authentication
+ * semantics."* A mounted subscriber still chooses the **cadence**; it does not
+ * grant permission to ask.
  *
  * Recurring polls also stop dead while the tab is hidden — see `schedule`.
  */
@@ -188,10 +205,41 @@ export interface JobEngine {
   completionCursor(): number;
   /** Completions past `cursor`, and the cursor to hold next. */
   drainCompletions(cursor: number): { jobs: Job[]; cursor: number };
-  /** An action failed: say so, and reconcile. */
-  actionFailed(message: string): void;
+  /**
+   * The session fence as a number, to be captured **before** an action's fetch
+   * goes out and handed back with its outcome.
+   *
+   * Polls and advances are fenced because the engine started them and kept the
+   * generation in a local. An action is fired by a mounted component, so the
+   * engine has no local to keep — and without this the promise reader A started
+   * lands in reader B's engine and clears B's error, lifts B's auth pause and
+   * pokes B's queue. Found by GPT Sol, 2026-09-01, reviewing the built code.
+   */
+  epoch(): number;
+  /**
+   * An action failed: say so, and reconcile.
+   *
+   * `status` is the HTTP status the rejection carried, or null. A **final** 401
+   * from an action pauses the engine exactly as a 401 from a poll does — the
+   * status used to be dropped on the floor here, so the one shape that means
+   * "stop asking" was the one shape this path could not see.
+   */
+  actionFailed(message: string, status: number | null, epoch: number): void;
   /** An action succeeded: clear the failure, lift an auth pause, and reconcile. */
-  actionSucceeded(): void;
+  actionSucceeded(epoch: number): void;
+  /**
+   * Fresh credentials arrived for the same reader — lift an auth pause and
+   * reconcile. A no-op when nothing is paused.
+   *
+   * The other way out of a pause, and the one a reader never has to do
+   * anything for: a 401 that outlived `apiFetch`'s own refresh is usually a
+   * token that expired while the tab was asleep, and the SDK's next
+   * `TOKEN_REFRESHED` is the answer to it. `App` calls this on a new access
+   * token for the unchanged reader id — see `useJobSession` in useJobs.ts.
+   * Without it the engine stayed paused until the reader pressed something or
+   * reloaded the page.
+   */
+  resume(): void;
   /**
    * Apply a job list as though a poll had returned it, **without touching the
    * timer**.
@@ -231,7 +279,20 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   let generation = 0;
 
   const subscribers = new Set<() => void>();
-  const driving = new Set<string>();
+  /**
+   * Which job ids this tab is driving, and **which loop is driving each**.
+   *
+   * A `Set` until 2026-09-01, and that was a bug: `teardown` clears it, so a
+   * restarted session legitimately starts a second loop on the same durable
+   * job — and when the *old* loop finally woke up and ran its `finally`, it
+   * deleted the **new** loop's entry. The next poll then found the id unclaimed
+   * and started a third loop for it. The server lease keeps two writers from
+   * corrupting anything, so nothing broke visibly; what broke is the invariant
+   * this map exists to state, and with it `driverFailures`, which counts per
+   * job and cannot mean anything if two loops are incrementing it. Found by GPT
+   * Sol, 2026-09-01. Each loop releases only its own token.
+   */
+  const driving = new Map<string, symbol>();
   let unwatch: (() => void) | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   /* One request at a time. `poke` fires after every action, and a slow response
@@ -247,9 +308,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   let sequence = 0;
   let completions: { seq: number; job: Job }[] = [];
 
-  /* Something is asking for this work: a session, or a mounted subscriber. With
-     neither, the engine is asleep — no timer, no listener, and no drive loop. */
-  const awake = () => started || subscribers.size > 0;
+  /* A bound session, and nothing else. See the header: a mounted subscriber
+     picks the cadence, it does not grant permission to ask. With no session the
+     engine is asleep — no timer, no listener, and no drive loop. */
+  const awake = () => started;
 
   const emit = () => {
     for (const fn of [...subscribers]) fn();
@@ -377,6 +439,14 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   };
 
   const poll = async (): Promise<void> => {
+    /* **The guard belongs here and not only at the callers.** `poke`, `wake`
+       and `schedule` each check the pause, and it was still reachable: a poke
+       that arrives while the poll that is *about* to 401 is in flight sets
+       `again`, and the `finally` below then starts one more poll on the way
+       out. If that one succeeded it cleared `error` and left `authFailed` true
+       — an engine that has stopped and says nothing, which is the exact shape
+       docs/reusable/silent-success.md is about. GPT Sol, 2026-09-01. */
+    if (snapshot.authFailed) return;
     if (inFlight) {
       again = true;
       return;
@@ -482,7 +552,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
 
   const drive = async (id: string): Promise<void> => {
     if (driving.has(id)) return;
-    driving.add(id);
+    /* This loop's own claim on the id. A stale loop from the previous session
+       may still be somewhere inside an `await` — see `driving` above. */
+    const token = Symbol(id);
+    driving.set(id, token);
     const mine = generation;
     try {
       let backoff = BUSY_MS;
@@ -492,7 +565,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
         backoff = next;
       }
     } finally {
-      driving.delete(id);
+      if (driving.get(id) === token) driving.delete(id);
     }
   };
 
@@ -541,7 +614,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       void poll();
     },
     stop() {
-      if (!started && snapshot === EMPTY && subscribers.size === 0) return;
+      if (!started && snapshot === EMPTY) return;
       started = false;
       sessionKey = null;
       teardown();
@@ -567,12 +640,24 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
         cursor: sequence,
       };
     },
-    actionFailed(message) {
+    epoch: () => generation,
+    actionFailed(message, status, epoch) {
+      if (epoch !== generation) return;
+      if (status === 401) {
+        noteAuthFailure(message);
+        return;
+      }
       set({ error: message });
       poke();
     },
-    actionSucceeded() {
+    actionSucceeded(epoch) {
+      if (epoch !== generation) return;
       set({ error: null, authFailed: false });
+      poke();
+    },
+    resume() {
+      if (!started || !snapshot.authFailed) return;
+      set({ authFailed: false, error: null });
       poke();
     },
     receive: apply,

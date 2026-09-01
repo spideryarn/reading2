@@ -108,6 +108,14 @@ function serving(jobs: Job[]) {
     if (u.includes("/api/jobs")) return new Response(JSON.stringify({ jobs: queue }), { status: 200 });
     return new Response(JSON.stringify({}), { status: 200 });
   });
+  /* **A session, because a mounted subscriber is no longer enough to wake the
+     engine.** It used to be `started || subscribers.size > 0`, which let a
+     component poll with no authenticated session bound — the signed-out
+     guarantee was then a property of the router rather than of the engine. GPT
+     Sol, 2026-09-01: *"test compatibility should not define production
+     authentication semantics."* Idempotent for the same key, so the tests that
+     re-serve a different list mid-case do not restart anything. */
+  jobEngine.start("reader-1");
 }
 
 beforeEach(() => {

@@ -5,20 +5,31 @@
  * true before it. On Vercel the browser is the worker — `pump` in src/jobs.ts
  * returns early when `VERCEL` is set — and the loop that called
  * `POST /api/jobs/:id/advance` lived inside `useJobs`, which is mounted from
- * the shelf, the add page and the reading-view bands. `App()` is a chain of
- * early returns, so a route change unmounted every one of them and `drive`'s
- * `while (alive())` stopped. **Paste a URL, click into the article to read
- * while you wait, and the import stopped.**
+ * `Library`, `AddPage` and `useStepJob`. `App()` is a chain of early returns,
+ * so **whether an import kept moving depended on whether the page the reader
+ * happened to open mounted one of those three**, and `drive`'s `while (alive())`
+ * stopped when it did not. `/profile`, `/design`, `/admin` and the landing page
+ * mount none of them.
+ *
+ * ## Not the reading view, which the first version of this comment said it was
+ *
+ * `useArc` runs on every owned reading view and reaches `useJobs` through
+ * `useStepJob`, so clicking from the shelf into an article kept driving all
+ * along. That sentence was mount accounting written from memory rather than
+ * from the imports — the same mistake that made the original bug hard to see,
+ * so it is corrected here rather than quietly dropped.
+ *
+ * What survives is the reason that never depended on the count: driving
+ * belonged to whichever unrelated feature hook the current route happened to
+ * mount, which is working by accident.
  *
  * ## Why this test and not "mount the reading view"
  *
  * The plan's first draft said: mount the reading view and assert `/advance` is
- * still called. That proves the wrong thing. After the fix *nothing*
- * route-scoped drives, so a reading-view test is green before and after — it
- * would only ever have been measuring whichever hook happened to be on that
- * page. The measurement that means something is the absence of React
- * altogether, and it is writable only because `createJobEngine` takes its
- * dependencies.
+ * still called. That proves the wrong thing, and now doubly so — it was green
+ * before the fix as well as after, because that route always did mount a hook.
+ * The measurement that means something is the absence of React altogether, and
+ * it is writable only because `createJobEngine` takes its dependencies.
  *
  * ## Why it cannot be an end-to-end test
  *
@@ -114,10 +125,11 @@ describe("the job engine, with nothing rendered", () => {
     expect(engine.getSnapshot().loaded).toBe(true);
   });
 
-  it("keeps driving across the route change that used to stop it", async () => {
+  it("keeps driving across a route change that mounts nothing", async () => {
     /* The reader is on the shelf: a subscriber is mounted, and the job is
-       found. Then they click into the article, every route-scoped hook
-       unmounts, and the *only* thing left is the engine. */
+       found. Then they open their profile — every route-scoped hook unmounts,
+       nothing on that page mounts another, and the *only* thing left is the
+       engine. */
     server.jobs = [job("j1", "running")];
     server.busy = true;
     const engine = createJobEngine(deps());
