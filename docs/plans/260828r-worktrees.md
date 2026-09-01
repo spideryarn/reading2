@@ -176,6 +176,30 @@ tests, written and reviewed on 2026-09-01 and then made unnecessary by a better 
 recording rather than quietly deleting: the reservation was not *wrong*, it was a solution to a
 problem the range constraint had already solved.
 
+### The first real worktree, measured on 2026-09-01 (and three of this plan's numbers were wrong)
+
+A worktree was finally built and run, rather than reasoned about, and it corrected the plan in four
+places. Made with `git worktree add` in `/tmp` rather than `claude --worktree`, so that
+`.worktreeinclude` and the native cleanup were *not* exercised — everything below is about the
+mechanics underneath them.
+
+| claim | measured | |
+|---|---|---|
+| `npm ci --prefer-offline` takes 4–5 s | **16.6 s** | At load average 3.75, so not a load artefact this time. The 4–5 s figure was itself a re-measurement that corrected an earlier 130 s; the truth is in between and closer to the low end. |
+| `node_modules` is 564 MB | **681 MB** | Thirty worktrees is ~20 GB, and `/home` has 43 GB free. Comfortable at ten, tight at thirty — which is the ceiling Greg asked for, so the box is the binding constraint, as he said. |
+| a fresh checkout costs ~50 test failures | **95 test files fail, 34 individual tests** | The ~50 was the *deploy gate's* number, and the gate copies the corpus in. A genuinely bare worktree is much worse, and most of the 95 are collection failures — the file cannot even load. |
+| `tsx`, `vitest` and friends "all execute from it" | **true, but check the warning** | `npm ci` now prints `npm warn install-scripts` and does not run esbuild's postinstall. Benign here, because the platform binary arrives as an optional dependency rather than from the script — verified by running a suite in the worktree, 115 passing. Worth knowing before someone spends an afternoon on it. |
+
+**The guard for `worktree:setup` is confirmed and is one line.** In a worktree,
+`git rev-parse --git-dir` is `…/.git/worktrees/<name>` while `--git-common-dir` is `…/.git`; in the
+primary they are identical. So "am I in a linked worktree" is exactly `git-dir !== git-common-dir`,
+and `worktree:setup` must refuse otherwise, because it runs `npm ci` and would wipe the primary's
+`node_modules` under a dozen agents.
+
+**Nothing comes across into a `git worktree add` checkout**: no `.env.local`, no `data/`, no
+`output/`, no `node_modules`. `claude --worktree` adds `.env.local` via `.worktreeinclude`; the other
+three are `worktree:setup`'s job.
+
 ### Things that will waste your time if you do not know them
 
 - **Twelve or more agents work in this tree at once.** `npm test` is not reliably green and the
@@ -1163,11 +1187,16 @@ to take while a dozen agents were mid-task.
    because clobbering the `node_modules` exclusion there would have been a slow disaster for everyone.
    **biome, knip and jscpd need nothing**: biome's `includes` is an anchored allowlist, knip's
    `project` globs likewise, and `dupes` names `src api scripts evals` explicitly.
-5. **`npm run worktree:setup`** — still to do. Run inside a fresh worktree: `npm ci --prefer-offline
-   --no-audit --no-fund`, claim a port with
-   [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), record a creation timestamp, and print
-   what it did. It has to be run by hand or by the agent, because `WorktreeCreate` replaces creation
-   rather than following it.
+5. ~~**`npm run worktree:setup`**~~ — **done**, [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts).
+   `npm ci --prefer-offline --no-audit --no-fund`, then materialise the corpus, then say what is still
+   missing. **No port claiming and no creation timestamp**: ports are dynamic now, and the timestamp was
+   for a sweep age-check a dynamic port does not need. Run by hand or by the agent, because
+   `WorktreeCreate` replaces creation rather than following it.
+
+   **Its guard is the important part.** It runs `npm ci`, which deletes `node_modules`, and a dozen
+   agents work out of the primary — so it refuses unless `inLinkedWorktree` says otherwise, asking git
+   rather than guessing from the path. Proven by running it in the primary: refused, exited 1, and
+   `node_modules` came out with the same inode and mtime.
 6. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
 **`data/` has its own plan now: [260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md).**
@@ -1262,7 +1291,17 @@ kept because items 3 and 4 stand unchanged:
    scan-then-pick and not a hash — see [Ports](#ports) for why the hash was proposed and withdrawn.
 3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml),
    **then restart Supabase and check the running container**: the file is not re-read automatically
-   ([setup-dev.md](../project/setup-dev.md)).
+   ([setup-dev.md](../project/setup-dev.md)). **Still open — it needs the restart, which interrupts
+   everyone.** But this is now the *only* thing stopping a worktree doing sign-in work, and the failure
+   was found rather than predicted: a worktree's dev server walks to 5274 the moment the primary holds
+   5273, and 5274 is not allow-listed. The startup warning says so now, having been fixed to read the
+   config file instead of our own range constant — it had been silent on exactly that case, which is
+   the failure it exists to prevent rebuilt one level up.
+
+   **Worth testing when the restart happens**: whether one wildcard (`http://localhost:52*/**`) covers
+   the range instead of the 124 entries that 31 ports × 2 hosts × 2 forms would need. GoTrue
+   glob-matches the list, but whether a glob works in the *port* position is untested and cannot be
+   tested without restarting.
 4. An identity endpoint reporting worktree and commit, which browser checks assert against.
 
 Why (4) is not optional: `strictPort` only makes the *second server* refuse to start. A browser
@@ -1295,9 +1334,63 @@ wrapper must check that the database's ledger is an exact prefix of the checkout
 *before* applying anything, holding the lease across the whole check-and-apply. A lease alone stops
 two migrations running at once; it does nothing about two branches independently minting `0037_`.
 
-### 4b. Try one worktree, before building anything else
+### 4a. `dev` as a landing branch only — **the design, and the one command Greg must run**
 
-**This is the highest-information next step and it needs nothing from Greg.** `claude --worktree probe`
+Greg, 2026-09-01:
+
+> I'm thinking that we could get the worktree stuff working using `main` instead of `dev` for now
+> (i.e. each worktree branches from the remote main, and pushes back to remote `main`), and then we'll
+> do the switch to pulling from/pushing to `dev` instead of `main` as a later stage.
+
+**The branching half is fine; the pushing half is not.** A push to `main` *is* a production deploy —
+`vercel.json` has `{"**": false, "main": true}` and [`scripts/deploy.ts`](../../scripts/deploy.ts)
+depends on it, polling for the production deployment its own push causes. Today the invariant is that
+only `npm run deploy` writes `main`; worktrees pushing there makes every landing an ungated live
+deploy of unreviewed work. ([version-control.md](../project/version-control.md) claimed the opposite
+until 2026-09-01 — "Vercel is not connected to this repo" — which is how this nearly went unnoticed.)
+
+**So `dev` becomes a landing branch, and nothing else changes.** This splits the flip into two halves
+that are genuinely independent:
+
+- Worktrees push to `origin/dev`, which does not build — the `"**": false` wildcard already covers it.
+- The primary **stays on `main`**. GitHub's default **stays `main`**. No branch moves anywhere, so
+  there is nothing to disturb.
+- Work reaches the primary with `git merge origin/dev`, which is a merge and therefore allowed —
+  not a branch switch.
+- `npm run deploy` is untouched and remains the only writer of `main`.
+
+What stays deferred to [Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run)
+is only: move the primary onto `dev`, and change GitHub's default. Neither is needed to use worktrees,
+because `worktree.baseRef: "head"` makes worktrees branch from the primary's local `HEAD` rather than
+through `origin/HEAD`.
+
+**The one command, which an agent cannot run** — the permission classifier refuses a `git push` here,
+correctly:
+
+```bash
+git push origin HEAD:refs/heads/dev
+```
+
+An explicit refspec, so it cannot touch `main`. Verified before proposing it: `dev` does not exist on
+`origin`, and the `vercel.json` **at HEAD** already carries the deny wildcard, so the new branch will
+not build.
+
+**And a pre-existing thing this surfaced, which is not part of this work but will bite:** `origin/main`
+is **8 commits ahead** of this box's `main` — the Mac's deploys — while local is 60 ahead. So
+`preflight` will refuse the next deploy from this box with "8 commit(s) on origin/main that this one is
+not built on — merge first", and somebody has to merge `origin/main` before deploying. That is true
+today, with or without worktrees.
+
+### 4b. Try one worktree — **done, 2026-09-01, and it corrected four numbers**
+
+Two worktrees were built with `git worktree add`, run, and removed. Findings are in
+[The first real worktree](#the-first-real-worktree-measured-on-2026-09-01-and-three-of-this-plans-numbers-were-wrong)
+above and in [worktrees.md](../project/worktrees.md); the headline is that `worktree:setup` takes a
+worktree from **95 of 477 test files failing to 14**, which is about what the primary itself manages.
+
+What is left of the original note, because it still applies to the next person:
+
+**This was the highest-information next step and it needed nothing from Greg.** `claude --worktree probe`
 works today: `origin/HEAD` is `main`, which is the current trunk, so the trunk flip is *not* a
 prerequisite for trying one. Write `worktree:setup`, create one, and find out what actually breaks
 instead of guessing.

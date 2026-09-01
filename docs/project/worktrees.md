@@ -31,8 +31,60 @@ true today, what was decided, and the two runbooks nobody has run yet.
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange` and `parseDevPortEnv` — all still right. **The reservation half of it is to be deleted**: Greg redirected the design to dynamic allocation on 2026-09-01 and was right, see [Ports and the ceiling](#ports-and-the-ceiling). Nothing reads any of it yet. |
 
-Still to build: `npm run worktree:setup`, the rest of ports, the database lease, and `worktree:sweep` —
+| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
+| [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote. See [Why not the remote](#why-a-worktree-branches-from-head-and-not-from-the-remote). |
+
+Still to build: the auth allow-list, an identity endpoint, the database lease, and `worktree:sweep` —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do).
+
+## Starting one
+
+```bash
+claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
+npm run worktree:setup         # inside it: dependencies + the article store
+npm test                        # expect ~14 of 477 files red, about what the primary has
+npm run dev                     # walks up from 5273; warns if the port is not allow-listed
+```
+
+**`worktree:setup` refuses to run in the primary checkout**, and that guard is the most important line
+in it: it runs `npm ci`, which deletes `node_modules` and reinstalls it, and a dozen agents work out of
+the primary. It asks git rather than guessing from the path — in a worktree `--git-dir` is
+`…/.git/worktrees/<name>` while `--git-common-dir` is the primary's `.git`; in the primary they are
+identical. Verified by running it in the primary and checking `node_modules` came out with the same
+inode and mtime.
+
+### Why a worktree branches from `HEAD` and not from the remote
+
+`worktree.baseRef: "head"` in [`.claude/settings.json`](../../.claude/settings.json), rather than the
+default `"fresh"`, which branches from the default branch **on the remote**. Measured on 2026-09-01:
+
+```
+  origin/main   ←  8 commits            these are the Mac's deploys
+  local main    →  60 commits ahead     this box's work since the last deploy
+```
+
+`origin/main` only moves when somebody deploys, so a worktree branching from it starts *sixty commits
+stale* and cannot see anything done here today. `"head"` gives it the primary's current committed
+state; uncommitted peer edits do not travel, because a worktree is a fresh checkout of commits.
+
+It also removes a reason to change GitHub's default branch, which is the other half of the deferred
+trunk flip — so this one setting buys back most of what waiting for [Runbook
+A](#runbook-a-flip-the-trunk-to-dev-not-yet-run) would have delayed.
+
+### What a worktree costs, measured rather than assumed
+
+```
+  npm ci --prefer-offline      16.6 s      at load average 3.75, so not a load artefact
+  node_modules                  681 MB     thirty worktrees is ~20 GB; /home has 43 GB
+  npm test, bare                 95 of 477 files fail, most unable to collect at all
+  npm test, after setup          14 of 477 files fail
+```
+
+The plan had 4–5 s and 564 MB, both from an earlier measurement, and both optimistic. The 95 → 14 is
+what `worktree:setup` buys, and it is the number that made a worktree worth having: the bare run also
+*collected* 1,137 fewer tests, so its lower raw failure count was hiding the problem rather than
+showing it.
 
 ## What Greg decided, 2026-09-01
 
@@ -178,10 +230,19 @@ The tell was his own "change its mind" requirement. A reservation needs a releas
 rule, a sweep step and a story for a `SIGKILL`ed holder. Dynamic allocation needs none of those,
 because it re-decides on every start.
 
-So the target shape is: start at the bottom of the range, let Vite walk, and **check the resolved port
-after `listening`** — fatal in a worktree, a warning in the primary. `reservePort` and friends come
-out. The identity endpoint below becomes *more* important, not less: it is what stops a stale browser
-tab reaching a peer's server, and a reservation never guaranteed your process was the listener either.
+So the shape is: start at the bottom of the range, let Vite walk, and **check the resolved port after
+`listening`**. `reservePort` and friends came out — `scripts/worktree-port.ts` went from 287 lines to
+about 150, and the export it had needed from `scripts/lockfile.ts` went back to being private.
+
+**And the check reads `supabase/config.toml`, not our own range constant** — which is the one part of
+this that had to be found by running it rather than reasoning. A worktree's dev server walked to 5274,
+landed inside `DEV_PORT_RANGE`, and said nothing, while sign-in on 5274 was in fact broken: the
+allow-list names **only 5273**. The warning had rebuilt the silent failure it existed to prevent, one
+level up. It now parses the file, so it tells you what is true today rather than what will be true
+after somebody extends the list — and it says which of the two situations you are in.
+
+The identity endpoint below becomes *more* important, not less: it is what stops a stale browser tab
+reaching a peer's server, and a reservation never guaranteed your process was the listener either.
 
 
 Half of this is worse than none, because each half hides the other's failure:

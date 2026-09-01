@@ -12,6 +12,9 @@
       }
     ]
   },
+  "worktree": {
+    "baseRef": "head"
+  },
   "enabledMcpjsonServers": [
     "supabase",
     "vercel",

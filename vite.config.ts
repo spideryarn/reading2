@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
@@ -5,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { loadEnvLocal } from "./src/env.js";
 import { errorFields, log } from "./src/log.js";
 import { missingClientEnv, resolveBuildStamp } from "./scripts/build-stamp.js";
-import { parseDevPortEnv, portInRange, PRIMARY_PORT } from "./scripts/worktree-port.js";
+import { allowListedPorts, parseDevPortEnv, portInRange, PRIMARY_PORT } from "./scripts/worktree-port.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
 
 /**
@@ -100,11 +101,29 @@ export default defineConfig(() => {
           server.httpServer?.once("listening", () => {
             const address = server.httpServer?.address();
             const actual = typeof address === "object" && address ? address.port : undefined;
-            if (actual === undefined || portInRange(actual)) return;
+            if (actual === undefined) return;
+            /* **The config file, not our own range constant.** `DEV_PORT_RANGE`
+               is the range we intend the allow-list to cover; this reads what it
+               covers today. Trusting the constant left this warning silent on
+               5274, where sign-in genuinely does not work — the same silent
+               failure it exists to prevent, one level up. */
+            let allowed: number[] = [];
+            try {
+              allowed = allowListedPorts(readFileSync("supabase/config.toml", "utf8"));
+            } catch {
+              /* No config to read: say nothing rather than cry wolf. */
+              return;
+            }
+            if (allowed.length === 0 || allowed.includes(actual)) return;
+            const plan = portInRange(actual)
+              ? `  ${actual} is in the range we intend to allow-list but the list has not caught up:\n` +
+                `  supabase/config.toml names only ${allowed.join(", ")}, and GoTrue bakes it in at start.\n`
+              : `  supabase/config.toml names only ${allowed.join(", ")}.\n`;
             server.config.logger.warn(
               `\n  Running on ${actual}, which is NOT on Supabase's redirect allow-list.\n` +
                 "  Google sign-in will appear to work and then drop you at the site root —\n" +
                 "  the callback never runs. Everything that does not need sign-in is fine.\n" +
+                plan +
                 `  Free up ${PRIMARY_PORT}, or see docs/project/setup-dev.md.\n`,
               { timestamp: true },
             );

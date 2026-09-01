@@ -37,7 +37,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 import { sslDecisionFor } from "../src/db/ssl.js";
+import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
@@ -660,25 +661,15 @@ function gatesAt(sha: string): void {
        peer's test run deleting a fixture directory mid-copy crashed a whole
        deploy on 2026-08-28 with an uncatchable-looking `directory_iterator`
        abort. */
-    const copied: string[] = [];
-    for (const dir of ["data", "output"] as const) {
-      const from = path.join(wt, GATE_FIXTURE_ROOT, dir);
-      if (!existsSync(from)) continue;
-      try {
-        cpSync(from, path.join(wt, dir), { recursive: true });
-      } catch (err) {
-        info(`${dir}/ moved under the copy (${(err as Error).message.slice(0, 60)}…) — retrying once`);
-        cpSync(from, path.join(wt, dir), { recursive: true, force: true });
-      }
-      copied.push(`${dir}/`);
-    }
-    /* **Says what happened, not what was meant to.** This line used to name both
-       directories unconditionally, so a run where the corpus was absent and
-       nothing was copied printed the same sentence as one where it worked. */
+    /* Extracted to scripts/corpus-materialise.ts on 2026-09-01, because
+       `worktree:setup` needs the same copy and a second implementation would
+       have lost the two lessons this one carries — both halves or neither, and
+       retry once. Its header has them. */
+    const materialised = materialiseCorpus(wt, { note: info });
     info(
-      copied.length === 0
-        ? `nothing copied — ${GATE_FIXTURE_ROOT}/ has neither half; the tests below run against an empty store`
-        : `tests run with .env.local linked and ${copied.join(" + ")} copied from ${GATE_FIXTURE_ROOT}/`,
+      materialised.copied.length === 0
+        ? describeMaterialise(materialised)
+        : `tests run with .env.local linked and ${describeMaterialise(materialised)}`,
     );
 
     const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
