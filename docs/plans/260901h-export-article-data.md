@@ -1,6 +1,8 @@
-# Export all of an article's data, from a button on the Metadata page
+# Export one article's data, from a button on the Metadata page
 
-**Status:** written 2026-09-01, before any code. Not yet reviewed by GPT Sol.
+**Status:** revised 2026-09-01 after GPT Sol's review
+([260901h-…-review-sol.md](260901h-export-article-data-review-sol.md)), which refuted the first
+version's central design. No code written yet. The rewrite below is what to build.
 
 ## What Greg asked for
 
@@ -13,177 +15,187 @@
 >
 > — Greg, 2026-09-01
 
-Asked what the file is for, and what to leave out of v1, he answered: include **everything**, but
-**leave out the binary asset bytes**; and
+Asked what the file is for and what to cut from v1, he said include **everything** but leave out the
+**binary asset bytes**, and:
 
 > perhaps also with a human-readable index .html, and/or a .md describing the data for agents
 > writing code to import it
 >
 > — Greg, 2026-09-01
 
-So the deliverable is a zip: one JSON file per feature, the ingested HTML, a `README.md` that
-documents the format for whoever writes an importer, and an `index.html` you can double-click.
+## Do we already have this? Half of it, and it is the wrong half
 
-## Do we already have this? Half of it, and not where a reader can reach it
+`npm run db:export` ([`src/store/export.ts`](../../src/store/export.ts)) already walks one article
+across every table. But it is **the rollback**: a CLI needing a service-role key, writing
+`data/<slug>/` to disk, in the filesystem store's internal layout. No reader can reach it, and the
+web app has no download path except the original-PDF route.
 
-`npm run db:export -- --out <dir>` ([`src/store/export.ts`](../../src/store/export.ts)) already
-walks one article across every table and writes `data/<slug>/`. But it is **the rollback**, not a
-feature: it is a CLI, it needs `DATABASE_URL` and a Supabase **service-role** key, it writes to the
-filesystem, and its output shape is the filesystem store's internal layout. No reader can run it,
-and there is no download path anywhere in the web app except the original-PDF route.
+## What the review changed, and why the first design was wrong
 
-What it does have, and what makes this job much smaller than it looks, is
-[`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) —
-a test that reads `src/db/schema.ts` at runtime, finds every table reaching an article, and fails
-if `ARTICLE_TABLE_COVERAGE` doesn't either export it or say in words why not. It exists because
-`referee_criteria` landed on 2026-08-31 and `db:export` silently dropped every row.
-**A second exporter written alongside the first would not be covered by that test**, and would
-acquire exactly the same bug on the next new table.
+The first version of this plan proposed making `exportArticle`'s *destination* an argument — one
+`ExportSink` interface, a file sink for the rollback and a zip sink for the download, so both shared
+one code path and one coverage test.
 
-## The key decision: one exporter, two sinks — not two exporters
+An audit of all 951 lines confirmed the narrow claim: there is no write outside `put()`,
+`writeRawDocument()` and the `stampedHtml` line. **But that was the wrong claim to check.** Sol's
+review made the point that matters, and the code confirms it on every count:
 
-`exportArticle()` interleaves gathering and writing, but every value it gathers already passes
-through a single choke point:
+`exportArticle` does not gather an article — it **projects one into a legacy format**, and that
+format is *pinned byte-for-byte* by `tests/store-roundtrip.test.ts`, which compares it against what
+the filesystem store writes. So the projection is deliberately lossy and **cannot be enriched in
+place**:
 
-```ts
-const put = async (from: ExportedTable | readonly ExportedTable[], name: string, value: unknown)
+- **`extractedHtml` is never written at all** — `grep extractedHtml src/store/export.ts` returns
+  nothing, while the proposed bundle layout promised `content/extracted.html`.
+- **A `candidates` chat thread is exported as `chat`.** The code comment says emitting the real kind
+  was tried and reverted, *because the roundtrip test compares bytes*. A reader's Candidates thread
+  would silently come back as an ordinary chat.
+- **`passages` and `interrupted` are dropped** from every chat message.
+- Article identity and sharing state — `shortId`, `createdAt`, `visibility`, `publicAt` — never
+  reach a file.
+
+A shared sink would have inherited every one of these into a brand-new user-facing format, and the
+roundtrip test would have blocked fixing them. **The rollback's data model is not "my article
+data", and must not become its definition.**
+
+Two more findings from the review, both verified in the source:
+
+- **The bucket read is not avoidable by a no-op.** `writeRawDocument` calls `readRawDocument(...)`
+  *before* it writes anything (export.ts:349), so a zip sink whose `rawDocument()` did nothing would
+  still have paid for the bucket fetch. The "no bucket access at all" claim would have been false.
+- **The coverage test is table-level, not column-level.** It cannot see a dropped column, the
+  `candidates` collapse, or a sink that receives a `put()` and discards it. My proposed zip
+  assertion — "every table in `ExportResult.tables` lands somewhere" — was *weaker* than the
+  existing sentinel test, because `tables` records that a call happened, not that data survived.
+
+## The design, and where it differs from the review
+
+Sol's remedy was a middle layer of "typed logical entries" that both renderers project from.
+**Taking the diagnosis, but a simpler remedy:** share the **queries**, not a synthesized model.
+
+```
+                  readArticleRows(slug)        ← one owner-scoped data walk
+                  typed Drizzle rows, faithful
+                   ↓                    ↓
+      legacy projection            bundle projection
+      (unchanged rollback)         (the new zip)
 ```
 
-`from` is the runtime half of the coverage test. There are exactly two escapes from `put`:
-`writeRawDocument()` (the original document's bytes, out of the bucket) and the `stampedHtml` write
-to `outputRoot`.
+`readArticleRows(slug): ArticleRows` returns the raw rows for the article, its current revision and
+the nine child tables — the ordering (`order by ordinal` on blocks is the whole ballgame; ids carry
+no position), the joins, and `ownedSlug()` in one place. `exportArticle` keeps its existing
+projection code *verbatim*, now reading from those rows, so byte-for-byte parity is preserved by
+construction rather than by care. The bundle writes its own, faithful projection.
 
-So we do not extract a gatherer and we do not write a second exporter. We **make the destination an
-argument**: `exportArticle(slug, sink)`, where the CLI passes a sink that writes files and the new
-route passes a sink that collects zip entries in memory. One code path, one query set, one
-coverage test — and a table added next month breaks the download the same day it breaks the
-rollback.
+Why not Sol's intermediate model: it would have to be rich enough for the bundle *and* lossily
+projectable to the pinned legacy format — real design work whose only output is a second
+representation of rows we already have. **The raw rows are already the faithful representation.**
+Fewer parts touching each other; the shared thing is the part worth sharing.
 
-The two escapes become sink methods rather than special cases, which is also where the "exclude the
-original PDF/HTML" instruction lands cleanly: the zip sink simply declines the raw document.
+**What this costs, honestly:** the coverage guard now has to attach to the query layer rather than
+to `put()`. That is Stage B's job and it is the riskiest part of this plan.
 
-**The simpler option passed over:** write `src/export-bundle.ts` standalone, querying the tables it
-wants. Fewer files touched, no refactor of a security-sensitive rollback tool, and it could have
-shipped in one stage. Rejected because it is a second way to do the same thing, and because the
-coverage test — the one guard that has already caught a real silent-success bug in this exact area —
-would protect only one of the two. Duplicating the guard means duplicating the maintenance of it,
-and a guard nobody updates is worse than none.
+## Decisions
 
-**Second decision: no bucket access at all.** Because the raw document is excluded (Greg) and the
-image bytes are deferred (Greg), the whole bundle is text out of Postgres. The route needs no
-service-role key, no signed URLs, and no streaming — it builds a buffer and ends the response, like
-`sendSource` already does for PDFs. That is a large simplification and it is worth protecting: if a
-later stage adds asset bytes, it adds the bucket dependency with it, and should say so.
+- **Size: buffer, and refuse loudly.** Vercel caps a buffered response body at **4.5 MB**
+  ([limits](https://vercel.com/docs/functions/limitations)); streaming is the documented escape.
+  Measured over the local database: the largest article (`scaling-hypothesis`, 12.6k words) is
+  1.01 MB uncompressed, **307 KB gzipped** — 7% of the cap; median 165 KB. So buffering is right for
+  v1. But Sol is correct that **a warning log is not a guard-rail — the reader's request still
+  fails**. So: assemble, and if the result exceeds the cap, return a **readable 413** saying the
+  article is too large to export, with a test that exercises that path. Streaming is the named fix
+  if it ever fires. Note stored HTML artefacts may be up to 32 MiB, so this is not hypothetical.
+- **`zip()`, not `zipSync()`.** fflate's own docs recommend the async API beyond one file, and
+  `zipSync` blocks the event loop while holding sources, encoded bytes and output at once.
+- **Name it what it is.** Older revisions and spend records stay out, so the manifest calls this a
+  **current-article snapshot**, not "all your data". A `format` version in the manifest from day one.
+- **Not behind the `experimental` flag.** Nothing sits behind it today and being first carries
+  obligations ([experimental-features.md](../project/experimental-features.md)). Export is small,
+  read-only and finished. Flagged for Greg to overrule.
 
-**Third decision: not behind the experimental flag.** Nothing sits behind `experimental` today, and
-[experimental-features.md](../project/experimental-features.md) attaches real obligations to being
-the first thing that does (a shared provider for the answer, a doc entry, mid-flight handling).
-Export is small, safe, read-only and finished — it ships visible. Flagged for Greg to overrule.
+## Corrections to fold in (all verified in the source)
 
-## References
-
-- [`src/store/export.ts`](../../src/store/export.ts) — the exporter being generalised; `put()` at
-  ~L468, `ARTICLE_TABLE_COVERAGE` at L168, `ExportTarget` at L82.
-- [`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) — the
-  guard this design is built around. Its docstring is the best statement of the failure mode.
-- [`src/routes.ts`](../../src/routes.ts) — `sendSource` (L417) is the only existing non-JSON
-  response and the template for this one; `contentDisposition` (L504) builds the RFC 6266 header;
-  `slugPart` (L3572) is mandatory for any slug that becomes a store key.
-- [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) — `Section` (L1460), the `CARD` style (L222),
-  `hasShelfRow` (L454) as the ownership gate, `SharingSection` (L914) and `DeleteArticle` (L1393) as
-  the two button patterns to copy.
-- [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) — the only blob-download idiom in the
-  app: `apiFetch` → `res.blob()` → object URL → `<a download>`. A plain `<a href>` cannot work,
-  because `/api/` needs a Bearer token and a navigation carries no headers.
-- [security-map.md](../project/security-map.md), [auth.md](../project/auth.md) — owner scoping is
-  request-scoped via `AsyncLocalStorage`; `ownedSlug()` in `src/store/pg.ts` is the one predicate.
-  `exportArticle` already uses it, which is why the route inherits the right behaviour.
-- [database.md](../project/database.md) — run everything with `SPIDERYARN_STORE=postgres`.
+- `contentDisposition(filename)` takes **one argument and always returns `inline`**
+  (routes.ts:504) — deliberately, for the PDF route. It needs a second parameter, and a test that
+  the PDF route stays `inline`.
+- `ownedSlug` lives in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts), not `pg.ts`.
+- `exportArticle` throws a plain `Error` for another owner's slug (export.ts:461), which the route
+  would turn into a **500 rather than a 404**. Needs a typed not-found.
+- `hasShelfRow` is **UI/load state, not an ownership gate** — ownership is settled server-side. Fine
+  to gate the button's display on it; wrong to describe it as the check.
+- Revisions do have lineage (`basedOnRevisionId`, timestamps), so "history would mean inventing it"
+  was false. Omitting older revisions is a **deliberate product choice**, and the manifest says so.
+- `DeleteArticle` starts around Metadata.tsx:1234.
 
 ## The stages
 
-**Stage A — make the destination an argument.** No behaviour change, no new feature.
+Ordered as the review recommended: the data contract first, docs before the button, UI last.
 
-- [ ] Define `ExportSink` in `src/store/export.ts`: `put(from, name, value)`, `rawDocument(...)`,
-      `stamped(html)`. Give it the same `from` bookkeeping so `ExportResult.tables` stays observed
-      rather than declared.
-- [ ] `fileSink(target: ExportTarget, sources: RawSourceStore)` reproduces today's behaviour
-      exactly, including `<slug>.html` into `outputRoot` and the `written` path list.
-- [ ] `exportArticle(slug, sink)` — the CLI at the bottom of the file builds a `fileSink`, so
-      `npm run db:export` is unchanged from the outside.
-- [ ] Done when: `npm test` green **with `REQUIRE_POSTGRES=1`**, so the behavioural half of the
-      coverage test actually ran rather than skipping. A green run that skipped it proves nothing
-      here — [silent-success.md](../reusable/silent-success.md).
+**Stage A — `readArticleRows`, with the rollback unchanged.**
+- [ ] Extract the owner-scoped queries into `readArticleRows(slug)` returning typed rows; add a
+      typed `ArticleNotFound`. `exportArticle` keeps its projection, now fed from it.
+- [ ] Done when `REQUIRE_POSTGRES=1 npm test` is green — the DB half must have *run*, not skipped.
+      Baseline captured before touching anything: 8 tests pass.
 
-**Stage B — the bundle.** `src/store/export-bundle.ts` + `fflate` (zero-dep, ESM, `zipSync`).
+**Stage B — move the guard to the query layer, and prove data survives.**
+- [ ] Coverage declaration attaches to `readArticleRows`, so a new table fails the test on the day
+      it lands, for both outputs.
+- [ ] **Run the same sentinel fixtures through both projections** and grep each declared destination
+      for its sentinel — Sol's suggestion, and stronger than what either had. A projection that
+      receives a row and discards it must go red.
+- [ ] Fidelity tests for the specific losses found: chat `kind` survives as `candidates`,
+      `passages` and `interrupted` survive, `extractedHtml` is present.
 
-- [ ] `bundleSink()` collects `{path, bytes}`; `articleBundle(slug): Promise<Uint8Array>` runs
-      `exportArticle` against it and zips the result.
-- [ ] Layout — flat is not good enough for something Greg will hand to an agent:
-      `manifest.json` (slug, title, url, exportedAt, format version, file list, what was
-      deliberately omitted and why), `article.json` (ex-`shelf.json`), `content/` (`stamped.html`,
-      `extracted.html`, `blocks.json`, `assets.json` — the manifest, with the bytes absent and said
-      to be absent), `augmentations/` (tree, arc, tweets, glossary, glossary-lookups, ideas,
-      quotes, timeline, quiz, sketch, labels, comments, chat, searches, referee-*).
-- [ ] `README.md` in the zip: what each file is, which feature it backs, the block-id contract
-      ([block-ids.md](../project/block-ids.md)) since every augmentation addresses text by it, and
-      what is **not** here (raw document, image bytes, older revisions, spend ledger) with the
-      reason for each. Written for someone writing an importer.
-- [ ] `bundleSink.rawDocument()` is a no-op that **records the omission into the manifest** rather
-      than dropping it silently.
-- [ ] Test: run `articleBundle` over the fixture article, assert the exact entry list, assert the
-      zip reads back, and assert every table `ExportResult.tables` reports lands in some entry —
-      the same "observed, not declared" trick the coverage test uses.
+**Stage C — the bundle.** `src/store/export-bundle.ts`, `fflate`, no bucket access.
+- [ ] `manifest.json` (slug, title, url, exportedAt, `format`, entry list, and machine-readable
+      omissions), `article.json` (identity + shelf + sharing state), `content/` (`stamped.html`,
+      `extracted.html`, `blocks.json`, `block-identities.json`, `assets.json`), `augmentations/`
+      (tree, arc, tweets, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, labels,
+      comments, chat, searches, referee-claims, referee-criteria).
+- [ ] **`block-identities.json` is not optional.** Comments and chat anchors can reference ids whose
+      blocks are gone from the current revision, so without it the bundle contains anchors pointing
+      at nothing. The rollback omits it as "recoverable from stamped HTML", which is true for
+      re-ingestion and false for anchor integrity.
+- [ ] `README.md` for whoever writes an importer — drafted already; leads on the block-id contract
+      ([block-ids.md](../project/block-ids.md)) and warns that ids carry no ordering.
+- [ ] A test that the bundle path **never touches the blob store** — pass a store that throws.
+- [ ] The oversize path returns a readable 413, with a test.
 
-**Stage C — the route.** `GET /api/export/:slug` in `src/routes.ts`.
+**Stage D — the route.** `GET /api/export/:slug`.
+- [ ] `slugPart`, not `part`. `contentDisposition(name, "attachment")` after the refactor above,
+      `application/zip`, `nosniff`, `Content-Length`.
+- [ ] Tests: owner downloads a valid zip; unauthenticated 401; **another owner 404** (with a
+      positive control — the test must be seen going red without the filter, or it is not evidence);
+      public-namespace 404; traversal and bad encoding 400; oversize 413.
 
-- [ ] Matched with `slugPart`, not `part`. Belt-and-braces ownership: an owner-scoped store read
-      first to force the 404, exactly as `sendSource` does and for the same recorded reason.
-- [ ] `Content-Type: application/zip`, `contentDisposition(`${slug}.zip`, "attachment")`,
-      `X-Content-Type-Options: nosniff`, `Content-Length`, `res.end(Buffer)`.
-- [ ] Tests: another owner's slug 404s (with a **positive control** — the test must be shown going
-      red if the owner filter is removed, or it is not evidence); a traversal-shaped slug 400s.
+**Stage E — docs.** `docs/project/export.md`: the format, the omissions and why, the relationship to
+`db:export`. Owned by [architecture.md](../project/architecture.md); `tests/doc-links.test.ts` green.
 
-**Stage D — the button.** `ExportSection` in `Metadata.tsx`.
+**Stage F — the button.** `ExportSection` in `Metadata.tsx`, before "Delete this article".
+- [ ] Inline card button in the `DeleteArticle` style, not `IconButton`; a Lucide icon that is not
+      `Download` (spent on the fetch stage). Pending state, readable failure
+      ([copy.md](../project/copy.md)).
+- [ ] Download via `apiFetch` → `res.blob()` → `<a download>` — the header's filename is lost
+      through the blob URL, so the anchor must carry the name.
+- [ ] A component test (pending state, error text, anchor click, URL revocation) **and** a browser
+      check in a Sonnet subagent. The manual check is extra evidence, not the only evidence.
 
-- [ ] Its own `<Section label="Export">` between "Access & sharing" and "Not built yet" — before
-      "Delete this article", which stays last.
-- [ ] Inline `<button>` in the card style of `DeleteArticle`, not `IconButton` (that is for compact
-      toolbar rows). A Lucide icon that is not `Download`, which this page already spends on the
-      fetch stage — `Package` or `FileArchive`.
-- [ ] Gated on `hasShelfRow`, like the sharing switch. Pending state while the zip builds, and a
-      readable failure message ([copy.md](../project/copy.md)) rather than a thrown error.
-- [ ] Download via the `SourceLink.tsx` idiom, revoking the object URL after.
-- [ ] Browser check in a Sonnet subagent against `SPIDERYARN_STORE=postgres npm run dev` on :5273 —
-      click it, confirm a zip actually lands and opens. Tests going green is not evidence a reader
-      can see it.
+**Stage G — `index.html`, deliberately minimal.** An escaped index of what's in the zip, with the
+article title and counts. Every reader-controlled and model-derived string HTML-escaped, a
+restrictive CSP blocking scripts and network, and adversarial fixtures (`<script>`, event handlers,
+closing tags). **`extractedHtml` is not safe to render directly.** Rendering every feature inline
+would be a second reading client inside a zip — out of scope, and the piece to cut if anything gives.
 
-**Stage E — `index.html`, the human-readable half.**
+## What this is deliberately not doing
 
-- [ ] A self-contained page in the zip: the article's stamped HTML, with its summaries, glossary,
-      ideas, quotes, timeline, comments and chats rendered alongside. No network, opens offline,
-      readable in six months.
-- [ ] Its own stage because it is presentation work with no bearing on A–D, and if it slips the
-      export is still complete and shippable. This is the piece to cut if anything has to give.
-
-**Stage F — docs.**
-
-- [ ] `docs/project/export.md` — what the button produces, the format, what is omitted and why, and
-      the relationship to `db:export`. Owned by [architecture.md](../project/architecture.md) with a
-      pointer from `reading-view-overview.md`; `tests/doc-links.test.ts` must stay green.
-- [ ] A line in `database.md` next to the rollback exporter saying they are now one code path.
-
-## What this plan is deliberately not doing
-
-- **Image and asset bytes.** Greg's call. `content/assets.json` ships the full manifest — every
-  source URL, hash, content type and byte count — so the bundle *names* everything, and a later
-  stage can fetch it. Adding it later means adding bucket credentials to the route, which is the
-  real cost and the reason it is worth deferring separately.
-- **The original PDF/HTML.** Greg's call, and easy to get otherwise.
-- **Older revisions.** Only `current_revision_id` is a first-class concept anywhere in the app;
-  regenerating glossary overwrites the column. Exporting history would mean inventing it first.
-- **`ai_calls` (what it cost).** `article_id` is nullable and half an article's calls have none, so
-  a per-article total would be quietly wrong. Better absent than misleading.
-- **`feedback` and `uploads`.** Joined to an article by a loose `slug` string with no FK, so the
-  schema walk cannot see them and neither can this.
-- **Whole-library export.** One article, one button. `db:export` already does the bulk case.
+- **Image bytes** (Greg's call) — `assets.json` names every image, hash and URL, so the bundle
+  *names* everything. Adding bytes later means adding bucket credentials to the route.
+- **The original PDF/HTML** (Greg's call) — easy to get from the URL.
+- **Older revisions** — a real, deliberate omission, not an impossibility. Named in the manifest.
+- **`ai_calls`** — rows with a matching `article_id` are exportable, but `article_id` is nullable and
+  many of an article's calls have none, so any total would be quietly wrong. Manifest says so.
+- **`checkpoints`, `jobs`, `queue_state`, `revision_step_runs`** — pipeline machinery, not reader
+  data. Listed in the manifest as omitted so an importer knows rather than guesses. **If `jobs` is
+  ever added, note it carries a reader-profile snapshot.**
+- **`feedback` / `uploads`** — support records, not article state.
+- **Whole-library export** — one article, one button. `db:export` covers bulk.
