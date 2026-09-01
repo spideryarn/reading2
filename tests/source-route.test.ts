@@ -160,6 +160,26 @@ describe("serving an article's original document", () => {
     expect(sent.headers["content-disposition"]).toContain('filename="paper.pdf"');
   });
 
+  /**
+   * **`inline`, and it has to be asserted on the route.**
+   *
+   * `contentDisposition` returned a hard-coded `inline` until 2026-09-01,
+   * because this was its only caller. It now takes the disposition as a
+   * required argument so a download route can ask for `attachment` — which
+   * means the *reason* a PDF is `inline` (the reader pressed *view the
+   * original*, and a browser that can show a PDF should show it — GPT Sol,
+   * 2026-08-31) is now a fact about this route rather than about that function,
+   * and nothing but this test holds it. Passing `"attachment"` here would send
+   * every original to the downloads folder, which is a regression no test of
+   * the pure function can see.
+   */
+  it("asks the browser to display the PDF, not download it", async () => {
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: "paper.pdf" });
+    const sent = await get("a-piece");
+    expect(sent.headers["content-disposition"]).toMatch(/^inline;/);
+    expect(sent.headers["content-disposition"]).not.toContain("attachment");
+  });
+
   it("falls back to the slug when the document has no filename of its own", async () => {
     /* Anything we fetched rather than took an upload of. `<slug>.pdf` is a name
        a reader can find again on their own disk. */

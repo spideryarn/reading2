@@ -152,13 +152,41 @@ describe("the raw document a source download resolves to", () => {
  */
 describe("the Content-Disposition a downloaded source carries", () => {
   it("keeps an ordinary name in both parameters", () => {
-    expect(contentDisposition("paper.pdf")).toBe(
+    expect(contentDisposition("paper.pdf", "inline")).toBe(
       `inline; filename="paper.pdf"; filename*=UTF-8''paper.pdf`,
     );
   });
 
+  /**
+   * **The disposition is the caller's, and it is required.**
+   *
+   * The function returned a hard-coded `inline` until 2026-09-01, because its
+   * only caller was *view the original* and a browser that can show a PDF
+   * should show it. A download route needs `attachment`, so the type is now a
+   * parameter — and the type says which two words are legal, so a typo is a
+   * compile error rather than a header a browser silently ignores.
+   */
+  it("says attachment when the caller asks for one, and changes nothing else", () => {
+    expect(contentDisposition("paper.pdf", "attachment")).toBe(
+      `attachment; filename="paper.pdf"; filename*=UTF-8''paper.pdf`,
+    );
+  });
+
+  /**
+   * The escaping is the disposition's business in neither direction: the same
+   * awkward name must come out the same way under both. Asserted rather than
+   * assumed, because the obvious refactor of this function is one that builds
+   * the two dispositions down two paths.
+   */
+  it("escapes a name identically whichever disposition it is asked for", () => {
+    const awkward = "O'Brien (draft)* бумага\uD800.pdf";
+    expect(contentDisposition(awkward, "attachment")).toBe(
+      contentDisposition(awkward, "inline").replace(/^inline/, "attachment"),
+    );
+  });
+
   it("cannot be made to end the quoted string early", () => {
-    const header = contentDisposition('ev"il\\.pdf');
+    const header = contentDisposition('ev"il\\.pdf', "inline");
     /* Exactly two quotes: the ones this function opened and closed. A name that
        could add a third could add a parameter of its own. */
     expect(header.split('"')).toHaveLength(3);
@@ -166,7 +194,7 @@ describe("the Content-Disposition a downloaded source carries", () => {
   });
 
   it("carries a non-ASCII name in filename* and a legible fallback in filename", () => {
-    const header = contentDisposition("бумага 日本.pdf");
+    const header = contentDisposition("бумага 日本.pdf", "inline");
     /* The fallback is ASCII throughout — a client that reads only `filename=`
        must still get something it can write to disk. */
     const fallback = /filename="([^"]*)"/.exec(header)?.[1] ?? "";
@@ -185,7 +213,7 @@ describe("the Content-Disposition a downloaded source carries", () => {
    * it. GPT Sol, second pass, 2026-08-31.
    */
   it("percent-encodes the four characters encodeURIComponent leaves alone", () => {
-    const header = contentDisposition("O'Brien (draft)*.pdf");
+    const header = contentDisposition("O'Brien (draft)*.pdf", "inline");
     const encoded = header.slice(header.indexOf("UTF-8''") + "UTF-8''".length);
     expect(encoded).toBe("O%27Brien%20%28draft%29%2A.pdf");
     /* And it still round-trips, so the escaping did not change the name. */
@@ -200,7 +228,7 @@ describe("the Content-Disposition a downloaded source carries", () => {
    * visible connection to filenames at all.
    */
   it("does not throw on a malformed filename", () => {
-    const header = contentDisposition("bad\uD800name.pdf");
+    const header = contentDisposition("bad\uD800name.pdf", "inline");
     expect(header).toContain("filename*=UTF-8''");
     /* The replacement character, not the surrogate. */
     const encoded = header.slice(header.indexOf("UTF-8''") + "UTF-8''".length);
@@ -210,6 +238,6 @@ describe("the Content-Disposition a downloaded source carries", () => {
   it("does not lose a name made entirely of awkward characters", () => {
     /* Replaced rather than stripped, so the fallback is never the empty string —
        which some clients treat as "no name" and others as a literal one. */
-    expect(contentDisposition("日本")).toContain('filename="__"');
+    expect(contentDisposition("日本", "inline")).toContain('filename="__"');
   });
 });

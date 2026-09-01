@@ -410,9 +410,14 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * machine's opinion would have cost a page-reconstruction aligner and would
  * still not have been verification. docs/plans/260826c-pdf-ingestion.md.
  *
- * `inline`, not `attachment`: the browser's own PDF viewer is the point. And
- * `X-Content-Type-Options: nosniff` because this is a stranger's file being
- * served from our origin — the one place a wrong content type becomes script.
+ * `inline`, not `attachment`: the reader pressed *view the original*, and a
+ * browser that can show a PDF should show it — the browser's own PDF viewer is
+ * the point. Raised by GPT Sol, 2026-08-31. That decision belongs to this route
+ * rather than to `contentDisposition`, which is why the disposition is passed in
+ * below: a download route wants `attachment` and must not inherit this one's
+ * answer. And `X-Content-Type-Options: nosniff` because this is a stranger's
+ * file being served from our origin — the one place a wrong content type
+ * becomes script.
  */
 async function sendSource(res: ServerResponse, slug: string): Promise<void> {
   /* **Ask the store whose article this is, before reading a byte.**
@@ -474,13 +479,19 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      only hand back a PDF: the narrowness of the store method is what makes one
      literal here correct. */
   res.setHeader("Content-Type", CONTENT_TYPE.pdf);
-  res.setHeader("Content-Disposition", contentDisposition(source.filename ?? `${slug}.pdf`));
+  res.setHeader(
+    "Content-Disposition",
+    contentDisposition(source.filename ?? `${slug}.pdf`, "inline"),
+  );
   res.setHeader("X-Content-Type-Options", "nosniff");
   /* The bytes actually being written, not a stored count. They are the same
      number whenever both exist, and the one that is true when they are not. */
   res.setHeader("Content-Length", String(source.bytes.byteLength));
   res.end(Buffer.from(source.bytes));
 }
+
+/** The two things a `Content-Disposition` can ask a browser to do with a file. */
+export type ContentDispositionType = "inline" | "attachment";
 
 /**
  * **A `Content-Disposition` for a filename a reader chose.**
@@ -498,10 +509,20 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
  *  - `filename*=` carries the real name, percent-encoded, per RFC 5987. A client
  *    that understands it must prefer it.
  *
- * `inline`, not `attachment`: the reader pressed *view the original*, and a
- * browser that can show a PDF should show it. Raised by GPT Sol, 2026-08-31.
+ * **`disposition` is required, and deliberately has no default.** It used to be
+ * hard-coded `inline`, because the only caller was *view the original* and a
+ * browser that can show a PDF should show it (GPT Sol, 2026-08-31) — that
+ * reasoning now lives on `sendSource`, where the decision actually belongs. A
+ * second caller wants `attachment` for a zip, and a default would have let it
+ * inherit an answer that is wrong for a download without anything saying so. A
+ * union rather than a boolean or a free string: the two legal values are the
+ * two RFC 6266 types, and both a wrong flag polarity and a typo are then things
+ * the compiler refuses.
  */
-export function contentDisposition(filename: string): string {
+export function contentDisposition(
+  filename: string,
+  disposition: ContentDispositionType,
+): string {
   /* **Well-formed first, or `encodeURIComponent` throws.** A lone UTF-16
      surrogate is a legal JavaScript string and an illegal Unicode scalar, and
      it can arrive here — the name came off a stranger's filesystem through a
@@ -531,7 +552,7 @@ export function contentDisposition(filename: string): string {
     /['()*]/g,
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   );
-  return `inline; filename="${ascii}"; filename*=UTF-8''${extended}`;
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${extended}`;
 }
 
 /** An error carrying the HTTP status it should be reported as. */
@@ -732,6 +753,17 @@ export function heartbeat(
      arrives, and only the dead connections take a minute longer to notice. */
   everyMs: number = SSE_HEARTBEAT_MS,
 ): () => void {
+  /* **The reader may already have gone, and then `close` has already fired.**
+     `sse` calls this after a handler's reads — three of them in `markOneAnswer`
+     — so a reader who shuts the tab during those is gone before there is any
+     listener to notice, and the `res.on("close", stop)` below would be
+     registered for an event that will never come again. The interval that
+     starts here would then run, unreferenced, until the process exits: it can
+     never write, because `alive()` is already false, so it costs nothing and
+     shows nothing, which is why it survived two reviews as a recorded leftover.
+     Asking the socket what it is, rather than waiting to be told — the same
+     question, in the same words, as the guard in `sse`. */
+  if (res.destroyed || res.writableEnded) return () => {};
   const timer = setInterval(() => {
     if (!alive()) return;
     try {
@@ -803,12 +835,6 @@ function sse(res: ServerResponse): {
     open = false;
     left.abort();
   }
-  /* **The leftover, recorded rather than fixed.** A caller that has already lost
-     its reader still starts its `heartbeat` interval, whose own `close` event
-     was missed for the same reason this block exists, so it runs unreferenced
-     until the process exits. It spends nothing and cannot write — `alive()` is
-     already false — so it is not worth a second mechanism today; it is worth
-     not being rediscovered. */
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
