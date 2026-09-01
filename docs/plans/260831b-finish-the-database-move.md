@@ -1,44 +1,57 @@
 # Finish the move from files to the database
 
-**Status, 2026-09-01 08:00. THE FLIP HAS LANDED.** Stage 2.4 (new — `db:migrate` was applying
-nothing) is done and reviewed. Stage 2.5 is measured and passing. Every item of stage 3 is done,
-including item 6: `claimSession` selects `pgStoreSession`, `src/store/publish-session.ts` is
-deleted, and the local proof Sol asked for is
-[`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts). **Only stage 4
-remains, plus the deployed canary, which is Greg's to run.** Nine GPT Sol reviews so far; the two on
-the overnight work were both NO-SHIP and both right.
+**Status, 2026-09-01 09:10. STAGE 3 IS COMPLETE — the pipeline publishes through Postgres.**
+`claimSession` opens the job's draft and commits into it; `publish-session.ts`, the 447-line
+decorator that copied files in at the end, is deleted. Stages 1, 2, 2.4, 2.5 and 3 are all done.
+**Only stage 4 remains.** Twelve GPT Sol reviews; the three on this work were each NO-SHIP and each
+right, and the third found a Critical the first two had not.
 
-**THREE THINGS WERE OWED at 06:30 and two are discharged** — the orphan migrations in `main` were
-fixed by another session, and stage 2.5 has now been measured on a quiet machine. The NO-SHIP is the
-one that remains.
+**Nothing here has been deployed.** The flip lands in code. Deploying it is Greg's call and needs
+credentials that are not in this tree, and the deployed run remains the canary for bundling,
+environment variables, Supabase credentials, auth wiring and real external calls — none of which a
+local proof reaches.
 
 | item | state |
 |---|---|
-| 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem, NO-SHIP answered |
-| 3 item 1 — prove the coordinator | **done** (`132be8d`) — and it found the carry hazard below |
-| 3 item 3 — `forceForRetry` | built in `265356b`; **Sol NO-SHIP being answered 2026-09-01** |
-| 3 item 4 — exact base | built in `265356b` but **did not close the race**; durable `based_on_revision_id` being added 2026-09-01 |
+| 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem |
+| 2.5 refetch | **done** — measured on a quiet machine, `✓ ready` |
+| 3 item 0 — short-id slugs | **done** (`74e2915`, `1010a60`) |
+| 3 item 1 — prove the coordinator | **done** (`132be8d`) |
+| 3 item 3 — `forceForRetry` | **done**; the retry money hole it opened is closed (`605877c`) |
+| 3 item 4 — exact base | **done**, and the guard now lives in `publishRevisionIn` rather than in the one caller that remembered to ask (`5618365`) |
 | 3 item 5 — delete the importer | **done** (`b73ad74`) |
-| 3 item 0 — short-id slugs | **done** — landed via `74e2915`, `1010a60`; `freeUploadSlug` and `slugIsSpokenFor` gone, `src/store/find-article.ts` committed |
-| 3 item 6 — **the flip** | **done, 2026-09-01** — `claimSession` → `openPgStoreSession`, `publish-session.ts` deleted, proved locally with a fresh scratch root per claim |
-| 2.5 refetch | **done** — measured 2026-09-01 on a quiet machine, `✓ ready` |
-| 4 | deliberately not started |
+| **3 item 6 — the flip** | **DONE** (`c42c940`) |
+| 4 | **not started** — and it is now the only thing left |
 
-**The three things that were owed, and where each stands:**
+### What the three Sol reviews found, and where each finding ended up
 
-1. ~~**`main` currently carries two orphan migrations.**~~ **Fixed by another session overnight.**
-   `drizzle/meta/_journal.json` is committed and runs to `0046_quiz`; `src/db/schema.ts` carries
-   `shortId` at `HEAD`, so the snapshot is no longer ahead of the schema. Verified 2026-09-01:
-   `db-repair-migration-ledger.ts` reports 47 journal entries, 47 ledger rows, nothing unreachable,
-   nothing pending, no orphans. The history is kept because the *class* is not fixed — the orphan
-   check still reads the working tree, so it cannot see this on the machine that causes it.
+| finding | outcome |
+|---|---|
+| reopened drafts could bury a newer revision | fixed by a durable `based_on_revision_id` (`848cb79`) |
+| `retryJob` allowed unlimited paid reruns of *successful* jobs | fixed — `error`/`cancelled` and `jobWorthRetrying` only, 409 otherwise |
+| an all-skipped `PublishRefused` left the job `running` for ever | fixed, and the catch is deliberately **wide** — the decorator caught every non-stale failure, so a narrow catch would have been a regression the flip introduced |
+| item 3's test proved composition, not wiring | fixed by a store-backed retry test, which also exercises the `FORCE_ONLY_WHEN_NAMED` case the code's comment argues for and nothing had tested |
+| **standalone `publishRevision` bypassed the base check entirely** | fixed by moving the comparison into `publishRevisionIn`; `refuseIfBaseMoved`, `DraftBase` and `draftBaseOf` deleted rather than left to disagree with it |
+| session construction sat outside the claimed-job recovery | fixed by reusing the all-skipped recovery — one function, two doors |
+| the wide catch called every failure retryable | fixed — `failureKindOf` preserved, and the card's sentence now asks `jobWorthRetrying`, the same authority the button asks |
+| the empty-scratch claim was overstated | the claim is narrowed; the assertion is unchanged |
 
-2. **Sol's NO-SHIP on items 3 and 4 is unanswered**, and item 3's half created a money hole:
-   `retryJob` checks only that the job exists, so POSTing `/retry` on a *successful* forced PDF
-   refresh now re-runs and re-pays, repeatedly. See § *Stage 3 — the flip* item 3.
-3. ~~**Stage 2.5 has never been measured on a quiet machine.**~~ **Measured 2026-09-01 06:35** at
-   load average 2.5, and it passes: 0 revisions with stamped-but-not-extracted HTML, 1 source
-   reference read back and 0 unreadable, over 15 articles and 4 revisions. `✓ ready`.
+**One correction worth keeping.** `tests/claim-session-postgres.test.ts` proves the session
+selection and that no filesystem artefact commit happens *for fixture steps*. It does **not** prove a
+real ingest writes nothing to scratch, and cannot: `hierarchy` and PDF extraction both write
+checkpoints under `ctx.dir` on purpose. That is landing D2, and Sol confirmed it is a cost-and-latency
+problem rather than a correctness one — completed step products survive a handback because they live
+in the draft, not in `/tmp`.
+
+**All three things owed at dawn are discharged**, and the record is kept because two of them are
+classes rather than incidents: `main`'s orphan migrations were fixed by another session (and the
+orphan check still reads the working tree, so it cannot see that fault on the machine that causes
+it); the NO-SHIP is answered above; and stage 2.5 is measured. The seam failure recurred twice more
+during stage 3 — `src/store/job-fence.ts` untracked while three committed files imported it, and a
+pathspec commit taking the `publishRevisionIn` guard without the projection it reads, which would
+have refused every publication including an article's first. **Simulate the commit against a clean
+`HEAD` before landing anything with a seam in it**; `git archive HEAD | tar -x -C $SIM`, symlink
+`node_modules`, overlay exactly the files you mean to commit, then `tsc --noEmit`. It caught both.
 
 | | what | commits |
 |---|---|---|
