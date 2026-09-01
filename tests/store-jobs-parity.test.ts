@@ -89,6 +89,21 @@ loadEnvLocal();
  */
 const OWNER_STEM = "000000b6-0000-4000-8000-";
 const OWNER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
+/**
+ * **A second real person**, because one case here is about a sweep that must
+ * only reach one of them.
+ *
+ * `settleExpired(now, owner)` is the owner-scoped sweep `listJobs` calls, and
+ * the way to get it wrong is for the owner argument to be accepted and then not
+ * used — which no test with a single owner can see, and which the `STRANGER`
+ * cannot see either: an owner with no jobs of their own proves that *nothing*
+ * was settled, not that *the right thing* was. So this owner is seeded and has
+ * a job, and the case sweeps as `OWNER` and looks at both.
+ *
+ * Same stem, so `RUBBLE` takes it away with the rest, and the same random tail
+ * per run for the same reason as `OWNER`.
+ */
+const OWNER_B = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
 const RUBBLE = `${OWNER_STEM}%`;
 const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
 
@@ -177,13 +192,15 @@ if (process.env.DATABASE_URL) {
          rethrow above is that this file says so rather than failing later on a
          foreign key. The email is per-run too — `users_email_partial_key` is
          unique, so a fixed one is its own way for two runs to collide. */
-      await pool.query(
-        `insert into auth.users
-           (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-         values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-                 $2, 'x', now(), now())`,
-        [OWNER, `store-jobs-parity-${OWNER}@example.invalid`],
-      );
+      for (const who of [OWNER, OWNER_B]) {
+        await pool.query(
+          `insert into auth.users
+             (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
+           values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+                   $2, 'x', now(), now())`,
+          [who, `store-jobs-parity-${who}@example.invalid`],
+        );
+      }
     }
   } catch (err) {
     if (reachable) throw err;
@@ -854,6 +871,60 @@ for (const adapter of ADAPTERS) {
       await store.claim(alive.id, OWNER, mintAttempt(), LEASE, CAP);
       expect(await store.settleExpired()).toEqual([]);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
+    });
+
+    /**
+     * **The sweep, scoped to one person, because `listJobs` calls it.**
+     *
+     * Stage 3 of docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md:
+     * on Vercel there is no cron and no worker, so the only caller of
+     * `settleExpired` was the top of `/api/jobs/:id/advance` — an endpoint that
+     * fires only when somebody is *already* driving a job. The reader who comes
+     * back to a dead claimant is exactly the person that sweep cannot reach, so
+     * the list path calls it too. And the list path is a reader's request, so
+     * what it settles has to be that reader's and nobody else's.
+     *
+     * **The owner is a filter on the same method**, not a sibling, so this file
+     * goes on holding both adapters to one contract — Sol approved that shape
+     * and asked for this case by name, 2026-09-01, answer 7.
+     *
+     * **Both people have an expired job**, which is the half that matters: an
+     * owner with nothing of their own could only prove that *nothing* was
+     * settled, and an argument that is accepted and then dropped passes that.
+     * With two, an unscoped sweep settles the wrong row and this goes red.
+     */
+    it("settles this owner's expired job, and cannot reach anybody else's", async () => {
+      const mine = aJob();
+      const theirs = aJob({ ownerId: OWNER_B });
+      await store.enqueueOrGet(mine, "k1");
+      await store.enqueueOrGet(theirs, "k2");
+      expect((await store.claim(mine.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+      expect((await store.claim(theirs.id, OWNER_B, mintAttempt(), LEASE, CAP)).kind).toBe(
+        "claimed",
+      );
+      await adapter.expire(mine.id);
+      await adapter.expire(theirs.id);
+
+      /* Exactly one settlement, not merely "contains mine": the failure this
+         guards against is a sweep that took the lot and happened to include the
+         right one. The owner is fresh every run, so nothing else can be in it. */
+      expect(await store.settleExpired(undefined, OWNER)).toEqual([
+        { id: mine.id, status: "error" },
+      ]);
+      expect((await store.get(mine.id, OWNER))?.status).toBe("error");
+
+      /* Untouched, and said field by field — a sweep that ended the job but
+         reported nothing would pass the line above. */
+      const untouched = await store.get(theirs.id, OWNER_B);
+      expect(untouched?.status).toBe("running");
+      expect(untouched?.error).toBeUndefined();
+      expect(untouched?.finishedAt).toBeUndefined();
+
+      /* And it is settleable — by the person whose job it is. Without this the
+         case would also pass for a sweep that had simply stopped working. */
+      expect(await store.settleExpired(undefined, OWNER_B)).toEqual([
+        { id: theirs.id, status: "error" },
+      ]);
     });
 
     /**
@@ -1578,8 +1649,8 @@ afterAll(async () => {
   if (!reachable) return;
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   try {
-    await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
-    await pool.query("delete from auth.users where id = $1", [OWNER]);
+    await pool.query("delete from spideryarn.jobs where owner_id = any($1)", [[OWNER, OWNER_B]]);
+    await pool.query("delete from auth.users where id = any($1)", [[OWNER, OWNER_B]]);
   } finally {
     await pool.end();
     /* And let the next suite in. Not left to the process exiting: vitest keeps

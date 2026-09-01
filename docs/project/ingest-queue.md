@@ -797,6 +797,25 @@ day of its life, which meant a killed instance left its job `running` for ever a
 answered `busy` — the in-memory queue had self-healed on restart, so this was a regression rather
 than a gap. GPT Sol found it; see [260827m-durable-queue-code-review-sol.md](../plans/260827m-durable-queue-code-review-sol.md).
 
+**It runs from two doors, and the second one is why a reader ever sees it work.** On Vercel
+`/advance` only fires when somebody is *already* driving a job, so a sweep living only there was
+structurally unable to reach the case that needs it most: the reader who comes back to a claimant
+that died while they were away. Since 2026-09-01 `listJobs` sweeps too — **owner-scoped**, so one
+reader's poll can never settle another's job, and gated on *the list already contains a `running`
+job* rather than on *any expired lease*. That gate is deliberately the blunter of the two: `Job` on
+the wire carries no lease, and sharpening it would mean exporting one, which is what keeps ownership
+decisions on the server. Both log lines carry a `where` field, because the interesting question about
+a settlement is which door found it.
+
+**What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
+running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
+the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate
+is closed. A 520-second worst-case import is therefore some 520 extra statements and well under a
+second of database time. On Vercel→Supabase the round trip dominates, so the statement count is the
+honest headline and the milliseconds are a floor. This paragraph used to say "one indexed `UPDATE`
+over rows that are almost always none", which was fair when it happened once an advance and is not
+when it happens once a second.
+
 **And since 2026-09-01 it does not always fail, which is why it is no longer called `failExpired`.**
 A row carrying `cancelling` is a reader who pressed Stop and then lost the claimant, so it settles as
 **cancelled**, with the `error` and `failureKind` of any earlier attempt cleared — the field always

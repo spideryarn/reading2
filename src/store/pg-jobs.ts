@@ -523,7 +523,7 @@ const rawPgJobStore: JobStore = {
    * then stopped would otherwise carry the old sentence under a `cancelled`
    * status. GPT Sol, 2026-09-01.
    */
-  async settleExpired(now?: Date): Promise<ExpirySettlement[]> {
+  async settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]> {
     const db = getDb();
     const settled = await db
       .update(jobs)
@@ -561,6 +561,14 @@ const rawPgJobStore: JobStore = {
       .where(
         and(
           eq(jobs.status, "running"),
+          /* **This reader's, when a reader is asking**, and the whole table
+             when the advance path is. `listJobs` calls this from inside a
+             request, so an unscoped sweep there would be one reader's page load
+             ending another reader's import — the same predicate `list` itself
+             is scoped by, in the same statement rather than in a filter
+             afterwards, so there is no moment at which the wrong row is
+             locked. GPT Sol, 2026-09-01, answer 7. */
+          owner === undefined ? undefined : eq(jobs.ownerId, owner),
           /* **Database time, unless a test says otherwise.** The lease is
              written by `claim` as `clock_timestamp() + leaseMs` on this same
              clock, so the deadline is one clock's arithmetic end to end. It

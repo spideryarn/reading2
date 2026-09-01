@@ -433,13 +433,28 @@ export const fsJobStore: JobStore = {
    * whose claimant then went away without ever reading the flag, so it settles
    * as `cancelled`. `sweepStopped` above already answers that way on restart;
    * this is the same answer for the same state, reached a different way.
+   *
+   * **`owner` is a filter on the map**, which is the whole of what the Postgres
+   * `where owner_id = $owner` is here. It exists because `listJobs` sweeps from
+   * inside a reader's request — see the contract in src/store/jobs.ts — and a
+   * request-scoped sweep must not reach anybody else's row.
+   *
+   * It is a filter on **everything**, the `attempts.delete` included: an
+   * owner-scoped call has to leave the other owner's job in exactly the state
+   * it found it, and dropping their token would revoke a live claimant's write
+   * authority (src/store/job-fence.ts) without settling the job — the one
+   * outcome worse than not sweeping at all, since nothing would then be able to
+   * move it but the global sweep. An entry with no job behind it belongs to
+   * nobody, so an owner-scoped call leaves that alone too and the table-wide
+   * one clears it.
    */
-  async settleExpired(now: Date = new Date()): Promise<ExpirySettlement[]> {
+  async settleExpired(now: Date = new Date(), owner?: OwnerId): Promise<ExpirySettlement[]> {
     await ready();
     const settled: ExpirySettlement[] = [];
     for (const [id, held] of attempts) {
       if (held.expires > now.getTime()) continue;
       const job = index.get(id);
+      if (owner !== undefined && job?.ownerId !== owner) continue;
       attempts.delete(id);
       if (!job || TERMINAL.has(job.status)) continue;
       settleAbandoned(job);

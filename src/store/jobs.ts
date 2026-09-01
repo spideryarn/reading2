@@ -241,8 +241,24 @@ export interface JobStore {
    * lease against their own store's clock — SQL `now()` on Postgres — because a
    * lease written by one instance and read by another is only a deadline if
    * both are reading the same clock.
+   *
+   * **`owner` narrows the same sweep to one person**, and it is what makes this
+   * safe to call from a reader's request. The one caller used to be the top of
+   * `/api/jobs/:id/advance`, which fires only while somebody is already driving
+   * a job — so the reader who comes back to a dead claimant was structurally
+   * out of the sweep's reach, which is the whole of stage 3 of
+   * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md.
+   * `listJobs` calls it now, and a request-scoped sweep that took the table
+   * would be one reader's page load ending another reader's import.
+   *
+   * **A parameter rather than a second method.** One method is one contract,
+   * so tests/store-jobs-parity.test.ts goes on holding both adapters to it —
+   * GPT Sol's answer 7 on the built stage 2, which also asked by name for the
+   * case proving that listing as one owner cannot settle another's. Omitted,
+   * the sweep is table-wide, which is what the advance path still wants: it is
+   * housekeeping for the machine at the moment somebody wants the slot.
    */
-  settleExpired(now?: Date): Promise<ExpirySettlement[]>;
+  settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]>;
 
   /**
    * The job queued or running for this slug, if there is one.

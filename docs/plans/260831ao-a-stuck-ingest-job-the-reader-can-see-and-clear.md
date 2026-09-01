@@ -481,24 +481,64 @@ it, which makes the naive spelling of *"did Stop settle it"* — `status !== "ru
 preference: land it first and a reader who pressed Stop gets passively reconciled to
 `error`/INTERRUPTED before the cancellation fix exists.
 
-- [ ] `settleExpired(now?, owner?)` — **the same method, owner-scoped**, not a sibling. An owner
+- [x] `settleExpired(now?, owner?)` — **the same method, owner-scoped**, not a sibling. An owner
       parameter keeps `tests/store-jobs-parity.test.ts` exercising one contract; the fs adapter's
       version is a filter on its `attempts` map.
-- [ ] `listJobs()` in `src/jobs.ts` calls it **only if the list it just fetched contains a `running`
+- [x] `listJobs()` in `src/jobs.ts` calls it **only if the list it just fetched contains a `running`
       job**, and re-lists if anything was settled. The candidate is "any running job", not "any
       expired lease", because the app-level `Job` cannot see leases and exporting them to sharpen
       the gate would violate the design.
-- [ ] **Say the cost honestly rather than calling it free.** A zero-row indexed `UPDATE` takes no
+- [x] **Say the cost honestly rather than calling it free.** A zero-row indexed `UPDATE` takes no
       row locks and writes no WAL, but it is still a Vercel→Postgres round trip, a pool checkout, a
       parse and a plan. At one poll a second it roughly **doubles database round trips while a job
       is running**. Bounded to active periods, and worth it for passive reconciliation — but measure
       it and write the number down, do not assert "costs nothing" as the first draft did.
-- [ ] **The list path needs the same id-bearing warning log** the advance path has, or the new
+- [x] **The list path needs the same id-bearing warning log** the advance path has, or the new
       common route to settling a dead claimant leaves no server-side account of it.
-- [ ] **Do not make `list()` reconcile inside the adapter.** The `JobStore` thesis is transitions,
+- [x] **Do not make `list()` reconcile inside the adapter.** The `JobStore` thesis is transitions,
       not patches; a list that mutates would be the first read-that-writes and the parity tests are
       not shaped to catch its divergence.
-- [ ] Keep the existing global call in the advance path — belt to this suspender.
+- [x] Keep the existing global call in the advance path — belt to this suspender.
+
+**Landed 2026-09-01.** `settleExpired(now?, owner?)` — one extra conjunct in the existing `where` on
+Postgres, so the wrong row is never even locked; a filter on the `attempts` loop on the filesystem.
+`listJobs` lists, gates on `listed.some(job => job.status === "running")`, sweeps, logs and re-lists,
+with early returns on both *nothing running* and *nothing settled*, so the second list only happens
+when the answer changed. Both log lines gained a `where` field — beyond the plan, but the two doors
+now share one sentence and which door found a settlement is the interesting part.
+
+**The measured cost**, counted at the driver by patching `Pool.prototype.query` over 300 iterations
+after a warm-up, against a three-job shelf with one job running on a live lease:
+
+| | statements | median |
+|---|---|---|
+| list alone, as it was | 1 | 1.32–1.68 ms |
+| list + sweep, a job running | 2 | 2.88–3.14 ms |
+| idle shelf, gate closed | 1 | ~0.92 ms |
+
+So **1 → 2 statements per poll while a job is running**, at about +1.5 ms each, nearly all round
+trip. Accounting for both pollers as Sol asked: after Stage 1 there is one engine and one timer, so
+the session poll is the cadence and a band opening adds one poke-poll, one-off, not a second
+cadence. A 520-second import is ~520 extra statements. Local numbers are a floor — on
+Vercel→Supabase the round trip dominates, so the statement count is the honest headline.
+
+**One judgment worth checking on the filesystem side.** The owner filter is applied **before**
+`attempts.delete(id)`, not after. A scoped call that dropped another owner's token would revoke a
+live claimant's write authority via `liveAttempt` without settling the job — strictly worse than not
+sweeping, because nothing but the table-wide sweep could then move it.
+
+**An asymmetry that is not a bug**, recorded so nobody reads the owner filter as having introduced
+it: the filesystem `settleExpired` iterates the `attempts` map, so a `running` record with no
+in-memory entry is invisible to it, where Postgres finds any running row with a lapsed lease. Safe
+within the single-process model, because `loadFromDisk` runs `sweepStopped` and returns such records
+to `queued` at start-up — a different mechanism reaching the same state.
+
+**Sol's parameter-order wart is real and was kept.** The one production call reads
+`settleExpired(undefined, owner)`. An options object would read better; it is one call site, and
+changing it touches both adapters and the contract for cosmetics. Said out loud because the moment a
+third parameter appears it stops being cosmetic.
+
+
 
 ### Stage 4 — one place that says what state a job is in
 

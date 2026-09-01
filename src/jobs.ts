@@ -1310,7 +1310,11 @@ export async function advanceJobWith(
   const swept = await store.settleExpired();
   if (swept.length > 0) {
     log("jobs").warn(
-      { count: swept.length, settled: swept },
+      /* `where`, because since stage 3 there are two doors into this same
+         sentence and the other one is the common route. Without it the two are
+         indistinguishable in the log, and the interesting question about a
+         settlement is which of them found it. */
+      { count: swept.length, settled: swept, where: "advance" },
       `settled ${swept.length} job(s) whose claimant stopped answering`,
     );
   }
@@ -2311,7 +2315,63 @@ const KEEP_FINISHED = 50;
  * the rest of the API. GPT Sol, 2026-08-27.
  */
 export async function listJobs(): Promise<Job[]> {
-  return store.list(currentOwnerId());
+  const owner = currentOwnerId();
+  const listed = await store.list(owner);
+
+  /**
+   * **The sweep, where the reader already is.**
+   *
+   * `settleExpired` had exactly one caller — the top of `advanceJobWith`, which
+   * runs only when somebody is *already* driving a job. On Vercel that is the
+   * whole of the machinery: no cron, no worker, `pump` returns on `VERCEL`, and
+   * the browser is the engine. So the one person the sweep could never reach
+   * was the one who needed it — the reader whose claimant died, who comes back
+   * to a card frozen at `running` that nothing will ever move, because the only
+   * thing that would move it is the request that stopped being made.
+   *
+   * **The gate is "is anything running", not "has any lease lapsed".** The
+   * app-level `Job` carries no lease — `leaseExpiresAt` lives on the row and in
+   * the filesystem `attempts` map and never reaches `publicJob` — and exporting
+   * it to sharpen this test would put an ownership decision where the client
+   * can see it, which is the one thing this design does not do. So the cheapest
+   * honest question is the one asked here, and it is answered from a list we
+   * already have in hand.
+   *
+   * **What it costs, said rather than waved away.** A zero-row indexed `UPDATE`
+   * takes no row locks and writes no WAL, but it is still a round trip, a pool
+   * checkout, a parse and a plan. While a job is running the browser polls this
+   * once a second (`BUSY_MS` in src/web/jobEngine.ts), so for the length of the
+   * import it **doubles the statements a poll issues**, 1 → 2 — counted at the
+   * driver, not read off the source. Measured against local Postgres over 300
+   * iterations: a poll goes from 1.32–1.68 ms to 2.88–3.14 ms, so about
+   * +1.5 ms each, and the sweep alone is ~1.3 ms of that, nearly all of it the
+   * round trip rather than the work. A 520 s worst-case import is therefore
+   * ~520 extra statements and under a second of extra database time, and an
+   * idle shelf is unchanged at one statement and ~0.9 ms because the gate above
+   * closes. That is the honest number, and it is not "costs nothing" — GPT Sol
+   * refused that phrase for this line, and was right to.
+   */
+  if (!listed.some((job) => job.status === "running")) return listed;
+
+  const settled = await store.settleExpired(undefined, owner);
+  if (settled.length === 0) return listed;
+
+  /* **The same line the advance path writes, from the door that is now the
+     common one.** The claimant is gone and logged nothing on its way out, so
+     without this a reader's page load quietly ends somebody's import and leaves
+     no server-side account of it at all. Ids and endings, because "settled 1
+     job(s)" can be joined to nothing — and because since 2026-09-01 a row
+     carrying `cancelling` comes back `cancelled`, so a line saying *failed*
+     would be untrue of exactly the jobs a reader chose to stop. */
+  log("jobs").warn(
+    { count: settled.length, settled, where: "list" },
+    `settled ${settled.length} job(s) whose claimant stopped answering`,
+  );
+  /* Re-read rather than patched, so the reader sees the settlement on the poll
+     they are looking at rather than the next one — and re-read rather than
+     mended in place, because the store is the thing that decides what a settled
+     job looks like. */
+  return store.list(owner);
 }
 
 /**
