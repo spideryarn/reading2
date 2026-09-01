@@ -140,8 +140,6 @@ export function expectFeedbackEnvelope(
   reportId: string,
   expectation: FeedbackExpectation,
 ): () => void {
-  return reportId as never; // MUTATION
-
   while (expectations.size >= MAX_EXPECTATIONS) {
     /* Oldest first — `Map` iterates in insertion order. */
     const oldest = expectations.keys().next();
