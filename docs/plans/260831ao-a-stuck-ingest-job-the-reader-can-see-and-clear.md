@@ -878,3 +878,43 @@ across 11 files** before any of this work started — `store-parity`, `store-rou
 `css-tokens`, `fixture-ids`, `pdf-bundle-trace`, `run-lock` — none of them in job or web code, and
 all of them from other people's in-flight work. Recorded so the next person can tell this work's
 breakage from the weather.
+
+## Done — 2026-09-01
+
+All eight stages. Six reviews from GPT Sol (the plan, then every stage), one design review from Fable
+before any of it, and four corrective stages that came out of those reviews rather than out of the
+plan.
+
+**What was actually wrong**, in the order it was found — and note that only the first was in the
+original diagnosis:
+
+1. **Driving worked by accident.** Whether an ingest kept running depended on whether the page you
+   opened happened to mount `useArc`, a hook belonging to the arc feature. Now a module-scope engine,
+   one per tab, with no route lifecycle at all.
+2. **The lease revoked nothing.** The fence checked id, attempt and status but not expiry, so a
+   claimant whose lease had lapsed could still commit — including committing an interruption over a
+   reader's Stop. And `now()` being transaction-start time meant a claim delayed behind a lock took a
+   *back-dated* lease.
+3. **The sweep could not reach the person who needed it**, living only at the top of an endpoint that
+   fires when somebody is already watching.
+4. **Stop lied**, waiting out a lease nobody held and then reporting *interrupted* to a reader who
+   had pressed stop.
+5. **A finished job explained nothing**, because the card renders `step.error` and never `job.error`
+   — a fact the first attempt got exactly backwards.
+6. **The 409 named no job**, and could not have shown one, because the panel filters the list to jobs
+   writing the requested step.
+
+**The failures worth remembering are the checks that agreed with the code.** A timing median built
+from five failed runs, confirmed by a re-derivation that repeated the method. Four negative
+assertions that passed because nothing rendered. A test that could not fail because a list returns
+live references and the "before" array mutates underneath it. A log assertion that grepped for a
+substring and would accept a line missing both fields it was added for. None of these was found by
+running the suite; all of them were found by asking what a broken implementation would do.
+
+**Left undone on purpose**, and worth its own work: the same application-clock-versus-database-
+timestamp shape in `pg-searches.ts`, `pg-chat.ts`, `pg-referee-criteria.ts` and the latent draft
+sweeper; and no `attemptStartedAt`, so *"this attempt has been going N"* is not derivable and only
+per-step elapsed time is shown.
+
+**And one thing to know before extending Stage 6**: the throw site every band button reaches is
+scheduled for replacement by [260830ar](260830ar-several-articles-at-once.md) § Stage 2.
