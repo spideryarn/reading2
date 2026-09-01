@@ -529,3 +529,53 @@ export async function deleteComment(slug: string, id: string): Promise<Comment[]
   log("store").info({ slug, id, remaining: remaining.length }, "comment deleted");
   return remaining;
 }
+
+/**
+ * What both comment sweeps write. One constant, so they cannot drift.
+ *
+ * The words are the ones `sweepOrphaned` in src/routes.ts wrote before the rule
+ * moved into the stores, unchanged: the reader has seen this sentence and there
+ * is nothing wrong with it. `CHAT_SWEPT` and `SEARCH_SWEPT` in src/store/fs.ts
+ * are its siblings.
+ */
+export const COMMENT_SWEPT = "The server stopped before this was answered.";
+
+/**
+ * Turn abandoned `pending` comments into `error`, so they can be retried.
+ *
+ * **`keep` alone, and only because there is exactly one process.** The Postgres
+ * half (`pgCommentStore.sweepPending`) needs a second guard — a lease on the
+ * row — because on Vercel a `GET` lands on a machine that knows nothing about
+ * the machine streaming the answer, and `keep` is a fact about *this* process.
+ * Here there is one server on one disk, so a `pending` comment this process is
+ * not writing has no answer coming: the server restarted, or the request was
+ * cut off.
+ *
+ * The asymmetry is written down rather than left to be noticed, because "the
+ * filesystem one is allowed to be weaker" is precisely what hid a production
+ * bug for four days — docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+ * Weaker is fine *when the reason is a property of the filesystem store*, as it
+ * is here; it is not fine as a shrug.
+ */
+export async function sweepPendingComments(
+  slug: string,
+  keep: ReadonlySet<string>,
+): Promise<Comment[]> {
+  const orphaned = (c: Comment) => c.status === "pending" && !keep.has(c.id);
+  const comments = await loadComments(slug);
+  // The pre-check exists to avoid rewriting the file for nothing. The Postgres
+  // store deliberately drops it: an UPDATE matching no rows is free. Same split
+  // as `fsChatStore.sweepPending`.
+  const orphans = comments.filter(orphaned).length;
+  if (orphans === 0) return comments;
+  const next = await update(slug, (current) =>
+    current.map((c) =>
+      orphaned(c) ? { ...c, status: "error" as const, error: COMMENT_SWEPT } : c,
+    ),
+  );
+  /* One line for the batch, never one per orphan. Every orphan gets the same
+     patch for the same reason, so a line each would say one thing N times — and
+     N is unbounded while Vercel allows 256 lines for the whole request. */
+  log("store").warn({ slug, orphans }, `swept ${orphans} abandoned comment(s) for ${slug}`);
+  return next;
+}

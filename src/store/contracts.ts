@@ -387,6 +387,41 @@ export interface CommentStore {
 
   remove(slug: string, id: string): Promise<Comment[]>;
 
+  /**
+   * Turn abandoned `pending` comments into `error`, so they can be retried.
+   *
+   * ## Why this takes a bare `keep` and not `SweepOptions`
+   *
+   * The rule `SweepOptions` states is right and this store obeys it: `keep` is
+   * this process's live work and something else has to speak for every other
+   * process, because **`keep` alone is a cross-process bug**. That is exactly
+   * what happened here — `sweepOrphaned` in src/routes.ts filtered a module-scope
+   * `Set`, so a `GET` landing on machine B while machine A streamed an answer
+   * saw a `pending` row nobody *local* was working on and errored it while the
+   * reader watched the words arrive.
+   *
+   * What differs is *where the clock is*. The other four measure an attempt's
+   * age at sweep time against a `graceMs` the caller supplies, because their
+   * rows carry an `attempt_started_at`. `comments` carries no start column; it
+   * carries `attempt_id` and **`lease_expires_at`**, which the schema comment on
+   * the table says outright were put there to "replace the in-process `answering`
+   * Set in src/routes.ts". A lease is a deadline, not a start, so the window is
+   * stamped on the row by `beginAnswer` rather than measured by the sweep — the
+   * shape `jobs` already uses (`leaseIsOver`, src/store/job-fence.ts).
+   *
+   * So a `graceMs` parameter here would be a number the implementation could not
+   * use, and a parameter that is silently ignored is the failure this codebase
+   * keeps finding — docs/reusable/silent-success.md. The window is
+   * `COMMENT_ANSWER_LEASE_MS` in src/store/pg-comments.ts, next to the write
+   * that stamps it, exactly as `CLAIMS_ORPHAN_GRACE_MS` lives beside its own.
+   *
+   * @param keep bare comment ids — *not* `slug/id`. The key src/routes.ts uses
+   * has to stay unique across articles; a store must not be handed a composite
+   * it would then have to take apart. `liveComments` there does the conversion,
+   * for the reason `liveMessages` does it for chat.
+   */
+  sweepPending(slug: string, keep: ReadonlySet<string>): Promise<Comment[]>;
+
   /** For the library card and the metadata page: a count, never the comments. */
   count(slug: string): Promise<number>;
 }
@@ -524,6 +559,11 @@ export interface LibrarySearchOptions {
  * spare anything young enough that some *other* process is plausibly still on
  * it. `keep` alone is a cross-process bug; `graceMs` alone would error a run
  * this very process has been streaming for four minutes.
+ *
+ * `CommentStore.sweepPending` obeys the same rule with a different second half —
+ * a lease stamped on the row instead of a window supplied by the caller, because
+ * `comments` has a `lease_expires_at` column and no attempt clock. See its doc
+ * for why it therefore does not take this type.
  */
 export interface SweepOptions {
   /** Ids this process is actively writing. Never swept, whatever their age. */
@@ -865,14 +905,29 @@ export interface RefereeCriteriaStore {
  * article, because a referee writes several criteria and asks the paper what
  * *it* claims exactly once. Running it again replaces what is there.
  *
- * **It has a filesystem implementation and no Postgres one, and that is
- * recorded rather than pending.** A claims run belongs in the pipeline as an
- * artefact — the plan says so and lists the surface — and building a bespoke
- * table for something already scheduled to be replaced is the gold-plating the
- * plan's own § 2 argues against. Under `SPIDERYARN_STORE=postgres` every method
- * here refuses through `notMigrated` (src/store/index.ts), loudly, rather than
- * writing a file no Postgres read will ever return. src/store/live.ts §
- * `notMigratedError` is the rule and this is the second thing under it.
+ * **A claims run's real home is a pipeline artefact, and this is not it.** The
+ * plan says so and lists the surface: a `StepName`, an `ArtifactKind` and an
+ * `article_revisions` column, because a claims run is article-derived and
+ * reusable rather than reader state. That is unchanged, and `referee_claims`
+ * (drizzle/0051) is an **interim** table, named as one in its own migration.
+ *
+ * **What changed, and when, because a recorded reason outlives the decision it
+ * justified.** Until 2026-09-01 this contract had a filesystem implementation
+ * and no Postgres one, and said so — deliberately, on the argument above plus
+ * one that has since expired. The expired half was the blocking one:
+ * src/store/export.ts was being rewritten in another session that day, so a
+ * bespoke table could only have landed *without* an `ARTICLE_TABLE_COVERAGE`
+ * entry, which is exactly the accident of the day before — `db:export` had never
+ * heard of `referee_criteria` and dropped every criterion from the rollback for
+ * a day while reporting success. That file is settled, so the table lands with
+ * its entry and with a fixture that inserts a row and requires it back out of
+ * the named file.
+ *
+ * Against the interim stood the cost of not building it, which a cross-family
+ * review put plainly: under `SPIDERYARN_STORE=postgres` — the store that
+ * deploys — *"'Pull the paper's claims' cannot load, start or persist a run"*.
+ * Both adapters are real now, and src/store/index.ts selects between them with
+ * `guarded(...)` like every other pair.
  */
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */
@@ -904,7 +959,17 @@ export interface RefereeClaimsStore {
    *
    * `live` is whether *this process* is running it now. Narrower than
    * `SweepOptions`, which carries a set of ids and a grace window, because there
-   * is one run and the filesystem has no other processes to be wrong about.
+   * is one run and no id to keep a set of.
+   *
+   * **The grace window still exists; it is just not in this signature.**
+   * `SweepOptions` explains why one is needed at all — `keep` alone is a
+   * cross-process bug, and process B seeing process A's live row in nobody's set
+   * errors an answer that is still arriving. That is as true here as anywhere,
+   * and on Vercel it is the ordinary shape. So the Postgres store applies its
+   * own window against `referee_claims.created_at`, which `begin` stamps and
+   * `finish` never touches (`CLAIMS_ORPHAN_GRACE_MS`,
+   * src/store/pg-referee-claims.ts). The filesystem store needs none: two
+   * servers sharing one `data/` directory is a thing nobody does.
    */
   sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
 }

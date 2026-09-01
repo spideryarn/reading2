@@ -54,6 +54,7 @@ import {
   loadComments,
   patchComment,
   patchCommentBody,
+  sweepPendingComments,
 } from "../comments.js";
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
 import { searchLibrary } from "../library-search.js";
@@ -157,6 +158,12 @@ export const fsCommentStore: CommentStore = {
   linkThread: linkCommentThread,
   patch: patchComment,
   remove: deleteComment,
+  /* `keep` alone, where the Postgres half also needs a lease on the row. The
+     reason is a property of *this* store rather than a lower bar: one server,
+     one disk, so nothing but this process can be answering. `sweepPendingComments`
+     in src/comments.ts says it at length, because "the filesystem one is allowed
+     to be weaker" is the shrug that hid a production bug for four days. */
+  sweepPending: sweepPendingComments,
 
   async count(slug: string): Promise<number> {
     return (await loadComments(slug)).length;

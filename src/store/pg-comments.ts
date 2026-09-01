@@ -29,10 +29,17 @@
  * the same millisecond would otherwise swap places between requests.
  */
 
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 
-import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type NewComment } from "../comments.js";
+import {
+  COMMENT_SWEPT,
+  CommentIdTaken,
+  NotAnExplanation,
+  type AnswerPatch,
+  type NewComment,
+} from "../comments.js";
 import { getDb } from "../db/client.js";
+import { EXPLAIN_TIMEOUT_MS } from "../explain.js";
 import { articles, comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
@@ -42,6 +49,29 @@ import type { CommentStore } from "./contracts.js";
 import { ownedSlug } from "./pg.js";
 
 const logger = log("store");
+
+/**
+ * **How long another machine leaves a comment's `pending` row alone.**
+ *
+ * `beginAnswer` stamps `now + this` into `lease_expires_at`; `sweepPending`
+ * errors a `pending` row only once that deadline has passed. It is the same job
+ * `SweepOptions.graceMs` does for chat, searches and criteria, moved onto the
+ * row because `comments` has a lease column and no attempt clock — see
+ * `CommentStore.sweepPending` in src/store/contracts.ts for why that means the
+ * method takes no window from its caller.
+ *
+ * **Derived from the call's own deadline** rather than written down beside it,
+ * so the two cannot drift into a sweep that fires before the model has given
+ * up: `explain` aborts at `EXPLAIN_TIMEOUT_MS` and then writes `error` itself,
+ * so anything still `pending` half a minute after that has no writer left. The
+ * arithmetic makes the relationship unfalsifiable where
+ * `CHAT_ORPHAN_GRACE_MS`'s needs an assertion; `CLAIMS_ORPHAN_GRACE_MS` in
+ * pg-referee-claims.ts is the same expression for the same reason.
+ *
+ * Thirty seconds of margin, matching that one, because the gap has to cover the
+ * store write that follows the model call, not just the call.
+ */
+export const COMMENT_ANSWER_LEASE_MS = EXPLAIN_TIMEOUT_MS + 30_000;
 
 /** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
 async function articleIdFor(slug: string): Promise<string> {
@@ -310,6 +340,23 @@ export const pgCommentStore: CommentStore = {
         searches: null,
         model: null,
         error: null,
+        /* **The lease, and the reason `sweepPending` is safe on Vercel.** Every
+           other machine has to be able to tell "an answer is arriving" from "a
+           process died holding this row", and the only thing they all agree on
+           is the database's clock. So the attempt stamps a deadline here, where
+           any of them can read it — `attemptId` and `lease_expires_at` are on
+           this table for exactly this, and the schema comment says so.
+
+           `clock_timestamp()`, not `now()`: `now()` is the transaction's start
+           and is frozen for its duration, which is the trap
+           tests/store-jobs-parity.test.ts pins for `jobs`.
+
+           `gen_random_uuid()` from the server too, so the fence and the clock
+           on one row cannot come from two different machines. Nothing reads the
+           id yet — `patch` is unfenced, as it was — but a fence that is written
+           is a fence that can be checked later without a migration. */
+        attemptId: sql`gen_random_uuid()`,
+        leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${COMMENT_ANSWER_LEASE_MS} / 1000.0)`,
       })
       /* **`in ('done','error')` is a claim; `<> 'none'` was not.**
          The first version excluded only bookmarks, so a row already `pending`
@@ -452,7 +499,14 @@ export const pgCommentStore: CommentStore = {
       })
       .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
 
-    /* The stored `error` string is deliberately NOT logged. It is whatever
+    /* **The lease is deliberately left where it is.** A terminal row's stale
+       deadline is unreadable by anything — `sweepPending` looks only at
+       `pending` rows, and `beginAnswer` overwrites both fields on the next
+       attempt — so clearing it here would buy nothing and would put the fence's
+       lifetime in two places. `chat_messages` clears its pair because a CHECK
+       constraint insists the two agree; `comments` has no such constraint.
+
+       The stored `error` string is deliberately NOT logged. It is whatever
        `explain` threw, and one of the things `explain` throws carries 400
        characters of a provider's response body — which, for a provider that
        echoes the request back, contains the reader's selected quote and the
@@ -477,6 +531,68 @@ export const pgCommentStore: CommentStore = {
     // can be told apart from one that did.
     logger.info({ slug, id, remaining: remaining.length }, "comment deleted");
     return remaining;
+  },
+
+  /**
+   * Turn abandoned `pending` comments into `error`, so they can be retried.
+   *
+   * **Two guards, and each one alone is a bug** — the pair pg-searches.ts §
+   * `sweepPending` sets out, with this store's own second half.
+   *
+   * `keep` is what THIS process is streaming: never swept, whatever the clock
+   * says, or a two-minute answer gets killed by the server producing it. The
+   * **lease** is for every other process, and it is the guard this store spent
+   * four months without: `keep` is a fact about one lambda, and on Vercel a
+   * `GET` lands wherever it lands. Without the lease, machine B read machine
+   * A's live row, found it in nobody's set, and told the reader "the server
+   * stopped before this was answered" about an answer arriving as they read it.
+   *
+   * A `pending` row with **no lease at all** is sweepable outright: an imported
+   * comment, or one begun before this column was written, and either way the
+   * process that started it is long gone. Same rule as a run with no attempt.
+   *
+   * `clock_timestamp()`, not `now()`, which is frozen for the transaction — the
+   * distinction `leaseIsOver` in src/store/job-fence.ts makes for the same
+   * reason, and the one tests/store-jobs-parity.test.ts caught by hand.
+   *
+   * No "is anything stale?" pre-check. The file has one to avoid rewriting
+   * itself for nothing; an UPDATE that matches no rows costs nothing here.
+   */
+  async sweepPending(slug: string, keep: ReadonlySet<string>): Promise<Comment[]> {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    const swept = await db
+      .update(commentsTable)
+      /* The attempt is declared dead, so its fence goes with it — otherwise the
+         row keeps a lease nobody holds, and the next reader of this table finds
+         an `error` comment that still names a live attempt. `pg-chat.ts` clears
+         its pair for the same reason. */
+      .set({ status: "error", error: COMMENT_SWEPT, attemptId: null, leaseExpiresAt: null })
+      .where(
+        and(
+          eq(commentsTable.articleId, articleId),
+          eq(commentsTable.status, "pending"),
+          sql`(${commentsTable.leaseExpiresAt} is null or ${commentsTable.leaseExpiresAt} <= clock_timestamp())`,
+          /* **No empty-list guard.** Raw SQL `not in ()` is a syntax error
+             rather than "matches everything", so a hand-written sweep would 500
+             on the first read of a quiet article. Drizzle does not do that:
+             `notInArray(col, [])` compiles to the literal `true` — measured by
+             printing the SQL, in pg-searches.ts, rather than assumed. */
+          notInArray(commentsTable.id, [...keep]),
+        ),
+      )
+      .returning({ id: commentsTable.id });
+
+    /* One line for the batch, never one per orphan: every one gets the same
+       patch for the same reason, and N is unbounded while Vercel allows 256
+       lines for the whole request. Ids and a count, never a quote. */
+    if (swept.length) {
+      logger.warn(
+        { slug, orphans: swept.length },
+        `swept ${swept.length} abandoned comment(s) for ${slug}`,
+      );
+    }
+    return listFor(articleId);
   },
 
   async count(slug: string): Promise<number> {

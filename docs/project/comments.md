@@ -658,14 +658,25 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
   appearing to ignore the drag.
 - **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
   visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
-- **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` on disk
-  cannot distinguish "an answer is coming" from "the process writing it died" — so the server keeps
-  the list of what it is actually answering, and anything else that is `pending` is swept to `error`
-  with a message. Without the sweep, a comment orphaned by a `npm run dev` restart reloads as a
-  spinner that never stops. See `sweepOrphaned` in [`src/routes.ts`](../../src/routes.ts).
-- **The model call has a 90-second deadline.** `fetch` has none of its own, so a request that never
-  comes back would hold the comment `pending` for ever. `EXPLAIN_TIMEOUT_MS` in
-  [`src/explain.ts`](../../src/explain.ts); the timeout is reported as a sentence, not `AbortError`.
+- **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` in the
+  store cannot distinguish "an answer is coming" from "the process writing it died" — so the server
+  keeps the list of what it is actually answering, and anything else that is `pending` is swept to
+  `error` with a message. Without the sweep, a comment orphaned by a `npm run dev` restart reloads
+  as a spinner that never stops. `sweepOrphaned` in [`src/routes.ts`](../../src/routes.ts) supplies
+  that list; the rule itself is `sweepPending` on each store.
+- **…and on Vercel that list is not enough on its own.** It is a fact about *one* process, and every
+  request may land on a different machine. So the Postgres store also reads a **lease** stamped on
+  the row when the attempt began: a fresh `pending` row is spared even by a machine that knows
+  nothing about it, and only an expired lease may be declared dead. `keep` alone would error an
+  answer while the reader watched it arrive; the lease alone would kill a long answer the server is
+  still writing. `COMMENT_ANSWER_LEASE_MS` and `sweepPending` in
+  [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts), and `CommentStore.sweepPending` in
+  [`src/store/contracts.ts`](../../src/store/contracts.ts) for why the filesystem store needs only
+  half of it. `tests/comment-sweep.test.ts` is the reproduction.
+- **The model call has a deadline**, and the lease above is derived from it so the two cannot drift.
+  `fetch` has none of its own, so a request that never comes back would hold the comment `pending`
+  for ever. `EXPLAIN_TIMEOUT_MS` in [`src/explain.ts`](../../src/explain.ts); the timeout is
+  reported as a sentence, not `AbortError`.
 - **Deleting while the answer is still in the air wins.** The POST returns the whole comment, so
   storing it used to put back a row the reader had already deleted, mark and all. `useComments`
   keeps a tombstone and re-sends the DELETE once the write it was racing has landed.
