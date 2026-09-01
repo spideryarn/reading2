@@ -179,10 +179,16 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 
 ### Working in a tree several agents share
 
+- **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
+  on the Hetzner remote box — [remote-box.md](docs/project/remote-box.md); `/Users/greg/` means
+  you are on Greg's Mac.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
   don't try to fence yourself off.
+- **Two things are changing here.** We are setting up a worktree per agent, so the sharing above
+  gets less painful; and the primary checkout is moving off `main` onto `dev`. Pushing to `main`
+  will still deploy.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
