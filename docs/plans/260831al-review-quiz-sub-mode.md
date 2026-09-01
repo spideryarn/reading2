@@ -569,6 +569,48 @@ Six findings. Five are mechanical and are being fixed; the sixth is Greg's call.
       knowing: the prompt is hard-wrapped, so `"nicely put"` is split across a line break inside it
       and a plain substring check cannot find the prompt's own banned phrase.
 
+### Stage 6 — the second review of the fixes
+
+[260831al-review-quiz-sub-mode-stage5-review-sol.md](260831al-review-quiz-sub-mode-stage5-review-sol.md).
+Still NO-SHIP, and right again on all four. Three are small; one needs thought.
+
+- [ ] **`finish_reason: "error"` is not handled.** The clearest of the four, and it is the original
+      bug with a different word in it: `didNotFinish`'s own docstring lists `error` among the five
+      reasons OpenRouter normalises to, and then does not return a failure for it. Partial text plus
+      `error` plus `[DONE]` is still filed as a finished mark. `tool_calls` stays accepted — the
+      docstring's reason holds, this call sends no tools so a model asking for one is a provider bug
+      and the prose it did write is still prose — but `error` was an oversight, not a decision.
+- [ ] **A disconnect before `sse(res)` is missed entirely.** `gone` is created by `sse`, which is
+      called *after* `loadQuiz`, `loadArticle` and the second `loadQuiz`. A reader who closes the tab
+      during those reads is never noticed: the `close` event has already fired, the signal that gets
+      created afterwards is live, and the paid call starts anyway on a response that is already
+      destroyed. Fix is a line — the signal starts aborted when the response is already gone.
+- [ ] **An empty box is superseded after all, and the copy was the wrong lever.** Stage 5 excluded
+      the empty case because the note told a reader to press an Answer button that is disabled while
+      the box is empty. The reviewer is right that this restores the original hole in miniature: an
+      empty box beside feedback for the answer that was just deleted, still reading "answered". The
+      note was the thing to change, not the rule — it should say the mark is about an answer that is
+      gone, without instructing a press. **This one is a judgement I got wrong**, and the test I
+      wrote for it is now a test for the wrong behaviour.
+- [ ] **The revision race is narrowed, not closed, and the reviewer's fix does not work as stated.**
+      The ABA case survives: quiz from A, prose from B, and a revision C published before the second
+      check that restores A's fingerprint under the same batch. The reviewer's remedy — compare
+      `found.quiz.sourceHash` against the fingerprint of the article actually loaded — is the right
+      *shape* and binds the question to the exact prose being sent. But Stage 5 tried it and it does
+      not compute: `Article.meta` has been through `titleFor`/`metaFrom`, which synthesise a title
+      from the h1, the slug or a shelf rename, while the store's fingerprint uses `metaFingerprintOf`,
+      which returns `null` when `revision.title` is null. Every renamed or untitled article would
+      409 on every mark. So the work is to find a fingerprint input both sides can agree on — or to
+      accept the ABA window and say so, which is a smaller lie than a mark that silently 409s for a
+      class of articles.
+
+Two more the reviewer raised that are about the tests rather than the code, and it is right about
+both: **removing the `gradeWords` field from the log line would leave every counter test green**
+(nothing asserts the instrument is actually wired to a mark), and **the batch-replacement test would
+pass if `clearAttempt` were a no-op**, because it never mounts `useQuiz` or holds a live request.
+There is also no committed test for the eval's failure accounting at all — reintroducing the
+constant mark count would go unnoticed.
+
 ### The tests that would actually catch something
 
 Listed here because the obvious ones mostly restate the implementation, and the failures this
