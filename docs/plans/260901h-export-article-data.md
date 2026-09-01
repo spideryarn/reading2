@@ -115,9 +115,10 @@ to `put()`. That is Stage B's job and it is the riskiest part of this plan.
 
 ## Corrections to fold in (all verified in the source)
 
-- `contentDisposition(filename)` takes **one argument and always returns `inline`**
-  (routes.ts:504) — deliberately, for the PDF route. It needs a second parameter, and a test that
-  the PDF route stays `inline`.
+- ~~`contentDisposition(filename)` takes one argument and always returns `inline`~~ — **done**
+  (commit `3183ddc`). Now `contentDisposition(filename, "inline" | "attachment")`, required with no
+  default so a download cannot inherit the PDF route's answer. The reasoning moved to `sendSource`.
+  The regression test was watched going red before being trusted.
 - `ownedSlug` lives in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts), not `pg.ts`.
 - `exportArticle` throws a plain `Error` for another owner's slug (export.ts:461), which the route
   would turn into a **500 rather than a 404**. Needs a typed not-found.
@@ -131,11 +132,30 @@ to `put()`. That is Stage B's job and it is the riskiest part of this plan.
 
 Ordered as the review recommended: the data contract first, docs before the button, UI last.
 
-**Stage A — `readArticleRows`, with the rollback unchanged.**
-- [ ] Extract the owner-scoped queries into `readArticleRows(slug)` returning typed rows; add a
-      typed `ArticleNotFound`. `exportArticle` keeps its projection, now fed from it.
-- [ ] Done when `REQUIRE_POSTGRES=1 npm test` is green — the DB half must have *run*, not skipped.
-      Baseline captured before touching anything: 8 tests pass.
+**Stage A — `readArticleRows`, with the rollback unchanged.** ✅ **Done.**
+- [x] [`src/store/article-rows.ts`](../../src/store/article-rows.ts): `ArticleRows` (typed via
+      `$inferSelect`, not hand-written), `readArticleRows(slug)`, `ArticleNotFound`, and
+      `messagesOfThread`. `exportArticle`'s projection is untouched and now fed from it — ten `await
+      db` reads became one call.
+- [x] Coverage test still 8/8 under `REQUIRE_POSTGRES=1`; the five rollback suites 285/285.
+      `npm run typecheck` clean.
+- [x] **Parity proven independently of the suite.** The pre-refactor `exportArticle` was
+      reconstructed in a scratchpad and both were run against a fixture exercising all ten tables —
+      blocks inserted in scrambled ordinal order, messages interleaved across `chat`, `remember` and
+      `candidates` threads. `diff -r` said *directories identical*, 21 files each, same `tables` set.
+- [x] Two things learned, both recorded because they will matter later:
+      - The positive control worked for `stance` (dropping it from the old copy's projection turned
+        the diff red) but **breaking `order by ordinal` did not** — Postgres returned the rows in
+        ordinal order anyway. Exactly the trap the file's own comment warns about. The `ORDER BY` is
+        guaranteed by being written, not by that diff; `store-roundtrip` is what pins it.
+      - An N+1 per-thread message query became one `article_id`-scoped read. The article-scoping
+        that stops one reader's conversation landing under another's article now lives in
+        `readArticleRows`, and the old site says so.
+- [x] **Cost accepted:** `db:export` now reads `block_identities` and throws the rows away — one
+      extra cheap read per article, the price of not having two query walks.
+- [x] Moved this suite's fixture ids off `…ea`/`…eb`, which `public-visibility-pg.test.ts` had also
+      claimed. `tests/fixture-ids.test.ts` exists to catch exactly that, and the symptom is a 404 in
+      whichever file loses the race — so it reads as a flake in someone else's work.
 
 **Stage B — move the guard to the query layer, and prove data survives.**
 - [ ] Coverage declaration attaches to `readArticleRows`, so a new table fails the test on the day

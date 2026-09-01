@@ -193,8 +193,16 @@ describe("the rollback knows about every article-scoped table", () => {
 /* ---------------------------------------------------------- the list is true -- */
 
 const SLUG = "store-export-coverage-fixture";
-const ARTICLE_ID = "00000000-0000-4000-8000-0000000000ea";
-const REVISION_ID = "00000000-0000-4000-8000-0000000000eb";
+/* Moved off `…ea`/`…eb` on 2026-09-01: `tests/public-visibility-pg.test.ts` had
+   claimed the same pair, which tests/fixture-ids.test.ts exists to catch. Its
+   docstring has the reason this matters — the loser's article is deleted
+   mid-run by the winner's `afterAll`, and the only symptom is a 404 over in
+   whichever file lost, so it reads as a flake in somebody else's work. This
+   file is the one that moved because the export coverage guard is load-bearing
+   for docs/plans/260901h-export-article-data.md, and a guard that goes red for
+   a reason that is not its own teaches people to ignore it. */
+const ARTICLE_ID = "00000000-0000-4000-8000-00000000e5a0";
+const REVISION_ID = "00000000-0000-4000-8000-00000000e5a1";
 const BLOCK_ID = "spya-cvb234";
 const CRITERION_ID = "spya-cvc234";
 
