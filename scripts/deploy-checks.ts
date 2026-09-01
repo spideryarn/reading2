@@ -127,6 +127,108 @@ export function scanSql(sql: string): SqlFindings {
  * got wrong once (docs/reusable/silent-success.md, and the header of
  * scripts/db-migrate.ts).
  */
+/* ------------------------------------------------------------------ */
+/* Which branch a deploy may start from                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The branches `npm run deploy` will accept as its source.
+ *
+ * **This is not the same thing as the production branch.** Vercel's production
+ * branch is `main` and stays `main`; the deploy script never deploys the branch
+ * you are standing on, it gates one sha and pushes *that sha* into `main`
+ * (`git push origin <sha>:refs/heads/main`). So this list is only "where is it
+ * legitimate to be standing when you ask for a deploy".
+ *
+ * `dev` is here because the trunk is moving to `dev`: agents commit and push
+ * there, and `main` is written only by a gated deploy. `main` stays accepted
+ * because the flip has not happened yet in every checkout, and a deploy that
+ * refuses during the changeover is a deploy nobody can ship.
+ *
+ * A `worktree-*` branch is deliberately **not** here. Worktrees have no
+ * `.env.prod`, so a deploy from one cannot work; refusing by name gives a
+ * legible reason instead of a missing-credential failure halfway in.
+ *
+ * See docs/project/worktrees.md and docs/plans/260828r-worktrees.md § Step 0.
+ */
+export const DEPLOY_SOURCE_BRANCHES = ["main", "dev"] as const;
+
+/**
+ * The trunk agents commit and push to. `main` is production, not the trunk.
+ *
+ * Named separately from `DEPLOY_SOURCE_BRANCHES` because the two answer
+ * different questions and only briefly overlap: during the changeover both
+ * names may launch a deploy, but only one of them is the branch a candidate has
+ * to match.
+ */
+export const TRUNK_BRANCH = "dev";
+
+/**
+ * `null` when this branch may launch a deploy, otherwise the reason it may not.
+ *
+ * **Detached HEAD arrives as `""`**, because the caller reads the branch with
+ * `git branch --show-current`. It used to use `git rev-parse --abbrev-ref HEAD`,
+ * which returns the literal `"HEAD"` when detached — refused either way, but
+ * that spelling has a second behaviour worth avoiding: when a tag shares a
+ * branch's short name it returns a disambiguated `heads/dev`, which would refuse
+ * a legitimate branch. GPT Sol, finding 6. Both spellings are still handled here,
+ * `"HEAD"` falling through to the ordinary not-in-the-list refusal.
+ */
+export function deployBranchProblem(branch: string): string | null {
+  if (branch === "") return "HEAD is detached, so there is no branch to deploy from";
+  const allowed: readonly string[] = DEPLOY_SOURCE_BRANCHES;
+  if (allowed.includes(branch)) return null;
+  return `on branch '${branch}', not ${DEPLOY_SOURCE_BRANCHES.join(" or ")}`;
+}
+
+/**
+ * **Being on the trunk is not the same as being level with it**, and this is the
+ * gap that accepting `dev` opened.
+ *
+ * `preflight` fetches `origin/main` and refuses a sha that is behind it. With
+ * `main` as both production and trunk that check did two jobs at once. With
+ * `dev` as the trunk it only does the first: it proves the candidate contains
+ * current *production*, and says nothing about whether it contains current
+ * *trunk*. So:
+ *
+ * ```text
+ *   origin/main:      A
+ *   stale local dev:  A-B          <- passes the origin/main check
+ *   origin/dev:       A-B-C-D
+ * ```
+ *
+ * Deploying `B` promotes code missing `C` and `D`, reports success, and nobody
+ * finds out. Caught by GPT Sol reviewing this slice
+ * (`docs/plans/260828r-worktrees-step0-review-sol.md`, finding 1).
+ *
+ * **Equality rather than ancestry**, deliberately. Ancestry in one direction
+ * allows the stale deploy above; ancestry in the other allows a local commit
+ * that was never pushed, which is the whole "push to `dev`, then deploy"
+ * convention bypassed. The sha is captured once at preflight, so `dev` moving
+ * *afterwards* does not invalidate a run already under way.
+ *
+ * Fails closed when the trunk cannot be read at all: an unreachable remote is
+ * indistinguishable from a trunk that agrees with you, and one of those is safe
+ * to assume.
+ */
+export function trunkGap(opts: {
+  branch: string;
+  sha: string;
+  trunkSha: string | null;
+}): string | null {
+  const { branch, sha, trunkSha } = opts;
+  /* Pre-flip, `main` is trunk and production at once, and the origin/main
+     ancestry check above already covers it. */
+  if (branch !== TRUNK_BRANCH) return null;
+  if (!trunkSha) {
+    return `could not read origin/${TRUNK_BRANCH} — refusing rather than assuming it agrees`;
+  }
+  if (sha !== trunkSha) {
+    return `${sha.slice(0, 8)} is not origin/${TRUNK_BRANCH} (${trunkSha.slice(0, 8)}) — pull, or push this work to ${TRUNK_BRANCH} first`;
+  }
+  return null;
+}
+
 export function migratorUrlFrom(appUrl: string, password: string): string {
   const app = new URL(appUrl);
   const ref = app.username.includes(".") ? app.username.split(".").slice(1).join(".") : null;

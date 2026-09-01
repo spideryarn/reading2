@@ -20,6 +20,8 @@ import {
   bucketDrift,
   codeMayNotHaveShipped,
   declaredBuckets,
+  deployBranchProblem,
+  DEPLOY_SOURCE_BRANCHES,
   describeRedirect,
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
@@ -37,6 +39,8 @@ import {
   sawSmokeLine,
   scanSql,
   stripSqlNoise,
+  TRUNK_BRANCH,
+  trunkGap,
   type DeclaredBucket,
   type JournalEntry,
   type RunningBucket,
@@ -50,6 +54,81 @@ const journal = (...whens: number[]): JournalEntry[] =>
   whens.map((when, idx) => ({ idx, tag: `${String(idx).padStart(4, "0")}_thing`, when }));
 
 /* ------------------------------------------------------------------ */
+
+describe("deployBranchProblem", () => {
+  it("refuses a worktree branch, which has no .env.prod to deploy with", () => {
+    expect(deployBranchProblem("worktree-referee-mode")).toBe(
+      "on branch 'worktree-referee-mode', not main or dev",
+    );
+  });
+
+  it("refuses a detached HEAD rather than reasoning about a branch that is not there", () => {
+    // `git branch --show-current` is empty when detached...
+    expect(deployBranchProblem("")).toBe("HEAD is detached, so there is no branch to deploy from");
+    // ...and the older `rev-parse --abbrev-ref HEAD` spelling said "HEAD",
+    // which is still refused rather than mistaken for a branch.
+    expect(deployBranchProblem("HEAD")).toBe("on branch 'HEAD', not main or dev");
+  });
+
+  it("accepts dev, the trunk agents commit and push to", () => {
+    expect(deployBranchProblem("dev")).toBeNull();
+  });
+
+  it("still accepts main, because the flip has not reached every checkout", () => {
+    expect(deployBranchProblem("main")).toBeNull();
+  });
+
+  it("names both, so the message cannot drift from the list", () => {
+    expect([...DEPLOY_SOURCE_BRANCHES]).toEqual(["main", "dev"]);
+  });
+});
+
+/**
+ * GPT Sol's finding 1 on this slice: accepting `dev` as a deploy source opened a
+ * gap, because `preflight` only ever compared against `origin/main`. Each case
+ * below is a state that used to pass.
+ */
+describe("trunkGap", () => {
+  it("refuses a stale trunk checkout that would promote code missing landed commits", () => {
+    // origin/main: A · local dev: A-B · origin/dev: A-B-C-D. `B` contains
+    // production, so the origin/main check is happy, and `C`/`D` vanish.
+    expect(trunkGap({ branch: "dev", sha: "b".repeat(40), trunkSha: "d".repeat(40) })).toBe(
+      "bbbbbbbb is not origin/dev (dddddddd) — pull, or push this work to dev first",
+    );
+  });
+
+  it("refuses a local commit that was never pushed to the trunk", () => {
+    // The other direction: ancestry would allow this, equality does not, and
+    // allowing it is the push-then-deploy convention bypassed.
+    expect(trunkGap({ branch: "dev", sha: "e".repeat(40), trunkSha: "a".repeat(40) })).toContain(
+      "is not origin/dev",
+    );
+  });
+
+  it("fails closed when the trunk cannot be read at all", () => {
+    expect(trunkGap({ branch: "dev", sha: "a".repeat(40), trunkSha: null })).toBe(
+      "could not read origin/dev — refusing rather than assuming it agrees",
+    );
+  });
+
+  it("says nothing when the candidate is exactly the trunk tip", () => {
+    expect(trunkGap({ branch: "dev", sha: "a".repeat(40), trunkSha: "a".repeat(40) })).toBeNull();
+  });
+
+  it("leaves the pre-flip main path alone, even when the trunk is unreadable", () => {
+    // Before the flip, `main` is trunk and production at once and the
+    // origin/main ancestry check already covers it. This must not start
+    // refusing deploys that work today.
+    expect(trunkGap({ branch: "main", sha: "a".repeat(40), trunkSha: null })).toBeNull();
+  });
+
+  it("keeps the trunk name and the deploy-source list as separate facts", () => {
+    // They overlap only during the changeover; conflating them is what made the
+    // gap invisible in the first place.
+    expect(TRUNK_BRANCH).toBe("dev");
+    expect([...DEPLOY_SOURCE_BRANCHES]).toContain(TRUNK_BRANCH);
+  });
+});
 
 describe("migrationState", () => {
   it("finds nothing pending when the ledger has caught up", () => {

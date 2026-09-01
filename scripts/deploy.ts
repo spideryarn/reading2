@@ -50,6 +50,7 @@ import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
   codeMayNotHaveShipped,
+  deployBranchProblem,
   describeRedirect,
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
@@ -65,6 +66,8 @@ import {
   rollbackAdvice,
   sawSmokeLine,
   scanSql,
+  TRUNK_BRANCH,
+  trunkGap,
   type Expected,
   type JournalEntry,
   type LogLine,
@@ -320,9 +323,14 @@ function takeLock(): () => void {
 async function preflight(): Promise<string> {
   step("Preflight");
 
-  const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-  if (branch !== "main") {
-    bad(`on branch '${branch}', not main`);
+  /* `--show-current` rather than `rev-parse --abbrev-ref HEAD`: the latter
+     returns a disambiguated `heads/dev` when a tag shares the branch's short
+     name, which would refuse a legitimate branch. Detached HEAD is `""` here
+     rather than `"HEAD"`, and deployBranchProblem names both. */
+  const branch = git("branch", "--show-current");
+  const branchProblem = deployBranchProblem(branch);
+  if (branchProblem) {
+    bad(branchProblem);
     failures.push("branch");
   } else {
     ok(`on ${branch}`);
@@ -341,6 +349,24 @@ async function preflight(): Promise<string> {
     failures.push("behind origin");
   } else {
     ok(`origin/main is an ancestor${ahead ? `, ${ahead} commit(s) to push` : ", nothing to push"}`);
+  }
+
+  /* The check above proves the candidate contains current *production*. Once the
+     trunk is `dev`, it says nothing about whether it contains current *trunk* —
+     see `trunkGap`, which is where the whole reasoning lives. Only runs when
+     standing on the trunk, so the pre-flip `main` path is untouched. */
+  if (branch === TRUNK_BRANCH) {
+    const fetched = run("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"]);
+    let trunkSha: string | null = null;
+    if (fetched.code === 0) {
+      try {
+        trunkSha = git("rev-parse", `origin/${TRUNK_BRANCH}`);
+      } catch {
+        trunkSha = null;
+      }
+    }
+    const problem = trunkGap({ branch, sha, trunkSha });
+    gate(`level with origin/${TRUNK_BRANCH}`, problem === null, () => problem ?? "");
   }
 
   /* Information, not a gate. A push ships commits, so somebody else's edits are

@@ -6,6 +6,13 @@
 
   "regions": ["lhr1"],
 
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  },
+
   "functions": {
     "api/**": {
       "maxDuration": 800,

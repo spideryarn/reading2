@@ -66,6 +66,10 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh
   handshake.
+- **[worktrees.md](worktrees.md)** — the plan to stop thirteen agents sharing one checkout, and
+  the operational half of it: what the trunk move to `dev` costs, why the local Supabase stays
+  shared for now (measured, and it is not the RAM that blocks it), and the two runbooks that are
+  written but not yet run — flipping the trunk, and getting the Mac out of Dropbox.
 
 Connecting to the **remote** database — which host, the SSL `pg` does not do by default, and the
 command that migrated the wrong machine while printing success — is in

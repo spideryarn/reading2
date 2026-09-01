@@ -63,6 +63,38 @@ checkable property — which is what a sweep needs. Greg has chosen the dev-bran
 
 ### Status
 
+**Step 0 was split on 2026-09-01, and the half that disturbs nobody is built.** Greg:
+
+> There are a bunch of other agents working right now, and I'd prefer not to disrupt them. So let's
+> go as far as we can without messing up their work, which may block us on switching this primary
+> checkout to dev, etc.
+>
+> — Greg, 2026-09-01
+
+So: `deploy.ts` accepts `dev` (via a new pure judgement `deployBranchProblem` in
+`scripts/deploy-checks.ts`, with five tests, four of them watched failing first), and `vercel.json`
+gets `git.deploymentEnabled.dev = false`. What is **not** done, because it moves the shared primary's
+branch and GitHub's default: creating `dev`, switching to it, and `git remote set-head`. That is now a
+runbook in [worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run),
+to be run in a quiet moment with Greg present. The Mac's route out of Dropbox is Runbook B in the same
+doc.
+
+**And four decisions arrived with it** — see [Open decisions](#open-decisions), where they are now
+marked. The one that changes this plan's design rather than merely settling a question is that **a
+worktree pushes straight to `dev`** rather than pushing a `worktree-*` branch to origin:
+
+> I want each worktree to push directly to dev, and then we'll tidy up the local worktree branch
+> afterwards.
+>
+> — Greg, 2026-09-01
+
+That deletes the preview-build problem for agent branches, removes stray refs from origin, and
+collapses the sweep's "did it land?" test to `git merge-base --is-ancestor HEAD origin/dev`. It costs
+one thing worth naming: **in-progress worktree commits have no remote copy**, so the
+push-at-the-end-of-a-piece-of-work convention is now the whole backup story rather than half of it.
+And it makes fetch-and-rebase mandatory before pushing, which is why the rebase ban has to be scoped
+to the shared primary — an agent applying it inside a worktree cannot complete the workflow.
+
 **Step 1 of the old seven is done and committed (`96c7661`, 2026-08-28). Nothing creates a worktree
 yet.** Steps 2 and 5 are largely deleted by the above. Read this section, [Step 0](#step-0-the-dev-branch-and-what-it-costs)
 and [What is left to do](#what-is-left-to-do); the middle of the document is the reasoning and can be
@@ -1207,7 +1239,20 @@ and the two should be decided together rather than growing two answers.
 
 Everything here needs Greg. The first four are new on 2026-08-31 and the first two block Step 0.
 
-0a. **Preview deploys on `dev`** — checked and **no longer the scary one**. `DATABASE_URL` and the
+0a. ~~**Preview deploys on `dev`**~~ — **decided and done, 2026-09-01.** `vercel.json` now carries
+   default-deny: `{"**": false, "main": true}`. It was first landed as the timid `{"dev": false}`,
+   on the worry that a wildcard might match `main` and leave `waitForDeployment` hanging on a
+   production build that never comes. **That worry was unfounded and the docs say so outright**:
+   *"If a branch matches multiple rules and at least one rule is `true`, a deployment will occur"*
+   ([Vercel](https://vercel.com/docs/project-configuration/git-configuration)). So the exact
+   `main: true` always wins and production is safe. Two details worth keeping: **`**` and not `*`**,
+   because minimatch's single star does not cross a slash and would miss `agent/foo` — verified
+   against the installed minimatch, not assumed; and taking the model keys off the Preview
+   environment is still worth doing, as defence in depth rather than as the fix. Caught by GPT Sol,
+   finding 2 in [the step-0 review](260828r-worktrees-step0-review-sol.md). Original reasoning
+   below, still accurate.
+
+   **Checked, and no longer the scary one.** `DATABASE_URL` and the
    service-role key are production-only, so a preview cannot reach the production database; it fails
    at the store. What remains is waste (a build per push, on one concurrent slot, that is guaranteed
    to 503) plus two small things: the model-provider keys are present on preview, and preview shares
@@ -1229,7 +1274,12 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    of text**, not the 75 MB a worktree would have copied, because the two large PDFs are already
    committed under `evals/pdf/` and most of `data/` is churn no test names.
 
-0c. **`.claude/worktrees/` inside Dropbox.** The plan is to leave worktrees where Claude Code puts
+0c. ~~**`.claude/worktrees/` inside Dropbox.**~~ **Moot on this box, deferred on the Mac (2026-09-01).**
+   Greg's answer was "this Linux box only, for now", and this box is at `/home/greg/code/spideryarn2`,
+   outside Dropbox — so there is nothing to decide here. The Mac keeps sharing one tree; getting it out
+   of Dropbox first, which deletes this question rather than answering it, is
+   [worktrees.md § Runbook B](../project/worktrees.md#runbook-b-the-mac-later), along with the
+   Dropbox-tolerant fallback if the move is not on yet. Original text: The plan is to leave worktrees where Claude Code puts
    them and set both Dropbox xattrs plus a `.gitignore` line. The alternative is a `WorktreeCreate`
    hook that relocates them off the Dropbox volume and runs `npm ci` at the same time, at the cost of
    `.worktreeinclude` and the cleanup marker. Worth a decision rather than a default — and it
@@ -1241,19 +1291,30 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    but not free, it will get worse with a dev server per worktree, and it is safe to delete. Unrelated
    to worktrees; found while measuring for them.
 
-1. **`data/` and Dropbox.** `node_modules` and `dist` are ignored; `data/` is not. Ignoring it stops
+1. **`data/` and Dropbox** — **moot on this box, still open on the Mac (2026-09-01)**, for the same
+   reason as 0c. `node_modules` and `dist` are ignored; `data/` is not. Ignoring it stops
    27 MB syncing but **deletes Dropbox's copy**, and that is 27 MB of pipeline output that cost model
    calls. Asked, not yet answered.
-2. **How many concurrent worktrees to list in `additional_redirect_urls`** (step 3). Ten was the
-   working assumption from "like today — 10+".
-3. **Is the manual `rm` after a `SIGKILL` acceptable** for the database lease (step 4)? The
-   alternative is a lease that can be held by two runs at once, which is worse, but it should be
-   Greg's call rather than assumed from step 1.
+2. ~~**How many concurrent worktrees to list in `additional_redirect_urls`**~~ (step 3) — **decided
+   2026-09-01: do not hardcode ten.** Greg: *"Conceivably we'd want to one day support >10 (e.g. 20 or
+   30), though I realise that would require us to scale up this box to support it."* So generate the
+   allow-list from one `WORKTREE_PORT_RANGE` constant, and make the port function **refuse** a port
+   outside it rather than trusting it — a port that is not on the list produces a sign-in that appears
+   to work and silently drops the return path. Raising the ceiling then costs one edit and a Supabase
+   restart. Ten is the starting number; the box is what caps it in practice.
+3. ~~**Is the manual `rm` after a `SIGKILL` acceptable** for the database lease (step 4)?~~ **Yes,
+   decided 2026-09-01.** Greg took the shared stack with a lease that never steals, accepting the
+   occasional hand-cleared lock over ever having two writers. He also asked whether a stack per
+   worktree would be affordable; it was measured, and RAM turns out not to be the blocker — the
+   `auth.users` foreign keys are. See
+   [worktrees.md § Why not a stack per worktree yet](../project/worktrees.md#why-not-a-stack-per-worktree-yet-measured-2026-09-01).
 4. **The Sentry gate allows preview deployments to report.** Greg asked for "only in production"; the
    gate implemented is "not on a laptop", so previews still report and are labelled by `environment`.
    Narrowing it to production-only is one condition if that is what he meant.
 5. **`.env.prod` is deliberately not provisioned into worktrees**, so an agent in one cannot deploy.
-   Confirm that is wanted.
+   Stated as an assumption on 2026-09-01 and not objected to, which is weaker than confirmed — but
+   `deployBranchProblem` now enforces the same thing at the branch level, refusing a `worktree-*`
+   branch by name so the reason is legible instead of a missing-credential failure halfway in.
 
 ## Open risks this plan does not close
 
