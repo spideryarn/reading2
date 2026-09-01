@@ -251,6 +251,60 @@ Four decisions worth a second look, each of which went against a plausible alter
   would buy a branch and nothing else. Named in the prop's own comment so it can be reopened if a
   referee is surprised by the absence.
 
+### Stage 3 — where the gap becomes visible
+
+[`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) reads the placement back in two
+places. `RefereeGap` is the second line on a result row the referee also placed — *"You: leans
+underpowered · −50 — Model: counts against — underpowered — −64"*, their judgement first, plus
+*"You and the model disagree here."* when the two point opposite ways. `Misses` is the sub-list
+under the results: **"Yours, that the model did not turn up"**, each with a jump into the passage.
+`CriteriaBand` grew a `comments` prop, threaded from `Reader` through `RefereeBand` and
+`RefereeSubMode`; the panel only reads it, because a placement is made from the prose and nowhere
+else. Two wording functions were exported rather than copied — `placementWords` out of
+`PlaceOnCriterion.tsx`, and `valenceSentence` pulled out of `valenceLabel` in
+[`src/web/valence.ts`](../../src/web/valence.ts) — so the label the referee pressed and the label
+they are shown cannot drift apart, which is the failure
+`tests/referee-criteria-panel.test.tsx` exists to catch.
+
+[`tests/referee-gap.test.tsx`](../../tests/referee-gap.test.tsx), ten cases, all watched red first
+over the real band. The one that matters most is not "both numbers are there" but **every digit
+inside the gap line collected and compared against the two that went in** — a mean, a difference or
+a rounded midpoint reads perfectly well and would pass a test that only looked for the strings it
+expected. The others: an ordinary reading note on the same block appears in neither list, a comment
+on another criterion appears under neither, and the referee's line survives `put(done)` replacing
+the row wholesale — which it does because it is drawn from the comments rather than from the run.
+
+Four decisions worth a second look:
+
+- **`valenceGap` still has no caller, and that is deliberate.** The stage brief expected this to be
+  the thing that gave it one. It measures *how far apart* two judgements are, which is what a
+  gap-sorted list ranks by; the disagreement sentence is about *direction*, and −100 against −5 is a
+  wide gap and the same answer. So the panel has a three-line `directionsDiffer` instead, and the
+  gap's magnitude is still waiting for the sorted list the plan defers. A call written to satisfy a
+  search for callers is worse than no call.
+- **"The model did not turn up" is said only when `status === "done"`.** A criterion still streaming,
+  or one that failed, gets *"Yours, and the model has not answered this criterion yet"* — the referee
+  may place passages before ever asking the model, which is the anchoring-friendly order, and calling
+  those misses would claim a search came back empty when it never ran.
+- **The misses list is placements only** — a comment naming a criterion with no number stays in the
+  gutter. Including the unscored ones is equally defensible and was passed over because the list is
+  read as *the referee's other judgement*; named at the point of the decision so it can be reopened.
+- **No swatch on either new line, and no colour anywhere in the block.** Both sides are already the
+  direction in words, so colour would be a fifth carrier of something four words say. A single hue
+  running between the two halves would also be the one number the feature refuses, drawn rather than
+  printed.
+
+Not built, and not cheap enough to sneak in: the **gap-sorted disagreement list across all
+criteria** stays deferred. Threading the comments through does not make it cheap — the sort is one
+line, and the question it begs (a ranking of the referee's own work, across criteria whose poles say
+different things) is the part the plan wanted thought about first.
+
+Stage 2's deferred **"default the picker to the criterion currently expanded in the panel"** is
+still deferred, and threading `comments` did **not** make it natural: it moves data the other way.
+The default needs the panel's *expanded criterion* — state `CriteriaPanel` does not lift and
+`AnnotateDialog` cannot see — and a defaulted criterion is a placement on the wrong one if the
+referee does not notice.
+
 ## The survey behind Stage 4
 
 A read-only sweep of the Referee area on 2026-09-01, looking for one shape: **a check that reports

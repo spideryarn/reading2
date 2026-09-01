@@ -59,10 +59,15 @@ export function useClaims(slug: string): ClaimsApi {
 
   /**
    * The paper's fingerprint, as the server last reported it. Three states, and
-   * the third earns the wrapper: `null` is *we have not been told*, and
-   * `{ hash: undefined }` is *the server checked and cannot tell*. Applying
-   * "unknown counts as stale" to a response that simply did not carry the field
-   * would put a warning on a run the moment it appeared.
+   * the third earns the wrapper: `null` is *we have not been told* — nothing
+   * has answered yet, or the fetch failed — and `{ hash: undefined }` is *the
+   * server checked and cannot tell*, which `isStale` counts as stale.
+   *
+   * The distinction is about **whether we heard from the server at all**, not
+   * about which keys the reply carried. A `sourceHash` the server computed as
+   * `undefined` does not survive `JSON.stringify`, so the two are
+   * indistinguishable in the parsed body and only the GET's own success branch
+   * knows which it is looking at — see it below.
    */
   const [fingerprint, setFingerprint] = useState<{ hash: string | undefined } | null>(null);
 
@@ -110,10 +115,17 @@ export function useClaims(slug: string): ClaimsApi {
           setLoadFailed(true);
         } else {
           setRun(body.run ?? null);
-          /* `in`, not truthiness: the server sends `sourceHash: undefined` —
-             which JSON drops — for a paper whose blocks it could not read, and
-             that is a real answer meaning "we checked and cannot tell". */
-          if ("sourceHash" in body) setFingerprint({ hash: body.sourceHash });
+          /* **Unconditionally, including when the field is missing.** A reply
+             that got here is the server's answer about this paper, so
+             `undefined` is not silence — it is "we checked and cannot tell",
+             which `isStale` counts as stale. That is the whole point of the
+             wrapper on `fingerprint`, and it is reachable only from here: the
+             server sends `sourceHash: undefined` for a paper whose blocks it
+             could not read, `JSON.stringify` deletes the key outright, and
+             `"sourceHash" in body` was therefore false for exactly the case the
+             state exists to carry. Silence is the *error* branch below, which
+             leaves the fingerprint `null`. */
+          setFingerprint({ hash: body.sourceHash });
         }
         setLoaded(true);
       })

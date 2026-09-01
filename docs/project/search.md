@@ -1085,10 +1085,18 @@ a hope.
   [Several searches at once](#several-searches-at-once-each-with-a-colour)); this half remains,
   and the case for changing it is much weaker, because "the letters I typed" and "what I meant"
   are not two criteria to compare so much as two ways of asking.
-- **No re-run of a stale search.** A saved search is answered against the article as it was; if the
-  article is re-extracted, hits whose blocks are gone are silently dropped and the rest may have
-  moved. Nothing says the run is out of date, where the tweet thread page does say exactly that
-  ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). A `sourceHash` on the run would fix it.
+- **A stale search is usually not announced, and never re-run.** A saved search is answered against
+  the article as it was; if the article is re-extracted, hits whose blocks are gone are silently
+  dropped and the rest may have moved. The machinery to say so is all there — runs carry a
+  `sourceHash`, [`src/search-stale.ts`](../../src/search-stale.ts) judges it, and
+  [`src/web/SearchPanel.tsx`](../../src/web/SearchPanel.tsx) has the banners — but **the searches
+  GET never sends the article's current fingerprint** (`sweepSearches` in
+  [`src/routes.ts`](../../src/routes.ts) answers `{ runs }` only; `readSearches`, the function that
+  reads both halves together, has no caller). So `useSearch` learns the fingerprint only from a
+  `begin` frame, and a reader who opens an article and looks at yesterday's searches is told
+  nothing. Referee mode's two panels do send it and do say it. Re-running from the banner is a
+  separate thing nobody has built; the tweet thread page is the model
+  ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)).
 - **Words mode has no whole-word or case-sensitive option.** Deliberately: find-on-page has a
   meaning readers already hold, and the reader who wants cleverness has the other toggle. But it is
   the first thing somebody will ask for.

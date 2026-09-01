@@ -75,10 +75,15 @@ export function useCriteria(slug: string): CriteriaApi {
 
   /**
    * The paper's fingerprint, as the server last reported it. Three states, and
-   * the third earns the wrapper: `null` is *we have not been told*, and
-   * `{ hash: undefined }` is *the server checked and cannot tell*. Applying
-   * "unknown counts as stale" to a response that simply did not carry the field
-   * would put a warning on every criterion at once.
+   * the third earns the wrapper: `null` is *we have not been told* — nothing
+   * has answered yet, or the fetch failed — and `{ hash: undefined }` is *the
+   * server checked and cannot tell*, which `isStale` counts as stale.
+   *
+   * The distinction is about **whether we heard from the server at all**, not
+   * about which keys the reply carried. A `sourceHash` the server computed as
+   * `undefined` does not survive `JSON.stringify`, so the two are
+   * indistinguishable in the parsed body and only the GET's own success branch
+   * knows which it is looking at — see it below.
    */
   const [fingerprint, setFingerprint] = useState<{ hash: string | undefined } | null>(null);
 
@@ -118,10 +123,17 @@ export function useCriteria(slug: string): CriteriaApi {
           setLoadFailed(true);
         } else {
           setRows(body.criteria ?? []);
-          /* `in`, not truthiness: the server sends `sourceHash: undefined` —
-             which JSON drops — for a paper whose blocks it could not read, and
-             that is a real answer meaning "we checked and cannot tell". */
-          if ("sourceHash" in body) setFingerprint({ hash: body.sourceHash });
+          /* **Unconditionally, including when the field is missing.** A reply
+             that got here is the server's answer about this paper, so
+             `undefined` is not silence — it is "we checked and cannot tell",
+             which `isStale` counts as stale. That is the whole point of the
+             wrapper on `fingerprint`, and it is reachable only from here: the
+             server sends `sourceHash: undefined` for a paper whose blocks it
+             could not read, `JSON.stringify` deletes the key outright, and
+             `"sourceHash" in body` was therefore false for exactly the case the
+             state exists to carry. Silence is the *error* branch below, which
+             leaves the fingerprint `null`. */
+          setFingerprint({ hash: body.sourceHash });
         }
         setLoaded(true);
       })
@@ -316,10 +328,19 @@ export function useCriteria(slug: string): CriteriaApi {
         }
       };
 
-      /* Behind whatever is already out for *this* row. `.then(patch, patch)`
-         rather than `.then(patch)` is the load-bearing part: a failed PATCH
-         must not stop the next one being sent, or one dropped connection wedges
-         that row's colour for the rest of the session. */
+      /* Behind whatever is already out for *this* row, so two choices cannot
+         land out of order.
+
+         **The thing that keeps the chain alive is `patch`'s own `try/catch`**:
+         it swallows the failure, so the promise it returns never rejects and
+         the next choice is always sent. The second handler in
+         `.then(patch, patch)` is a backstop for the day someone takes that
+         `catch` out — it costs nothing and it would then be the only thing
+         standing between one dropped connection and that row's colour being
+         wedged for the rest of the session. It is *not* what is doing the work
+         today, and this comment used to claim it was: removing it leaves
+         tests/referee-criteria-panel.test.tsx green, and only removing the
+         `try/catch` as well reddens it. */
       const next = (patching.current.get(id) ?? Promise.resolve()).then(patch, patch);
       patching.current.set(id, next);
       void next;

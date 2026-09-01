@@ -152,6 +152,10 @@ function mount(): void {
         createElement(CriteriaBand, {
           slug: SLUG,
           blocks: BLOCKS,
+          /* The referee has placed nothing, which is what every case in this
+             file is about — the model's own row. tests/referee-gap.test.tsx is
+             where the two judgements meet. */
+          comments: [],
           onJump: () => {},
           onFound: () => {},
         }),
@@ -549,5 +553,61 @@ describe("two colour choices for one row cannot land out of order", () => {
       "a failed colour PATCH stopped the next one, so this row's colour is stuck",
     ).toHaveLength(2);
     expect(JSON.parse(patches[1]?.body ?? "{}").colour).toBe(1);
+  });
+});
+
+/* --------------------------------------------- what the paper has done since -- */
+
+describe("a criterion answered about an older paper says so on the row", () => {
+  /** The sentence the referee reads. Not imported — `CriteriaPanel` inlines it. */
+  const WARNING = "answered about an earlier version of this paper";
+
+  /**
+   * Load one criterion off the GET, with whatever the server said about the
+   * paper's fingerprint, and wait for the row to reach the screen.
+   *
+   * `body` is passed through `JSON.stringify` exactly as `send` does on the
+   * server, so a `sourceHash: undefined` disappears here the same way it
+   * disappears on the wire — which is the whole of the bug this pins.
+   */
+  async function paint(current: string | undefined, answered: string | undefined): Promise<void> {
+    const row = diverging([-80], answered === undefined ? {} : { sourceHash: answered });
+    answer = () => Promise.resolve(json({ criteria: [row], sourceHash: current }));
+    mount();
+    await flush();
+    expect(host.textContent, "no criterion reached the screen at all").toContain(row.criterion);
+  }
+
+  it("warns when the server checked and could not fingerprint the paper", async () => {
+    /* The server answers `sourceHash: undefined` for a paper whose blocks it
+       could not read — see the GET in src/routes.ts. That is a real answer, and
+       `isStale` says unknown counts as stale from either side. It is also the
+       one that vanishes on the wire, so a client reading the key rather than the
+       value never sees it and quietly tells the referee nothing has moved. */
+    await paint(undefined, "h");
+    expect(
+      JSON.parse(JSON.stringify({ criteria: [], sourceHash: undefined })),
+      "the premise of this test is that JSON drops the key, and it no longer does",
+    ).not.toHaveProperty("sourceHash");
+    expect(host.textContent, "the referee was told nothing about a paper nobody could read").toContain(
+      WARNING,
+    );
+  });
+
+  it("says nothing when the paper is the one the criterion was answered about", async () => {
+    await paint("h", "h");
+    expect(host.textContent).not.toContain(WARNING);
+  });
+
+  it("warns when the paper has moved since the criterion was answered", async () => {
+    await paint("moved", "h");
+    expect(host.textContent).toContain(WARNING);
+  });
+
+  it("warns about a criterion saved before runs recorded what they answered", async () => {
+    /* The other half of `isStale`'s rule: a row with no fingerprint of its own
+       cannot be judged against a paper that has one either. */
+    await paint("h", undefined);
+    expect(host.textContent).toContain(WARNING);
   });
 });

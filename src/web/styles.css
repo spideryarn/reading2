@@ -6428,6 +6428,42 @@ td.text.has-hit[data-hues="8"] {
 .crit-valence-words { color: var(--ink); }
 .crit-valence-number { font-variant-numeric: tabular-nums; }
 
+/* **The referee's own judgement beside the model's**, and the sub-list of the
+   ones the model never turned up. src/web/CriteriaPanel.tsx § `RefereeGap`.
+
+   There is no swatch and no ramp here on purpose. The line is four words about
+   direction on each side — colour would be a fifth carrier of something the
+   words already say, and docs/project/colour-scales.md wants the words first.
+   It is also the reason nothing in this block is coloured *by value*: a single
+   hue running between the two halves would be the one number the whole feature
+   refuses, drawn instead of printed. */
+.crit-gap {
+  margin: 0.15rem 0 0 1.45rem;
+  font-size: 0.72rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
+
+.crit-misses { margin: 0.3rem 0 0; }
+.crit-misses-head {
+  margin: 0 0 0.15rem;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+  padding-top: 0.25rem;
+}
+.crit-miss-list { margin: 0; padding: 0; list-style: none; }
+.crit-miss { padding: 0.15rem 0; }
+/* Indented as the model's rows are, although there is no rank to indent past —
+   the two lists read as one column rather than as two shapes. */
+.crit-yours {
+  margin: 0.1rem 0 0 1.45rem;
+  font-size: 0.72rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
 .crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.72rem; }
 

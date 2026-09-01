@@ -233,12 +233,19 @@ describe("GET", () => {
     /* **And the fingerprint is absent here, which is worth pinning rather than
        glossing.** This fixture has no `blocks.json`, so the store answers
        `undefined` — and `JSON.stringify` deletes an `undefined` value outright,
-       so the key does not reach the wire at all. The client reads
-       `"sourceHash" in body`, so it correctly concludes *we have not been told*
-       and marks nothing stale, which is the same answer search's GET gives for
-       the same article and the safe way round to be wrong (`isStale`, and
-       useCriteria.ts § fingerprint). What must never happen is a *hash* here,
-       which would date the criteria to an article nobody read. */
+       so the key does not reach the wire at all. What must never happen is a
+       *hash* here, which would date the criteria to an article nobody read.
+
+       **What the client makes of that is not a fact this test establishes**,
+       and the sentence that used to stand here said it did: it reasoned that
+       `useCriteria` reads `"sourceHash" in body` and so "correctly concludes we
+       have not been told". Both halves were wrong. A key `JSON.stringify` drops
+       is a key `JSON.parse` does not produce, so that check was false for
+       exactly this reply and the hook marked nothing stale — the opposite of
+       what `isStale` requires, since unknown counts as stale from either side.
+       A body shape asserted here cannot say what a hook does with it; that
+       belongs to a test that runs the hook, and it is
+       tests/referee-criteria-panel.test.tsx § "answered about an older paper". */
     expect("sourceHash" in reply.body).toBe(false);
   });
 

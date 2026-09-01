@@ -129,8 +129,16 @@ function stepOf(valence: number): PlacementStep | null {
  * is not one of the five (a placement made by some future instrument, or by the
  * API directly) falls back to the direction in words, so there is no state this
  * cannot describe.
+ *
+ * **Exported for `CriteriaPanel`**, which prints the referee's placement beside
+ * the model's on a row they both reached. That is an import in the safe
+ * direction — a wording function travelling *out* of this file — and it is what
+ * keeps "leans underpowered" one string rather than two. Nothing about the
+ * model travels the other way; this file still renders no `DivergingResult`,
+ * which is the rule the header states and tests/referee-placement.test.tsx
+ * checks by rendering the section with loud model valences in scope.
  */
-function placementWords(valence: number, poles: RefereePoles): string {
+export function placementWords(valence: number, poles: RefereePoles): string {
   const step = stepOf(valence);
   return step ? placementLabel(step, poles) : valenceWords(valence);
 }

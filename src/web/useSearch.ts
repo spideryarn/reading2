@@ -210,11 +210,25 @@ export function useSearch(slug: string): SearchApi {
           setLoadFailed(true);
         } else {
           setRuns(body.runs ?? []);
-          /* `in`, not truthiness. The server sends `sourceHash: undefined` —
-             which JSON drops — for an article whose blocks it could not read,
-             and that is a real answer meaning "we checked and cannot tell".
-             An endpoint that does not carry the field at all is a different
-             thing and must not be read as one. */
+          /* **Guarded, and here that guard is load-bearing** — unlike in
+             useCriteria.ts and useClaims.ts, whose GETs do send a fingerprint
+             and where the same guard made "we checked and cannot tell"
+             unreachable, because a `sourceHash` of `undefined` does not survive
+             `JSON.stringify` and so is absent rather than present-and-undefined
+             after `JSON.parse`.
+
+             This endpoint sends **no fingerprint at all**: the searches GET
+             answers `{ runs }` and nothing else (src/routes.ts §
+             `sweepSearches`; `readSearches` in src/searches.ts is the half that
+             reads both together, and no route calls it). So setting the
+             fingerprint unconditionally here would put "answered about an
+             earlier version" on every saved search on every article, on the
+             strength of a key nobody sends. The consequence of leaving it is
+             the other way round and known: a saved run is judged only once a
+             `begin` frame in this session has carried a hash — until then the
+             panel says nothing, which is what docs/project/search.md § "No
+             re-run of a stale search" still records as open. Fixing that is a
+             route change, not a change here. */
           if ("sourceHash" in body) setFingerprint({ hash: body.sourceHash });
         }
         /* Loaded means *the question has been answered*, not *it succeeded*. A
@@ -448,10 +462,19 @@ export function useSearch(slug: string): SearchApi {
         }
       };
 
-      /* Behind whatever is already out for *this* run — see `patching`. The
-         `.then(send, send)` rather than `.then(send)` is the load-bearing part:
-         a failed PATCH must not stop the next one being sent, or one dropped
-         connection wedges that row's colour for the rest of the session. */
+      /* Behind whatever is already out for *this* run — see `patching` — so two
+         choices cannot land out of order.
+
+         **The thing that keeps the chain alive is `send`'s own `try/catch`**:
+         it swallows the failure, so the promise it returns never rejects and
+         the next choice is always sent. The second handler in
+         `.then(send, send)` is a backstop for the day someone takes that
+         `catch` out — it costs nothing and it would then be the only thing
+         standing between one dropped connection and that row's colour being
+         wedged for the rest of the session. It is *not* what is doing the work
+         today, and this comment used to claim it was; tests/use-search.test.ts
+         § "does not wedge the row" pins the outcome and says out loud that it
+         pins neither strand. */
       const next = (patching.current.get(id) ?? Promise.resolve()).then(send, send);
       patching.current.set(id, next);
       void next;

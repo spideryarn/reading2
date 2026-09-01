@@ -45,14 +45,30 @@
  * the plan's § 1 is about: the referee reads the paper before the model paints
  * on it.
  *
- * ## What is deliberately not here
+ * ## The referee's own valence, which is here now, and the rule it is under
  *
- * **The referee's own valence, and the disagreement list.** A passage can carry
- * two valences on one criterion — the model's and the referee's — and the whole
- * value is in the distance between them (src/referee-criteria.ts §
- * `valenceGap`). The referee's is a comment (`comments.criterion_id` +
- * `comments.valence`, drizzle/0043) and writing one is the next stage's work.
- * Nothing here averages, reconciles or shows one number.
+ * A passage can carry two valences on one criterion — the model's and the
+ * referee's — and the whole value is in the distance between them
+ * (src/referee-criteria.ts § `valenceGap`). The referee's is a comment
+ * (`comments.criterion_id` + `comments.valence`, drizzle/0043), made from a
+ * prose selection and never from this panel (src/web/PlaceOnCriterion.tsx says
+ * why at length). Since 2026-09-01 this panel reads it back in two places:
+ * `RefereeGap`, the second line on a row they both reached, and `Misses`, the
+ * placements the model never returned.
+ *
+ * **Two valences, never one.** Nothing here averages them, reconciles them,
+ * splits the difference or prints a single number. The referee's line comes
+ * first on the row, so what they read first is their own judgement rather than
+ * the one they might be reacting to, and the disagreement is said in a plain
+ * sentence rather than measured. tests/referee-gap.test.tsx collects every digit
+ * inside that line and compares it against the two that went in, because a mean
+ * would read perfectly well.
+ *
+ * ## What is deliberately still not here
+ *
+ * **A gap-sorted disagreement list across all criteria.** Deferred by the plan,
+ * and not because it is hard: a list sorted by disagreement is a ranking of the
+ * referee's own work, which wants thought before it wants code.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
@@ -62,15 +78,23 @@ import type {
   DivergingScale,
   RefereeCriterionConfig,
   RefereeCriterionKind,
+  RefereePoles,
   RefereeResult,
 } from "../referee-criteria.js";
 import { DEFAULT_DIVERGING_SCALE } from "../referee-criteria.js";
-import type { Block, BlockId } from "../types.js";
+import type { Block, BlockId, Comment } from "../types.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
 import { critsParam } from "./params.js";
+import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
-import { signedValence, valenceLabel, valenceToken, valenceWords } from "./valence.js";
+import {
+  signedValence,
+  valenceLabel,
+  valenceSentence,
+  valenceToken,
+  valenceWords,
+} from "./valence.js";
 
 /**
  * **Starter packs, taken from real referee forms** — Nature's, PLOS ONE's
@@ -153,11 +177,25 @@ const CRITERION_PRESETS: {
 export function CriteriaBand({
   slug,
   blocks,
+  comments,
   onJump,
   onFound,
 }: {
   slug: string;
   blocks: Block[];
+  /**
+   * **Every comment this reader has on the article**, of which the ones
+   * carrying a `criterionId` are the referee's own placements.
+   *
+   * Threaded down from `Reader` rather than fetched here, because `useComments`
+   * is already mounted for the whole page and a second copy of the list would
+   * be a second thing that can be stale — the gutter and this panel disagreeing
+   * about a judgement is worse than either of them being slightly behind.
+   * Read-only: a placement is *made* from a prose selection
+   * (src/web/PlaceOnCriterion.tsx), never from here, and this panel has no way
+   * to write one.
+   */
+  comments: readonly Comment[];
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — see the seam described on `found` in App.tsx. */
   onFound(next: Found[]): void;
@@ -211,6 +249,7 @@ export function CriteriaBand({
       api={api}
       slots={slots}
       active={on}
+      comments={comments}
       onToggle={toggle}
       onJump={onJump}
       onShow={(id) => {
@@ -244,6 +283,7 @@ function CriteriaView({
   api,
   slots,
   active,
+  comments,
   onToggle,
   onJump,
   onShow,
@@ -251,6 +291,7 @@ function CriteriaView({
   api: ReturnType<typeof useCriteria>;
   slots: Map<string, number>;
   active: string[];
+  comments: readonly Comment[];
   onToggle(id: string): void;
   onJump(blockId: BlockId): void;
   onShow(id: string): void;
@@ -283,6 +324,7 @@ function CriteriaView({
             row={row}
             slot={slots.get(row.id)}
             showing={active.includes(row.id)}
+            comments={comments}
             onToggle={() => onToggle(row.id)}
             onRetry={() => api.retry(row.id)}
             onRemove={() => api.remove(row.id)}
@@ -452,12 +494,108 @@ const KIND_NOTE: Record<RefereeCriterionKind, string> = {
     "Goes to the web and brings back sources. A passage with no source link is not shown, because you could not check it.",
 };
 
+/* ------------------------------------------- the referee's own placements -- */
+
+/**
+ * A comment the referee actually placed: it names a criterion *and* carries a
+ * number.
+ *
+ * The narrowing is the point rather than the convenience. `Comment.criterionId`
+ * and `Comment.valence` are both optional and independent — a comment naming a
+ * criterion without a number is the ordinary case, a referee who wrote a
+ * sentence and did not score it — so a `Comment` on its own cannot be printed
+ * beside the model's number, and a `?? 0` reaching for the missing half would
+ * print *"counts neither way"* over a judgement nobody made.
+ */
+interface Placement extends Comment {
+  criterionId: string;
+  valence: number;
+}
+
+/**
+ * **Which of the referee's comments are placements on this criterion.**
+ *
+ * Two filters and both matter. `criterionId === id` is the whole distinction
+ * between a review comment and a reading note
+ * (docs/project/comments.md § the referee's own placement) — an ordinary
+ * bookmark on the same paragraph is not a judgement and must never be shown as
+ * one. `valence !== undefined` is what makes it a *placement*: a note answering
+ * a criterion with no number has nothing to set against the model's, so it
+ * stays where it already is, in the gutter beside the passage.
+ *
+ * That second choice is the one to reopen if a referee is surprised. Including
+ * the unscored ones in the misses list below would also be defensible — the
+ * model missed the passage either way — and was passed over because the list is
+ * read as *the referee's other judgement*, and a row in it with no judgement in
+ * it would be the odd one out.
+ */
+function placementsOn(comments: readonly Comment[], criterionId: string): Placement[] {
+  return comments.filter(
+    (c): c is Placement => c.criterionId === criterionId && c.valence !== undefined,
+  );
+}
+
+/**
+ * **Matching is on criterion and block, and nothing finer.**
+ *
+ * A model result and a referee's comment both anchor to a `blockId`, and the
+ * comment additionally knows the offset of the words it was made on. Matching
+ * on the overlap of the two spans would be more precise and is **deferred**
+ * until same-block-different-passage is shown to be common: a paragraph is the
+ * unit a referee argues about, two placements in one paragraph on one criterion
+ * is not a shape anyone has produced yet, and the offsets on the two sides come
+ * from different things (the model quotes, the referee selects) so an overlap
+ * test would need `resolveCriterion`'s span arithmetic to mean anything.
+ *
+ * Where the referee has placed the same block twice on one criterion, the first
+ * wins and the rest fall into the misses list, which is visible rather than
+ * silent — they are still on screen, under a heading that says the model did
+ * not turn them up.
+ */
+function placementByBlock(placements: readonly Placement[]): Map<BlockId, Placement> {
+  const out = new Map<BlockId, Placement>();
+  for (const p of placements) if (!out.has(p.blockId)) out.set(p.blockId, p);
+  return out;
+}
+
+/**
+ * Reader-facing, and each is a fact about *this run* rather than about the
+ * paper — docs/project/copy.md, and the same care
+ * tests/referee-copy-is-about-the-model.test.ts takes over the empty state.
+ *
+ * The second exists because **a referee may place passages before ever asking
+ * the model**, which is the anchoring-friendly order and the one the whole mode
+ * would prefer. Calling those "misses" would say the model looked and found
+ * nothing, which is a claim about a search that has not happened.
+ */
+const MODEL_MISSED = "Yours, that the model did not turn up";
+const MODEL_HAS_NOT_ANSWERED = "Yours, and the model has not answered this criterion yet";
+
+/**
+ * Do these two point opposite ways?
+ *
+ * Zero is a real answer meaning *neither way* (src/web/valence.ts), so it never
+ * disagrees with anything — a referee who said "counts neither way" against a
+ * model that said −64 has not contradicted it, they have declined to.
+ *
+ * **Not `valenceGap`.** That function measures how far apart two judgements are
+ * and is what a gap-*sorted* list would rank by; this sentence is about
+ * direction, and −100 against −5 is a wide gap and the same answer. The plan
+ * defers the sorted list, so `valenceGap` still has no caller — recorded here
+ * rather than given a made-up one, since a call written to satisfy a search for
+ * callers is worse than none.
+ */
+function directionsDiffer(referee: number, model: number): boolean {
+  return (referee < 0 && model > 0) || (referee > 0 && model < 0);
+}
+
 /* -------------------------------------------------------------- one row -- */
 
 function CriterionRow({
   row,
   slot,
   showing,
+  comments,
   onToggle,
   onRetry,
   onRemove,
@@ -467,6 +605,7 @@ function CriterionRow({
   row: SavedCriterionState;
   slot: number | undefined;
   showing: boolean;
+  comments: readonly Comment[];
   onToggle(): void;
   onRetry(): void;
   onRemove(): void;
@@ -474,6 +613,14 @@ function CriterionRow({
   onJump(blockId: BlockId): void;
 }) {
   const [picking, setPicking] = useState(false);
+  /* Only a `diverging` criterion has two ends, so only a `diverging` criterion
+     can hold a placement — `markProblem` refuses the rest, and there would be
+     no poles to print one between. */
+  const poles = row.config.kind === "diverging" ? row.config.poles : null;
+  const placements = poles === null ? [] : placementsOn(comments, row.id);
+  const byBlock = placementByBlock(placements);
+  const answered = new Set(row.results.map((r) => r.blockId));
+  const missed = placements.filter((p) => byBlock.get(p.blockId) !== p || !answered.has(p.blockId));
   return (
     <li className="crit-row">
       <div className="crit-head">
@@ -594,11 +741,74 @@ function CriterionRow({
             result={result}
             rank={i + 1}
             config={row.config}
+            placement={byBlock.get(result.blockId)}
             onJump={onJump}
           />
         ))}
       </ol>
+
+      {poles !== null && missed.length > 0 && (
+        <Misses
+          placements={missed}
+          poles={poles}
+          /* `done` is the only status under which "the model did not turn up"
+             is true. A run still streaming, or one that failed, has not looked
+             — and a row that says otherwise is the shape
+             docs/reusable/silent-success.md is about, with the referee told a
+             search came back empty when it never ran. */
+          answered={row.status === "done"}
+          onJump={onJump}
+        />
+      )}
     </li>
+  );
+}
+
+/**
+ * **"Yours, that the model did not turn up"** — the mirror image of the gap,
+ * and arguably the more valuable half.
+ *
+ * It exists only because the referee places a passage from the prose rather
+ * than from this panel: a control beside each model result could only ever
+ * collect judgements on passages the model had already surfaced, so the
+ * model's *misses* would be unreachable by construction
+ * (src/web/PlaceOnCriterion.tsx § it lives in the selection flow).
+ *
+ * No rank, deliberately. The number on a model row is that model's ordering of
+ * its own answers; the referee's placements have no such ordering and inventing
+ * one — by valence, by recency — would be this panel ranking the referee's
+ * work, which is the thing the plan defers on purpose.
+ */
+function Misses({
+  placements,
+  poles,
+  answered,
+  onJump,
+}: {
+  placements: readonly Placement[];
+  poles: RefereePoles;
+  answered: boolean;
+  onJump(blockId: BlockId): void;
+}) {
+  return (
+    <div className="crit-misses">
+      <p className="crit-misses-head">{answered ? MODEL_MISSED : MODEL_HAS_NOT_ANSWERED}</p>
+      <ul className="crit-miss-list">
+        {placements.map((p) => (
+          <li className="crit-miss" key={p.id}>
+            <button type="button" className="crit-jump" onClick={() => onJump(p.blockId)}>
+              <span className="crit-quote">{p.quote}</span>
+            </button>
+            {/* `crit-yours` and not `crit-gap`: there is no gap here, because
+                there is only one judgement. The class is the difference, and
+                tests/referee-gap.test.tsx counts on it — a shared class would
+                let a row with one judgement pass every assertion written about
+                a row with two. */}
+            <p className="crit-yours">{refereeSide(p.valence, poles)}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -615,11 +825,14 @@ function CriterionResult({
   result,
   rank,
   config,
+  placement,
   onJump,
 }: {
   result: RefereeResult;
   rank: number;
   config: RefereeCriterionConfig;
+  /** The referee's own placement of this same block, if they made one. */
+  placement: Placement | undefined;
   onJump(blockId: BlockId): void;
 }) {
   const diverging = result.kind === "diverging" && config.kind === "diverging";
@@ -671,6 +884,10 @@ function CriterionResult({
         </p>
       )}
 
+      {diverging && placement && (
+        <RefereeGap referee={placement.valence} model={result.valence} poles={config.poles} />
+      )}
+
       {result.reasoning && <p className="crit-why">{result.reasoning}</p>}
 
       {result.kind === "literature" && (
@@ -688,5 +905,71 @@ function CriterionResult({
         </p>
       )}
     </li>
+  );
+}
+
+/* --------------------------------------------- the referee's line on a row -- */
+
+/**
+ * The referee's half of the sentence — *"You: leans underpowered · −50"*.
+ *
+ * `placementWords` comes from src/web/PlaceOnCriterion.tsx, which is where the
+ * five positions and their labels are defined. Importing it rather than
+ * rebuilding the words here is what keeps the label the referee *pressed* and
+ * the label they are shown the same string; a second copy is how the two ends
+ * end up swapped in one of them.
+ */
+function refereeSide(valence: number, poles: RefereePoles): string {
+  return `You: ${placementWords(valence, poles)} · ${signedValence(valence)}`;
+}
+
+/**
+ * **Both judgements on one line, the referee's first.**
+ *
+ * The order is the design and not a layout preference. The referee's own
+ * placement is what they read first, so the model's number is not the thing
+ * they are reacting to — the same anchoring argument that put the placement
+ * instrument in the prose selection rather than in this panel
+ * (src/web/PlaceOnCriterion.tsx).
+ *
+ * **Two valences, never one.** There is no mean here, no difference, no arrow
+ * and no bar: `valenceGap` is explicit that averaging them, or letting one
+ * overwrite the other, deletes exactly the thing worth looking at
+ * (src/referee-criteria.ts). What the line offers instead is both numbers side
+ * by side and a sentence when they point opposite ways.
+ *
+ * ## Why this is plain text, where the row above it is four hidden spans
+ *
+ * `CriterionResult`'s valence paragraph splits into `aria-hidden` pieces with a
+ * `.sr-only` sentence beside them, because the visible version is a swatch and
+ * three fragments and a screen reader would otherwise hear them loose. This one
+ * is *already* one ordered sentence in words — the direction, the referee's own
+ * end and the number, on both sides — so there is nothing to hide and nothing
+ * to say twice. It carries no swatch for the same reason: colour would be a
+ * fifth carrier of something four words already say, and
+ * docs/project/colour-scales.md wants the words first, not the colour as well.
+ */
+function RefereeGap({
+  referee,
+  model,
+  poles,
+}: {
+  referee: number;
+  model: number;
+  poles: RefereePoles;
+}) {
+  return (
+    <>
+      <p className="crit-gap">
+        {refereeSide(referee, poles)} — Model: {valenceSentence(model, poles)}
+      </p>
+      {/* A plain sentence rather than a measured distance, and its own
+          paragraph rather than a word inside the line above, so that what the
+          referee sees is *that* they disagree and never *by how much* — the
+          number would be the single number this whole feature refuses. */}
+      {directionsDiffer(referee, model) && (
+        <p className="crit-disagree">You and the model disagree here.</p>
+      )}
+    </>
   );
 }

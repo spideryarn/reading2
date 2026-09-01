@@ -196,6 +196,18 @@ missing branch away from destroying a judgement nobody mentioned
 `create` under a stored id carrying a different valence is still a 409 rather than a re-score,
 deliberately: an edit has to say it is one.
 
+**And the panel reads it back, which is where the gap becomes visible.** A result row the referee
+also placed grows a second line with **their judgement first** — *"You: leans underpowered · −50 —
+Model: counts against — underpowered — −64"* — and a plain sentence, *"You and the model disagree
+here"*, when the two point opposite ways. Below the model's results, **"Yours, that the model did not
+turn up"** lists the placements no result matched, which is the model's *misses* and only reachable
+because the referee places a passage from the prose. Matching is on criterion and block; span
+overlap is deferred until same-block-different-passage is shown to be common. Nothing is averaged
+and no third number is drawn — `valenceGap` still has no caller, because a gap-*sorted* list across
+all criteria is a ranking of the referee's own work and is **not built**.
+[`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
+which collects every digit in that line and compares it against the two that went in.
+
 ### 2. Claims — where the paper addresses its own claims
 
 Pulls the claims the paper makes up front and, for each, lists the passages that address it, by

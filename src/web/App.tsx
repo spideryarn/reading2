@@ -13,6 +13,7 @@ import type {
   Block,
   BlockId,
   ChatThread,
+  Comment,
   GlossaryEntry,
   Idea,
   Quote,
@@ -2678,6 +2679,12 @@ function Reader({
              so that they can be left out of its own suggestions.
              docs/project/referee-mode.md, rule 4. */
           byline={article.meta.byline}
+          /* **The referee's own placements, for Criteria and for nothing
+             else** — the ones carrying a `criterionId`. Passed rather than
+             fetched again so the panel and the gutter cannot disagree about a
+             judgement; `useComments` is already mounted for the page.
+             docs/project/referee-mode.md § the referee's own mark. */
+          comments={comments}
           onJump={jumpTo}
           onFound={setRefereeFound}
         />
@@ -4447,6 +4454,7 @@ function RefereeBand({
   slug,
   blocks,
   byline,
+  comments,
   onJump,
   onFound,
 }: {
@@ -4462,6 +4470,16 @@ function RefereeBand({
    * is written here, in the prop, rather than left to be discovered in a diff.
    */
   byline?: string | undefined;
+  /**
+   * This reader's comments — **passed through to Criteria and read nowhere
+   * else**, and read-only there.
+   *
+   * A comment with a `criterionId` is the referee's own placement of a passage
+   * on one of their criteria, and the panel puts it beside the model's on the
+   * same block. One without is an ordinary reading note and is none of Referee
+   * mode's business. docs/project/comments.md § the referee's own placement.
+   */
+  comments: readonly Comment[];
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
@@ -4503,6 +4521,7 @@ function RefereeBand({
           slug={slug}
           blocks={blocks}
           byline={byline}
+          comments={comments}
           onJump={onJump}
           onFound={onFound}
         />
@@ -4598,6 +4617,7 @@ function RefereeSubMode({
   slug,
   blocks,
   byline,
+  comments,
   onJump,
   onFound,
 }: {
@@ -4605,6 +4625,8 @@ function RefereeSubMode({
   slug: string;
   blocks: Block[];
   byline?: string | undefined;
+  /** The referee's own placements. See `RefereeBand`, which says why. */
+  comments: readonly Comment[];
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
 }) {
@@ -4613,7 +4635,15 @@ function RefereeSubMode({
       /* **Stage 3.** Its band owns `?crits=` and pushes the marked passages up;
          src/web/CriteriaPanel.tsx is the whole of it, including the three
          visual rules it is under. */
-      return <CriteriaBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
+      return (
+        <CriteriaBand
+          slug={slug}
+          blocks={blocks}
+          comments={comments}
+          onJump={onJump}
+          onFound={onFound}
+        />
+      );
     case "claims":
       /* **Stage 4.** What the paper claims about itself and where it takes each
          claim up, in the paper's own order and never ranked by how much was

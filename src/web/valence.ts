@@ -99,9 +99,24 @@ export function signedValence(valence: number): string {
  * gets, in the identical order, and neither of them gets the colour.
  */
 export function valenceLabel(rank: number, valence: number, poles: RefereePoles): string {
+  return `${rank}. ${valenceSentence(valence, poles)}`;
+}
+
+/**
+ * The same three facts without the rank — *"counts against — underpowered —
+ * −64"*.
+ *
+ * Pulled out of `valenceLabel` rather than written a second time when the
+ * referee-vs-model line arrived (`CriteriaPanel`'s `RefereeGap`), which prints
+ * the model's judgement inside a sentence that already has the referee's in
+ * front of it and so has no rank to lead with. Two copies of this ordering
+ * would be two places for the poles to end up swapped, and swapping them is the
+ * failure tests/referee-criteria-panel.test.tsx exists to catch.
+ */
+export function valenceSentence(valence: number, poles: RefereePoles): string {
   const end = valence < 0 ? poles.against : valence > 0 ? poles.favour : null;
   const direction = valenceWords(valence);
   return end === null
-    ? `${rank}. ${direction}, ${signedValence(valence)}`
-    : `${rank}. ${direction} — ${end} — ${signedValence(valence)}`;
+    ? `${direction}, ${signedValence(valence)}`
+    : `${direction} — ${end} — ${signedValence(valence)}`;
 }
