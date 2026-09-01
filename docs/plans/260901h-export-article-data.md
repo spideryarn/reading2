@@ -383,6 +383,34 @@ from `data/` under other agents' work and it diffs red on an unmodified codebase
       attempted, and no test in this suite claims otherwise.
 
 
+## Open, and honestly unresolved
+
+**`tests/export-route.test.ts` 404s intermittently under heavy peer load.** Run alone it passes
+10/10, twice, reliably. In a batch alongside eight other suites with ~14 peer vitest processes
+against the one local Postgres, three of its cases failed — including *the owner still gets it*,
+which returned 404 where it should return 200.
+
+What has been ruled out, rather than assumed:
+- **Not a fixture-id collision** — its three uuids appear in no other test file, and
+  `fixture-ids.test.ts`'s docstring names "every test in the loser 404s" as exactly that symptom, so
+  this was the first suspect.
+- **Not a slug collision** — `test-export-route` is used nowhere else.
+- **Not a broad delete from another suite** — every `delete(articles)` in `tests/` is narrowed by id
+  or by that suite's own slug.
+- **Not a database error masquerading as a 404** — `sendExport` catches `ArticleNotFound` alone and
+  rethrows everything else, so a pool timeout surfaces as a 500, which is correct.
+
+So the mechanism is **not pinned**. The most plausible remaining explanation is connection
+starvation during the suite's own `beforeAll` seeding: the pool is `max: 5`, and Stage I's snapshot
+transaction now holds one connection for the whole walk where the previous parallel reads borrowed
+three briefly. That agent flagged the same risk unprompted after seeing one such failure.
+
+**Why it is being left:** the fix would be either a bigger pool (a system-wide change affecting every
+other agent on this box, and production pools per instance anyway) or giving up the snapshot, which
+is the correctness property Stage I existed to add. Neither is worth doing on the evidence of a
+contended dev box. **It is recorded rather than closed**, and if it is ever seen on a quiet machine
+or in production it is a real bug and this is the first place to look.
+
 ## What this is deliberately not doing
 
 - **Image bytes** (Greg's call) — `assets.json` names every image, hash and URL, so the bundle
