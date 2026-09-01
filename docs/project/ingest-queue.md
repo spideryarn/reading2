@@ -836,9 +836,12 @@ retry costs minutes of pipeline and another billed model call, which is a good d
 same mistake on a chat message.
 
 **What makes a failure permanent is Retry's own shape.** For an ordinary job `forceForRetry` forces
-nothing, so **a retry never re-runs a step that succeeded**. A stage that failed while reading an
-artefact an earlier step wrote will read that identical artefact again. That is what separates the
-two lists:
+nothing, so a retry never *forces* a step that already succeeded — but that is not the same as never
+rerunning one. Under Postgres a failed attempt's draft is discarded, and whatever its steps wrote
+went with it, so the new attempt's own freshness checks may find them gone and correctly rerun them
+anyway; only on the filesystem store, where an artefact really does stay on disk, is the skip
+guaranteed. A stage that failed while reading an artefact an earlier step wrote will read that
+identical artefact again. That is what separates the two lists:
 
 | Cannot come out differently | Might |
 |---|---|

@@ -496,12 +496,11 @@ async function readBlocks(
  * Is there a published revision behind this draft — the `basedOn` that
  * `beginDraftIn` copied its block rows from?
  *
- * **`articles.current_revision_id`, because the draft does not record its own
- * lineage.** There is no `based_on_revision_id` column (it is named in
- * `REVISION_CARRY_POLICY`'s comment as a column that *would* be harmful to
- * carry, not as one that exists), so the honest source is the article's current
- * publication — which is exactly the value `beginDraftIn` read as `basedOn` when
- * it made this draft, and which only moves when something publishes.
+ * **`articles.current_revision_id`, still, and now by choice rather than for
+ * want of anything better.** The honest source used to be the article's current
+ * publication, because the draft recorded no lineage — which is exactly the
+ * value `beginDraftIn` read as `basedOn` when it made this draft, and which only
+ * moves when something publishes.
  *
  * That makes the answer sound in the direction that matters. A published
  * revision cannot exist without blocks — `publishRevision` refuses a revision
@@ -510,9 +509,17 @@ async function readBlocks(
  *
  * The one case it can be wrong about is a first ingest for a slug that somebody
  * *else's* job published in between, which would turn a genuine mint into a
- * refusal. That is the safe direction, it needs two concurrent ingests of one
- * article, and the alternative — recording lineage on the draft — is a column
- * and a migration that landing D can add if this is ever seen.
+ * refusal. That is the safe direction, and it needs two concurrent ingests of
+ * one article.
+ *
+ * **`article_revisions.based_on_revision_id` exists since 2026-09-01**
+ * (drizzle/0047), written by `beginDraftIn` and never carried, and reading it
+ * off `ref.revisionId` would answer this question exactly rather than nearly —
+ * closing the concurrent-first-ingest case above. It is deliberately not done
+ * here: the column landed to close the publication race
+ * (`DraftBase` in src/store/pg-session.ts), the current answer is already wrong
+ * only in the safe direction, and changing what a stage decides to skip deserves
+ * its own change and its own test.
  */
 async function articleHasPublishedBlocks(exec: Executor, articleId: string): Promise<boolean> {
   const [row] = await exec

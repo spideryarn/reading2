@@ -341,6 +341,15 @@ const REVISION_READ_POLICY: Record<
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
   status: { publish: "value" },
+  /* **No reader, and that is the whole intent of the column.** The lineage a
+     draft records at mint (src/db/schema.ts, drizzle/0047) is read by exactly
+     one place — `openOrBeginJobDraft` in src/store/pg-revisions.ts, inside the
+     transaction that reopens the draft — and handed to the publication guard as
+     a `DraftBase` (src/store/pg-session.ts). That read is the store's own
+     lifecycle, not one of these projections, and nothing a reader draws depends
+     on which revision a draft was copied from. A grant here would widen a
+     projection for a fact no page prints. */
+  basedOnRevisionId: {},
 
   /* `metaFrom` — the reading view's masthead and the library card. */
   /* `metadata` reads these three because the freshness fingerprint of every

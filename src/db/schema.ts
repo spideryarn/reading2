@@ -44,6 +44,7 @@
 
 import { sql, type SQL } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -402,6 +403,45 @@ export const articleRevisions = spideryarn.table(
       .notNull()
       .references(() => articles.id, { onDelete: "cascade" }),
     status: text("status").notNull(),
+
+    /**
+     * **The revision this one was copied from** — written once, when the draft
+     * is minted, and never changed afterwards.
+     *
+     * `beginDraftIn` copies whichever revision is current at that moment
+     * (src/store/pg-revisions.ts), and this column is that value. It is the
+     * lineage a publication is checked against: `refuseIfBaseMoved`
+     * (src/store/pg-session.ts) refuses to move `articles.current_revision_id`
+     * off anything but the revision the draft actually saw, so a job that ran
+     * for minutes cannot bury a publication that landed while it ran.
+     *
+     * **It exists because reading the article's current revision instead is not
+     * the same question.** A job runs one step per HTTP request and reopens its
+     * draft on the next claim, so a draft can be minutes old by the time it
+     * publishes; asking the article what it is serving *now* answers with
+     * whatever landed in the meantime, which is exactly the value the guard is
+     * supposed to catch. It has to be recorded on the row at mint time or it is
+     * not recoverable at all. GPT Sol, 2026-08-31, finding 1 of
+     * docs/plans/260831b-stage3-items3and4-review-sol.md.
+     *
+     * **Null means copied from nothing** — an article's first draft — and it is
+     * also what a revision minted before 2026-09-01 carries, which the guard
+     * then reads as a base that does not match and refuses. Fail-closed is the
+     * right direction for a draft whose lineage nobody recorded.
+     *
+     * `mint` in `REVISION_CARRY_POLICY`, and that classification is the
+     * dangerous half of this column: carried, every draft would inherit its
+     * parent's base and the guard would compare the wrong pair for ever.
+     *
+     * `on delete set null` rather than cascade, for the same reason
+     * `jobs.draft_revision_id` has it: losing the base must not take the
+     * revision with it, and a lineage that has gone reads as "unknown, refuse"
+     * rather than as a licence.
+     */
+    basedOnRevisionId: uuid("based_on_revision_id").references(
+      (): AnyPgColumn => articleRevisions.id,
+      { onDelete: "set null" },
+    ),
 
     // The identity of the piece, as this extraction saw it — `Meta` in src/types.ts.
     title: text("title"),
