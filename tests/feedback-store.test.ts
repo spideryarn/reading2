@@ -163,6 +163,30 @@ async function seedUser(id: string, email: string): Promise<void> {
     on conflict (id) do nothing`);
 }
 
+/**
+ * **Open every connection the pool will hold, before racing anything through
+ * it.**
+ *
+ * Without this the concurrency tests below are not concurrent, and they say they
+ * are — which is the failure mode this whole file is written against. `pg`
+ * creates connections lazily and one at a time, so the first `Promise.all`
+ * against a cold pool hands the first transaction a socket and makes the other
+ * five wait for sockets that are still being opened; by the time they have one,
+ * the first has committed. Measured, 2026-08-31, with the advisory lock deleted:
+ * cold, six concurrent submits of one id gave `created` and five `duplicate`
+ * and the test stayed green; warm, the same six gave four uniqueness violations
+ * every run out of five.
+ *
+ * `poolMax()` in src/db/client.ts is five unless `DATABASE_POOL_MAX` says
+ * otherwise, and a transaction needs exactly one connection, so five is how many
+ * of these can genuinely overlap.
+ */
+const POOL_MAX = Number(process.env.DATABASE_POOL_MAX) || 5;
+
+async function warmPool(): Promise<void> {
+  await Promise.all(Array.from({ length: POOL_MAX }, () => getDb().execute(sql`select 1`)));
+}
+
 async function clear(): Promise<void> {
   const db = getDb();
   for (const owner of [ALICE, BOB]) {
@@ -210,6 +234,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await seedUser(ALICE, "feedback-alice@example.invalid");
     await seedUser(BOB, "feedback-bob@example.invalid");
+    await warmPool();
     await clear();
   });
 
@@ -363,20 +388,93 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(alice.kind).toBe("created");
   });
 
-  it("records that Sentry took it, and only then", async () => {
+  it("records the attempt and the acknowledgement as two different facts", async () => {
     const id = mintId();
     await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id })));
-    await runAsOwner(ALICE, () => pgFeedbackStore.markMirrored(id, "0123456789abcdef"));
+
+    /* Handed over, and nothing more. This is the state a report is left in when
+       Sentry is down, and it is the state that makes
+       `mirror_attempted_at is not null and mirrored_at is null` mean something. */
+    await runAsOwner(ALICE, () => pgFeedbackStore.markMirrorAttempted(id));
+    const handed = await runAsOwner(ALICE, () => pgFeedbackStore.read(id));
+    expect(Number.isNaN(Date.parse(handed?.mirrorAttemptedAt ?? ""))).toBe(false);
+    expect(handed?.mirroredAt).toBeNull();
+    expect(handed?.sentryEventId).toBeNull();
+
+    const marked = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.markMirrored(id, "0123456789abcdef"),
+    );
+    expect(marked).toBe(true);
     const stored = await runAsOwner(ALICE, () => pgFeedbackStore.read(id));
     expect(stored?.sentryEventId).toBe("0123456789abcdef");
     expect(Number.isNaN(Date.parse(stored?.mirroredAt ?? ""))).toBe(false);
 
-    /* Somebody else's report is not markable, for the same reason it is not
-       readable. Nothing throws — there is simply no such row for this owner. */
-    await runAsOwner(BOB, () => pgFeedbackStore.markMirrored(id, "deadbeef"));
+    /* **A second mark does not overwrite the first**, and says so. Two
+       acknowledgements for one report should not happen; if they ever do, the
+       first is the true one and the second is a thing to be able to see. */
+    const again = await runAsOwner(ALICE, () => pgFeedbackStore.markMirrored(id, "deadbeef"));
+    expect(again).toBe(false);
     expect((await runAsOwner(ALICE, () => pgFeedbackStore.read(id)))?.sentryEventId).toBe(
       "0123456789abcdef",
     );
+
+    /* Somebody else's report is not markable, for the same reason it is not
+       readable. Nothing throws — there is simply no such row for this owner. */
+    expect(await runAsOwner(BOB, () => pgFeedbackStore.markMirrored(id, "deadbeef"))).toBe(false);
+  });
+
+  /* ------------------------------------------------------- really at once -- */
+
+  /**
+   * **The two tests the advisory lock exists for, and until now nothing had
+   * one.**
+   *
+   * > The duplicate and cap tests are sequential. Delete the advisory-lock
+   * > statement and all of them still pass.
+   * >
+   * > — GPT Sol's code review, 2026-08-31
+   *
+   * Which was exactly true, and is the shape docs/reusable/silent-success.md
+   * warns about: a claim with a green test underneath it that cannot go red for
+   * the reason the claim is about. Both of these were run against
+   * src/store/pg-feedback.ts with the `pg_advisory_xact_lock` line deleted, and
+   * both went red — the first with a uniqueness violation, the second with
+   * eleven `created`.
+   *
+   * `Promise.all`, and not merely `await` in a loop: the whole property is that
+   * the transactions overlap. The pool is five connections by default
+   * (src/db/client.ts) and each transaction needs exactly one, so eleven of
+   * these queue rather than deadlock.
+   */
+  it("files one report when the same id arrives at the same moment, not merely twice", async () => {
+    const id = mintId();
+    const answers = await Promise.all(
+      Array.from({ length: POOL_MAX }, (_unused, i) =>
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, actual: `telling ${i}` }))),
+      ),
+    );
+    const kinds = answers.map((one) => one.kind).sort();
+    expect(kinds.filter((kind) => kind === "created")).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === "duplicate")).toHaveLength(POOL_MAX - 1);
+    /* And the database agrees, which is the half that is not about return
+       values: without the lock the losers raise a uniqueness violation on the
+       composite primary key rather than answering `duplicate`. */
+    expect(await rowsFor(ALICE, id)).toBe(1);
+  });
+
+  it("takes exactly ten when eleven arrive at the same moment", async () => {
+    const answers = await Promise.all(
+      Array.from({ length: FEEDBACK_HOURLY_CAP + 1 }, () =>
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() }))),
+      ),
+    );
+    const kinds = answers.map((one) => one.kind);
+    expect(kinds.filter((kind) => kind === "created")).toHaveLength(FEEDBACK_HOURLY_CAP);
+    expect(kinds.filter((kind) => kind === "limited")).toHaveLength(1);
+    /* The cap is about rows, so the rows are what is counted. `count` then
+       `insert` without the lock lets every one of these see the same count and
+       insert anyway, which is the whole reason the lock is there. */
+    expect(await rowsFor(ALICE)).toBe(FEEDBACK_HOURLY_CAP);
   });
 
   /**

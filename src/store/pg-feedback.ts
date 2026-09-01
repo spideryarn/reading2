@@ -44,7 +44,7 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
@@ -101,6 +101,7 @@ const REPORT_COLUMNS = {
   diagnostics: feedbackTable.diagnostics,
   diagnosticsVersion: feedbackTable.diagnosticsVersion,
   screenshotBytes: sql<number | null>`octet_length(${feedbackTable.screenshot})`,
+  mirrorAttemptedAt: feedbackTable.mirrorAttemptedAt,
   mirroredAt: feedbackTable.mirroredAt,
   sentryEventId: feedbackTable.sentryEventId,
   createdAt: feedbackTable.createdAt,
@@ -130,6 +131,7 @@ interface ReportRow {
   diagnostics: FeedbackDiagnosticsPayload;
   diagnosticsVersion: number | null;
   screenshotBytes: number | null;
+  mirrorAttemptedAt: Date | null;
   mirroredAt: Date | null;
   sentryEventId: string | null;
   createdAt: Date;
@@ -161,6 +163,8 @@ function toReport(row: ReportRow): FeedbackReport {
        what the `feedback_diagnostics_version` CHECK exists to make safe. */
     diagnostics: version === null ? null : { version, payload: row.diagnostics },
     screenshotBytes: row.screenshotBytes,
+    mirrorAttemptedAt:
+      row.mirrorAttemptedAt === null ? null : row.mirrorAttemptedAt.toISOString(),
     mirroredAt: row.mirroredAt === null ? null : row.mirroredAt.toISOString(),
     sentryEventId: row.sentryEventId,
     createdAt: row.createdAt.toISOString(),
@@ -192,6 +196,19 @@ export const pgFeedbackStore: FeedbackStore = {
         ? null
         : input.diagnostics;
 
+    /**
+     * **`read committed`, said out loud.**
+     *
+     * It is PostgreSQL's default, so this changes nothing today — and the
+     * correctness argument above *depends* on it, which is exactly why it is
+     * written down rather than inherited. Under `repeatable read` the lock
+     * statement can establish a snapshot before it starts waiting, so the reads
+     * after the wait would be taken from before the transaction that held the
+     * lock committed: the idempotency check would miss the row it is looking
+     * for, and the cap would count one short. GPT Sol's code review,
+     * 2026-08-31. A `default_transaction_isolation` set on the role or the
+     * database would do that silently, and nothing would fail on a laptop.
+     */
     return db.transaction(async (tx) => {
       /* Step 1. Everything below happens one submit at a time, per owner. */
       await tx.execute(
@@ -214,19 +231,35 @@ export const pgFeedbackStore: FeedbackStore = {
       /* Step 3. The cap, over the index this table has for exactly this query.
          The oldest rows rather than a bare `count`, because the same read
          answers both "how many" and "when does the window free up" — and it is
-         bounded by the cap, so it cannot grow into a scan. */
-      const since = new Date(Date.now() - FEEDBACK_WINDOW_MS);
+         bounded by the cap, so it cannot grow into a scan.
+
+         **One clock, and it is the database's.** The cutoff and the retry both
+         come from `now()` in the same statement that reads `created_at`, rather
+         than from `Date.now()` here. `created_at` is written by the database, so
+         comparing it against this process's clock made the cap sensitive to skew
+         between them — tighter than an hour in one direction and looser in the
+         other, on a serverless instance whose clock nobody watches. GPT Sol's
+         code review, 2026-08-31. `now()` is the transaction's start time, so it
+         is also the same instant for both halves of this. */
+      const windowSeconds = FEEDBACK_WINDOW_MS / 1000;
       const recent = await tx
-        .select({ createdAt: feedbackTable.createdAt })
+        .select({
+          retryAfterMs: sql<number>`ceil(extract(epoch from (${feedbackTable.createdAt} + make_interval(secs => ${windowSeconds}) - now())) * 1000)::double precision`,
+        })
         .from(feedbackTable)
-        .where(and(eq(feedbackTable.ownerId, ownerId), gte(feedbackTable.createdAt, since)))
+        .where(
+          and(
+            eq(feedbackTable.ownerId, ownerId),
+            sql`${feedbackTable.createdAt} >= now() - make_interval(secs => ${windowSeconds})`,
+          ),
+        )
         .orderBy(asc(feedbackTable.createdAt))
         .limit(FEEDBACK_HOURLY_CAP);
       const oldest = recent[0];
       if (recent.length >= FEEDBACK_HOURLY_CAP && oldest) {
         /* At least a millisecond: a `retryAfterMs` of 0 is a header that tells
            the client to try again immediately, for ever. */
-        const retryAfterMs = Math.max(1, oldest.createdAt.getTime() + FEEDBACK_WINDOW_MS - Date.now());
+        const retryAfterMs = Math.max(1, Math.ceil(Number(oldest.retryAfterMs)));
         logger.warn(
           { recent: recent.length, retryAfterMs },
           "feedback report refused: hourly cap",
@@ -281,7 +314,7 @@ export const pgFeedbackStore: FeedbackStore = {
         "feedback report filed",
       );
       return { kind: "created", report };
-    });
+    }, { isolationLevel: "read committed" });
   },
 
   async read(id: string): Promise<FeedbackReport | null> {
@@ -292,22 +325,48 @@ export const pgFeedbackStore: FeedbackStore = {
     return row ? toReport(row) : null;
   },
 
-  async markMirrored(id: string, sentryEventId: string | null): Promise<void> {
+  async markMirrorAttempted(id: string): Promise<void> {
+    /* **The honest half.** We have an event id, so the event exists and has been
+       handed to the SDK — nothing more than that, and this column says nothing
+       more than that. Owner-scoped like every other query here. */
+    const updated = await getDb()
+      .update(feedbackTable)
+      .set({ mirrorAttemptedAt: new Date() })
+      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), eq(feedbackTable.id, id)))
+      .returning({ id: feedbackTable.id });
+    logger.info({ id, rows: updated.length }, "feedback report handed to sentry");
+  },
+
+  async markMirrored(id: string, sentryEventId: string | null): Promise<boolean> {
     /* One statement, so `mirrored_at` and `sentry_event_id` cannot disagree —
        `feedback_mirrored_pair` refuses an event id with no time anyway, and this
        is what makes that constraint something nobody has to think about.
 
+       **`mirrored_at is null` in the WHERE**, so a second mark cannot overwrite
+       the first. Two acknowledgements for one report should not be possible, and
+       if they ever are, the first one is the true one and the second is a bug
+       worth being able to see rather than one that has already tidied itself up.
+
        Owner-scoped like every other query in this file. Updating nothing is not
-       an error: the row belongs to somebody else, or has been removed, and
-       neither is worth failing a mirror that has already happened over. */
+       an error: the row belongs to somebody else, has been removed, or was
+       already marked. */
     const updated = await getDb()
       .update(feedbackTable)
       .set({ mirroredAt: new Date(), sentryEventId })
-      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), eq(feedbackTable.id, id)))
+      .where(
+        and(
+          eq(feedbackTable.ownerId, currentOwnerId()),
+          eq(feedbackTable.id, id),
+          isNull(feedbackTable.mirroredAt),
+        ),
+      )
       .returning({ id: feedbackTable.id });
-    /* `rows` and not a bare "mirrored" line: an update that matched nothing and
-       one that marked the report look identical from here otherwise, and the
-       first is how `mirrored_at is null` would quietly stop meaning anything. */
-    logger.info({ id, rows: updated.length }, "feedback report mirrored");
+    /* **The answer, not a log line.** An update that matched nothing and one
+       that marked the report look identical from here otherwise, and the first
+       is how `mirrored_at is null` would quietly stop meaning anything. The
+       caller gets to decide what to do about it; this file says what happened. */
+    const marked = updated.length === 1;
+    logger.info({ id, marked }, "feedback report mirrored");
+    return marked;
   },
 };

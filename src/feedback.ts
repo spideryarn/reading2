@@ -45,35 +45,90 @@
  *
  * So both are replaced — `withIsolationScope(new Scope(), …)` in its two-argument
  * form, and a second `new Scope()` handed to `captureFeedback` — and the user is
- * re-added explicitly from the gate. tests/feedback-mirror.test.ts asserts on the
- * **final envelope**, not on the object handed to the SDK, because a test that
- * captures on a clean scope proves nothing; that is exactly how the first version
- * of this design got it wrong. `beforeSendFeedback` cannot serve as the allowlist
- * instead: it fires *before* scope capture.
+ * re-added explicitly from the gate. `beforeSendFeedback` cannot serve as the
+ * allowlist instead: it fires *before* scope capture.
  *
- * **What still rides, named rather than discovered later:** `server_name` (this
- * machine's hostname, or a Vercel instance's) and `contexts.runtime` (the Node
- * version), both added by `prepareEvent` after any hook can reach them. They are
- * facts about the server, not about the reader, and Sentry already has the
- * source maps for this project. Accepted, and written down.
+ * ## And replacing two scopes is **still** not enough
+ *
+ * `prepareEvent` starts from the **global** scope; the two above are merged into
+ * it. And an event processor runs after all three. GPT Sol's code review,
+ * 2026-08-31, reproduced global extras, a global attachment and a processor's
+ * additions all reaching the final envelope against exactly the code above.
+ *
+ * So the thing that actually closes this seam is a guard at the **envelope**,
+ * after every scope and every processor: src/feedback-envelope.ts, which
+ * rebuilds the outgoing item from what this file registers before it captures.
+ * Read that file's header; it is where the argument lives. Everything above
+ * stays anyway, because two independent mechanisms failing the same way is
+ * unlikely and the second one is free — the same argument `dataCollection` gets
+ * in src/monitoring.ts.
+ *
+ * tests/feedback-mirror.test.ts asserts on the **final envelope**, not on the
+ * object handed to the SDK, because a test that captures on a clean scope proves
+ * nothing; that is exactly how the first two versions of this design got it
+ * wrong, one after the other.
  *
  * ## It cannot throw, and it cannot fail the request
  *
  * Rule 2 of src/monitoring.ts. The row is already written and the reader has
  * been told their report is filed; a Sentry outage must not turn that into an
- * error for them. Nothing is mirrored unless there is a client to mirror to, so
- * `mirrored_at` never records a report that went nowhere — that column is the
- * query that finds anything stranded, and it only means something if it is
- * never written hopefully.
+ * error for them.
+ *
+ * ## `mirror_attempted_at` and `mirrored_at` are two different facts
+ *
+ * They were one, and that was wrong. `captureFeedback` returns an event id
+ * synchronously; the SDK sends later, `sendEvent` does not return the send
+ * promise, and `sendEnvelope` swallows every transport failure and resolves an
+ * empty `{}`. So a network failure, a rate limit, a dropped event or a disabled
+ * transport all used to leave `mirrored_at` populated with nothing delivered —
+ * docs/reusable/silent-success.md, in the one column that finds a stranded
+ * report.
+ *
+ * Now:
+ *
+ * - **`mirror_attempted_at`** is written as soon as the event is handed over.
+ *   That is a thing we know.
+ * - **`mirrored_at`** is written only for a 2xx from the transport, carried by
+ *   the `afterSendEvent` hook. Best-effort, with a two-second ceiling: if the
+ *   acknowledgement does not arrive the row honestly says *attempted, not
+ *   confirmed*.
+ *
+ * Which makes `mirror_attempted_at is not null and mirrored_at is null` a
+ * trustworthy query for a report Sentry did not take, which is the whole point
+ * of having either column.
+ *
+ * The wait happens **after the reader has been answered** — src/routes.ts starts
+ * this and awaits it on the far side of `send` — so it costs a warm function and
+ * never a spinner.
  */
+import type { TransportMakeRequestResponse } from "@sentry/core";
 import { captureFeedback, getClient, Scope, withIsolationScope } from "@sentry/node-core/light";
 
-import type { FeedbackScreenshot } from "./feedback-payload.js";
+import {
+  expectFeedbackEnvelope,
+  installFeedbackEnvelopeGuard,
+  type AllowedAttachment,
+  type FeedbackTagKey,
+  type FeedbackTagValue,
+} from "./feedback-envelope.js";
+import type { FeedbackScreenshot } from "./feedback-image.js";
 import { log } from "./log.js";
 import type { FeedbackReport } from "./store/contracts.js";
 import { feedbackStore } from "./store/index.js";
 
 const logger = log("http");
+
+/**
+ * How long to wait for Sentry to say it took the report, **after the reader has
+ * already been answered**.
+ *
+ * The same two seconds `flushMonitoring` allows, and for the same reason: the
+ * report is filed and the response is sent before this starts, so all that is
+ * being bought is the difference between a row that says *delivered* and a row
+ * that says *handed over*. Worth two seconds of a warm function; not worth
+ * holding a reader.
+ */
+const MIRROR_ACK_MS = 2000;
 
 export interface FeedbackMirrorInput {
   /** The report as it was **stored** — never the request body. */
@@ -84,7 +139,7 @@ export interface FeedbackMirrorInput {
    * come from the same place they always did: src/auth.ts.
    */
   user: { id: string; email: string };
-  /** Decoded, sniffed and named by us. `src/feedback-payload.ts`. */
+  /** Decoded, re-encoded and named by us. `src/feedback-image.ts`. */
   screenshot: FeedbackScreenshot | null;
 }
 
@@ -111,8 +166,16 @@ function message(report: FeedbackReport): string {
  * report's own shape. `report_id` is deliberately not here — it goes on the
  * scope beside the user, because those two are the fields that join this event
  * to a row and to a person, and they are set at the one seam that knows both.
+ *
+ * **The return type is the pin.** `FeedbackTagKey` is the guard's allowlist in
+ * src/feedback-envelope.ts, so a tag added here and not there is a compile
+ * error rather than a tag that silently stops arriving — which is the shape of
+ * failure an allowlist at a distance usually has.
  */
-function tagsFor(report: FeedbackReport, screenshot: FeedbackScreenshot | null) {
+function tagsFor(
+  report: FeedbackReport,
+  screenshot: FeedbackScreenshot | null,
+): Partial<Record<Exclude<FeedbackTagKey, "report_id">, FeedbackTagValue>> {
   return {
     route_kind: report.routeKind,
     consented: report.consented,
@@ -134,18 +197,23 @@ function tagsFor(report: FeedbackReport, screenshot: FeedbackScreenshot | null) 
  * boolean the caller can forget.
  */
 export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> {
+  const { report, user, screenshot } = input;
   try {
-    /* No client, nothing to mirror, and **nothing to record**. This is the
-       ordinary case on a laptop and under `npm test` (src/monitoring.ts: a DSN
-       and a deployment, or no Sentry), so it is the first thing asked. */
+    /* No client, nothing to mirror, and **nothing to record** — not even an
+       attempt. This is the ordinary case on a laptop and under `npm test`
+       (src/monitoring.ts: a DSN and a deployment, or no Sentry), so it is the
+       first thing asked. */
     const client = getClient();
     if (!client) return;
+    /* Before anything is captured. src/feedback-envelope.ts explains why this
+       is installed here rather than in `initMonitoring`. */
+    installFeedbackEnvelopeGuard(client);
 
-    const { report, user, screenshot } = input;
     /* The blob and the picture ride as envelope attachment items, which
        `client.sendEvent` appends from `hint.attachments` — verified against the
-       installed SDK, from Node, not only from a browser. */
-    const attachments = [
+       installed SDK, from Node, not only from a browser. The same array is
+       registered with the guard, which is what writes the final items. */
+    const attachments: AllowedAttachment[] = [
       ...(report.diagnostics === null
         ? []
         : [
@@ -160,54 +228,123 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
         : [
             {
               data: screenshot.bytes,
-              /* Ours, from the bytes. A client-supplied filename or MIME type
-                 never reaches here — see `sniffScreenshot`. */
+              /* Ours, from the bytes — and from a re-encode, not a sniff. See
+                 src/feedback-image.ts. */
               filename: screenshot.filename,
               contentType: screenshot.contentType,
             },
           ]),
     ];
 
-    const eventId = withIsolationScope(new Scope(), () => {
-      /* Both scopes, and read the header before changing either: a clean
-         current scope on its own was tried and still leaked, because the
-         isolation scope is merged whatever current scope you pass. */
-      const scope = new Scope();
-      scope.setClient(client);
-      /* Re-added explicitly, from the gate, and reduced to the same two fields
-         `safeUser` reduces an error's user to — which is the function that does
-         not run on this path. */
-      scope.setUser({ id: user.id, email: user.email });
-      /* So a Sentry item and a Postgres row name each other. */
-      scope.setTag("report_id", report.id);
-      return captureFeedback(
-        {
-          message: message(report),
-          /* **`email`, not `user.email`.** `contexts.feedback.contact_email` is
-             the field Sentry's feedback UI reads, and it is a different field
-             from the one on `user`. Both are set, from the same gate. */
-          email: user.email,
-          source: "spideryarn",
-          tags: tagsFor(report, screenshot),
-        },
-        { attachments },
-        scope,
-      );
+    const tags: Partial<Record<FeedbackTagKey, FeedbackTagValue>> = {
+      report_id: report.id,
+      ...tagsFor(report, screenshot),
+    };
+    /* Everything the envelope may contain, said **before** it is built, so the
+       guard writes it rather than inspects it. Forgotten again in `finally`
+       however this ends. */
+    const forget = expectFeedbackEnvelope(report.id, {
+      message: message(report),
+      contactEmail: user.email,
+      source: "spideryarn",
+      user: { id: user.id, email: user.email },
+      tags,
+      attachments,
     });
 
-    await feedbackStore.markMirrored(report.id, eventId ?? null);
-    /* Lengths and ids, never text — docs/project/logging.md. The three answers
-       are in the event, which the reader consented to; they are not in this
-       log, which they did not. */
-    logger.info(
-      { id: report.id, sentryEventId: eventId ?? null, attachments: attachments.length },
-      "feedback report mirrored to sentry",
-    );
+    /**
+     * **The acknowledgement, and the whole reason this function is shaped like
+     * this.**
+     *
+     * `captureFeedback` hands back an event id synchronously and the SDK sends
+     * later: `client.sendEvent` does not return the send promise, and
+     * `sendEnvelope` catches every transport failure and resolves `{}`. So the
+     * id proves the event was *built*, and nothing else. `afterSendEvent` is the
+     * one hook that carries what the transport actually answered.
+     */
+    let settle: ((response: TransportMakeRequestResponse | null) => void) | undefined;
+    const acknowledged = new Promise<TransportMakeRequestResponse | null>((resolve) => {
+      settle = resolve;
+    });
+    let eventId: string | undefined;
+    const off = client.on("afterSendEvent", (event, response) => {
+      if (event.event_id !== eventId) return;
+      settle?.(response);
+    });
+    /* `unref`, so a pending wait can never be the thing keeping a process
+       alive — the same care src/log.ts takes about its own timers. */
+    const timer = setTimeout(() => settle?.(null), MIRROR_ACK_MS);
+    timer.unref?.();
+
+    try {
+      eventId = withIsolationScope(new Scope(), () => {
+        /* Both scopes, and read the header before changing either: a clean
+           current scope on its own was tried and still leaked, because the
+           isolation scope is merged whatever current scope you pass. And even
+           both together are not enough — src/feedback-envelope.ts. */
+        const scope = new Scope();
+        scope.setClient(client);
+        /* Re-added explicitly, from the gate, and reduced to the same two fields
+           `safeUser` reduces an error's user to — which is the function that does
+           not run on this path. */
+        scope.setUser({ id: user.id, email: user.email });
+        /* So a Sentry item and a Postgres row name each other. */
+        scope.setTag("report_id", report.id);
+        return captureFeedback(
+          {
+            message: message(report),
+            /* **`email`, not `user.email`.** `contexts.feedback.contact_email` is
+               the field Sentry's feedback UI reads, and it is a different field
+               from the one on `user`. Both are set, from the same gate. */
+            email: user.email,
+            source: "spideryarn",
+            tags: tagsFor(report, screenshot),
+          },
+          { attachments },
+          scope,
+        );
+      });
+
+      /* **What we know at this moment, and only that.** The event has been
+         built and handed over; nothing has been delivered. */
+      await feedbackStore.markMirrorAttempted(report.id);
+
+      const response = await acknowledged;
+      const status = response?.statusCode;
+      const took = status !== undefined && status >= 200 && status < 300;
+      if (!took) {
+        /* Left as attempted-not-confirmed, which is the true thing to say. The
+           query that finds a stranded report is
+           `mirror_attempted_at is not null and mirrored_at is null`, and it only
+           means anything because of this branch. */
+        logger.warn(
+          { id: report.id, status: status ?? null },
+          "feedback report was not acknowledged by sentry",
+        );
+        return;
+      }
+      const marked = await feedbackStore.markMirrored(report.id, eventId ?? null);
+      /* Lengths and ids, never text — docs/project/logging.md. The three answers
+         are in the event, which the reader consented to; they are not in this
+         log, which they did not. */
+      logger.info(
+        {
+          id: report.id,
+          sentryEventId: eventId ?? null,
+          attachments: attachments.length,
+          marked,
+        },
+        "feedback report mirrored to sentry",
+      );
+    } finally {
+      clearTimeout(timer);
+      off();
+      forget();
+    }
   } catch {
     /* Rule 2 of src/monitoring.ts, and the reason it is a bare `catch`: there is
        nothing this function can usefully do about a failure, and everything it
        could try — including logging the error — is a second way to throw from
-       inside the path that must not. `mirrored_at is null` is how a stranded
-       report is found. */
+       inside the path that must not. */
   }
 }
