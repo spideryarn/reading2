@@ -451,6 +451,27 @@ branch rather than on whoever migrates next. Predicted as failure row 8 of
 [260828r-worktrees.md](../plans/260828r-worktrees.md), for two worktrees; it happened between two
 sessions in one tree.
 
+### Rule 4 on a laptop: the draft that ran, and the file that was committed
+
+`db-repair-migration-ledger.ts` does not clear a **rule 4** refusal — it repairs watermark gaps, and
+against a hash mismatch it reports *"nothing to reconcile"* while `db:migrate` keeps refusing. The
+laptop is then stuck with every later migration pending.
+
+It happened on 2026-09-01, to `0021_ai_calls_ledger` and `0036_drop_summary_column`. Neither file had
+changed since it was committed and neither ledger hash matched **any** committed version of it — the
+tell that this machine had applied a *working draft* and the file was tidied before it was committed.
+That is a laptop-only shape: nothing else ever runs uncommitted SQL.
+
+The remedy is to restamp those two rows' hashes, and the thing that makes it legitimate is doing what
+the repair script does — **probe the postconditions first, in the catalogue, not by reading the
+migration and believing it**. Here: `article_revisions.summary` gone, `revision_step_runs_step`
+holding exactly 0036's list, no orphan `summary` rows, `ai_calls` present with all its columns. A
+restamped row then means *"this database is at that migration's postcondition"*, the same weaker
+claim the repair script's header describes, and `npm run db:check` is what says so afterwards.
+
+**Against a remote, none of this applies**: a hash mismatch there means the published file was
+edited after it ran, which is a different and worse problem, and the answer is not a restamp.
+
 **Rows the journal has never heard of** get a policy rather than a rule, because a laptop
 legitimately carries them and production never should. Remote: refuse. Laptop with anything still
 pending: refuse, because an orphan row may be the same DDL as a pending migration under a new
