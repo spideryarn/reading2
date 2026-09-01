@@ -32,7 +32,7 @@ import { describe, expect, it } from "vitest";
 import { isSpideryarnId } from "../src/ids.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { checkTree } from "../src/tree-invariants.js";
-import { REVIEW_STANCES } from "../src/types.js";
+import { REMEMBER_STANCES } from "../src/types.js";
 import type { Block, ChatThread, Comment, SearchRun, ShelfState, Tree } from "../src/types.js";
 import { FIXTURE_ROOT, fixturePath, requireFixture } from "./helpers/require-fixture.js";
 
@@ -196,7 +196,7 @@ describe("the committed fixture corpus", () => {
       /* **The synthesised files are the one part of this corpus nothing wrote**,
          so they are the one part that could be shaped subtly wrong — a `kind`
          the union does not have, a `stance` spelled differently from the four.
-         Checked against `REVIEW_STANCES`, the exported list the route and the
+         Checked against `REMEMBER_STANCES`, the exported list the route and the
          client both use, rather than against a literal here that could drift.
 
          **Not read through `loadThreads`/`loadComments`/`loadRuns`, which would
@@ -226,7 +226,7 @@ describe("the committed fixture corpus", () => {
         for (const m of t.messages) {
           expect(["user", "assistant"]).toContain(m.role);
           expect(["pending", "done", "error"]).toContain(m.status);
-          if (m.stance) expect(REVIEW_STANCES).toContain(m.stance);
+          if (m.stance) expect(REMEMBER_STANCES).toContain(m.stance);
         }
       }
 

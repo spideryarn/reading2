@@ -4252,7 +4252,7 @@ td.text.has-hit[data-hues="8"] {
 .chat-send:disabled { opacity: 0.45; cursor: default; }
 .chat-send:not(:disabled):hover { border-color: var(--highlight); color: var(--highlight-ink); }
 
-/* ---- review mode's composer ----
+/* ---- Remember mode's composer ----
    Same component as chat's, two differences on screen: the box is a place to
    put a paragraph rather than a sentence, and the microphone is a labelled
    control rather than one icon among three.
@@ -4261,15 +4261,15 @@ td.text.has-hit[data-hues="8"] {
    probably emphasise the microphone UI, because talking will be much less
    annoying than typing."*
 
-   `.review` is on the `.mode-band` (ChatPanel's `<aside>`), so these are all
+   `.remember` is on the `.mode-band` (ChatPanel's `<aside>`), so these are all
    descendants rather than a second set of class names on the elements
    themselves — which keeps the chat rules the single definition of what a
    composer looks like, and these the delta.
 
    The ceiling is set inline by the component as the content grows (360px in
-   review, 160px in chat); `max-height` here has to allow it or the two would
+   Remember, 160px in chat); `max-height` here has to allow it or the two would
    silently disagree and the box would stop growing where the CSS said. */
-.review .chat-input {
+.remember .chat-input {
   max-height: 22.5rem;
   /* A shade larger than chat's 0.85rem. This is prose the reader is composing
      and will want to read back before sending, not a one-line question. */
@@ -4279,8 +4279,8 @@ td.text.has-hit[data-hues="8"] {
 /* The whole control row drops below the box rather than sitting beside it: at
    six rows tall, buttons aligned to `flex-end` beside the textarea sit level
    with its last line and read as belonging to nothing. */
-.review .chat-composer { flex-wrap: wrap; align-items: center; }
-.review .chat-input { flex-basis: 100%; }
+.remember .chat-composer { flex-wrap: wrap; align-items: center; }
+.remember .chat-input { flex-basis: 100%; }
 
 /* The bottom row reads left to right in the order the reader does things:
    talk, choose how the reply comes back, send. The DOM order cannot say that —
@@ -4288,12 +4288,12 @@ td.text.has-hit[data-hues="8"] {
    dictation button is rendered after it — so the three are ordered here.
    Without this the box wraps to `send · talk · stance`, which strands send at
    the far left of a full-width row with the stance at the far right. */
-.review .chat-talk { order: 1; }
-.review .chat-live { order: 2; }
-.review .chat-stance { order: 3; }
-.review .chat-send { order: 4; }
-.review .prof-row { order: 5; }
-.review .prof-listening { order: 6; }
+.remember .chat-talk { order: 1; }
+.remember .chat-live { order: 2; }
+.remember .chat-stance { order: 3; }
+.remember .chat-send { order: 4; }
+.remember .prof-row { order: 5; }
+.remember .prof-listening { order: 6; }
 
 .chat-talk {
   display: inline-flex;
@@ -4425,7 +4425,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
 }
 
-/* The tag on a review's row in the shared thread list. Quiet on purpose: it
+/* The tag on a Remember row in the shared thread list. Quiet on purpose: it
    distinguishes a minority of rows and must not read as a badge worth having. */
 .chat-thread-kind {
   white-space: nowrap;
@@ -11248,7 +11248,7 @@ table.only-prose thead { display: none; }
 }
 
 /* ------------------------------------------------------------------ quiz --
-   The Quiz sub-mode of Review — docs/plans/260831al-review-quiz-sub-mode.md.
+   The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
 
    **Deliberately minimal, and stage 2's whole visual budget.** The band's real
    design is stage 3, along with show-all, the collapsed reference answer, the
@@ -11262,7 +11262,7 @@ table.only-prose thead { display: none; }
 /* Recall | Quiz, in the band's head beside the title. Two toggle buttons, and
    the pressed one is filled — a pair where one is always on, so an outline-only
    treatment would leave a reader guessing which half they are looking at. */
-.review-submode {
+.remember-submode {
   display: flex;
   gap: 1px;
   margin-left: auto;
@@ -11271,7 +11271,7 @@ table.only-prose thead { display: none; }
   border-radius: 4px;
   overflow: hidden;
 }
-.review-submode-btn {
+.remember-submode-btn {
   border: 0;
   background: transparent;
   color: var(--ink-faint);
@@ -11280,8 +11280,8 @@ table.only-prose thead { display: none; }
   padding: 0.15rem 0.5rem;
   cursor: pointer;
 }
-.review-submode-btn:hover { color: var(--ink); }
-.review-submode-btn.on {
+.remember-submode-btn:hover { color: var(--ink); }
+.remember-submode-btn.on {
   background: var(--rule);
   color: var(--ink);
 }

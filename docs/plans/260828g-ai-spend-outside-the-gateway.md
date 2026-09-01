@@ -19,7 +19,7 @@ spend money that produces no row, in **three** different ways, on **two** differ
 
 | Where | How it calls | Account | Why there is no row |
 | --- | --- | --- | --- |
-| [`evals/review-stances.ts`](../../evals/review-stances.ts) | `converse` → chat wire | OpenRouter | metered, but no scope is open |
+| [`evals/review-stances.ts`](../../evals/remember-stances.ts) | `converse` → chat wire | OpenRouter | metered, but no scope is open |
 | [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts) | `converse` → chat wire | OpenRouter | metered, but no scope is open |
 | [`evals/embedding-retrieval.ts`](../../evals/embedding-retrieval.ts) | `embedAll` → chat wire | OpenRouter | metered, but no scope is open |
 | [`evals/embedding-retrieval.ts:933`](../../evals/embedding-retrieval.ts) — the judge | `new Anthropic()` | **Anthropic** | outside both seams |
@@ -114,7 +114,7 @@ written down once.
 
 `converse` and `embedAll` were measured all along and dropped on the floor because no collector was
 open. One line each at the entry point of
-[`review-stances.ts`](../../evals/review-stances.ts), [`prompt-caching.ts`](../../evals/prompt-caching.ts),
+[`review-stances.ts`](../../evals/remember-stances.ts), [`prompt-caching.ts`](../../evals/prompt-caching.ts),
 [`embedding-retrieval.ts`](../../evals/embedding-retrieval.ts) and
 [`rescue.mts`](../../evals/extraction/rescue.mts):
 

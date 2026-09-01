@@ -3,7 +3,7 @@
  *
  *   npm run quiz -- data/noema-mythology-of-conscious-ai
  *
- * Review mode today is free recall — the reader says what they took from the
+ * Remember mode today is free recall — the reader says what they took from the
  * article and the model shows them where that comes apart. This is the other
  * half of it, where the questions come from the article instead. Full design,
  * the cross-family review that rewrote most of it, and the spike that measured
@@ -11,7 +11,7 @@
  *
  * **Stage 2 wired it up.** It is a `StepName`, a `PipelineStep` in
  * src/pipeline.ts, a `quiz` jsonb column (drizzle/0046_quiz.sql),
- * `GET /api/quiz/:slug`, and a band behind `?mode=review&review=quiz`. Stage 1
+ * `GET /api/quiz/:slug`, and a band behind `?mode=remember&remember=quiz`. Stage 1
  * was this file, src/quiz-mark.ts and evals/quiz.ts and nothing else —
  * deliberately, because in this feature the prompt *is* the product and
  * everything else is plumbing around a page of instructions. The registration
@@ -590,7 +590,7 @@ export interface QuizRun {
 /**
  * **The generation prompt.**
  *
- * House style is `REVIEW_SYSTEM`'s in src/converse.ts: shouted section
+ * House style is `REMEMBER_SYSTEM`'s in src/converse.ts: shouted section
  * headings, rules stated as prohibitions with the reason attached, the failure
  * named rather than gestured at. Several rules here are the fix for something
  * the spike actually produced on `data/noema-mythology-of-conscious-ai`, and

@@ -337,7 +337,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call |
 | `SPIDERYARN_CHAT_MODEL` | the chat |
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
-| `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in the review quiz |
+| `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Remember's quiz |
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 

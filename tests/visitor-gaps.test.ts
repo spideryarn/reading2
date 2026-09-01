@@ -129,7 +129,7 @@ describe("what a visitor is told, mode by mode", () => {
    * could not know from a payload that carries no timeline either way.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "review", "diagram", "timeline"] as const) {
+    for (const mode of ["chat", "search", "remember", "diagram", "timeline"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -230,7 +230,7 @@ describe("what a visitor is told, mode by mode", () => {
        somebody says otherwise, and this one will spend money in stage 2.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "referee", "review", "search", "timeline"].sort(),
+      ["chat", "diagram", "referee", "remember", "search", "timeline"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes"] as const) {

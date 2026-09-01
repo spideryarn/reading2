@@ -56,11 +56,11 @@ function still(phase: LivePhase, over: Partial<LiveApi> = {}): LiveApi {
   };
 }
 
-/** The widths that matter: the dock, a narrow dock, and review's full width. */
+/** The widths that matter: the dock, a narrow dock, and Remember's full width. */
 const WIDTHS = [
   { px: 400, what: "the dock, as it usually is" },
   { px: 320, what: "the dock, squeezed" },
-  { px: 680, what: "review, full width" },
+  { px: 680, what: "Remember, full width" },
 ];
 
 const PHASES: { phase: LivePhase; what: string; over?: Partial<LiveApi> }[] = [
@@ -89,11 +89,11 @@ function Page() {
             <div className="case" key={`${p.phase}-${p.what}`}>
               <span className="what">{p.what}</span>
               {/* The panel's own class, so the composer inherits the widths and
-                  the orders the real one does. `.review` on the last column,
+                  the orders the real one does. `.remember` on the last column,
                   which is what makes the box six rows tall and labels the two
                   talking controls. */}
               <div
-                className={`chat-panel${w.px > 500 ? " review" : ""}`}
+                className={`chat-panel${w.px > 500 ? " remember" : ""}`}
                 style={{ width: `${w.px}px` }}
               >
                 <Composer

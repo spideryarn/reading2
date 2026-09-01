@@ -99,7 +99,7 @@ describe("an article", () => {
       referee: "Referee",
       diagram: "Diagram",
       chat: "Chat",
-      review: "Review",
+      remember: "Remember",
       timeline: "Timeline",
     };
     for (const mode of MODES) {

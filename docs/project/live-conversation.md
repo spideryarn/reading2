@@ -203,7 +203,7 @@ thread, and start a fresh seeded session if the reader wants one.
   clock — a session that kept itself alive by answering its own last question would be exactly the
   case the cap is for.
 - **Live conversation anywhere but chat.** Greg's "other places too later": the comment dialog and
-  the review composer. Chat was done first because it is the hardest — the only surface with a
+  Remember's composer. Chat was done first because it is the hardest — the only surface with a
   thread to keep in step.
 
 ## See also

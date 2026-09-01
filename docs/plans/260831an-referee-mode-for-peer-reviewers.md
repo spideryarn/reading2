@@ -43,7 +43,7 @@ were added back after the first draft dropped them. What was rejected, and why, 
 ## The name is `referee`, not `reviewer`
 
 `review` is already a mode — the reader says what they took from a piece and the model shows them
-where it comes apart ([review-mode.md](../project/review-mode.md)). A `reviewer` mode beside a
+where it comes apart ([remember-mode.md](../project/remember-mode.md)). A `reviewer` mode beside a
 `review` mode is one word meaning two things, which this repo has already paid for once
 ([modes.ts](../../src/modes.ts) on `toc`/`hierarchy`).
 
@@ -263,7 +263,7 @@ referee's sentences, never sentences the referee can paste.
 
 It reuses `review` mode's prompt and eval machinery ([`converse.ts`](../../src/converse.ts)), with an
 eval under `evals/` whose transcript a person reads, which is how
-[review-mode.md](../project/review-mode.md) says a prompt this load-bearing gets checked.
+[remember-mode.md](../project/remember-mode.md) says a prompt this load-bearing gets checked.
 
 ### 4. Candidates — who could review this, for an editor
 

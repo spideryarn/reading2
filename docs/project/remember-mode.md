@@ -1,10 +1,12 @@
-# Review mode — say what you took from it, and find out
+# Remember mode — say what you took from it, and find out
 
-**Built 2026-08-27.** The reader talks — or types — about what they got from the article, and the
-model helps them find where their account and the piece come apart. Four **stances** control how
-much it says: Balanced, Respond, Socratic, Signposts.
+**Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
+[260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
+types — about what they got from the article, and the model helps them find where their account and
+the piece come apart. Four **stances** control how much it says: Balanced, Respond, Socratic,
+Signposts.
 
-Greg, 2026-08-27:
+Greg, 2026-08-27, when it was still called Review:
 
 > I want to add a Review mode where the user types or talks … about what they've taken from the doc,
 > and then the agent responds plainly but concisely with any corrections/misunderstandings/
@@ -12,23 +14,24 @@ Greg, 2026-08-27:
 > annoying/patronising/superior, but at the same time the user is earnestly looking to deepen/correct
 > their understanding.
 
-Code: [`src/converse.ts`](../../src/converse.ts) § `REVIEW_SYSTEM`, `systemFor`, `stanceLine` (the
+Code: [`src/converse.ts`](../../src/converse.ts) § `REMEMBER_SYSTEM`, `systemFor`, `stanceLine` (the
 prompt and where each piece of it lands), [`src/chat.ts`](../../src/chat.ts) (`withTurn`,
 `withRetry`, `withEdit` — who owns a stance), [`src/routes.ts`](../../src/routes.ts) § `streamChat`
-(validation, the 409, `MAX_REVIEW_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
+(validation, the 409, `MAX_REMEMBER_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
 (one panel, parameterised by kind), [`src/web/App.tsx`](../../src/web/App.tsx) §
 `ConversationBand`.
-Tests: [`review-prompt.test.ts`](../../tests/review-prompt.test.ts),
-[`review-store.test.ts`](../../tests/review-store.test.ts),
-[`review-route.test.ts`](../../tests/review-route.test.ts),
-[`review-panel.test.tsx`](../../tests/review-panel.test.tsx).
-Eval: [`evals/review-stances.ts`](../../evals/review-stances.ts) — **read this before editing the
-prompt.**
-The plan, the reasoning and the cross-family review: [review-mode.md](../plans/260827ah-review-mode.md).
+Tests: [`remember-prompt.test.ts`](../../tests/remember-prompt.test.ts),
+[`remember-store.test.ts`](../../tests/remember-store.test.ts),
+[`remember-route.test.ts`](../../tests/remember-route.test.ts),
+[`remember-panel.test.tsx`](../../tests/remember-panel.test.tsx).
+Eval: [`evals/remember-stances.ts`](../../evals/remember-stances.ts) — **read this before editing
+the prompt.**
+The plan, the reasoning and the cross-family review:
+[260827ah-review-mode.md](../plans/260827ah-review-mode.md).
 
 ```
-   CHAT                                 REVIEW
-   ────                                 ──────
+   CHAT                                 REMEMBER
+   ────                                 ────────
 
    reader ──── question ────►           reader ──── what I think ────►
                                                                        model
@@ -47,7 +50,7 @@ The plan, the reasoning and the cross-family review: [review-mode.md](../plans/2
 [vision.md § Anti-goals](vision.md#anti-goals) names *"a chatbot with the article stuffed in the
 context window"*, and [260826a-chat-mode.md § Say the awkward thing
 first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first) is a long apology for building one anyway.
-Review needs no such apology, and the reason is structural rather than a promise: **the reader has to
+Remember needs no such apology, and the reason is structural rather than a promise: **the reader has to
 have read the piece before they can use it at all.** There is nothing to say otherwise, and the
 output is a set of paragraphs to go back to. vision.md's *recall* entry is the nearest thing already
 written down; this is that idea with the direction reversed, the reader supplying the answer first.
@@ -83,7 +86,7 @@ promise the code broke — the picker was still on Socratic, so the next turn wa
 ## The prompt is the feature
 
 Everything else here is plumbing around a page of instructions about tone, so
-[`evals/review-stances.ts`](../../evals/review-stances.ts) came **first** and runs again after every
+[`evals/remember-stances.ts`](../../evals/remember-stances.ts) came **first** and runs again after every
 prompt change: eight readers × four stances against a real article, read by a person. Each of the
 eight is a way the prompt has misbehaved rather than a spread of inputs — a reader who is right, one
 whose reading the piece genuinely permits, one who understood it and disagrees, one whose dictation
@@ -92,7 +95,7 @@ something the piece genuinely leaves open, and one who says only *"just tell me"
 conversation.
 
 The three faults that draft had are worth knowing before editing the prompt, because all three are
-the obvious thing to write. They are recorded in full on `REVIEW_SYSTEM` in
+the obvious thing to write. They are recorded in full on `REMEMBER_SYSTEM` in
 [`src/converse.ts`](../../src/converse.ts); in short:
 
 1. **It treated the model's reading as ground truth.** Socratic makes that worse than Respond does —
@@ -120,7 +123,7 @@ the prompt *said* correctly and the model did not do:
 
 ### What the first run showed
 
-`evals/results/review-stances.md`, 2026-08-27, Sonnet 5, 28 answers. The cases that were meant to be
+`evals/results/remember-stances.md`, 2026-08-27, Sonnet 5, 28 answers. The cases that were meant to be
 hard came out right: the reader who disagreed was engaged with as an interlocutor rather than
 corrected; the defensible reading was confirmed and then made more precise; the garbled dictation was
 read straight through to its meaning with the mangled words never mentioned; and Balanced **told**
@@ -149,7 +152,7 @@ fine. A green count with a patronising answer under it is the failure
 [silent-success.md](../reusable/silent-success.md) is about, so the report prints every answer in
 full and the pass condition is a person reading them.
 
-## A review conversation IS a chat thread
+## A Remember conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of
 the reuse comes from. Same table, same store, same streaming route, same citation contract, same
@@ -162,8 +165,8 @@ Two fields were added, and both are the kind that goes wrong quietly.
 ### `kind` belongs to the thread
 
 `ChatThread.kind` is **required**, not optional — an optional field means a `?? "chat"` at every read
-site and one of them would eventually be missed, which is a review answered with chat's prompt and
-nothing on screen disagreeing. Stored threads that predate the field are normalised to `"chat"` once
+site and one of them would eventually be missed, which is a Remember turn answered with chat's prompt
+and nothing on screen disagreeing. Stored threads that predate the field are normalised to `"chat"` once
 on load, in each store (`normaliseKind` in [`src/chat.ts`](../../src/chat.ts), and `threadsFor` in
 [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts)). Making it required is what turned this from a
 question of discipline into four compiler errors.
@@ -178,15 +181,15 @@ question of discipline into four compiler errors.
 - **Retry and edit send no kind at all** — their thread already has one, and the route 400s one that
   arrives. That refusal happens *before* `settleThread`, because a request rejected after it has
   already aborted the answer another tab's reader was watching.
-- **A review cannot be anchored.** No gesture starts one from a selection, so an anchor with
-  `kind: "review"` is a 400. That is worth more than tidiness: it means every mark in the prose
+- **A Remember thread cannot be anchored.** No gesture starts one from a selection, so an anchor
+  with `kind: "remember"` is a 400. That is worth more than tidiness: it means every mark in the prose
   belongs to a chat, which is what lets the floating `ChatDialog` go on being chat's.
 - **A stance on a chat is refused**, because the check constraint can only say "assistant rows
-  only" and the invariant is "review threads only". An invariant the database cannot express is one
+  only" and the invariant is "Remember threads only". An invariant the database cannot express is one
   the route has to.
 - **The length cap resolves the thread's kind too.** Reading only the request's was a bug: an edit
-  sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character review could
-  be created and then never rewritten.
+  sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character Remember
+  message could be created and then never rewritten.
 
 ### The stance belongs to the turn
 
@@ -218,7 +221,7 @@ distinguishes nothing.
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │  system:  SYSTEM  or  REVIEW_SYSTEM                    │  ← the KIND
+   │  system:  SYSTEM  or  REMEMBER_SYSTEM                  │  ← the KIND
    ├────────────────────────────────────────────────────────┤
    │  user:    the whole article, with block ids            │
    │           ▒▒▒▒▒ cache_control: ephemeral ▒▒▒▒▒         │  ← THE BREAKPOINT
@@ -247,26 +250,27 @@ article is written to the cache again every turn — the bug in
 
 "Two prefixes, paid once" is the normal path rather than an invariant: a cold first use earns nothing
 back unless a second request lands inside the TTL, concurrent cold requests can both write, and a
-change of model or tool set makes its own entry. `tests/review-prompt.test.ts` proves the bytes are
+change of model or tool set makes its own entry. `tests/remember-prompt.test.ts` proves the bytes are
 identical and **cannot** prove the provider read them; the eval run above reported
 `cacheReadTokens: 25226` against a 25k-token article, which is the half that costs money.
 
 ## On screen
 
 The mode band, the eighth value in `MODES`, last in the dock — the order runs outward from the
-article's own words to the conversation about it, and Review is one step further out again as the
+article's own words to the conversation about it, and Remember is one step further out again as the
 only mode whose content comes from the reader.
 
 **The list of conversations is shared.** Greg's call, 2026-08-27: both modes show every thread for
-this article, and a review carries a small `review` tag. Opening a thread of the other kind moves
-`?mode=` and `?thread=` together, in one navigation, or the Back stack gets an entry pairing chat
-mode with a review thread. Auto-start ("if there are none, start one") counts threads **of this
-kind**, or a reader with three chats and no reviews would press Review and be shown three chats.
+this article, and a Remember thread carries a small `remember` tag. Opening a thread of the other
+kind moves `?mode=` and `?thread=` together, in one navigation, or the Back stack gets an entry
+pairing chat mode with a Remember thread. Auto-start ("if there are none, start one") counts threads
+**of this kind**, or a reader with three chats and no Remember threads would press Remember and be
+shown three chats.
 
 The floating `ChatDialog` opens only for a thread whose summary says it **is** a chat — a positive
-test. `!== "review"` was the first version and had its default backwards: an unknown thread (a stale
-id, or summaries not yet fetched) came out as a chat, so a review URL flashed the chat dialog on
-every load and a missing thread sat on "Starting…" forever.
+test. `!== "remember"` was the first version and had its default backwards: an unknown thread (a
+stale id, or summaries not yet fetched) came out as a chat, so a Remember URL flashed the chat dialog
+on every load and a missing thread sat on "Starting…" forever.
 
 **One panel, parameterised by kind, not two panels.** The transcript, the scroll-follow, the citation
 chips, the tool strip, the retry, the editor and the stream recovery are identical in both; what
@@ -280,8 +284,8 @@ beside it and first place in the row. Greg:
 > the input box should be much larger for Review mode, and probably emphasise the microphone UI,
 > because talking will be much less annoying than typing.
 
-Because talking is the expected input, a review has **its own length limit**
-(`MAX_REVIEW_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
+Because talking is the expected input, a Remember turn has **its own length limit**
+(`MAX_REMEMBER_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
 typed question and an accident applied to a spoken paragraph, and a reader who talked for four
 minutes would have hit it after paying for the transcription. Same mistake `MAX_QUOTE_CHARS` had to
 be rescued from.
@@ -296,7 +300,7 @@ third claimant — is a keyboard problem nobody needs.
   keeps. The picker is seeded from the last answer's stance so the choice survives a return to the
   conversation.
 - **No no-spoilers rule keyed on `?at=`.** That parameter is where the reader is *now*, not how far
-  they have read, and the likeliest reviewer has finished the piece and scrolled back to the
+  they have read, and the likeliest reader here has finished the piece and scrolled back to the
   paragraph they want to talk about. Using it as a progress marker would suppress exactly the
   corrections the mode exists for. The prompt honours an *explicit* request instead.
 - **No "retry as a different stance".** Retry preserves the stored stance, which is the right

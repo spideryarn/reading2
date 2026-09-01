@@ -54,7 +54,7 @@ export const SITE_TERMS: readonly string[] = [
   "block ids of the form spya-k3m9qt",
   "the shelf",
   "reading view",
-  "review mode",
+  "remember mode",
   "glossary",
   "table of contents",
 ];

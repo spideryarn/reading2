@@ -67,7 +67,7 @@ import type {
   LibraryEntry,
   LibraryHit,
   ListOptions,
-  ReviewStance,
+  RememberStance,
   SearchRun,
   ShelfState,
   ArcFound,
@@ -594,7 +594,7 @@ export interface ChatStore {
       question: string;
       anchor?: ChatAnchor;
       /**
-       * Chat or review — like `anchor`, applied **only when this turn creates
+       * Chat or Remember — like `anchor`, applied **only when this turn creates
        * the thread**. `withTurn` throws `ChatConflict` on one that contradicts
        * an existing thread rather than ignoring it, which is what makes the
        * rule hold under Postgres too: the route's own check runs inside
@@ -602,13 +602,13 @@ export interface ChatStore {
        */
       kind?: ThreadKind;
       /**
-       * How much a review answer should say — written onto the **pending**
+       * How much a Remember answer should say — written onto the **pending**
        * reply, in the same write as the question.
        *
        * `retry` and `edit` below take no stance, deliberately: theirs comes
        * from the answer they are replacing. See `ChatMessage.stance`.
        */
-      stance?: ReviewStance;
+      stance?: RememberStance;
     },
     now?: () => string,
   ): Promise<Turn>;

@@ -57,8 +57,9 @@ export const MODES = [
      rather than the paper.
      docs/plans/260831an-referee-mode-for-peer-reviewers.md.
 
-     **`referee` and not `reviewer`, because `review` is already in this list**
-     further down, and it is a different thing: there the reader says what
+     **`referee` and not `reviewer`, because `review` was already in this list**
+     further down (since renamed `remember`), and it is a different thing:
+     there the reader says what
      they took from a piece they have read for themselves. A `reviewer` mode
      beside a `review` mode is one word meaning two things, which is the exact
      collision `toc`/`hierarchy` above cost this repo a rename to get out of.
@@ -75,16 +76,33 @@ export const MODES = [
   "summary",
   "diagram",
   "ideas",
-  /* Review is the seventh, 2026-08-27, and the first mode whose content comes
-     from the reader rather than from the article: they say what they took from
-     it and the model helps them find where that comes apart. It cost this list
-     one word, like the five before it. docs/plans/260827ah-review-mode.md.
+  /* The seventh, 2026-08-27, and the first mode whose content comes from the
+     reader rather than from the article: they say what they took from it and
+     the model helps them find where that comes apart. It cost this list one
+     word, like the five before it. docs/plans/260827ah-review-mode.md.
 
      There is deliberately no `?stance=` beside `?thread=` below. The stance
      governs the next answer and changes nothing on screen, which is the rule
      this file keeps — the closest existing thing is chat's profile checkbox,
-     which is component state for the same reason. */
-  "review",
+     which is component state for the same reason.
+
+     Renamed `review` → `remember` on 2026-09-01, at Greg's request, and the
+     reason is worth keeping straight because it is *not* the reason he gave.
+     He asked for the rename because he wanted the word free for a peer-review
+     mode; that mode then arrived as **Referee** rather than Reviewer (see
+     above), so the collision he feared never happened. The rename went ahead
+     anyway on the weaker but real case: *Review* still reads ambiguously
+     sitting beside a tool whose whole subject is peer review; *Remember* names
+     what the product is *for* — vision.md's "internalise and interrogate" —
+     where *Review* named only the mechanism; and it works as an umbrella over
+     the two sub-modes that now live under it, Recall and Quiz.
+
+     The cost, named rather than hidden: *Remember* can suggest saved memories
+     or spaced repetition, and this mode does neither. The dock blurb
+     (src/web/Dock.tsx) carries the weight of correcting that, so it has to
+     stay accurate.
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+  "remember",
   /* The eighth, 2026-08-28: the whole document as one nested list that never
      scrolls and expands around where the reader is. It costs this list one
      word like the six before it, and it is the first mode that is a second

@@ -39,7 +39,7 @@ import type {
   ChatAnchor,
   ChatMessage,
   ChatThread,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
   ToolRun,
 } from "../types.js";
@@ -170,7 +170,7 @@ export interface ChatApi {
      */
     anchor?: ChatAnchor,
     /**
-     * Chat or review — **only on the send that creates the thread**, and the
+     * Chat or Remember — **only on the send that creates the thread**, and the
      * server 409s one that contradicts a thread that already exists.
      *
      * Deliberately absent from `retry` and `edit` below: their thread already
@@ -179,7 +179,7 @@ export interface ChatApi {
      */
     kind?: ThreadKind,
     /**
-     * How much this answer should say — review turns only, and the reader's
+     * How much this answer should say — Remember turns only, and the reader's
      * current picker.
      *
      * Also absent from `retry` and `edit`, and that one is not symmetry: a
@@ -189,7 +189,7 @@ export interface ChatApi {
      * this rode along instead, moving the picker and then pressing retry would
      * silently rewrite the instruction attached to a stored turn.
      */
-    stance?: ReviewStance,
+    stance?: RememberStance,
     /**
      * The comment this conversation is being started from — **only on the send
      * that creates the thread**, and passed straight through to the server.
@@ -507,11 +507,15 @@ export function useChat(slug: string): ChatApi {
         type: "thread.begun",
         thread: {
           id,
-          /* A review's placeholder title says what it is, because the list is
-             shared: "New chat" sitting in a list the reader reached by pressing
-             Review is a small lie, and it is the row they are about to type
-             into. The real title arrives with the first thing they say. */
-          title: kind === "review" ? "New review" : "New chat",
+          /* A Remember thread's placeholder title says what it is, because the
+             list is shared: "New chat" sitting in a list the reader reached by
+             pressing Remember is a small lie, and it is the row they are about
+             to type into. The real title arrives with the first thing they say.
+
+             `kind === "review"` is the **persisted** thread kind, still spelled
+             the old way until Stage C migrates the column — src/types.ts §
+             ThreadKind. */
+          title: kind === "review" ? "Remembering" : "New chat",
           createdAt: at,
           updatedAt: at,
           /* An empty thread exists only in this tab, so this kind is a promise
@@ -550,7 +554,7 @@ export function useChat(slug: string): ChatApi {
       onThreadId?: (id: string) => void,
       anchor?: ChatAnchor,
       kind?: ThreadKind,
-      stance?: ReviewStance,
+      stance?: RememberStance,
       sourceCommentId?: string,
     ): string => {
       const id = threadId ?? mintId();
@@ -611,8 +615,8 @@ export function useChat(slug: string): ChatApi {
                   /* The optimistic row's own guess, and it has to be right
                      rather than defaulted: this thread is rendered — and
                      filtered by kind in the panel — in the frame before the
-                     server answers. A `?? "chat"` here would flash a new review
-                     into the list as a chat. */
+                     server answers. A `?? "chat"` here would flash a new
+                     Remember thread into the list as a chat. */
                   kind: kind ?? "chat",
                   messages: [],
                 },
@@ -639,7 +643,7 @@ export function useChat(slug: string): ChatApi {
             at,
             ...(useProfile ? {} : { useProfile: false }),
             ...(anchor ? { anchor } : {}),
-            /* Sent only when it is a review. A body with no `kind` means chat,
+            /* Sent only when it is a Remember turn. A body with no `kind` means chat,
                which is what every caller written before this feature meant, and
                what keeps an old tab working. */
             ...(kind === "review" ? { kind } : {}),

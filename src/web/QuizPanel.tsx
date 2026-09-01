@@ -1,7 +1,7 @@
 /**
  * **The Quiz band** — one question, an answer box, and the reply.
  *
- * The other half of Review. Free recall asks the reader what they took from the
+ * The other half of Remember. Free recall asks the reader what they took from the
  * article; this asks the questions the article itself would ask, from a batch
  * written once and cached as an artefact (src/quiz.ts).
  *
@@ -34,40 +34,40 @@ import { MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
 import type { QuizQuestion } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import type { UseQuiz } from "./useQuiz.js";
-import type { ReviewView } from "./params.js";
+import type { RememberView } from "./params.js";
 import { JobProgress } from "./JobProgress.js";
 import { useRenderCount } from "./perf.js";
 
 /**
- * **Recall | Quiz**, at the top of the Review band.
+ * **Recall | Quiz**, at the top of the Remember band.
  *
  * A control rather than two links, because the two are one choice — and it is
- * rendered by `ReviewBand` and handed to whichever panel is showing, so that
- * both halves of Review carry the same control in the same place rather than
+ * rendered by `RememberBand` and handed to whichever panel is showing, so that
+ * both halves of Remember carry the same control in the same place rather than
  * each growing its own.
  *
  * The navigation rules it triggers (clear `thread` in one step; Quiz wins a
- * pasted collision) are `ReviewBand`'s, in src/web/App.tsx. This component only
+ * pasted collision) are `RememberBand`'s, in src/web/App.tsx. This component only
  * says which half is open and asks for the other.
  */
-export function ReviewSubModeToggle({
+export function RememberSubModeToggle({
   value,
   onChange,
 }: {
-  value: ReviewView;
-  onChange(next: ReviewView): void;
+  value: RememberView;
+  onChange(next: RememberView): void;
 }) {
   return (
     /* No `role="group"`: each button already says what it is and whether it is
        pressed, and the two honest alternatives are worse — a `fieldset` needs a
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
-    <div className="review-submode">
+    <div className="remember-submode">
       {(["recall", "quiz"] as const).map((view) => (
         <button
           key={view}
           type="button"
-          className={`review-submode-btn${value === view ? " on" : ""}`}
+          className={`remember-submode-btn${value === view ? " on" : ""}`}
           /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
              buttons, not a tablist, and claiming to be a tablist without the
              arrow-key handling a tablist promises is worse than not claiming
@@ -87,7 +87,7 @@ export function QuizPanel({
   subMode,
 }: {
   owner: UseQuiz;
-  /** The Recall | Quiz control, built by `ReviewBand`. */
+  /** The Recall | Quiz control, built by `RememberBand`. */
   subMode?: React.ReactNode;
 }) {
   useRenderCount("QuizPanel");
@@ -148,7 +148,7 @@ export function QuizPanel({
     <aside className="mode-band gloss quiz" aria-label="Quiz">
       <div className="gloss-head">
         <MessageCircleQuestionMark size={14} className="gloss-head-icon" />
-        <h2>Review</h2>
+        <h2>Remember</h2>
         {subMode}
       </div>
 

@@ -10,7 +10,7 @@
  * check — a remark naming no comment, a misunderstanding with no quoted
  * passage, a broken reply becoming the friendly empty list. None of that can
  * tell you whether the model abstains, and abstention is the whole design.
- * Modelled on `evals/review-stances.ts`, which says the same thing at greater
+ * Modelled on `evals/remember-stances.ts`, which says the same thing at greater
  * length about the other prompt in this repo whose job is tone.
  *
  * ## The eight cases, and the wrong answer each one invites
@@ -30,7 +30,7 @@
  *
  * ## The paper is synthetic, and that is deliberate
  *
- * `review-stances.ts` points at a real article because its cases are only
+ * `remember-stances.ts` points at a real article because its cases are only
  * checkable against that article. Mirror's checkability runs the other way: the
  * eval has to know what a passage does and does not support in order to say
  * whether a "misunderstanding" is real. So the paper is five short passages

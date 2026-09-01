@@ -1,21 +1,21 @@
 /**
- * Eval — does Review mode's prompt behave when the reader is right, is
+ * Eval — does Remember mode's prompt behave when the reader is right, is
  * defensible, is garbled, or is lost?
  *
- *     npm run eval:review -- data/noema-mythology-of-conscious-ai
+ *     npm run eval:remember -- data/noema-mythology-of-conscious-ai
  *
  * **This one spends money**, and it is the reason the feature was built in the
- * order it was. Review's prompt *is* the feature: the schema, the panel and the
+ * order it was. Remember's prompt *is* the feature: the schema, the panel and the
  * composer are plumbing around a paragraph of instructions about tone, and
  * nothing deterministic can tell you whether that paragraph works.
- * tests/review-prompt.test.ts pins where the words go; only a model can say
+ * tests/remember-prompt.test.ts pins where the words go; only a model can say
  * what they do.
  *
  * ## Where the seven cases come from
  *
  * They are not a spread of inputs. Each one is a way the **first draft** of the
  * prompt would have misbehaved, taken from GPT Sol's review of
- * docs/plans/260827ah-review-mode.md — see the header on `REVIEW_SYSTEM` in
+ * docs/plans/260827ah-review-mode.md — see the header on `REMEMBER_SYSTEM` in
  * src/converse.ts for the three faults, and the table in the plan for the rest.
  * A case is here because there is a specific wrong answer it invites:
  *
@@ -48,8 +48,8 @@ import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
-import type { Block, ChatMessage, Meta, ReviewStance } from "../src/types.js";
-import { REVIEW_STANCES } from "../src/types.js";
+import type { Block, ChatMessage, Meta, RememberStance } from "../src/types.js";
+import { REMEMBER_STANCES } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -195,12 +195,12 @@ async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }
   return { meta, blocks };
 }
 
-/** One review turn, start to finish, with tools off so the run is about the prompt. */
-async function reviewOnce(
+/** One Remember turn, start to finish, with tools off so the run is about the prompt. */
+async function rememberOnce(
   meta: Meta,
   blocks: Block[],
   said: string,
-  stance: ReviewStance,
+  stance: RememberStance,
   history: ChatMessage[] = [],
 ): Promise<{ text: string; model: string; truncated: boolean; stopped: boolean }> {
   let text = "";
@@ -218,7 +218,10 @@ async function reviewOnce(
     blocks,
     history,
     question: said,
-    slug: "eval-review",
+    slug: "eval-remember",
+    /* The **persisted** thread kind, still spelled the old way until Stage C of
+       docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md
+       migrates the column. src/types.ts § ThreadKind. */
     kind: "review",
     stance,
     /* Our own tools off. They would make the run slower, dearer and
@@ -258,12 +261,12 @@ async function main(): Promise<void> {
     console.log(s);
   };
 
-  say(`# Review stances — ${meta.title ?? dir}`);
+  say(`# Remember stances — ${meta.title ?? dir}`);
   say();
   say(`Article: \`${dir}\` (${blocks.length} blocks)`);
   say();
   say(
-    "Seven readers × four stances. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of `evals/review-stances.ts`.",
+    "Seven readers × four stances. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of `evals/remember-stances.ts`.",
   );
   say();
 
@@ -279,11 +282,11 @@ async function main(): Promise<void> {
     say();
     say("> " + c.said.replace(/\n/g, "\n> "));
     say();
-    for (const stance of REVIEW_STANCES) {
+    for (const stance of REMEMBER_STANCES) {
       const started = performance.now();
-      let out: Awaited<ReturnType<typeof reviewOnce>>;
+      let out: Awaited<ReturnType<typeof rememberOnce>>;
       try {
-        out = await reviewOnce(meta, blocks, c.said, stance, c.history ?? []);
+        out = await rememberOnce(meta, blocks, c.said, stance, c.history ?? []);
       } catch (err) {
         say(`### ${stance} — FAILED`);
         say();
@@ -317,7 +320,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const total = CASES.length * REVIEW_STANCES.length;
+  const total = CASES.length * REMEMBER_STANCES.length;
   say("## Counts, which are not the answer");
   say();
   say(`- model: \`${model}\``);
@@ -332,7 +335,7 @@ async function main(): Promise<void> {
     "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, and whether `lost` was told rather than questioned — and only reading them says that.",
   );
 
-  const out = path.resolve(import.meta.dirname, "results", "review-stances.md");
+  const out = path.resolve(import.meta.dirname, "results", "remember-stances.md");
   await mkdir(path.dirname(out), { recursive: true });
   await writeFile(out, `${lines.join("\n")}\n`, "utf-8");
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);

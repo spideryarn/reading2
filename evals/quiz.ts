@@ -51,7 +51,7 @@
  *
  * ## The pass condition is read by a person
  *
- * Deliberately, as in evals/review-stances.ts. This is a judgement about tone
+ * Deliberately, as in evals/remember-stances.ts. This is a judgement about tone
  * and authority, and anything a regex could check would be checking the wrong
  * thing — a reply can contain none of the banned phrases and still read as a
  * school report. The counts below are a prompt to look, never a verdict. A
@@ -242,7 +242,7 @@ const CASES: readonly MarkCase[] = [
     /* Doubles as Sol's "reference unsupported by its evidence": the draft
        over-claims, and the reader is the one being careful. The article says we
        ought to worry about organoids; it never says it thinks one would be
-       conscious. That distinction is the same one evals/review-stances.ts had
+       conscious. That distinction is the same one evals/remember-stances.ts had
        to rewrite its `ambiguous` case to test. */
     watchFor:
       "The article does NOT settle this, and the draft asserts an answer. Does the reply mark it open, or pick the draft's side?",
@@ -299,7 +299,7 @@ const BANNED = [
   /* Added after run 1, which opened three of eight replies with "This tracks
      the article closely" and confirmed two more with "correctly". Both are a
      verdict on the answer as a whole wearing agreement's clothes, which is the
-     failure review mode's prompt names by hand and this one now does too. */
+     failure Remember mode's prompt names by hand and this one now does too. */
   "correctly",
   "rightly",
   "tracks the article",

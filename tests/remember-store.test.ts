@@ -2,10 +2,10 @@
  * **`kind` and `stance`: who owns them, and what happens when a stale client
  * disagrees.**
  *
- * These are the two fields review mode added to a conversation, and both of
+ * These are the two fields Remember mode added to a conversation, and both of
  * them are the kind of thing that goes wrong quietly:
  *
- *   - a **kind** written twice turns a review into a chat halfway through its
+ *   - a **kind** written twice turns a Remember thread into a chat halfway through its
  *     own transcript. The system prompt changes, the list tag changes, and the
  *     conversation still reads as one conversation.
  *   - a **stance** taken from the reader's current picker rather than from the
@@ -24,12 +24,17 @@
  */
 import { describe, expect, it } from "vitest";
 import { ChatConflict, withEdit, withRetry, withTurn } from "../src/chat.js";
-import type { ChatMessage, ChatThread, ReviewStance } from "../src/types.js";
+/* Every `"review"` below is the **persisted thread kind**, which Stage B of the
+   Remember rename deliberately leaves spelled the old way — the live
+   `chat_threads.kind` CHECK constraint still says `chat|review`, and Stage C
+   moves the literal, the schema and the rows together.
+   docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+import type { ChatMessage, ChatThread, RememberStance } from "../src/types.js";
 
 const AT = "2026-08-27T12:00:00.000Z";
 
 /** A thread as the store would hold it after `turns` question-and-answer pairs. */
-function threadWith(kind: "chat" | "review", stances: (ReviewStance | undefined)[]): ChatThread {
+function threadWith(kind: "chat" | "review", stances: (RememberStance | undefined)[]): ChatThread {
   const messages: ChatMessage[] = [];
   stances.forEach((stance, i) => {
     messages.push({ id: `spya-usr${i}aa`, role: "user", text: `q${i}`, createdAt: AT, status: "done" });
@@ -51,13 +56,13 @@ describe("a thread is one kind for life", () => {
     expect(thread.kind).toBe("review");
   });
 
-  it("is a chat when no kind is offered — what every pre-review caller means", () => {
+  it("is a chat when no kind is offered — what every pre-Remember caller means", () => {
     const { thread } = withTurn([], { threadId: "spya-newone", question: "q" }, AT);
     expect(thread.kind).toBe("chat");
   });
 
   /* THE test. Without the guard in `withTurn`, this second turn quietly
-     succeeds and every later answer in a review conversation is written with
+     succeeds and every later answer in a Remember conversation is written with
      chat's prompt. Nothing errors and nothing on screen disagrees. */
   it("refuses a second turn that contradicts it", () => {
     const existing = [threadWith("review", ["balanced"])];
@@ -152,7 +157,7 @@ describe("a retry re-asks the question the way it was asked", () => {
 });
 
 describe("an edit inherits from the answer it replaces, not from the tail", () => {
-  /* The sharper half of finding 4. Editing question 1 of a three-turn review
+  /* The sharper half of finding 4. Editing question 1 of a three-turn Remember thread
      discards turns 2 and 3 — which had different stances — and the reader's
      picker at that moment is seeded from turn 3's. Taking the tail's stance
      would answer a rewritten early question in the voice of a later turn that

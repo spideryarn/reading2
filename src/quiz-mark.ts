@@ -45,7 +45,7 @@
  * ## Confirming is allowed here; grading is not
  *
  * This is the one place quiz departs from free recall, and the distinction is
- * fault 6 in review-mode's list. A quiz question **has** a right answer and the
+ * fault 6 in remember-mode's list. A quiz question **has** a right answer and the
  * reader asked to be told, so *"yes: the passage treats X as Y [id]"* is a fact
  * about the article and is exactly what they wanted. *"Your answer was mostly
  * correct"* is a verdict on the person, and is the sentence to delete. The line
@@ -130,9 +130,9 @@ export const MARK_MAX_TOKENS = 1_200;
 /**
  * **The marking prompt.**
  *
- * Two thirds of it is `REVIEW_SYSTEM`'s entitlement section (src/converse.ts),
+ * Two thirds of it is `REMEMBER_SYSTEM`'s entitlement section (src/converse.ts),
  * carried over rather than reinvented because those rules are the fix for
- * specific failures a cross-family review found in review mode's first draft
+ * specific failures a cross-family review found in Remember mode's first draft
  * and every one of them applies here. The parts that are new are the two this
  * mode has and free recall does not: a reference answer that must not become an
  * answer key, and a question that genuinely has a right answer.

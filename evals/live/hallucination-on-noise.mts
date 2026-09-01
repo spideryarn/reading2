@@ -71,7 +71,7 @@ const SECONDS = 18;
 /** A stand-in for the real thing — the shape that matters is "a list of jargon". */
 const VOCABULARY =
   "Spideryarn, granularity zoom, gist column, block id, block ids of the form spya-k3m9qt, " +
-  "the shelf, reading view, review mode, glossary, table of contents, computational " +
+  "the shelf, reading view, remember mode, glossary, table of contents, computational " +
   "functionalism, substrate independence, qualia, Anil Seth, Ex Machina, Hinton, " +
   "phrenology, Alimentiveness, Broca, the hard problem of consciousness";
 

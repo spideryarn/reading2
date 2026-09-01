@@ -126,7 +126,7 @@ const ARTEFACT: Partial<Record<Mode, keyof PublicArtefacts>> = {
 const COSTS: Partial<Record<Mode, string>> = {
   search: "Search",
   chat: "Chat",
-  review: "Review",
+  remember: "Remember",
   /**
    * **Diagram is here rather than under `ARTEFACT`, and it is the one judgement
    * call in this table.**

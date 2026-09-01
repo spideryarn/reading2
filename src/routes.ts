@@ -263,7 +263,7 @@ import type {
   IdeasResponse,
   QuotesResponse,
   SketchResponse,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
   ThreadResponse,
   ThreadSummary,
@@ -289,8 +289,8 @@ import {
 } from "./types.js";
 /* A value, not a type — the one list the stance is validated against, shared
    with the client's picker so a fifth stance cannot be accepted here and
-   missing from the menu. src/types.ts § REVIEW_STANCES. */
-import { REVIEW_STANCES } from "./types.js";
+   missing from the menu. src/types.ts § REMEMBER_STANCES. */
+import { REMEMBER_STANCES } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1475,11 +1475,18 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      silent fall back to the default: a client that sends `stance: "socratik"`
      and gets a 200 has no way to learn that every answer it receives was
      `balanced`, and neither has the reader. Same reasoning as the `kind` check
-     below, and the same reason `REVIEW_STANCES` is one exported list rather
+     below, and the same reason `REMEMBER_STANCES` is one exported list rather
      than a set of string literals written out again here. */
-  if (stance !== undefined && !REVIEW_STANCES.includes(stance as ReviewStance)) {
-    throw httpError(400, `stance must be one of: ${REVIEW_STANCES.join(", ")}`);
+  if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
+    throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
   }
+  /* **`review` is the wire value Remember mode still sends**, and it is still
+     that on purpose: `chat_threads.kind` carries a live CHECK constraint that
+     accepts only `chat|review`, so Stage B of the rename maps mode `remember`
+     onto kind `review` and Stage C moves the literal, the schema and the rows
+     together. The message names the wire value because that is what a client
+     has to send.
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
   if (kind !== undefined && kind !== "chat" && kind !== "review") {
     throw httpError(400, "kind must be 'chat' or 'review'");
   }
@@ -1520,11 +1527,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
-  /* Two limits, chosen by what the box actually is — see `MAX_REVIEW_CHARS`.
+  /* Two limits, chosen by what the box actually is — see `MAX_REMEMBER_CHARS`.
 
      **The request's kind is not enough**, and reading only it was a bug: an
      edit sends no kind at all (it is refused one, just above), so every edit
-     was measured against chat's 4,000 and a 4,001-character review could be
+     was measured against chat's 4,000 and a 4,001-character Remember turn could be
      created and then never rewritten. So the *thread's* kind decides whenever
      there is a thread, and the request's is the fallback for the turn that
      creates one. GPT Sol's review of the built code, finding 5.
@@ -1533,13 +1540,13 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      `kind: "review"` on a thread that is a chat buys nothing — the 409 below
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
-  const askingReview = (storedKind ?? wantedKind) === "review";
-  const cap = askingReview ? MAX_REVIEW_CHARS : MAX_QUESTION_CHARS;
+  const askingRemember = (storedKind ?? wantedKind) === "review";
+  const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
-      askingReview
-        ? `A review may be at most ${MAX_REVIEW_CHARS} characters`
+      askingRemember
+        ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
   }
@@ -1548,8 +1555,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      request naming a stance and no kind writes one onto a chat answer, where
      nothing reads it and the transcript looks right. An invariant the database
      cannot express is one the route has to. GPT Sol's review, finding 7. */
-  if (stance !== undefined && !askingReview) {
-    throw httpError(400, "A stance only applies to a review");
+  if (stance !== undefined && !askingRemember) {
+    throw httpError(400, "A stance only applies in Remember mode");
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
      `withRetry` and `withEdit` do not go through `withTurn` at all, so an
@@ -1572,15 +1579,15 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (anchor !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An anchor can only be sent with a new question");
   }
-  /* **A review is about the whole piece, so it has nothing to anchor to.**
+  /* **A Remember turn is about the whole piece, so it has nothing to anchor to.**
      There is no gesture that starts one from a selection — the paragraph and
      selection buttons both open a chat — so an anchor arriving with
      `kind: "review"` is a client that has confused the two. Refused rather than
-     dropped, and worth more than tidiness: an unanchored review draws no mark
+     dropped, and worth more than tidiness: an unanchored Remember turn draws no mark
      in the prose, which is what lets the reading view go on treating every mark
      it draws as a chat. */
   if (wantedKind === "review" && anchor !== undefined) {
-    throw httpError(400, "A review is about the whole article and cannot be anchored");
+    throw httpError(400, "Remembering is about the whole article and cannot be anchored");
   }
   const wanted = parseAnchor(anchor);
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
@@ -1684,10 +1691,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             ...(wanted ? { anchor: wanted } : {}),
             ...(wantedKind ? { kind: wantedKind } : {}),
             /* Onto the **pending** reply row, inside the same write as the
-               question — see `ChatMessage.stance`. Only meaningful on a review;
+               question — see `ChatMessage.stance`. Only meaningful on a Remember turn;
                `withTurn` writes whatever it is given and the check constraint
                refuses one on a user row. */
-            ...(stance ? { stance: stance as ReviewStance } : {}),
+            ...(stance ? { stance: stance as RememberStance } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -2190,7 +2197,7 @@ async function spokenChat(
  * How long either half of one spoken exchange may be.
  *
  * Its own number rather than `MAX_QUESTION_CHARS`, and for the same reason
- * `MAX_REVIEW_CHARS` is: 4,000 is a considered cap on a sentence somebody
+ * `MAX_REMEMBER_CHARS` is: 4,000 is a considered cap on a sentence somebody
  * *typed*, and speech runs three or four times longer than the same thought
  * typed. It applies to the answer as well, which is the model's own speech and
  * bounded by one realtime turn.
@@ -2442,11 +2449,11 @@ function summarise(thread: ChatThread): ThreadSummary {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     ...(thread.anchor ? { anchor: thread.anchor } : {}),
-    /* The reading view draws no marks for a review — a review thread cannot be
+    /* The reading view draws no marks for Remember — a Remember thread cannot be
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
-       `?mode=hierarchy&thread=<a review>` would continue a review as a chat. The
+       `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
        overlay is gated on this. src/web/App.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
@@ -2458,9 +2465,9 @@ function summarise(thread: ChatThread): ThreadSummary {
 const MAX_QUESTION_CHARS = 4000;
 
 /**
- * How long a **review** may be — its own limit, and not the question's.
+ * How long a **Remember** turn may be — its own limit, and not the question's.
  *
- * A chat question is a sentence somebody typed; a review is a paragraph or two
+ * A chat question is a sentence somebody typed; a Remember turn is a paragraph or two
  * somebody *said*, and speech runs three or four times longer than the same
  * thought typed. 4,000 characters is a considered cap on the first and an
  * accident applied to the second: a reader who talks for four minutes hits it,
@@ -2472,7 +2479,7 @@ const MAX_QUESTION_CHARS = 4000;
  * Roughly fifteen minutes of continuous speech, because the cost of a long one
  * is tokens rather than risk.
  */
-const MAX_REVIEW_CHARS = 20_000;
+const MAX_REMEMBER_CHARS = 20_000;
 
 /**
  * How long a selection may be, in characters.

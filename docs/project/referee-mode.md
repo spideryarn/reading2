@@ -41,8 +41,9 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 `review` is already a mode — the reader says what they took from a piece they have read for
 themselves and the model shows them where it comes apart
-([review-mode.md](review-mode.md)). A `reviewer` mode beside a `review` mode would be one word
-meaning two things, which this repo has already paid a rename to get out of once
+([remember-mode.md](remember-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
+name was chosen). A `reviewer` mode beside a `review` mode would be one word meaning two things,
+which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md)).
 `referee` is also what journals call the person, so it is the plainer word as well as the free one.
@@ -131,7 +132,7 @@ cut —
 >
 > — Greg, 2026-09-01
 
-Designed as `candidates` becoming a third `ThreadKind` beside `chat` and `review`, opening with a
+Designed as `candidates` becoming a third `ThreadKind` beside `chat` and `remember`, opening with a
 fit brief (what expertise a competent reviewer would need, each requirement anchored to the passage
 that motivates it) and refined by conversation, with a persistent shortlist rather than names that
 scroll away up a transcript. Every candidate would need a source link the web search actually
@@ -152,6 +153,15 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    `PUBLISHED IN:` and `URL:` into every prompt; an `ArticleIdentity` of `"anonymous"` drops all
    three and keeps only `TITLE:`, and it is additive — nothing else changes. Candidates is the one
    stated exception, and only to exclude the paper's own authors from its own suggestions.
+   **Read the name narrowly: it strips the metadata labels, not the identity.** Every byte of every
+   block still goes, and a PDF's title page routinely carries the authors, their institutions and
+   their email addresses as ordinary prose — so "anonymous" means *this app did not prepend a
+   byline*, not *the model cannot tell who wrote it*. The cross-family review called the earlier
+   claim an overstatement (finding 7) and the test that appeared to prove it theatre, because its
+   fixture contained no identity to strip;
+   [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) now asserts the limit
+   instead, with a title-page block. Closing the gap means changing extraction or the prompt, not
+   `head()`.
 5. **A deterministic injection scan, before the model, not by it.** The first draft made
    hidden-instruction detection a *criterion* — asking the possibly-compromised model to find the
    attack on itself, which is detection after exposure by the component under attack. Instead:
@@ -173,13 +183,24 @@ the draft: a notice at that point warns about something the app has already done
 acknowledgement there would be worse than none, because it would imply that ticking a box makes
 prohibited use permissible.
 
-So there are two sentences, in two places, and the **tense is the whole point**:
+So there are three sentences, in three places, and the **tense is the whole point**:
 
 - **Present tense, at the point of adding an article, before ingestion runs** —
   `ADDING_SENDS_TEXT_AWAY` ([`src/messages.ts`](../../src/messages.ts)), shown under both the URL
   box and the upload picker in [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx). One
   sentence, no gate, no checkbox. It is true of everything this app does and belongs there whatever
   happens to Referee mode.
+- **Past tense, on the direct-add pages, because they never got to ask** — `DIRECT_ADD_SENT_TEXT_AWAY`
+  (`src/messages.ts`), shown by [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx). `/add/<url>` and
+  `/add/upload/<id>` exist so that a bookmarklet or a share sheet can hand us an article in a single
+  address, which means there is no form and no Add button: the page queues the ingest from its first
+  effect, so the POST has already gone by the time anybody can read a word on it. The cross-family
+  review of the *built* code found the sentence missing here entirely — finding 1, and the same
+  finding as the one above, only on the path that has no pause in it. A present-tense warning would
+  have been false, so this one is `ADDING_SENDS_TEXT_AWAY` with its tense corrected. It is behind
+  the page's `ok` flag, because an address we refused to queue is the one case where nothing was
+  sent. `tests/direct-add-says-the-text-has-gone.test.tsx` asserts both the sentence and the
+  asymmetry, so that making the three disclosures "consistent" goes red.
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
   (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)). It does
   not pretend a choice is still open: this article's text has already been sent, that happened when
@@ -191,7 +212,7 @@ So there are two sentences, in two places, and the **tense is the whole point**:
   `REFEREE_DECLARE_IT`, adds the fact for the venues that do permit AI assistance: they still nearly
   always require the referee to disclose it.
 
-There is deliberately no acknowledgement to tick in either place — a box reading "I understand" in
+There is deliberately no acknowledgement to tick in any of the three — a box reading "I understand" in
 front of something already done would itself imply that ticking it makes prohibited use
 permissible. A blocking attestation at ingest is a real product question and is Greg's to make, not
 this mode's.
@@ -238,8 +259,8 @@ feedback of this shape*, which is a different question from how confident anyone
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.
 - [search.md](search.md) — the machinery Criteria is built on.
-- [review-mode.md](review-mode.md) — the other reader-authored mode, and the reason this one is not
-  named after it.
+- [remember-mode.md](remember-mode.md) — the other reader-authored mode, and the reason this one is
+  not named after it.
 - [colour-scales.md](colour-scales.md) — the diverging scales Criteria's valence uses.
 - [block-ids.md](block-ids.md) — the anchoring contract every row in every sub-mode is required to
   keep.

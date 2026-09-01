@@ -41,12 +41,14 @@ describe("the referee mode itself", () => {
     }
   });
 
-  it("is a sibling of Search rather than of Review", () => {
-    /* Not a decoration: `review` is a different mode with a different job, and
-       the plan's § "The name is `referee`, not `reviewer`" is about keeping one
-       word for one thing. If somebody renames this to `reviewer` they should
-       have to come here and argue with the sentence. */
-    expect(MODES).toContain("review");
+  it("is a sibling of Search rather than of Remember", () => {
+    /* Not a decoration: `remember` — `review` until 2026-09-01, and renamed
+       partly because of this very adjacency — is a different mode with a
+       different job, and the plan's § "The name is `referee`, not `reviewer`"
+       is about keeping one word for one thing. If somebody renames this to
+       `reviewer` they should have to come here and argue with the sentence. */
+    expect(MODES).toContain("remember");
+    expect(MODES).not.toContain("review");
     expect(MODES).not.toContain("reviewer");
     expect(MODES.indexOf("referee")).toBe(MODES.indexOf("search") + 1);
   });

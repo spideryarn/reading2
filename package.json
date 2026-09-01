@@ -52,7 +52,7 @@
     "db:reset": "supabase db reset",
     "eval:caching": "tsx evals/prompt-caching.ts",
     "eval:reorder": "tsx evals/reorder-quality.ts",
-    "eval:review": "tsx evals/review-stances.ts",
+    "eval:remember": "tsx evals/remember-stances.ts",
     "eval:quiz": "tsx evals/quiz.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
     "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",

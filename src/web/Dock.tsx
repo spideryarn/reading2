@@ -462,15 +462,25 @@ const MODES_UI: {
   },
   /* Last, and one step further out than Chat, which is the end of the ordering
      this list has followed since Greg set it by hand: it runs from the article
-     restated, through the ways into it, to the conversation about it. Review is
-     the only mode whose content comes from the READER — it cannot be used at
+     restated, through the ways into it, to the conversation about it. Remember
+     is the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
-     article's own words run out. docs/plans/260827ah-review-mode.md. */
+     article's own words run out. docs/plans/260827ah-review-mode.md.
+
+     **The blurb is doing more work here than anywhere else in this list**, and
+     it has to keep doing it. "Remember" (renamed from "Review" on 2026-09-01)
+     suggests two things this mode is not: saved memories you can go back to,
+     and spaced repetition. Neither exists — nothing is stored for later and
+     nothing comes back on a schedule; the reader talks, and the model shows
+     them where their account and the piece come apart. That is the named cost
+     of the rename, so if this line is ever shortened, the denial is the part to
+     keep.
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   {
-    mode: "review",
+    mode: "remember",
     icon: Speech,
-    label: "Review",
-    blurb: "Say what you took from this, and find out where it holds up",
+    label: "Remember",
+    blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
 ];
 

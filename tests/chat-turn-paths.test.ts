@@ -115,7 +115,7 @@ afterEach(async () => {
 });
 
 describe("retry", () => {
-  /** An errored review answer, with every field a retry has to clear. */
+  /** An errored Remember answer, with every field a retry has to clear. */
   const stored: ChatThread = {
     id: THREAD,
     kind: "review",

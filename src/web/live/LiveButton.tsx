@@ -49,10 +49,10 @@ export function LiveButton({
   /**
    * Show the word beside the icon even when nothing is running.
    *
-   * Review's composer is full-width and Greg asked for talking to be
+   * Remember's composer is full-width and Greg asked for talking to be
    * emphasised there; chat's is about 400px and already holds a textarea, Send
    * and the dictation microphone. **A prop rather than a CSS rule**, because
-   * the label is conditionally *rendered* — a `.review .chat-live-label`
+   * the label is conditionally *rendered* — a `.remember .chat-live-label`
    * selector would have styled an element that is not there, which is the kind
    * of rule that looks like it works and does nothing.
    */
@@ -104,7 +104,7 @@ export function LiveButton({
           spent on a button whose icon and `aria-label` already say what it is.
           While the session is running the label is not decoration — it is the
           one place "listening" and "speaking" are said in words rather than in
-          colour. Review mode shows it throughout, because that composer is
+          colour. Remember mode shows it throughout, because that composer is
           full-width and Greg asked for talking to be emphasised there. */}
       {(on || labelled) && (
         <span className="chat-live-label" aria-hidden="true">

@@ -1371,7 +1371,7 @@ async function main(): Promise<void> {
   console.log(`\nWrote ${path.relative(ROOT, out)}`);
 }
 
-/* See the note in evals/review-stances.ts. The embedding calls here are metered
+/* See the note in evals/remember-stances.ts. The embedding calls here are metered
    by src/ai-call.ts and only ever needed a collector; the judge is a declared
    bypass and records itself. */
 await withLedger("eval", main);

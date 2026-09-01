@@ -1,7 +1,7 @@
 /**
- * **What the chat endpoint refuses once review mode exists.**
+ * **What the chat endpoint refuses once Remember mode exists.**
  *
- * Review added two optional fields to `POST /api/chat/:slug` — `kind` and
+ * Remember added two optional fields to `POST /api/chat/:slug` — `kind` and
  * `stance` — and every test here is about a request that must NOT be quietly
  * accepted. That emphasis is the point: an API that ignores an unknown key and
  * a client that never checks look identical from both ends, so the failure mode
@@ -27,7 +27,7 @@ import { handleApi } from "../src/routes.js";
 import { loadThreads } from "../src/chat.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
-const SLUG = "test-review-route-fixture";
+const SLUG = "test-remember-route-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
 /* The committed fixture's artefacts, copied in so the turn has an article. This
    slug used to get them for nothing — an unknown slug fell through to
@@ -88,8 +88,14 @@ async function post(body: unknown): Promise<{ status: number; body: string }> {
   return { status: (res as { statusCode: number }).statusCode, body: written };
 }
 
-/** A stored review, so the "already a different kind" cases have one to hit. */
-async function seedReview(threadId: string) {
+/** A stored Remember thread, so the "already a different kind" cases have one to hit.
+
+    `kind: "review"` is the **persisted** thread kind, which Stage B of the
+    Remember rename deliberately leaves spelled the old way — the live
+    `chat_threads.kind` CHECK constraint still says `chat|review`, and Stage C
+    moves the literal, the schema and the rows together.
+    docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+async function seedRemember(threadId: string) {
   await post({ threadId, question: "what I took from it", kind: "review", stance: "socratic" });
 }
 
@@ -133,17 +139,17 @@ describe("a stance the server does not know is refused, not ignored", () => {
   });
 });
 
-describe("a review cannot be anchored to a passage", () => {
-  /* There is no gesture that starts a review from a selection — both the
+describe("a Remember turn cannot be anchored to a passage", () => {
+  /* There is no gesture that starts one from a selection — both the
      paragraph button and the selection open a chat — so an anchor arriving with
      `kind: "review"` is a confused client. It is refused rather than dropped
-     because an unanchored review draws no mark in the prose, which is the
+     because an unanchored Remember turn draws no mark in the prose, which is the
      property the reading view's overlay relies on. */
-  it("400s an anchor sent with kind review", async () => {
+  it("400s an anchor sent with the Remember kind", async () => {
     /* `spya-tgnssb` is a REAL block of the fixture article (example/blocks.json),
        and that matters: the first version of this test used a made-up id and
        passed for the wrong reason — `checkAnchor` rejects an id the article
-       does not have, so the 400 arrived whether or not the review rule existed.
+       does not have, so the 400 arrived whether or not the Remember rule existed.
        With a genuine block, the only thing that can refuse this is the rule
        under test. */
     const { status } = await post({
@@ -173,21 +179,21 @@ describe("a thread's kind belongs to the thread", () => {
        because the route reads under `inTurnOrder` and that is only
        per-process. Remove both and this goes red. */
     const id = "spya-r7k2wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({ threadId: id, question: "sneaky", kind: "chat" });
     expect(status).toBe(409);
   });
 
   it("accepts a send that agrees, so a duplicate request is harmless", async () => {
     const id = "spya-r7k3wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({ threadId: id, question: "and also", kind: "review" });
     expect(status).not.toBe(409);
   });
 
   it("accepts a send that names no kind at all", async () => {
     const id = "spya-r7k4wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({ threadId: id, question: "and also" });
     expect(status).not.toBe(409);
     const threads = await loadThreads(SLUG);
@@ -201,21 +207,21 @@ describe("a thread's kind belongs to the thread", () => {
      answer someone was watching in another tab and record it as stopped. */
   it("400s a retry that carries a kind", async () => {
     const id = "spya-r7k5wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({ threadId: id, retry: "spya-whatever", kind: "review" });
     expect(status).toBe(400);
   });
 
   it("400s a retry that carries a stance", async () => {
     const id = "spya-r7k6wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({ threadId: id, retry: "spya-whatever", stance: "respond" });
     expect(status).toBe(400);
   });
 
   it("400s an edit that carries a stance", async () => {
     const id = "spya-r7k7wz";
-    await seedReview(id);
+    await seedRemember(id);
     const { status } = await post({
       threadId: id,
       edit: "spya-whatever",
@@ -251,25 +257,25 @@ describe("what actually gets stored", () => {
     expect(thread?.messages.at(-1)).not.toHaveProperty("stance");
   });
 
-  /* A spoken review runs three or four times longer than a typed question, so
+  /* A spoken Remember turn runs three or four times longer than a typed question, so
      the two have their own limits. Sharing chat's 4,000 would 413 a reader who
      talked for four minutes, after they had already paid for the
      transcription. */
-  it("lets a review be much longer than a question", async () => {
+  it("lets a Remember turn be much longer than a question", async () => {
     const long = "so what I took from this is ".repeat(300); // ~8,400 chars
     expect(long.length).toBeGreaterThan(4000);
     const asChat = await post({ threadId: "spya-r9m2wz", question: long });
-    const asReview = await post({
+    const asRemember = await post({
       threadId: "spya-r9m3wz",
       question: long,
       kind: "review",
       stance: "balanced",
     });
     expect(asChat.status).toBe(413);
-    expect(asReview.status).not.toBe(413);
+    expect(asRemember.status).not.toBe(413);
   });
 
-  it("still has a ceiling on a review", async () => {
+  it("still has a ceiling on a Remember turn", async () => {
     const absurd = "x".repeat(20_001);
     const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "review" });
     expect(status).toBe(413);

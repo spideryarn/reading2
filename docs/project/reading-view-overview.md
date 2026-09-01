@@ -72,8 +72,8 @@ of compression, down the page for position and across for detail. Read that firs
 - **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
   [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
-- **[review-mode.md](review-mode.md)** — the other direction: the reader says what they took from the
-  piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
+- **[remember-mode.md](remember-mode.md)** — the other direction: the reader says what they took from
+  the piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
   cross-family review said not to ship the first one, and the one mode that cannot be used to avoid
   reading.
 

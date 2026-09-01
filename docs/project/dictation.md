@@ -346,8 +346,8 @@ once for that origin. And the origin includes the port, which Vite moves.
 ## This is not two-way voice
 
 Worth saying plainly, because the UI implies otherwise. The chat composer's button says **"Talk"**
-and flips to **"Listening…"**, and review mode wears a `Speech` icon under *"Say what you took from
-this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
+and flips to **"Listening…"**, and Remember mode wears a `Speech` icon under *"Say what you took
+from this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
 sound.** There is no text-to-speech, no WebRTC, no WebSocket, and no speech-to-speech anywhere.
 
 A voice-dialogue feature would be entirely greenfield, and the accounting for it has already been

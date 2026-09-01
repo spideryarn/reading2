@@ -339,7 +339,7 @@ async function main(): Promise<void> {
 const invokedDirectly = isMain(import.meta.url);
 
 if (invokedDirectly) {
-  /* See the note at the foot of evals/review-stances.ts. */
+  /* See the note at the foot of evals/remember-stances.ts. */
   withLedger("eval", main).catch((err) => {
     console.error(err);
     process.exit(1);

@@ -20,7 +20,7 @@
  *   whole of GPT Sol's finding 3 on the plan.
  *
  * The prompts themselves are pinned at the bottom, in the shape
- * tests/review-prompt.test.ts uses: a rule is here by name because it is the fix
+ * tests/remember-prompt.test.ts uses: a rule is here by name because it is the fix
  * for a specific way the first draft misbehaved, and because it is the kind of
  * paragraph a later tidy-up would shorten out without knowing what it was for.
  * What the prompts *do* is `evals/quiz.ts`'s question, and only a model can
@@ -538,7 +538,7 @@ describe("the marking prompt", () => {
     expect(QUIZ_MARK_SYSTEM).toMatch(/DEFEND THE READER AGAINST THE REFERENCE/);
   });
 
-  it("keeps review mode's entitlement rules, which are the ones that cost", () => {
+  it("keeps Remember mode's entitlement rules, which are the ones that cost", () => {
     expect(QUIZ_MARK_SYSTEM).toContain("A CORRECTION MAY NOT BE BUILT OUT OF YOUR OWN INFERENCE");
     expect(QUIZ_MARK_SYSTEM).toContain("DISAGREEING WITH THE AUTHOR IS NOT GETTING IT WRONG");
     expect(QUIZ_MARK_SYSTEM).toContain("A SHORTER ANSWER IS NOT A WORSE ANSWER");

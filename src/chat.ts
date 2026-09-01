@@ -28,7 +28,7 @@ import type {
   ChatAnchor,
   ChatMessage,
   ChatThread,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
   ToolRun,
 } from "./types.js";
@@ -72,11 +72,11 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /**
- * A stored thread written before review mode existed has no `kind`. Give it one.
+ * A stored thread written before Remember mode existed has no `kind`. Give it one.
  *
  * **`ChatThread.kind` is required**, deliberately — an optional field would mean
  * a `?? "chat"` at every read site, and one of those would eventually be missed,
- * which is a review answered with chat's prompt and nothing on screen
+ * which is a Remember turn answered with chat's prompt and nothing on screen
  * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
  * price of "required" is exactly this function, and its twin in
  * src/store/pg-chat.ts. Two places hold the default instead of twenty.
@@ -228,29 +228,29 @@ export interface Turn {
    */
   anchor?: ChatAnchor;
   /**
-   * Chat or review — **only meaningful when this turn creates the thread**,
+   * Chat or Remember — **only meaningful when this turn creates the thread**,
    * which is the only branch `withTurn` applies it on, exactly like `anchor`
    * above.
    *
    * A kind that contradicts an existing thread is refused here rather than
-   * ignored: silently answering a review with chat's prompt because a stale tab
+   * ignored: silently answering a Remember turn with chat's prompt because a stale tab
    * said so is a transcript half in one voice and half in another, with nothing
    * anywhere disagreeing. The route refuses it first, with a 409 and a sentence
    * a person can act on; this is the backstop, and it is inside the Postgres
    * transaction because `inTurnOrder` is only per-process.
    *
-   * Absent means `"chat"`, which is what every caller written before review
+   * Absent means `"chat"`, which is what every caller written before Remember
    * mode meant.
    */
   kind?: ThreadKind;
   /**
-   * How much the answer should say, for a review turn.
+   * How much the answer should say, for a Remember turn.
    *
    * Written onto the **pending** reply, not onto the finished one — see
    * `ChatMessage.stance`. An answer that never finished still has to say which
    * instruction produced it.
    */
-  stance?: ReviewStance;
+  stance?: RememberStance;
 }
 
 /**
@@ -497,8 +497,8 @@ export function withSpokenTurn(
     title: "New chat",
     createdAt: at,
     updatedAt: at,
-    /* Always `chat`. Live conversation has no review stance and no anchor —
-       and a spoken review is a mode nobody has designed, so inventing one here
+    /* Always `chat`. Live conversation has no Remember stance and no anchor —
+       and a spoken Remember turn is a mode nobody has designed, so inventing one here
        by passing a kind through would be deciding it by accident. */
     kind: "chat",
     messages: [],
@@ -754,7 +754,7 @@ export async function retryTurn(
  * site is already a conditional spread and the interesting part — *which* row —
  * would be lost inside it.
  */
-function stanceOf(message: ChatMessage | undefined): ReviewStance | undefined {
+function stanceOf(message: ChatMessage | undefined): RememberStance | undefined {
   return message?.role === "assistant" ? message.stance : undefined;
 }
 
@@ -819,7 +819,7 @@ export function withEdit(
        may not exist — a question whose answer was never stored — in which case
        there is nothing to inherit and `balanced` applies downstream. */
     ...(stanceOf(existing.messages[index + 1])
-      ? { stance: stanceOf(existing.messages[index + 1]) as ReviewStance }
+      ? { stance: stanceOf(existing.messages[index + 1]) as RememberStance }
       : {}),
   };
   const thread: ChatThread = {

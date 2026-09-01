@@ -1,7 +1,7 @@
 /**
- * **Review mode's prompt, and the one property that costs money if it breaks.**
+ * **Remember mode's prompt, and the one property that costs money if it breaks.**
  *
- * Review adds a second system prompt and a per-turn stance. Where each of those
+ * Remember adds a second system prompt and a per-turn stance. Where each of those
  * lands in the message array is not a style question: everything above the
  * `cache_control` breakpoint has to stay byte-identical for the life of a
  * conversation, or the whole article is written to the cache again on every
@@ -27,7 +27,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { buildConverseMessages } from "../src/converse.js";
-import type { Block, ChatMessage, Meta, ReviewStance } from "../src/types.js";
+import type { Block, ChatMessage, Meta, RememberStance } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -57,23 +57,26 @@ describe("the article message is the same bytes whatever the mode", () => {
      should be free — which is exactly why it is worth pinning: a future change
      that "helpfully" mentions the mode near the article would break it
      silently, and the only symptom would be a larger bill. */
-  it("chat and review send an identical article block", () => {
+  it("chat and remember send an identical article block", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const review = buildConverseMessages({ ...base, kind: "review" });
-    expect(articleMessage(review)).toEqual(articleMessage(chat));
+    /* `kind: "review"` is the persisted thread kind, which Stage B of the
+       Remember rename deliberately leaves spelled the old way — src/types.ts §
+       ThreadKind. */
+    const remember = buildConverseMessages({ ...base, kind: "review" });
+    expect(articleMessage(remember)).toEqual(articleMessage(chat));
   });
 
   it("every stance sends an identical article block", () => {
-    const stances: ReviewStance[] = ["balanced", "respond", "socratic", "signposts"];
+    const stances: RememberStance[] = ["balanced", "respond", "socratic", "signposts"];
     const first = articleMessage(buildConverseMessages({ ...base, kind: "review", stance: "balanced" }));
     for (const stance of stances) {
       expect(articleMessage(buildConverseMessages({ ...base, kind: "review", stance }))).toEqual(first);
     }
   });
 
-  it("keeps its cache_control marker in review mode", () => {
-    const review = buildConverseMessages({ ...base, kind: "review" });
-    const article = articleMessage(review);
+  it("keeps its cache_control marker in Remember mode", () => {
+    const remember = buildConverseMessages({ ...base, kind: "review" });
+    const article = articleMessage(remember);
     expect(Array.isArray(article?.content)).toBe(true);
     const parts = article?.content as { cache_control?: unknown }[];
     expect(parts[0]?.cache_control).toEqual({ type: "ephemeral" });
@@ -81,10 +84,10 @@ describe("the article message is the same bytes whatever the mode", () => {
 });
 
 describe("the kind chooses the system prompt", () => {
-  it("sends a different system message for review than for chat", () => {
+  it("sends a different system message for remember than for chat", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const review = buildConverseMessages({ ...base, kind: "review" });
-    expect(review[0]?.content).not.toEqual(chat[0]?.content);
+    const remember = buildConverseMessages({ ...base, kind: "review" });
+    expect(remember[0]?.content).not.toEqual(chat[0]?.content);
   });
 
   it("defaults to chat's system prompt when no kind is given", () => {
@@ -96,11 +99,11 @@ describe("the kind chooses the system prompt", () => {
      the wrong sentence to put in the mouth of a conversation where the reader
      is the one about to talk — and because someone deduplicating the two would
      not otherwise find out that it was deliberate. */
-  it("greets a reviewer differently from a questioner, below the breakpoint", () => {
+  it("greets somebody recollecting differently from a questioner, below the breakpoint", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const review = buildConverseMessages({ ...base, kind: "review" });
-    expect(review[2]?.content).not.toEqual(chat[2]?.content);
-    expect(String(review[2]?.content)).toMatch(/tell me what you took from it/i);
+    const remember = buildConverseMessages({ ...base, kind: "review" });
+    expect(remember[2]?.content).not.toEqual(chat[2]?.content);
+    expect(String(remember[2]?.content)).toMatch(/tell me what you took from it/i);
   });
 });
 
@@ -109,7 +112,7 @@ describe("the stance lands below the breakpoint and nowhere else", () => {
      this goes red — and without it, that migration is invisible until the
      OpenRouter bill arrives. */
   it("is not in the system prompt", () => {
-    for (const stance of ["respond", "socratic", "signposts"] as ReviewStance[]) {
+    for (const stance of ["respond", "socratic", "signposts"] as RememberStance[]) {
       const messages = buildConverseMessages({ ...base, kind: "review", stance });
       expect(String(messages[0]?.content).toUpperCase()).not.toContain(
         `STANCE FOR THIS TURN: ${stance.toUpperCase()}`,
@@ -149,12 +152,12 @@ describe("the stance lands below the breakpoint and nowhere else", () => {
   });
 });
 
-describe("the review prompt itself", () => {
+describe("the Remember prompt itself", () => {
   const system = String(buildConverseMessages({ ...base, kind: "review" })[0]?.content);
 
   /* Not a style check. Each of these is a rule GPT Sol's review of the plan
      required, and each is the fix for a specific way the first draft would have
-     misbehaved — see the header comment on REVIEW_SYSTEM in src/converse.ts.
+     misbehaved — see the header comment on REMEMBER_SYSTEM in src/converse.ts.
      They are pinned by name because they are the kind of paragraph a later
      tidy-up would shorten out of the prompt without knowing what it was for. */
   it("tells the model its own reading is not the article", () => {

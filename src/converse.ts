@@ -62,7 +62,7 @@ import type {
   ChatMessage,
   Citation,
   Meta,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
 } from "./types.js";
 import { loadEnvLocal } from "./env.js";
@@ -268,9 +268,9 @@ not need a search behind it.`;
 /**
  * What a model may put in an `href`, in both prompts.
  *
- * Shared rather than written twice, because a review thread can search the web
+ * Shared rather than written twice, because a Remember thread can search the web
  * too and its answers go through the same renderer — so a rule that lived only
- * in `SYSTEM` would have let a review answer emit a model-chosen address with
+ * in `SYSTEM` would have let a Remember answer emit a model-chosen address with
  * nothing said about where it had to come from. Found by a GPT Sol review,
  * 2026-08-27.
  *
@@ -380,7 +380,7 @@ ${WEB_LINKS}
 ${PROFILE_RULES}`;
 
 /**
- * The system prompt for **review** mode, where the reader has said what they
+ * The system prompt for **Remember** mode, where the reader has said what they
  * took from the article and wants to know where it holds up.
  *
  * ## Why it is a second prompt rather than a paragraph appended to the first
@@ -419,9 +419,9 @@ ${PROFILE_RULES}`;
  *     solid, what is off, what is missing, acknowledge the right ones, two or
  *     three points. Hence NO INVENTORY and NO OVERALL ASSESSMENT.
  *
- * The seven cases that must not regress are in `evals/review-stances.ts`.
+ * The seven cases that must not regress are in `evals/remember-stances.ts`.
  */
-const REVIEW_SYSTEM = `You are a reading companion. The reader has just read an article — or part
+const REMEMBER_SYSTEM = `You are a reading companion. The reader has just read an article — or part
 of it — and is telling you, in their own words, what they took from it.
 
 Your job is to notice where their account and the article genuinely come apart,
@@ -670,9 +670,15 @@ ${PROFILE_RULES}`;
  * See `streamChat` in src/routes.ts: the request may propose a kind, but only a
  * thread has one, and the two are the same thing only when the request was
  * right.
+ *
+ * **`"review"` is the persisted spelling of Remember**, and it is still that on
+ * purpose — the `chat_threads.kind` CHECK constraint has not moved yet, so
+ * Stage B maps mode `remember` onto kind `review`. Stage C renames the literal,
+ * the schema and the rows together.
+ * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
  */
 const systemFor = (kind: ThreadKind): string =>
-  kind === "review" ? REVIEW_SYSTEM : SYSTEM;
+  kind === "review" ? REMEMBER_SYSTEM : SYSTEM;
 
 /**
  * The assistant's canned line between the article and the conversation.
@@ -697,12 +703,12 @@ const readItFor = (kind: ThreadKind): string =>
  * the gesture the feature is built around.
  *
  * Named rather than described: the four stances are spelled out at length in
- * `REVIEW_SYSTEM`, so this only has to say which one, and saying it twice would
+ * `REMEMBER_SYSTEM`, so this only has to say which one, and saying it twice would
  * be two places to change it.
  */
 function stanceLine(
   kind: ThreadKind,
-  stance: ReviewStance | undefined,
+  stance: RememberStance | undefined,
 ): string {
   if (kind !== "review") return "";
   return `Stance for this turn: ${(stance ?? "balanced").toUpperCase()}.`;
@@ -753,7 +759,7 @@ export interface ConverseRequest {
    */
   useTools?: boolean;
   /**
-   * Chat or review — which chooses the system prompt.
+   * Chat or Remember — which chooses the system prompt.
    *
    * **The caller passes the THREAD's kind, not the request body's.** See
    * `streamChat` in src/routes.ts: a request may propose a kind for a thread it
@@ -761,15 +767,15 @@ export interface ConverseRequest {
    * prompt the client asked for rather than the one the conversation was
    * started with is how a transcript ends up half in one voice and half in
    * another. Defaults to `"chat"`, which is what every caller written before
-   * review mode existed means.
+   * Remember mode existed means.
    */
   kind?: ThreadKind;
   /**
-   * How much to say, for a review turn. Ignored when `kind` is `"chat"`.
+   * How much to say, for a Remember turn. Ignored when `kind` is `"chat"`.
    *
    * Absent means `balanced`, which is the default the picker starts on.
    */
-  stance?: ReviewStance | undefined;
+  stance?: RememberStance | undefined;
 }
 
 export type ConverseEvent =
@@ -917,18 +923,18 @@ export function buildConverseMessages(opts: {
    */
   anchor?: ChatAnchor | null;
   /**
-   * Chat or review, which picks the system prompt — the ONE thing here that
+   * Chat or Remember, which picks the system prompt — the ONE thing here that
    * lands above the `cache_control` breakpoint and therefore changes the cached
    * prefix. Two kinds means two prefixes per article, paid on entering the mode
    * rather than per turn. docs/plans/260827ah-review-mode.md § Where the stance goes.
    */
   kind?: ThreadKind;
   /**
-   * How much a review answer should say. **In the final user message**, with
+   * How much a Remember answer should say. **In the final user message**, with
    * the profile and the position line, so that switching stance mid-conversation
    * — which is the expected use — costs nothing above the breakpoint.
    */
-  stance?: ReviewStance | undefined;
+  stance?: RememberStance | undefined;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
   const position = readerPositionLine(opts.at);

@@ -974,15 +974,15 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* -------------------------------------------------- review's two sub-modes --
+/* ------------------------------------------------ Remember's two sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. */
 
 /** Free recall, or the questions the piece asks you back. */
-export const REVIEW_VIEWS = ["recall", "quiz"] as const;
-export type ReviewView = (typeof REVIEW_VIEWS)[number];
+export const REMEMBER_VIEWS = ["recall", "quiz"] as const;
+export type RememberView = (typeof REMEMBER_VIEWS)[number];
 
 /**
- * Which half of Review is open — `recall` (the default, omitted) or `quiz`.
+ * Which half of Remember is open — `recall` (the default, omitted) or `quiz`.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
  * stance changes nothing on screen and is therefore component state; a sub-mode
@@ -992,15 +992,15 @@ export type ReviewView = (typeof REVIEW_VIEWS)[number];
  * switching is a deliberate act on the view and Back should undo it.
  *
  * **Its collision with `?thread=` is defined rather than left to fall out**,
- * because `?mode=review&review=quiz&thread=<id>` would otherwise leave a review
- * conversation selected and invisible. The three rules are implemented in
- * `ReviewBand` (src/web/App.tsx), not here, because they are navigations rather
- * than parsing:
+ * because `?mode=remember&remember=quiz&thread=<id>` would otherwise leave a
+ * Remember conversation selected and invisible. The three rules are implemented
+ * in `RememberBand` (src/web/App.tsx), not here, because they are navigations
+ * rather than parsing:
  *
- * - switching to Quiz sets `review=quiz` **and clears `thread`, in one
+ * - switching to Quiz sets `remember=quiz` **and clears `thread`, in one
  *   navigation** — two would put a half-state on the Back stack;
- * - opening a review conversation sets `review=recall` and `thread=<id>`, also
- *   in one;
+ * - opening a Remember conversation sets `remember=recall` and `thread=<id>`,
+ *   also in one;
  * - a pasted URL carrying both: **Quiz wins**, and `thread` is dropped with a
  *   *replace*, so the reader's Back button does not land them on the broken
  *   combination they were just rescued from.
@@ -1015,8 +1015,8 @@ export type ReviewView = (typeof REVIEW_VIEWS)[number];
  * An unknown value degrades to the default rather than throwing, the same rule
  * as every other parser in this file.
  */
-export const reviewParam = createParser<ReviewView>({
-  parse: (v) => (REVIEW_VIEWS.includes(v as ReviewView) ? (v as ReviewView) : null),
+export const rememberParam = createParser<RememberView>({
+  parse: (v) => (REMEMBER_VIEWS.includes(v as RememberView) ? (v as RememberView) : null),
   serialize: (v) => v,
 })
   .withDefault("recall")

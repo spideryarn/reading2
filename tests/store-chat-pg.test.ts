@@ -659,7 +659,7 @@ when("the Postgres chat store", () => {
     await expect(pgChatStore.load("../etc/passwd")).rejects.toMatchObject({ status: 400 });
   });
 
-  /* ------------------------------------------------------- review mode ----
+  /* ----------------------------------------------------- Remember mode ----
      The two fields review added, against the two ways Postgres could lose them
      that the filesystem store cannot. Both are silent failures: no error, no
      visible symptom, and a transcript that still reads as one conversation.

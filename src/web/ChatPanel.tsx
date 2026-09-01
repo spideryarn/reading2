@@ -79,7 +79,7 @@ import type {
   BlockId,
   ChatMessage,
   ChatThread,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
   ToolRun,
 } from "../types.js";
@@ -203,7 +203,7 @@ interface Props {
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
   /**
-   * Which mode this panel is being shown in — chat, or review.
+   * Which mode this panel is being shown in — chat, or Remember.
    *
    * **One panel with a kind, not two panels.** Everything under here is the
    * same in both: the transcript, the scroll-follow, the citation chips, the
@@ -214,11 +214,11 @@ interface Props {
    * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
    * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
-   * modes show every thread for this article, and a review carries a tag.
+   * modes show every thread for this article, and a Remember thread carries a tag.
    */
   kind: ThreadKind;
   /**
-   * The stance the next review answer will be asked for, and how to change it.
+   * The stance the next Remember answer will be asked for, and how to change it.
    *
    * Above the composer because the composer is keyed by thread id and remounts;
    * seeded by the band from the last answer in the open conversation, so a
@@ -226,14 +226,14 @@ interface Props {
    * chat mode. See docs/plans/260827ah-review-mode.md § Where the stance picker's value
    * lives.
    */
-  stance: ReviewStance;
-  onStance(next: ReviewStance): void;
+  stance: RememberStance;
+  onStance(next: RememberStance): void;
   /**
    * **The Recall | Quiz control**, when this panel is the Recall half of
-   * Review. Absent in chat mode.
+   * Remember. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
-   * belongs to `ReviewBand` (src/web/App.tsx): the navigation rules behind it —
+   * belongs to `RememberBand` (src/web/App.tsx): the navigation rules behind it —
    * clearing `?thread=` in one step, Quiz winning a pasted collision — are
    * about two parameters this panel knows nothing about. Handing down a rendered
    * node keeps that knowledge where it is, and keeps `ChatPanel` unaware there
@@ -344,7 +344,11 @@ export function ChatPanel({
   onStartLive,
 }: Props) {
   useRenderCount("ChatPanel");
-  const review = kind === "review";
+  /* `"review"` is the **persisted** spelling of the Remember thread kind, kept
+     while the `chat_threads.kind` CHECK constraint still says so — Stage C of
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md moves
+     it. src/types.ts § ThreadKind. */
+  const remember = kind === "review";
   const open = threads.find((t) => t.id === threadId) ?? null;
 
   /**
@@ -431,11 +435,11 @@ export function ChatPanel({
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
     <aside
-      className={`mode-band chat${review ? " review" : ""}`}
-      aria-label={review ? "Review what you took from this article" : "Chat about this article"}
+      className={`mode-band chat${remember ? " remember" : ""}`}
+      aria-label={remember ? "Remember what you took from this article" : "Chat about this article"}
     >
       <div className="chat-head">
-        <h2>{open ? open.title : review ? "Review" : "Chat"}</h2>
+        <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
         {subMode}
         {open ? (
           <>
@@ -453,7 +457,7 @@ export function ChatPanel({
           <button
             type="button"
             className="chat-icon"
-            title={review ? "Start a new review" : "Start a new conversation"}
+            title={remember ? "Start remembering" : "Start a new conversation"}
             onClick={onNew}
           >
             <MessageSquarePlus size={14} />
@@ -483,7 +487,7 @@ export function ChatPanel({
           draft={drafts.current.get(open.id) ?? ""}
           onDraft={(text) => drafts.current.set(open.id, text)}
           /* The OPEN conversation's kind, not the mode's. The list is shared,
-             so a reader in review mode can open a chat — and when they do, the
+             so a reader in Remember mode can open a chat — and when they do, the
              transcript in front of them is a chat and its composer must be
              chat's. Reading the mode here instead would put a stance picker
              under a conversation whose answers ignore it. */
@@ -543,7 +547,7 @@ export function ChatPanel({
             onNew={onNew}
             onRename={onRename}
             onDelete={onDelete}
-            review={review}
+            remember={remember}
           />
           {/* The list's own composer. Typing here and pressing Enter starts a
               conversation and sends the question into it in one go, which is
@@ -607,7 +611,7 @@ export function ChatPanel({
               onDraft={(text) => {
                 listDraft.current = text;
               }}
-              placeholder={review ? "Say what you took from this…" : "Ask something new…"}
+              placeholder={remember ? "Say what you took from this…" : "Ask something new…"}
               kind={kind}
               stance={stance}
               onStance={onStance}
@@ -717,7 +721,7 @@ function ThreadList({
   onNew,
   onRename,
   onDelete,
-  review,
+  remember,
 }: {
   threads: ChatThread[];
   onOpen(id: string): void;
@@ -725,7 +729,7 @@ function ThreadList({
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
   /** Which mode the reader pressed to get here — it only changes the wording. */
-  review: boolean;
+  remember: boolean;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   /* Read once here and passed to every row, so two rows a minute apart in the
@@ -736,14 +740,14 @@ function ThreadList({
   if (sorted.length === 0) {
     return (
       <div className="chat-empty">
-        <p>{review ? "Nothing reviewed yet." : "Nothing asked yet."}</p>
+        <p>{remember ? "Nothing remembered yet." : "Nothing asked yet."}</p>
         <p className="chat-empty-hint">
-          {review
+          {remember
             ? "Say what you took from this article and I'll point at the places it comes apart from the piece — and at the paragraphs worth another look."
             : "Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there."}
         </p>
         <button type="button" className="chat-new" onClick={onNew}>
-          <MessageSquarePlus size={14} /> {review ? "New review" : "New conversation"}
+          <MessageSquarePlus size={14} /> {remember ? "Start remembering" : "New conversation"}
         </button>
       </div>
     );
@@ -786,10 +790,15 @@ function ThreadList({
                         2026-08-27), so the row has to say which it is — "times
                         I explained myself" and "questions I asked" are not the
                         same thing to go looking for, and the titles alone do
-                        not tell them apart. Only reviews are tagged: chat is
-                        the older and commoner kind, and tagging both would put
-                        a label on every row to distinguish a minority. */}
-                    {t.kind === "review" && <span className="chat-thread-kind">review</span>}
+                        not tell them apart. Only Remember threads are tagged:
+                        chat is the older and commoner kind, and tagging both
+                        would put a label on every row to distinguish a minority.
+
+                        `t.kind === "review"` is the **persisted** thread kind,
+                        still spelled the old way until Stage C migrates the
+                        column — src/types.ts § ThreadKind. The tag the reader
+                        sees is the new name. */}
+                    {t.kind === "review" && <span className="chat-thread-kind">remember</span>}
                     <span className="chat-thread-count">{turns(t)}</span>
                     {/* Recency, because the question a list of conversations
                         answers is "which was I in?". The exact time is in the
@@ -957,8 +966,8 @@ export function Conversation({
    * therefore passes nothing.
    */
   kind: ThreadKind;
-  stance?: ReviewStance;
-  onStance?: ((next: ReviewStance) => void) | undefined;
+  stance?: RememberStance;
+  onStance?: ((next: RememberStance) => void) | undefined;
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
@@ -1056,7 +1065,7 @@ export function Conversation({
         }}
       >
         {thread.messages.length === 0 &&
-          (kind === "review" ? <ReviewInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
+          (kind === "review" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1141,7 +1150,7 @@ export function Conversation({
 }
 
 /**
- * The opening state of a **review**, which is not a list of suggestions and
+ * The opening state of a **Remember thread**, which is not a list of suggestions and
  * must not become one.
  *
  * Chat's `Suggestions` are complete questions that send on click, and that
@@ -1154,7 +1163,7 @@ export function Conversation({
  * is a genuinely hard instruction to obey from a standing start, and naming
  * three ways in is the cheapest help that does not contaminate the answer.
  */
-function ReviewInvitation() {
+function RememberInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
@@ -1415,7 +1424,7 @@ function Turn({
       )}
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {/* **Which stance produced this answer**, on review turns only.
+          {/* **Which stance produced this answer**, on Remember turns only.
               A Socratic reply and a Respond reply to the same words look very
               different, and a reader who moved the picker three turns ago has
               no other way to tell why. It is also the honest label for a retry,
@@ -1423,7 +1432,7 @@ function Turn({
               rather than in whatever the picker says now.
               Not on `balanced`: that is the default and most answers are it, so
               labelling them would put a tag on nearly every turn to distinguish
-              a minority — the same call the thread list's `review` tag makes. */}
+              a minority — the same call the thread list's Remember tag makes. */}
           {message.stance && message.stance !== "balanced" && (
             <span className="chat-stance-tag" title={`Asked for a ${message.stance} reply`}>
               {message.stance}
@@ -1819,12 +1828,12 @@ export function Composer({
    */
   placeholder?: string;
   /**
-   * Chat or review. **Everything that makes this box work is shared** — the
+   * Chat or Remember. **Everything that makes this box work is shared** — the
    * draft, the focus nonce, the auto-resize, Enter to send, the Escape ladder,
    * the key-propagation stop that keeps the article's ↑/↓ out of the caret, the
    * `readOnly` gate while a transcript is arriving, the dictation button and
    * strip. Those are the parts that are subtle and the parts where a second
-   * copy would drift; a review box that reimplemented the Escape ladder would
+   * copy would drift; a Remember box that reimplemented the Escape ladder would
    * be a bug nobody found for a month.
    *
    * What the kind changes is layout and one control: a box six rows tall
@@ -1833,9 +1842,9 @@ export function Composer({
    * microphone UI, because talking will be much less annoying than typing."*
    */
   kind?: ThreadKind;
-  /** The stance the next review answer will be asked for. Ignored in chat. */
-  stance?: ReviewStance;
-  onStance?: ((next: ReviewStance) => void) | undefined;
+  /** The stance the next Remember answer will be asked for. Ignored in chat. */
+  stance?: RememberStance;
+  onStance?: ((next: RememberStance) => void) | undefined;
   /**
    * The live conversation this composer can hand over to, if there is one.
    *
@@ -1851,7 +1860,7 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  const review = kind === "review";
+  const remember = kind === "review";
   const box = useRef<HTMLTextAreaElement>(null);
   const hasProfile = useHasProfile(slug);
   /* Per turn, and it stays where the reader left it for the rest of the
@@ -1886,13 +1895,13 @@ export function Composer({
     const el = box.current;
     if (!el) return;
     el.style.height = "auto";
-    /* Twice chat's ceiling for a review. A chat question is a sentence; a
-       spoken review is a paragraph or three, and a box that stops growing at
+    /* Twice chat's ceiling for a Remember turn. A chat question is a sentence; a
+       spoken Remember turn is a paragraph or three, and a box that stops growing at
        160px turns the reader's own words into a four-line scrolling window they
        cannot read back before sending. `rows` below sets the floor; this sets
        the roof. */
-    el.style.height = `${Math.min(el.scrollHeight, review ? 360 : 160)}px`;
-  }, [value, review]);
+    el.style.height = `${Math.min(el.scrollHeight, remember ? 360 : 160)}px`;
+  }, [value, remember]);
 
   /**
    * **Dictation, in the box where it is worth most.**
@@ -1961,13 +1970,13 @@ export function Composer({
         /* Six rows rather than one, so the box LOOKS like somewhere to put a
            paragraph before a word is in it. The height then follows the content
            exactly as chat's does. */
-        rows={review ? 6 : 1}
+        rows={remember ? 6 : 1}
         value={value}
         readOnly={dictate.readOnly}
         placeholder={
           busy
             ? "Waiting for the answer…"
-            : review
+            : remember
               ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
               : (placeholder ?? "Ask about this article…")
         }
@@ -2037,7 +2046,7 @@ export function Composer({
         </button>
       )}
       {dictate.dictation.supported &&
-        (review ? (
+        (remember ? (
           /* **Labelled, and first in the row.** Greg asked for the microphone to
              be emphasised here because talking a paragraph is so much less
              annoying than typing one — and an unlabelled icon among three other
@@ -2068,10 +2077,10 @@ export function Composer({
           live={live}
           onStart={onStartLive}
           disabled={busy || dictate.readOnly}
-          labelled={review}
+          labelled={remember}
         />
       )}
-      {review && onStance && (
+      {remember && onStance && (
         /* **A native `<select>`, not a custom radiogroup**, and that is a
            keyboard decision rather than a lazy one. The dock already owns a
            roving-tabindex radiogroup for the modes; a second one *inside* the
@@ -2089,7 +2098,7 @@ export function Composer({
             value={stance}
             disabled={busy}
             onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => onStance(e.target.value as ReviewStance)}
+            onChange={(e) => onStance(e.target.value as RememberStance)}
             title="How much the answer should say"
           >
             <option value="balanced">Balanced</option>

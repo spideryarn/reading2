@@ -26,7 +26,7 @@ import { AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
-import { jobEngine } from "./jobEngine.js";
+import { useJobSession } from "./useJobs.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
@@ -233,31 +233,23 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
  */
 export function App() {
   const route = useRoute();
-  const { user, loading } = useSession();
+  const { session, user, loading } = useSession();
 
   /**
    * **The one thing that keeps an import moving while the reader reads.**
    *
    * On Vercel the browser is the worker, and until 2026-09-01 the loop that
-   * drove it lived in `useJobs` — mounted from the shelf, the add page and the
-   * reading-view bands. Every branch below is an early `return`, so there is no
-   * persistent shell component at all and a route change unmounted all three:
-   * paste a URL, click into the article to read while you wait, and the import
-   * stopped. It is a tab-level service now (src/web/jobEngine.ts) and this is
-   * where its session begins and ends.
-   *
-   * **Keyed on the id, not on a truthy user.** A public job carries no
-   * `ownerId`, so the engine cannot work out for itself that the list it holds
-   * belongs to the reader who just signed out; the key is the only thing that
-   * knows. The cleanup is not a Stop — the durable job is left exactly as it
-   * is, to be reconciled when its owner comes back.
+   * drove it lived in `useJobs` — mounted from the shelf, the add page and,
+   * through `useStepJob`, the reading view. Every branch below is an early
+   * `return`, so there is no persistent shell component at all, and driving an
+   * import therefore depended on whether the page the reader happened to open
+   * mounted one of those. On `/profile`, `/design`, `/admin` and the landing
+   * page it mounted none, and the import stopped. It is a tab-level service now
+   * (src/web/jobEngine.ts) and this is where its session begins and ends; the
+   * effect itself is `useJobSession` in useJobs.ts, so that a test can render
+   * the real one rather than a copy of it.
    */
-  const readerId = user?.id ?? null;
-  useEffect(() => {
-    if (!readerId) return;
-    jobEngine.start(readerId);
-    return () => jobEngine.stop();
-  }, [readerId]);
+  useJobSession(user?.id ?? null, session?.access_token ?? null);
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the

@@ -553,7 +553,7 @@ export async function exportArticle(
             /* **The field this file's own comment warned about**, four lines
                up: `tools` went missing from an export exactly this way once
                already, because the row is built from named fields and a new one
-               is easy not to add. A review thread exported without its stances
+               is easy not to add. A Remember thread exported without its stances
                and imported back is a conversation whose every answer has lost
                the instruction that produced it, and nothing reports an error.
                GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */

@@ -610,24 +610,24 @@ export function coverageAskable(
  * The instructions. **This is the feature; everything else in the file is
  * plumbing around it.**
  *
- * Read src/converse.ts § `REVIEW_SYSTEM` before editing it. Review mode is the
+ * Read src/converse.ts § `REMEMBER_SYSTEM` before editing it. Remember mode is the
  * other prompt in this repo whose whole job is tone towards a person who has
  * volunteered their own thinking, and its six recorded faults are the obvious
  * things to write. Three of them are load-bearing here:
  *
  *  - **A correction may not be built out of the model's own inference.** In
- *    review that produced a confident objection reasoned from a different part
+ *    Remember that produced a confident objection reasoned from a different part
  *    of the article. Here the same move would be worse: the model has one
  *    paragraph and the referee has read the whole paper, so an inferred
  *    "misunderstanding" is the model's own reading dressed as the paper's.
  *    Hence the hard bar under kind 2 — the passage must contradict the comment
  *    *by itself*.
  *  - **Confirming and grading are different, and grading wears a friendly
- *    face.** Review had to be told that "that reading holds up well" is a
+ *    face.** Remember had to be told that "that reading holds up well" is a
  *    verdict. Mirror has no room for one — the output is remarks and nothing
  *    else — but a `note` can still characterise the set, so it is forbidden
  *    explicitly.
- *  - **Forbidding a thing and then listing its ingredients.** Review's first
+ *  - **Forbidding a thing and then listing its ingredients.** Remember's first
  *    draft banned grading and then asked for what was solid, what was off and
  *    what was missing. So this prompt never asks what is *good* about a
  *    comment, and never asks for a count.

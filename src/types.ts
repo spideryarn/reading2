@@ -1857,7 +1857,7 @@ export type StepName =
      article bytes at the same effort and share one cached prefix, the same
      reason `quotes` sits beside `glossary`. */
   | "timeline"
-  /* The questions the piece can ask you back, the second sub-mode of Review —
+  /* The questions the piece can ask you back, the second sub-mode of Remember —
      docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
      for the third time and the same reason: `articleWithIds` at `high` effort,
      so all four share one cached article prefix and `STEP_ORDER` keeps them
@@ -2141,7 +2141,7 @@ export interface ChatMessage {
    */
   editedAt?: string;
   /**
-   * Which stance produced this answer. **Assistant turns only, review threads
+   * Which stance produced this answer. **Assistant turns only, Remember threads
    * only** — absent on every chat answer and on every user message.
    *
    * Written when the *pending* row is created, never when it finishes, and that
@@ -2152,18 +2152,18 @@ export interface ChatMessage {
    *
    * See docs/plans/260827ah-review-mode.md § Where the stance picker's value lives.
    */
-  stance?: ReviewStance;
+  stance?: RememberStance;
 }
 
 /**
- * How much the model should say in a review answer — the reader's choice, per
+ * How much the model should say in a Remember answer — the reader's choice, per
  * turn.
  *
  * Greg named all four, 2026-08-27. `balanced` is the default and is not an
  * average of the other three: it decides per point, on evidence, and defaults
  * to telling when it cannot tell. docs/plans/260827ah-review-mode.md § The stance.
  */
-export type ReviewStance = "balanced" | "respond" | "socratic" | "signposts";
+export type RememberStance = "balanced" | "respond" | "socratic" | "signposts";
 
 /**
  * The four, as a value.
@@ -2173,7 +2173,7 @@ export type ReviewStance = "balanced" | "respond" | "socratic" | "signposts";
  * offered in the menu and rejected by the server. The same trick `MODES` plays
  * in src/web/params.ts.
  */
-export const REVIEW_STANCES: readonly ReviewStance[] = [
+export const REMEMBER_STANCES: readonly RememberStance[] = [
   "balanced",
   "respond",
   "socratic",
@@ -2186,13 +2186,22 @@ export const REVIEW_STANCES: readonly ReviewStance[] = [
  *
  * **Required, not optional**, and normalised to `"chat"` when a stored thread
  * predates this field. An optional kind means a `?? "chat"` at every read site
- * and one of them will eventually be missed — which is a review thread answered
+ * and one of them will eventually be missed — which is a Remember thread answered
  * with chat's prompt, and nothing on screen disagreeing. GPT Sol's review of
  * docs/plans/260827ah-review-mode.md, 2026-08-27.
  *
  * A thread's kind is set on the turn that creates it and never again, exactly
  * like its `anchor`. See docs/plans/260827ah-review-mode.md § `kind` belongs to the
  * thread.
+ *
+ * **`"review"` here is the old name of the Remember mode, and it is still
+ * `"review"` on purpose.** The mode was renamed on 2026-09-01, but this value is
+ * persisted: `chat_threads.kind` carries a live CHECK constraint
+ * `kind in ('chat','review')`, so renaming the discriminant before the database
+ * moves would fail every Remember insert with `23514`. Stage C renames the
+ * literal, the schema and the data together — until then the mapping is
+ * deliberately `mode "remember"` → `kind "review"`.
+ * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
  */
 export type ThreadKind = "chat" | "review";
 
@@ -2254,7 +2263,8 @@ export interface ChatThread {
    */
   anchor?: ChatAnchor;
   /**
-   * A question about the article, or a review of it. See `ThreadKind`.
+   * A question about the article, or the reader saying what they took from
+   * it. See `ThreadKind`.
    *
    * **Set on the turn that creates the thread and never again**, the same rule
    * as `anchor` two fields up and for a sharper reason: it chooses the system
@@ -2291,13 +2301,14 @@ export interface ThreadSummary {
   updatedAt: string;
   anchor?: ChatAnchor;
   /**
-   * Chat or review — which the reading view needs even though it draws no
-   * review marks.
+   * Chat or Remember — which the reading view needs even though it draws no
+   * Remember marks.
    *
    * `?thread=` opens the floating `ChatDialog` in every mode but the two
    * conversation modes, and that dialog is chat's UI and asks with chat's
-   * prompt. A pasted `?mode=toc&thread=<a review>` would therefore continue a
-   * review conversation as a chat. The overlay is gated on this instead. See
+   * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
+   * continue a Remember conversation as a chat. The overlay is gated on this
+   * instead. See
    * src/web/App.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
    */
@@ -2591,7 +2602,7 @@ export type TimelineFound = TimelineResponse;
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
-   second sub-mode of Review. See docs/plans/260831al-review-quiz-sub-mode.md.
+   second sub-mode of Remember. See docs/plans/260831al-review-quiz-sub-mode.md.
 
    ## Why these are here and not in src/quiz.ts, where the stage lives
 

@@ -52,6 +52,12 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `diagram` | which of the three pictures diagram mode is drawing, absent for `force` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
+| `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
+| `remember` | which half of Remember is open: `recall` (the default) or `quiz` — [remember-mode.md](remember-mode.md). **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+
+**`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
+so all three push, and all three land an unrecognised value on the default rather than on an error
+page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
 **`dx` and `dhue` replace where `diagram` pushes**, and the split is the one this
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo

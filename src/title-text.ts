@@ -241,5 +241,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   referee: "Referee",
   diagram: "Diagram",
   chat: "Chat",
-  review: "Review",
+  remember: "Remember",
 };
