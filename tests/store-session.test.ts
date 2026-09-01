@@ -377,7 +377,7 @@ describe("a step that writes its own artefacts inside run", () => {
 
     await expect(
       session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE),
-    ).rejects.toThrow(/toc/);
+    ).rejects.toThrow(/hierarchy/);
     expect(watched.finishes, "finished a step it refused").toBe(0);
     /* And the marker is still there, so the next run re-runs the step rather
        than trusting whatever the stage left behind. */
@@ -422,7 +422,7 @@ describe("assertProduced still catches a step that claims to have written and di
     await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Half")), "utf-8");
     const step = stepProducing("hierarchy", ["tree", "labels"]);
     await expect(assertProduced(step, ctx, watched.store)).rejects.toThrow(
-      /toc finished without writing labels/,
+      /hierarchy finished without writing labels/,
     );
   });
 });
