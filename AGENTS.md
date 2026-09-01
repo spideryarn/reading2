@@ -63,8 +63,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
-  `browser-control.md` (laptop or remote box? start here) · `browser-testing.md` ·
-  `claude-in-chrome.md` (nothing connected?) · `performance.md` ·
+  `browser-control.md` (which browser automation on which machine — start here) ·
+  `browser-testing.md` · `claude-in-chrome.md` (the laptop extension: nothing connected?) ·
+  `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
@@ -269,8 +270,11 @@ actually reaches is not always the one on its command line, and both mistakes pr
 
 - **Do browser work in a Sonnet subagent.** It's mostly click-look-click and the screenshots are
   large, so keeping them out of the main context is worth more than the extra reasoning. Tell it to
-  read [browser-testing.md](docs/project/browser-testing.md) first, and ask it back for the
-  conclusion, not the page dumps.
+  read [browser-control.md](docs/project/browser-control.md) then
+  [browser-testing.md](docs/project/browser-testing.md) first, and ask it back for the conclusion,
+  not the page dumps. **Which automation you get is decided by the machine, not by preference** —
+  the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote
+  box, and the extension cannot follow you there.
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and

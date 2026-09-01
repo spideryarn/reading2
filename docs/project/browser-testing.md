@@ -5,11 +5,14 @@ The reading view has no DOM tests and won't for a while — see
 does, **looking at it in a browser is the test harness for stage 6**, and that makes it worth
 writing down what to look at and where the eye lies to you.
 
-This doc is the how. What the client *is*: [web-client.md](web-client.md). Why the feature exists:
+This doc is the how — what to look at, whichever automation you are driving the page with. **Which
+one that is depends on the machine**, and [browser-control.md](browser-control.md) is the fork:
+the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote box.
+Read it first; the mechanism-specific traps live under it, and the examples below are written in the
+extension's tools. What the client *is*: [web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
-[claude-in-chrome.md](claude-in-chrome.md). And if you are not on Greg's laptop, most of this cannot
-apply: [browser-control.md](browser-control.md) is which mechanism goes with which machine.
+[claude-in-chrome.md](claude-in-chrome.md).
 
 ## Before anything, check the server is actually up
 

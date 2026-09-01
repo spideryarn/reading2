@@ -52,7 +52,7 @@ arrived, exit code *and* answer file. Mechanics in
 ## Delegate
 
 The orchestrator should do **little of the implementation**. Hand the main work to Opus subagents,
-and the low-level work — research, repo-wide trawls, Claude-in-Chrome, running tests and reading
+and the low-level work — research, repo-wide trawls, browser automation, running tests and reading
 logs — to Sonnet. GPT Luna via [codex-cli-as-subagent.md](codex-cli-as-subagent.md) is the cheap tier
 for the same low-level and token-heavy work, and it's a different model family, so the variety is
 free. Those are defaults, not rules; use your judgment about what a given piece of work needs.
@@ -103,7 +103,8 @@ the machinery is still open now.
   rather than arguing it out in prose.
 - **Static analysis, typecheck, lint** — as well as the suite. Run the gate the project actually
   uses ([code-quality-overview.md](../project/code-quality-overview.md)).
-- **Claude-in-Chrome**, in a subagent, for anything with a UI. Tests going green is not evidence
+- **Drive a real browser**, in a subagent, for anything with a UI — with whatever automation the
+  machine you are on has (Claude-in-Chrome, Playwright, …). Tests going green is not evidence
   that a reader can see it ([browser-testing.md](../project/browser-testing.md)).
 
 "Done, all tests pass" is a claim, not a result — read the diff, and run the gates yourself before

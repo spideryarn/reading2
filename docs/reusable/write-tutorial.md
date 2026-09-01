@@ -99,9 +99,10 @@ An SVG that is correct in the source and wrong on screen is the normal case: ove
 text escaping its box, an arrowhead pointing at nothing, a colour invisible on the page background.
 **None of that is visible in the markup.**
 
-So open the finished file and look at it. Delegate this to a Sonnet subagent with
-[Claude-in-Chrome](https://claude.ai/chrome) — it is click-look-click and the screenshots are large,
-so keeping them out of the main context is worth more than the extra reasoning:
+So open the finished file and look at it. Delegate this to a Sonnet subagent driving a browser —
+[Claude-in-Chrome](https://claude.ai/chrome), Playwright, or whatever automation the machine you
+are on has. It is click-look-click and the screenshots are large, so keeping them out of the main
+context is worth more than the extra reasoning:
 
 ```
 Open file:///<abs path>/docs/tutorials/<topic>.html in a new tab.
