@@ -37,6 +37,15 @@
  * read past. The model asserts that a passage takes the claim up; whether it
  * carries it is theirs, and it is the interesting part.
  *
+ * ## And the thing none of the three rules covered
+ *
+ * All three are about the rows that came back. **A claim that never gets a row
+ * is invisible**, and this panel looks exactly as tidy either way — the guard
+ * was built on the wrong side of the door, and the eval caught two papers
+ * silently dropping a claim from their own abstract. `Unaccounted` at the bottom
+ * of this file is the other side of it, and its docstring is where the wording
+ * is argued for, because the wording is the whole value.
+ *
  * ## What this panel deliberately does not show
  *
  * **How many passages a claim has.** Not as a number, not as a bar, not as a
@@ -65,12 +74,17 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
-import type { Claim } from "../referee-claims.js";
+import type { Claim, OpeningSentence } from "../referee-claims.js";
 import {
   DOCUMENT_ORDER_NOTE,
   LINKAGE_NOT_ADEQUACY,
   NO_PASSAGE_FOUND,
   PASSAGES_UNUSABLE,
+  REASONING_WITHHELD,
+  UNACCOUNTED_HEADING,
+  UNACCOUNTED_NOTE,
+  unaccountedSentences,
+  withheldNote,
 } from "../referee-claims.js";
 import type { Block, BlockId } from "../types.js";
 import { assignSlots } from "./hit-colours.js";
@@ -155,6 +169,22 @@ export function ClaimsBand({
     [api.run, at],
   );
 
+  /* **Computed here rather than on the server**, and that is the whole reason it
+     could be built without touching a route, a table or a stored shape: it is a
+     pure function of the blocks this reader already has and the claims that came
+     back.
+
+     **Only once the run is done.** Mid-stream every claim that has not arrived
+     yet reads as a claim the answer did not account for, which is a true
+     statement about an incomplete answer and a misleading one on a screen. The
+     panel is honest about a partial list of claims — they are the paper's, in
+     order — and cannot be about a partial list of omissions. */
+  const settled = api.run?.status === "done";
+  const unaccounted = useMemo(
+    () => (settled ? unaccountedSentences(blocks, claims) : []),
+    [settled, blocks, claims],
+  );
+
   /* `createdAt` is the run's, so it is the same for every claim and the tie-break
      inside `assignSlots` falls to the id — which is `blockId:start`, so the
      assignment is stable across a re-render and across a stream frame. */
@@ -203,6 +233,7 @@ export function ClaimsBand({
     <ClaimsView
       api={api}
       claims={claims}
+      unaccounted={unaccounted}
       slots={slots}
       showing={showing}
       onToggle={toggle}
@@ -225,6 +256,7 @@ export function ClaimsBand({
 export function ClaimsView({
   api,
   claims,
+  unaccounted = [],
   slots,
   showing,
   onToggle,
@@ -232,6 +264,15 @@ export function ClaimsView({
 }: {
   api: ClaimsApi;
   claims: Claim[];
+  /**
+   * The sentences the claims do not account for — `unaccountedSentences`.
+   *
+   * Optional, and empty by default, because most of this file's tests are about
+   * a claim row and have no article to compute it from. A panel with none of
+   * these draws nothing extra, which is also what an answer that accounted for
+   * everything looks like.
+   */
+  unaccounted?: readonly OpeningSentence[];
   slots: Map<string, number>;
   showing: string[];
   onToggle(id: string): void;
@@ -239,6 +280,10 @@ export function ClaimsView({
 }) {
   const run = api.run;
   const pending = run?.status === "pending";
+  /* Counted from the rows themselves rather than carried alongside them, so a
+     stored run from before the fail-safe existed reads as zero — which is the
+     truth about it. */
+  const withheld = claims.reduce((n, c) => n + c.passages.filter((p) => p.withheld).length, 0);
   return (
     <div className="clm">
       {/* **Above the button, not under the results.** Both sentences are about
@@ -305,9 +350,64 @@ export function ClaimsView({
               />
             ))}
           </ol>
+
+          {/* **Under the list, and it is the one note that belongs there.**
+              Every other note on this panel is about how to read what follows;
+              this one is a fact about the list that has just been read, and it
+              is meaningless before it. */}
+          {withheld > 0 && <p className="clm-what">{withheldNote(withheld)}</p>}
+
+          {unaccounted.length > 0 && <Unaccounted rows={unaccounted} onJump={onJump} />}
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * **What the claims above did not account for**, and the wording is the whole
+ * value of it.
+ *
+ * The failure this exists for is invisible by construction: a claim the model
+ * never lists gets no row, `NO_PASSAGE_FOUND` never fires, and the panel looks
+ * exactly as tidy as one that missed nothing. The eval caught two papers
+ * dropping a claim from their own abstract — twice each, identically — with the
+ * dropped claim's words swallowed inside a neighbouring claim's quote.
+ *
+ * So this section says a mechanical thing — *no claim above is anchored in these
+ * sentences* — and refuses the tempting one, *here are the claims it missed*.
+ * Deciding what is a claim is a judgement, and the blocks a claim came from
+ * carry background, citation and setup as well as claims; a list headed *claims
+ * you missed* would be the same judgement this sub-mode refuses, made in
+ * reverse and with worse evidence. `UNACCOUNTED_NOTE` is where that is said, as
+ * a value, so tests/referee-copy-is-about-the-model.test.ts can hold it to it.
+ *
+ * **No count and no ordinal**, for the same reason nothing else here has one:
+ * six of these is not a worse answer than two, and a number is one glance from a
+ * ranking. They are doors into the prose like every other row, and that is all
+ * they are.
+ */
+function Unaccounted({
+  rows,
+  onJump,
+}: {
+  rows: readonly OpeningSentence[];
+  onJump(blockId: BlockId): void;
+}) {
+  return (
+    <section className="clm-row">
+      <p className="clm-claim">{UNACCOUNTED_HEADING}</p>
+      <p className="clm-what">{UNACCOUNTED_NOTE}</p>
+      <ul className="clm-passages">
+        {rows.map((row) => (
+          <li className={"clm-passage"} key={`${row.blockId}:${row.start}`}>
+            <button type="button" className="clm-jump" onClick={() => onJump(row.blockId)}>
+              <span className="clm-quote">{row.text}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -396,6 +496,12 @@ function ClaimRow({
               <span className="clm-quote">{p.quote}</span>
             </button>
             {p.reasoning && <p className="clm-why">{p.reasoning}</p>}
+            {/* Never both: `validateClaims` blanks the line as it sets the flag.
+                The sentence is a value in src/referee-claims.ts so the copy test
+                can check what it may say — it is about the model's line, and it
+                says the passage survived, because a referee who watches a line
+                vanish will otherwise wonder what went with it. */}
+            {p.withheld && <p className="clm-why">{REASONING_WITHHELD}</p>}
           </li>
         ))}
       </ul>

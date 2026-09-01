@@ -37,8 +37,12 @@ import {
   DOCUMENT_ORDER_NOTE,
   NO_PASSAGE_FOUND,
   PASSAGES_UNUSABLE,
+  REASONING_WITHHELD,
+  UNACCOUNTED_HEADING,
+  UNACCOUNTED_NOTE,
 } from "../src/referee-claims.js";
 import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
+import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -68,6 +72,14 @@ const REFEREE_SURFACES = [
   "src/web/CriteriaPanel.tsx",
   "src/web/MirrorPanel.tsx",
   "src/web/ClaimsPanel.tsx",
+  /* **Candidates joined on 2026-09-01**, and its null result is about neither
+     the paper nor the referee's notes but about *people*. That makes the wrong
+     sentence a different and larger claim: "no suitable reviewers were found" is
+     about the field, and this app — which has no scholarly identity graph and
+     ran a handful of web searches — has no standing whatever to make it. The
+     phrase list below does not catch that one, so `ALL_DROPPED` and
+     `NO_NAMES_YET` are checked as values in their own block further down. */
+  "src/web/CandidatesPanel.tsx",
 ];
 
 /**
@@ -176,6 +188,65 @@ describe("what Claims says about an empty answer", () => {
   });
 });
 
+/**
+ * **Candidates' own copy, checked as values.**
+ *
+ * Three sentences, and each is a rule rather than a phrasing:
+ *
+ * - `NO_NAMES_YET` and `ALL_DROPPED` are two of the three states, kept apart for
+ *   the reason Claims keeps its three apart: *nobody was named* and *people were
+ *   named and none survived the rules* call for different actions from the
+ *   editor.
+ * - `COI_NOT_CHECKED` is the one that has to say what did **not** happen. Half
+ *   of what publishers call a conflict is mechanically checkable from public
+ *   data and this app checks none of it; the other half is not automatable by
+ *   anybody. Any sentence that could be read as "we checked and it is clear" is
+ *   the specific move the editor research says editors already distrust, and it
+ *   is worse here than an ordinary null result: an editor who believes a
+ *   conflict filter ran will not run one.
+ */
+describe("what Candidates says about an empty shortlist, and about conflicts", () => {
+  it("makes the model the subject when names were dropped", () => {
+    expect(ALL_DROPPED.toLowerCase()).toMatch(/^the model /);
+    for (const phrase of ABOUT_THE_PAPER) {
+      expect(ALL_DROPPED.toLowerCase(), phrase).not.toContain(phrase);
+    }
+  });
+
+  it("never says the field has no suitable reviewers", () => {
+    /* The larger wrong claim, and the one the phrase list above cannot see. */
+    for (const sentence of [ALL_DROPPED, NO_NAMES_YET]) {
+      expect(sentence.toLowerCase()).not.toMatch(/no (suitable|qualified|good) (reviewers|candidates)/);
+      expect(sentence.toLowerCase()).not.toMatch(/nobody (is|would be) suitable/);
+    }
+  });
+
+  it("keeps 'nobody named' and 'named and none shown' apart", () => {
+    expect(NO_NAMES_YET).not.toMatch(/none of them could be shown/i);
+    expect(ALL_DROPPED).toMatch(/none of them could be shown/i);
+  });
+
+  it("says the conflict check did not run, and never that it came back clear", () => {
+    expect(COI_NOT_CHECKED.toLowerCase()).toMatch(/no conflict-of-interest check has run/);
+    for (const claim of [
+      /no conflicts? (were )?found/,
+      /no conflicts? of interest(?! check)/,
+      /clear of/,
+      /independent of the authors/,
+    ]) {
+      expect(COI_NOT_CHECKED.toLowerCase(), String(claim)).not.toMatch(claim);
+    }
+  });
+
+  it("names both halves, so it cannot be read as a partial filter having run", () => {
+    /* Saying only "we did not check co-authorship" would imply the rest was
+       handled. Saying only "some things cannot be checked by anyone" would imply
+       the checkable half was. Both halves, or neither is honest. */
+    expect(COI_NOT_CHECKED.toLowerCase()).toContain("co-authorship");
+    expect(COI_NOT_CHECKED.toLowerCase()).toContain("advisor");
+  });
+});
+
 describe("what Referee says when it found nothing", () => {
   it("never puts the paper in the subject position", () => {
     const offenders: string[] = [];
@@ -203,5 +274,64 @@ describe("what Referee says when it found nothing", () => {
       `The zero-result branch has to name the model as the thing that came up ` +
         `empty, or the reader has no way to tell a failure to find from a finding.`,
     ).toMatch(/did not find/i);
+  });
+});
+
+/**
+ * **The two sentences added on 2026-09-01, and they are the ones most likely to
+ * drift into being about the paper.**
+ *
+ * An eval found that Claims could drop a claim from a paper's own abstract and
+ * leave a panel that looked perfectly tidy — the sub-mode's whole defence,
+ * `NO_PASSAGE_FOUND`, cannot fire for a claim that never got a row. The answer
+ * is a list of the sentences no claim above is anchored in, and **the wording is
+ * the entire value of it**. One word in the wrong direction and it becomes
+ * *here are the claims the model missed*, which is a judgement about the paper
+ * made with worse evidence than the judgement this sub-mode already refuses to
+ * make: a block a claim came from carries background, citation and setup as
+ * well as claims.
+ *
+ * `REASONING_WITHHELD` has the same shape of danger one field over. A line was
+ * taken out because it read as a verdict; the sentence in its place must say
+ * that about the *model's line*, and must not become *this passage does not
+ * carry the claim*, which is the verdict itself wearing our clothes.
+ */
+describe("what Claims says about the sentences it did not account for", () => {
+  it("never puts the paper in the subject position", () => {
+    for (const sentence of [UNACCOUNTED_HEADING, UNACCOUNTED_NOTE, REASONING_WITHHELD]) {
+      for (const phrase of ABOUT_THE_PAPER) {
+        expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
+      }
+    }
+  });
+
+  it("never calls them claims the model missed, which is the same judgement in reverse", () => {
+    const note = `${UNACCOUNTED_HEADING} ${UNACCOUNTED_NOTE}`.toLowerCase();
+    for (const phrase of [
+      "missed",
+      "missing",
+      "omitted",
+      "left out",
+      "overlooked",
+      "should have",
+      "failed to",
+      "unlisted claim",
+    ]) {
+      expect(note, phrase).not.toContain(phrase);
+    }
+  });
+
+  it("says out loud that some of them will not be claims, and hands the judgement over", () => {
+    /* Without this the list reads as an accusation, and a referee who reads it
+       that way will either dismiss it or over-trust it. Both are worse than
+       reading three sentences of the paper, which is what it is for. */
+    expect(UNACCOUNTED_NOTE.toLowerCase()).toContain("background");
+    expect(UNACCOUNTED_NOTE.toLowerCase()).toMatch(/decide for yourself/);
+  });
+
+  it("makes the model's line the thing that was withheld, not the passage", () => {
+    expect(REASONING_WITHHELD.toLowerCase()).toMatch(/^the model's line/);
+    // And says the passage is still there, or a referee wonders what else went.
+    expect(REASONING_WITHHELD.toLowerCase()).toContain("untouched");
   });
 });

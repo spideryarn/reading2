@@ -73,6 +73,38 @@
 > lines of the same shape. Both the guarded line and its ablated twin are pinned
 > in the self-check table below, so the narrowing cannot quietly come undone.
 >
+> ## Everything above predates the fix, and no call was spent to re-run it
+>
+> **Added 2026-09-01, after the fix, by hand.** The transcript above is exactly
+> the six paid runs of the morning. Nothing here has been re-run — the fix is
+> deterministic and its evidence is a unit test over *this file's* committed
+> output (`tests/referee-claims-accounting.test.ts`, which feeds the Ridge
+> answer above through the real `unaccountedSentences` and asserts it surfaces
+> the memory and the robustness clause), so a paid re-run would have bought a
+> second sample of the model rather than evidence about the code.
+>
+> Three things changed, and the next run of this file will show all three:
+>
+> - **The panel now prints what the answer did not account for.** For each block
+>   a claim was taken from, the sentences and clauses no claim is anchored in —
+>   `unaccountedSentences`, src/referee-claims.ts. On the Ridge answer above that
+>   is *"uses less peak memory than the current allocator,"* and *"and is robust
+>   to adversarially constructed inputs."*, which is the whole finding, visible
+>   without anybody having planted a phrase first. Every case below will grow a
+>   list of these; **read them as what the answer did not account for, never as
+>   claims the model missed** — an opening carries background and setup too.
+> - **The frames moved into `validateClaims` and now blank a `reasoning` line
+>   rather than only counting it.** So a re-run of `ablation` will show six
+>   passages whose line was withheld, quoted under **Withheld** — the eval reads
+>   them from `validateClaims`'s own return so this file keeps its evidence
+>   rather than reporting a green its own fail-safe manufactured. There is one
+>   copy of the frames now and this file imports it, so `SELF_CHECK` below is a
+>   test of the code that runs on a referee's answer.
+> - **The prompt asks for one claim per assertion**, and to quote the part of a
+>   compound sentence that makes *this* claim. That is the fix that might work
+>   and might not; the visible-omission list is the one that is there when it
+>   does not.
+>
 > ## What this file cannot tell you
 >
 > - **The paper-phrase subtraction never changed an outcome in these runs.** No

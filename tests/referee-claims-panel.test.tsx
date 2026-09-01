@@ -32,8 +32,14 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
-import { NO_PASSAGE_FOUND, PASSAGES_UNUSABLE } from "../src/referee-claims.js";
+import type { Claim, ClaimsRun, OpeningSentence } from "../src/referee-claims.js";
+import {
+  NO_PASSAGE_FOUND,
+  PASSAGES_UNUSABLE,
+  REASONING_WITHHELD,
+  UNACCOUNTED_NOTE,
+  withheldNote,
+} from "../src/referee-claims.js";
 import { ClaimsView, inDocumentOrder } from "../src/web/ClaimsPanel.js";
 import type { ClaimsApi } from "../src/web/useClaims.js";
 
@@ -99,13 +105,19 @@ afterEach(() => {
   host.remove();
 });
 
-function render(claims: Claim[], run?: ClaimsRun | null, over: Partial<ClaimsApi> = {}) {
+function render(
+  claims: Claim[],
+  run?: ClaimsRun | null,
+  over: Partial<ClaimsApi> = {},
+  unaccounted: OpeningSentence[] = [],
+) {
   const r = run === undefined ? done(claims) : run;
   act(() => {
     root.render(
       createElement(ClaimsView, {
         api: api(r, over),
         claims,
+        unaccounted,
         slots: new Map(claims.map((c, i) => [c.id, i])),
         showing: [],
         onToggle: () => {},
@@ -115,6 +127,16 @@ function render(claims: Claim[], run?: ClaimsRun | null, over: Partial<ClaimsApi
   });
   return host;
 }
+
+/**
+ * Two sentences of the paper's own that no claim above is anchored in — the
+ * shape `unaccountedSentences` produces, and deliberately carrying words that
+ * would read as claims, because that is the case where the wording has to work.
+ */
+const UNACCOUNTED: OpeningSentence[] = [
+  { blockId: FIRST, text: "uses less peak memory than the current allocator,", start: 74 },
+  { blockId: FIRST, text: "and is robust to adversarially constructed inputs.", start: 123 },
+];
 
 /* ------------------------------------------------- rule 1, on the screen -- */
 
@@ -262,5 +284,107 @@ describe("the run's own states", () => {
   it("says the paper has moved on, when it has", () => {
     const panel = render([THICK], done([THICK]), { stale: true });
     expect(panel.textContent).toMatch(/earlier version of this paper/i);
+  });
+});
+
+/* ------------------------------------ the hole none of the three rules covered -- */
+
+/**
+ * **A claim that never gets a row is invisible, and this panel looked exactly
+ * as tidy either way.**
+ *
+ * The sub-mode's defence against *a tired referee treats everything unlisted as
+ * clean* is `NO_PASSAGE_FOUND` — a row, and an honest sentence under it. It
+ * cannot fire for a claim the model never listed, because there is no row. The
+ * eval found two papers dropping a claim from their own abstract, twice each,
+ * with the dropped claim's words swallowed inside a neighbouring claim's quote
+ * (evals/results/referee-claims.md).
+ *
+ * What is asserted here is the **wording**, because the wording is the whole
+ * value: *what the answer did not account for*, never *the claims you missed*.
+ * The second is a judgement about the paper made with worse evidence than the
+ * one this sub-mode already refuses to make.
+ */
+describe("the sentences the claims do not account for", () => {
+  it("prints them, with the note that says what they are and are not", () => {
+    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    expect(panel.textContent).toContain(UNACCOUNTED_NOTE);
+    for (const row of UNACCOUNTED) expect(panel.textContent).toContain(row.text);
+  });
+
+  it("draws nothing at all when the claims account for everything", () => {
+    const panel = render([THICK]);
+    expect(panel.textContent).not.toContain(UNACCOUNTED_NOTE);
+  });
+
+  it("keeps them out of the claims list, so no count of them can become a rank", () => {
+    /* The list is where the no-digit rule holds, and these sentences are the
+       paper's own words — full of numbers. Outside the list they are prose;
+       inside it they would be a second column the eye reads as thinness. */
+    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const list = panel.querySelector(".clm-list");
+    expect(list?.textContent ?? "").not.toContain(UNACCOUNTED[0]?.text ?? "");
+    expect(list?.textContent ?? "").not.toMatch(/\d/);
+  });
+
+  it("puts no number on them anywhere", () => {
+    /* Six of these is not a worse answer than two. A count is one glance from a
+       ranking, which is the whole reason this sub-mode survived its review. */
+    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
+    expect(section).not.toBeNull();
+    expect(section?.textContent ?? "").not.toMatch(/\b(two|2|6|six)\b/i);
+  });
+
+  it("stays away until the run is finished", () => {
+    /* Mid-stream, every claim that has not arrived yet is a sentence nothing is
+       anchored in. That is true of an incomplete answer and misleading on a
+       screen — the band withholds the list until `done`, and this is the panel
+       half of the same thought: it never draws a section it was handed nothing
+       for. */
+    const panel = render([THICK], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [THICK] }, {}, []);
+    expect(panel.textContent).not.toContain(UNACCOUNTED_NOTE);
+  });
+
+  it("makes each one a door into the prose, like every other row", () => {
+    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
+    expect(section?.querySelectorAll(".clm-jump")).toHaveLength(UNACCOUNTED.length);
+  });
+});
+
+/* --------------------------------------------- the fail-safe, made visible -- */
+
+/**
+ * **A fail-safe nobody can see is a fail-safe nobody can check.**
+ *
+ * `validateClaims` blanks a `reasoning` line that reads as a verdict on whether
+ * a passage carries its claim. If those frames ever start firing on ordinary
+ * linkage sentences, the referee is the only one in a position to notice — and
+ * they cannot notice a thing that only ever reached a log line.
+ * docs/reusable/silent-success.md.
+ */
+describe("what the panel says when a line was withheld", () => {
+  const withheldPassage: Claim = {
+    ...THIN,
+    passages: [
+      { blockId: "spya-ekn678", quote: "law, medicine and finance", start: 0, reasoning: "", withheld: true },
+    ],
+  };
+
+  it("says so where the line would have been, and says the passage survived", () => {
+    const panel = render([withheldPassage]);
+    expect(panel.textContent).toContain(REASONING_WITHHELD);
+    expect(panel.textContent).toContain("law, medicine and finance");
+  });
+
+  it("counts them out loud rather than only in a log line", () => {
+    expect(render([withheldPassage]).textContent).toContain(withheldNote(1));
+  });
+
+  it("says nothing when nothing was withheld", () => {
+    const panel = render([THICK]);
+    expect(panel.textContent).not.toContain(REASONING_WITHHELD);
+    expect(panel.textContent).not.toContain(withheldNote(1));
   });
 });

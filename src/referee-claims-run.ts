@@ -41,11 +41,20 @@
  *    referee actually reads is a constant in src/referee-claims.ts that the
  *    model never sees and cannot influence. A claim with no passages under it
  *    gets `NO_PASSAGE_FOUND`, written by us.
- * 3. **Linkage, never adequacy.** This one **is only a prompt rule**, and it is
- *    the one to be honest about: `reasoning` is free text, and a model that
- *    writes *"this fully establishes the claim"* into it will have that printed.
- *    Nothing in the validator can read English. The eval is what would measure
- *    it, and it is not built — see § What is not here.
+ * 3. **Linkage, never adequacy.** This was the one held by nothing but the
+ *    prompt, and the eval below is what measured it. It now also has a
+ *    **fail-safe in code**: `validateClaims` blanks a `reasoning` line that
+ *    matches one of `ADEQUACY_FRAMES` (src/referee-claims.ts) with the paper's
+ *    own phrases subtracted first, keeps the passage, and reports what it
+ *    blanked. Read that docstring before trusting it — a verdict in ordinary
+ *    English that avoids every frame still reaches the referee, so the prompt
+ *    below is still doing most of the work.
+ *
+ * And a fourth thing, which the three rules above have nothing to say about:
+ * **a claim the model never lists is invisible**, and a tidy panel is exactly
+ * what that looks like. The eval caught two papers dropping a claim from their
+ * own abstract, twice each. `unaccountedSentences` is the answer, and it lives
+ * on the panel rather than here.
  *
  * And one more, which is a rule about how it is *described*: the prompt says the
  * manuscript is data and never instruction, and **that is not called a defence**.
@@ -69,11 +78,13 @@
  * quote, never a passage's reasoning** — a paper under review is somebody else's
  * unpublished work.
  *
- * ## What is not here
+ * ## The eval
  *
- * An eval. The thing that would measure rule 3 above, and the false
- * "did not find" rate the plan asks for. `evals/referee-mirror.ts` is the shape
- * to copy.
+ * `evals/referee-claims.ts`, and its committed transcript is
+ * `evals/results/referee-claims.md`. Five short synthetic papers, one paid call
+ * each, plus a red-first control that runs the same paper with this prompt's
+ * refusals cut out — because a detector nobody has watched go red is not
+ * evidence. Read the reasoning lines; the counters are a prompt to look.
  */
 
 import { openRouterStream, ProviderRefused } from "./ai-call.js";
@@ -223,9 +234,16 @@ THE RULES THAT MATTER
 - quote MUST be copied verbatim from that block — the exact characters, including
   the spaces, not a paraphrase and not a tidied-up version. It is used to find the
   words on the page. If you cannot copy it exactly, leave that row out.
-- The claim's own quote is the sentence in which the paper MAKES the claim,
-  usually in the abstract or the introduction. Quote the sentence, not the
-  paragraph.
+- ONE CLAIM PER ASSERTION. A single sentence often makes several claims at once
+  — "X compiles faster, uses less memory, and is robust to adversarial inputs"
+  is THREE claims, not one, and so is "we recover 98% of the quality at 4% of the
+  cost, and the saving grows with model size". Return a separate entry for each,
+  each with its own one-line claim. A claim you fold into a neighbouring claim's
+  quote is a claim the referee never sees.
+- The claim's own quote is the words in which the paper MAKES the claim, usually
+  in the abstract or the introduction. Quote the sentence, not the paragraph —
+  and when one sentence makes several claims, quote the PART of it that makes
+  this one, so that each claim's quote is different from its neighbour's.
 - claim is ONE SHORT LINE naming the claim in plain words, so the referee can
   read a list of them. It is a restatement, never an assessment.
 - A passage's quote is the sentence or phrase where the paper TAKES THE CLAIM UP.
@@ -304,6 +322,17 @@ export interface ClaimsOutcome {
   model: string;
   /** What validation threw away — the whole point of the log line below. */
   dropped: DroppedClaims;
+  /**
+   * The `reasoning` lines the validator blanked for reading as a verdict on
+   * whether a passage carries its claim — src/referee-claims.ts § `ADEQUACY_FRAMES`.
+   *
+   * **The strings, not the count**, and they go no further than a caller that
+   * asks: the route stores `claims` and nothing else, so nothing on this list
+   * reaches a referee or a log. `evals/referee-claims.ts` is the caller that
+   * reads them, which is what keeps the eval able to see what the fail-safe
+   * caught rather than reporting a green it manufactured.
+   */
+  withheld: string[];
   usage?: {
     promptTokens: number | null;
     completionTokens: number | null;
@@ -519,8 +548,9 @@ export async function* runClaimsStream({
   // is also where the document sort happens.
   let claims: Claim[];
   let dropped: DroppedClaims;
+  let withheld: string[];
   try {
-    ({ claims, dropped } = validateClaims(parseHits(rawText), blocks));
+    ({ claims, dropped, withheld } = validateClaims(parseHits(rawText), blocks));
   } catch (err) {
     if (stopped) throw new Error(READER_LEFT);
     line.error(
@@ -558,6 +588,12 @@ export async function* runClaimsStream({
            finding: it is as much a fact about this run's extraction as about the
            paper, which is the whole reason the panel refuses to rank on it. */
         claimsWithNoPassage: claims.filter((c) => c.passages.length === 0).length,
+        /* **The count, never the sentences.** A withheld line is still a
+           passage's reasoning about somebody's unpublished paper, and this
+           file's rule about what may be logged has no exception for a line we
+           happen to disapprove of. The referee is told the number on the panel
+           (`withheldNote`), which is where it can actually be checked. */
+        adequacyWithheld: withheld.length,
         blocks: blocks.length,
         ...dropped,
         finishReason,
@@ -583,6 +619,7 @@ export async function* runClaimsStream({
       claims,
       model: used,
       dropped,
+      withheld,
       usage: {
         promptTokens: usage?.prompt_tokens ?? null,
         completionTokens: usage?.completion_tokens ?? null,

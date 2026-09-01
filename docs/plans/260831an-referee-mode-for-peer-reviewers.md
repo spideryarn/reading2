@@ -206,6 +206,67 @@ So, three changes, all Sol's:
 - The model asserts *linkage* only, never *adequacy*. Whether the results carry the abstract's
   sentence is the referee's job, and it is the interesting part.
 
+#### The eval found the hole in those three, and it was on the wrong side of the door
+
+**2026-09-01.** [`evals/referee-claims.ts`](../../evals/referee-claims.ts) was built to measure the
+third rule, and it did — the linkage/adequacy line held on all five guarded papers, and the ablated
+control (the same paper with the prompt's refusals cut out) came back with six adequacy verdicts in
+eleven passages, so the refusals are what stop it. But the runs said something the eval was not
+looking for:
+
+> **`neverTakenUp` and `injected` each silently dropped a claim from their own paper's abstract, and
+> the panel would have looked perfectly tidy.** … In every case the words were **in** the answer,
+> inside the quote attached to a neighbouring claim, which is not the same as the referee having the
+> claim.
+>
+> — [`evals/results/referee-claims.md`](../../evals/results/referee-claims.md), and a repeat run
+> reproduced it exactly: same claims, same passages, same omissions.
+
+The three rules above are all about the rows that came back. **A claim that never gets a row is
+invisible.** The defence against *a tired referee treats everything unlisted as clean* is the
+zero-passage row and its honest sentence — and it cannot fire when there is no row.
+
+Two things landed, and only the first is a fix:
+
+- **What the answer did not account for is now computed and shown.** For each block a claim was
+  taken from, the sentences and clauses no claim is anchored in
+  (`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
+  for the clause its quote **begins** in, not every clause its quote covers — which is exactly what
+  makes a three-claim sentence quoted whole under one claim show its other two. The wording is the
+  whole value and is a checked constant: *what was not accounted for*, **never** *claims you
+  missed*, because a block a claim came from carries background, citation and setup too, and naming
+  them claims would be the judgement this sub-mode refuses, made in reverse.
+  [`tests/referee-copy-is-about-the-model.test.ts`](../../tests/referee-copy-is-about-the-model.test.ts)
+  holds it there. **What it deliberately cannot see**: a whole block the model ignored, because
+  finding that would mean asserting where a paper's claims live, and that is a judgement.
+- **The prompt asks for one claim per assertion**, and to quote the part of a compound sentence that
+  makes *this* claim. That might work and might not — the eval showed a prompt holding a rule and
+  also showed how little that proves about any single run. The visible-omission list is what is
+  there when the prompt fails.
+
+#### And the frames became a fail-safe, one copy of them
+
+The eval's adequacy frames — a degree, a negation or a comparison bolted to a support verb, with the
+paper's own four-word runs subtracted first — moved into `validateClaims`, which now **blanks** a
+`reasoning` line they fire on and counts what it blanked. The eval imports them rather than keeping
+a second copy, so its two-directional self-check is a test of the code that runs on a referee's
+answer. It **blanks the line and keeps the passage**: the linkage is still a door into the prose, and
+failing safe here means failing towards showing the paragraph. The count is printed on the panel
+rather than only logged, because a fail-safe nobody can see is a fail-safe nobody can check.
+
+**The stronger move, weighed and not taken: a closed enum of linkage kinds** —
+reports-the-figure / describes-the-method / restates-the-claim / … — which would make adequacy
+*unrepresentable* rather than caught by a pattern. Greg's call, 2026-09-01:
+
+> It is the stronger move and it costs the specific sentence, which is the part a referee actually
+> uses — *"reports the measured reduction figure on the single dataset tested"* tells them more than
+> a category would.
+>
+> — Greg, 2026-09-01
+
+**This is the escalation if the frames prove insufficient**, and the trigger is a verdict in ordinary
+English that slips past every pattern, seen more than once.
+
 **It is a route, not a pipeline stage — a compromise, recorded so nobody mistakes it for the
 design.** Sol was right that an article-derived, reusable, expensive artefact belongs in the
 pipeline, and it listed the real surface: `StepName`, `STEP_ORDER`, exclusion from

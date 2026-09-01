@@ -185,15 +185,43 @@ of them are properties of the code and the third is only a prompt rule, and the 
   in Criteria and needed a second review to catch (finding 4); it is built in here rather than
   retrofitted. The same split exists for a whole run: `CLAIMS_UNUSABLE` is a **failed** run with a
   Try again, not an empty one.
-- **Linkage, never adequacy** is asked for in the prompt and said in words at the top of the panel,
-  and it is **only a prompt rule** — `reasoning` is free text and no validator reads English. The
-  eval is [`evals/referee-claims.ts`](../../evals/referee-claims.ts), and it measures that one rule
-  and nothing else, because the other two are held by code and an eval could tell you nothing about
-  them. Five papers written to pull the model over the line, a red-first control that runs one of
-  them again with the refusals cut out of the prompt, and a committed transcript
+- **Linkage, never adequacy** is asked for in the prompt, said in words at the top of the panel, and
+  since 2026-09-01 also **backed by a fail-safe in code**. The eval is
+  [`evals/referee-claims.ts`](../../evals/referee-claims.ts) — five papers written to pull the model
+  over the line, a red-first control that runs one of them again with the refusals cut out of the
+  prompt, and a committed transcript
   ([`evals/results/referee-claims.md`](../../evals/results/referee-claims.md)). The line held on
-  every guarded paper on 2026-09-01 — and the same runs found a worse failure the rule says nothing
-  about: two papers had a claim from their own abstract silently left off the list.
+  every guarded paper; the ablated control produced six adequacy verdicts in eleven passages, so it
+  is the refusals doing the work. The frames the eval built to detect those verdicts — a degree, a
+  negation or a comparison bolted to a support verb, with the paper's own four-word runs subtracted
+  first — now live in `ADEQUACY_FRAMES` and are applied by `validateClaims`, which **blanks the
+  line and keeps the passage** and reports how many it blanked. There is one copy and the eval
+  imports it. It is a fail-safe rather than a guarantee: a verdict in ordinary English that avoids
+  every frame still reaches the referee.
+
+#### And the failure none of the three rules covered
+
+The same runs found something worse than an ugly sentence, and the eval was not looking for it:
+**two papers had a claim from their own abstract silently left off the list** — the same two claims,
+the same omissions, on a repeat run — with the dropped claim's words swallowed inside a neighbouring
+claim's quote. Every rule above is about the rows that came back, and a claim that never gets a row
+is invisible: the zero-passage row and its honest sentence cannot fire when there is no row.
+
+So the panel now prints, under the list, **what the claims did not account for**: for each block a
+claim was taken from, the sentences and clauses no claim above is anchored in
+(`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
+for the clause its quote *begins* in rather than every clause it covers, which is what makes a
+three-claim sentence quoted whole under one claim show its other two.
+
+**The wording is the whole value of it**, and it is a checked constant rather than a string in the
+panel. It says *what was not accounted for* and never *the claims you missed*: a block a claim came
+from carries background, citation and setup as well as claims, so calling these missed claims would
+be the judgement this sub-mode refuses, made in reverse and on worse evidence.
+[`tests/referee-copy-is-about-the-model.test.ts`](../../tests/referee-copy-is-about-the-model.test.ts)
+holds it there, and no number appears beside them for the same reason no number appears on a claim.
+It shows only once a run is **done** — mid-stream every claim that has not arrived yet would read as
+an omission. What it deliberately cannot see is a whole block the model ignored, because finding
+that would mean asserting where a paper's claims live, and that is a judgement.
 
 **One run per article**, not a list — a referee writes several criteria and asks the paper what *it*
 claims once — so there is no id, no colour and no delete, and a second POST replaces the first. The

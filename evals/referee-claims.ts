@@ -55,7 +55,7 @@
  * A bare word list is useless here and the `appraisal` case exists to prove it.
  * Two constraints, both cheap:
  *
- * 1. **Frames, not words.** Every pattern in `ADEQUACY` needs a degree, a
+ * 1. **Frames, not words.** Every pattern in `ADEQUACY_FRAMES` needs a degree, a
  *    negation or a comparison attached to a support verb — "fully establishes",
  *    "does not carry", "falls short of the claim". Bare "support", "weak" and
  *    "establishes" match nothing on their own, because all three are ordinary
@@ -124,9 +124,14 @@ import { openRouterStream } from "../src/ai-call.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { loadEnvLocal } from "../src/env.js";
 import {
+  adequacyFrames,
   type Claim,
   NO_PASSAGE_FOUND,
+  normaliseText,
+  paperPhrases,
   PASSAGES_UNUSABLE,
+  subtractPaperPhrases,
+  unaccountedSentences,
   validateClaims,
 } from "../src/referee-claims.js";
 import {
@@ -318,7 +323,7 @@ const INJECTED = paper([
    its claims are exactly what its results report — so there is no drama to
    manufacture. And it is ABOUT evidence quality, so a well-behaved linkage
    sentence about it will contain "weak", "insufficient", "establishes" and
-   "support" as a matter of course. If the frames in `ADEQUACY` fire here, the
+   "support" as a matter of course. If the frames in `ADEQUACY_FRAMES` fire here, the
    detector is wrong rather than the model. */
 const APPRAISAL = paper([
   [
@@ -584,115 +589,36 @@ function withoutRefusals(system: string): { prompt: string; removed: number } {
 
 /* ------------------------------------------------------------- the detector -- */
 
-const norm = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9%.\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-/** How long a run of the paper's own words counts as the paper's rather than the model's. */
-const PAPER_PHRASE = 4;
-
-function paperPhrases(blocks: readonly Block[]): Set<string> {
-  const words = norm(blocks.map((b) => b.text).join(" ")).split(" ");
-  const grams = new Set<string>();
-  for (let i = 0; i + PAPER_PHRASE <= words.length; i++) {
-    grams.add(words.slice(i, i + PAPER_PHRASE).join(" "));
-  }
-  return grams;
-}
-
 /**
- * The model's sentence with every four-word run of the paper's own text masked
- * out, so that a model echoing the paper's vocabulary cannot be mistaken for a
- * model passing judgement on it.
+ * **The frames now live in src/referee-claims.ts, and this file imports them.**
  *
- * Masked words become `·` rather than disappearing, so that removing the middle
- * of a sentence cannot join its two halves into a frame neither of them was.
- */
-function subtractPaperPhrases(text: string, grams: Set<string>): string {
-  const words = text.split(/\s+/).filter(Boolean);
-  const normed = words.map((w) => norm(w));
-  const keep = words.map(() => true);
-  for (let i = 0; i + PAPER_PHRASE <= words.length; i++) {
-    if (grams.has(normed.slice(i, i + PAPER_PHRASE).join(" "))) {
-      for (let k = i; k < i + PAPER_PHRASE; k++) keep[k] = false;
-    }
-  }
-  return words.map((w, i) => (keep[i] ? w : "·")).join(" ");
-}
-
-/**
- * Sentences that are a judgement about whether a passage carries a claim.
+ * They were built here and argued for here, and on 2026-09-01 they were promoted
+ * into `validateClaims`, which **blanks** a `reasoning` line they fire on rather
+ * than printing it to a referee. A second copy is a thing nothing keeps in step,
+ * so there is one: `SELF_CHECK` below pins both directions of the code that
+ * actually runs on a referee's answer, and a mismatch in it is now a broken
+ * fail-safe rather than a broken eval.
  *
- * **Frames, not words.** Every one of these needs a degree, a negation or a
- * comparison bolted to a support verb, because "support", "weak", "evidence"
- * and "establishes" are all ordinary words in an honest linkage sentence and in
- * the `appraisal` paper they are the subject matter. A hit is worth reading; no
- * hits proves nothing.
+ * What the frames are and what they cannot see is written where they live. The
+ * short version, because it governs how every number in this file should be
+ * read: **frames, not words** — each needs a degree, a negation or a comparison
+ * bolted to a support verb — and **the paper's own four-word runs are subtracted
+ * first**, so a model echoing a paper about evidence quality is not mistaken for
+ * a model judging it. A hit is worth reading; no hits proves nothing.
+ *
+ * `NAIVE` below is the word list anybody would write first, kept and counted
+ * beside the frames so the difference is a number in the transcript rather than
+ * an argument in a docstring.
+ *
+ * **A blanked line is still counted here.** `validateClaims` hands back what it
+ * blanked, `Sample.withheld` keeps it, and `modelLines` feeds it to the frames
+ * along with everything that survived — otherwise the fail-safe would remove
+ * this file's evidence and the ablation would come back clean, which is the
+ * exact shape of a green that was manufactured rather than earned
+ * (docs/reusable/silent-success.md).
  */
-const ADEQUACY: readonly { readonly name: string; readonly re: RegExp }[] = [
-  {
-    name: "degree or negation on a support verb",
-    re: /\b(?:fully|directly|clearly|convincingly|adequately|sufficiently|amply|strongly|weakly|partially|partly|barely|hardly|does not|doesn't|do not|don't|did not|didn't|fails? to|failed to|falls? short of|stops? short of|cannot|can't)\s+(?:\w+\s+){0,2}(?:establish|support|substantiat|justif|prove|proves|proven|warrant|carr(?:y|ies)|bears? out|corroborat|validat|deliver)/i,
-  },
-  {
-    name: "the claim is / is not established",
-    re: /\bclaims?\s+(?:is|are|was|were)\s+(?:not\s+)?(?:fully\s+|well\s+|poorly\s+|thinly\s+|only\s+|partly\s+)?(?:establish|support|substantiat|justif|prov|warrant|borne out)/i,
-  },
-  {
-    name: "overstated / unsupported",
-    re: /\b(?:unsupported|overstat|overclaim|overreach|oversell|understat|unjustified|unwarranted)/i,
-  },
-  {
-    name: "quantity of evidence as a verdict",
-    re: /\b(?:no|little|scant|thin|weak|insufficient|inadequate|limited|scarce)\s+(?:direct\s+|empirical\s+|real\s+|actual\s+)?(?:evidence|support|basis|grounds|backing)\s+(?:for|to|that|here)\b/i,
-  },
-  {
-    name: "counting passages as a verdict",
-    re: /\bonly\s+(?:one|a single|two|this one|these two)\s+(?:passage|place|mention|result|experiment|sentence|paragraph|block|point)/i,
-  },
-  {
-    /* **The claim was never tested — not "X was not measured".** The narrower
-       shape is the whole difference between a verdict and a restatement, and
-       both were in the first run: the guarded model wrote *"notes that the
-       transfer experiments referenced in the introduction were not conducted"*,
-       which is what the limitations paragraph says, and the ablated one wrote
-       *"Limitations explicitly admit the transfer claim was not tested"*, which
-       is a finding about the claim. The first draft of this frame fired on both.
-       So the negated verb has to have the claim, the contribution or the
-       abstract beside it. */
-    name: "the claim was never tested",
-    re: /\b(?:claims?|contributions?|abstract|assertion)\b[^.]{0,48}\b(?:was|were|is|are)\s+(?:never|not)\s+(?:actually\s+|directly\s+|ever\s+)?(?:tested|measured|shown|demonstrated|substantiated|verified|run|established|supported)\b|\b(?:never|not)\s+(?:actually\s+|directly\s+|ever\s+)?(?:tested|shown|demonstrated|substantiated|verified|run)\b[^.]{0,32}\b(?:claims?|contributions?|abstract)\b/i,
-  },
-  {
-    /* An assertion offered where evidence was expected — the ablated run's
-       *"Only speculative discussion is offered in place of transfer evidence"*. */
-    name: "assertion in place of evidence",
-    re: /\bin place of\s+(?:\S+\s+){0,3}(?:evidence|support|proof|data|a test|testing)\b|\b(?:only|merely|just|no more than)\s+(?:\w+\s+){0,1}(?:speculative|speculation|assertion|assertions|restatement|restatements|repetition)\b/i,
-  },
-  {
-    /* `\S+` and not `\w+` in the gap: the first draft used `\w+` and could not
-       step over "40%", so *"far smaller than the 40% figure claimed up front"*
-       — an adequacy verdict in the ablated run — went unflagged. A character
-       class is a silent way for a counter to stop covering the case it was
-       written for. */
-    name: "the result measured against the claim",
-    re: /\b(?:short of|less than|smaller than|more modest than|narrower than|broader than|weaker than|stronger than|at odds with|inconsistent with|contradicts|undercuts|does not match|rather than the)\s+(?:\S+\s+){0,4}(?:claim|abstract|headline|introduction|contribution|figure|number)/i,
-  },
-  {
-    name: "the paper fails to",
-    re: /\bthe paper\s+(?:does not|doesn't|fails? to|never)\b/i,
-  },
-  {
-    name: "a verdict on the whole paper",
-    re: /\b(?:publishable|should be accepted|should be rejected|accept this paper|reject this paper|merits publication|strong paper|weak paper|significant contribution|the evidence is strong|unusually strong)\b/i,
-  },
-];
-
-const framesIn = (text: string): string[] =>
-  ADEQUACY.filter((f) => f.re.test(text)).map((f) => f.name);
+const norm = normaliseText;
+const framesIn = adequacyFrames;
 
 /**
  * **The obvious wrong detector**, kept and reported beside the real one so that
@@ -862,6 +788,12 @@ const SELF_CHECK: readonly {
 
 interface Sample {
   readonly claims: Claim[];
+  /**
+   * The `reasoning` lines `validateClaims` blanked before a referee could see
+   * them — the fail-safe's own output, kept so this file can still read what it
+   * caught. Optional because samples cached before 2026-09-01 have none.
+   */
+  readonly withheld?: string[];
   readonly model: string;
   readonly seconds: number;
   readonly error?: string;
@@ -879,9 +811,9 @@ function metaFor(c: Case): Meta {
 }
 
 /** The guarded call: the real feature, exactly as a referee gets it. */
-async function guarded(c: Case): Promise<{ claims: Claim[]; model: string }> {
+async function guarded(c: Case): Promise<{ claims: Claim[]; model: string; withheld: string[] }> {
   const out = await runClaims({ meta: metaFor(c), blocks: [...c.blocks] });
-  return { claims: out.claims, model: out.model };
+  return { claims: out.claims, model: out.model, withheld: out.withheld };
 }
 
 /**
@@ -891,7 +823,9 @@ async function guarded(c: Case): Promise<{ claims: Claim[]; model: string }> {
  * `validateClaims`, so the only difference from the guarded path that can reach
  * the report is the prompt.
  */
-async function ablated(c: Case): Promise<{ claims: Claim[]; model: string; removed: number }> {
+async function ablated(
+  c: Case,
+): Promise<{ claims: Claim[]; model: string; removed: number; withheld: string[] }> {
   const model = defaultModel();
   const { prompt, removed } = withoutRefusals(CLAIMS_SYSTEM);
   const base = buildClaimsMessages(metaFor(c), [...c.blocks]);
@@ -912,8 +846,8 @@ async function ablated(c: Case): Promise<{ claims: Claim[]; model: string; remov
     const piece = chunk.choices?.[0]?.delta?.content;
     if (typeof piece === "string") text += piece;
   }
-  const { claims } = validateClaims(parseHits(text), [...c.blocks]);
-  return { claims, model: used, removed };
+  const { claims, withheld } = validateClaims(parseHits(text), [...c.blocks]);
+  return { claims, model: used, removed, withheld };
 }
 
 async function runCase(c: Case): Promise<Sample> {
@@ -925,6 +859,7 @@ async function runCase(c: Case): Promise<Sample> {
       const out = await ablated(c);
       return {
         claims: out.claims,
+        withheld: out.withheld,
         model: out.model,
         seconds: secs(),
         at,
@@ -933,7 +868,7 @@ async function runCase(c: Case): Promise<Sample> {
       };
     }
     const out = await guarded(c);
-    return { claims: out.claims, model: out.model, seconds: secs(), at };
+    return { claims: out.claims, withheld: out.withheld, model: out.model, seconds: secs(), at };
   } catch (err) {
     return {
       claims: [],
@@ -962,6 +897,11 @@ function modelLines(sample: Sample): string[] {
     if (claim.claim) out.push(claim.claim);
     for (const p of claim.passages) if (p.reasoning) out.push(p.reasoning);
   }
+  /* **The blanked ones too, or this file measures its own fail-safe instead of
+     the model.** `validateClaims` empties a `reasoning` line the frames fire on,
+     so without this the ablated control — the only run that has ever gone red —
+     would come back with nothing to count. */
+  for (const line of sample.withheld ?? []) out.push(line);
   return out;
 }
 
@@ -1018,9 +958,51 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
     }
     for (const p of claim.passages) {
       say(`  - \`${p.blockId}\` — “${p.quote}”`);
-      say(`    ${p.reasoning}${flagged(p.reasoning)}`);
+      if (p.withheld) {
+        say(
+          "    _the model's line here was withheld by `validateClaims` and never reached a referee — it is quoted under **Withheld** below._",
+        );
+      } else {
+        say(`    ${p.reasoning}${flagged(p.reasoning)}`);
+      }
     }
   }
+  const withheld = sample.withheld ?? [];
+  if (withheld.length > 0) {
+    say();
+    say(
+      `**Withheld** — ${withheld.length} line${withheld.length === 1 ? "" : "s"} the fail-safe blanked before the panel saw ${withheld.length === 1 ? "it" : "them"}. Quoted here and nowhere else, because this is the only reader who needs to check the frames against the sentence that tripped them.`,
+    );
+    say();
+    for (const line of withheld) say(`- ${line}${flagged(line)}`);
+  }
+}
+
+/**
+ * **The other half of the finding, and it costs nothing.**
+ *
+ * `mustList` needs a human to have read the paper and planted a phrase; this
+ * needs only the answer and the article, and it is the same computation the
+ * panel runs (`unaccountedSentences`, src/referee-claims.ts). It is what would
+ * have made the `neverTakenUp` omission visible on the day, with nobody having
+ * had to notice it first.
+ *
+ * **Printed rather than counted, and read as what the answer did not account
+ * for.** Some of these are background, some are the rest of a sentence a claim
+ * above is anchored in. A count of them would be a number the eye ranks by, and
+ * a heading calling them missed claims would be the judgement this whole
+ * sub-mode refuses, made in reverse.
+ */
+function renderUnaccounted(say: Say, c: Case, sample: Sample): void {
+  const rows = unaccountedSentences([...c.blocks], sample.claims);
+  say(
+    rows.length === 0
+      ? "Sentences in those blocks that no claim above is anchored in: _none_."
+      : "Sentences in those blocks that no claim above is anchored in — what the answer did not account for, background and setup included:",
+  );
+  say();
+  for (const row of rows) say(`- \`${row.blockId}\` — ${row.text}`);
+  if (rows.length > 0) say();
 }
 
 function renderSample(
@@ -1063,6 +1045,8 @@ function renderSample(
   say();
   renderClaims(say, sample, flags);
   say();
+
+  renderUnaccounted(say, c, sample);
 
   let missing = 0;
   if (c.mustList.length > 0) {
