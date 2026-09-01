@@ -497,6 +497,22 @@ the two verbs. Search belongs in this too.
 **Add identical stall, timeout, premature-EOF and non-2xx tests to both callers first.**
 **Effort** L · **Value** high · **Risk** real — the highest-stakes paths in the app.
 
+> **2026-09-01 — the race was lost, twice.** "When there is room" was five days ago, and in those
+> five days two more callers copied the sequence: `referee-mirror.ts` and `quiz-mark.ts`, both on
+> 2026-09-01. There are now **five** copies of one invariant and one of them is right.
+> [260901c-the-success-signal-that-outlived-its-witness.md](../postmortems/260901c-the-success-signal-that-outlived-its-witness.md)
+> traces the wrong sentence — *"`finish_reason` counts as a second witness"* — from the commit that
+> wrote it on 2026-08-26 through four verbatim copies, and shows the guard it lives on could never
+> fire on a finish reason at all, in any of them. Three of the six findings against quiz were that
+> one sentence. `search.ts` and `referee-mirror.ts` do not currently ship a visible bug, and the
+> reason is **luck of payload rather than judgement**: both ask for JSON, so a truncated reply is
+> unparseable and something downstream catches it. Prose has no second witness, which is why this
+> surfaced in the three prose callers. The postmortem's recommendation narrows this item usefully:
+> do the **classification** quarter first — `sseChunks` returns a `StreamOutcome` discriminated
+> union and each caller `switch`es on it with a `never` default — and leave the transport half
+> here. Classification is shared because *what happened* has one true answer; policy stays in the
+> caller because *what to do* legitimately differs.
+
 ### 3.5 `summarise`'s concurrency pool — **do not change**
 The first draft suggested replacing the hand-rolled 20-line ordered pool with `p-queue`. Sol is
 right that this is wrong: it saves almost nothing and changes failure and scheduling semantics on

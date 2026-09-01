@@ -343,12 +343,20 @@ async function drain(gen: AsyncGenerator<QuizMarkEvent>): Promise<QuizMarkEvent[
 
 describe("a reply the provider did not finish writing", () => {
   it("refuses one cut off at the token ceiling rather than calling it a mark", async () => {
-    /* **`[DONE]` arrives**, and that is the point of the case. A truncated
-       reply is not a broken connection: OpenRouter finishes the stream
-       properly and says `finish_reason: "length"` on the way out, so every
-       other witness this generator has says the reply is whole. Only the
-       reason says otherwise, and it used to be read as a *second witness for*
-       completion. */
+    /* **`[DONE]` arrives**, and that is the point of the case: a truncated
+       reply need not be a broken connection. Every other witness this
+       generator has then says the reply is whole, and only the reason says
+       otherwise — where it used to be read as a *second witness for*
+       completion.
+
+       **This mock is the shape we must survive, not evidence of the shape
+       OpenRouter sends.** Nobody here has captured a real `length` stream, so
+       asserting the provider's behaviour from a fixture we wrote would be the
+       test agreeing with whoever wrote it. It does not matter either way: the
+       old guard was `!end.terminated && finishReason === null`, and a non-null
+       reason can only make that conjunction less likely to fire, so no finish
+       reason could have failed a mark whatever the terminator did.
+       docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
     providerSays(() =>
       provider(
         wire({ choices: [{ delta: { content: "You have the first half of it, and then" } }] }) +

@@ -737,12 +737,18 @@ export async function* markAnswerStream({
   }
 
   /* **The provider said why it stopped, and it was not "finished".**
-     Checked before the terminator, because the two are independent and this is
-     the one that arrives looking like success: OpenRouter writes `[DONE]` after
-     a `length` stop exactly as it does after a `stop` one, so `end.terminated`
-     is true, the text is well-formed, and a mark cut off mid-sentence is filed
-     as a whole one and the question ticked off. `didNotFinish` is the whole
-     rule; the comment beside this check used to say the opposite of it. */
+
+     Checked before the terminator and independently of it, because the guard
+     that used to stand here could not fire on a finish reason at all. It read
+     `!end.terminated && finishReason === null`, and a non-null finish reason
+     can only make a conjunction like that *less* likely to be true — so no
+     value of `finish_reason` could ever have failed a mark, whatever the
+     terminator did. The comment beside it described a loosening as though it
+     were a check. (Whether OpenRouter also writes `[DONE]` after a `length`
+     stop is very likely and is *not* claimed here: nobody has captured a real
+     one, and the reasoning above does not need it.)
+
+     `didNotFinish` is the whole rule now. */
   const cutShort = didNotFinish(finishReason);
   if (cutShort) {
     line.error(
