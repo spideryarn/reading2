@@ -731,6 +731,68 @@ add_mcp() {
 add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable"
 add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
 
+echo "=== gjd-remote loopback key ==="
+# gjd-remote is written to run FROM the laptop, and resolves the box's address
+# out of Terraform state. An agent working ON the box has neither: no `tofu`,
+# and no private key -- ~/.ssh holds authorized_keys and nothing else. So every
+# gjd-remote command from inside a session died at
+# "Permission denied (publickey)", and the tool that manages the sessions was
+# the one tool a session could not use.
+#
+# A keypair that only reaches this same machine fixes it and grants nothing:
+# anyone who can read the private key already has a shell here, which is all
+# the key can get them. It is NOT a route to anywhere else -- the box still has
+# no key to GitHub or to the laptop.
+#
+# All three steps are idempotent, because this file is re-run on live boxes.
+run 30 "gjd-remote loopback key" su - "$GJD_USERNAME" -c '
+  set -eu
+  install -d -m 0700 ~/.ssh
+  # No passphrase: gjd-remote uses BatchMode=yes for every non-interactive
+  # call, which turns a passphrase prompt into a failure rather than a prompt.
+  test -f ~/.ssh/id_ed25519_loopback ||
+    ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519_loopback -C "gjd-remote loopback (box to itself)"
+  # grep the KEY FIELD, not the whole line: the comment differs between a key
+  # made here and one restored with the volume, and matching the whole line
+  # would append a second copy on every re-run.
+  key=$(cut -d" " -f2 < ~/.ssh/id_ed25519_loopback.pub)
+  touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+  grep -qF "$key" ~/.ssh/authorized_keys || cat ~/.ssh/id_ed25519_loopback.pub >> ~/.ssh/authorized_keys
+'
+# ssh does not offer a non-default key name on its own, and gjd-remote passes
+# no -i and no `-F none`, so ~/.ssh/config is both honoured and the only place
+# this can be said.
+#
+# Appended behind a marker, never written whole. /home is the persistent volume,
+# so a config Greg adds by hand outlives the server that provisioning rebuilds --
+# and `cat >` would eat it on the next re-run, at the one moment nobody is
+# looking. The marker is what keeps the append idempotent.
+run 30 "gjd-remote loopback ssh config" su - "$GJD_USERNAME" -c '
+  set -eu
+  install -d -m 0700 ~/.ssh
+  touch ~/.ssh/config && chmod 600 ~/.ssh/config
+  grep -qF "gjd-remote-loopback" ~/.ssh/config || cat >> ~/.ssh/config <<EOF
+
+# gjd-remote-loopback -- written by provision.sh, see docs/project/remote-box.md.
+# Lets a Claude session running ON the box drive gjd-remote against the box
+# itself. Reaches nowhere else. Delete this block and the key to undo it.
+Host 127.0.0.1 localhost
+  User $USER
+  IdentityFile ~/.ssh/id_ed25519_loopback
+  IdentitiesOnly yes
+EOF
+'
+# ...and the address, so `gjd-remote ls` on the box needs no argument and no
+# Terraform. Only ever set on the box: on the laptop the variable stays unset
+# and the address still comes out of Terraform state, which is what makes it
+# survive a rebuild. A login shell is enough -- tmux sessions get one
+# (`exec bash -l` at the end of every job script).
+cat > /etc/profile.d/gjd-remote-loopback.sh <<'EOF'
+# Written by provision.sh. gjd-remote run ON the box talks to the box.
+export GJD_REMOTE_HOST=127.0.0.1
+EOF
+chmod 0644 /etc/profile.d/gjd-remote-loopback.sh
+
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 # `sshd -t` refuses to validate without its privilege separation directory,
@@ -797,6 +859,18 @@ check "swap active"              'swapon --show | grep -q swapfile'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+# The loopback, end to end and as the user -- not "the key file exists". Three
+# separate things have to be true at once (a key, a line in authorized_keys, a
+# Host block that makes ssh actually OFFER a non-default key name), each of them
+# present-looking while the connection still fails, so the only check worth
+# having is the connection. BatchMode is what stops a broken one hanging on a
+# password prompt until the run times out.
+check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 hostname"'
+# ...and the address it will use, which is the other half: the ssh above can
+# work perfectly and `gjd-remote ls` still die at "could not read the server
+# address from Terraform state", because the box has no tofu. A login shell,
+# because that is what a tmux session gets.
+check "GJD_REMOTE_HOST is set on the box" 'su - '"$USER_NAME"' -c "echo \$GJD_REMOTE_HOST" | grep -qx "127.0.0.1"'
 # Reads the value back out of the JSON rather than grepping the file for the
 # key name: a merge that landed the key with the wrong value, or under the wrong
 # parent, looks identical to a working one under grep.

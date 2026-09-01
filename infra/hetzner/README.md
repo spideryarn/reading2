@@ -101,8 +101,10 @@ things is worse than none.
 
 `user_data` reaches the Hetzner API as one field with a hard cap — *"This field is limited to
 32KiB"*, enforced as `Length must be between 0 and 32768` — and both scripts ride inside it
-base64-encoded, which costs a third on top. As of 2026-09-01 the rendered file is **78.7 KiB**, so
-`tofu apply` would be rejected the moment it tried to create a server.
+base64-encoded, which costs a third on top. As of 2026-09-01 the rendered file is **84.2 KiB**, so
+`tofu apply` would be rejected the moment it tried to create a server. (78.7 KiB of that predates
+the gjd-remote loopback block, which added about 4 KiB to a file already two and a half times over
+the line — it did not cause this and does not change what has to be done about it.)
 
 **This is not new and nothing is currently broken.** The live box was built when `provision.sh` still
 lived inside `cloud-init.yaml` and the whole thing was about 18 KiB; it went over the line when the
@@ -477,6 +479,27 @@ to `gjd-remote doctor` and asking Greg to run things with the `!` prefix.
 Either way the design rule still earns its place: **prefer things that report over HTTPS, or that
 Terraform can assert, over things that need someone to log in and look.** That is what made the box
 recoverable on the day nobody could reach it.
+
+### And an agent ON the box, reaching the box
+
+The section above is about the laptop reaching the server. The mirror of it caught us out
+separately: an agent working **on** the box could not use `gjd-remote` at all. It resolves the
+address from Terraform state and there is no `tofu` here, and it authenticates with a key the box
+did not have — `~/.ssh` held `authorized_keys` and nothing else. So the tool that manages the
+sessions was the one tool a session could not run.
+
+`provision.sh` now mints a keypair that reaches only this same machine, adds it to
+`authorized_keys`, names it in `~/.ssh/config` (ssh will not offer a non-default key name
+otherwise, and `gjd-remote` passes no `-i`), and exports `GJD_REMOTE_HOST=127.0.0.1` from
+`/etc/profile.d/gjd-remote-loopback.sh`. All of it idempotent, and the config block appended behind
+a marker rather than written whole, because `/home` is the persistent volume and a hand-written
+config outlives the server.
+
+It widens nothing: whoever can read that key already has a shell here. The verify block checks the
+**connection**, not the files, and checks the address separately — the ssh can be perfect and
+`gjd-remote ls` still die on "could not read the server address from Terraform state".
+
+Full reasoning in [../../docs/project/remote-box.md § Running `gjd-remote` from the box](../../docs/project/remote-box.md#running-gjd-remote-from-the-box).
 
 ## mosh does not carry the tunnel
 

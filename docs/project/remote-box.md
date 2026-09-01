@@ -88,6 +88,32 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md](../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md)
   — the timings below, and the bugs found underneath them.
 
+## Running `gjd-remote` from the box
+
+`gjd-remote` is written to run **from the laptop**, and for a while that was the only place it ran.
+An agent working on the box had neither of the two things it needs: no `tofu`, so the address could
+not come out of Terraform state, and no private key at all — `~/.ssh` held `authorized_keys` and
+nothing else. Every command died at `Permission denied (publickey)`, so the tool that manages the
+sessions was the one tool a session could not use.
+
+Provisioning now gives the box a keypair that reaches **only itself**, and sets `GJD_REMOTE_HOST`
+in `/etc/profile.d/`. So from any session on the box, `gjd-remote ls` and the rest just work.
+
+It grants nothing. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
+is all the key can get them; the box still has no key to GitHub, to the laptop, or anywhere else.
+To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-loopback` block in
+`~/.ssh/config`.
+
+Three separate things have to be true at once — the key, the `authorized_keys` line, and a `Host`
+block, because ssh will not **offer** a non-default key name on its own and `gjd-remote` passes no
+`-i`. Each can be present while the connection still fails, so `provision.sh` checks the connection
+rather than the files, and checks `GJD_REMOTE_HOST` separately: the ssh can be perfect and
+`gjd-remote ls` still die on the address. Both are in `doctor`'s report by way of the verify block.
+
+The `~/.ssh/config` block is **appended behind a marker, never written whole**. `/home` is the
+persistent volume, so a config Greg adds by hand outlives the server that provisioning rebuilds, and
+a `cat >` would eat it on a re-run — at the one moment nobody is looking.
+
 ## Which tabs are on the box
 
 A dozen tabs in one window look identical, and the difference that matters is invisible until you
