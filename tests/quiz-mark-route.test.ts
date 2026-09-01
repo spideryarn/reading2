@@ -24,9 +24,18 @@
  *    an ordinary JSON status a `fetch` caller can read, not an error frame
  *    inside a 200.
  *
- * Nothing here reaches the model: `fetch` is stubbed to reject, which is what
- * makes point 1 assertable at all — a 409 that had already called the provider
- * would still be a 409.
+ * Two more were added after a GPT Sol review of the built code
+ * (docs/plans/260831al-review-quiz-sub-mode-stage4-review-sol.md):
+ *
+ * 5. the quiz and the article are two separate reads, and a revision landing
+ *    **between** them defeats every check above — so the article is checked
+ *    again after it has been read, not only before;
+ * 6. a reader who leaves cancels the **provider** call, not merely the writing
+ *    of frames.
+ *
+ * Nothing here reaches the model except the two cases that say so: `fetch` is
+ * stubbed to reject, which is what makes point 1 assertable at all — a 409 that
+ * had already called the provider would still be a 409.
  *
  * Harness copied from tests/chat-route.test.ts.
  * docs/plans/260831al-review-quiz-sub-mode.md § Marking.
@@ -34,7 +43,39 @@
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * **A hook in the gap between the two reads**, and the only way to test the
+ * gap at all.
+ *
+ * `markOneAnswer` reads the quiz, validates it, and then reads the article —
+ * two awaits, and a new revision can be published between them. Nothing in a
+ * test can win that race by hand, so this puts the publication *inside* it:
+ * `betweenReads` runs immediately before the article read and after the quiz
+ * has already been validated, which is precisely the interleaving.
+ *
+ * Everything else comes straight from the real store, so the five cases that
+ * do not set `betweenReads` are running against exactly the code they were
+ * written against. It must be `vi.mock` rather than a spy: the store's exports
+ * are ESM bindings and `src/routes.ts` captures them at import.
+ */
+let betweenReads: (() => Promise<void>) | null = null;
+vi.mock("../src/store/index.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/store/index.js")>(
+    "../src/store/index.js",
+  );
+  return {
+    ...actual,
+    loadArticle: async (slug: string) => {
+      const hook = betweenReads;
+      betweenReads = null;
+      if (hook) await hook();
+      return actual.loadArticle(slug);
+    },
+  };
+});
+
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 import { buildQuiz } from "../src/quiz.js";
@@ -123,7 +164,17 @@ interface Answered {
   streamed: boolean;
 }
 
-async function mark(body: unknown): Promise<Answered> {
+/**
+ * The request and response a mark is served on, plus the two levers a test
+ * needs on them: what has been written so far, and the reader hanging up.
+ *
+ * **`close()` is not decoration.** `sse` and `heartbeat` both register
+ * `res.on("close")`, and a mock whose `on` is a no-op silently drops them — so
+ * a route that never noticed the reader had gone would look identical to one
+ * that did. Recording the listeners is what makes "the reader left" something
+ * this file can actually do.
+ */
+function serve(body: unknown) {
   const payload = [Buffer.from(JSON.stringify(body))];
   const req = Object.assign(
     (async function* () {
@@ -134,6 +185,7 @@ async function mark(body: unknown): Promise<Answered> {
 
   let written = "";
   let head = 0;
+  const closers: (() => void)[] = [];
   const res = {
     statusCode: 0,
     writableEnded: false,
@@ -147,7 +199,9 @@ async function mark(body: unknown): Promise<Answered> {
       (this as { statusCode: number }).statusCode = status;
     },
     flushHeaders() {},
-    on() {},
+    on(event: string, fn: () => void) {
+      if (event === "close") closers.push(fn);
+    },
     write(chunk: string) {
       written += chunk;
       return true;
@@ -158,15 +212,40 @@ async function mark(body: unknown): Promise<Answered> {
     },
   } as unknown as ServerResponse;
 
-  await handleApi(req, res, acceptAny);
   return {
-    status: (res as unknown as { statusCode: number }).statusCode,
-    body: written,
-    streamed: head === 200 && written.includes("event: "),
+    req,
+    res,
+    /** The reader navigated away: the socket is gone, the handler is not. */
+    close(): void {
+      (res as unknown as { destroyed: boolean }).destroyed = true;
+      for (const fn of closers) fn();
+    },
+    answered(): Answered {
+      return {
+        status: (res as unknown as { statusCode: number }).statusCode,
+        body: written,
+        streamed: head === 200 && written.includes("event: "),
+      };
+    },
   };
 }
 
-beforeEach(reseed);
+async function mark(body: unknown): Promise<Answered> {
+  const call = serve(body);
+  await handleApi(call.req, call.res, acceptAny);
+  return call.answered();
+}
+
+beforeEach(async () => {
+  await reseed();
+  betweenReads = null;
+  /* Back to the rejecting default every time, because one case below points
+     `fetch` at a provider that talks. A leaked stub would let a later test
+     reach a model and still pass, which is the shape of failure this whole
+     file is about. */
+  globalThis.fetch = (() =>
+    Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
+});
 
 describe("marking one answer", () => {
   it("refuses a batchId that is not the current one, with a 409", async () => {
@@ -262,5 +341,115 @@ describe("marking one answer", () => {
     expect(answered.body).toContain("event: error");
     // And exactly one terminal frame, never a `done` beside it.
     expect(answered.body).not.toContain("event: done");
+  });
+});
+
+describe("the article can move between the two reads", () => {
+  it("refuses when a revision lands after the quiz was checked and before the article was read", async () => {
+    const quiz = await writeQuiz();
+
+    /* **Publish, in the gap.** The quiz was current when it was validated and
+       the article is a different one by the time it is read — so the model
+       would be handed revision A's question, reference answer and evidence
+       beside revision B's prose, and the staleness guard, whose entire job is
+       to stop exactly that, has already passed. Rewriting one block's text is
+       all it takes: the fingerprint covers the prose. */
+    betweenReads = async () => {
+      const file = path.join(DIR, "blocks.json");
+      const parsed = JSON.parse(await readFile(file, "utf-8")) as { blocks: Block[] };
+      const first = parsed.blocks[0];
+      if (!first) throw new Error("the fixture has no blocks");
+      first.text = `${first.text} And then the author added a paragraph.`;
+      await writeFile(file, JSON.stringify(parsed, null, 2));
+    };
+
+    const answered = await mark({
+      batchId: quiz.batchId,
+      questionId: quiz.questions[0]?.id,
+      answer: "I think it says the quoted thing.",
+    });
+
+    /* The same 409 and the same sentence as a quiz that was stale on arrival —
+       because it is the same fact, found one await later. */
+    expect(answered.status).toBe(409);
+    expect(answered.streamed).toBe(false);
+    expect(answered.body).toMatch(/article has changed/i);
+  });
+
+  it("still marks when nothing moved, so the re-check is not simply a refusal", async () => {
+    /* The negative control for the case above: the second read must be a
+       check, not a second chance to fail. `fetch` rejects in this file, so
+       reaching the provider is as far as a passing request can get. */
+    const quiz = await writeQuiz();
+    const answered = await mark({
+      batchId: quiz.batchId,
+      questionId: quiz.questions[0]?.id,
+      answer: "I think it says the quoted thing.",
+    });
+
+    expect(answered.status).toBe(200);
+    expect(answered.streamed).toBe(true);
+  });
+});
+
+describe("the reader leaving stops the paid call", () => {
+  it("aborts the provider request, not just the writing of frames", async () => {
+    const quiz = await writeQuiz();
+
+    /* A provider that has started talking and has not finished, so there is
+       something in flight to cancel. `release` ends it from the test's side
+       afterwards — deliberately, so that a route which does NOT abort still
+       finishes and fails on the assertion rather than on a five-second
+       timeout. A timeout is a red test that says almost nothing. */
+    let sent: AbortSignal | undefined;
+    let release = () => {};
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      sent = init?.signal ?? undefined;
+      return Promise.resolve({
+        ok: true,
+        headers: new Headers(),
+        body: new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify({ choices: [{ delta: { content: "You have " } }] })}\n\n`,
+              ),
+            );
+            release = () => {
+              // A cancelled stream throws on `close()`, and by then the abort
+              // has already done the job this is standing in for.
+              try {
+                c.close();
+              } catch {}
+            };
+          },
+        }),
+      } as unknown as Response);
+    }) as unknown as typeof fetch;
+
+    const call = serve({
+      batchId: quiz.batchId,
+      questionId: quiz.questions[0]?.id,
+      answer: "I think it says the quoted thing.",
+    });
+    const handled = handleApi(call.req, call.res, acceptAny);
+
+    // Wait for the call to actually be in flight; there is nothing to abort
+    // before that, and a fixed sleep here would be a flake waiting to happen.
+    for (let i = 0; i < 200 && !sent; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(sent, "the route never reached the provider").toBeDefined();
+
+    call.close();
+    release();
+    await handled;
+
+    /* **The signal handed to OpenRouter, not the one the route keeps.** Before
+       this, closing the tab stopped the frames and left the provider
+       generating — and being paid for — until it finished on its own, so a
+       retry started a second paid call beside the first. */
+    expect(sent?.aborted).toBe(true);
+    // And nothing was ticked on the way out: the socket is gone either way,
+    // but a `done` frame written to it would still be the wrong claim.
+    expect(call.answered().body).not.toContain("event: done");
   });
 });
