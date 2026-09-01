@@ -9,7 +9,7 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 >
 > — Greg, 2026-08-24
 
-The product is **Spideryarn**; `spideryarn2` is just this working directory. `CLAUDE.md` is a
+The product is **Spideryarn**; `reading2` is just the directory and the repo. `CLAUDE.md` is a
 symlink to this file — there is only one of it, so edit either name freely.
 
 **This file is a signpost, not a spec**, and it is loaded into every agent's context on every turn,

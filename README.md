@@ -70,7 +70,7 @@ account of where that argument is weakest — is in
 Also not this, ever: "read it in 2 minutes", engagement mechanics, or confident claims with no path
 back to the source.
 
-`spideryarn2` is an offshoot of a working app that is far larger — accounts, a database,
+`reading2` is an offshoot of a working app that is far larger — accounts, a database,
 deployment, a year of building. [original-version/](docs/project/original-version/overview.md) is
 the map to it: a library to consult, not a backlog to import. This repo stays deliberately tight
 where that one is broad.

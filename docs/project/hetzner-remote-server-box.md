@@ -253,8 +253,9 @@ Four things about it, each of which is a decision rather than a detail:
   renames a session to Claude's title and the name you kill is usually not the name it was launched
   under.
 - **It is not in the repo**, though "git-ignored" is what was asked for: worktrees would split the
-  record across checkouts, and the repo is inside Dropbox, so an append-only file there syncs on
-  every command.
+  record across checkouts. It was also inside Dropbox when this was written, so an append-only
+  file there synced on every command; that half stopped being true on 2026-09-01 and the first
+  half still holds.
 - **It never holds the prompt** — no argv field, no prompt field, only the length and the path on
   the box. It does hold the session *name*, and for an unnamed session that name is the first five
   words of the prompt, so the file is `0600` in a `0700` directory and is not as harmless as it

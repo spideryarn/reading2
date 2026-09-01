@@ -59,7 +59,7 @@ import { normaliseText } from "./html.js";
 import { DEFAULT_MODE, type Mode } from "./modes.js";
 import type { ArticleView } from "./read-address.js";
 
-/** The product. `spideryarn2` is the working directory; this is the name. */
+/** The product. `reading2` is the directory and the repo; this is the name. */
 export const APP_NAME = "Spideryarn";
 
 /**
