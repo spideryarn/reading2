@@ -32,7 +32,8 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
-  `database.md` · `sql.md` (columns over JSON, keys over good intentions)
+  `database.md` · `sql.md` (columns over JSON, keys over good intentions) ·
+  `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·

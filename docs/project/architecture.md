@@ -147,7 +147,8 @@ edit to each of the four stage files necessary: see
 [database.md](database.md) covers this layout as a whole, and what changes when it becomes Supabase
 Postgres. [sql.md](sql.md) is the shape we want that schema to have — real columns rather than JSON,
 foreign keys rather than good intentions, and a nullable timestamp wherever a boolean would throw
-away when it happened.
+away when it happened. [export.md](export.md) is the way data leaves: the zip a reader downloads for
+one article, and the `db:export` rollback it shares its queries with.
 
 **Moved, as of 2026-09-01.** Every store — reader and pipeline alike — is Postgres under
 `SPIDERYARN_STORE=postgres`, which is what production runs: a pipeline job commits each step's

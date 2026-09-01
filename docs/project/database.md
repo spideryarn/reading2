@@ -275,9 +275,10 @@ of tables, so `referee_criteria` — added on 2026-08-31 — was dropped silentl
 reporting success and listing the files it *did* write. Nothing could have gone red: a file that is
 never written is a file the round-trip test never misses.
 
-So `ARTICLE_TABLE_COVERAGE` in [`src/store/export.ts`](../../src/store/export.ts) names every table
-that reaches an article and says, for each, which file it goes into or **in words** why a rollback of
-`data/` does not need it.
+So `ARTICLE_TABLE_COVERAGE` in [`src/store/article-rows.ts`](../../src/store/article-rows.ts) names
+every table that reaches an article and says, for each, which file it goes into or **in words** why
+it is not needed. Since 2026-09-01 it answers that twice, because the rollback and the reader's
+export now share one owner-scoped query walk and nothing else — [export.md](export.md).
 [`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) checks
 that record two ways, and they fail differently:
 
