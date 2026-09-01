@@ -1597,6 +1597,33 @@ hand-roll `db.insert(articles)`**; tests of publication must keep using the real
 - **Four lists in this document have been wrong.** Re-derive rather than inherit — including from
   this appendix.
 
+### The migration repair would refuse to repair production — found 2026-09-01, NOT fixed
+
+**`scripts/db-repair-migration-ledger.ts` cannot currently repair the two migrations most likely to
+be outstanding on production.** This is a defect in the repair tool built this morning, found while
+narrowing a probe, and it is left for Greg because fixing it changes the tool's refusal semantics
+rather than a line of its logic.
+
+`shapeGuards` derives an *"the object is there and it is the wrong thing"* refusal from **every**
+non-absence effect — **including effects whose own `repair` drops and re-adds that object.** So the
+guard fires exactly when the repair is needed. Reproduced against the live catalogue, both inside
+rolled-back transactions:
+
+- a simulated pre-`0037` state (seven block kinds, `callout` absent, `experimental_since` dropped)
+  makes the `revision_blocks_kind` guard return a row, so `--apply` **refuses** — and that script's
+  own header says this is production's expected state;
+- a simulated pre-`0036` state (one `summary` step run present) does the same, and `0036`'s migration
+  comment says *"any database that has ever run the summary step has such rows"*.
+
+**So the repair refuses `0036` and `0037` wherever they are genuinely outstanding, which is the case
+it exists for.** The fix is to mark which effects a reconciliation's own `repair` replaces, and skip
+those in the guard — a design decision about what "refuse anything I do not understand" should mean,
+not a patch. Until then, treat a refusal from `--apply` on production as *possibly this bug* rather
+than as the guard working.
+
+Note the narrowing landed today slightly *reduces* the false-refusal surface: a constraint differing
+only in other step names no longer trips the guard.
+
 ### Also outstanding, unrelated to the flag
 
 - **`docs/project/architecture.md` and `dev-and-deployment-overview.md` each need one line changed**
