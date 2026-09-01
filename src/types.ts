@@ -1857,6 +1857,12 @@ export type StepName =
      article bytes at the same effort and share one cached prefix, the same
      reason `quotes` sits beside `glossary`. */
   | "timeline"
+  /* The questions the piece can ask you back, the second sub-mode of Review —
+     docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
+     for the third time and the same reason: `articleWithIds` at `high` effort,
+     so all four share one cached article prefix and `STEP_ORDER` keeps them
+     contiguous. */
+  | "quiz"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Last in the list and last in `STEP_ORDER`: nothing reads what it writes. */
   | "sketch";
@@ -2713,6 +2719,55 @@ export interface Quiz {
   generatedAt: string;
   elapsedMs: number;
 }
+
+/**
+ * `GET /api/quiz/:slug`. Two staleness facts and no third, exactly as
+ * `TimelineResponse` above: the reader profile is **not** in this stage's
+ * stamp, so there is no `profileChanged` to report and the route sends no
+ * `withProfileChanged`.
+ * docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+ */
+export interface QuizResponse {
+  quiz: Quiz;
+  /** The article moved underneath these questions — blocks, sections or head. */
+  stale: boolean;
+  /** The article is the same and we would write the questions differently now. */
+  outdated: boolean;
+}
+
+/**
+ * As `TimelineFound`, and here too it is the *same* type, for the same reason:
+ * there is no `profileChanged` for a store adapter to leave out. Named rather
+ * than skipped so both adapters agree with their neighbours by shape.
+ */
+export type QuizFound = QuizResponse;
+
+/**
+ * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.
+ *
+ * **Three ids and the reader's own words, and nothing else.** The question, the
+ * reference answer and the evidence are looked up server-side from the artefact
+ * (`markOneAnswer` in src/routes.ts), so a tampered body cannot make the model
+ * mark against a question the article never asked. The `batchId` is what binds
+ * that lookup to the batch the reader was actually shown — a mismatch is a 409
+ * rather than a silent fall-forward.
+ */
+export interface QuizMarkBody {
+  batchId: string;
+  questionId: QuizQuestionId;
+  answer: string;
+}
+
+/**
+ * The most characters a reader's answer may carry.
+ *
+ * "A couple of sentences, give or take" is the shape asked for, and this is
+ * four or five times that — a cap against a paste of the whole article rather
+ * than a style rule. It is here in src/types.ts rather than in src/quiz-mark.ts
+ * because the panel disables its button against the same number, and two copies
+ * of a limit is one copy that drifts.
+ */
+export const MAX_QUIZ_ANSWER_CHARS = 4000;
 
 /* ------------------------------------------------------------- feedback -- */
 

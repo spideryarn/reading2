@@ -6153,6 +6153,179 @@ td.text.has-hit[data-hues="8"] {
   overflow-y: auto;
 }
 
+/* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
+
+   Nothing here paints a valence. The swatch beside a row takes its colour from
+   an inline `--div-rg-*` / `--div-*` reference chosen by `valenceToken` in
+   src/web/valence.ts, so the ramp stays in styles/colourscales.css and this
+   file never learns what red means. The rules below are layout, and the one
+   thing they are opinionated about is that the rank, the words and the number
+   are all *text*: colour may never be the only carrier
+   (docs/project/colour-scales.md). */
+
+.crit { padding: 0 0.35rem 0.5rem; }
+
+.crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
+.crit-label { font-size: 0.72rem; color: var(--ink-faint); }
+.crit-text, .crit-poles input, .crit-poles select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.35rem;
+}
+.crit-poles { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.crit-kinds { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.crit-kind-btn {
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
+.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-kind-note { margin: 0; font-size: 0.72rem; color: var(--ink-faint); }
+
+.crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.crit-preset {
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+}
+.crit-preset:hover { color: var(--ink); border-color: var(--rule-strong); }
+
+.crit-run {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.crit-run:disabled { opacity: 0.5; cursor: default; }
+
+.crit-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
+.crit-retry {
+  font: inherit;
+  font-size: 0.74rem;
+  background: none;
+  border: none;
+  color: var(--highlight);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.crit-list { margin: 0; padding: 0; list-style: none; }
+.crit-row { border-top: 1px solid var(--rule); padding: 0.4rem 0; }
+.crit-head { display: flex; align-items: flex-start; gap: 0.3rem; }
+.crit-tick { display: flex; align-items: flex-start; gap: 0.3rem; flex: 1; cursor: pointer; }
+/* The tick takes the criterion's own hue, so the control and the mark it draws
+   in the prose are visibly the same thing — the same call `.srch-saved-tick`
+   makes, and the same fallback for a row with no slot yet. */
+.crit-tick input { margin-top: 0.15rem; accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+.crit-criterion { font-size: 0.82rem; color: var(--ink); }
+
+.crit-colour, .crit-del {
+  flex: none;
+  font: inherit;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+}
+.crit-colour { width: 1.1rem; height: 1.1rem; background: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+
+.crit-picker { display: flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.3rem 0; }
+.crit-swatch {
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgb(var(--cat-rgb));
+  cursor: pointer;
+}
+.crit-swatch.current { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-swatch-auto {
+  font: inherit;
+  font-size: 0.7rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0 0.3rem;
+}
+
+.crit-meta { margin: 0.15rem 0 0.25rem; font-size: 0.7rem; color: var(--ink-faint); }
+
+.crit-results { margin: 0; padding: 0; list-style: none; }
+.crit-result { padding: 0.25rem 0; }
+.crit-jump {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+}
+/* **The rank leads, and it is large** — the plan's § 1. It is the first thing
+   in the row and the first thing in the accessible name. */
+.crit-rank {
+  flex: none;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  min-width: 1.1rem;
+}
+.crit-quote { font-size: 0.8rem; }
+
+.crit-valence {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0 1.45rem;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+.crit-valence-swatch {
+  align-self: center;
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+.crit-valence-words { color: var(--ink); }
+.crit-valence-number { font-variant-numeric: tabular-nums; }
+
+.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
+.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.72rem; }
+
 /* -------------------------------------------------------- § summary mode ----
    The article at more than one length, in the mode band. The shell is
    `.mode-band` above; everything here is what goes inside it. See
@@ -11070,6 +11243,107 @@ table.only-prose thead { display: none; }
    scroll twenty-six events to reach. */
 .tl-again {
   margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* ------------------------------------------------------------------ quiz --
+   The Quiz sub-mode of Review — docs/plans/260831al-review-quiz-sub-mode.md.
+
+   **Deliberately minimal, and stage 2's whole visual budget.** The band's real
+   design is stage 3, along with show-all, the collapsed reference answer, the
+   citation chips and dictation. What is here is enough that the thin vertical
+   slice can be looked at and judged: a question that reads as a question, a box
+   that reads as a box, and a reply that is not run together with either. The
+   structural classes are the glossary band's (`gloss-head`, `gloss-run`,
+   `gloss-stale`) rather than a second vocabulary that would then have to be
+   thrown away. */
+
+/* Recall | Quiz, in the band's head beside the title. Two toggle buttons, and
+   the pressed one is filled — a pair where one is always on, so an outline-only
+   treatment would leave a reader guessing which half they are looking at. */
+.review-submode {
+  display: flex;
+  gap: 1px;
+  margin-left: auto;
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.review-submode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.review-submode-btn:hover { color: var(--ink); }
+.review-submode-btn.on {
+  background: var(--rule);
+  color: var(--ink);
+}
+
+/* The scrolling child every `.mode-band` needs. Without one the panel's own
+   content decides its height, which a fixed element cannot honour, and the
+   Previous/Next row lands under the dock — the fault the ideas panel shipped
+   with and `.tl-scroll` above records. */
+.quiz-one {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+.quiz-question {
+  margin: 0.4rem 0 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.quiz-answer {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.quiz-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+/* The mark. A left rule rather than a box, because it is the model talking
+   about what the reader just wrote and it should read as a margin note on the
+   answer rather than as a verdict handed down in its own frame. */
+.quiz-reply {
+  margin: 0.6rem 0;
+  padding: 0 0 0 0.7rem;
+  border-left: 2px solid var(--rule);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.quiz-step {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.quiz-rewrite {
   padding: 0.45rem 0.7rem;
   border-top: 1px solid var(--rule);
 }

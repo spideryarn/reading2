@@ -78,6 +78,7 @@ import type {
   Glossary,
   Ideas,
   JobStep,
+  Quiz,
   Quotes,
   SearchHit,
   Timeline,
@@ -148,6 +149,35 @@ export const articles = spideryarn.table("articles", {
   /** `auth.users(id)`. FK in the custom migration — see the header. */
   ownerId: uuid("owner_id").notNull(),
   slug: text("slug").notNull().unique(),
+  /**
+   * **The stable handle the slug is only a copy of.**
+   *
+   * > Yes, let's add a short id — and actually then we could in future allow
+   * > users to rename the slug, and redirect/find it from the short id. So make
+   * > sure it's globally unique. I'm fine with adding that to all slugs.
+   * >
+   * > — Greg, 2026-08-31
+   *
+   * A `spya-k3m9qt` from src/ids.ts, the same shape as a block id, minted with
+   * the slug and repeated on the end of it (src/ingest.ts §
+   * `slugWithShortId`). Two articles can therefore never want the same name,
+   * which is what deleted `freeSlug`'s collision ladder and the whole of
+   * `freeUploadSlug`.
+   *
+   * **A column and not a substring of the slug**, and that is the second half
+   * of the decision rather than tidiness: a slug the reader has renamed no
+   * longer contains an id, and this is what the rename would redirect through.
+   * `slugForShortId` (src/store/find-article.ts) is the lookup; the rename
+   * itself is not built.
+   *
+   * **Nullable, and nothing backfills it.** Every article added before
+   * 2026-08-31 keeps the slug it has and has no id — so a lookup by short id
+   * is a lookup that can miss, deliberately. Unique because Greg asked for
+   * globally unique, and NULLs are distinct in Postgres, so the older rows do
+   * not collide with each other. docs/plans/260831b-finish-the-database-move.md
+   * § Stage 3 item 0.
+   */
+  shortId: text("short_id").unique(),
   currentRevisionId: uuid("current_revision_id"),
   createdAt: createdAt(),
 
@@ -634,6 +664,37 @@ export const articleRevisions = spideryarn.table(
      * delete with it or block one.
      */
     timeline: jsonb("timeline").$type<Timeline>(),
+
+    /**
+     * The questions the piece can ask you back — `Quiz`, src/types.ts, written
+     * by the `quiz` step. docs/plans/260831al-review-quiz-sub-mode.md.
+     *
+     * The WHOLE artefact, like its neighbours, and here two of its fields are
+     * doing work no other column's do. `sourceHash` is
+     * `articleWithIdsFingerprint` — the blocks, the tree and a metadata head —
+     * so the panel can ask whether the article has moved underneath the
+     * questions. And **`batchId`**, which is what a mark binds to: between a
+     * reader seeing a question and pressing Answer, a forced regeneration can
+     * replace every reference answer in this column while the shape of the
+     * document stays exactly the same. `POST /api/quiz/:slug/mark` answers 409
+     * on a mismatch rather than marking one batch's answer against another's
+     * reference, which is a failure nothing else here would notice.
+     *
+     * **No `profileHash`, like `timeline` and unlike `ideas` and `sketch`** — a
+     * decision rather than a gap, and a cheap one to reverse, because
+     * `profileHash` is a field on the JSON rather than a column.
+     *
+     * **No attempts table beside it.** v1 stores no answers: a reader answers,
+     * reads the reply and moves on. The questions persist because they are an
+     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not
+     * stored.
+     *
+     * **No foreign key from an evidence `blockId` to `revision_blocks`**, on
+     * the same argument the glossary, the ideas, the quotes, the timeline and
+     * the sketch make: a dropped paragraph should cost that question its jump
+     * rather than take a delete with it or block one.
+     */
+    quiz: jsonb("quiz").$type<Quiz>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -1667,7 +1728,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch')`,
     ),
     check(
       "revision_step_runs_status",
@@ -2527,7 +2588,15 @@ export const feedback = spideryarn.table(
      * MIME type or filename can never be forwarded.
      */
     screenshot: bytea("screenshot"),
-    /** Null until Sentry took it. See the header on the crash window. */
+    /**
+     * **Null until the report was handed to Sentry**, which is a different fact
+     * from Sentry having taken it — and they were one column until GPT Sol's
+     * code review, 2026-08-31, pointed out that the SDK sends asynchronously and
+     * swallows transport failures, so the one column said *delivered* for
+     * reports that went nowhere.
+     */
+    mirrorAttemptedAt: timestamp("mirror_attempted_at", { withTimezone: true }),
+    /** Null until Sentry **acknowledged** it. See the header on the crash window. */
     mirroredAt: timestamp("mirrored_at", { withTimezone: true }),
     sentryEventId: text("sentry_event_id"),
     createdAt: createdAt(),
@@ -2634,6 +2703,16 @@ export const feedback = spideryarn.table(
     check(
       "feedback_mirrored_pair",
       sql`${t.sentryEventId} is null or ${t.mirroredAt} is not null`,
+    ),
+    /**
+     * **Delivered implies attempted.** A row saying Sentry acknowledged a report
+     * we never handed over is the state this pair of columns exists to make
+     * impossible, so it is a constraint rather than an ordering somebody
+     * remembers in src/feedback.ts.
+     */
+    check(
+      "feedback_mirror_attempted_first",
+      sql`${t.mirroredAt} is null or ${t.mirrorAttemptedAt} is not null`,
     ),
     /**
      * **The rate cap's only query**, and the reason it can be a `count` rather

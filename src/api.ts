@@ -44,6 +44,11 @@ import {
   readTimeline,
 } from "./timeline.js";
 import {
+  isStale as quizIsStale,
+  PROMPT_VERSION as QUIZ_PROMPT_VERSION,
+  readQuiz,
+} from "./quiz.js";
+import {
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
@@ -70,6 +75,7 @@ import type {
   IdeasFound,
   QuotesFound,
   SketchFound,
+  QuizFound,
   TimelineFound,
   LibraryEntry,
   ListOptions,
@@ -626,6 +632,53 @@ export async function loadTimeline(slug: string): Promise<TimelineFound> {
       !tree ||
       timelineIsStale(timeline, blocksFile.blocks, tree, timelineMeta ?? null),
     outdated: timeline.version !== TIMELINE_PROMPT_VERSION,
+  };
+}
+
+/**
+ * The article's questions, and whether they still describe it — the filesystem
+ * half. docs/plans/260831al-review-quiz-sub-mode.md.
+ *
+ * Shaped exactly on `loadIdeas` above, including the "unknown counts as stale"
+ * rule, and differing in two places.
+ *
+ * **A 404 is the ordinary case.** `quiz` is off `DEFAULT_INGEST_STEPS`, so most
+ * articles have never had questions written, and the panel's job on a 404 is to
+ * offer the button rather than to report a failure.
+ *
+ * **And no third staleness fact.** This stage was not written for a profile, so
+ * `QuizResponse` has two fields where `IdeasResponse` has three and the route
+ * sends no `withProfileChanged`.
+ */
+export async function loadQuiz(slug: string): Promise<QuizFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const quiz = await readQuiz(dir);
+  if (!quiz) {
+    throw Object.assign(
+      new Error(
+        `No quiz for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* The **cited** head — this stage sends `articleWithIds`, which prints a
+     `URL:` line the four `articleText` stages never send. Absent metadata is a
+     legitimate input rather than no input at all, which is what lets this
+     comparison mean the same thing on both sides. */
+  const quizMeta = await readJson<Meta>(path.join(dir, "meta.json"));
+  // Unknown counts as stale, the same way round as the ideas above.
+  return {
+    quiz,
+    stale: !blocksFile || !tree || quizIsStale(quiz, blocksFile.blocks, tree, quizMeta ?? null),
+    outdated: quiz.version !== QUIZ_PROMPT_VERSION,
   };
 }
 

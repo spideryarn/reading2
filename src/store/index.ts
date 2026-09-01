@@ -67,6 +67,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   ReaderStore,
+  RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
   SourceStore,
@@ -83,6 +84,7 @@ import {
   fsGlossaryStore,
   fsLibrarySearch,
   fsReaderStore,
+  fsRefereeCriteriaStore,
   fsSearchStore,
   fsShelfStore,
 } from "./fs.js";
@@ -94,6 +96,7 @@ import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
+import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 import { pgSourceStore } from "./pg-source.js";
@@ -206,6 +209,7 @@ export const loadGlossary = reader.loadGlossary.bind(reader);
 export const loadQuotes = reader.loadQuotes.bind(reader);
 export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadTimeline = reader.loadTimeline.bind(reader);
+export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
@@ -228,6 +232,30 @@ export const loadArc = reader.loadArc.bind(reader);
 export const chatStore: ChatStore = guarded("chat", pgChatStore, fsChatStore);
 
 export const searchStore: SearchStore = guarded("searches", pgSearchStore, fsSearchStore);
+
+/**
+ * **A referee's own criteria, run over the paper** — the same flag as the
+ * searches beside it, and for the same reason plus one of its own.
+ *
+ * The general reason first: a criterion written to a file while the article it
+ * is about came from Postgres is a write no Postgres read will ever return —
+ * the failure this file's header calls the worst available outcome, because it
+ * reports success and loses the data.
+ *
+ * The one of its own is `comments.criterion_id`. The referee's *own* placement
+ * of a passage is a comment (drizzle/0043), and it carries a foreign key to
+ * `(article_id, id)` on this table. Comments follow the flag; if criteria did
+ * not, a referee's mark would point at a row that store cannot see.
+ *
+ * `guarded(...)` is not optional. The parameters Drizzle puts into a failed
+ * query's message here are the referee's criterion and the passages the model
+ * quoted — see [db-errors.ts](db-errors.ts).
+ */
+export const refereeCriteriaStore: RefereeCriteriaStore = guarded(
+  "referee-criteria",
+  pgRefereeCriteriaStore,
+  fsRefereeCriteriaStore,
+);
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded(
   "lookups",
@@ -432,6 +460,12 @@ const feedbackOnFiles: FeedbackStore = {
     );
   },
   read: () => {
+    throw Object.assign(
+      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
+      { status: 501 },
+    );
+  },
+  markMirrorAttempted: () => {
     throw Object.assign(
       new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
       { status: 501 },

@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { throttle, useQueryState } from "nuqs";
+import { throttle, useQueryState, useQueryStates } from "nuqs";
 import type {
   Article,
   Block,
@@ -35,6 +35,8 @@ import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
 import { TimelinePanel } from "./TimelinePanel.js";
 import { useTimeline } from "./useTimeline.js";
+import { QuizPanel, ReviewSubModeToggle } from "./QuizPanel.js";
+import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TheOriginal } from "./SourceLink.js";
@@ -59,6 +61,7 @@ import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
+import { CriteriaBand } from "./CriteriaPanel.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
@@ -107,6 +110,7 @@ import {
   refereeParam,
   REFEREE_VIEWS,
   type RefereeView,
+  reviewParam,
   barParam,
   eventParam,
   ideaParam,
@@ -1609,6 +1613,14 @@ function Reader({
      months once per civilisation. */
   const [timelineFound, setTimelineFound] = useState<Found[]>([]);
   const [openTimelineKey, setOpenTimelineKey] = useState<string | null>(null);
+  /* **A fifth state, for the reason the second, third and fourth have their
+     own**: two modes sharing one `Found[]` clear each other on the way out, and
+     which one wins is an accident of whether the outgoing mode's cleanup is
+     passive and the incoming mode's push is layout. Referee's Criteria has no
+     `openKey` of its own yet — stepping between marked passages is search's
+     control and this panel does not offer one, so nothing here can be open.
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1. */
+  const [refereeFound, setRefereeFound] = useState<Found[]>([]);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1628,7 +1640,9 @@ function Reader({
         ? quoteFound
         : mode === "timeline"
           ? timelineFound
-          : found;
+          : mode === "referee"
+            ? refereeFound
+            : found;
   const openPassage =
     mode === "ideas"
       ? openOccurrence
@@ -1636,7 +1650,9 @@ function Reader({
         ? null
         : mode === "timeline"
           ? openTimelineKey
-          : openHit;
+          : mode === "referee"
+            ? null
+            : openHit;
   const hitMarks = useMemo(
     () => buildHitMarks(passages, openPassage),
     [passages, openPassage],
@@ -2400,15 +2416,22 @@ function Reader({
           `visitorGap` answers `null`. What is left here is a mode the pipeline
           never ran for this piece, and the four that cost a model call. */}
       {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
-      {owner && (mode === "chat" || mode === "review") && (
+      {owner && mode === "chat" && (
         <ConversationBand
           key={mode}
           slug={slug}
           blocks={blockText}
           onJump={jumpTo}
-          kind={mode === "review" ? "review" : "chat"}
+          kind="chat"
           onMode={setMode}
         />
+      )}
+      {/* **Review is two bands behind one mode**, and the choice between them
+          is `?review=`. The wrapper exists so that the parameter and its
+          collision with `?thread=` are decided in one place rather than in each
+          half — see `ReviewBand`. */}
+      {owner && mode === "review" && (
+        <ReviewBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
       )}
       {/* `glossaryRead &&` rather than `owner &&`, and it is the same test: the
           read is non-null exactly when the article is yours. Written this way
@@ -2529,7 +2552,9 @@ function Reader({
           fails closed and already answers `owners-only` for this mode, so a
           visitor pressing the button gets the boundary sentence and not a blank
           band. src/web/visitor.ts. */}
-      {owner && mode === "referee" && <RefereeBand />}
+      {owner && mode === "referee" && (
+        <RefereeBand slug={slug} blocks={article.blocks} onJump={jumpTo} onFound={setRefereeFound} />
+      )}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
@@ -3005,6 +3030,126 @@ function TimelineBand({
 }
 
 /**
+ * **Review's two sub-modes, and the one place their URL rules live.**
+ *
+ * Review is `recall` — the reader says what they took from the article and the
+ * model shows them where that comes apart — or `quiz`, where the questions come
+ * from the article instead. One mode, two bands, and `?review=` says which.
+ * docs/plans/260831al-review-quiz-sub-mode.md.
+ *
+ * ## Why this is a component rather than two conditions up in `Reader`
+ *
+ * Two reasons, and the second is the one that matters.
+ *
+ * The cheap one: `?review=` is meaningless outside review mode, and reading it
+ * in `Reader` would put a parameter subscription on every render of the reading
+ * view for a value only this subtree uses — the same argument `ConversationBand`
+ * makes about `?thread=`.
+ *
+ * The real one: **`?review=` and `?thread=` collide, and the rules are
+ * navigations rather than parsing.** `?mode=review&review=quiz&thread=<id>`
+ * would otherwise leave a review conversation selected and invisible. Both
+ * parameters are set through one `useQueryStates`, so switching sub-mode is one
+ * history entry rather than two — two would put a half-state on the Back stack,
+ * which is the bug review-mode.md already records for opening a thread of the
+ * other kind.
+ *
+ * Three rules, and all three are here:
+ *
+ * 1. **switching to Quiz sets `review=quiz` and clears `thread`, in one
+ *    navigation** — pushed, because switching sub-mode is a deliberate act on
+ *    the view and Back should undo it;
+ * 2. **a pasted URL carrying both: Quiz wins**, and `thread` is dropped with a
+ *    *replace* — a push would put the broken combination one Back press away
+ *    from the reader we have just rescued from it;
+ * 3. **opening a review conversation sets `review=recall` and `thread=<id>`,
+ *    also in one** — that one is in `ConversationBand`'s `onThread`, because it
+ *    is the same navigation that already moves `?mode=`, and splitting it would
+ *    be the two-entry bug again.
+ *
+ * ## And the live conversation is hung up before the panel goes
+ *
+ * Switching to Quiz **unmounts** `ConversationBand`, which is what ends any
+ * live session: `useLiveConversation`'s unmount cleanup is the only thing that
+ * closes the peer connection, and a session left running is listening to the
+ * reader and writing into a transcript they are no longer looking at. That is
+ * why the two halves are rendered as alternatives rather than one being hidden
+ * with CSS — a hidden band is a mounted band.
+ */
+function ReviewBand({
+  slug,
+  blocks,
+  onJump,
+  onMode,
+}: {
+  slug: string;
+  blocks: Map<string, string>;
+  onJump(id: BlockId): void;
+  onMode(next: Mode): void;
+}) {
+  const [{ review, thread }, setBoth] = useQueryStates({
+    review: reviewParam,
+    thread: threadParam,
+  });
+
+  /* Rule 2. A *replace*, and an effect rather than a render-time fix-up,
+     because writing to the URL during render is what React refuses. It settles
+     on the first commit and then never fires again, since `thread` is null. */
+  useEffect(() => {
+    if (review === "quiz" && thread !== null) {
+      void setBoth({ thread: null }, { history: "replace" });
+    }
+  }, [review, thread, setBoth]);
+
+  const toggle = (
+    <ReviewSubModeToggle
+      value={review}
+      onChange={(next) =>
+        /* Rule 1. Both keys in one call, so this is one history entry — and
+           `thread: null` on the way to Quiz rather than only on arrival, so
+           there is no frame in which the URL says both. Going the other way
+           leaves `thread` alone: the reader is going back to a list, and the
+           conversation they last had open is the right thing to find. */
+        void setBoth(
+          next === "quiz" ? { review: next, thread: null } : { review: next },
+          { history: "push" },
+        )
+      }
+    />
+  );
+
+  if (review === "quiz") return <QuizSubBand slug={slug} subMode={toggle} />;
+  return (
+    <ConversationBand
+      /* Keyed so that leaving Quiz and coming back starts clean rather than
+         carrying the previous visit's focus nonce and stance — the same reason
+         `Reader` keys this component on `mode`. */
+      key="review-recall"
+      slug={slug}
+      blocks={blocks}
+      onJump={onJump}
+      kind="review"
+      onMode={onMode}
+      subMode={toggle}
+    />
+  );
+}
+
+/**
+ * The quiz, and the fetch and the poller that belong to it.
+ *
+ * A component of its own for `GlossaryBand`'s surviving reason rather than
+ * `ConversationBand`'s: **`useStepJob` polls the job list for ever**, which is
+ * one small request every eight seconds for the life of the band. A reader who
+ * never opens Quiz should not pay for a poller, and hooks cannot be called
+ * conditionally, so the condition has to be a component boundary.
+ */
+function QuizSubBand({ slug, subMode }: { slug: string; subMode: React.ReactNode }) {
+  const owner = useQuiz(slug);
+  return <QuizPanel owner={owner} subMode={subMode} />;
+}
+
+/**
  * Chat, and the fetch that belongs to it.
  *
  * A component of its own for one reason: **`useChat` fetches on mount**, and
@@ -3023,6 +3168,7 @@ export function ConversationBand({
   blocks,
   onJump,
   kind,
+  subMode,
   onMode,
 }: {
   slug: string;
@@ -3040,6 +3186,12 @@ export function ConversationBand({
    * twice.
    */
   kind: ThreadKind;
+  /**
+   * **The Recall | Quiz control**, when this band is the Recall half of Review.
+   * Absent in chat mode. Built by `ReviewBand` above and passed straight
+   * through to `ChatPanel`, which is where it is drawn.
+   */
+  subMode?: React.ReactNode;
   /**
    * Switch mode, for when the reader opens a thread of the *other* kind.
    *
@@ -3067,6 +3219,10 @@ export function ConversationBand({
     error,
   } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
+  /* Write-only, for rule 3 in `onThread` below — the value itself is
+     `ReviewBand`'s to read. A setter with no reader still subscribes, which is
+     the cost, and it is paid only by a band the reader has opened. */
+  const [, setReview] = useQueryState("review", reviewParam);
 
   /**
    * The conversations as they are **now**, for a callback that outlives a render.
@@ -3273,6 +3429,16 @@ export function ConversationBand({
       onThread={(id) => {
         const target = id ? threads.find((t) => t.id === id) : null;
         if (target && target.kind !== kind) onMode(target.kind === "review" ? "review" : "chat");
+        /* **Rule 3**: opening a review conversation lands on the Recall half,
+           because a conversation is what Recall is and Quiz has nowhere to put
+           one. Set unconditionally rather than only when crossing from chat,
+           so a stale `?review=quiz` on the URL cannot survive a thread being
+           opened from anywhere. nuqs batches every setter fired in one event
+           into a single navigation, which is what the two lines above already
+           rely on — so this is still one entry on the Back stack, not three.
+           `reviewParam` defaults to `recall`, so this writes nothing to the URL
+           in the ordinary case. */
+        if (!target || target.kind === "review") void setReview("recall");
         void setThread(id);
       }}
       onNew={startNew}
@@ -3348,6 +3514,7 @@ export function ConversationBand({
       kind={kind}
       stance={stance}
       onStance={setPicked}
+      subMode={subMode}
     />
   );
 }
@@ -4086,7 +4253,18 @@ function DiagramBand({
  * It is styled as a notice and not as an error — src/web/styles.css § referee
  * mode. Nothing has gone wrong.
  */
-function RefereeBand() {
+function RefereeBand({
+  slug,
+  blocks,
+  onJump,
+  onFound,
+}: {
+  slug: string;
+  blocks: Block[];
+  onJump(blockId: BlockId): void;
+  /** `Reader` owns the prose — the seam described on `found` above. */
+  onFound(next: Found[]): void;
+}) {
   useRenderCount("RefereeBand");
   const [view, setView] = useQueryState("referee", refereeParam);
 
@@ -4107,7 +4285,13 @@ function RefereeBand() {
       <RefereeViews view={view} onView={(next) => void setView(next)} />
 
       <div className="ref-panel">
-        <RefereeSubMode view={view} />
+        <RefereeSubMode
+          view={view}
+          slug={slug}
+          blocks={blocks}
+          onJump={onJump}
+          onFound={onFound}
+        />
       </div>
     </aside>
   );
@@ -4195,10 +4379,27 @@ const REFEREE_VIEW_LABEL: Record<RefereeView, string> = {
  * `noUncheckedIndexedAccess` and render nothing at runtime, which is the shape
  * docs/reusable/silent-success.md is about.
  */
-function RefereeSubMode({ view }: { view: RefereeView }) {
+function RefereeSubMode({
+  view,
+  slug,
+  blocks,
+  onJump,
+  onFound,
+}: {
+  view: RefereeView;
+  slug: string;
+  blocks: Block[];
+  onJump(blockId: BlockId): void;
+  onFound(next: Found[]): void;
+}) {
   switch (view) {
     case "criteria":
-      return <CriteriaPanel />;
+      /* **Stage 3, and the only sub-mode that is built.** Its band owns
+         `?crits=` and pushes the marked passages up; src/web/CriteriaPanel.tsx
+         is the whole of it, including the three visual rules it is under.
+         The other three panels below are still their Stage 1 placeholders, and
+         they take none of these props because they draw nothing. */
+      return <CriteriaBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
     case "claims":
       return <ClaimsPanel />;
     case "mirror":
@@ -4210,20 +4411,6 @@ function RefereeSubMode({ view }: { view: RefereeView }) {
       throw new Error(`unknown referee view: ${String(unknown)}`);
     }
   }
-}
-
-/**
- * **Stage 2.** The referee's own criteria, each one a saved, re-runnable pass
- * over the article whose hits are marked in the prose — Search's machinery, with
- * a valence, a ranking, and the starter packs from real referee forms.
- */
-function CriteriaPanel() {
-  return (
-    <p className="gloss-quiet">
-      Write the criteria you have been asked to judge this on, and each one becomes a pass over the
-      article. Not built yet.
-    </p>
-  );
 }
 
 /**
