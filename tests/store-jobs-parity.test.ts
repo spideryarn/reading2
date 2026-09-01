@@ -29,6 +29,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { ID_PREFIX, mintId } from "../src/ids.js";
+import { INTERRUPTED } from "../src/messages.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import type { ExpirySettlement, JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -38,7 +39,7 @@ import {
   reattachAttemptForTests,
   forgetForTests,
 } from "../src/store/jobs-fs.js";
-import { pgJobStore } from "../src/store/pg-jobs.js";
+import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
 import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
@@ -266,15 +267,18 @@ const ADAPTERS: Adapter[] = [
        because a lease short enough to expire during a test is short enough to
        expire between two of the assertions that follow.
 
-       **`now()`, not `Date.now()`.** The store creates and compares leases on
-       the database's clock since 2026-09-01, so a helper reaching for the
+       **`clock_timestamp()`, not `Date.now()`.** The store creates and compares
+       leases on the database's clock, so a helper reaching for the
        application's would be testing the two against each other — green on a
        laptop where they are the same clock, and quietly wrong exactly where
-       Vercel and Supabase are not. */
+       Vercel and Supabase are not. And `clock_timestamp()` rather than `now()`
+       for the same reason the store uses it: one spelling of "the time", so
+       nobody has to work out whether a helper and a fence mean the same
+       thing. */
     async expire(id) {
       await getDb()
         .update(jobs)
-        .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+        .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
         .where(eq(jobs.id, id));
     },
     async reattach(id, attempt) {
@@ -773,6 +777,59 @@ for (const adapter of ADAPTERS) {
       );
     });
 
+    /**
+     * **An expired lease revokes the claimant, on its own** — before Stop and
+     * before the sweep, and whether or not either ever arrives.
+     *
+     * This is the invariant the whole design rests on: the claimant sets its
+     * own deadline *inside* the lease and aborts itself (src/jobs.ts §
+     * `LEASE_MS`), so a lapsed lease is supposed to mean *the process is gone*
+     * rather than *the process might be slow*. Everything that acts on an
+     * expired lease — `settleExpired`, `requestCancel`'s lapsed branch — is
+     * only safe because of that.
+     *
+     * **And until 2026-09-01 nothing enforced it.** The fence checked `id`,
+     * `attempt_id` and `status = 'running'` and said nothing about the lease,
+     * so expiry revoked nothing: a claimant that woke up late could still
+     * commit, as long as it reached the row before Stop or the sweep did. In
+     * the ignored-abort path it could commit an `error`/INTERRUPTED ending,
+     * which is a concurrent Stop reporting the wrong thing to the reader —
+     * the exact class of bug the stage before this one existed to close.
+     *
+     * So: expire it, sweep **nothing**, and ask for all three writes.
+     * GPT Sol, 2026-09-01, finding 1 on the built stage 2.
+     */
+    it("refuses every write from a claimant whose lease has run out, with nothing having swept it", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = mintAttempt();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+
+      await adapter.expire(job.id);
+      /* **The row is untouched**, and that is what makes this a test of expiry
+         rather than of settlement: still `running`, still carrying this
+         claimant's own token. Every condition the old fence checked still
+         holds. */
+      expect((await store.get(job.id, OWNER))?.status).toBe("running");
+
+      await expect(store.noteProgress(job.id, attempt, job.steps)).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+      await expect(store.releaseStep(job.id, attempt, job.steps, {})).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+      await expect(
+        store.finish(job.id, attempt, { status: "error", steps: job.steps, error: "wrong" }),
+      ).rejects.toBeInstanceOf(StaleAttemptError);
+
+      /* And none of them moved the row a millimetre — a refusal that still
+         wrote half of something would be the same failure wearing a throw. */
+      const after = await store.get(job.id, OWNER);
+      expect(after?.status).toBe("running");
+      expect(after?.error).toBeUndefined();
+      expect(after?.finishedAt).toBeUndefined();
+    });
+
     it("fails a job whose lease ran out, and leaves a live one alone", async () => {
       const dead = aJob();
       await store.enqueueOrGet(dead, "k1");
@@ -863,33 +920,56 @@ for (const adapter of ADAPTERS) {
     });
 
     /**
-     * **A job that is over must not still be showing a spinner.**
+     * **A job that is over must not still be showing a spinner — and the two
+     * endings do not settle the step the same way.**
      *
      * Both expiry paths end a job nobody is inside, so if the statement that
      * ends it does not settle the step that was running, nothing ever will:
      * `StepRow` draws `LoaderCircle` for a `running` step regardless of what the
-     * job says. Back to `pending`, which is what `sweepStopped` already writes
-     * for a step whose process went away.
+     * job says.
+     *
+     * **Cancelled goes to `pending`, interrupted goes to `error`.** That
+     * distinction is finding 2 of GPT Sol's review of stage 2, and the argument
+     * for it is about the built card rather than about tidiness: `JobCard`
+     * (src/web/AddArticle.tsx) renders `step.error` and the shared poll error,
+     * and **never `job.error`**. Settling both endings to `pending` — which is
+     * what stage 2 shipped — left an interrupted job showing one muted step and
+     * a Retry button with no explanation on the card at all. A reader who
+     * pressed Stop has an explanation already: they are the one who pressed it.
+     *
+     * `tests/interrupted-job-card.test.tsx` is the other half of this, because
+     * a store assertion is not evidence that a person can see anything.
      */
-    it("settles the step that was running, so a finished job never draws a spinner", async () => {
+    it("settles the step that was running, and says why only when nobody asked", async () => {
       /** Claim it and leave one step visibly running, as any long step does. */
-      async function midStep(job: Job, key: string): Promise<void> {
+      async function midStep(job: Job, key: string): Promise<string> {
         await store.enqueueOrGet(job, key);
         const attempt = mintAttempt();
         expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+        const startedAt = new Date().toISOString();
         await store.noteProgress(job.id, attempt, [
-          { ...job.steps[0]!, status: "running", startedAt: new Date().toISOString() },
+          { ...job.steps[0]!, status: "running", startedAt },
         ]);
         await adapter.expire(job.id);
+        return startedAt;
       }
 
       const swept = aJob();
-      await midStep(swept, "k1");
+      const startedAt = await midStep(swept, "k1");
       await store.settleExpired();
       const afterSweep = await store.get(swept.id, OWNER);
       expect(afterSweep?.status).toBe("error");
-      expect(afterSweep?.steps.map((step) => step.status)).toEqual(["pending"]);
-      expect(afterSweep?.steps[0]?.startedAt).toBeUndefined();
+      expect(afterSweep?.steps.map((step) => step.status)).toEqual(["error"]);
+      /* The sentence the reader gets, on the row that draws it. Without this
+         the card is a muted line and a Retry button and nothing else. */
+      expect(afterSweep?.steps[0]?.error).toBe(INTERRUPTED.message);
+      /* A step that ended has a `finishedAt`, exactly as one that threw does —
+         and it keeps the `startedAt` it really had, because it really did run. */
+      expect(afterSweep?.steps[0]?.finishedAt).toBeTruthy();
+      expect(afterSweep?.steps[0]?.startedAt).toBe(startedAt);
+      /* And the job repeats it, which is what src/types.ts says `job.error` is
+         for — the failure of the step that raised it. */
+      expect(afterSweep?.error).toBe(INTERRUPTED.message);
 
       const stopped = aJob();
       await midStep(stopped, "k2");
@@ -897,6 +977,68 @@ for (const adapter of ADAPTERS) {
       expect(cancelled?.status).toBe("cancelled");
       expect(cancelled?.steps.map((step) => step.status)).toEqual(["pending"]);
       expect(cancelled?.steps[0]?.startedAt).toBeUndefined();
+      /* **Nothing failed.** A sentence here would be the app telling a reader
+         who pressed Stop that something went wrong. */
+      expect(cancelled?.steps[0]?.error).toBeUndefined();
+      expect(cancelled?.error).toBeUndefined();
+    });
+
+    /**
+     * **Everything that was not running is left exactly as it was.**
+     *
+     * The settlement rewrites the `steps` array whole — one `jsonb_agg` over
+     * every element in Postgres, a loop over every step on the filesystem — so
+     * "it only touches the running one" is a claim about a statement that
+     * rebuilds all of them. The single-step fixture every other case here uses
+     * cannot tell the difference: with one step, "rewrote the right one" and
+     * "rewrote all of them" are the same array.
+     *
+     * So this one carries a done step with a detail and a stamp, a running one,
+     * a pending one and a skipped one, and asserts the three bystanders come
+     * back **deep-equal to what went in**. GPT Sol asked for it by name,
+     * 2026-09-01.
+     *
+     * **What it does not pin is the ordering.** The `order by step.ordinality`
+     * inside `jsonb_agg` was deleted as a mutation and this case stayed green:
+     * Postgres happens to aggregate that plan in input order, so the clause is
+     * insurance against a plan change rather than something a test can watch
+     * fail. Said out loud rather than implied by an assertion that never had
+     * teeth.
+     */
+    it("leaves every step that was not running exactly as it found it", async () => {
+      const startedAt = "2026-09-01T00:00:00.000Z";
+      const mixed: JobStep[] = [
+        {
+          name: "fetch",
+          label: "Fetching the page",
+          status: "done",
+          detail: "12 KB",
+          startedAt,
+          finishedAt: "2026-09-01T00:00:01.000Z",
+        },
+        { name: "extract", label: "Reading the article", status: "running", startedAt },
+        { name: "blocks", label: "Splitting it up", status: "pending" },
+        { name: "hierarchy", label: "Building the hierarchy", status: "skipped" },
+      ];
+      const bystanders = [mixed[0], mixed[2], mixed[3]].map((step) => structuredClone(step));
+
+      const job = aJob({ steps: structuredClone(mixed) });
+      await store.enqueueOrGet(job, "k1");
+      const attempt = mintAttempt();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+      await store.noteProgress(job.id, attempt, structuredClone(mixed));
+      await adapter.expire(job.id);
+
+      expect(settledIds(await store.settleExpired())).toContain(job.id);
+      const after = await store.get(job.id, OWNER);
+      expect(after?.steps.map((step) => step.name)).toEqual([
+        "fetch",
+        "extract",
+        "blocks",
+        "hierarchy",
+      ]);
+      expect([after?.steps[0], after?.steps[2], after?.steps[3]]).toEqual(bystanders);
+      expect(after?.steps[1]?.status).toBe("error");
     });
 
     it("cancels a queued job outright, and only asks a running one — in one call", async () => {
@@ -1120,6 +1262,26 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
     }
   }
 
+  const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "pending" }];
+
+  /** One queued job of this suite's own, cleaned up by the `afterEach` above. */
+  async function queued(): Promise<string> {
+    const id = mintId();
+    made.push(id);
+    await pgJobStore.enqueueOrGet(
+      {
+        id,
+        ownerId: OWNER,
+        slug: `${MINE}${id}`,
+        steps: structuredClone(STEPS),
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      },
+      `clock-${id}`,
+    );
+    return id;
+  }
+
   it("dates the lease and the ending from the database, not from whatever this instance thinks the time is", async () => {
     const id = mintId();
     made.push(id);
@@ -1160,6 +1322,246 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
        everything the reader did afterwards, and retention orders by time. */
     expect(ended?.finishedAt).toBeTruthy();
     expect(ended!.finishedAt!.getTime() - Date.now()).toBeLessThan(30_000);
+    /* **And a lower bound, which the first version of this did not have.** Both
+       assertions above were one-sided, so the epoch passed them, and so did any
+       timestamp arbitrarily far in the past — which is the other half of the
+       same bug, since an instance running *slow* writes a lease that has
+       already expired. GPT Sol, 2026-09-01: "its timestamp assertions are upper
+       bounds only". */
+    expect(claimed!.lease!.getTime() - Date.now()).toBeGreaterThan(LEASE - 30_000);
+    expect(ended!.finishedAt!.getTime() - Date.now()).toBeGreaterThan(-30_000);
+  });
+
+  /**
+   * **The sweep and Stop are on the database's clock too**, and the previous
+   * case never asked them.
+   *
+   * It skewed the application clock across `claim` and `finish` and stopped
+   * there — so an implementation that had moved back to `Date.now()` inside
+   * `settleExpired` or `requestCancel` would have passed it. Those two are
+   * where an app clock does the most damage, because they decide *ownership*: a
+   * fast instance evicts a claimant that is still working, and a slow one
+   * leaves a dead one holding the article for as long as the skew.
+   *
+   * Both directions, because they fail differently and only one of them is
+   * visible as a stuck job.
+   */
+  it("settles and stops on the database's clock, in both directions of skew", async () => {
+    const HOUR = 60 * 60_000;
+
+    /* An hour SLOW. This instance believes the lease has an hour left; the
+       database knows it ran out a second ago. The sweep must act. */
+    const dead = await queued();
+    expect((await pgJobStore.claim(dead, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+    await getDb()
+      .update(jobs)
+      .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+      .where(eq(jobs.id, dead));
+    await skewed(-HOUR, async () => {
+      expect(settledIds(await pgJobStore.settleExpired())).toContain(dead);
+    });
+    expect((await pgJobStore.get(dead, OWNER))?.status).toBe("error");
+
+    /* An hour FAST, on a claim that is genuinely live. Stop must **ask** — an
+       instance that believed the lease had lapsed would end the job outright
+       and leave the real claimant writing artefacts for an article the reader
+       has been told is finished, which is the one thing the lapsed branch of
+       `requestCancel` must never do early. */
+    const live = await queued();
+    expect((await pgJobStore.claim(live, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+    await skewed(HOUR, async () => {
+      const asked = await pgJobStore.requestCancel(live, OWNER);
+      expect(asked?.status).toBe("running");
+      expect(asked?.cancelling).toBe(true);
+      /* And it did not settle it either, for the same reason. */
+      expect(settledIds(await pgJobStore.settleExpired())).not.toContain(live);
+    });
+  });
+
+  /**
+   * **A transaction that began before the deadline and reaches the row after
+   * it.**
+   *
+   * This is the case `now()` cannot see and the reason the fence uses
+   * `clock_timestamp()`. `now()` is **transaction start time** and does not
+   * move: a claimant whose write is inside a transaction that opened before the
+   * lease ran out — which under Postgres is every artefact commit, since
+   * `releaseStepIn` runs inside the session's transaction — would be judged on
+   * the time before it waited, and let through.
+   *
+   * The case makes the two readings visible rather than assuming them: it asks
+   * the database, in the same transaction, whether `now()` still thinks the
+   * lease is live (it does) and whether `clock_timestamp()` knows better (it
+   * does). So a run that goes green cannot have gone green because the timing
+   * did not happen.
+   */
+  it("refuses a claimant whose transaction opened before its lease ran out", async () => {
+    const id = await queued();
+    const attempt = mintAttempt();
+    expect((await pgJobStore.claim(id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+
+    await getDb().transaction(async (tx) => {
+      /* Pins the transaction's `now()`. Postgres sets it at the first command,
+         so without this it would be whatever the fenced statement itself
+         started at, and there would be nothing to cross. */
+      await tx.execute(sql`select 1`);
+
+      /* The lease runs out a second from here — written on **another**
+         connection, because inside this transaction it would be invisible to
+         everybody else and the point is that the row really has expired. */
+      await getDb()
+        .update(jobs)
+        .set({ leaseExpiresAt: sql`clock_timestamp() + interval '1 second'` })
+        .where(eq(jobs.id, id));
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+
+      const crossing = await tx.execute<{ frozen: boolean; really: boolean }>(sql`
+        select now() < lease_expires_at as frozen,
+               clock_timestamp() > lease_expires_at as really
+        from ${jobs} where ${jobs.id} = ${id}`);
+      /* The whole hazard, in two booleans: this transaction's `now()` still
+         says the claim is live, and the wall clock says it is over. */
+      expect(crossing.rows[0]?.frozen, "the transaction has not crossed the lease").toBe(true);
+      expect(crossing.rows[0]?.really, "the lease has not actually expired").toBe(true);
+
+      await expect(releaseStepIn(tx, id, attempt, STEPS, {})).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+    });
+
+    // Still running and still untouched, waiting for the sweep rather than
+    // carrying a settlement written by a claimant that had no right to.
+    expect((await pgJobStore.get(id, OWNER))?.status).toBe("running");
+  }, 20_000);
+
+  /**
+   * **A Stop that arrives with a real failure already on the row.**
+   *
+   * The cancelled settlement clears `error` and `failure_kind`, and the case
+   * that covers it built its fixture out of a job that had never failed — so an
+   * implementation that simply left both columns alone passed it. GPT Sol's
+   * table, 2026-09-01: "retaining stale `error`, `failureKind`, token, lease,
+   * pointer, or missing `finishedAt`".
+   *
+   * So this one seeds the whole set: a job that failed, was retried, was
+   * claimed again, was stopped, and whose claimant then walked away. Every
+   * field the settlement is supposed to write is asserted, including the draft
+   * pointer — a terminal job holding one is a revision `sweepAbandonedDrafts`
+   * spares for ever.
+   *
+   * Postgres only, because the fields are seeded straight into the columns: the
+   * filesystem adapter has no equivalent of "a row that failed before this
+   * claim", and `settleAbandoned` there is one branch that clears both.
+   */
+  it("clears a real failure's sentence when a stopped job is swept", async () => {
+    const id = await queued();
+    const attempt = mintAttempt();
+    expect((await pgJobStore.claim(id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+    await pgJobStore.noteProgress(id, attempt, [
+      { ...STEPS[0]!, status: "running", startedAt: new Date().toISOString() },
+    ]);
+
+    await getDb()
+      .update(jobs)
+      .set({
+        cancelling: true,
+        error: "Readability could not find an article on this page. [ex-empty]",
+        failureKind: "blocked",
+        leaseExpiresAt: sql`clock_timestamp() - interval '1 second'`,
+      })
+      .where(eq(jobs.id, id));
+
+    expect(await pgJobStore.settleExpired()).toContainEqual({ id, status: "cancelled" });
+
+    const settled = await pgJobStore.get(id, OWNER);
+    expect(settled?.status).toBe("cancelled");
+    expect(settled?.cancelling).toBeFalsy();
+    expect(settled?.error, "the old failure's sentence survived the cancel").toBeUndefined();
+    expect(settled?.failureKind).toBeUndefined();
+    expect(settled?.finishedAt).toBeTruthy();
+    /* No sentence on the step either: the reader stopped it. */
+    expect(settled?.steps[0]?.status).toBe("pending");
+    expect(settled?.steps[0]?.error).toBeUndefined();
+
+    const [row] = await getDb()
+      .select({ attemptId: jobs.attemptId, lease: jobs.leaseExpiresAt })
+      .from(jobs)
+      .where(eq(jobs.id, id));
+    expect(row?.attemptId).toBeNull();
+    expect(row?.lease).toBeNull();
+    /* **The draft pointer is not asserted here**, and deliberately: the column
+       has a foreign key, so seeding it needs a real article and a real
+       revision, and `tests/store-pg-session.test.ts` already settles an expired
+       job that is genuinely holding one and watches the pointer go. Inventing a
+       second, weaker version of that here would be a test of the fixture. */
+  });
+
+  /**
+   * **Stop, the sweep and the claimant's own release, all at once.**
+   *
+   * Every one of the three has a claim on the same expired row, and the reader
+   * must end up with one coherent account whichever order they land in. The
+   * risk is not a crash — Postgres serialises the row — it is two of them
+   * *both* believing they settled it, which is how a reader gets told their
+   * Stop was an interruption.
+   *
+   * Three assertions, and the middle one is the sharp one: exactly one
+   * settlement is reported. `requestCancel` is fenced on `status in
+   * ('queued','running')` and `settleExpired` on `status = 'running'`, so
+   * whichever commits second re-reads the row and finds nothing to do.
+   */
+  it("gives one answer when Stop, the sweep and a release arrive together", async () => {
+    const id = await queued();
+    const attempt = mintAttempt();
+    expect((await pgJobStore.claim(id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+    await getDb()
+      .update(jobs)
+      .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+      .where(eq(jobs.id, id));
+
+    /* **The claimant goes first.** The three run concurrently either way, but
+       issuing the release ahead of the other two is what makes the assertion
+       below load-bearing: with the lease left out of the fence — the state this
+       work found — the claimant's `UPDATE` reaches the row first and wins, and
+       a reader who had pressed Stop is told they were interrupted. Ordered
+       last, the same broken code passes by luck. */
+    const [released, stopped, swept] = await Promise.allSettled([
+      pgJobStore.releaseStep(id, attempt, STEPS, {}),
+      pgJobStore.requestCancel(id, OWNER),
+      pgJobStore.settleExpired(),
+    ]);
+
+    /* The claimant loses, always and whatever the order: its lease is gone, so
+       there is no interleaving in which it is entitled to write. */
+    expect(released.status).toBe("rejected");
+    expect(released.status === "rejected" && released.reason).toBeInstanceOf(StaleAttemptError);
+
+    /* **`stopped.value !== undefined` is not padding.** `requestCancel` answers
+       `undefined` when its `WHERE` matched nothing, which is what it does when
+       the sweep got there first — and `undefined?.status !== "running"` is
+       *true*, so the obvious spelling of this counted a Stop that did nothing
+       as a settlement and the case failed about one run in three. Written down
+       because the wrong version reads correctly. */
+    const settlements =
+      Number(
+        stopped.status === "fulfilled" &&
+          stopped.value !== undefined &&
+          stopped.value.status !== "running",
+      ) + Number(swept.status === "fulfilled" && settledIds(swept.value).includes(id));
+    expect(settlements, "two of them both thought they had settled it").toBe(1);
+
+    const after = await pgJobStore.get(id, OWNER);
+    expect(["cancelled", "error"]).toContain(after?.status);
+    expect(after?.finishedAt).toBeTruthy();
+    expect(after?.cancelling).toBeFalsy();
+    /* Whichever won, the row is complete: no spinner, no token, no lease. */
+    expect(after?.steps.some((step) => step.status === "running")).toBe(false);
+    const [row] = await getDb()
+      .select({ attemptId: jobs.attemptId, lease: jobs.leaseExpiresAt })
+      .from(jobs)
+      .where(eq(jobs.id, id));
+    expect(row?.attemptId).toBeNull();
+    expect(row?.lease).toBeNull();
   });
 });
 

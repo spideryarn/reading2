@@ -366,8 +366,9 @@ watched red by a named reversion.
 settles a `cancelling` row as cancelled and clears the stale `error`/`failureKind`;
 `requestCancel` computes one condition `over = coalesce(status = 'queued' or lease_expires_at <
 now(), false)` and reuses it across every `case`, so the seven branches cannot drift — which is the
-shape of the bug this area has produced twice. A new `settledSteps()` rewrites any running step to
-`pending` in the same statement, so a terminal job never draws a spinner. The filesystem adapter
+shape of the bug this area has produced twice. A new `settledSteps()` rewrites any running step in the same
+statement, so a terminal job never draws a spinner — to `pending` for both endings at first, which
+Stage 2b had to split. The filesystem adapter
 grew `settleAbandoned(job, as?)` holding the field set once for both its paths, and treats *no entry
 in `attempts`* as lapsed. Database time landed at all three sites — `claim` writes `now() +
 make_interval(...)`, `finishIn` stamps `now()`, the sweep compares `now()` — and the parity suite's
@@ -384,11 +385,11 @@ in under its own message via the pathspec form, which is the shared-tree hazard
 [version-control.md](../project/version-control.md) describes working exactly as documented: nothing
 was lost, and the committed content was the right version.
 
-**Open for the reviewer:** the settled step goes to `pending`, not `error`. For: `sweepStopped`
-already wrote exactly that, a cancelled job has no sentence for the step to carry, and `StepRow`
-renders `step.error` in full so `INTERRUPTED.message` would print the same paragraph twice. Against:
-`runStep`'s in-process interruption sets `error`, so one event now has two spellings depending on
-which path noticed it.
+**That reviewer question was answered, and the answer was no.** The argument for `pending` on both
+endings rested on `StepRow` rendering `step.error` so a job sentence would print twice — and the
+argument was about a UI that does not exist. `JobCard` renders `step.error` and never `job.error`,
+so what actually shipped was an interrupted job with a muted pending step, a Retry button and no
+explanation. Split in Stage 2b.
 
 
 ### Stage 2b — the lease has to mean something
@@ -399,19 +400,19 @@ changes before Stage 3, and it was right about the thing that matters most: *"th
 transitions are sound and I found no new permanently stuck legal state, but lease expiry does not
 actually revoke the claimant's write authority."*
 
-- [ ] **HIGH — expiry revokes nothing.** `fence(id, attempt)` checks `id`, `attempt_id` and
+- [x] **HIGH — expiry revokes nothing.** `fence(id, attempt)` checks `id`, `attempt_id` and
       `status = 'running'`, and no lease freshness; the filesystem fence and the draft and
       publication fences in `pg-revisions.ts` repeat the omission. So a claimant whose lease lapsed
       can still commit, provided it gets there before Stop or `settleExpired` wins the row — and in
       the ignored-abort path it can commit an `error`/INTERRUPTED ending over a reader's Stop, which
       is the exact class of bug Stage 2 existed to close. One live-attempt predicate everywhere,
       lease freshness included.
-- [ ] **`now()` is transaction-start time**, so a claim that waited behind locks gets a *backdated*
+- [x] **`now()` is transaction-start time**, so a claim that waited behind locks gets a *backdated*
       lease. `clock_timestamp()` for minting and fencing.
-- [ ] **The self-abort timer starts after the awaited session setup**, so the claimant's real
+- [x] **The self-abort timer starts after the awaited session setup**, so the claimant's real
       deadline drifts past the arithmetic that makes an expired lease safe to act on. Start it when
       the claim does.
-- [ ] **MEDIUM — an interrupted job now explains nothing.** Stage 2 settles the abandoned step to
+- [x] **MEDIUM — an interrupted job now explains nothing.** Stage 2 settles the abandoned step to
       `pending` for both endings, on the argument that `StepRow` renders `step.error` so
       `INTERRUPTED.message` would print twice. **That was wrong about the built UI**, and Sol
       checked: `AddArticle.tsx` renders `step.error` and `queue.error` and **never `job.error`**, so
@@ -419,13 +420,13 @@ actually revoke the claimant's write authority."*
       endings must differ — `pending` and no error for a cancellation the reader asked for, `error`
       with `INTERRUPTED.message` for an interruption nobody asked for. With a test that renders the
       card, because a green store test is not evidence that a reader can see anything.
-- [ ] **The tests claim more than they pin.** Sol's table gives, for each Stage 2 test, a broken
+- [x] **The tests claim more than they pin.** Sol's table gives, for each Stage 2 test, a broken
       implementation that still passes it. The clock test never invokes `settleExpired` or
       `requestCancel` under skew and asserts only upper bounds, so an epoch timestamp passes it.
       The three that would have caught the HIGH: expire without sweeping and prove claimant writes
       are stale; cross expiry while blocked on a database lock; simultaneous Stop / sweep / release.
-- [ ] **The adapters disagree on the boundary** — Postgres `<`, filesystem effectively `<=`.
-- [ ] **Judgment call:** `coalesce(over, false)` leaves a corrupt NULL-lease running row in
+- [x] **The adapters disagree on the boundary** — Postgres `<`, filesystem effectively `<=`.
+- [x] **Judgment call:** `coalesce(over, false)` leaves a corrupt NULL-lease running row in
       "Stopping…" for ever, since neither claimant nor sweep can resolve it. Schema-unreachable, so
       hardening rather than a bug — make the impossible state explicit, or treat NULL as abandoned.
 
@@ -441,6 +442,38 @@ field including the draft pointer; row locking makes Stop, release and sweep lin
 legal interleaving leaves an immovable job. Also: *"two dev tabs"* was a misleading comment in the
 filesystem adapter — tabs share one server process, so *no entry in `attempts`* is safe within that
 adapter's single-process model for a better reason than the one given.
+
+**Landed 2026-09-01.** [`src/store/job-fence.ts`](../../src/store/job-fence.ts) is the new home of
+one live-attempt predicate — id, attempt, `status = 'running'`, and a lease that has not run out —
+shared by `pg-jobs.ts` and by **three** job fences in `pg-revisions.ts`, where Sol had named two.
+`leaseIsOver` is written as the exact complement, so the fence refuses if and only if the sweep may
+settle, and there is no instant where a job is neither writable nor settleable. `clock_timestamp()`
+replaces `now()` for minting and every comparison. The claimant's timer and its `AbortController`
+are now created **before** `parts.session(...)` is awaited and anchored on a `claimedMs` taken
+before `store.claim` — both halves had been pushing the real deadline later than the arithmetic
+assumed, and under Postgres the session open is two row locks and possibly a block copy with no
+deadline armed for any of it.
+
+**The NULL-lease call: over, not ask**, and `coalesce(…, false)` is gone. Unreachable either way, so
+both answers are dead code — but *ask* is the one that strands the row at "Stopping…" for ever with
+nothing able to move it, and *over* hands it to machinery that already exists. It also matches the
+filesystem adapter, where no entry in `attempts` has always meant lapsed.
+
+**Eight tests, and the first one was written before any fix and watched red on both adapters.**
+
+**Two honest notes the implementer wrote into the tests rather than around them.** The `order by
+step.ordinality` inside `jsonb_agg` is **not falsifiable** — deleting it left the mixed-step test
+green, so it is insurance against a future plan change rather than something a test watches. And the
+card test's fixtures are hand-written, so it does not go red when the *store's* endings change; the
+parity case guards that, and the file says so.
+
+**Two things it found that Sol did not.** `advanceJobWith` always passes `LEASE_MS` to `store.claim`
+and never `parts.leaseMs`, so the test seam shortens only the claimant's self-deadline and never the
+real lease — benign, because earlier is the safe direction, but it means no test exercises a
+genuinely short lease through that door. And `requestCancel` answers `undefined` when the sweep beat
+it, which makes the naive spelling of *"did Stop settle it"* — `status !== "running"` — true for
+`undefined`; that cost about one run in three until it was written down.
+
 
 ### Stage 3 — reconcile where the reader already is
 

@@ -806,15 +806,47 @@ filesystem adapter's `sweepStopped` already did the same on restart. It returns
 `{ id, status }` pairs rather than ids, because a caller that has to guess which of two endings it
 just caused is a caller that will guess wrong, and the log says *settled N job(s)* accordingly.
 
-**A terminal job never keeps a step that says `running`.** Both endings settle the active step back
-to `pending` and drop its `startedAt` — otherwise the card draws a spinner on a job that is over,
-which is the same sentence as the whole of [silent-success.md](../reusable/silent-success.md) with
-the reader as the thing that fails quietly.
+**A terminal job never keeps a step that says `running`**, and the two endings differ. A **cancel**
+settles the abandoned step back to `pending` with no sentence — the reader asked, so there is nothing
+to explain. An **interruption** settles it as `error`, carrying `INTERRUPTED.message` and a
+`finishedAt`. Otherwise the card draws a spinner on a job that is over, which is
+[silent-success.md](../reusable/silent-success.md) with the reader as the thing that fails quietly.
 
-**The lease is the database's arithmetic, end to end.** `claim` writes `now() + leaseMs`, the sweep
-compares against `now()`, and endings stamp `now()`. It used to be `Date.now()` at both ends, which
-is one clock on a laptop and two the moment a Vercel function talks to Supabase — and the two only
-have to disagree by a few seconds for a live claim to look lapsed.
+**Why the sentence goes on the step and not only on the job**: `JobCard` renders `step.error` and
+**never** `job.error`. That is worth knowing before you change either, because the first version of
+this settled both endings to `pending` on the reasoning that a step sentence would duplicate the
+job's — and the reasoning was about a UI that does not exist. It shipped an interrupted job showing
+a muted pending step, a Retry button, and no explanation at all. `JobProgress`, the other renderer,
+is the mirror image: it shows the job's sentence and never the step's. So storing both duplicates
+nothing on either surface. GPT Sol found it on 2026-09-01.
+
+**The lease is the database's arithmetic, end to end** — and it is `clock_timestamp()`, not `now()`.
+`claim` mints `clock_timestamp() + leaseMs` and every expiry comparison uses the same function;
+endings still stamp `now()`. It was `Date.now()` at both ends first, which is one clock on a laptop
+and two the moment a Vercel function talks to Supabase; and then it was `now()`, which is worse than
+it looks, because **`now()` is transaction-start time**. A claim that waited behind the `queue_state`
+lock would take a back-dated lease, and a statement that crossed its deadline while blocked would be
+judged on the time before it waited.
+
+**The fence has four conditions, not three, and expiry is one of them.**
+[`src/store/job-fence.ts`](../../src/store/job-fence.ts) holds `liveAttempt` — id, attempt token,
+`status = 'running'`, **and a lease that has not run out** — shared by
+[`pg-jobs.ts`](../../src/store/pg-jobs.ts) and by all three job fences in
+[`pg-revisions.ts`](../../src/store/pg-revisions.ts), which is what covers the draft, the step runs
+and the publication. Its own module because `pg-revisions.ts` importing `pg-jobs.ts` would be the
+kind of cycle `npm run check` gates on.
+
+Until 2026-09-01 there were three conditions, and **expiry therefore revoked nothing on its own**:
+a claimant whose lease had lapsed could still commit, as long as it got there before Stop or the
+sweep won the row — including committing an interruption over a reader's Stop. `leaseIsOver` is the
+exact complement of the fence's lease test, so *the fence refuses if and only if the sweep may
+settle*, and there is no instant where a job is neither writable nor settleable. GPT Sol, 2026-09-01.
+
+**A `running` row with no lease at all counts as over, not as ask.** `jobs_running_is_fenced` makes
+it unreachable, so both answers are dead code — but *ask* is the one that would leave such a row
+disabled at "Stopping…" for ever, with neither the claimant nor the sweep able to move it, and *over*
+makes it recoverable by machinery that already exists. It also matches the filesystem adapter, where
+no entry in `attempts` has always meant lapsed.
 
 **Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
@@ -1072,6 +1104,12 @@ signal cannot do. An `AbortSignal` is a thing a running function is listening to
 instance has no function to interrupt — so Stop is two halves: the flag, which everybody can see, and
 the local abort, which only helps when the claimant happens to be here. That is why Stop feels
 instant on a laptop and takes until the next step boundary in production.
+
+**The claimant's timer is armed at the claim, not after the session opens.** Everything above rests
+on the claimant aborting itself *inside* its own lease, and for a while it did not: the timer was
+created after `parts.session(...)` had been awaited, which under Postgres is two row locks and
+possibly a block copy — with no deadline armed for any of it. The real deadline drifted later than
+the arithmetic assumed, which is precisely what let a claimant still be alive when its lease lapsed.
 
 ## Naming the step is the point
 
