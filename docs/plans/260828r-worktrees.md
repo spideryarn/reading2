@@ -1312,9 +1312,29 @@ runs `npm ci`, so run by accident in the primary it wipes and reinstalls `node_m
 agents are working. Refuse unless `git rev-parse --git-dir` differs from `--git-common-dir`, which is
 exactly the test for "am I in a linked worktree".
 
-Expect the suite to be meaningless there until
-[260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md) lands — a clean checkout
-costs ~50 failures. That is a reason to try a worktree anyway and learn the rest, not a reason to wait.
+**And the blocker this step was waiting on has largely gone.**
+[260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md) landed on 2026-09-01, and
+its headline number is about worktrees whether or not it was aimed at them:
+
+```
+  the deploy gate's test failures, in a worktree with no laptop state
+  before      50
+  after        3      and each of the three is a defect the corpus exposed
+```
+
+So a worktree can now run a nearly-green suite, which it could not this morning. Two things follow:
+
+- **`worktree:setup` must materialise the corpus**, and the code for it already exists — the gate does
+  `cpSync` from `tests/fixtures/data-root/{data,output}` into the worktree's own `{data,output}`
+  ([`scripts/deploy.ts`](../../scripts/deploy.ts), around the `GATE_FIXTURE_ROOT` copy). **Extract that
+  rather than writing a second copy**: it already carries two lessons a fresh version would not — it
+  copies *both* halves, because copying only `data/` made the gate structurally incapable of passing,
+  and it retries once, because a peer's test run deleting a fixture directory mid-copy killed a deploy
+  on 2026-08-28.
+- **A bare `npm test` is still not hermetic**, and that is deliberate: the corpus plan's deferred half
+  leaves ~76 test files computing their own `ROOT/data`, left alone because stage 4 of the store
+  migration deletes both filesystem seams and sweeping now would move the same files twice. So
+  `worktree:setup` doing the copy is what makes a worktree's suite meaningful, not an optional extra.
 
 ### 5. `worktree:sweep` — the part the native cleanup does not do
 
