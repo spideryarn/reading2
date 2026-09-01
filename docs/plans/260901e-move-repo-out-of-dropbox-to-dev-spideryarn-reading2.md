@@ -114,6 +114,24 @@ If a deploy *is* running, do not move. What breaks depends on where it got to: d
 its Git calls fail because the linked tree points at a vanished main repo; after migrations but
 before push, the production schema advances while the code does not ship.
 
+### 4. Two containers bind-mount paths *inside* the repo
+
+Sol could not reach Docker from its sandbox, so it asked for the mount list rather than answering.
+Running it found what a directory rename would otherwise have broken quietly:
+
+```
+supabase_studio_spideryarn2        bind  <repo>/supabase/snippets
+supabase_edge_runtime_spideryarn2  bind  <repo>/supabase/.temp/start-secrets/.../main/index.ts
+```
+
+Named volumes survive a rename because Docker owns them; a **bind** mount is a path, and the
+container keeps running with a source that no longer exists. Nothing errors, `docker ps` still says
+healthy, and Studio simply stops seeing its snippets.
+
+So the stack is stopped **before** the move and started **after**, from the new directory, which is
+what re-creates the mounts. `supabase stop` keeps the data — no `--no-backup`, and no `--all`,
+which would also stop the unrelated `hellozenno` stack sharing this Docker daemon.
+
 ## Decisions
 
 | | |
@@ -254,3 +272,129 @@ one is phrased the way it is — [silent-success.md](../reusable/silent-success.
 - Old absolute paths inside historical plans, postmortems, Claude transcripts and shell history are
   evidence, not errors. Do not bulk-rewrite them.
 - `.vercel/project.json` travels with the directory and stays authoritative.
+
+---
+
+## What actually happened, 2026-09-01
+
+Done. `mv` at 12:26; **inode `574720701` before and after**, which is the check that separates a
+move from a copy.
+
+**Baselines, recorded before and re-read after:**
+
+| | before | after |
+|---|---|---|
+| `data/` · `output/` · `evals/` files | 254 · 106 · 213 | 254 · 106 · 213 |
+| `.env.local` · `.env.prod` · `.vercel/project.json` | 3662 · 6805 · 404 bytes | same |
+| Supabase rows | articles=19 users=7 storage=837 migrations=37 | **identical** |
+| `HEAD`, origin, ahead/behind | `276aabe`, `spideryarn/reading2`, `0 0` | same |
+| test suite | 42 files / 64 tests red | 41–42 files red — **unstable between runs** |
+| typecheck | 3 errors in `tests/` | 3 errors in `tests/` |
+
+`gjd-remote ls` was run **by bare name from `~`**, not `npx tsx` from inside the repo, and reached
+the box: seven tmux sessions, ages 2–16h, all survived. The wrapper contains no `Dropbox` string.
+
+**The suite was already red before the move, and — this is the honest version — the evidence does
+not establish that the move added nothing to it.** The local database is **11 migrations behind**
+(37 applied, 48 on disk), so the tests that touch Postgres die on
+`column articles.short_id does not exist`: 35 of the 41 failing files are database-shaped, out of 47
+`store-*`/`db-*`/`pg-*` files in total, so it is *most* of them and not all. The other six
+(`blocks-baseline`, `client-imports`, `css-tokens`, `fixture-ids`, `glossary-ideas-baseline`,
+`health`) are peer work in progress on `main`. The database was left behind on purpose: catching it
+up in the same sitting would have changed two variables at once.
+
+**Why the before/after comparison cannot carry the weight put on it, per GPT Sol's second review:**
+
+- The baseline recorded failure **counts, not names**. 42 → 41 is consistent with "one flaky test
+  settled" and equally with "one fixed, one newly broken".
+- The count is **not stable between runs anyway** — consecutive post-move runs gave 41 and 42. A
+  difference of one is inside the noise, so it measures nothing.
+- The control was **not the same grep**. The path check searched for `Dropbox`/the old path; the
+  control counted `AssertionError|Error`. It proved the output contained errors, not that the path
+  search could have found a path if one were there — the control shared no assumption with the
+  thing it was supposed to be validating, which is the exact shape of
+  [silent-success.md](../reusable/silent-success.md).
+- A pathless regression is easy to construct: [`src/api.ts`](../../src/api.ts) derives a root path
+  and its `readJson` turns `ENOENT` into `null`, so a wrong root surfaces as a value assertion or a
+  404, with no path in the message.
+
+What *is* established: no failure message names the old path; the working tree holds no reference to
+it outside the historical docs; and every artefact count matches the baseline exactly. That is
+consistent with a clean move and is not proof of one. The failing set is now recorded properly at
+`/tmp/fail-set.txt` — **record the set, not the size**, and the next comparison will be able to say
+something this one cannot.
+
+### The six worktrees
+
+`git worktree remove` **refused all five** scratch trees — the right refusal, and the reason to look
+rather than reach for `--force`. Each was obstructed by an untracked `node_modules` symlink into the
+old repo; `wt-verify` also had a modified `tests/jobs.test.ts`, and that diff turns out to be **the
+same guidance-removal edit already committed on `main`** (`tests/jobs.test.ts:510-537`) in a verify
+tree that predates the `toc`→`hierarchy` rename. Saved to a patch file before removing, then
+`--force`; the deploy tree needed `--force --force` and its real lock, `.git/spideryarn-deploy.lock`,
+was absent at the moment of removal as well as an hour earlier.
+
+### The one loose end: this session's own transcript split
+
+A live Claude session holds the project path it started with, so while the state directory moved,
+**this** conversation kept writing to the old slug and recreated it. The split is clean — 264
+entries up to 09:28:17 in the new directory, 76 entries from 09:28:39 in the old, **zero shared
+uuids**, strictly chronological. Once the session that did the move has ended:
+
+```
+cat ~/.claude/projects/-Users-greg-Dropbox-dev-experim-spideryarn2/*.jsonl \
+  >> ~/.claude/projects/-Users-greg-dev-spideryarn-reading2/<same-uuid>.jsonl
+```
+
+then delete the old directory. Nothing else landed there — 415 entries and all 67 memory files
+moved intact.
+
+The old `~/.claude.json` project key was **copied, not moved**, and is still there as a fallback;
+delete it once a resume from the new path has been seen to work. Backups:
+`~/.claude.json.bak-260901-move`, `~/.codex/config.toml.bak-260901-move`.
+
+### Lessons
+
+**Record the set, not the size.** The baseline captured failure counts and not names, and no command
+run afterwards can reconstruct the missing pre-move set. The question "did the move break a test"
+is now permanently unanswerable for this move; it cost nothing to record and cannot be recovered.
+
+**A control has to share the assumption it is testing.** Counting `AssertionError` lines to
+"validate" a search for `Dropbox` tests only that the output was non-empty. A real control greps for
+a string known to be present *of the same kind as the one being looked for* — here, the old path
+deliberately planted in a scratch file, or the same expression run against the pre-move tree.
+
+**Ask the reviewer for the thing it cannot see.** Sol could not reach Docker from its sandbox, so
+instead of guessing it asked for the mount list — which is how the two bind mounts were found. The
+same move surfaced the stale `file://` fixture URLs. A reviewer that names its blind spot is more
+useful than one that fills it.
+
+### What the second review found, and what was done about it
+
+The post-execution review looked at the *result* rather than the plan, and found four things the
+verification had missed. All four were checked independently before acting.
+
+1. **A tracked file still linked into the deleted tree.**
+   `evals/hierarchy-structure/REVIEW-SOL.md` held 31 absolute links under the old path — the only
+   tracked file outside `docs/plans|research|postmortems` that did. Rewritten as **repo-relative**
+   links rather than repointed at the new absolute path, so the next move does not break them again.
+   Two of the 31 were already dead before the move: `heading-tree.ts` was never tracked in git at
+   all, and `evals/` holds 213 files before and after, so the move deleted nothing.
+2. **Three PDF articles had stale `file://` source URLs**, in `meta.json` and `raw.json` for
+   `ball-lightning`, `coolabah-memory` and `fowler-phrenology`. This one had teeth:
+   [`src/store/find-article.ts`](../../src/store/find-article.ts) de-duplicates filesystem articles
+   by `meta.url`, so re-ingesting one of those PDFs from its new path would have created a **second
+   copy of an article already there** rather than matching it. All three PDFs exist at the new path,
+   so the repair was exact; the six files were backed up first and re-parsed as JSON afterwards.
+3. **Postgres was clean** — the review could not reach the database and said so rather than
+   guessing. Every `text`/`varchar` column in the `spideryarn` schema was scanned: **zero rows**
+   hold the old path. So the duplicate-article risk was filesystem-only.
+4. **Four gitignored experiment scripts** under `output/` hardcoded the old path. Repointed.
+
+Left alone deliberately: 206 files under `docs/plans|research|postmortems` that name the old path,
+because they are records of what was true when written; the Dropbox xattrs on `node_modules/` and
+`dist/`, inert outside Dropbox; and `.vite-temp`/Jiti caches, which `npm ci` regenerates.
+
+Still open and **not** caused by this move: iTerm's saved-session state and ~765 Codex threads store
+the old `cwd`, so a restored tab or a resumed Codex thread may open in the wrong directory. Neither
+loses data and both are cosmetic; noted here rather than fixed.
