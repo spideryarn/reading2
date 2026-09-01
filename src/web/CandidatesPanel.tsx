@@ -54,12 +54,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe, LoaderCircle, SendHorizontal, Square } from "lucide-react";
-import type { Block, BlockId, ChatMessage, ChatThread } from "../types.js";
+import type { Block, BlockId, ChatMessage, ChatThread, Citation } from "../types.js";
 import {
   ALL_DROPPED,
   COI_NOT_CHECKED,
   CANDIDATES_OPENING,
   INDEXING_SKEW,
+  MAX_CANDIDATES,
   NO_BYLINE_TO_EXCLUDE,
   NO_NAMES_YET,
   type Candidate,
@@ -69,7 +70,9 @@ import {
   authorKeys,
   citedUrls,
   excludedByByline,
+  nameKey,
   readShortlist,
+  redactNames,
   withoutShortlist,
 } from "../referee-candidates.js";
 import { CitedMarkdown } from "./Cited.js";
@@ -211,14 +214,16 @@ export function CandidatesPanel({
   );
 
   /**
-   * The shortlist, and everything the four rules needed to decide it.
+   * The shortlist, everything the four rules needed to decide it, and the names
+   * they refused.
    *
    * Recomputed on every streamed token, which is cheap and is also the point:
    * an unclosed fence parses to nothing, so the list on screen stays the
    * previous turn's until this turn's is complete and checked. There is no
-   * frame in which an unvalidated name is visible.
+   * frame in which an unvalidated name is visible — in the list *or*, since
+   * 2026-09-01, in the prose beside it.
    */
-  const shortlist = useMemo(
+  const { shortlist, refused } = useMemo(
     () => latestShortlist(messages, blocks, byline),
     [messages, blocks, byline],
   );
@@ -246,7 +251,14 @@ export function CandidatesPanel({
       <ol className="cnd-turns">
         {messages.map((m) => (
           <li key={m.id} className={`cnd-turn ${m.role}`}>
-            <Turn message={m} blocks={blockText} onJump={onJump} onStop={onStop} />
+            <Turn
+              message={m}
+              blocks={blockText}
+              refused={refused}
+              shown={shortlist?.candidates ?? EMPTY}
+              onJump={onJump}
+              onStop={onStop}
+            />
           </li>
         ))}
       </ol>
@@ -257,31 +269,66 @@ export function CandidatesPanel({
 }
 
 /**
- * The newest answer that carries a shortlist, validated.
+ * The newest answer that carries a shortlist, validated — **and every name this
+ * thread refused**, which is what the prose is then cut against.
  *
  * **Newest that carries one, not simply newest.** The editor asks follow-up
  * questions — *what would it take to judge the statistics?* — and the model
  * answers them in prose with no fence. Reading only the last answer would blank
  * the list every time they asked something, and re-populate it whenever they
  * asked for names again, which reads as the app losing the work.
+ *
+ * One forward walk rather than a backward one, because the two things it
+ * returns want opposite directions: the shortlist is the *last* fence, and the
+ * refused set is *every* fence, since every turn's prose is on screen at once.
+ * Walking forward also gives the citation pool its scope for free.
  */
 function latestShortlist(
   messages: readonly ChatMessage[],
   blocks: readonly Block[],
   byline: string | null | undefined,
-): Shortlist | null {
-  /* Every URL the search returned across the whole conversation — rule 1, and
-     src/referee-candidates.ts § citedUrls for why it is not scoped to one turn. */
-  const allowed = citedUrls(messages);
+): { shortlist: Shortlist | null; refused: string[] } {
   const blockIds = new Set(blocks.map((b) => b.id));
   const authors = authorKeys(byline);
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m?.role !== "assistant") continue;
+
+  /* **Only what had come back by the time each answer was written.** Built up
+     as the walk goes forward rather than gathered from the whole thread first,
+     which is the whole of the fix: every earlier turn's citations count, because
+     the model re-emits the whole list each turn and a person found in turn two
+     is still in turn five's fence — but nothing from *after* an answer may
+     validate it, or a search run at turn five stands up a name written at turn
+     two, and a rule that can be satisfied by waiting is not one. The unsliced
+     version shipped and a cross-family review found it, 2026-09-01.
+     src/referee-candidates.ts § citedUrls. */
+  const allowed = new Map<string, Citation>();
+  let shortlist: Shortlist | null = null;
+  /* Every name any answer in this thread put forward and did not get shown for.
+     Collected across the whole thread because the *prose* of every turn is on
+     screen at once, not just the newest — see `Turn`. */
+  const refused = new Set<string>();
+
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const [url, c] of citedUrls([m])) if (!allowed.has(url)) allowed.set(url, c);
     const list = readShortlist(m.text, { allowed, blockIds, authors });
-    if (list) return list;
+    if (!list) continue;
+    shortlist = list;
+    for (const name of list.refused) refused.add(name);
   }
-  return null;
+
+  /* A name refused at turn two and shown at turn five is shown: the later fence
+     is the current shortlist, and blanking it out of the older paragraph would
+     be the panel disagreeing with itself. */
+  const standing = new Set(
+    (shortlist?.candidates ?? []).map((c) => nameKey(c.name)).filter((k): k is string => k !== null),
+  );
+  return {
+    shortlist,
+    refused: [...refused].filter((n) => {
+      const k = nameKey(n);
+      return k === null || !standing.has(k);
+    }),
+  };
 }
 
 /**
@@ -317,7 +364,7 @@ function Shortlisted({
       </section>
     );
   }
-  const { candidates, dropped } = shortlist;
+  const { candidates, dropped, omitted } = shortlist;
   return (
     <section className="cnd-list-box" aria-label="Shortlist">
       <h3 className="cnd-list-head">
@@ -336,6 +383,18 @@ function Shortlisted({
         </ol>
       )}
       <Dropped dropped={dropped} />
+      {omitted > 0 && (
+        /* **The cap says so.** Stopping at forty quietly would turn *position in
+           the model's list* into a ranking, in the one panel built to have none —
+           and a list that silently truncates is the exact shape
+           docs/reusable/silent-success.md is about. Mirror prints
+           `placementsOmitted` and Claims prints its drops for the same reason. */
+        <p className="cnd-dropped">
+          {omitted} more {omitted === 1 ? "name was" : "names were"} listed after the first{" "}
+          {MAX_CANDIDATES} and {omitted === 1 ? "was" : "were"} not read. Narrow the search rather
+          than reading this as the end of the list.
+        </p>
+      )}
       <p className="cnd-caveat">{INDEXING_SKEW}</p>
       <p className="cnd-caveat">{byline ? excludedByByline(byline) : NO_BYLINE_TO_EXCLUDE}</p>
       <p className="cnd-caveat">{COI_NOT_CHECKED}</p>
@@ -420,15 +479,38 @@ function Dropped({ dropped }: { dropped: DroppedCandidates }) {
   return <p className="cnd-dropped">Dropped: {lines.join("; ")}.</p>;
 }
 
-/** One turn — the editor's words, or the model's answer with its shortlist taken out. */
+/** Nothing shown yet, as a stable reference so `Turn` does not re-render on every paint. */
+const EMPTY: Candidate[] = [];
+
+/**
+ * One turn — the editor's words, or the model's answer with its shortlist taken
+ * out **and every refused name cut out of what is left**.
+ *
+ * The second half is the fix for the hole a cross-family review found on
+ * 2026-09-01: hiding the JSON block hid the *evidence*, not the *names*, so a
+ * model that listed six people in the fence and introduced the same six in the
+ * paragraph above it put all six on screen beside an empty shortlist. The rule
+ * was true of the data and false of the page.
+ *
+ * The paragraph itself stays, deliberately. What was searched, which subfields
+ * were covered and why somebody fits is the point of this sub-mode, and an
+ * editor who lost the transcript would be worse off than one reading a name too
+ * many. src/referee-candidates.ts § redactNames.
+ */
 function Turn({
   message,
   blocks,
+  refused,
+  shown,
   onJump,
   onStop,
 }: {
   message: ChatMessage;
   blocks: Map<string, string>;
+  /** Every name this thread put forward and did not show. */
+  refused: readonly string[];
+  /** The names that *are* on the shortlist, so a refused surname cannot blank one of theirs. */
+  shown: readonly Candidate[];
   onJump(id: BlockId): void;
   onStop(messageId: string): void;
 }) {
@@ -437,7 +519,7 @@ function Turn({
      *unclosed* one, which is what a streaming answer looks like for the second
      it takes the JSON to arrive — so the reader never watches raw JSON scroll
      past, and never sees a name before the four rules have looked at it. */
-  const prose = withoutShortlist(message.text);
+  const prose = redactNames(withoutShortlist(message.text), refused, shown);
   const thinking = message.status === "pending" && prose === "" && (message.tools?.length ?? 0) === 0;
   return (
     <>

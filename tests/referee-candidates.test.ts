@@ -25,6 +25,7 @@ import {
   ALL_DROPPED,
   COI_NOT_CHECKED,
   MAX_CANDIDATES,
+  NAME_NOT_SHOWN,
   NO_BYLINE_TO_EXCLUDE,
   SHORTLIST_FENCE,
   anyDropped,
@@ -33,6 +34,7 @@ import {
   excludedByByline,
   nameKey,
   readShortlist,
+  redactNames,
   withoutShortlist,
 } from "../src/referee-candidates.js";
 
@@ -68,6 +70,22 @@ function answer(rows: unknown[], prose = "Here are some people worth asking.\n\n
 
 function read(text: string, authors: Set<string> = new Set()) {
   return readShortlist(text, { allowed: allowed(), blockIds, authors });
+}
+
+/**
+ * `n` rows with **distinct keys**, not merely distinct strings.
+ *
+ * Digits are not letters, so `Surname1` and `Surname2` reduce to one `nameKey`
+ * and the first version of the cap test measured the deduplicator instead of the
+ * cap. It went red saying `expected 1 to be 40`, which is how that was noticed.
+ */
+function distinctRows(n: number): Record<string, unknown>[] {
+  const letters = "abcdefghijklmnopqrstuvwxyz";
+  return Array.from({ length: n }, (_, i) => {
+    const a = letters[i % 26] ?? "a";
+    const b = letters[Math.floor(i / 26) % 26] ?? "a";
+    return row({ name: `Given${a}${b} Surname${a}${b}${a}` });
+  });
 }
 
 describe("rule 1 — no name without a source link the web search returned", () => {
@@ -259,18 +277,23 @@ describe("the fence", () => {
     expect(anyDropped(list?.dropped ?? { uncited: 0, authors: 0, unanchored: 0, malformed: 0, duplicate: 0 })).toBe(true);
   });
 
+  it("counts the rows the cap never read, rather than stopping in silence", () => {
+    /* A list that silently truncates is a list where *position* has become a
+       ranking, in the one panel built to have none — and it is the shape
+       docs/reusable/silent-success.md is about. The old version of the test
+       below asserted only `length === 40`, which is exactly as true of a cap
+       that says so as of one that does not. */
+    const many = distinctRows(MAX_CANDIDATES + 5);
+    const list = read(answer(many));
+    expect(list?.candidates.length).toBe(MAX_CANDIDATES);
+    expect(list?.omitted).toBe(5);
+    /* And the five are refused as well as counted: a name the cap swallowed is
+       still a name the prose must not be allowed to show. */
+    expect(list?.refused.length).toBe(5);
+  });
+
   it("caps the list", () => {
-    /* Distinct **keys**, not just distinct strings: digits are not letters, so
-       `Surname1` and `Surname2` reduce to one key and the first version of this
-       test measured the deduplicator instead of the cap. It went red saying
-       `expected 1 to be 40`, which is how that was noticed. */
-    const letters = "abcdefghijklmnopqrstuvwxyz";
-    const many = Array.from({ length: MAX_CANDIDATES + 5 }, (_, i) => {
-      const a = letters[i % 26] ?? "a";
-      const b = letters[Math.floor(i / 26) % 26] ?? "a";
-      return row({ name: `Given${a}${b} Surname${a}${b}${a}` });
-    });
-    expect(read(answer(many))?.candidates.length).toBe(MAX_CANDIDATES);
+    expect(read(answer(distinctRows(MAX_CANDIDATES + 5)))?.candidates.length).toBe(MAX_CANDIDATES);
   });
 
   it("drops the same person named twice", () => {
@@ -294,5 +317,61 @@ describe("what was dropped is counted, not swallowed", () => {
   it("reports nothing dropped when nothing was", () => {
     const list = read(answer([row()]));
     expect(anyDropped(list?.dropped ?? { uncited: 1, authors: 0, unanchored: 0, malformed: 0, duplicate: 0 })).toBe(false);
+  });
+});
+
+describe("the rule governs the screen, not the JSON", () => {
+  /* The hole a cross-family review found on 2026-09-01. `withoutShortlist` hides
+     the *block*; it does not hide the *names*, and a model that lists people in
+     the fence and introduces the same people in the paragraph above it puts
+     every refused name on screen beside an empty shortlist — which is what the
+     first live run did, six times over. */
+
+  it("cuts a refused name out of the prose, in full and by surname", () => {
+    const prose = "Ada Kessler has published the method, and Kessler's lab is the obvious place.";
+    expect(redactNames(prose, ["Ada Kessler"], [])).toBe(
+      `${NAME_NOT_SHOWN} has published the method, and ${NAME_NOT_SHOWN}'s lab is the obvious place.`,
+    );
+  });
+
+  it("leaves the discussion of fit intact, which is the point of the sub-mode", () => {
+    /* Overcorrecting into uselessness would be worse than the bug: the editor
+       still needs to read why somebody fits and what was searched. Only the name
+       goes. */
+    const prose =
+      "I searched the hierarchical-modelling literature and the second field, which is thin. " +
+      "Ada Kessler is the closest fit on the Bayesian requirement.";
+    const out = redactNames(prose, ["Ada Kessler"], []);
+    expect(out).toContain("I searched the hierarchical-modelling literature and the second field");
+    expect(out).toContain("closest fit on the Bayesian requirement");
+    expect(out).not.toContain("Ada");
+  });
+
+  it("does not blank a surname a shown candidate also has", () => {
+    /* A refused "Bo Kessler" must not delete an accepted "Ada Kessler" from the
+       prose. The full name still goes; the bare surname is left alone, because
+       it is now ambiguous in the reader's favour rather than against it. */
+    const shown = read(answer([row()]))?.candidates ?? [];
+    expect(shown).toHaveLength(1);
+    const out = redactNames("Bo Kessler is out; Kessler is still in.", ["Bo Kessler"], shown);
+    expect(out).toBe(`${NAME_NOT_SHOWN} is out; Kessler is still in.`);
+  });
+
+  it("does not eat a longer word that starts with a refused surname", () => {
+    expect(redactNames("Ada Frank went to Frankfurt.", ["Ada Frank"], [])).toBe(
+      `${NAME_NOT_SHOWN} went to Frankfurt.`,
+    );
+  });
+
+  it("names every row the rules refused, so the panel knows what to cut", () => {
+    const list = read(
+      answer([
+        row({ name: "Ada Kessler" }),
+        row({ name: "Bo Nakamura", sources: ["https://mit.edu/~nakamura"] }),
+        row({ name: "Cy Oyelaran", blockId: "spya-zzzzzz" }),
+      ]),
+    );
+    expect(list?.candidates.map((c) => c.name)).toEqual(["Ada Kessler"]);
+    expect(list?.refused).toEqual(["Bo Nakamura", "Cy Oyelaran"]);
   });
 });

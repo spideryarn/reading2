@@ -31,6 +31,8 @@ import type { Block, BlockId, ChatMessage, ChatThread } from "../src/types.js";
 import {
   COI_NOT_CHECKED,
   INDEXING_SKEW,
+  MAX_CANDIDATES,
+  NAME_NOT_SHOWN,
   NO_BYLINE_TO_EXCLUDE,
   NO_NAMES_YET,
   SHORTLIST_FENCE,
@@ -151,14 +153,26 @@ describe("a name reaches the screen only with a source the search returned", () 
   });
 
   it("shows nobody when the URL was never returned, and says so rather than saying nothing", () => {
+    /* **The prose names her too, and that is the whole point of this fixture.**
+       The first version of this test put the rejected candidate only inside the
+       hidden fence and had the prose say merely "Some people worth asking", so
+       it passed against a panel that rendered every refused name in the
+       paragraph above the block — which is what the panel did, and what a real
+       run put on screen six times over. A test that cannot fail is not evidence
+       (docs/reusable/silent-success.md). */
     paint(
       thread([
         answer(
-          `Some people worth asking.\n\n${fence([candidate({ sources: ["https://mit.edu/~kessler"] })])}`,
+          `Ada Kessler is the closest fit on the Bayesian requirement.\n\n${fence([candidate({ sources: ["https://mit.edu/~kessler"] })])}`,
         ),
       ]),
     );
     expect(text()).not.toContain("Ada Kessler");
+    expect(text()).not.toContain("Kessler");
+    expect(text()).toContain(NAME_NOT_SHOWN);
+    /* And the discussion survives, because losing the transcript would be worse
+       than the bug it fixes: the editor still has to read why somebody fits. */
+    expect(text()).toContain("closest fit on the Bayesian requirement");
     /* The distinction that matters: *named nobody* and *named somebody who could
        not be shown* are different sentences, and a panel that printed the first
        for the second would be hiding the model's failure behind its own. */
@@ -282,5 +296,94 @@ describe("the shortlist survives a turn that has no names in it", () => {
       ]),
     );
     expect(text()).toContain("Ada Kessler");
+  });
+});
+
+describe("cutting refused names does not cut the shown ones", () => {
+  it("keeps a shown name that the same block also listed twice", () => {
+    /* The trap in redacting by exact string: the second copy of a person is
+       dropped as a duplicate, so her name is on the refused list *and* on the
+       shortlist. Blanking her out of the prose would be the panel disagreeing
+       with the list directly above it. */
+    paint(
+      thread([
+        answer(
+          `Ada Kessler is the closest fit.\n\n${fence([candidate(), candidate({ affiliation: "Elsewhere" })])}`,
+        ),
+      ]),
+    );
+    expect(host.querySelectorAll(".cnd-row").length).toBe(1);
+    expect(text()).toContain("Ada Kessler is the closest fit");
+    expect(text()).not.toContain(NAME_NOT_SHOWN);
+  });
+});
+
+describe("a citation cannot reach backwards in time", () => {
+  it("does not let a later search stand up a name written before it", () => {
+    /* `citedUrls` used to be built from the whole thread before any answer was
+       inspected, so a URL that came back at turn three validated a shortlist
+       written at turn one — a rule that can be satisfied by *waiting*. Here the
+       answer carrying the fence cites nothing; the address only arrives later. */
+    paint(
+      thread([
+        answer(`Two names.\n\n${fence([candidate()])}`, {
+          id: "spya-msg2aa",
+          citations: [],
+          searches: 0,
+        }),
+        {
+          id: "spya-msg2bb",
+          role: "user",
+          text: "Any luck?",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          status: "done",
+        },
+        answer("Still looking.", { id: "spya-msg2cc" }),
+      ]),
+    );
+    expect(text()).not.toContain("Ada Kessler");
+    expect(text()).toContain("no source link the web search returned");
+  });
+
+  it("still counts a search from an earlier turn, which is what the pool is for", () => {
+    /* The other direction, and the reason this is a scoping fix rather than a
+       one-answer one: the model re-emits the whole shortlist every turn, so a
+       person found at turn one is still in turn three's fence long after turn
+       three's own searches have moved on. */
+    paint(
+      thread([
+        answer("Searching.", { id: "spya-msg2aa" }),
+        {
+          id: "spya-msg2bb",
+          role: "user",
+          text: "Now give me names.",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          status: "done",
+        },
+        answer(`Here.\n\n${fence([candidate()])}`, {
+          id: "spya-msg2cc",
+          citations: [],
+          searches: 0,
+        }),
+      ]),
+    );
+    expect(text()).toContain("Ada Kessler");
+  });
+});
+
+describe("the cap says so", () => {
+  it("prints how many names it never read", () => {
+    /* Silence here would make *position in the model's list* a ranking, in the
+       one panel built to have none. Mirror prints `placementsOmitted` and Claims
+       prints its drops; this is the same sentence. */
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    const many = Array.from({ length: MAX_CANDIDATES + 3 }, (_, i) => {
+      const a = letters[i % 26] ?? "a";
+      const b = letters[Math.floor(i / 26) % 26] ?? "a";
+      return candidate({ name: `Given${a}${b} Surname${a}${b}${a}` });
+    });
+    paint(thread([answer(fence(many))]));
+    expect(host.querySelectorAll(".cnd-row").length).toBe(MAX_CANDIDATES);
+    expect(text()).toContain("3 more names were listed after the first 40");
   });
 });

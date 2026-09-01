@@ -196,3 +196,30 @@ when("a thread's kind belongs to the thread", () => {
     expect(status).toBe(409);
   });
 });
+
+describe("the search engine rule 1 depends on", () => {
+  /**
+   * **Not a config echo — the one setting that makes rule 1 checkable at all.**
+   *
+   * Candidates may show a name only if the web search returned a URL for it, and
+   * the only evidence of that is OpenRouter's `url_citation` annotations. A wire
+   * probe on 2026-09-01 sent the same prompt twice, two searches each, with the
+   * answer told to reply `DONE` and attribute nothing: the default engine
+   * emitted **zero** annotations and `engine: "exa"` emitted **nine**, all of
+   * them before the first content token. So a tidy-up that folded these
+   * parameters back into one object would not break a feature — it would make
+   * the shortlist start deleting good names again, silently, exactly as the
+   * first live run did. src/referee-candidates.ts § citedUrls.
+   */
+  it("asks Exa for a Candidates turn, and caps results rather than pretending to cap searches", async () => {
+    const { webSearchTool } = await import("../src/converse.js");
+    const tool = webSearchTool("candidates");
+    expect(tool.parameters).toMatchObject({ engine: "exa" });
+    /* `max_uses` is **not** enforced: the same probe sent `max_uses: 2`, asked
+       for six searches, and OpenRouter reported six executed. `max_total_results`
+       was honoured to the row. Asking for the one that does nothing would be a
+       budget in the code and no budget on the wire. */
+    expect(tool.parameters).not.toHaveProperty("max_uses");
+    expect(tool.parameters).toHaveProperty("max_total_results");
+  });
+});

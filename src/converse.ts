@@ -210,23 +210,57 @@ export const MAX_TOOL_ROUNDS = 3;
  * every round including the last. Left as a literal here rather than moved into
  * src/chat-tools.ts because that file is about tools *this process* runs, and
  * a server tool in it would be the one entry `runTool` could never dispatch.
+ *
+ * ## Candidates asks for Exa, and it is the difference between a rule and a hope
+ *
+ * Everything else takes the default engine, which for Anthropic means the
+ * provider's own search. Candidates cannot: its rule 1 is *no name without a
+ * source link the search returned*, and that rule can only be checked against
+ * the `url_citation` annotations OpenRouter emits — which, under the default
+ * engine, appear **only where the model attributes a result in its prose**. The
+ * first live run of Candidates ran four searches, produced six well-sourced
+ * people, emitted zero annotations, and had all six dropped as uncited.
+ *
+ * Measured on the wire, 2026-09-01. Identical prompt, two searches each, and an
+ * answer instructed to reply with the single word `DONE` and attribute nothing:
+ *
+ * - default engine → 2 searches, **0 annotations**.
+ * - `engine: "exa"` → 2 searches, **9 annotations**, all arriving before the
+ *   first content token, each with `url`, `title` and a page extract.
+ *
+ * So under Exa the results arrive at *search* time rather than at *attribution*
+ * time. src/referee-candidates.ts § citedUrls.
+ *
+ * **`max_uses` is not a budget and must not be described as one.** The same
+ * probe sent `max_uses: 2` and asked for six searches: OpenRouter reported
+ * `web_search_requests: 6`, `tool_calls_executed: 6`. `max_total_results` *was*
+ * honoured to the row — `max_total_results: 4` came back as exactly four
+ * annotations out of those six searches — so that is the cap this asks for.
+ * Nothing here limits how many times a Candidates turn searches; what it limits
+ * is how much comes back. The non-Candidates branch keeps `max_uses` untouched,
+ * because it runs on a different engine and this probe says nothing about that
+ * one.
  */
-const webSearchTool = (kind: ThreadKind) =>
-  ({
-    type: "openrouter:web_search",
-    // A cap, not a quota — the model still decides whether to search.
-    parameters: {
-      /* **Eight for Candidates, four for everyone else.** A chat turn checks a
-         name or a date; a Candidates turn is a search across a whole field, and
-         the first live run of one spent its four and said so in the answer —
-         *"I've run through my search budget for this turn, so this list is
-         partial"*. A shortlist that stops early because of a constant is a
-         shortlist the editor has to ask for twice, and the research says depth
-         is the thing they actually need. */
-      max_uses: kind === "candidates" ? 8 : 4,
-      max_results: 5,
-    },
-  }) as const;
+export const webSearchTool = (kind: ThreadKind) =>
+  kind === "candidates"
+    ? ({
+        type: "openrouter:web_search",
+        parameters: {
+          engine: "exa",
+          /* Thirty results a turn: a shortlist wants ten to twenty people with a
+             page apiece, and the research says depth is what an editor actually
+             needs. It is also cheaper than it looks — the Exa probe spent 9,689
+             prompt tokens for nine results where the default engine spent 22,010
+             for two searches. */
+          max_total_results: 30,
+          max_results: 5,
+        },
+      } as const)
+    : ({
+        type: "openrouter:web_search",
+        // A cap, not a quota — the model still decides whether to search.
+        parameters: { max_uses: 4, max_results: 5 },
+      } as const);
 
 /* ----------------------------------------------------- the tool wire format --
    Chat's request is no longer a list of `OpenRouterMessage`. Two more shapes go

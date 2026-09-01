@@ -28,13 +28,15 @@
  * shrank is exactly the failure docs/reusable/silent-success.md is about.
  *
  *  1. **No name without a source link the web search actually returned.**
- *     `readShortlist` is given the URLs OpenRouter's own annotations reported for
- *     this conversation, and a candidate whose `sources` meet none of them is
+ *     `readShortlist` is given the URLs OpenRouter's own annotations reported
+ *     *up to that answer*, and a candidate whose `sources` meet none of them is
  *     dropped. Not "a URL that parses" — `isWebUrl` is necessary and nowhere near
  *     sufficient, since a plausible name beside a real-looking address is
  *     precisely what a model produces well. The **title** shown beside a source
  *     comes from the search result rather than from the model, for the same
- *     reason.
+ *     reason. And the rule governs **the screen and not the JSON**: a name the
+ *     validator refused is cut out of the prose too, by `redactNames`, because a
+ *     rule the reader can read straight past is not a rule.
  *  2. **The paper's own authors are excluded.** `authorKeys` reads the byline
  *     and `readShortlist` drops any candidate matching one. This is the one call
  *     in Referee mode that legitimately sees the byline — a stated exception to
@@ -142,6 +144,22 @@ export interface DroppedCandidates {
 export interface Shortlist {
   candidates: Candidate[];
   dropped: DroppedCandidates;
+  /**
+   * **Every name in the block that is not on `candidates`** — refused by a rule,
+   * or never read because the cap had already been reached.
+   *
+   * Here because the rules have to govern *the screen*, not the JSON. A
+   * cross-family review on 2026-09-01 found the hole: the validator dropped six
+   * names and the panel then rendered the same six out of the surrounding prose,
+   * so "no name without a source" was true of the shortlist and false of the
+   * page the editor was reading. Knowing the refused names by their exact
+   * strings is what lets `redactNames` cut them out without guessing at what a
+   * name looks like — see it for the residual hole and why this is not a
+   * heuristic.
+   */
+  refused: string[];
+  /** Rows past `MAX_CANDIDATES` that were never read at all. Never silent — see the panel. */
+  omitted: number;
 }
 
 const NO_DROPS: DroppedCandidates = {
@@ -210,19 +228,38 @@ export function readShortlist(
     /* A fence that arrived and could not be read is **not** "no shortlist": the
        model tried to name people and we could not tell who. One malformed row
        says so, rather than the panel saying nobody was named. */
-    return { candidates: [], dropped: { ...NO_DROPS, malformed: 1 } };
+    return { candidates: [], dropped: { ...NO_DROPS, malformed: 1 }, refused: [], omitted: 0 };
   }
-  if (!Array.isArray(raw)) return { candidates: [], dropped: { ...NO_DROPS, malformed: 1 } };
+  if (!Array.isArray(raw)) {
+    return { candidates: [], dropped: { ...NO_DROPS, malformed: 1 }, refused: [], omitted: 0 };
+  }
 
   const dropped = { ...NO_DROPS };
   const candidates: Candidate[] = [];
+  const refused: string[] = [];
   const seen = new Set<string>();
+  let omitted = 0;
 
-  for (const item of raw) {
-    if (candidates.length >= MAX_CANDIDATES) break;
-    const verdict = readCandidate((item ?? {}) as Record<string, unknown>, opts, seen);
+  for (const [i, item] of raw.entries()) {
+    const row = (item ?? {}) as Record<string, unknown>;
+    if (candidates.length >= MAX_CANDIDATES) {
+      /* **The cap is counted, not merely applied.** Stopping at forty and saying
+         nothing would make position a ranking in a feature built to have none —
+         and it is the shape docs/reusable/silent-success.md is about. The tail
+         is refused as well as counted, because a name the cap swallowed is still
+         a name the panel must not let the prose show. */
+      omitted = raw.length - i;
+      for (const tail of raw.slice(i)) {
+        const name = str((tail as Record<string, unknown> | null | undefined)?.name);
+        if (name !== "") refused.push(name);
+      }
+      break;
+    }
+    const verdict = readCandidate(row, opts, seen);
     if (typeof verdict === "string") {
       dropped[verdict]++;
+      const name = str(row.name);
+      if (name !== "") refused.push(name);
       continue;
     }
     const key = nameKey(verdict.name);
@@ -230,7 +267,7 @@ export function readShortlist(
     candidates.push(verdict);
   }
 
-  return { candidates, dropped };
+  return { candidates, dropped, refused, omitted };
 }
 
 /**
@@ -335,18 +372,132 @@ function str(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/* --------------------------------------------- the rule at the screen edge -- */
+
+/**
+ * What stands where a refused name stood.
+ *
+ * A value rather than a literal in the panel so
+ * tests/referee-copy-is-about-the-model.test.ts can be right about the words,
+ * and deliberately **not** bracketed: `[…]` immediately followed by a `(` is a
+ * markdown link, and the commonest thing after a person's name in this prose is
+ * a parenthesis.
+ */
+export const NAME_NOT_SHOWN = "(name not shown)";
+
+/**
+ * **Rule 1 applied to the prose, which is the only boundary that matters.**
+ *
+ * `withoutShortlist` hides the JSON; it does not hide the *names*. A model that
+ * lists eleven people in the fence and introduces the same eleven in the
+ * paragraph above it defeats every rule in this file, because the panel renders
+ * that paragraph. That is exactly what happened: the first live run put six
+ * names on screen beside an empty validated shortlist, and the test named "a
+ * name reaches the screen only with a source" could not see it, because its
+ * rejected candidate existed only inside the hidden fence.
+ *
+ * So the prose is rendered through here. Every name in `refused` — every name
+ * the block put forward that is not a shown row, for **any** reason including
+ * the cap — is cut out of the text, in full and by surname, and `NAME_NOT_SHOWN`
+ * stands in its place. The editor keeps the paragraph, which is the point of the
+ * sub-mode: what was searched, which subfields were covered, why somebody fits.
+ * They just cannot read a name the rules refused.
+ *
+ * ## Why exact strings and not a name detector
+ *
+ * Because the refused names are **known**. They came out of the same JSON the
+ * validator read, so no guess is needed about what a person's name looks like in
+ * running text — and a detector that guessed would have to choose between
+ * cutting "Item Response Theory" out of the fit brief and letting "Ada Kessler"
+ * through, both of which are worse than this.
+ *
+ * **The residual hole, stated rather than discovered later:** a name the model
+ * writes in prose and leaves *out* of the fence entirely is not known here and
+ * is not cut. `CANDIDATES_SYSTEM` now forbids names in prose outright — the
+ * shortlist block is the only place they belong — so this is the model
+ * disobeying rather than the design allowing it, but it is a wish and not a
+ * check, and closing it needs either an identity graph or an app-owned search
+ * seam. See docs/project/referee-mode.md § Candidates.
+ *
+ * A surname is cut on its own too, since "Kessler has published…" is how a
+ * second mention reads — but never one that a **shown** candidate also has, so
+ * an accepted Kessler is not blanked by a refused one.
+ */
+export function redactNames(
+  prose: string,
+  refused: readonly string[],
+  shown: readonly Candidate[],
+): string {
+  if (refused.length === 0 || prose === "") return prose;
+
+  const keep = new Set<string>();
+  for (const c of shown) {
+    const s = surnameOf(c.name);
+    if (s !== null) keep.add(s.toLowerCase());
+  }
+
+  let out = prose;
+  /* Longest first, so "Ada Kessler" is cut before a bare "Kessler" can eat half
+     of it and leave "Ada (name not shown)". */
+  const full = [...new Set(refused)].filter((n) => n !== "").sort((a, b) => b.length - a.length);
+  for (const name of full) out = cut(out, name.split(/\s+/), NAME_NOT_SHOWN);
+
+  const surnames = new Set<string>();
+  for (const name of full) {
+    const s = surnameOf(name);
+    if (s !== null && !keep.has(s.toLowerCase())) surnames.add(s);
+  }
+  for (const s of surnames) out = cut(out, [s], NAME_NOT_SHOWN);
+  return out;
+}
+
+/**
+ * Replace every whole-word occurrence of `parts` (whitespace-flexible) with
+ * `with_`.
+ *
+ * `\\b` on both ends so "Frankfurt" survives a refused "Frank", and `\\s+`
+ * between parts so a name that wrapped across a line is still one name. Each
+ * part is escaped: a model may write "Jane O'Neill (Ph.D.)" and a raw `.` in a
+ * pattern matches anything.
+ *
+ * Case-insensitive but **not** diacritic-folded, unlike `nameKey`: a name spelt
+ * "Zugaro" in the block and "Zugaró" in the prose is not cut. Folding would mean
+ * rebuilding the haystack, and the two spellings come out of the same answer, so
+ * they agree in practice.
+ */
+function cut(text: string, parts: readonly string[], with_: string): string {
+  const escaped = parts
+    .filter((p) => p !== "")
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (escaped.length === 0) return text;
+  const body = escaped.join("\\s+");
+  /* `\b` only works next to a word character. A name ending in `.` — "Ada K." —
+     would make the trailing `\b` demand one, so it is conditional on the last
+     character being wordy. */
+  const head = /^\w/.test(parts[0] ?? "") ? "\\b" : "";
+  const tail = /\w$/.test(parts.at(-1) ?? "") ? "\\b" : "";
+  return text.replace(new RegExp(`${head}${body}${tail}`, "gi"), with_);
+}
+
+/**
+ * The surname of a written name, **as written** — the part `nameKey` folds, but
+ * un-folded, because this one goes into a pattern matched against the model's
+ * own prose.
+ */
+function surnameOf(raw: string): string | null {
+  const parts = raw.split(/\s+/).filter((p) => p !== "");
+  for (let i = parts.length - 1; i > 0; i--) {
+    const cleaned = (parts[i] ?? "").replace(/[^\p{L}'-]/gu, "");
+    if (cleaned.length > 1) return cleaned;
+  }
+  return null;
+}
+
 /* ------------------------------------------------------- the URLs allowed -- */
 
 /**
  * **The URLs a shortlist may cite**, gathered from the conversation's own
  * citations.
- *
- * Across **every** answer in the thread, not just the newest, and that is the
- * point rather than generosity: the model is asked to re-emit the whole list
- * each turn, so a person first found in turn two is still in turn five's fence
- * long after turn five's own searches have moved on. Scoping this to one answer
- * would delete the earlier half of every long shortlist and count it as
- * uncited — a rule doing the opposite of its job.
  *
  * `Citation` is what OpenRouter's `annotations` reported and `collectCitations`
  * kept (src/openrouter-stream.ts), so this really is *what the search returned*
@@ -354,30 +505,50 @@ function str(value: unknown): string {
  * also a gate: nothing that is not http(s) may become a source, whichever side
  * it came from.
  *
- * ## The known weakness, measured on 2026-09-01 and not yet fixed
+ * ## Give this the messages **up to and including** the answer being validated
  *
- * **Annotations are not guaranteed to arrive, and when they do not, this rule
- * deletes good names.** With `tools: [{ type: "openrouter:web_search" }]` the
- * search runs inside Anthropic, and OpenRouter emits a `url_citation` annotation
- * only where the model attributes a search result *in its prose*. The first live
- * run of Candidates ran four searches, produced six well-sourced people, emitted
- * **zero** annotations, and every one of the six was dropped here as uncited —
- * a rule doing the exact opposite of its job, and doing it silently but for the
- * dropped counts.
+ * Not the whole thread. It is still more than one answer — the model re-emits
+ * the whole shortlist each turn, so a person found in turn two is still in turn
+ * five's fence long after turn five's own searches have moved on, and scoping to
+ * a single answer would count the earlier half of every long list as uncited.
+ * But a citation from a **later** answer must not reach an earlier one, or a
+ * search run at turn five retroactively validates a name written at turn two,
+ * which is a rule that passes by waiting. `latestShortlist` in
+ * src/web/CandidatesPanel.tsx is the caller and does the slicing; a cross-family
+ * review found the unsliced version on 2026-09-01.
  *
- * The fix that is in is a **prompt** one: `CANDIDATES_SYSTEM` requires the page
- * to be linked in the sentence that introduces the person, not only in the JSON.
- * The next run of the same paper returned five annotations and one drop. That
- * works, and it is the weak half of this design: the supply of the thing the
- * code checks depends on an instruction the model can ignore.
+ * ## What this proves, and what it does not
  *
- * The real fix is on the wire and is a decision somebody should take
- * deliberately: OpenRouter's `plugins: [{ id: "web" }]` form annotates
- * everything it returns, unconditionally, but runs exactly one search per
- * request whatever the model wanted — a trade src/explain.ts already writes down
- * from the other side. Until then, an empty shortlist beside a transcript full
- * of names means *this*, and the panel's dropped line is the only thing that
- * says so.
+ * It proves the URL came back from a search in this conversation. It does **not**
+ * prove the page is about the person it is filed under: a hallucinated name can
+ * be paired with a real URL from an earlier search and pass. Closing that needs
+ * the result's own title and snippet stored beside the URL and the name matched
+ * against them — feasible now that the wire supplies both (see below), but it
+ * needs `Citation` to carry a snippet, which is a change in src/types.ts and
+ * src/openrouter-stream.ts. docs/project/referee-mode.md § Candidates.
+ *
+ * ## Where the evidence comes from, measured on the wire 2026-09-01
+ *
+ * The **engine** decides whether this rule has anything to check, and the first
+ * live run of Candidates found that out the hard way: four searches, six
+ * well-sourced people, **zero** annotations, all six dropped here as uncited.
+ * With the default engine the search runs inside Anthropic and OpenRouter emits
+ * a `url_citation` only where the model attributes a result *in its prose*, so
+ * the supply of the evidence depended on an instruction the model could ignore.
+ *
+ * A wire probe settled it. Same prompt both ways — two searches, and an answer
+ * told to reply with the single word `DONE` and no attribution at all:
+ *
+ * - default engine (`max_uses`/`max_results`): 2 searches, **0 annotations**.
+ * - `engine: "exa"`: 2 searches, **9 annotations**, every one of them arriving
+ *   *before the first content token*, with `start_index === end_index === 0`,
+ *   and each carrying `url`, `title` and a 250–5,300 character `content`
+ *   extract of the page.
+ *
+ * So under Exa the results are delivered at search time and not at attribution
+ * time, which is what makes rule 1 a check rather than a hope. `webSearchTool`
+ * in src/converse.ts asks for that engine on Candidates turns for this reason
+ * and no other.
  */
 export function citedUrls(
   messages: readonly { role: string; citations?: Citation[] }[],

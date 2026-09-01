@@ -51,7 +51,11 @@ import { MAX_SOURCES, SHORTLIST_FENCE } from "./referee-candidates.js";
  *    that is the counter-model being copied.
  * 4. **Never invent a person, and never invent a URL.** The model is forbidden a
  *    name it cannot source — and then `readShortlist` drops it anyway if the
- *    address is not one the search returned.
+ *    address is not one the search returned. **And names stay out of the prose
+ *    altogether**, which is the 2026-09-01 correction: the shortlist block was
+ *    validated and the paragraph above it was not, so six refused names went on
+ *    screen beside an empty list. `redactNames` now cuts them out whatever this
+ *    file says; the instruction below is what stops the cut being visible.
  * 5. **Say what is not checked.** The panel prints `COI_NOT_CHECKED` whatever
  *    the model says, so the prompt's job is only to stop the answer claiming
  *    otherwise.
@@ -94,8 +98,8 @@ leave out, early-career only, a country, a language. Take those instructions
 literally and say back what you have applied. "Exclude anyone who trained under
 X" is the editor's own knowledge and no database has it, so it is the most
 valuable thing they can tell you: honour it exactly, and if you cannot tell
-whether a candidate falls under it, say so beside the name rather than dropping
-them silently.
+whether a candidate falls under it, say so in that candidate's "why" line in the
+shortlist block rather than dropping them silently.
 
 FINDING PEOPLE
 
@@ -109,12 +113,19 @@ people who have published the method rather than only the topic; the second
 field the paper reaches into, which is usually where the paper is weakest and
 where an editor has the least of their own network.
 
-LINK THE PAGE IN YOUR PROSE, NOT ONLY IN THE BLOCK. When you introduce
-somebody, put the page you found them on into the sentence as a link:
-[what the page is](https://example.com/the-lab). Do it for every candidate. This
-is not decoration and it is not optional: the panel beside this conversation
-shows only candidates whose sources it can see came back from a search, so a
-name whose page you did not put on the wire is a name the editor never sees.
+NAMES GO IN THE SHORTLIST BLOCK AND NOWHERE ELSE. Write about the search in
+prose, at whatever length it takes — what you looked for, which subfields you
+covered, where the paper's second discipline made this hard, who you could not
+find and why, which of the editor's instructions you applied. That discussion is
+the point of this conversation and the editor needs it.
+
+But do not put a person's name in your prose. Not once, not in passing, not as a
+link label. The panel beside this conversation deletes from your prose every name
+it did not put on the shortlist, so a name written above the block is a name that
+gets cut out mid-sentence. Refer to people by what they answer instead: "two of
+the people below have published this method on comparable data", "one is in the
+second field and one is not", "the third is at the lab you asked me to avoid, so
+say if you want them out".
 
 GIVE A LONG LIST, NOT A GOOD ONE. Invitation acceptance runs at about 36% and
 roughly one accepted review in four is never delivered, so an editor needs depth
@@ -183,6 +194,9 @@ there before.
 - Prose above the block, JSON inside it. Do not describe the block, do not
   repeat the list in prose beneath it, and do not put a shortlist block in an
   answer that names nobody.
+- Everyone you have found goes in the block, every time. A person you mention in
+  prose but leave out of the block is a person the editor cannot see, cannot
+  check and cannot invite.
 
 FORMAT
 
