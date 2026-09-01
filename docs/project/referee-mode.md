@@ -182,7 +182,13 @@ of them are properties of the code and the third is only a prompt rule, and the 
   Try again, not an empty one.
 - **Linkage, never adequacy** is asked for in the prompt and said in words at the top of the panel,
   and it is **only a prompt rule** — `reasoning` is free text and no validator reads English. The
-  eval that would measure it is not built.
+  eval is [`evals/referee-claims.ts`](../../evals/referee-claims.ts), and it measures that one rule
+  and nothing else, because the other two are held by code and an eval could tell you nothing about
+  them. Five papers written to pull the model over the line, a red-first control that runs one of
+  them again with the refusals cut out of the prompt, and a committed transcript
+  ([`evals/results/referee-claims.md`](../../evals/results/referee-claims.md)). The line held on
+  every guarded paper on 2026-09-01 — and the same runs found a worse failure the rule says nothing
+  about: two papers had a claim from their own abstract silently left off the list.
 
 **One run per article**, not a list — a referee writes several criteria and asks the paper what *it*
 claims once — so there is no id, no colour and no delete, and a second POST replaces the first. The
