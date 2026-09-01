@@ -131,6 +131,51 @@ Three reviews are worth reading before continuing, because each one changed the 
   cannot, because ignored files are invisible to every check it makes**. Both are fixed above; both
   were verified here rather than taken on trust.
 
+### The port design, redirected by Greg on 2026-09-01 (read this before touching ports)
+
+Greg, after the reservation allocator had been built and reviewed:
+
+> I was thinking that maybe the worktree-init script would look for an available port somehow
+> (perhaps using existing `npm run dev` or similar machinery for doing this), then mark that as the
+> port for that worktree, and ideally log this in a way that other worktrees won't try and borrow
+> that port. I suppose we might also need a way for the worktree to change its mind, e.g. if
+> something outside our control takes over the port. So, given all that, maybe it's better to just
+> make the whole thing dynamic like you're suggesting…
+>
+> — Greg, 2026-09-01
+
+**He is right, and it deletes most of `scripts/worktree-port.ts`.** The reasoning, because it is the
+kind that is obvious afterwards and not before:
+
+- **`bind()` is already an atomic port allocator, and the kernel is a better arbiter than any file we
+  can write.** A reservation file answers "does another worktree claim this port", which is a *proxy*
+  for the question that matters — "can I listen on it". The proxy is weaker in both directions: a
+  reserved port can be occupied by something outside this repo, and an unreserved one can be free.
+  Two sources of truth for one fact, and the authoritative one was free all along.
+- **Vite already does the walk.** With `strictPort` false it probes upward from the configured port.
+  So "dynamic" is not machinery we add; it is machinery we stop duplicating.
+- **Nothing actually needs a *stable* port.** The auth allow-list accepts any port in the range, so
+  sign-in does not care which. That was the assumption underneath the reservation and it does not
+  survive being stated.
+- **His "change its mind" requirement is the tell.** A reservation needs a release path, a staleness
+  rule, a sweep step, and a story for a `SIGKILL`ed holder. Dynamic allocation needs none of them: it
+  re-decides every start, so a port taken by something outside our control is handled by walking past
+  it. The self-healing is free rather than built.
+
+So the shape becomes: Vite starts at the bottom of the range and walks; after `listening`, the
+resolved port is checked against `DEV_PORT_RANGE`; **outside the range is fatal in a worktree** and a
+loud warning in the primary. The identity endpoint (step 3 item 4) becomes *more* important, not less
+— it is what stops a stale browser tab reaching a peer's server — but it was already required, because
+a reservation never guaranteed your process was the one listening either.
+
+**What survives** from the reservation work: `DEV_PORT_RANGE`, `PRIMARY_PORT`, `portInRange`,
+`parseDevPortEnv`, and the `spideryarn-port-warning` plugin. **What should be deleted**: `reservePort`,
+`readReservation`, `reservedPorts`, the `.reserved` files, and the `publishExclusive` export added to
+[`scripts/lockfile.ts`](../../scripts/lockfile.ts) for them — roughly 150 lines of code and 100 of
+tests, written and reviewed on 2026-09-01 and then made unnecessary by a better question. Worth
+recording rather than quietly deleting: the reservation was not *wrong*, it was a solution to a
+problem the range constraint had already solved.
+
 ### Things that will waste your time if you do not know them
 
 - **Twelve or more agents work in this tree at once.** `npm test` is not reliably green and the
@@ -1207,7 +1252,9 @@ middleware is imported at server boot and a peer's 5273 process does not carry y
 evidence settled it — **5273 through 5277 were all listening at the time**, so it would have broken
 the next `npm run dev` for everyone. The fallback stays; a startup warning replaces the silence.
 
-The original list, for the two items left:
+**Superseded by [the port redirect](#the-port-design-redirected-by-greg-on-2026-09-01-read-this-before-touching-ports).**
+The reservation half of what landed is to be deleted, not extended. The list below is the original,
+kept because items 3 and 4 stand unchanged:
 
 1. `SPIDERYARN_DEV_PORT` in [`vite.config.ts`](../../vite.config.ts) (currently hardcodes `5273`),
    with **`strictPort: true`**.
@@ -1247,6 +1294,27 @@ not a convention: landing or rebasing must reject duplicate migration numbers, a
 wrapper must check that the database's ledger is an exact prefix of the checkout's migrations
 *before* applying anything, holding the lease across the whole check-and-apply. A lease alone stops
 two migrations running at once; it does nothing about two branches independently minting `0037_`.
+
+### 4b. Try one worktree, before building anything else
+
+**This is the highest-information next step and it needs nothing from Greg.** `claude --worktree probe`
+works today: `origin/HEAD` is `main`, which is the current trunk, so the trunk flip is *not* a
+prerequisite for trying one. Write `worktree:setup`, create one, and find out what actually breaks
+instead of guessing.
+
+What it would answer, none of which is currently known rather than assumed: whether `npm ci` in a
+worktree really is 4–5 s on this box; whether the dev server starts and lands on a sane port; whether
+the tool-level isolation holds when you try to escape it on purpose; whether `.worktreeinclude`
+actually delivers `.env.local`; and how bad an empty `data/` really is.
+
+**The one guard `worktree:setup` must have**, because getting it wrong is expensive for everybody: it
+runs `npm ci`, so run by accident in the primary it wipes and reinstalls `node_modules` while a dozen
+agents are working. Refuse unless `git rev-parse --git-dir` differs from `--git-common-dir`, which is
+exactly the test for "am I in a linked worktree".
+
+Expect the suite to be meaningless there until
+[260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md) lands — a clean checkout
+costs ~50 failures. That is a reason to try a worktree anyway and learn the rest, not a reason to wait.
 
 ### 5. `worktree:sweep` — the part the native cleanup does not do
 

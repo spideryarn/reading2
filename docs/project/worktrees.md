@@ -29,7 +29,7 @@ true today, what was decided, and the two runbooks nobody has run yet.
 | [`.worktreeinclude`](../../.worktreeinclude) | `.env.local` and `.env`, copied into each new worktree. `.env.prod` deliberately absent, so an agent in a worktree cannot deploy. |
 | [`scripts/typecheck.ts`](../../scripts/typecheck.ts) | `.claude` added to `SKIP`. **The one scanner that actually walks in** — it recurses from the repository root and matches by basename, so a worktree's `tsconfig.json` became a project of the primary's. biome, knip and jscpd need nothing: their globs are anchored allowlists. |
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
-| [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The port allocator: a **persistent reservation**, not a hash and not a lock. **Nothing reads it yet** — deliberately, see below. |
+| [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange` and `parseDevPortEnv` — all still right. **The reservation half of it is to be deleted**: Greg redirected the design to dynamic allocation on 2026-09-01 and was right, see [Ports and the ceiling](#ports-and-the-ceiling). Nothing reads any of it yet. |
 
 Still to build: `npm run worktree:setup`, the rest of ports, the database lease, and `worktree:sweep` —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do).
@@ -160,6 +160,29 @@ opposite of what this section said before.
 stack and watching it under load rather than reasoning from the idle numbers above.
 
 ## Ports and the ceiling
+
+**The design changed on 2026-09-01, after the reservation allocator was built and reviewed.** Greg
+asked whether the init script should probe for a free port, mark it, and be able to change its mind if
+something outside our control took it — and then answered his own question: *"maybe it's better to
+just make the whole thing dynamic"*. He is right, and the reason is worth keeping:
+
+**`bind()` is already an atomic port allocator, and the kernel is a better arbiter than any file we
+can write.** A reservation file answers "does another worktree claim this port", which is only a proxy
+for "can I listen on it" — and a weak proxy both ways, since a reserved port can be taken by something
+outside this repo and an unreserved one can be free. Vite already walks upward from the configured
+port when `strictPort` is false, so *dynamic is less machinery, not more*. And nothing actually needs a
+stable port: the auth allow-list accepts any port in the range, which was the unexamined assumption
+underneath the whole reservation idea.
+
+The tell was his own "change its mind" requirement. A reservation needs a release path, a staleness
+rule, a sweep step and a story for a `SIGKILL`ed holder. Dynamic allocation needs none of those,
+because it re-decides on every start.
+
+So the target shape is: start at the bottom of the range, let Vite walk, and **check the resolved port
+after `listening`** — fatal in a worktree, a warning in the primary. `reservePort` and friends come
+out. The identity endpoint below becomes *more* important, not less: it is what stops a stale browser
+tab reaching a peer's server, and a reservation never guaranteed your process was the listener either.
+
 
 Half of this is worse than none, because each half hides the other's failure:
 
