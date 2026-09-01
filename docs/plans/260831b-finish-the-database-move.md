@@ -1624,6 +1624,33 @@ than as the guard working.
 Note the narrowing landed today slightly *reduces* the false-refusal surface: a constraint differing
 only in other step names no longer trips the guard.
 
+### Eleven transactions still inherit their isolation level — survey in `sql.md`
+
+Pinning `read committed` on the three transactions in `src/store/pg-session.ts` prompted a survey of
+all **21** Postgres transactions. Two are pinned (those three, plus `pg-feedback.ts`); **eleven depend
+on an isolation level nobody sets.** The full table with a verdict each is in
+[sql.md](../project/sql.md); these are the ones worth knowing:
+
+- **`pg-jobs.ts:~434` `claim` is the worst, and it is not about aborts.** Under `repeatable read` the
+  running-count is taken from a snapshot predating the incumbent's commit, so it would admit an
+  **N+1st runner** — breaking the concurrency cap its own docstring argues is impossible. A wrong
+  answer, not an error.
+- **`pg-revisions.ts:~812` `openOrBeginJobDraft`** would read a stale draft and **mint a second one** —
+  the orphan that function exists to prevent.
+- **`pg-chat.ts`'s four writers** lose their `lockArticle` mutex silently: `base = messages.length - 2`
+  computed off a stale read gives a `23505` on the ordinal, and `edit` would delete the wrong span.
+- **`pg-searches.ts` / `pg-referee-criteria.ts` / `pg-referee-claims.ts`** would stamp a run with the
+  **old source hash**, so it reads as current against prose it does not match — which those files' own
+  comments say is exactly what their lock is for.
+
+**Do the `pg-revisions.ts` ones first** if this is picked up: their stale reads produce an orphaned
+draft or a wrong publication, where the others produce an error somebody sees.
+
+**And note what "stricter" would cost.** Nothing here is safer under `repeatable read` — everything
+that reads-then-writes already takes a lock, so a stricter level buys nothing and adds the failures
+above. `40001` is caught and retried **nowhere in `src/`**, so a serialization abort takes the whole
+revision commit and reaches the reader as *"a moment's trouble"*.
+
 ### Also outstanding, unrelated to the flag
 
 - **`docs/project/architecture.md` and `dev-and-deployment-overview.md` each need one line changed**
