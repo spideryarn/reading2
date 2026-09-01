@@ -123,7 +123,7 @@ import {
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
-import { CommentIdTaken, NotAnExplanation } from "./comments.js";
+import { CommentIdTaken, NotAnExplanation, type AnswerPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
    has to satisfy before one is made. `referee-criteria.js` is pure (it reaches
@@ -1132,16 +1132,79 @@ async function answer(
   const article = await loadArticle(slug);
   if (!isSpideryarnId(id)) throw httpError(400, "id must be a comment id");
 
+  /* **The profile is read before the row is claimed, and the order is the
+     point.** `beginAnswer` stamps a lease — `COMMENT_ANSWER_LEASE_MS` in
+     src/store/pg-comments.ts — and that lease is sized as the model's own
+     deadline plus half a minute for the store write after it. Anything slow
+     between the claim and `explainStream` therefore eats a window that was
+     never budgeted for it: a profile lookup stalling past the deadline (there
+     is no query timeout on it) lets another machine's `GET` sweep a row whose
+     model call has not even started. GPT Sol, 2026-09-01.
+
+     So the slow read happens first, and the lease begins a few lines above the
+     call it is measuring. The alternative was a second write to renew the lease
+     just before the model call, which is one more store method and one more
+     UPDATE per answer for the same effect. This is free.
+
+     The fence in `commentStore.patch` is what makes an expired lease merely
+     expensive rather than wrong; this is what stops it being either.
+
+     One consequence, and it is an improvement: a profile read that *fails* now
+     fails the request before a header is written, so it is an ordinary JSON 500
+     and the comment is left exactly as it was. It used to happen inside the
+     stream and be recorded as a failed answer on the reader's own question. */
+  const profile = wantsProfile ? await resolveProfile(slug) : null;
+
   /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
      `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
      back off the stored row — the request never gets to name one. */
-  const comment = await commentStore.beginAnswer(slug, id);
+  const { comment, attempt } = await commentStore.beginAnswer(slug, id);
   const { blockId, quote } = comment;
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
   const { frame } = sse(res);
   frame("begin", comment);
+
+  /**
+   * Send the `done` frame, carrying **what the store actually holds**.
+   *
+   * `commentStore.patch` answers `undefined` when this attempt is no longer the
+   * live one — a sweep buried it and the reader has begun another. Framing our
+   * own answer then would put it back on their screen, which is the overwrite
+   * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
+   * whatever the `done` frame carries. So on a refusal the row is read back and
+   * framed instead, and the reader's panel ends up agreeing with the database.
+   *
+   * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
+   * simply stays silent. The comment client turns a stream that ends without a
+   * `done` into "The answer stopped arriving. Try again." and writes that error
+   * over the row — so silence here would clobber the newer attempt in the UI
+   * with a message about an older one.
+   *
+   * The fallback is our own patch, for the case where the read finds nothing:
+   * the comment was deleted mid-answer, and `useComments` already knows what to
+   * do with a `done` frame for an id it has deleted.
+   */
+  const settle = async (patch: AnswerPatch): Promise<void> => {
+    const kept = await commentStore.patch(slug, comment.id, patch, attempt);
+    if (kept) {
+      frame("done", { ...comment, ...patch });
+      return;
+    }
+    let stored: Comment | undefined;
+    try {
+      stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
+    } catch (readErr) {
+      // The write was refused and the read-back failed too. Say so, then fall
+      // back — a `done` frame the reader can act on beats a stream that stops.
+      log("store").error(
+        { ...errorFields(readErr), slug, id: comment.id },
+        `could not read back a superseded explanation for ${slug}`,
+      );
+    }
+    frame("done", stored ?? { ...comment, ...patch });
+  };
 
   let text = "";
   try {
@@ -1151,22 +1214,20 @@ async function answer(
       blockId,
       quote,
       deep: deeper,
-      profile: wantsProfile ? await resolveProfile(slug) : null,
+      profile,
     })) {
       if (event.type === "delta") {
         text += event.text;
         frame("delta", { text: event.text });
         continue;
       }
-      const patch = {
+      await settle({
         status: "done" as const,
         answer: event.answer,
         citations: event.citations,
         searches: event.searches,
         model: event.model,
-      };
-      await commentStore.patch(slug, comment.id, patch);
-      frame("done", { ...comment, ...patch });
+      });
     }
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
@@ -1189,7 +1250,7 @@ async function answer(
        would see the stream simply stop. A store that cannot record the failure
        is a worse thing than a failure, and it is worth its own line. */
     try {
-      await commentStore.patch(slug, comment.id, patch);
+      await settle(patch);
     } catch (storeErr) {
       log("store").error(
         { ...errorFields(storeErr), slug, id: comment.id },
@@ -1199,8 +1260,10 @@ async function answer(
          on the first: one of these means a model call failed, two mean the
          store is broken too, and only the second is an emergency. */
       captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
+      /* `settle` frames the `done` itself, so this is the one path that still
+         has to: the store could not be told, and the reader must still be. */
+      frame("done", { ...comment, ...patch });
     }
-    frame("done", { ...comment, ...patch });
   } finally {
     release();
     res.end();

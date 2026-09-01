@@ -336,8 +336,29 @@ export interface CommentStore {
    * Throws `NotAnExplanation` for an unknown id, and for a `none` comment — a
    * bookmark was never a question, and the retired explanation path must not be
    * reachable from one.
+   *
+   * ## It also claims an abandoned attempt, which is what makes Retry work
+   *
+   * A `pending` row whose attempt is **over** — the lease has run out, or there
+   * never was one — is claimed here, atomically, in the same statement that
+   * refuses a live one. Without that, healing an abandoned comment needed the
+   * sweep, the sweep runs only on the comments `GET`, and *Try again* posts
+   * straight to the answer endpoint: so a reader whose answering machine died
+   * got a 409 from every retry until they reloaded the page. GPT Sol,
+   * 2026-09-01. "No lease at all" counts as over for the reason `sweepPending`
+   * below gives: an imported row, or one begun before the column existed, and
+   * either way its process is long gone.
+   *
+   * ## The attempt token
+   *
+   * `undefined` from the filesystem store, which has one process and needs no
+   * fence — see `beginAnswer` in src/comments.ts for why that is a property of
+   * that store rather than a weaker version of this one. From Postgres it is
+   * the row's `attempt_id`, and it has to be carried to `patch`: without it a
+   * model call this sweep already buried can land on top of the retry the
+   * reader is watching arrive.
    */
-  beginAnswer(slug: string, id: string): Promise<Comment>;
+  beginAnswer(slug: string, id: string): Promise<{ comment: Comment; attempt: string | undefined }>;
 
   /**
    * The reader edited their words. Writes `body` and `updatedAt`, nothing else.
@@ -372,18 +393,35 @@ export interface CommentStore {
   ): Promise<Comment>;
 
   /**
-   * Fill in the answer, or the error.
+   * Fill in the answer, or the error — **if this attempt is still the live one**.
    *
-   * `quiet` suppresses the per-comment log line, for the sweep that patches
-   * every orphan with the same reason — one line each would say one thing N
+   * `attempt` is the token `beginAnswer` handed back. It is optional in the
+   * type because the filesystem store has none; **the Postgres store refuses a
+   * call without it** rather than falling back to identity, because a caller
+   * that merely forgot to carry it would put back the whole race in silence.
+   * Exactly `SearchStore.finish`, and for the same reason.
+   *
+   * `patch.status` must be `done` or `error`. The attempt ends here either way,
+   * so a patch that left the comment `pending` would strip the fence off a row
+   * still waiting for an answer, after which anybody's late write can land.
+   *
+   * **`undefined` back means "you were superseded"** — the fenced write matched
+   * no row, because a sweep buried this attempt and the reader has already
+   * begun another. It is not an error: nothing is wrong, this call is simply
+   * not the one that gets to answer. `SearchStore.finish` returns `undefined`
+   * in the same case. The comments as they now stand come back otherwise.
+   *
+   * `quiet` suppresses the per-comment log line, for a caller patching a batch
+   * of comments with the same reason — one line each would say one thing N
    * times, and N is unbounded while Vercel allows 256 lines per request.
    */
   patch(
     slug: string,
     id: string,
     patch: AnswerPatch,
+    attempt?: string,
     opts?: { quiet?: boolean },
-  ): Promise<Comment[]>;
+  ): Promise<Comment[] | undefined>;
 
   remove(slug: string, id: string): Promise<Comment[]>;
 

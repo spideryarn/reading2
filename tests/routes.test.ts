@@ -806,7 +806,7 @@ describe("a pending comment nobody is answering", () => {
   const orphaned = async (id: string) => {
     await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "the hard problem", start: 12, id });
     await patchComment(SLUG, id, { status: "done", answer: "an old explanation" });
-    return beginAnswer(SLUG, id);
+    return (await beginAnswer(SLUG, id)).comment;
   };
 
   it("comes back as an error the reader can retry, not an eternal spinner", async () => {

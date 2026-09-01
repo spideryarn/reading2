@@ -21,12 +21,28 @@
  * Both stores are here, because they are allowed to differ and the difference
  * has to be pinned rather than assumed. See `CommentStore.sweepPending` in
  * src/store/contracts.ts.
+ *
+ * ## And the two interleavings the lease opened up
+ *
+ * A lease means a sweep can genuinely take a comment away from an attempt that
+ * is still running, which is a second thing to get right and a second thing to
+ * pin here. GPT Sol set both out in the final review, 2026-09-01:
+ *
+ * - **A buried attempt must not overwrite the one that replaced it.** Terminal
+ *   writes carry the token `beginAnswer` returned, and a write from a superseded
+ *   attempt matches no row.
+ * - **An abandoned attempt must heal through *Try again*, with no `GET` first.**
+ *   The sweep runs only on the comments `GET`; the retry button does not do one.
+ *
+ * The lease is aged **in SQL** rather than waited out — a `setTimeout` long
+ * enough to be true would be two and a half minutes, and on a machine running
+ * other suites it would be a test that sometimes fails for no reason.
  */
 
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   COMMENT_SWEPT,
@@ -79,6 +95,34 @@ describe("the filesystem comment sweep", () => {
     const [free] = await sweepPendingComments(FS_SLUG, new Set());
     expect(free?.status).toBe("none");
   });
+
+  /**
+   * **An abandoned answer must heal through *Try again*, with no `GET` first.**
+   *
+   * The sweep runs only on `GET /api/comments/:slug`; *Try again* posts straight
+   * at the answer endpoint (`retry` in src/web/useComments.ts). So if the row is
+   * only healed by the sweep, a reader whose server died mid-answer gets a 409
+   * from every press until they reload the page — and an open tab never does.
+   * GPT Sol found it in the final review, 2026-09-01.
+   *
+   * A fresh module registry is a restart, exactly: `comments.json` still says
+   * `pending`, and nothing in memory remembers who was writing it.
+   */
+  it("hands a comment left pending by a dead process to the next Try again", async () => {
+    const made = await createComment(FS_SLUG, { ...anchor, id: "spya-fsd444" });
+    await patchComment(FS_SLUG, made.id, { status: "error", error: "the model fell over" });
+    await fsBeginAnswer(FS_SLUG, made.id);
+
+    vi.resetModules();
+    const restarted = await import("../src/comments.js");
+    const { comment } = await restarted.beginAnswer(FS_SLUG, made.id);
+
+    expect(comment.status).toBe("pending");
+    // And the row is claimed once: the restarted module now refuses it too.
+    await expect(restarted.beginAnswer(FS_SLUG, made.id)).rejects.toThrow(
+      /already being answered/,
+    );
+  });
 });
 
 /* ---------------------------------------------------------- and Postgres -- */
@@ -95,15 +139,40 @@ const { reachable } = await pgReady({
 
 const when = reachable ? describe : describe.skip;
 
-/** Create, fail, retry — the only path that still produces a `pending` comment. */
-async function nowPending(id: string): Promise<void> {
+/**
+ * Create, fail, retry — the only path that still produces a `pending` comment.
+ *
+ * The middle step is raw SQL because `patch` will no longer write a terminal
+ * state onto a row no attempt has claimed; see `legacyAnswered` in
+ * tests/store-comments.test.ts for the same fixture and the same reason.
+ * Returns the attempt token, which the fence cases below need.
+ */
+async function nowPending(id: string): Promise<string | undefined> {
   await pgCommentStore.create(SLUG, { id, blockId: BLOCK_ID, quote: "the question", start: 3 });
-  await pgCommentStore.patch(SLUG, id, { status: "error", error: "the model fell over" });
-  await pgCommentStore.beginAnswer(SLUG, id);
+  await getDb()
+    .update(commentsTable)
+    .set({ status: "error", error: "the model fell over" })
+    .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
+  return (await pgCommentStore.beginAnswer(SLUG, id)).attempt;
 }
 
 const statusOf = async (id: string) =>
   (await pgCommentStore.load(SLUG)).find((c) => c.id === id)?.status;
+
+/**
+ * Age the attempt's lease past its deadline, in SQL.
+ *
+ * The clock is on the row, so this is what "two and a half minutes went by"
+ * looks like without a `setTimeout` — which on a shared machine is a test that
+ * sometimes fails for reasons that are nothing to do with the code.
+ * `clock_timestamp()`, not `now()`, which is frozen for the transaction —
+ * tests/store-jobs-parity.test.ts caught that one by hand.
+ */
+const expire = (id: string) =>
+  getDb()
+    .update(commentsTable)
+    .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+    .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
 
 when("the Postgres comment sweep", () => {
   beforeAll(async () => {
@@ -212,6 +281,123 @@ when("the Postgres comment sweep", () => {
       .where(eq(commentsTable.id, "spya-swp555"));
     expect(row?.attemptId).toBeNull();
     expect(row?.lease).toBeNull();
+  });
+
+  /**
+   * **A buried attempt must not overwrite the one that replaced it.**
+   *
+   * The interleaving GPT Sol set out in the final review, 2026-09-01, and the
+   * reason `patch` now carries the attempt token:
+   *
+   * 1. A begins, and stalls somewhere before the model call — a slow profile
+   *    read, a cold lambda. There is no query timeout on that read.
+   * 2. A `GET` on another machine finds A's lease expired and sweeps it.
+   * 3. The reader presses Try again; B claims the row.
+   * 4. A wakes up and writes its answer.
+   *
+   * Before the fence, step 4 landed: the `UPDATE` named the article and the
+   * comment and nothing else. Run this against that version and B's answer is
+   * replaced by A's while the reader is reading it.
+   */
+  it("refuses a buried attempt's answer, so it cannot overwrite the retry", async () => {
+    const a = await nowPending("spya-swp777");
+    await expire("spya-swp777");
+    await pgCommentStore.sweepPending(SLUG, new Set()); // machine B's GET
+
+    const b = await pgCommentStore.beginAnswer(SLUG, "spya-swp777"); // Try again
+    expect(b.comment.status).toBe("pending");
+    expect(b.attempt).not.toBe(a);
+
+    const refused = await pgCommentStore.patch(
+      SLUG,
+      "spya-swp777",
+      { status: "done", answer: "A's answer, hours late" },
+      a,
+    );
+    // `undefined` is "you were superseded" — not an error, and not a write.
+    expect(refused).toBeUndefined();
+    expect(await statusOf("spya-swp777")).toBe("pending");
+
+    // B still finishes, and B's answer is the one that is there.
+    const kept = await pgCommentStore.patch(
+      SLUG,
+      "spya-swp777",
+      { status: "done", answer: "B's answer" },
+      b.attempt,
+    );
+    expect(kept?.find((c) => c.id === "spya-swp777")?.answer).toBe("B's answer");
+
+    /* And A's *failure* is refused just as its success was. This is the half
+       that would have been worse: A's `error` patch landing on a `done` row
+       replaces a good answer with "the model fell over". */
+    const alsoRefused = await pgCommentStore.patch(
+      SLUG,
+      "spya-swp777",
+      { status: "error", error: "A finally gave up" },
+      a,
+    );
+    expect(alsoRefused).toBeUndefined();
+    const after = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-swp777");
+    expect(after?.status).toBe("done");
+    expect(after?.answer).toBe("B's answer");
+  });
+
+  it("refuses a terminal write that carries no attempt at all", async () => {
+    /* The token is optional in the interface because the filesystem store has
+       none. A caller that simply forgot to carry it must not get identity-only
+       writes back in silence — `pgSearchStore.finish` refuses for the same
+       reason, and this is the assertion that the refusal is real. */
+    const attempt = await nowPending("spya-swp223");
+    await expect(
+      pgCommentStore.patch(SLUG, "spya-swp223", { status: "done", answer: "x" }),
+    ).rejects.toThrow(/needs the attempt/);
+    // And a patch that would leave the row `pending` while releasing the fence.
+    await expect(
+      pgCommentStore.patch(SLUG, "spya-swp223", { answer: "x" }, attempt),
+    ).rejects.toThrow(/must end an answer/);
+  });
+
+  /**
+   * **The second half of Sol's finding 2: Retry heals without a `GET`.**
+   *
+   * Sweeping happens only on the comments `GET`, and *Try again* posts straight
+   * at the answer endpoint. So the claim itself has to be able to take an
+   * abandoned row — otherwise an open page 409s for ever and only a reload
+   * fixes it. No sweep is called anywhere in this test, deliberately.
+   */
+  it("lets Try again claim an abandoned attempt with no sweep first", async () => {
+    await nowPending("spya-swq444");
+    await expire("spya-swq444"); // the answering machine died
+
+    const { comment, attempt } = await pgCommentStore.beginAnswer(SLUG, "spya-swq444");
+
+    expect(comment.status).toBe("pending");
+    expect(attempt).toBeDefined();
+    // The previous attempt's error went with it — this is a fresh attempt.
+    expect("error" in comment).toBe(false);
+  });
+
+  it("claims a pending row that never had a lease at all", async () => {
+    // Imported, or begun before the column existed. Whatever process started it
+    // is long gone — the same rule the sweep applies to the same row.
+    await nowPending("spya-swr444");
+    await getDb()
+      .update(commentsTable)
+      .set({ attemptId: null, leaseExpiresAt: null })
+      .where(eq(commentsTable.id, "spya-swr444"));
+
+    expect((await pgCommentStore.beginAnswer(SLUG, "spya-swr444")).comment.status).toBe(
+      "pending",
+    );
+  });
+
+  it("still refuses a retry while the lease is live", async () => {
+    /* The guard on the reclaim, and without it the reclaim is the 2026-08-28
+       bug back again: two presses of Try again buying two model calls. */
+    await nowPending("spya-sws555");
+    await expect(pgCommentStore.beginAnswer(SLUG, "spya-sws555")).rejects.toThrow(
+      /already being answered/,
+    );
   });
 
   it("leaves a bookmark alone, and an article with no comments at all", async () => {

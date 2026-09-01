@@ -79,16 +79,29 @@ plan; it is the reason the store contract now names who may write what.
 | operation | writes | refuses |
 |---|---|---|
 | `create` | the anchor, `body`, the placement, `status: "none"` | a stored id whose anchor, body **or placement** differs — **409**, never an overwrite |
-| `beginAnswer` | the answer fields only | anything not `done` or `error` — a bookmark was never a question, and a `pending` row already has an answer coming |
+| `beginAnswer` | the answer fields — plus, in Postgres, an attempt id and a lease | a bookmark, and a `pending` row whose attempt is **still live** — one answer at a time |
 | `patchBody` | `body`, `updatedAt` | — |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
 
 `beginAnswer` takes an id and *nothing else*: it reads the stored passage rather than accepting one,
-so a retry cannot quietly move a comment to different words. **It claims a terminal row**, and that
-is stricter than it first looks: the first version excluded only bookmarks, which meant a row
-already `pending` passed the check, so two presses of *Try again* both succeeded and bought two
-model calls. An abandoned `pending` becomes `error` through `sweepOrphaned` and can be retried then
-— which is what that sweep is for.
+so a retry cannot quietly move a comment to different words. **It claims a terminal row, or an
+abandoned attempt**, and both halves are load-bearing. The first version excluded only bookmarks,
+which meant a row already `pending` passed the check, so two presses of *Try again* both succeeded
+and bought two model calls. The version after that refused every `pending` row, which left the
+opposite bug: only the sweep could heal an abandoned one, the sweep runs only on the comments `GET`,
+and *Try again* posts straight at the answer endpoint — so a reader whose answering machine died got
+a 409 from every press until they reloaded the page, and an open tab never did. Now the claim itself
+takes a `pending` row whose lease has run out, in the same statement that refuses one whose lease is
+live. GPT Sol, 2026-09-01.
+
+**The claim hands back an attempt token, and the terminal write has to carry it.** A comment keeps
+its id across a retry — that is what makes it the same question — so identity alone cannot say which
+model call is reporting. Without the token, an attempt that stalled, had its row swept by another
+machine and then woke up would overwrite the retry the reader was watching arrive; with it, that
+write matches no row and `patch` answers `undefined`, which means *you were superseded* rather than
+*something failed*. `pgSearchStore.finish` made the same decision in August, and the two now read
+alike. The filesystem store has no token and needs none: one process, so `begun` in
+[`src/comments.ts`](../../src/comments.ts) can say whether an attempt is live without a clock.
 
 The legacy answer patch is `AnswerPatch`, six fields wide, not `Partial<Comment>`. A generic patch
 was what let the one remaining writer reach the anchor and the reader's words.
@@ -664,6 +677,9 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
   `error` with a message. Without the sweep, a comment orphaned by a `npm run dev` restart reloads
   as a spinner that never stops. `sweepOrphaned` in [`src/routes.ts`](../../src/routes.ts) supplies
   that list; the rule itself is `sweepPending` on each store.
+- **A dead attempt heals on the next *Try again*, without a read first.** The sweep only runs on
+  `GET /api/comments/:slug`, and the retry button does not do a `GET` — so `beginAnswer` claims an
+  abandoned row itself. See the store contract above.
 - **…and on Vercel that list is not enough on its own.** It is a fact about *one* process, and every
   request may land on a different machine. So the Postgres store also reads a **lease** stamped on
   the row when the attempt began: a fresh `pending` row is spared even by a machine that knows

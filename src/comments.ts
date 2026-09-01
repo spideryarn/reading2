@@ -328,6 +328,29 @@ export async function createComment(
 }
 
 /**
+ * **The attempts this process began and has not finished**, as `slug/id`.
+ *
+ * The filesystem store's whole answer to "is an answer actually coming?", and
+ * it can be this small because there is one process on one disk: an attempt is
+ * live exactly while the request that began it is still running here. Postgres
+ * cannot use a set — its readers are on different machines — so it stamps a
+ * deadline on the row instead (`COMMENT_ANSWER_LEASE_MS`,
+ * src/store/pg-comments.ts) and every machine reads the database's clock.
+ *
+ * Keyed `slug/id` because comment ids are unique **per article**, not globally,
+ * exactly as `answering` in src/routes.ts is. That map is the same fact seen
+ * from the request side, and it is what `sweepPending`'s `keep` is built from;
+ * this one is the store's own, so that `beginAnswer` — which is handed a slug
+ * and an id and nothing else — can ask the question too.
+ *
+ * Emptied by a restart, which is the point: nothing was in flight before this
+ * process started, so every `pending` row it finds is abandoned.
+ */
+const begun = new Set<string>();
+
+const attemptKey = (slug: string, id: string) => `${slug}/${id}`;
+
+/**
  * Reset a *legacy explanation* for another attempt at the model call.
  *
  * The other half of what `createComment` used to be, and split from it because
@@ -343,7 +366,10 @@ export async function createComment(
  * Refuses `status: "none"`. A bookmark was never a question, and the retired
  * explanation path must not be reachable from one.
  */
-export async function beginAnswer(slug: string, id: string): Promise<Comment> {
+export async function beginAnswer(
+  slug: string,
+  id: string,
+): Promise<{ comment: Comment; attempt: undefined }> {
   let stored!: Comment;
   await update(slug, (comments) => {
     const existing = comments.find((c) => c.id === id);
@@ -352,11 +378,35 @@ export async function beginAnswer(slug: string, id: string): Promise<Comment> {
        `status !== "none"` was the first version and it is not a claim at all:
        a row already `pending` passes it, so two presses of Try again both
        "succeed", buy two model calls, and race each other's terminal writes.
-       Only `done` and `error` are answerable — an abandoned `pending` becomes
-       `error` through the sweep in src/routes.ts and can be retried then.
+       Only `done` and `error` are answerable — and a `pending` row that no
+       attempt in this process is writing, which is the reclaim below.
        GPT Sol, reviewing the built code, 2026-08-28. */
     if (existing.status === "none") throw new NotAnExplanation(id, "free");
-    if (existing.status === "pending") throw new NotAnExplanation(id, "running");
+    /* **A `pending` row nobody here is writing has been abandoned, and is
+       claimed rather than refused.** Otherwise a reader whose server died
+       mid-answer gets 409 from every press of Try again until they reload the
+       page — the sweep is the only thing that heals the row, and the sweep runs
+       only on the comments `GET`. GPT Sol, 2026-09-01.
+
+       The Postgres half asks a clock — is the lease over? — because on Vercel
+       the machine taking this request cannot see the memory of the one that
+       began the attempt. Here there is one process on one disk, so "an attempt
+       is live" is *exactly* "this process began it and has not finished it",
+       which `begun` knows without a clock and without waiting one out. Simpler,
+       and in one respect stronger: a restart empties `begun`, so a comment left
+       `pending` by the process that died is answerable on the very next press
+       rather than two and a half minutes later.
+
+       That is a property of having one process, not a shrug. It is also why
+       `patchComment` needs no attempt token: a live attempt here cannot be
+       superseded, because this line refuses to hand its row to anybody until it
+       finishes or the sweep buries it. */
+    if (existing.status === "pending" && begun.has(attemptKey(slug, id))) {
+      throw new NotAnExplanation(id, "running");
+    }
+    /* Inside the mutation, which `update` serialises, so the row and the set
+       cannot disagree about whether this attempt exists. */
+    begun.add(attemptKey(slug, id));
     stored = {
       id: existing.id,
       blockId: existing.blockId,
@@ -378,7 +428,11 @@ export async function beginAnswer(slug: string, id: string): Promise<Comment> {
     return comments.map((c) => (c.id === id ? stored : c));
   });
   log("store").info({ slug, id: stored.id, blockId: stored.blockId }, "comment answer begun");
-  return stored;
+  /* `attempt: undefined` rather than a token this store would then have to
+     check. See the reclaim above for why one process needs no fence — and
+     `CommentStore.patch` in src/store/contracts.ts for why the Postgres store
+     refuses a terminal write that arrives without one. */
+  return { comment: stored, attempt: undefined };
 }
 
 /**
@@ -467,8 +521,27 @@ export async function patchComment(
   slug: string,
   id: string,
   patch: AnswerPatch,
+  /**
+   * **Accepted and ignored**, and the ignoring is the interesting part.
+   *
+   * `CommentStore.patch` carries the token `beginAnswer` returned so the
+   * Postgres store can refuse a write from an attempt that a sweep on another
+   * machine already buried. This store has no such attempt to refuse: with one
+   * process, `begun` (above) hands the row to nobody else while this attempt is
+   * running, so the write that arrives here is always the live one. The
+   * parameter is in the signature so the two stores are called identically —
+   * a caller that had to remember which store it was talking to is the shape
+   * that lets a fence quietly go missing.
+   */
+  _attempt?: string,
   opts: { quiet?: boolean } = {},
 ): Promise<Comment[]> {
+  /* The attempt is over whatever the patch says, so the row goes back to being
+     claimable. Terminal statuses only: a patch that left it `pending` and
+     released it would be handing a live attempt's row away. */
+  if (patch.status === "done" || patch.status === "error") {
+    begun.delete(attemptKey(slug, id));
+  }
   /* **Built field by field, never spread.** It used to be
      `{ ...c, ...patch, id: c.id }`, which protected the id and nothing else —
      so a caller could rewrite the anchor, `createdAt`, the reader's body or the
@@ -569,9 +642,16 @@ export async function sweepPendingComments(
   const orphans = comments.filter(orphaned).length;
   if (orphans === 0) return comments;
   const next = await update(slug, (current) =>
-    current.map((c) =>
-      orphaned(c) ? { ...c, status: "error" as const, error: COMMENT_SWEPT } : c,
-    ),
+    current.map((c) => {
+      if (!orphaned(c)) return c;
+      /* The sweep has declared this attempt dead, so it stops counting as one
+         — otherwise `begun` keeps a row that `beginAnswer` would then refuse to
+         reclaim, and the comment is stuck 409ing for the life of the process.
+         `pgCommentStore.sweepPending` clears the row's `attempt_id` for exactly
+         this reason. */
+      begun.delete(attemptKey(slug, c.id));
+      return { ...c, status: "error" as const, error: COMMENT_SWEPT };
+    }),
   );
   /* One line for the batch, never one per orphan. Every orphan gets the same
      patch for the same reason, so a line each would say one thing N times — and

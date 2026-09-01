@@ -29,7 +29,7 @@
  * the same millisecond would otherwise swap places between requests.
  */
 
-import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 
 import {
   COMMENT_SWEPT,
@@ -70,6 +70,12 @@ const logger = log("store");
  *
  * Thirty seconds of margin, matching that one, because the gap has to cover the
  * store write that follows the model call, not just the call.
+ *
+ * **Nothing slow may sit between the claim and the model call**, or the margin
+ * is spent before the thing it is for. `answer` in src/routes.ts resolves the
+ * reader profile *before* `beginAnswer` for exactly that reason — a stalled
+ * profile read used to be able to eat the whole lease while `explainStream`'s
+ * own clock had not started. GPT Sol, 2026-09-01.
  */
 export const COMMENT_ANSWER_LEASE_MS = EXPLAIN_TIMEOUT_MS + 30_000;
 
@@ -327,8 +333,14 @@ export const pgCommentStore: CommentStore = {
    * `status <> 'none'` in the WHERE is what refuses a bookmark, and it is one
    * statement rather than read-then-check so two simultaneous requests cannot
    * both pass the check.
+   *
+   * Returns the row **and the attempt token**, which `patch` needs; see
+   * `CommentStore.beginAnswer` in src/store/contracts.ts.
    */
-  async beginAnswer(slug: string, id: string): Promise<Comment> {
+  async beginAnswer(
+    slug: string,
+    id: string,
+  ): Promise<{ comment: Comment; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     const [row] = await db
@@ -352,24 +364,57 @@ export const pgCommentStore: CommentStore = {
            tests/store-jobs-parity.test.ts pins for `jobs`.
 
            `gen_random_uuid()` from the server too, so the fence and the clock
-           on one row cannot come from two different machines. Nothing reads the
-           id yet — `patch` is unfenced, as it was — but a fence that is written
-           is a fence that can be checked later without a migration. */
+           on one row cannot come from two different machines. The id goes back
+           to the caller off `returning()` and `patch` will not write without
+           it: an attempt that a sweep declared dead must not be able to land on
+           top of the retry the reader is watching arrive. GPT Sol, 2026-09-01. */
         attemptId: sql`gen_random_uuid()`,
         leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${COMMENT_ANSWER_LEASE_MS} / 1000.0)`,
       })
       /* **`in ('done','error')` is a claim; `<> 'none'` was not.**
          The first version excluded only bookmarks, so a row already `pending`
          satisfied it: two presses of Try again would both "succeed", buy two
-         model calls, and race each other's terminal writes. Only a *terminal*
-         row is answerable. An abandoned `pending` becomes `error` through
-         `sweepOrphaned` and can be retried then — which is what that sweep is
-         for. GPT Sol, reviewing the built code, 2026-08-28. */
+         model calls, and race each other's terminal writes. A *terminal* row is
+         answerable. GPT Sol, reviewing the built code, 2026-08-28.
+
+         **And so is a `pending` row whose attempt is over**, which is the
+         second half and arrived on 2026-09-01. It used to be the sweep's job
+         alone, and the sweep runs only on `GET /api/comments/:slug` — while
+         *Try again* posts straight at the answer endpoint. So a reader whose
+         answering machine died watched every retry come back 409 until they
+         reloaded the page, which is what caused the `GET`. An open tab could
+         stay stuck for ever. GPT Sol found it in the final review.
+
+         Reclaiming here rather than sweeping first is what makes it safe: this
+         is **one statement**, so two readers pressing Try again on the same
+         abandoned row cannot both claim it — Postgres serialises them on the
+         row and the loser's `UPDATE` matches nothing.
+
+         The lease test is the same expression `sweepPending` uses, and the
+         `is null` half means the same thing there: a row with no lease at all
+         is imported, or was begun before the column existed, and either way its
+         process is long gone.
+
+         **What this deliberately cannot see** is `keep` — the ids this process
+         is streaming right now. `sweepPending` takes that as an argument and
+         spares them even past the deadline; `beginAnswer` is handed a slug and
+         an id. So an answer still being written more than
+         `COMMENT_ANSWER_LEASE_MS` after it began can have its row claimed by a
+         retry: a second model call, paid for twice. That is the trade for
+         healing without a `GET`, it costs money rather than correctness — the
+         first attempt's terminal write is fenced out by `patch` — and the
+         window is 30 s past the deadline `explainStream` aborts on. */
       .where(
         and(
           eq(commentsTable.articleId, articleId),
           eq(commentsTable.id, id),
-          inArray(commentsTable.status, ["done", "error"]),
+          or(
+            inArray(commentsTable.status, ["done", "error"]),
+            and(
+              eq(commentsTable.status, "pending"),
+              sql`(${commentsTable.leaseExpiresAt} is null or ${commentsTable.leaseExpiresAt} <= clock_timestamp())`,
+            ),
+          ),
         ),
       )
       .returning();
@@ -392,8 +437,15 @@ export const pgCommentStore: CommentStore = {
       );
     }
     const stored = toComment(row);
+    /* Written by the statement above, so this cannot happen — and it is checked
+       rather than coerced away with `?? undefined`, because the one thing that
+       must never reach `patch` is a *missing* fence: the store would refuse
+       every terminal write and every answer would be lost in silence. */
+    if (row.attemptId === null) {
+      throw new Error(`beginAnswer("${slug}", "${id}") wrote no attempt id.`);
+    }
     logger.info({ slug, id: stored.id, blockId: stored.blockId }, "comment answer begun");
-    return stored;
+    return { comment: stored, attempt: row.attemptId };
   },
 
   /** The reader edited their words. `body` and `updated_at`, and nothing else. */
@@ -471,20 +523,63 @@ export const pgCommentStore: CommentStore = {
     return toComment(existing);
   },
 
+  /**
+   * Write the answer, **if this attempt is still the live one**.
+   *
+   * The other end of the fence `beginAnswer` stamps, and the reason it exists:
+   *
+   * 1. Attempt A begins and stamps a lease.
+   * 2. Something before the model call stalls past the deadline — a slow
+   *    database read, a cold lambda. `explainStream`'s own 120-second clock has
+   *    not even started.
+   * 3. A `GET` on machine B sweeps A's expired row to `error`.
+   * 4. The reader presses Try again; attempt B begins.
+   * 5. A wakes up and writes its answer.
+   *
+   * Until 2026-09-01 step 5 landed: this UPDATE named the article and the
+   * comment and nothing else, so A's stale answer — or A's stale *error* —
+   * overwrote the answer B was streaming onto the reader's screen. GPT Sol,
+   * final review. `pgSearchStore.finish` had the same three-part WHERE for the
+   * same reason since 2026-08-26; this is that decision applied here.
+   */
   async patch(
     slug: string,
     id: string,
     patch: AnswerPatch,
+    attempt?: string,
     opts: { quiet?: boolean } = {},
-  ): Promise<Comment[]> {
+  ): Promise<Comment[] | undefined> {
     const db = getDb();
+
+    /* **Refused without an attempt, rather than falling back to identity.**
+       The token is optional in the interface because the filesystem store has
+       none. Accepting `undefined` *here* would mean a caller that simply forgot
+       to carry it through got the whole race back, with nothing anywhere
+       reporting it — the reasoning `pgSearchStore.finish` sets out at length. */
+    if (attempt === undefined) {
+      throw new Error(
+        `patch("${slug}") needs the attempt that beginAnswer() returned. ` +
+          "Without it a model call the sweep already buried can overwrite the retry.",
+      );
+    }
+    /* **And the status has to be one this answer can end on.** The attempt is
+       released below whatever the patch says, so a patch leaving the comment
+       `pending` would strip the fence off a row still waiting for an answer,
+       after which anybody's late write can land on it. */
+    if (patch.status !== "done" && patch.status !== "error") {
+      throw new Error(
+        `patch("${slug}") must end an answer: status was ${JSON.stringify(patch.status)}, ` +
+          'expected "done" or "error".',
+      );
+    }
+
     const articleId = await articleIdFor(slug);
 
     /* `id` is deliberately not settable. src/comments.ts spreads `{ ...c,
        ...patch, id: c.id }` — the trailing `id` puts it back — so a patch
        carrying an id cannot rename a comment. Building the set explicitly is
        the same guarantee without depending on key order. */
-    await db
+    const written = await db
       .update(commentsTable)
       .set({
         /* The anchor is no longer settable here either. `AnswerPatch` is the
@@ -496,17 +591,48 @@ export const pgCommentStore: CommentStore = {
         ...(patch.searches === undefined ? {} : { searches: patch.searches }),
         ...(patch.model === undefined ? {} : { model: patch.model }),
         ...(patch.error === undefined ? {} : { error: patch.error }),
+        /* **The attempt ends here, so its fence goes with it.** Both columns or
+           neither: half an attempt is a row that can never be swept and never
+           be finished. It used to be left in place on the grounds that a
+           terminal row's stale deadline was unreadable by anything — true while
+           nothing checked `attempt_id`, and no longer true now that the WHERE
+           below does. A `done` row still naming an attempt would let that
+           attempt's own late duplicate write land on it. `pg-searches.ts`
+           clears its pair in `finish` for the same reason. */
+        attemptId: null,
+        leaseExpiresAt: null,
       })
-      .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
+      .where(
+        and(
+          eq(commentsTable.articleId, articleId),
+          eq(commentsTable.id, id),
+          /* **Three parts, not one.** The identity says which comment, the
+             status says it is still waiting for an answer, and the attempt says
+             it is waiting for *this* one. Drop the last two and a call another
+             process already declared dead overwrites the retry the reader is
+             watching arrive. Word for word `pgSearchStore.finish`. */
+          eq(commentsTable.status, "pending"),
+          eq(commentsTable.attemptId, attempt),
+        ),
+      )
+      .returning({ id: commentsTable.id });
 
-    /* **The lease is deliberately left where it is.** A terminal row's stale
-       deadline is unreadable by anything — `sweepPending` looks only at
-       `pending` rows, and `beginAnswer` overwrites both fields on the next
-       attempt — so clearing it here would buy nothing and would put the fence's
-       lifetime in two places. `chat_messages` clears its pair because a CHECK
-       constraint insists the two agree; `comments` has no such constraint.
+    if (written.length === 0) {
+      /* **Superseded, and that is not a failure.** The fenced write matched no
+         row: a sweep buried this attempt and the reader has begun another, or
+         they deleted the comment while the model was thinking. Reported as
+         `undefined` rather than thrown, because there is nothing for the reader
+         to do about it and nothing wrong with the store — the same answer
+         `pgSearchStore.finish` gives, and src/routes.ts hands the reader
+         whatever the store actually holds instead of this call's answer.
 
-       The stored `error` string is deliberately NOT logged. It is whatever
+         Logged at `info` with no reason string, because the interesting fact is
+         the *count* of these: a handful means machines are dying mid-answer. */
+      logger.info({ slug, id }, "comment answer superseded — a later attempt owns this row");
+      return undefined;
+    }
+
+    /* The stored `error` string is deliberately NOT logged. It is whatever
        `explain` threw, and one of the things `explain` throws carries 400
        characters of a provider's response body — which, for a provider that
        echoes the request back, contains the reader's selected quote and the

@@ -57,6 +57,22 @@ const ORPHAN_BLOCK_ID = "spya-bbb333";
  */
 const CRITERION_ID = "spya-ccc555";
 
+/**
+ * Make a comment look like a **legacy explanation that has already been
+ * answered**, in SQL.
+ *
+ * Nothing in the store can produce this state any more, which is why the
+ * fixture is raw: `create` makes a free comment, and `patch` since 2026-09-01
+ * only ends an attempt that `beginAnswer` started — it will not write an answer
+ * onto a row that was never claimed. The rows this stands in for were written
+ * by the explanation path retired on 2026-08-28 and are still in the database.
+ */
+const legacyAnswered = (id: string, answer = "an old explanation") =>
+  getDb()
+    .update(commentsTable)
+    .set({ status: "done", answer })
+    .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
+
 const { reachable } = await pgReady({
   suite: "tests/store-comments.test.ts",
   tables: ["spideryarn.comments"],
@@ -242,8 +258,8 @@ when("the Postgres comment store", () => {
       criterionId: CRITERION_ID,
       valence: -80,
     });
-    await pgCommentStore.patch(SLUG, "spya-bqd890", { status: "done", answer: "an explanation" });
-    const again = await pgCommentStore.beginAnswer(SLUG, "spya-bqd890");
+    await legacyAnswered("spya-bqd890", "an explanation");
+    const { comment: again } = await pgCommentStore.beginAnswer(SLUG, "spya-bqd890");
     expect(again.status).toBe("pending");
     expect(again.valence).toBe(-80);
     expect(again.criterionId).toBe(CRITERION_ID);
@@ -312,13 +328,19 @@ when("the Postgres comment store", () => {
       quote: "the question",
       start: 3,
     });
-    await pgCommentStore.patch(SLUG, "spya-ddd555", {
-      status: "error",
-      error: "the model fell over",
-    });
+    /* A *failed* legacy attempt, not an answered one: the assertion below is
+       that the previous attempt's `error` goes, and it proves nothing against a
+       row that never had one. Raw, for the reason `legacyAnswered` is. */
+    await getDb()
+      .update(commentsTable)
+      .set({ status: "error", error: "the model fell over" })
+      .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, "spya-ddd555")));
 
     const before = (await pgCommentStore.load(SLUG)).length;
-    const retried = await pgCommentStore.beginAnswer(SLUG, "spya-ddd555");
+    const { comment: retried, attempt } = await pgCommentStore.beginAnswer(SLUG, "spya-ddd555");
+    /* The fence the terminal write has to carry. It is a fresh uuid per
+       attempt, minted by the database — see `beginAnswer`. */
+    expect(attempt).toMatch(/^[0-9a-f-]{36}$/);
     const after = await pgCommentStore.load(SLUG);
 
     // A second row would leave the failed original behind, drawing a second
@@ -364,7 +386,7 @@ when("the Postgres comment store", () => {
       quote: "the question",
       start: 3,
     });
-    await pgCommentStore.patch(SLUG, "spya-run999", { status: "done", answer: "old" });
+    await legacyAnswered("spya-run999", "old");
     await pgCommentStore.beginAnswer(SLUG, "spya-run999"); // now pending
     await expect(pgCommentStore.beginAnswer(SLUG, "spya-run999")).rejects.toThrow(
       /already being answered/,
@@ -390,14 +412,17 @@ when("the Postgres comment store", () => {
       quote: "q",
       start: 0,
     });
+    await legacyAnswered("spya-eee666");
+    const { attempt } = await pgCommentStore.beginAnswer(SLUG, "spya-eee666");
     // src/comments.ts spreads `{...c, ...patch, id: c.id}` — the trailing `id`
     // puts it back. That guarantee must not depend on key order, so it is
     // asserted rather than assumed.
-    await pgCommentStore.patch(SLUG, "spya-eee666", {
-      id: "spya-fff777",
-      status: "done",
-      answer: "an answer",
-    } as never);
+    await pgCommentStore.patch(
+      SLUG,
+      "spya-eee666",
+      { id: "spya-fff777", status: "done", answer: "an answer" } as never,
+      attempt,
+    );
     const all = await pgCommentStore.load(SLUG);
     expect(all.find((c) => c.id === "spya-eee666")?.answer).toBe("an answer");
     expect(all.some((c) => c.id === "spya-fff777")).toBe(false);

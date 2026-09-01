@@ -108,7 +108,11 @@ describe("comment storage", () => {
       error: "old",
     });
 
-    const again = await beginAnswer(SLUG, first.id);
+    const { comment: again, attempt } = await beginAnswer(SLUG, first.id);
+    /* No fence on the filesystem side, and the absence is asserted rather than
+       assumed: one process means `begun` in src/comments.ts can say whether an
+       attempt is live without a token. See `CommentStore.patch`. */
+    expect(attempt).toBeUndefined();
     expect(again.status).toBe("pending");
     expect(again.answer).toBeUndefined();
     expect(again.citations).toBeUndefined();
