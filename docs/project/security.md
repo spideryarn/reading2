@@ -911,15 +911,28 @@ Three properties, and each is a decision rather than an implementation detail:
 **What it cannot see, which matters more than what it can.** Every gap here is a false negative, and
 a clean result means less than it looks:
 
-- **PDFs are not scanned at all** — `scanRawSource` answers `coverage: "none"`, which has to reach
-  the reader rather than rendering as "nothing found". This is the big one: the July 2025 incident
-  was largely PDFs, and finding white text in one means parsing content streams through their
-  compression filters.
+- **PDFs are not scanned at all** — `scanRawSource` answers `{ examined: "nothing", reason: "pdf" }`,
+  and that has to reach the reader rather than rendering as "nothing found". This is the big one:
+  the July 2025 incident was largely PDFs, and finding white text in one means parsing content
+  streams through their compression filters. The result type makes the branch unavoidable rather
+  than merely advisable: `findings` exists **only** on the examined arm, so a caller cannot render a
+  clean bill from `findings.length` without first saying which arm it is in.
 - **External stylesheets are never fetched**, so a `<link rel="stylesheet">` that hides a paragraph
   is invisible. The largest gap on the HTML side.
-- **The cascade is approximated** — source order, inline last, no specificity, `@media print` handled
-  specially and every other query treated as applying. It errs towards reporting.
+- **The cascade is approximated.** Specificity, the `!important` tier and inheritance are all
+  implemented — an earlier `#attack { color: white }` is no longer overwritten by a later
+  `p { color: black }`, and `<div style="color:white"><p>…</p></div>` is caught at the `p` — but
+  `@media print` is handled specially, every other query is treated as applying, and a selector
+  jsdom cannot parse is counted rather than skipped in silence. It errs towards reporting.
 - Anything JavaScript does, and images of text.
+- **Masks and layering are deliberately not attempted.** Whether a `mask-image` or a `z-index`
+  overlap hides text cannot be decided without rendering. The only cheap rule — treat any mask as
+  hiding — fires on every decorative element, and a scanner that cries wolf is one referees stop
+  reading.
+
+Every one of those is named in the result: `blindSpots` is **never empty** (`approximated-cascade`
+is always on it), so the list of what was not checked travels with the findings instead of being
+something a reader has to remember.
 
 The scan is also **not** what stops an injected instruction from working. Nothing does. It is a way
 for a referee to find out that somebody tried.
