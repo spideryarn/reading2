@@ -8,8 +8,12 @@ writing down what to look at and where the eye lies to you.
 This doc is the how — what to look at, whichever automation you are driving the page with. **Which
 one that is depends on the machine**, and [browser-control.md](browser-control.md) is the fork:
 the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote box.
-Read it first; the mechanism-specific traps live under it, and the examples below are written in the
-extension's tools. What the client *is*: [web-client.md](web-client.md). Why the feature exists:
+
+**The examples below are written in the extension's tools**, because that is the laptop. On the box,
+read them through
+[browser-testing-playwright.md](browser-testing-playwright.md) — the same checks in Playwright, and
+the several traps here that simply stop existing there. What the client *is*:
+[web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
 [claude-in-chrome.md](claude-in-chrome.md).
@@ -850,7 +854,12 @@ No requests means it never arrived, whatever it is telling you. That is the same
 one layer along — and it is the [silent-success](../reusable/silent-success.md) pattern with an
 agent in it.
 
-## Driving it from an agent
+## Driving it from an agent, through the extension
+
+Everything in this section and the ones under it is about **Claude-in-Chrome specifically**, so it is
+the part that does not carry to the remote box; the Playwright answer to each is in
+[browser-testing-playwright.md](browser-testing-playwright.md), and most of these traps are simply
+absent there.
 
 Claude-in-Chrome drives a real, visible Chrome. `resize_window` then `navigate`, and batch the
 steps — a `navigate` may reset the window size, so resize *after* it if the width matters.

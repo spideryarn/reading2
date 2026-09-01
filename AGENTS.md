@@ -64,8 +64,8 @@ listed here; the names under each are files in `docs/project/`.
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
   `browser-control.md` (which browser automation on which machine — start here) ·
-  `browser-testing.md` · `claude-in-chrome.md` (the laptop extension: nothing connected?) ·
-  `performance.md` ·
+  `browser-testing.md` (what to check) · `browser-testing-playwright.md` (the same, on the box) ·
+  `claude-in-chrome.md` (the laptop extension: nothing connected?) · `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.

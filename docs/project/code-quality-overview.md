@@ -70,7 +70,11 @@ you read those two *before* you measure something, not after.
   follow. Open this before either of the two below.
 - **[browser-testing.md](browser-testing.md)** — driving the reading view in a real browser, and the
   ways it lies to you: colour in a screenshot, a hidden tab that fires no scroll events, hovering by
-  pixel rather than by element. Open this before any UI check.
+  pixel rather than by element. Open this before any UI check. Its recipes are written in the
+  extension's tools, because that is the laptop.
+- **[browser-testing-playwright.md](browser-testing-playwright.md)** — those same checks in
+  Playwright, for the remote box, and which of that doc's traps stop existing once the browser is
+  headless and yours: the hidden tab, the black screenshot, the pixel arithmetic, the 605px floor.
 - **[claude-in-chrome.md](claude-in-chrome.md)** — getting the extension to talk to Claude Code in
   the first place. `list_connected_browsers` returning `[]` is almost always the wrong Chrome
   profile, not broken plumbing. Open this before you debug anything below the extension.
