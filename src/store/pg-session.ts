@@ -49,9 +49,10 @@
  * job's included. `finish` and `releaseStep` still do not clear it and must not:
  * the first is always preceded here by a publication or a failure that clears it
  * on its own fence, and the second is the statement that hands the same draft to
- * the next request. The two endings that happen to a job *nobody is inside* —
- * `settleExpired` and a queued `requestCancel` — clear it themselves, since no
- * session will ever run for them (src/store/pg-jobs.ts; GPT Sol, 2026-08-30,
+ * the next request. The endings that happen to a job *nobody is inside* —
+ * `settleExpired`, and `requestCancel` on a job that is queued or whose lease
+ * has lapsed — clear it themselves, since no session will ever run for them
+ * (src/store/pg-jobs.ts; GPT Sol, 2026-08-30,
  * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1).
  *
  * ## The lock order: article, then job, always

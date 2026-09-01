@@ -482,7 +482,7 @@ describe("a signed-out browser on a shared document", () => {
    * to mount something that fetches.
    */
   it("stays inside the public namespace through every mode", async () => {
-    for (const mode of ["glossary", "summary", "ideas", "search", "chat", "review", "diagram"]) {
+    for (const mode of ["glossary", "summary", "ideas", "search", "chat", "remember", "diagram"]) {
       trace.length = 0;
       await open(`?mode=${mode}`);
       expect(outsidePublic()).toEqual([]);
@@ -803,7 +803,7 @@ describe("a signed-out browser on a shared document", () => {
     await open();
     trace.length = 0;
 
-    for (const label of ["Summary", "Glossary", "Ideas", "Search", "Diagram", "Chat", "Review"]) {
+    for (const label of ["Summary", "Glossary", "Ideas", "Search", "Diagram", "Chat", "Remember"]) {
       const button = [...host.querySelectorAll("button")].find(
         (b) => b.getAttribute("aria-label") === label,
       );
@@ -815,7 +815,7 @@ describe("a signed-out browser on a shared document", () => {
 
     /* And the presses really did move the band — otherwise this passes by
        clicking seven dead buttons. */
-    expect(host.textContent).toContain("Review is for whoever added this article");
+    expect(host.textContent).toContain("Remember is for whoever added this article");
   });
 
   it("opens the comments drawer without asking for anybody's comments", async () => {
@@ -1023,7 +1023,30 @@ describe("a signed-in reader who does not own it", () => {
     expect(withAnAccount.filter((l) => l === probe), "the owned probe, exactly once").toHaveLength(
       1,
     );
-    expect(withAnAccount.filter((l) => l !== probe)).toEqual(stranger);
+
+    /**
+     * **The second thing a signed-in reader asks that a stranger does not, and
+     * it is not about this article.**
+     *
+     * The job engine binds to `user.id` and reconciles once when a session
+     * begins (src/web/jobEngine.ts), so any signed-in reader makes one
+     * `GET /api/jobs` wherever they are — it is *their* queue, and it says
+     * nothing about whose article this is. Deliberate, and new on 2026-09-01:
+     * before that the poller was mounted by three route-scoped surfaces, which
+     * is exactly why clicking into an article stopped an import.
+     *
+     * Pinned as "exactly once" rather than filtered away, because the rule that
+     * makes it acceptable is that it does **not** recur on a reading view with
+     * nothing in the queue.
+     */
+    const sessionPoll = "GET /api/jobs";
+    expect(stranger.filter((l) => l === sessionPoll), "a stranger polls nothing").toHaveLength(0);
+    expect(
+      withAnAccount.filter((l) => l === sessionPoll),
+      "one session poll, not a loop",
+    ).toHaveLength(1);
+
+    expect(withAnAccount.filter((l) => l !== probe && l !== sessionPoll)).toEqual(stranger);
   });
 
   /**
@@ -1055,23 +1078,55 @@ describe("a signed-in reader who does not own it", () => {
 
 describe("the same address, as the owner", () => {
   /**
-   * **The control the acceptance criterion was written around**: `useJobs`
-   * polls `GET /api/jobs` for as long as its band is mounted, and it mounts
-   * inside `GlossaryBand`, `SummaryBand` and `IdeasBand`. So the sweep above,
-   * which opens every mode as a visitor and finds nothing outside
-   * `/api/public/`, is only worth anything if opening the *same* mode as the
-   * owner puts the poller in the trace. This is that half.
+   * **The control the acceptance criterion was written around**, and **the one
+   * assertion in this file that changed on purpose on 2026-09-01.**
    *
-   * It is a separate test from the one below because it needs a mode: the
-   * owner's default view is the table of contents, which mounts no band at
-   * all — so a control that only opened the default address would have proved
-   * the three hooks and said nothing whatever about `useJobs`.
+   * It used to read: the job poller runs for as long as its band is mounted, so
+   * the sweep above — every mode as a visitor, nothing outside `/api/public/` —
+   * is only worth anything if opening the *same* mode as the owner puts the
+   * poller in the trace.
+   *
+   * That is still true and still checked. What changed is why: the poller is
+   * not owned by the band any more. It is a tab-level engine started from
+   * `App` on `user.id` (src/web/jobEngine.ts), because `App()` is a chain of
+   * early returns and a route change therefore unmounted every surface that
+   * drove an ingest — so clicking from the shelf into an article stopped the
+   * import. **The owner now polls once wherever they are**, and the band is
+   * what keeps it on its idle cadence afterwards.
+   *
+   * The visitor half of this file is untouched and is not negotiable: nothing
+   * calls `start()` for a signed-out reader, so they poll nothing at all.
    */
   it("polls the job list from a band the visitor cannot open", async () => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     await open("?mode=glossary");
 
     expect(trace.map((r) => r.url)).toContain("/api/jobs");
+  });
+
+  /**
+   * **The owner asks for their queue on the plain reading view too**, with no
+   * band open at all.
+   *
+   * The comment above this pair used to say the owner's default view "mounts no
+   * band at all", and that has not been true for a while: `useArc` runs on
+   * every owned reading view and goes through `useStepJob`. So the job list was
+   * already being polled here before the engine existed — what the engine adds
+   * is the one reconciliation at session start, and that the *driving* no
+   * longer stops when this route unmounts.
+   *
+   * The cadence rule that keeps this from being an unbounded idle poll is
+   * pinned deterministically, under fake timers, in
+   * `tests/job-engine-drives-with-no-view.test.ts` — there are no fake timers in
+   * this file and a count here could only ever be a snapshot of one instant.
+   */
+  it("asks for its own queue on the default view, with no band open", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open();
+
+    expect(trace.filter((r) => r.url === "/api/jobs").length).toBeGreaterThan(0);
+    // And it is the owner's queue, not something about this article.
+    expect(trace.filter((r) => r.url.startsWith("/api/public/"))).toEqual([]);
   });
 
   it("mounts the private hooks and the record-open POST", async () => {

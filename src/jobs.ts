@@ -2103,10 +2103,13 @@ export async function cancelJob(id: string): Promise<Job | null> {
   if (job.status === "done" || job.status === "error" || job.status === "cancelled") return job;
 
   /* **One call, because the store decides which kind of stop this is.** A
-     queued job ends outright; a running one is asked, and reads the flag at its
-     next step boundary. It was two calls — cancel-if-idle, then ask — until GPT
-     Sol pointed out that a claimant releasing between them leaves the job
-     `queued` with `cancelling` set, which nothing ever moves on.
+     queued job ends outright — and since 2026-09-01 so does a running one whose
+     lease has lapsed, because the claimant aborts itself inside its own lease
+     and there is provably nobody left to read a flag. A running job with a live
+     claim is asked, and reads the flag at its next step boundary. It was two
+     calls — cancel-if-idle, then ask — until GPT Sol pointed out that a claimant
+     releasing between them leaves the job `queued` with `cancelling` set, which
+     nothing ever moves on.
 
      The local abort comes after, and only helps in the common case that the
      claimant is this very process — which is what makes Stop feel instant

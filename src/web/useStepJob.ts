@@ -28,7 +28,14 @@
  *
  * ## Who uses it
  *
- * All four: `useGlossary`, `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`.
+ * **Eight, and this line said four until 2026-09-01** — it named `useGlossary`,
+ * `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`, and `useSummaries` no
+ * longer exists. The list now is `useArc`, `useGlossary`, `useIdeas`,
+ * `useQuotes`, `useQuiz`, `useSketch`, `useTimeline` and `src/web/Tweets.tsx`.
+ * Called out rather than quietly corrected, because it is the same species of
+ * stale comment that cost a day in 2026-08-27's CPU work: a quantity a file
+ * asserts and nothing measures is a perfectly good reason to believe something
+ * false.
  *
  * The thread page came last, a day after the other three, because it had a
  * hundred lines of another session's uncommitted work in it on the day this was
@@ -126,12 +133,13 @@ function writesStep(job: Job, step: StepName): boolean {
  *   shelf when the mode was opened — so opening a band does not refetch once
  *   per historical job.
  *
- *   **The cost, said out loud:** `useJobs` polls the whole job list and never
- *   stops while the tab is visible, so sitting in one of these modes is one
- *   small request every eight seconds. What it buys is that a run started in
+ *   **The cost, said out loud:** subscribing puts the shared engine on its idle
+ *   cadence, so sitting in one of these modes is one small request every eight
+ *   seconds while the tab is visible. What it buys is that a run started in
  *   another tab or from the CLI shows up here as progress rather than as a
- *   button that appears to do nothing. If it ever matters, the fix is an idle
- *   switch in `useJobs`, not a private poller in each surface.
+ *   button that appears to do nothing. Closing the band stops the idle poll
+ *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
+ *   is actually running.
  */
 export function useStepJob(slug: string, step: StepName, onFinished: () => void): StepJob {
   const announce = useCallback(

@@ -177,6 +177,43 @@ function header(res: Response, name: string): string | null {
   }
 }
 
+/**
+ * A failure the server chose, carrying **the status it chose it with**.
+ *
+ * The message is unchanged — it is still the server's own sentence, and every
+ * existing `catch` that reads `.message` keeps working. What is new is that a
+ * caller can now tell *which* refusal it was without reading prose, which
+ * `src/web/jobEngine.ts` needs: the engine stops on a final 401 and keeps
+ * polling through a 500, and those two are the same string as far as
+ * `Error.message` goes.
+ *
+ * Added 2026-09-01 with the job engine. The alternative was inspecting
+ * `Response.status` at each call site before handing the body to `readJson`,
+ * which puts the same two lines back in every caller and gets forgotten in
+ * exactly one of them.
+ */
+export class HttpError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+/**
+ * The HTTP status a thrown error carries, or null if it carries none.
+ *
+ * **Duck-typed rather than `instanceof`**, and deliberately: a test that mocks
+ * `lib/api.js` supplies its own `readJson`, and a second copy of this module in
+ * the graph would make `instanceof HttpError` false for an object that is one
+ * in every way that matters. A number on `.status` is the whole contract.
+ */
+export function statusOf(err: unknown): number | null {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : null;
+}
+
 /** Log it, then say it in one sentence a reader can act on. */
 function errorFor(res: Response, text: string): Error {
   let said: unknown;
@@ -195,10 +232,11 @@ function errorFor(res: Response, text: string): Error {
 
   /* The server's own words when it gave them, and only then. See the header:
      an unparsed body is not ours to quote. */
-  if (typeof said === "string" && said.trim() !== "") return new Error(said);
+  if (typeof said === "string" && said.trim() !== "") return new HttpError(said, res.status);
 
-  return new Error(
+  return new HttpError(
     `${statusLabel(res)} — the server's reply wasn't JSON, so the browser console has more.`,
+    res.status,
   );
 }
 

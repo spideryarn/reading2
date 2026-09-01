@@ -21,6 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, Job } from "../src/types.js";
 import { SketchView } from "../src/web/SketchView.js";
+import { jobEngine } from "../src/web/jobEngine.js";
 
 const BLOCKS: Block[] = [
   { id: "spya-b0" as BlockId, tag: "p", kind: "text", text: "one two three", words: 3, html: "<p>one two three</p>", gistable: true },
@@ -117,6 +118,10 @@ beforeEach(() => {
   /* The job list is polled on a timer, so a test that wants to see the next
      poll has to move the clock rather than wait eight real seconds. */
   vi.useFakeTimers({ shouldAdvanceTime: true });
+  /* The poller is a tab-level singleton (src/web/jobEngine.ts) and survives an
+     unmount on purpose, so each case starts it over rather than inheriting the
+     previous one's list and its drive loop. */
+  jobEngine.reset();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);

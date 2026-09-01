@@ -15,7 +15,7 @@ import type {
   GlossaryEntry,
   Idea,
   Quote,
-  ReviewStance,
+  RememberStance,
   ThreadKind,
 } from "../types.js";
 import { Library } from "./Library.js";
@@ -26,6 +26,7 @@ import { AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
+import { jobEngine } from "./jobEngine.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
@@ -35,7 +36,7 @@ import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
 import { TimelinePanel } from "./TimelinePanel.js";
 import { useTimeline } from "./useTimeline.js";
-import { QuizPanel, ReviewSubModeToggle } from "./QuizPanel.js";
+import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
@@ -110,7 +111,7 @@ import {
   refereeParam,
   REFEREE_VIEWS,
   type RefereeView,
-  reviewParam,
+  rememberParam,
   barParam,
   eventParam,
   ideaParam,
@@ -233,6 +234,30 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
 export function App() {
   const route = useRoute();
   const { user, loading } = useSession();
+
+  /**
+   * **The one thing that keeps an import moving while the reader reads.**
+   *
+   * On Vercel the browser is the worker, and until 2026-09-01 the loop that
+   * drove it lived in `useJobs` — mounted from the shelf, the add page and the
+   * reading-view bands. Every branch below is an early `return`, so there is no
+   * persistent shell component at all and a route change unmounted all three:
+   * paste a URL, click into the article to read while you wait, and the import
+   * stopped. It is a tab-level service now (src/web/jobEngine.ts) and this is
+   * where its session begins and ends.
+   *
+   * **Keyed on the id, not on a truthy user.** A public job carries no
+   * `ownerId`, so the engine cannot work out for itself that the list it holds
+   * belongs to the reader who just signed out; the key is the only thing that
+   * knows. The cleanup is not a Stop — the durable job is left exactly as it
+   * is, to be reconciled when its owner comes back.
+   */
+  const readerId = user?.id ?? null;
+  useEffect(() => {
+    if (!readerId) return;
+    jobEngine.start(readerId);
+    return () => jobEngine.stop();
+  }, [readerId]);
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the
@@ -829,8 +854,8 @@ function OwnedReader({
    * why it has to — but behind the list, never in front of it.
    *
    * `GlossaryBand` still exists for the reason it always did, which was never
-   * the opening fetch: `useJobs` polls for ever, and a reader who never opens
-   * the band should not pay for a poller.
+   * the opening fetch: subscribing to the job engine puts it on its idle
+   * cadence, and a reader who never opens the band should not pay for that.
    */
   const glossary = useGlossaryRead(slug);
   /**
@@ -1434,22 +1459,23 @@ function Reader({
        resolve to `null` — but that is an argument from two other pieces of
        state staying empty, and this is an argument from the branch not
        existing. The floating chat dialog fetches a conversation on mount. */
-    !owner || mode === "chat" || mode === "review"
+    !owner || mode === "chat" || mode === "remember"
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
            `?thread=` survives leaving the mode, so a pasted
-           `?mode=toc&thread=<a review>` used to mount this dialog over a review
-           conversation — chat's UI, chat's composer, no stance picker, and the
+           `?mode=toc&thread=<a Remember thread>` used to mount this dialog over
+           a Remember conversation — chat's UI, chat's composer, no stance picker, and the
            next question answered with chat's prompt. Nothing on screen would
            have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
-           exists for; a review with no matching summary simply opens nothing,
+           exists for; a Remember thread with no matching summary simply opens
+           nothing,
            which is the same thing a stale id already did. GPT Sol's review of
            docs/plans/260827ah-review-mode.md, finding 7. */
         /* **A positive test, not a negative one.** `?.kind !== "review"` was
            the first version and had its default backwards: an *unknown* thread
            — summaries not fetched yet, or a stale id — came out as a chat, so a
-           review URL opened the floating chat dialog for a moment on every
+           Remember URL opened the floating chat dialog for a moment on every
            load, and a missing thread sat on "Starting…" forever. Asking for
            `=== "chat"` means the overlay opens only for a thread we can see is
            one. GPT Sol's review of the built code, finding 3. */
@@ -1482,8 +1508,8 @@ function Reader({
    * why it has to — but behind the list, never in front of it.
    *
    * `GlossaryBand` still exists for the reason it always did, which was never
-   * the opening fetch: `useJobs` polls for ever, and a reader who never opens
-   * the band should not pay for a poller.
+   * the opening fetch: subscribing to the job engine puts it on its idle
+   * cadence, and a reader who never opens the band should not pay for that.
    */
   const glossaryRead = owner?.glossary ?? null;
   /* **A visitor's terms are underlined too**, and that is the whole of what
@@ -2426,12 +2452,12 @@ function Reader({
           onMode={setMode}
         />
       )}
-      {/* **Review is two bands behind one mode**, and the choice between them
-          is `?review=`. The wrapper exists so that the parameter and its
+      {/* **Remember is two bands behind one mode**, and the choice between them
+          is `?remember=`. The wrapper exists so that the parameter and its
           collision with `?thread=` are decided in one place rather than in each
-          half — see `ReviewBand`. */}
-      {owner && mode === "review" && (
-        <ReviewBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
+          half — see `RememberBand`. */}
+      {owner && mode === "remember" && (
+        <RememberBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
       )}
       {/* `glossaryRead &&` rather than `owner &&`, and it is the same test: the
           read is non-null exactly when the article is yours. Written this way
@@ -3030,39 +3056,39 @@ function TimelineBand({
 }
 
 /**
- * **Review's two sub-modes, and the one place their URL rules live.**
+ * **Remember's two sub-modes, and the one place their URL rules live.**
  *
- * Review is `recall` — the reader says what they took from the article and the
+ * Remember is `recall` — the reader says what they took from the article and the
  * model shows them where that comes apart — or `quiz`, where the questions come
- * from the article instead. One mode, two bands, and `?review=` says which.
+ * from the article instead. One mode, two bands, and `?remember=` says which.
  * docs/plans/260831al-review-quiz-sub-mode.md.
  *
  * ## Why this is a component rather than two conditions up in `Reader`
  *
  * Two reasons, and the second is the one that matters.
  *
- * The cheap one: `?review=` is meaningless outside review mode, and reading it
+ * The cheap one: `?remember=` is meaningless outside Remember mode, and reading it
  * in `Reader` would put a parameter subscription on every render of the reading
  * view for a value only this subtree uses — the same argument `ConversationBand`
  * makes about `?thread=`.
  *
- * The real one: **`?review=` and `?thread=` collide, and the rules are
- * navigations rather than parsing.** `?mode=review&review=quiz&thread=<id>`
- * would otherwise leave a review conversation selected and invisible. Both
+ * The real one: **`?remember=` and `?thread=` collide, and the rules are
+ * navigations rather than parsing.** `?mode=remember&remember=quiz&thread=<id>`
+ * would otherwise leave a Remember conversation selected and invisible. Both
  * parameters are set through one `useQueryStates`, so switching sub-mode is one
  * history entry rather than two — two would put a half-state on the Back stack,
- * which is the bug review-mode.md already records for opening a thread of the
+ * which is the bug remember-mode.md already records for opening a thread of the
  * other kind.
  *
  * Three rules, and all three are here:
  *
- * 1. **switching to Quiz sets `review=quiz` and clears `thread`, in one
+ * 1. **switching to Quiz sets `remember=quiz` and clears `thread`, in one
  *    navigation** — pushed, because switching sub-mode is a deliberate act on
  *    the view and Back should undo it;
  * 2. **a pasted URL carrying both: Quiz wins**, and `thread` is dropped with a
  *    *replace* — a push would put the broken combination one Back press away
  *    from the reader we have just rescued from it;
- * 3. **opening a review conversation sets `review=recall` and `thread=<id>`,
+ * 3. **opening a Remember conversation sets `remember=recall` and `thread=<id>`,
  *    also in one** — that one is in `ConversationBand`'s `onThread`, because it
  *    is the same navigation that already moves `?mode=`, and splitting it would
  *    be the two-entry bug again.
@@ -3076,7 +3102,7 @@ function TimelineBand({
  * why the two halves are rendered as alternatives rather than one being hidden
  * with CSS — a hidden band is a mounted band.
  */
-function ReviewBand({
+export function RememberBand({
   slug,
   blocks,
   onJump,
@@ -3087,8 +3113,8 @@ function ReviewBand({
   onJump(id: BlockId): void;
   onMode(next: Mode): void;
 }) {
-  const [{ review, thread }, setBoth] = useQueryStates({
-    review: reviewParam,
+  const [{ remember, thread }, setBoth] = useQueryStates({
+    remember: rememberParam,
     thread: threadParam,
   });
 
@@ -3096,14 +3122,14 @@ function ReviewBand({
      because writing to the URL during render is what React refuses. It settles
      on the first commit and then never fires again, since `thread` is null. */
   useEffect(() => {
-    if (review === "quiz" && thread !== null) {
+    if (remember === "quiz" && thread !== null) {
       void setBoth({ thread: null }, { history: "replace" });
     }
-  }, [review, thread, setBoth]);
+  }, [remember, thread, setBoth]);
 
   const toggle = (
-    <ReviewSubModeToggle
-      value={review}
+    <RememberSubModeToggle
+      value={remember}
       onChange={(next) =>
         /* Rule 1. Both keys in one call, so this is one history entry — and
            `thread: null` on the way to Quiz rather than only on arrival, so
@@ -3111,23 +3137,26 @@ function ReviewBand({
            leaves `thread` alone: the reader is going back to a list, and the
            conversation they last had open is the right thing to find. */
         void setBoth(
-          next === "quiz" ? { review: next, thread: null } : { review: next },
+          next === "quiz" ? { remember: next, thread: null } : { remember: next },
           { history: "push" },
         )
       }
     />
   );
 
-  if (review === "quiz") return <QuizSubBand slug={slug} subMode={toggle} />;
+  if (remember === "quiz") return <QuizSubBand slug={slug} subMode={toggle} />;
   return (
     <ConversationBand
       /* Keyed so that leaving Quiz and coming back starts clean rather than
          carrying the previous visit's focus nonce and stance — the same reason
          `Reader` keys this component on `mode`. */
-      key="review-recall"
+      key="remember-recall"
       slug={slug}
       blocks={blocks}
       onJump={onJump}
+      /* The **persisted thread kind**, which is still spelled `review` while
+         the `chat_threads.kind` CHECK constraint says so — src/types.ts §
+         ThreadKind. Stage C renames it with the migration. */
       kind="review"
       onMode={onMode}
       subMode={toggle}
@@ -3139,10 +3168,11 @@ function ReviewBand({
  * The quiz, and the fetch and the poller that belong to it.
  *
  * A component of its own for `GlossaryBand`'s surviving reason rather than
- * `ConversationBand`'s: **`useStepJob` polls the job list for ever**, which is
- * one small request every eight seconds for the life of the band. A reader who
- * never opens Quiz should not pay for a poller, and hooks cannot be called
- * conditionally, so the condition has to be a component boundary.
+ * `ConversationBand`'s: **`useStepJob` subscribes to the job engine**, which
+ * holds it on its idle cadence — one small request every eight seconds for the
+ * life of the band. A reader who never opens Quiz should not pay for that, and
+ * hooks cannot be called conditionally, so the condition has to be a component
+ * boundary.
  */
 function QuizSubBand({ slug, subMode }: { slug: string; subMode: React.ReactNode }) {
   const owner = useQuiz(slug);
@@ -3175,7 +3205,7 @@ export function ConversationBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
   /**
-   * Which mode mounted this — chat, or review.
+   * Which mode mounted this — chat, or Remember.
    *
    * **One component for both, and not two.** Everything in here is the same for
    * either: one `useChat(slug)`, one `?thread=`, one focus nonce, one
@@ -3187,15 +3217,16 @@ export function ConversationBand({
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Quiz control**, when this band is the Recall half of Review.
-   * Absent in chat mode. Built by `ReviewBand` above and passed straight
+   * **The Recall | Quiz control**, when this band is the Recall half of
+   * Remember. Absent in chat mode. Built by `RememberBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
    */
   subMode?: React.ReactNode;
   /**
    * Switch mode, for when the reader opens a thread of the *other* kind.
    *
-   * The list is shared (Greg's call, 2026-08-27), so a review is reachable from
+   * The list is shared (Greg's call, 2026-08-27), so a Remember thread is
+   * reachable from
    * chat mode and vice versa. Opening one has to move `?mode=` as well as
    * `?thread=` or the conversation would be answered with the wrong prompt.
    */
@@ -3220,9 +3251,9 @@ export function ConversationBand({
   } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
   /* Write-only, for rule 3 in `onThread` below — the value itself is
-     `ReviewBand`'s to read. A setter with no reader still subscribes, which is
+     `RememberBand`'s to read. A setter with no reader still subscribes, which is
      the cost, and it is paid only by a band the reader has opened. */
-  const [, setReview] = useQueryState("review", reviewParam);
+  const [, setRemember] = useQueryState("remember", rememberParam);
 
   /**
    * The conversations as they are **now**, for a callback that outlives a render.
@@ -3309,7 +3340,8 @@ export function ConversationBand({
    * How many conversations **of this kind** the reader has.
    *
    * The list is shared, so `threads.length` is the wrong count for the latch
-   * below: a reader with three chats and no reviews would press Review and be
+   * below: a reader with three chats and no Remember threads would press
+   * Remember and be
    * shown three chats, which is not what "start a new one if there are none"
    * ever meant. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 7.
    */
@@ -3383,7 +3415,7 @@ export function ConversationBand({
   const at = new URLSearchParams(location.search).get("at");
 
   /**
-   * The stance the next review answer will be asked for.
+   * The stance the next Remember answer will be asked for.
    *
    * **Not in the URL**, for the rule url-state.md keeps: it changes nothing on
    * screen, only what the next answer is asked for. The closest existing thing
@@ -3396,12 +3428,12 @@ export function ConversationBand({
    * the reader has touched the control it is theirs, and reopening a thread
    * does not overrule them mid-session.
    */
-  const [picked, setPicked] = useState<ReviewStance | null>(null);
+  const [picked, setPicked] = useState<RememberStance | null>(null);
   const open = threads.find((t) => t.id === thread);
   const lastStance = [...(open?.messages ?? [])]
     .reverse()
     .find((m) => m.role === "assistant" && m.stance)?.stance;
-  const stance: ReviewStance = picked ?? lastStance ?? "balanced";
+  const stance: RememberStance = picked ?? lastStance ?? "balanced";
 
   return (
     <ChatPanel
@@ -3419,26 +3451,30 @@ export function ConversationBand({
        * Open a conversation — and follow it into its own mode if it is not the
        * one we are in.
        *
-       * The list is shared, so a `review` row is pressable from chat mode.
-       * Moving `?thread=` without `?mode=` would leave a review open in a panel
+       * The list is shared, so a Remember row is pressable from chat mode.
+       * Moving `?thread=` without `?mode=` would leave one open in a panel
        * that asks with chat's prompt and shows no stance picker, and the
        * transcript would give no sign why. Both setters fire in the same event,
        * so they land in one navigation rather than putting a chat-mode-plus-
-       * review-thread entry on the Back stack in between.
+       * Remember-thread entry on the Back stack in between.
        */
       onThread={(id) => {
         const target = id ? threads.find((t) => t.id === id) : null;
-        if (target && target.kind !== kind) onMode(target.kind === "review" ? "review" : "chat");
-        /* **Rule 3**: opening a review conversation lands on the Recall half,
+        /* `target.kind === "review"` is the *thread kind*, which Stage B
+           deliberately leaves spelled the old way (src/types.ts § ThreadKind);
+           the mode it maps to is `remember`. Stage C closes that gap.
+           docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+        if (target && target.kind !== kind) onMode(target.kind === "review" ? "remember" : "chat");
+        /* **Rule 3**: opening a Remember conversation lands on the Recall half,
            because a conversation is what Recall is and Quiz has nowhere to put
            one. Set unconditionally rather than only when crossing from chat,
-           so a stale `?review=quiz` on the URL cannot survive a thread being
+           so a stale `?remember=quiz` on the URL cannot survive a thread being
            opened from anywhere. nuqs batches every setter fired in one event
            into a single navigation, which is what the two lines above already
            rely on — so this is still one entry on the Back stack, not three.
-           `reviewParam` defaults to `recall`, so this writes nothing to the URL
+           `rememberParam` defaults to `recall`, so this writes nothing to the URL
            in the ordinary case. */
-        if (!target || target.kind === "review") void setReview("recall");
+        if (!target || target.kind === "review") void setRemember("recall");
         void setThread(id);
       }}
       onNew={startNew}
@@ -3530,10 +3566,11 @@ export function ConversationBand({
  * when the dotted underlines became a standing property of the article and the
  * list had to be fetched for everyone anyway.
  *
- * What survives is the other half: **`useJobs` polls the job list for ever**,
- * and that is a request every eight seconds for the life of the panel. A reader
- * who never opens the band should not pay for a poller. Hooks cannot be called
- * conditionally, so the condition has to be a component boundary — this one.
+ * What survives is the other half: **a mounted `useJobs` holds the job engine
+ * on its idle cadence**, and that is a request every eight seconds for the life
+ * of the panel. A reader who never opens the band should not pay for it. Hooks
+ * cannot be called conditionally, so the condition has to be a component
+ * boundary — this one.
  * The band's own mount revalidation rides on the same boundary.
  *
  * `?term=` and `?sort=` live here too, for the same reason: both are

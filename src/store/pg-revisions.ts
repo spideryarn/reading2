@@ -1109,10 +1109,10 @@ export async function finishStepRun(
 
   /* **The job's own fence, before the row's.** The step row only knows which
      token wrote it; it cannot know whether that token is still the live claim.
-     `settleExpired` clears a lapsed job's token and marks it errored without
-     touching its step runs, so a swept worker that keeps going finds its row
-     still `running/A`, matches on both of the conditions below, and commits
-     `done` for a job that has already failed.
+     `settleExpired` clears a lapsed job's token and settles it — errored, or
+     cancelled if Stop had been pressed — without touching its step runs, so a
+     swept worker that keeps going finds its row still `running/A`, matches on
+     both of the conditions below, and commits `done` for a job that is over.
 
      Found in review of the built code, which is why this repo weights that
      above a plan review: the two row conditions look complete on their own.
@@ -1397,6 +1397,53 @@ export async function publishRevisionIn(
     throw new PublishRefused(slug, [`revision ${revisionId} belongs to another article`]);
   if (draft.status !== "draft")
     throw new PublishRefused(slug, [`revision ${revisionId} is already ${draft.status}`]);
+
+  /**
+   * **A draft may only replace the revision it was copied from.**
+   *
+   * Both sides are read inside this transaction and under the article lock
+   * taken above: `based_on_revision_id` is written once by `beginDraftIn` and
+   * never changed, and `article.currentRevisionId` is the pointer the statement
+   * at the bottom of this function is about to move. Nothing can publish
+   * between the two reads without taking the same lock, so a mismatch means one
+   * thing only — something published while this draft was being written, and
+   * moving the pointer now would discard it.
+   *
+   * `null === null` is the article's **first** publication: copied from nothing,
+   * over an article serving nothing. A `null` base against a live pointer is
+   * refused, and that covers the other thing `null` means — a draft minted
+   * before the column existed (drizzle/0047), whose lineage nobody recorded.
+   * Fail-closed, at the cost of one re-run of whatever was in flight at that
+   * deploy. See `basedOnRevisionId` in src/db/schema.ts.
+   *
+   * **Here, rather than in the caller, and that is the whole point.** Until
+   * 2026-09-01 this comparison lived in `pgStoreSession.settleJob`, one
+   * statement after `publishRevisionIn` returned — so it held for the pipeline
+   * and for nobody else. Standalone `publishRevision` moved the pointer without
+   * ever reading the column, and a script, `revisionLifecycle`
+   * (src/store/revisions.ts) or the next caller nobody has written yet buried a
+   * newer publication and reported success. A guard that lives in one caller is
+   * a guard the next caller forgets. GPT Sol, finding 1 of
+   * docs/plans/260901d-stage3-code-review-sol.md;
+   * tests/pg-session-exact-base.test.ts case 5 is the red one.
+   *
+   * **There is no opt-out, and that is a decision rather than an omission** —
+   * see `PublishRevisionOptions`.
+   *
+   * Ids only, no article text (docs/project/logging.md), and `PublishRefused`
+   * rather than a plain `Error` so `guardDbStore` keeps the 409 instead of
+   * scrubbing it into "this app asked its database for something it would not
+   * do".
+   */
+  if (draft.basedOnRevisionId !== article.currentRevisionId) {
+    throw new PublishRefused(slug, [
+      `this draft (${revisionId}) was copied from revision ` +
+        `${draft.basedOnRevisionId ?? "none"}, but the article is now serving ` +
+        `${article.currentRevisionId ?? "none"} — something else published while this draft was ` +
+        "being written, and publishing now would discard it. Nothing was published; " +
+        "start again from what is there.",
+    ]);
+  }
 
   const blocks = await storedBlocks(tx, revisionId);
   const tree = draft.tree as Tree | null;

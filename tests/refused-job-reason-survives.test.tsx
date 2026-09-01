@@ -81,6 +81,7 @@ vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { Tweets } = await import("../src/web/Tweets.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 
 /** Enough article for the page to render its head. */
 const ARTICLE = {
@@ -116,6 +117,12 @@ function Harness(): ReactElement {
 }
 
 beforeEach(() => {
+  /* **The poller is a tab-level singleton since 2026-09-01**
+     (src/web/jobEngine.ts), so it outlives a test the way it outlives a route.
+     Every case below counts polls exactly — `toBe(1)`, `toBe(2)` — and without
+     this a timer armed by the previous case contributes one of them, which is
+     a failure that reads as a race in the code under test. */
+  jobEngine.reset();
   sent = [];
   heldPolls = [];
   ideas = null;
@@ -155,6 +162,7 @@ afterEach(async () => {
   for (const go of heldPolls.splice(0)) go();
   await act(async () => root.unmount());
   host.remove();
+  jobEngine.reset();
   vi.unstubAllGlobals();
 });
 

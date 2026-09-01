@@ -4,11 +4,19 @@
  *
  * The complaint that started this was CPU: the reading view was busy while
  * sitting still, and busiest of all in a background tab, where by definition
- * nothing is being read. The cause is `useJobs` — it polls `/api/jobs` every
- * eight seconds, reschedules from each response, and had no idea whether
+ * nothing is being read. The cause was the job poller — it asked `/api/jobs`
+ * every eight seconds, rescheduled from each response, and had no idea whether
  * anybody was there. A tab left open overnight made about nine thousand
  * requests and re-rendered a React tree nine thousand times to be told, each
  * time, that nothing had changed.
+ *
+ * **The poller moved out of `useJobs` on 2026-09-01** and into the tab-level
+ * engine (src/web/jobEngine.ts), so what this file drives is a mounted
+ * subscriber rather than a mounted poller. Every assertion below survived the
+ * move unchanged, which is the point of keeping them: the visibility contract
+ * is about the tab, and the tab is what now owns it. What did change is the
+ * bookkeeping — the engine is a module singleton, so each test resets it, and
+ * `driving` belongs to the engine rather than to this module.
  *
  * ## Why a test rather than a measurement
  *
@@ -52,11 +60,11 @@ let advanceFailures = 0;
 
 /** The id of the job in `queue`, unique per test.
  *
- * `driving` in useJobs.ts is module scope — deliberately, so that two mounted
- * copies of the hook do not both drive the same job — and this module is
- * imported once for the whole file. A shared id would let one test's driver
- * still hold the lock when the next test starts, and that test would then see
- * no advances for a reason that has nothing to do with what it is asserting. */
+ * The engine keeps one `driving` set for the tab — deliberately, so that two
+ * mounted subscribers do not both drive the same job — and this module is
+ * imported once for the whole file. `reset()` in `beforeEach` fences the
+ * previous test's loops, and a fresh id on top of it means a straggler can
+ * never be mistaken for this test's driver. */
 let jobId = "j0";
 let jobCounter = 0;
 
@@ -100,9 +108,15 @@ vi.mock("../src/web/lib/api.js", () => ({
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return text === "" ? {} : JSON.parse(text);
   },
+  /* The engine asks this of every rejection so it can stop on a final 401 and
+     keep going through a 500. The stand-in `readJson` above throws a plain
+     `Error`, so the honest answer here is "no status", which is exactly the
+     path a 500 takes. */
+  statusOf: () => null,
 }));
 
 const { useJobs } = await import("../src/web/useJobs.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -152,6 +166,10 @@ function setVisibility(state: "visible" | "hidden"): void {
 const A_MINUTE = 60_000;
 
 beforeEach(() => {
+  /* The engine outlives a mount by design, so it outlives a test too: without
+     this, one case's armed timer and running drive loop are the next case's
+     mystery requests. */
+  jobEngine.reset();
   requests = [];
   queue = [];
   advanceFailures = 0;
@@ -167,6 +185,7 @@ afterEach(async () => {
   host?.remove();
   root = null;
   host = null;
+  jobEngine.reset();
   vi.useRealTimers();
 });
 

@@ -97,9 +97,9 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
  * A private owner is not enough on its own, because the two rules that matter
  * most here are not scoped to an owner at all: `jobs_only_one_running` is a
  * unique index on `(true)` over every running row in the table, and
- * `settleExpired` sweeps the whole table and returns the ids this file asserts
- * exactly. So a second copy holding a claim makes this one's `claimed` come
- * back `busy`, and its expiries are added to this one's total. Measured with
+ * `settleExpired` sweeps the whole table and returns the settlements this file
+ * asserts exactly. So a second copy holding a claim makes this one's `claimed`
+ * come back `busy`, and its expiries are added to this one's total. Measured with
  * the lock taken out and the owner already unique per run: two copies at once,
  * 6 and 9 of the 21 Postgres cases failed. The filesystem side passed both
  * times — its running slot is a variable in one process.

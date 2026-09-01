@@ -36,24 +36,33 @@ queue that has no manager, when the missing thing is a driver.
 | 3 | Stop pressed on state 2 | `cancelling=true` is written and nobody ever reads it. Button says "Stopping…", disabled, same 12.67 min — then reports **interrupted**, not cancelled | Reader tries to fix state 2 |
 | 4 | Any of the above, and the reader is reading | **The import stops.** See below | Ordinary navigation |
 
-### State 4 is the one nobody had noticed, and it is not an edge case
+### State 4, and the correction that came out of building it
 
-`useJobs` is mounted in exactly three places — [`AddPage.tsx`](../../src/web/AddPage.tsx),
-[`Library.tsx`](../../src/web/Library.tsx), and `useStepJob` for the tweets panel. `drive()`'s loop
-is `while (alive())` and `alive` goes false on unmount.
+**What this plan said, and what turned out to be true.** The plan was written on the finding that
+`useJobs` is mounted in only three places — `AddPage.tsx`, `Library.tsx`, and `useStepJob` — and
+that since `App()` is a chain of early returns, navigating from the shelf into an article unmounts
+the only thing calling `/advance`. The headline was: *paste a URL, click into an article to read
+while you wait, and the import stops.*
 
-And the unmount is not conditional. **`App()` is a chain of early returns, so it returns a different
-root per route and there is no persistent shell component at all** — every route change unmounts
-everything, which is why no amount of moving the hook between page components fixes this. Fable's
-correction; the first draft of this plan said "`App.tsx` returns `<Library />` or `<Reader />`",
-which is true and understates it.
+**That headline was wrong, and the implementer found it.** `useArc` runs on every owned reading
+view ([`App.tsx:868`](../../src/web/App.tsx)) and goes through `useStepJob`, which mounts `useJobs`.
+So an owned reading view *does* poll and *does* drive. Navigating shelf → article ends the old
+`drive` loop, and the reading view's own next poll starts a new one — a gap of about a second, not a
+stall.
 
-**So: paste a URL, then click into an article to read while you wait, and the import stops.** It
-resumes when you go back to the shelf. Same for `/profile`, `/design`, `/admin`. This is not a crash
-path; it is what a reader does.
+**What is actually broken, then:**
 
-Two things follow. It is the largest single cause of "my import is stuck" we have, and it is invisible
-in testing, because a developer watching an ingest is by definition on the page that drives it.
+- **Pages that mount no `useJobs` at all**: `/profile`, `/design`, `/admin`, and the landing page.
+  Paste a URL, go to your profile, and the import really does stop until you come back.
+- **The structural fault, which is the reason to fix it properly.** Whether an ingest keeps running
+  depended on whether the page you happened to navigate to happened to mount an unrelated hook —
+  `useArc`, which exists for the arc feature and has nothing to do with the queue. Delete or
+  condition that hook for any reason and the ingest silently becomes route-dependent again, with no
+  test anywhere that would notice. **That** is the bug worth the refactor: not that driving was
+  broken, but that it was an accident.
+
+The fix is unchanged and so is its value. The diagnosis is recorded wrong-then-right rather than
+quietly corrected, because the wrong version is what the first two reviews were argued against.
 
 ## Answers to the two ideas in the question
 
@@ -94,12 +103,12 @@ branch. The reason that survives is the one Sol gives: **the engine is an impera
 service, not React view state.** A provider whose only consumer is `useJobs` buys dependency
 injection that the factory already buys.
 
-- [ ] **Decide the shape first, then write the red test.** The original checkbox — "mount the
+- [x] **Decide the shape first, then write the red test.** The original checkbox — "mount the
       reading view and assert `/advance` is still called" — proves the wrong thing: after the fix
       *nothing route-scoped* drives, so a reading-view test is green before and after.
-- [ ] **`src/web/jobEngine.ts`**: factory + singleton. Snapshot carries at least `jobs`, `loaded`,
+- [x] **`src/web/jobEngine.ts`**: factory + singleton. Snapshot carries at least `jobs`, `loaded`,
       poll failure, and per-job driver health.
-- [ ] **Say who owns `error`.** Today it deliberately conflates poll and action failures, and
+- [x] **Say who owns `error`.** Today it deliberately conflates poll and action failures, and
       `lastFailure` survives a successful poll. "Actions stay in the hook" does not answer what a
       successful *engine* poll does to a hook-local action error. Write the rule down before
       building: `error` is engine state meaning *is anything wrong right now*; `lastFailure` stays a
@@ -113,12 +122,12 @@ not sufficient**, and this is the one place the refactor can introduce a bug the
 not have: the engine can see a completion **between a subscriber's render and its subscription
 effect**, and a Set seeded in the effect would baseline that real completion away as history.
 
-- [ ] A **monotonic completion-event sequence** on the engine. Each subscriber captures the current
+- [x] A **monotonic completion-event sequence** on the engine. Each subscriber captures the current
       sequence during its **first render**, then consumes events past that cursor. Events are kept
       only long enough to be consumed.
-- [ ] The contract, in one sentence: *notify this subscriber once when a job transitions to `done`
+- [x] The contract, in one sentence: *notify this subscriber once when a job transitions to `done`
       after that subscriber began observing; never announce a job already done when it arrived.*
-- [ ] The pinning test arranges exactly this, and it is Sol's sequence:
+- [x] The pinning test arranges exactly this, and it is Sol's sequence:
       1. snapshot already contains done `A` and running `B`;
       2. subscriber 1 renders and captures its cursor;
       3. `B` becomes done **before** subscriber 1's effect is flushed;
@@ -126,7 +135,7 @@ effect**, and a Set seeded in the effect would baseline that real completion awa
       5. subscriber 2 mounts after `B` is done and gets neither;
       6. `C` goes running → done; both get `C` exactly once;
       7. an identical repeated snapshot emits nothing.
-- [ ] This touches **every** `useStepJob` caller, not the four the stale comment in
+- [x] This touches **every** `useStepJob` caller, not the four the stale comment in
       `useStepJob.ts` names: `useArc`, `useGlossary`, `useIdeas`, `useQuotes`, `useSketch`,
       `useTimeline`, `useQuiz` and `Tweets.tsx`, plus `Library`'s `reload`. Fix that comment while
       you are there — it is the same species of stale comment `useJobs.ts` already calls out about
@@ -134,14 +143,14 @@ effect**, and a Set seeded in the effect would baseline that real completion awa
 
 #### When the engine polls, and the request budget
 
-- [ ] **`start()` / `stop()` from a `useEffect` in `App.tsx` keyed on `user.id`** — not on a truthy
+- [x] **`start()` / `stop()` from a `useEffect` in `App.tsx` keyed on `user.id`** — not on a truthy
       user. `start()` must be idempotent.
-- [ ] **A generation/epoch**, so a response in flight from before a `stop()` cannot write into a
+- [x] **A generation/epoch**, so a response in flight from before a `stop()` cannot write into a
       later session's snapshot. Clear snapshot, errors, completion history, timers and the
       visibility listener when identity changes. Public jobs omit `ownerId`, so the engine cannot
       work out for itself that its cached snapshot belongs to the previous reader.
-- [ ] **Test React Strict Mode's start → stop → start with a deferred old poll.**
-- [ ] **This changes the network shape for owners, deliberately, and one existing test asserts the
+- [x] **Test React Strict Mode's start → stop → start with a deferred old poll.**
+- [x] **This changes the network shape for owners, deliberately, and one existing test asserts the
       old shape.** `tests/public-network-trace.test.tsx` pins that a signed-out visitor makes no
       `GET /api/jobs` and an owner *with a band open* does. The visitor half must stay true and is
       non-negotiable. The owner half changes, because the point of the engine is that it does not
@@ -153,15 +162,15 @@ effect**, and a Set seeded in the effect would baseline that real completion awa
 
 #### 401 and sign-out
 
-- [ ] **Stop only on the *final* 401.** `apiFetch` already refreshes and retries once, so a first
+- [x] **Stop only on the *final* 401.** `apiFetch` already refreshes and retries once, so a first
       401 is not news. Do not sign the reader out: pause every poll and drive loop, keep a visible
       authentication failure, and resume on a new session/token event, a reload, or an explicit
       successful recovery.
-- [ ] **The engine cannot identify a 401 today.** `readJson` throws an ordinary `Error` carrying no
+- [x] **The engine cannot identify a 401 today.** `readJson` throws an ordinary `Error` carrying no
       status, and parsing prose for it is not acceptable. Inspect `Response.status` before
       `readJson`, or introduce a typed HTTP error — the latter is the long-term-best of the two and
       is small.
-- [ ] **Sign-out is not Stop.** Stop scheduling, generation-fence anything in flight, clear the old
+- [x] **Sign-out is not Stop.** Stop scheduling, generation-fence anything in flight, clear the old
       reader's snapshot at once — and leave the durable job alone. The reader did not cancel it; it
       is reconciled when its owner returns. An `/advance` already admitted may finish.
 
@@ -169,62 +178,148 @@ effect**, and a Set seeded in the effect would baseline that real completion awa
 
 Each of these is asserted by a comment in `useJobs.ts` and each was a bug before it was a rule.
 
-- [ ] Pausing the poll must not pause `drive`.
-- [ ] **A hidden `poke` still makes exactly one reconciliation request.** Sol: this is the one most
+- [x] Pausing the poll must not pause `drive`.
+- [x] **A hidden `poke` still makes exactly one reconciliation request.** Sol: this is the one most
       likely to be lost, because the conventional refactor puts `if (!visible()) return` at the top
       of the poll and silently eats it — **and the existing suite does not prove it.** New test:
       visible baseline poll → hide → fire an action that pokes → observe exactly one `GET
       /api/jobs` → advance well past `IDLE_MS` → observe no second poll → if that reconciliation
       found a job, observe `/advance` continuing while hidden.
-- [ ] `visibilitychange` polls at once on return.
-- [ ] `done` is the only thing that ends a drive loop; an error does not — it waits and retries
+- [x] `visibilitychange` polls at once on return.
+- [x] `done` is the only thing that ends a drive loop; an error does not — it waits and retries
       inside the loop, because the thing that used to restart it was the thing that got paused.
-- [ ] Two subscribers still produce one poll. Keep that test after the refactor.
-- [ ] `sameJobs` still suppresses identical snapshots.
-- [ ] **`drive`'s `alive()` parameter should go.** It exists to stop a loop when a *mount* ends, and
+- [x] Two subscribers still produce one poll. Keep that test after the refactor.
+- [x] `sameJobs` still suppresses identical snapshots.
+- [x] **`drive`'s `alive()` parameter should go.** It exists to stop a loop when a *mount* ends, and
       after this there is no mount to end. Delete it deliberately rather than leaving it as a
       always-true vestige.
-- [ ] **Tests that must be rewritten, not merely re-run**: `tests/idle-work.test.ts` and
+- [x] **Tests that must be rewritten, not merely re-run**: `tests/idle-work.test.ts` and
       `tests/refused-job-reason-survives.test.tsx` both assume mounting `useJobs` starts a poller
       and assert exact poll counts. `tests/sketch-view-drawing.test.tsx` depends on the real drive
       loop under fake timers. The five files that `vi.mock` the whole hook are the safety net that
       proves the external contract survived — keep `useJobs(onFinished?) => UseJobs` unchanged.
-- [ ] **A test with zero components mounted**: jobs advance with no React at all. That is the proof
+- [x] **A test with zero components mounted**: jobs advance with no React at all. That is the proof
       the engine is really route-independent, and it is only writable because of the factory.
 
+
+#### What actually landed, 2026-09-01
+
+Built by Fable, tests first and each one watched go red before it went green.
+
+- **[`src/web/jobEngine.ts`](../../src/web/jobEngine.ts)** — `createJobEngine(deps)` plus the
+  exported `jobEngine`. Deps are `listJobs`, `advance`, `visible`, `watchVisibility`, so every test
+  below runs with no network and no `document`.
+- **A typed HTTP error, as the plan preferred.** `HttpError` and `statusOf(err)` in
+  [`lib/api.ts`](../../src/web/lib/api.ts); `errorFor` now returns one, so every existing `catch`
+  that reads `.message` is unchanged. `statusOf` is **duck-typed rather than `instanceof`**, because
+  a test that mocks `lib/api.js` supplies its own `readJson` and a second copy of the class in the
+  graph would make `instanceof` false for an object that is one in every way that matters.
+- **`useJobs(onFinished?) => UseJobs` is byte-identical in signature and field names.** The five
+  whole-hook mocks are all green, untouched.
+- **`error` / `loaded` / `jobs` are engine state; `lastFailure` stayed a per-subscriber ref**, and
+  an action's success is also what lifts an authentication pause — the "explicit successful
+  recovery" the 401 rule asks for.
+
+**Four things a reviewer should look at**, because each was a judgment rather than a transcription:
+
+1. **`receive(jobs)` is public.** The completion window under test is one synchronous commit, so
+   nothing that goes through a promise can land inside it and no fake server can reach the case at
+   all. `receive` is the engine's own reducer, exposed, and the pinning test finishes a job *during
+   React's render pass*. Without it, step 3 of Sol's sequence is untestable.
+2. **The engine is awake when `started || subscribers > 0`, not on `started` alone.** Otherwise
+   mounting `useJobs` in a test — or anywhere `start()` has not run — polls nothing, and four
+   existing files do exactly that. The signed-out-visitor guarantee is unaffected: nothing mounts
+   `useJobs` for a visitor, which is the same guarantee as before.
+3. **Completion events are capped at 200 rather than pruned by cursor.** A subscriber captures its
+   cursor at *render*, before the engine knows it exists, so "prune below the lowest cursor anybody
+   holds" would drop precisely the event belonging to the subscriber it cannot see. The cap is the
+   honest version; overflow loses an announcement rather than duplicating one.
+4. **A band opening costs one extra poll.** The engine reconciles at session start, sleeps, and then
+   a mounting subscriber wakes it. It could be avoided with a "last polled at" clock; it was not,
+   because before this every mount had its own poller, so one request per band open is strictly
+   fewer than before.
+
+**Three things found while building that change what the later stages should assume:**
+
+- **The reading view already polled for ever.** `useArc` runs on every owned reading view and goes
+  through `useStepJob`, so the owner's default view has had a `useJobs` on it all along. The comment
+  in `tests/public-network-trace.test.tsx` saying the default view "mounts no band at all" was
+  stale, and is corrected there. So the *poll* was never the thing that stopped at a route change —
+  only the `drive` loop was, and only for the routes with no band.
+- **`tests/idle-work.test.ts` needed one line, not a rewrite.** Every assertion in it survived
+  unchanged; what it needed was `statusOf` in its `lib/api.js` mock, and `jobEngine.reset()` per
+  test now that the poller outlives a mount. `tests/refused-job-reason-survives.test.tsx` and
+  `tests/sketch-view-drawing.test.tsx` needed only the reset.
+- **The `public-network-trace` owner half changed in one place**, and it is not the one the plan
+  expected: a signed-in reader who is *not* the owner now also makes one `GET /api/jobs`, because
+  the engine binds to any session. That test now pins it as exactly one, and says the change was
+  intended.
+
+Stage 5's per-job advance-failure health is already in the snapshot as `driverFailures` — counted,
+reset on success, dropped when a job goes terminal. Nothing renders it yet; that is still stage 5.
 ### Stage 2 — Stop means what it says
 
-- [ ] **Rename the contract.** `failExpired` will no longer always fail, so its name, its `JobStore`
+- [x] **Rename the contract.** `failExpired` will no longer always fail, so its name, its `JobStore`
       doc, its return type and the log in the advance path (`failed N job(s)`) all become false.
       `settleExpired`, returning typed outcomes — `{ id, status: "error" | "cancelled" }` — and
       neutral wording in the log.
-- [ ] It settles a row carrying `cancelling=true` as **cancelled**, not `error` / INTERRUPTED. It is
+- [x] It settles a row carrying `cancelling=true` as **cancelled**, not `error` / INTERRUPTED. It is
       currently the odd one out: `releaseStepIn` already settles a live claimant's release on a
       `cancelling` job as cancelled, and the fs adapter's `sweepStopped` does the same on restart. So
       this makes three mechanisms agree rather than adding a fourth.
-- [ ] `requestCancel` grows a branch: `running` with an **expired** lease goes straight to
+- [x] `requestCancel` grows a branch: `running` with an **expired** lease goes straight to
       `cancelled`, in the same statement, compared against database time.
-- [ ] **That branch must copy `settleExpired`'s field set, not `requestCancel`'s running branch** —
+- [x] **That branch must copy `settleExpired`'s field set, not `requestCancel`'s running branch** —
       Fable's catch. In particular it must null `draftRevisionId`: the running branch deliberately
       leaves the pointer alone because the claimant disposes of it, and going terminal while holding
       it means `sweepAbandonedDrafts` spares that draft for ever. That is the exact leak GPT Sol's
       2026-08-30 finding closed in `failExpired`. Also `attemptId`, `leaseExpiresAt`, `finishedAt`.
-- [ ] **A cancelled settlement must also clear stale `error` and `failureKind`** — Sol. A job that
+- [x] **A cancelled settlement must also clear stale `error` and `failureKind`** — Sol. A job that
       failed a step, was retried, and is then cancelled would otherwise carry the old sentence.
-- [ ] **A terminal job must not retain a step whose status is `running`.** Both current expiry paths
+- [x] **A terminal job must not retain a step whose status is `running`.** Both current expiry paths
       allow it, so the card can show a spinner on a job that is over. Define how the active step
       settles, and assert that no terminal job contains a running step.
-- [ ] The **fs adapter needs the matching branch** (checking its `attempts` map), or
+- [x] The **fs adapter needs the matching branch** (checking its `attempts` map), or
       `tests/store-jobs-parity.test.ts` should be the thing that says so first. A hidden claimant on
       a laptop is rarer but real — two dev tabs.
-- [ ] **Use database time.** The plan said "compared against `now()`" and the code does not: Postgres
+- [x] **Use database time.** The plan said "compared against `now()`" and the code does not: Postgres
       currently creates and compares lease times with the application's `Date.now()`. Since this work
       is already inside claim expiry, move production claim creation, expiry comparison and
       `finishedAt` to SQL `now()`, keeping injected dates for tests only.
-- [ ] **No "Force stop" before the lease expires.** A live claim may genuinely be working, and
+- [x] **No "Force stop" before the lease expires.** A live claim may genuinely be working, and
       clearing it is how you get two writers. The copy carries the wait.
-- [ ] **No migration.** `cancelling`, `lease_expires_at` and `jobs_lease_idx` all exist. Said out
+- [x] **No migration.** `cancelling`, `lease_expires_at` and `jobs_lease_idx` all exist. Said out
       loud so nobody goes looking.
+
+**Landed 2026-09-01.** All ten. `failExpired(now?) → string[]` is now
+`settleExpired(now?) → ExpirySettlement[]` with `{ id, status: "error" | "cancelled" }`; the sweep
+settles a `cancelling` row as cancelled and clears the stale `error`/`failureKind`;
+`requestCancel` computes one condition `over = coalesce(status = 'queued' or lease_expires_at <
+now(), false)` and reuses it across every `case`, so the seven branches cannot drift — which is the
+shape of the bug this area has produced twice. A new `settledSteps()` rewrites any running step to
+`pending` in the same statement, so a terminal job never draws a spinner. The filesystem adapter
+grew `settleAbandoned(job, as?)` holding the field set once for both its paths, and treats *no entry
+in `attempts`* as lapsed. Database time landed at all three sites — `claim` writes `now() +
+make_interval(...)`, `finishIn` stamps `now()`, the sweep compares `now()` — and the parity suite's
+own `expire()` helper had to move with it, or it would have been testing two clocks against each
+other. No migration: `cancelling`, `lease_expires_at` and `jobs_lease_idx` all already existed.
+
+Five tests, four in the parity suite so both adapters run them. `docs/project/ingest-queue.md`
+updated in five places.
+
+**Two things worth knowing.** The implementer wrote the code before the tests and then watched each
+one go red by weakening the implementation a change at a time — honest, and not the discipline
+asked for; recorded rather than smoothed over. And a peer's commit `c42c940` swept most of this work
+in under its own message via the pathspec form, which is the shared-tree hazard
+[version-control.md](../project/version-control.md) describes working exactly as documented: nothing
+was lost, and the committed content was the right version.
+
+**Open for the reviewer:** the settled step goes to `pending`, not `error`. For: `sweepStopped`
+already wrote exactly that, a cancelled job has no sentence for the step to carry, and `StepRow`
+renders `step.error` in full so `INTERRUPTED.message` would print the same paragraph twice. Against:
+`runStep`'s in-process interruption sets `error`, so one event now has two spellings depending on
+which path noticed it.
+
 
 ### Stage 3 — reconcile where the reader already is
 

@@ -66,7 +66,8 @@ the progress list.
 | [`src/pipeline.ts`](../../src/pipeline.ts) | the six steps, as data — the only place that knows the pipeline's order |
 | [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, and the restart sweep |
 | [`src/routes.ts`](../../src/routes.ts) | six HTTP routes, all of which return immediately |
-| [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the poll |
+| [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | the poll and the driver, for the whole tab — [§ The browser is the worker](#the-browser-is-the-worker) |
+| [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the subscription over the engine, and the actions |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
@@ -663,6 +664,55 @@ and not this one.
 could produce there is a `running` row whose claimant is already frozen. The browser is the only
 driver in production, which is what the advance endpoint was built for.
 
+### The browser is the worker
+
+So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
+walked away — and until 2026-09-01 walking away was ordinary navigation.
+
+The loop that calls `POST /api/jobs/:id/advance` lived inside `useJobs`, which is mounted from the
+shelf, the add page and `useStepJob`. **`App()` is a chain of early returns**, so it returns a
+different root per route and there is no persistent shell component at all: every route change
+unmounted all three, and `drive`'s `while (alive())` stopped.
+
+**The plan for this work said that meant "click into an article and your import stops", and that was
+wrong** — worth recording, because it is the claim two rounds of review were argued against.
+`useArc` runs on every owned reading view and goes through `useStepJob`, so the reading view mounts
+a poller of its own and picks the job back up within a second. What actually stopped were the routes
+that mount none: `/profile`, `/design`, `/admin`, the landing page.
+
+**The fault worth fixing was never the size of that gap.** It was that whether an ingest kept
+running depended on whether the page you happened to open happened to mount an unrelated hook —
+`useArc`, which exists for the arc feature and knows nothing about the queue. Condition that hook
+for any reason, or stop calling it, and driving silently becomes route-dependent again with no test
+anywhere that would notice. Driving was working by accident, and an accident is not a design.
+
+[`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) is the fix: **a module-scope service, one per
+tab**, owning the poll timer, the job list, the visibility rules and one drive loop per job.
+`App` starts it from a `useEffect` keyed on `user.id` and stops it when that changes; `useJobs`
+became a `useSyncExternalStore` subscriber over its snapshot, plus the actions. Not a React
+provider — a provider whose entire purpose is never to unmount is a component doing an imperative
+service's job.
+
+Three things about it are worth knowing before touching it, and each was argued out rather than
+chosen:
+
+- **When it polls.** At the active cadence while any job is active, wherever the reader is;
+  otherwise only while at least one `useJobs` subscriber is mounted; with neither, it sleeps until
+  poked. So making the driver route-independent did not buy every owner an unbounded idle poll on
+  every reading view.
+- **Completion is a monotonic cursor, not a set.** A subscriber captures the engine's completion
+  sequence during its **first render** and consumes events past it. A per-subscriber `Set` seeded in
+  the subscription effect — which is what the old code did, correctly, while the poll belonged to
+  the mount — would baseline away a job that finished between render and effect, and the engine now
+  polls whether or not anything is mounted.
+- **The session is fenced on `user.id`.** A public job carries no `ownerId`, so the engine cannot
+  tell from the list that it belongs to the reader who just signed out. Every request captures a
+  generation and every callback checks it. Signing out is **not** Stop: the durable job is left
+  alone and reconciled when its owner returns.
+
+The plan and both reviews are
+[260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md](../plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md).
+
 ### The rejected list, kept
 
 Still the right answers to the 2026-08-25 question, and pg-boss is still the first thing to
@@ -699,7 +749,9 @@ awkward. And there is no reconnect logic to get wrong — the failure mode of a 
 is a progress panel that quietly stops updating, which looks exactly like a stuck job.
 
 The poll reschedules itself on each response rather than running on an interval, so a slow response
-can never stack a second request on the first.
+can never stack a second request on the first. It stops dead while the tab is hidden rather than
+slowing down — an action's own poke still makes exactly one reconciliation request, and coming back
+polls at once. See [§ The browser is the worker](#the-browser-is-the-worker) for who owns the timer.
 
 ## Idempotent is the goal; this is a step towards it
 
@@ -717,14 +769,33 @@ nothing on disk can have work happening against it; Postgres cannot reason that 
 **lease** instead. The steps keep their individual statuses either way, so a resumed job still shows
 which stages finished, and **Retry queues the same steps and skips them**.
 
-**A lease that nothing enforces is a note.** `failExpired` is what turns an abandoned claim back into
-something a reader can act on — the job is marked failed, with a sentence saying it was interrupted
-and a Retry button, rather than taken over. It runs at the top of every advance rather than on a
+**A lease that nothing enforces is a note.** `settleExpired` is what turns an abandoned claim back
+into something a reader can act on — with a sentence saying the job was interrupted and a Retry
+button, rather than taken over. It runs at the top of every advance rather than on a
 timer: there is no scheduler on Vercel, that is the exact moment somebody wants the slot, and it is
 one indexed `UPDATE` over rows that are almost always none. It had **no caller at all** for the first
 day of its life, which meant a killed instance left its job `running` for ever and every advance
 answered `busy` — the in-memory queue had self-healed on restart, so this was a regression rather
 than a gap. GPT Sol found it; see [260827m-durable-queue-code-review-sol.md](../plans/260827m-durable-queue-code-review-sol.md).
+
+**And since 2026-09-01 it does not always fail, which is why it is no longer called `failExpired`.**
+A row carrying `cancelling` is a reader who pressed Stop and then lost the claimant, so it settles as
+**cancelled**, with the `error` and `failureKind` of any earlier attempt cleared — the field always
+describes *this* ending. That makes three mechanisms agree rather than leaving one the odd one out:
+`releaseStepIn` already settled a live claimant's release on a `cancelling` job as cancelled, and the
+filesystem adapter's `sweepStopped` already did the same on restart. It returns
+`{ id, status }` pairs rather than ids, because a caller that has to guess which of two endings it
+just caused is a caller that will guess wrong, and the log says *settled N job(s)* accordingly.
+
+**A terminal job never keeps a step that says `running`.** Both endings settle the active step back
+to `pending` and drop its `startedAt` — otherwise the card draws a spinner on a job that is over,
+which is the same sentence as the whole of [silent-success.md](../reusable/silent-success.md) with
+the reader as the thing that fails quietly.
+
+**The lease is the database's arithmetic, end to end.** `claim` writes `now() + leaseMs`, the sweep
+compares against `now()`, and endings stamp `now()`. It used to be `Date.now()` at both ends, which
+is one clock on a laptop and two the moment a Vercel function talks to Supabase — and the two only
+have to disagree by a few seconds for a live claim to look lapsed.
 
 **Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
@@ -942,12 +1013,30 @@ takes one directly, so a model call stops mid-stream. The tokens already streame
 either way, so there is nothing to save by letting the call run on — and a Stop button that does
 nothing for two minutes is a Stop button that looks broken. Between the click and the step
 unwinding the job carries `cancelling`, which is why the button says "Stopping…" rather than
-staying "Stop".
+staying "Stop" — but only while a claim is live. A Stop that lands on a claim whose lease has already
+lapsed goes straight to *stopped*, because there is nobody left to wait for.
 
 ### Stop is one statement, and it used to be two
 
-The decision — *is anybody inside this job?* — happens **inside the `UPDATE`**. Queued means over
-right now; running means set `cancelling` and let the claimant read it at its next step boundary.
+The decision — *is anybody inside this job?* — happens **inside the `UPDATE`**, and since
+2026-09-01 it has three answers rather than two. Queued means over right now. Running with a lease
+that has **lapsed** means over right now too. Running with a live lease means set `cancelling` and
+let the claimant read it at its next step boundary.
+
+**The lapsed branch is what makes Stop mean what it says.** The claimant sets its own deadline
+*inside* the lease and aborts itself ([`src/jobs.ts`](../../src/jobs.ts) § `LEASE_MS`), so a lapsed
+lease says the process is *gone* rather than *slow* — there is provably nobody to read a flag.
+Without it, Stop on a dead claimant showed a disabled "Stopping…" for up to 12.67 minutes and then
+reported the job **interrupted**, which is not what the reader did.
+
+Two things about that branch are load-bearing. It settles with **`settleExpired`'s field set, not the
+running branch's** — `draftRevisionId` included, because the running branch deliberately leaves the
+pointer for the claimant to dispose of, and a terminal row still holding one is a draft
+`sweepAbandonedDrafts` spares for ever. And the condition is written **once**, as `over`, and reused
+across every `case`: seven branches that have to agree is the shape of the bug this section is about.
+
+**There is deliberately no force-stop short of the lease.** A live claim may genuinely be working,
+and clearing it out from under a claimant is how two runners come to write one article.
 
 It was two calls until 2026-08-27, cancel-if-idle and then ask, and GPT Sol found what lives in the
 gap between them. A claimant that releases in that gap turns the job `queued`; the second call then
