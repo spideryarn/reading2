@@ -1,0 +1,2203 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0020",
+        "n0048",
+        "n0133",
+        "n0155"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-w8z40d"
+      ],
+      "title": "The Mythology Of Conscious AI",
+      "gist": "Widespread belief in imminent conscious AI stems mainly from psychological bias and a flawed computational theory of mind, so we should resist creating or naively trusting conscious-seeming machines while reaffirming the embodied, biological basis of genuine human experience.",
+      "sourceHeading": "The Mythology Of Conscious AI"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0009",
+        "n0015"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-u774u3"
+      ],
+      "title": "Framing The Question",
+      "gist": "The essay opens by introducing Anil Seth's argument and establishing why the question of machine consciousness carries deep ethical and existential stakes."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-rg493b"
+      ],
+      "title": "Author And Prize",
+      "gist": "Anil Seth, a leading consciousness researcher, wrote this prize-winning essay questioning claims of conscious AI."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-tgnssb",
+        "spya-tgnssb"
+      ],
+      "title": "",
+      "navLabel": "The Mythology Of Conscious AI"
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-cfbkp2",
+        "spya-cfbkp2"
+      ],
+      "title": "",
+      "navLabel": "Anil Seth · NOEMA · ~54 min read"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-d2h6jh",
+        "spya-d2h6jh"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-gp3g6s",
+        "spya-gp3g6s"
+      ],
+      "title": "",
+      "navLabel": "Anil Seth won the 2025 Berggruen Prize Essay Competition for this essay"
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-rg493b",
+        "spya-rg493b"
+      ],
+      "title": "",
+      "navLabel": "Seth's credentials as consciousness researcher and author of Being You"
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-u6w37a",
+        "spya-epw4h3"
+      ],
+      "title": "Fantasies Of Artificial Minds",
+      "gist": "Cultural history and recent high-profile claims, like Blake Lemoine's, show that fantasies of conscious machines keep resurfacing despite skepticism from experts."
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-u6w37a",
+        "spya-u6w37a"
+      ],
+      "title": "",
+      "navLabel": "Humans have long fantasized about playing God with genetic engineering, robotics, androids"
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-gjy45p",
+        "spya-gjy45p"
+      ],
+      "title": "",
+      "navLabel": "AI is another breaking wave, but are systems conscious, and why would that matter?"
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-d9a0wr",
+        "spya-d9a0wr"
+      ],
+      "title": "",
+      "navLabel": "Golem to HAL 9000 to Ava: synthetic consciousness stories rarely end well for humans"
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-cvyfqe",
+        "spya-cvyfqe"
+      ],
+      "title": "",
+      "navLabel": "Blake Lemoine claimed LaMDA was conscious; Google fired him, dismissed the claim"
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-epw4h3",
+        "spya-epw4h3"
+      ],
+      "title": "",
+      "navLabel": "Chalmers, Hinton and others treat machine consciousness as a when-not-if question"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019"
+      ],
+      "range": [
+        "spya-e68t9h",
+        "spya-u774u3"
+      ],
+      "title": "Why This Question Matters",
+      "gist": "Whether or not AI is truly conscious matters ethically and psychologically, both for AI systems' potential rights and for how humans understand themselves."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-e68t9h",
+        "spya-e68t9h"
+      ],
+      "title": "",
+      "navLabel": "Machine consciousness matters for AI systems themselves via moral status and suffering"
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-z2b4ny",
+        "spya-z2b4ny"
+      ],
+      "title": "",
+      "navLabel": "Believing AI companions feel things exploits our psychological vulnerabilities and distorts ethics"
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-sge6a2",
+        "spya-sge6a2"
+      ],
+      "title": "",
+      "navLabel": "Confusing ourselves with machines makes us overestimate them and underestimate ourselves"
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-u774u3",
+        "spya-u774u3"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0021",
+        "n0030",
+        "n0035",
+        "n0039",
+        "n0044"
+      ],
+      "range": [
+        "spya-nh8mt7",
+        "spya-gxdsbh"
+      ],
+      "title": "The Temptations Of Conscious AI",
+      "gist": "Multiple overlapping psychological biases, not evidence, largely explain why people are tempted to believe AI systems are or will soon become conscious.",
+      "sourceHeading": "The Temptations Of Conscious AI"
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029"
+      ],
+      "range": [
+        "spya-nh8mt7",
+        "spya-xm96be"
+      ],
+      "title": "Intelligence Versus Consciousness",
+      "gist": "Intelligence and consciousness are distinct properties, and conflating them is one root of the temptation to see AI as conscious."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-nh8mt7",
+        "spya-nh8mt7"
+      ],
+      "title": "",
+      "navLabel": "The Temptations Of Conscious AI"
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-q23td7",
+        "spya-q23td7"
+      ],
+      "title": "",
+      "navLabel": "Computers differ from biological organisms, yet only meat is agreed to be conscious"
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-f87ghx",
+        "spya-f87ghx"
+      ],
+      "title": "",
+      "navLabel": "We assume intelligence and consciousness go together because they do so in us"
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-nj888h",
+        "spya-nj888h"
+      ],
+      "title": "",
+      "navLabel": "Intelligence is about doing: achieving complex goals by flexible means"
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-qb6xsj",
+        "spya-qb6xsj"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-hk6gha",
+        "spya-hk6gha"
+      ],
+      "title": "",
+      "navLabel": "AGI explicitly references human cognitive competencies; ASI bootstraps beyond our control"
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-j0a9rq",
+        "spya-j0a9rq"
+      ],
+      "title": "",
+      "navLabel": "Consciousness is about being: Nagel's something-it-is-like-to-be defines experience"
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-xm96be",
+        "spya-xm96be"
+      ],
+      "title": "",
+      "navLabel": "AI systems can claim intelligence but not clearly anything-it-is-like-to-be ChatGPT"
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034"
+      ],
+      "range": [
+        "spya-cvaqgs",
+        "spya-nxxnrj"
+      ],
+      "title": "Three Psychological Biases",
+      "gist": "Anthropocentrism, human exceptionalism, and anthropomorphism combine to make people project consciousness onto machines that merely mimic human traits."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-cvaqgs",
+        "spya-cvaqgs"
+      ],
+      "title": "",
+      "navLabel": "Three baked-in psychological biases bundle intelligence and consciousness together"
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-h4mwb2",
+        "spya-h4mwb2"
+      ],
+      "title": "",
+      "navLabel": "Anthropocentrism takes the human example as definitional rather than one case"
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-her4zk",
+        "spya-her4zk"
+      ],
+      "title": "",
+      "navLabel": "Human exceptionalism and anthropomorphism project humanlike qualities onto machines"
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-nxxnrj",
+        "spya-nxxnrj"
+      ],
+      "title": "",
+      "navLabel": "These biases explain why human-seeming abilities get imbued with understanding and consciousness"
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0036",
+        "n0037",
+        "n0038"
+      ],
+      "range": [
+        "spya-k6fpme",
+        "spya-cqh2pq"
+      ],
+      "title": "Language Fuels False Attribution",
+      "gist": "Because language is central to human exceptionalism, chatbots' fluent speech—reinforced by loaded terms like 'hallucinate'—makes them seem more conscious than they are."
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-k6fpme",
+        "spya-k6fpme"
+      ],
+      "title": "",
+      "navLabel": "Language, a cornerstone of exceptionalism, makes LLMs seem conscious unlike AlphaFold"
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-t29n67",
+        "spya-t29n67"
+      ],
+      "title": "",
+      "navLabel": "Calling LLM errors 'hallucinate' wrongly confers experience; 'confabulate' would fit better"
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-cqh2pq",
+        "spya-cqh2pq"
+      ],
+      "title": "",
+      "navLabel": "Assuming consciousness rides along with AGI-level intelligence signals human exceptionalism"
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043"
+      ],
+      "range": [
+        "spya-cke6sj",
+        "spya-mcaa4g"
+      ],
+      "title": "Exponential Hype And Techno-Rapture",
+      "gist": "The psychology of exponential technological change and quasi-religious dreams of transcendence further inflate expectations of imminent machine consciousness."
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-cke6sj",
+        "spya-cke6sj"
+      ],
+      "title": "",
+      "navLabel": "Exponential hype makes every point feel like an inflection point toward conscious AI"
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-v7s7gu",
+        "spya-v7s7gu"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-v4sduf",
+        "spya-v4sduf"
+      ],
+      "title": "",
+      "navLabel": "Techno-rapture temptation: creating conscious machines as the history of Gods, promising immortality"
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-mcaa4g",
+        "spya-mcaa4g"
+      ],
+      "title": "",
+      "navLabel": "Technorati's pronouncements of imminent machine consciousness may also inflate share prices"
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0045",
+        "n0046",
+        "n0047"
+      ],
+      "range": [
+        "spya-k850tu",
+        "spya-gxdsbh"
+      ],
+      "title": "Pareidolia And Its Limits",
+      "gist": "Recognizing that perceived AI consciousness is akin to pareidolia is only the first step; deeper analysis is needed to assess whether artificial consciousness is truly possible."
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0044",
+      "children": [],
+      "range": [
+        "spya-k850tu",
+        "spya-k850tu"
+      ],
+      "title": "",
+      "navLabel": "Becker's pareidolia framing is apt, but recognizing bias is only the first step"
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0044",
+      "children": [],
+      "range": [
+        "spya-rtcxt4",
+        "spya-rtcxt4"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0044",
+      "children": [],
+      "range": [
+        "spya-gxdsbh",
+        "spya-gxdsbh"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0049",
+        "n0053",
+        "n0080",
+        "n0094",
+        "n0109",
+        "n0122"
+      ],
+      "range": [
+        "spya-d3g67c",
+        "spya-nuy4fw"
+      ],
+      "title": "Consciousness & Computation",
+      "gist": "Four independent arguments—about brains, alternative computation, biological life, and simulation—undermine the assumption that digital computation alone can produce consciousness.",
+      "sourceHeading": "Consciousness & Computation"
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0050",
+        "n0051",
+        "n0052"
+      ],
+      "range": [
+        "spya-d3g67c",
+        "spya-cv97j7"
+      ],
+      "title": "The Computational Assumption",
+      "gist": "Conscious AI presupposes computational functionalism—the claim that the right computations suffice for consciousness—an assumption the author sets out to challenge."
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-d3g67c",
+        "spya-d3g67c"
+      ],
+      "title": "",
+      "navLabel": "Consciousness & Computation"
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-wepmnr",
+        "spya-wepmnr"
+      ],
+      "title": "",
+      "navLabel": "Conscious AI assumes computational functionalism, a hidden assumption Seth challenges"
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-cv97j7",
+        "spya-cv97j7"
+      ],
+      "title": "",
+      "navLabel": "Four arguments will undermine the claim that computation suffices for consciousness"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079"
+      ],
+      "range": [
+        "spya-sk4su6",
+        "spya-hrbtpu"
+      ],
+      "title": "1: Brains Are Not Computers",
+      "gist": "Unlike Turing machines, brains cannot be cleanly separated into software and hardware, so the brain-as-computer metaphor breaks down as a basis for artificial consciousness.",
+      "sourceHeading": "1: Brains Are Not Computers"
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-sk4su6",
+        "spya-sk4su6"
+      ],
+      "title": "",
+      "navLabel": "1: Brains Are Not Computers"
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-a8jgf4",
+        "spya-a8jgf4"
+      ],
+      "title": "",
+      "navLabel": "The brain-as-computer metaphor—mind as software, brain as hardware—has been productive but limited"
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-u9egtc",
+        "spya-u9egtc"
+      ],
+      "title": "",
+      "navLabel": "Turing seeded the idea that machines might be intelligent decades before the 1950s"
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-qcevgh",
+        "spya-qcevgh"
+      ],
+      "title": "",
+      "navLabel": "Turing formulated a definition of computation fundamental to today's technologies"
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-cf70dt",
+        "spya-cf70dt"
+      ],
+      "title": "",
+      "navLabel": "Turing machines formalize algorithms; universal Turing machines simulate any specific machine"
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-gx8jm9",
+        "spya-gx8jm9"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-dfujdu",
+        "spya-dfujdu"
+      ],
+      "title": "",
+      "navLabel": "Turing computation's software/hardware separation makes it substrate independent, or substrate flexible"
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-va8qxr",
+        "spya-va8qxr"
+      ],
+      "title": "",
+      "navLabel": "McCulloch and Pitts showed simplified neuron networks perform logical operations, later Turing complete"
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-b3yn6t",
+        "spya-b3yn6t"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-qknqjx",
+        "spya-qknqjx"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-v5vz2t",
+        "spya-v5vz2t"
+      ],
+      "title": "",
+      "navLabel": "Combining abstract neurons with Turing computation yields a powerful mathematical marriage"
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-va72zk",
+        "spya-va72zk"
+      ],
+      "title": "",
+      "navLabel": "Today's neural network AI descends from McCulloch, Pitts and Kleene's algorithmic tradition"
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-b0086e",
+        "spya-b0086e"
+      ],
+      "title": "",
+      "navLabel": "Inside brains there's no sharp mindware/wetware separation unlike software and hardware"
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-cf8rt8",
+        "spya-cf8rt8"
+      ],
+      "title": "",
+      "navLabel": "Brain activity spans multiple scales down to metabolic autopoiesis, self-producing living systems"
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-zw2m7u",
+        "spya-zw2m7u"
+      ],
+      "title": "",
+      "navLabel": "Unlike computers, brains resist separating what they do from what they are"
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ycpfzs",
+        "spya-ycpfzs"
+      ],
+      "title": "",
+      "navLabel": "Evolution gives no selection pressure for a clean software/hardware division, unlike costly server farms"
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ey2gx2",
+        "spya-ey2gx2"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-p4vmm0",
+        "spya-p4vmm0"
+      ],
+      "title": "",
+      "navLabel": "Without substrate independence, the meat-Turing-machine idea collapses, undermining functionalism"
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-jnwfxp",
+        "spya-jnwfxp"
+      ],
+      "title": "",
+      "navLabel": "Generative entrenchment means silicon can't replace a single neuron while preserving function"
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-un9fjn",
+        "spya-un9fjn"
+      ],
+      "title": "",
+      "navLabel": "Neurons firing to clear metabolic waste show silicon replacement would need a new metabolism"
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ahtr6e",
+        "spya-ahtr6e"
+      ],
+      "title": "",
+      "navLabel": "The neural replacement thought experiment fails since perfect silicon neuron substitution is impossible"
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-v2q8qk",
+        "spya-v2q8qk"
+      ],
+      "title": "",
+      "navLabel": "In Turing-world only sequence matters; time between states is irrelevant to computation"
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-v52g4f",
+        "spya-v52g4f"
+      ],
+      "title": "",
+      "navLabel": "For brains, time is physical and continuous, resisting entropy unlike out-of-time algorithms"
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ecfgkp",
+        "spya-ecfgkp"
+      ],
+      "title": "",
+      "navLabel": "Conscious experience flows continuously, unlike the arid sequence space of algorithms"
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-uwxe4h",
+        "spya-uwxe4h"
+      ],
+      "title": "",
+      "navLabel": "Confusing the Turing metaphor with the brain itself: it is not a Turing machine made of meat"
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-hrbtpu",
+        "spya-hrbtpu"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093"
+      ],
+      "range": [
+        "spya-affgsh",
+        "spya-gr2k02"
+      ],
+      "title": "2: Other Games In Town",
+      "gist": "Beyond Turing-style algorithms, analogue, dynamical, and continuous processes may be essential to brain function and consciousness, undermining purely computational accounts.",
+      "sourceHeading": "2: Other Games In Town"
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-affgsh",
+        "spya-affgsh"
+      ],
+      "title": "",
+      "navLabel": "2: Other Games In Town"
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-gw0hsq",
+        "spya-gw0hsq"
+      ],
+      "title": "",
+      "navLabel": "Turing algorithms map discrete symbol sequences but exclude non-computable and continuous or stochastic functions"
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-n393ru",
+        "spya-n393ru"
+      ],
+      "title": "",
+      "navLabel": "Biological systems are rife with continuous, stochastic dynamics like fields and neurotransmitter flux beyond algorithms"
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-gamzr3",
+        "spya-gamzr3"
+      ],
+      "title": "",
+      "navLabel": "These limits push toward viewing brains beyond \"Turing world\" into broader computation and dynamics"
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-zg9me8",
+        "spya-zg9me8"
+      ],
+      "title": "",
+      "navLabel": "Earliest computers were analogue devices like the Antikythera mechanism and 1950s cybernetics"
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-kjfjgm",
+        "spya-kjfjgm"
+      ],
+      "title": "",
+      "navLabel": "Neuromorphic and Hinton's \"mortal computation\" tie algorithms more closely to their material substrate"
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-wze0fn",
+        "spya-wze0fn"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-v8s83c",
+        "spya-v8s83c"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-sq9v5k",
+        "spya-sq9v5k"
+      ],
+      "title": "",
+      "navLabel": "Van Gelder's steam engine governor shows some systems aren't usefully described as computational at all"
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-t54yqa",
+        "spya-t54yqa"
+      ],
+      "title": "",
+      "navLabel": "Dynamical systems and 4E cognitive science reject exhaustive algorithmic accounts of mind and brain"
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-ezw0kc",
+        "spya-ezw0kc"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-f0qxnb",
+        "spya-f0qxnb"
+      ],
+      "title": "",
+      "navLabel": "Functionalism-in-general is conflated with the narrower, Turing-specific claim of computational functionalism"
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-gr2k02",
+        "spya-gr2k02"
+      ],
+      "title": "",
+      "navLabel": "Moving from Turing world means asking how brain-like a system must be, not which algorithms matter"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107",
+        "n0108"
+      ],
+      "range": [
+        "spya-e7jqx4",
+        "spya-pfkhtt"
+      ],
+      "title": "3: Life Matters",
+      "gist": "Consciousness may be tied specifically to the self-sustaining, predictive processes of living systems, suggesting that life itself—not mere information processing—is what generates experience.",
+      "sourceHeading": "3: Life Matters"
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-e7jqx4",
+        "spya-e7jqx4"
+      ],
+      "title": "",
+      "navLabel": "3: Life Matters"
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-hj5y6s",
+        "spya-hj5y6s"
+      ],
+      "title": "",
+      "navLabel": "Searle's biological naturalism holds life is necessary for consciousness, since every agreed-conscious being is alive"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-hrydkk",
+        "spya-hrydkk"
+      ],
+      "title": "",
+      "navLabel": "The case for life mattering draws on \"Being You\" and a related research paper"
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-dp8sem",
+        "spya-dp8sem"
+      ],
+      "title": "",
+      "navLabel": "Predictive processing frames conscious perception as the brain's best guesses minimizing prediction error"
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-xhvztm",
+        "spya-xhvztm"
+      ],
+      "title": "",
+      "navLabel": "Conscious experience is a controlled hallucination calibrated by bottom-up sensory signals"
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-njmsbz",
+        "spya-njmsbz"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-f3bgh0",
+        "spya-f3bgh0"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-hzp9yz",
+        "spya-hzp9yz"
+      ],
+      "title": "",
+      "navLabel": "Perceptual best-guessing also underlies selfhood, including interoceptive inference about bodily condition"
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-b59nm2",
+        "spya-b59nm2"
+      ],
+      "title": "",
+      "navLabel": "Perceptual predictions serve control and regulation, since the brain's core duty is keeping the body alive"
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-b228ay",
+        "spya-b228ay"
+      ],
+      "title": "",
+      "navLabel": "Emotion and mood are characterized primarily by valence, unlike vision"
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-dgf4em",
+        "spya-dgf4em"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-vys3vj",
+        "spya-vys3vj"
+      ],
+      "title": "",
+      "navLabel": "Prediction error minimization reaches into cellular metabolism, linking autopoietic life to Bayesian best-guessing"
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-da9tvt",
+        "spya-da9tvt"
+      ],
+      "title": "",
+      "navLabel": "Three converging lines suggest consciousness, bodily regulation, and life are non-computational and inseparable from biology"
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0094",
+      "children": [],
+      "range": [
+        "spya-pfkhtt",
+        "spya-pfkhtt"
+      ],
+      "title": "",
+      "navLabel": "Perhaps life, not information processing, breathes fire into the equations of experience"
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-cqh5wq",
+        "spya-xdy4fe"
+      ],
+      "title": "4: Simulation Is Not Instantiation",
+      "gist": "Simulating a conscious brain, however detailed, does not create consciousness unless computation itself is sufficient for it, exposing a hidden assumption behind mind-uploading dreams.",
+      "sourceHeading": "4: Simulation Is Not Instantiation"
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-cqh5wq",
+        "spya-cqh5wq"
+      ],
+      "title": "",
+      "navLabel": "4: Simulation Is Not Instantiation"
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-fz5xq5",
+        "spya-fz5xq5"
+      ],
+      "title": "",
+      "navLabel": "Turing-based computers can simulate even non-computational phenomena like continuous and random processes"
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-cepmwf",
+        "spya-cepmwf"
+      ],
+      "title": "",
+      "navLabel": "An algorithmic simulation of a continuous process is a simulation, not the process itself"
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-npjt4j",
+        "spya-npjt4j"
+      ],
+      "title": "",
+      "navLabel": "Simulations lack the causal powers of what they simulate, so simulating X doesn't instantiate X"
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-pbcr03",
+        "spya-pbcr03"
+      ],
+      "title": "",
+      "navLabel": "Whole-brain emulation instantiating consciousness already assumes computational functionalism, which is likely wrong"
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-jvrmrh",
+        "spya-jvrmrh"
+      ],
+      "title": "",
+      "navLabel": "The brain-as-computer metaphor makes simulation-equals-instantiation seem natural under the \"Turing world\" view"
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-t5ppft",
+        "spya-t5ppft"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-tb4wr2",
+        "spya-tb4wr2"
+      ],
+      "title": "",
+      "navLabel": "Detailed biophysical brain models make it less natural to assume simulation realizes all brain properties"
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-xvm37k",
+        "spya-xvm37k"
+      ],
+      "title": "",
+      "navLabel": "Mind-uploading dreams contain a contradiction: detailed brain models undercut the case for silicon rapture"
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-sq7un9",
+        "spya-sq7un9"
+      ],
+      "title": "",
+      "navLabel": "What if our whole universe is itself an assemblage of code in a simulation by future descendants?"
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-bcnvp2",
+        "spya-bcnvp2"
+      ],
+      "title": "",
+      "navLabel": "Bostrom's simulation hypothesis remains influential among the technorati"
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-xdy4fe",
+        "spya-xdy4fe"
+      ],
+      "title": "",
+      "navLabel": "Bostrom's argument rests unexamined on the assumption that a suitable running program would be conscious"
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130",
+        "n0131",
+        "n0132"
+      ],
+      "range": [
+        "spya-uzr60x",
+        "spya-nuy4fw"
+      ],
+      "title": "Summary Of Arguments",
+      "gist": "Together, these four arguments suggest computational functionalism is shaky and that real machine consciousness may be unlikely, though not strictly impossible."
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-uzr60x",
+        "spya-uzr60x"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-e3cq2m",
+        "spya-e3cq2m"
+      ],
+      "title": "",
+      "navLabel": "Cognitive biases predispose us to overattribute consciousness to machines"
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ymbpwn",
+        "spya-ymbpwn"
+      ],
+      "title": "",
+      "navLabel": "Computational functionalism looks increasingly shaky given differences between brains and digital computers"
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ps0kap",
+        "spya-ps0kap"
+      ],
+      "title": "",
+      "navLabel": "Consciousness may be deeply tied to biological life via predictive processing and metabolism"
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-mtzbbg",
+        "spya-mtzbbg"
+      ],
+      "title": "",
+      "navLabel": "Simulating consciousness computationally won't create it unless computational functionalism is true"
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-nv6tp0",
+        "spya-nv6tp0"
+      ],
+      "title": "",
+      "navLabel": "The four arguments stand independently but reinforce each other when taken together"
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-c5ve5t",
+        "spya-c5ve5t"
+      ],
+      "title": "",
+      "navLabel": "Consciousness likely won't emerge automatically as AI gets smarter, and may be impossible for silicon systems"
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-rn8y3y",
+        "spya-rn8y3y"
+      ],
+      "title": "",
+      "navLabel": "Nothing here rules out the possibility of artificial consciousness altogether"
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-z4bud7",
+        "spya-z4bud7"
+      ],
+      "title": "",
+      "navLabel": "Given all this, what should we do?"
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-nuy4fw",
+        "spya-nuy4fw"
+      ],
+      "title": ""
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0134",
+        "n0140",
+        "n0146",
+        "n0152"
+      ],
+      "range": [
+        "spya-e7fdmb",
+        "spya-d89xf7"
+      ],
+      "title": "What (Not) To Do?",
+      "gist": "Because we cannot be certain whether AI is or merely seems conscious, we should avoid deliberately creating machine consciousness while taking seriously the distinct ethical risks posed by convincingly conscious-seeming systems.",
+      "sourceHeading": "What (Not) To Do?"
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 2,
+      "parent": "n0133",
+      "children": [
+        "n0135",
+        "n0136",
+        "n0137",
+        "n0138",
+        "n0139"
+      ],
+      "range": [
+        "spya-e7fdmb",
+        "spya-yverz7"
+      ],
+      "title": "Uncertainty And Ethical Stakes",
+      "gist": "Given deep uncertainty about machine consciousness, deliberately trying to create it would be ethically reckless because it risks producing new forms of suffering."
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 3,
+      "parent": "n0134",
+      "children": [],
+      "range": [
+        "spya-e7fdmb",
+        "spya-e7fdmb"
+      ],
+      "title": "",
+      "navLabel": "What (Not) To Do?"
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0134",
+      "children": [],
+      "range": [
+        "spya-ryg483",
+        "spya-ryg483"
+      ],
+      "title": "",
+      "navLabel": "Things capable of conscious experience have ethical and moral standing others lack"
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0134",
+      "children": [],
+      "range": [
+        "spya-qu7j89",
+        "spya-qu7j89"
+      ],
+      "title": "",
+      "navLabel": "Other theories of consciousness assume computational functionalism rather than defending it"
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0134",
+      "children": [],
+      "range": [
+        "spya-zajp75",
+        "spya-zajp75"
+      ],
+      "title": "",
+      "navLabel": "All theories of consciousness carry deep uncertainty, so overconfidence in either direction oversteps what can be said"
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0134",
+      "children": [],
+      "range": [
+        "spya-yverz7",
+        "spya-yverz7"
+      ],
+      "title": "",
+      "navLabel": "Deliberately creating conscious AI would be an ethical disaster, introducing new moral subjects and suffering"
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 2,
+      "parent": "n0133",
+      "children": [
+        "n0141",
+        "n0142",
+        "n0143",
+        "n0144",
+        "n0145"
+      ],
+      "range": [
+        "spya-vs0vpj",
+        "spya-fdefb5"
+      ],
+      "title": "Real Versus Seeming Consciousness",
+      "gist": "Separate from whether AI is actually conscious, systems that merely seem conscious already raise urgent and distinct ethical problems."
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-vs0vpj",
+        "spya-vs0vpj"
+      ],
+      "title": "",
+      "navLabel": "Accidental consciousness in cerebral organoids may deserve more worry than any new wave of LLM"
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-x63ycg",
+        "spya-x63ycg"
+      ],
+      "title": "",
+      "navLabel": "Conscious-seeming AI systems raise urgent concerns closer at hand than actually conscious ones"
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-p8ky7g",
+        "spya-p8ky7g"
+      ],
+      "title": "",
+      "navLabel": "Lemoine's case shows conscious-seeming machines already exist, posing distinct ethical issues"
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-n0bnf9",
+        "spya-n0bnf9"
+      ],
+      "title": "",
+      "navLabel": "Kant's lecture warns treating conscious-seeming things as non-conscious is psychologically unhealthy"
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-fdefb5",
+        "spya-fdefb5"
+      ],
+      "title": "",
+      "navLabel": "Suleyman and Bengio have noticed dangers of conscious-seeming AI, but the problem remains uncontrolled"
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 2,
+      "parent": "n0133",
+      "children": [
+        "n0147",
+        "n0148",
+        "n0149",
+        "n0150",
+        "n0151"
+      ],
+      "range": [
+        "spya-gwz5eu",
+        "spya-kqs33c"
+      ],
+      "title": "The Persistence Of Illusion",
+      "gist": "Like a visual illusion, the feeling that an AI is conscious can persist even when we know intellectually that it is not, and no definitive test can resolve the question."
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-gwz5eu",
+        "spya-gwz5eu"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-xk9gne",
+        "spya-xk9gne"
+      ],
+      "title": "",
+      "navLabel": "Like the Müller-Lyer illusion, the feeling an AI is conscious persists despite knowing otherwise"
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-fb397y",
+        "spya-fb397y"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-tv922y",
+        "spya-tv922y"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-kqs33c",
+        "spya-kqs33c"
+      ],
+      "title": "",
+      "navLabel": "The \"Garland test\" from Ex Machina tests human persuasion, not actual machine consciousness"
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 2,
+      "parent": "n0133",
+      "children": [
+        "n0153",
+        "n0154"
+      ],
+      "range": [
+        "spya-mxxutn",
+        "spya-d89xf7"
+      ],
+      "title": "Moral Status And False Positives",
+      "gist": "While history warns against denying moral status too readily, human biases toward AI are more likely to produce false positives than false negatives."
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 3,
+      "parent": "n0152",
+      "children": [],
+      "range": [
+        "spya-mxxutn",
+        "spya-mxxutn"
+      ],
+      "title": "",
+      "navLabel": "History warns against withholding moral status, fueling \"AI welfare\" concerns about consciousness attribution"
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 3,
+      "parent": "n0152",
+      "children": [],
+      "range": [
+        "spya-d89xf7",
+        "spya-d89xf7"
+      ],
+      "title": "",
+      "navLabel": "Human biases toward AI are more likely to produce false positives than false negatives, unlike with animals"
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0156",
+        "n0160",
+        "n0163"
+      ],
+      "range": [
+        "spya-v98v5u",
+        "spya-w8z40d"
+      ],
+      "title": "Soul Machine",
+      "gist": "The essay closes by urging that we resist mechanizing our self-understanding and instead recover an embodied sense of what makes human experience—our 'soul'—distinct from any machine.",
+      "sourceHeading": "Soul Machine"
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 2,
+      "parent": "n0155",
+      "children": [
+        "n0157",
+        "n0158",
+        "n0159"
+      ],
+      "range": [
+        "spya-v98v5u",
+        "spya-qwvjwn"
+      ],
+      "title": "Stakes Of Getting It Right",
+      "gist": "Navigating AI's real challenges requires resisting exaggerated claims about imminent conscious machines."
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-v98v5u",
+        "spya-v98v5u"
+      ],
+      "title": "",
+      "navLabel": "Soul Machine"
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-y4vjdg",
+        "spya-y4vjdg"
+      ],
+      "title": "",
+      "navLabel": "Immoderate claims about conscious machines add needless confusion to AI's real societal challenges"
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-qwvjwn",
+        "spya-qwvjwn"
+      ],
+      "title": "",
+      "navLabel": "Real artificial consciousness would be worse, but illusions of it are dangerous distractions in their own way"
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 2,
+      "parent": "n0155",
+      "children": [
+        "n0161",
+        "n0162"
+      ],
+      "range": [
+        "spya-hbueqc",
+        "spya-vnkr36"
+      ],
+      "title": "Choosing Our Future",
+      "gist": "The future of AI is not predetermined, and mistaking our algorithms for reflections of ourselves risks mechanizing our self-understanding."
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0160",
+      "children": [],
+      "range": [
+        "spya-hbueqc",
+        "spya-hbueqc"
+      ],
+      "title": "",
+      "navLabel": "The future history of AI is undetermined, and we can still decide which AI we want"
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0160",
+      "children": [],
+      "range": [
+        "spya-vnkr36",
+        "spya-vnkr36"
+      ],
+      "title": "",
+      "navLabel": "Vallor's mirror metaphor warns that mechanizing the mind makes us underestimate ourselves"
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 2,
+      "parent": "n0155",
+      "children": [
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167",
+        "n0168"
+      ],
+      "range": [
+        "spya-zv36xq",
+        "spya-w8z40d"
+      ],
+      "title": "Rethinking The Soul",
+      "gist": "Reviving older, embodied notions of the soul—rooted in breath and lived awareness rather than disembodied rationality—reminds us that being human is more meat than machine."
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-zv36xq",
+        "spya-zv36xq"
+      ],
+      "title": "",
+      "navLabel": "The soul as immaterial rational essence separable from body seems outmoded but not entirely wrong"
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-w4hwnc",
+        "spya-w4hwnc"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-fyrb7m",
+        "spya-fyrb7m"
+      ],
+      "title": "",
+      "navLabel": "Psychē and Ātman offer older soul concepts tied to breath and witnessing awareness, not rationality"
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-gvzuc4",
+        "spya-gvzuc4"
+      ],
+      "title": "",
+      "navLabel": "Mind uploading fantasies regress to the Cartesian soul, promising posthuman paradise but delivering silicon oblivion"
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-w8z40d",
+        "spya-w8z40d"
+      ],
+      "title": "",
+      "navLabel": "Turkle's warning suggests remembering life as inchoate feeling—more breath than thought, more meat than machine"
+    }
+  }
+}

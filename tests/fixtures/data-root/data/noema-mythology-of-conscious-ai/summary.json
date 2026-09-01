@@ -1,0 +1,237 @@
+{
+  "version": "summary/3",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5",
+  "profileHash": "ce9ca17df79828a9",
+  "entries": [
+    {
+      "range": [
+        "spya-tgnssb",
+        "spya-w8z40d"
+      ],
+      "depth": 0,
+      "short": "Belief in imminent conscious AI runs on psychological bias and a shaky computational theory of mind rather than evidence [spya-e3cq2m]. Anil Seth walks through why intelligence and consciousness get conflated, why brains resist the brain-as-computer metaphor, and why the practical upshot should be caution about building or trusting conscious-seeming machines, plus a recovered sense of embodied selfhood [spya-wepmnr spya-yverz7 spya-w8z40d].",
+      "long": "Starting from Blake Lemoine's claim that Google's LaMDA was conscious, the case is made that the growing conviction that AI systems are, or soon will be, conscious rests less on evidence than on a bundle of psychological biases: anthropocentrism, human exceptionalism, and anthropomorphism, amplified by fluent language and exponential-growth thinking [spya-cvyfqe spya-cvaqgs spya-cke6sj]. The deeper argument targets computational functionalism, the assumption that the right computation is sufficient for consciousness [spya-wepmnr]. Four arguments chip away at it: brains are not cleanly separable into software and hardware like Turing machines are [spya-a8jgf4]; consciousness may depend on non-algorithmic dynamics beyond Turing computation [spya-affgsh]; consciousness may require being alive, not just processing information [spya-hj5y6s]; and simulating a brain is not the same as instantiating one [spya-cqh5wq]. Given deep uncertainty either way, deliberately creating conscious AI would be reckless, and machines that merely seem conscious already pose distinct ethical dangers, since the feeling of their sentience can persist even once we know better [spya-yverz7 spya-xk9gne]. The essay ends by warning against mechanizing our self-understanding and urging a return to older, embodied notions of the soul rooted in breath and aliveness rather than disembodied rationality [spya-vnkr36 spya-w8z40d]."
+    },
+    {
+      "range": [
+        "spya-tgnssb",
+        "spya-u774u3"
+      ],
+      "depth": 1,
+      "short": "Blake Lemoine's claim that Google's chatbot LaMDA was conscious reopened a question experts thought settled, and figures like Chalmers and Hinton now treat machine consciousness as a matter of when, not if [spya-cvyfqe spya-epw4h3]. Getting this right matters for AI systems' potential moral status, for our psychological vulnerability to conscious-seeming machines, and for how we understand our own nature [spya-e68t9h spya-sge6a2].",
+      "long": "The long, mostly unhappy cultural history of imagined synthetic minds, from the Golem to HAL 9000, sets the stage for a very current claim: Google engineer Blake Lemoine's 2022 assertion that the chatbot LaMDA was conscious [spya-d9a0wr spya-cvyfqe]. Though Lemoine was dismissed, the underlying question persists, and prominent figures including David Chalmers and Geoffrey Hinton now suggest conscious machines are imminent or already here [spya-epw4h3]. The stakes are laid out on three fronts: if AI systems really are conscious, they may deserve moral status and rights; if we wrongly believe conscious-seeming machines have feelings, our ethical priorities and psychological wellbeing are distorted; and confusing ourselves with our machine creations risks both overestimating them and underestimating our own human nature [spya-e68t9h spya-z2b4ny spya-sge6a2]."
+    },
+    {
+      "range": [
+        "spya-tgnssb",
+        "spya-rg493b"
+      ],
+      "depth": 2,
+      "short": "Anil Seth, director of Sussex's Centre for Consciousness Science and author of \"Being You,\" won the 2025 Berggruen Prize Essay Competition for this piece [spya-gp3g6s spya-rg493b].",
+      "long": "Establishes credentials before the argument begins: this essay, questioning the current wave of conscious-AI claims, is the prize-winning entry by Anil Seth, a neuroscience professor and consciousness researcher who also co-directs a Canadian institute program on brain, mind and consciousness and has written a prior book on the science of consciousness [spya-gp3g6s spya-rg493b]."
+    },
+    {
+      "range": [
+        "spya-u6w37a",
+        "spya-epw4h3"
+      ],
+      "depth": 2,
+      "short": "From Yossele the Golem and Frankenstein to HAL 9000 and Ex Machina's Ava, stories of synthetic minds rarely end well [spya-d9a0wr], and the fantasy resurfaced concretely when Google engineer Blake Lemoine claimed his LaMDA chatbot was conscious [spya-cvyfqe]—a claim experts continue to debate rather than dismiss outright [spya-epw4h3].",
+      "long": "AI is framed as the latest wave in a long human dream of playing God by building artificial people, following genetic engineering's promise of cloning and robotics' promise of androids [spya-u6w37a spya-gjy45p]. Cultural history of synthetic minds—Yossele the Golem, Frankenstein, HAL 9000, Ex Machina's Ava, Klara and the Sun—warns that such creations rarely end well for the humans involved [spya-d9a0wr]. This isn't just fiction: Google engineer Blake Lemoine's 2022 claim that chatbot LaMDA was conscious got him dismissed but didn't settle the question, and prominent figures like David Chalmers and Geoffrey Hinton now treat machine consciousness as a matter of when, not if [spya-cvyfqe spya-epw4h3]."
+    },
+    {
+      "range": [
+        "spya-e68t9h",
+        "spya-u774u3"
+      ],
+      "depth": 2,
+      "short": "Whether AI is conscious matters for the machines themselves—consciousness bringing moral status and potential rights [spya-e68t9h]—and for us, since believing it (rightly or wrongly) reshapes our ethics, our psychological vulnerabilities, and our self-understanding [spya-z2b4ny spya-sge6a2].",
+      "long": "Getting this question right carries stakes on three fronts: for AI systems, since consciousness would bring moral status, capacity for suffering, and perhaps rights [spya-e68t9h]; for humans, since believing our AI companions genuinely feel things can be exploited, distort our ethics, or brutalize our minds if we wrongly treat feeling machines as feelingless—while granting rights to non-conscious systems could mean we can't switch them off even when they work against us [spya-z2b4ny]; and, perhaps most importantly, for how we understand our own nature, since confusing ourselves with our machine creations means both overestimating them and underestimating ourselves [spya-sge6a2]."
+    },
+    {
+      "range": [
+        "spya-nh8mt7",
+        "spya-gxdsbh"
+      ],
+      "depth": 1,
+      "short": "Three baked-in biases, anthropocentrism, human exceptionalism, and anthropomorphism, explain why fluent chatbots strike people as conscious even though intelligence (doing) and consciousness (being) are different things [spya-nj888h spya-cvaqgs]. Loaded language like calling AI errors hallucinations, exponential-growth psychology, and techno-rapture fantasies of digital immortality all inflate the impression further [spya-t29n67 spya-cke6sj spya-v4sduf].",
+      "long": "The temptation to see AI as conscious starts from conflating intelligence, which is about doing, with consciousness, which is about being, something it is like to be that organism [spya-nj888h spya-j0a9rq]. Three overlapping biases do the real work: anthropocentrism, human exceptionalism, and anthropomorphism, which together make humanlike abilities read as evidence of inner experience [spya-cvaqgs spya-nxxnrj]. Language proves especially potent, since fluency is central to human exceptionalism, and calling AI errors hallucinations rather than confabulations implicitly grants chatbots a capacity for experience they may not have [spya-k6fpme spya-t29n67]. Exponential-growth psychology makes every moment feel like the cusp of a major transition, and techno-rapture fantasies of transcending biology add a quasi-religious pull, especially among those with a stake in AI's mystique [spya-cke6sj spya-v4sduf spya-mcaa4g]. All this is likened to pareidolia, seeing faces in toast, which is only the first step toward asking whether artificial consciousness is genuinely possible [spya-k850tu]."
+    },
+    {
+      "range": [
+        "spya-nh8mt7",
+        "spya-xm96be"
+      ],
+      "depth": 2,
+      "short": "Intelligence is about doing—achieving complex goals by flexible means—while consciousness is about being, the Nagel-style question of whether there is something it is like to be a system [spya-nj888h spya-j0a9rq]. AI systems clearly display intelligence, but whether anything-it-is-like-to-be accompanies that, as with ChatGPT, is a separate and much harder question [spya-xm96be].",
+      "long": "Because humans are both conscious and (think themselves) intelligent, it feels natural to assume the two properties travel together, but that need not hold outside the human case [spya-f87ghx]. Intelligence is functional and behavioural—solving problems, achieving goals by flexible means, as in AGI's aim to match human cognitive competencies [spya-nj888h spya-hk6gha]—whereas consciousness, per Nagel, is about there being something it is like to be an organism, the experiential texture of perception and feeling [spya-j0a9rq]. AI can reasonably claim intelligence since it does things, but whether there is anything-it-is-like-to-be a system such as ChatGPT remains an open, separate question, and conflating the two is a root source of overestimating machines while underestimating ourselves [spya-xm96be spya-qb6xsj]."
+    },
+    {
+      "range": [
+        "spya-cvaqgs",
+        "spya-nxxnrj"
+      ],
+      "depth": 2,
+      "short": "Three baked-in biases—anthropocentrism, human exceptionalism, and anthropomorphism—combine so that anything displaying humanlike abilities gets credited with humanlike consciousness too [spya-h4mwb2 spya-her4zk].",
+      "long": "The urge to bundle intelligence with consciousness traces to three biases: anthropocentrism, treating the human case as definitional rather than one example among many; human exceptionalism, placing humans atop (or outside) every hierarchy of being; and anthropomorphism, projecting humanlike qualities onto nonhuman things from superficial similarities [spya-h4mwb2 spya-her4zk]. Together these explain why exhibiting a distinctively human ability, like intelligence, makes people readily attribute other supposedly human qualities—understanding, mindedness, consciousness—to the same system [spya-nxxnrj]."
+    },
+    {
+      "range": [
+        "spya-k6fpme",
+        "spya-cqh2pq"
+      ],
+      "depth": 2,
+      "short": "Language is especially good at triggering false consciousness-attribution because it sits at the core of human exceptionalism—which is why chatbots, not protein-folding models like AlphaFold, get called conscious [spya-k6fpme].",
+      "long": "Fluent language is the single most effective trigger for perceiving consciousness in AI, precisely because language is a cornerstone of human exceptionalism; this is why LLMs like ChatGPT and Claude draw claims of consciousness while structurally similar systems like AlphaFold, which output protein structures rather than words, do not [spya-k6fpme]. The words we choose compound the effect: calling an LLM's falsehoods 'hallucinations' borrows a term for lost-touch-with-reality conscious experience and smuggles in an implicit attribution of experience, whereas 'confabulate'—making things up without realizing it, a matter of doing not experiencing—would be more accurate [spya-t29n67]. Identifying consciousness with humanlike traits like intelligence and language thus makes us prone both to seeing consciousness where none exists and missing it where it does, including the false idea that consciousness will simply emerge once AGI is reached [spya-cqh2pq]."
+    },
+    {
+      "range": [
+        "spya-cke6sj",
+        "spya-mcaa4g"
+      ],
+      "depth": 2,
+      "short": "The felt steepness of exponential technological change makes every moment feel like an inflection point, and dreams of techno-rapture—Promethean world-transformation and escaping death via digital immortality—add a quasi-religious pull toward believing conscious AI is imminent [spya-cke6sj spya-v4sduf].",
+      "long": "Exponential change in compute and AI capability has a psychologically destabilizing property: from any point on the curve, the future looks impossibly steep and the past looks flat, making it feel like we are always on the cusp of a major transition—and nothing would be more major than the birth of artificial consciousness, even though on an exponential curve every point is an inflection point [spya-cke6sj]. Layered onto this is the techno-rapture: the Promethean allure of creating what was once divine, paired with the promise of immortality, escaping decaying bodies for a silicon-enabled eternity, as dramatized in Ex Machina's line about the 'history of Gods' [spya-v4sduf]. This may explain why claims of imminent machine consciousness cluster among the technorati, and cynically, such claims can also help justify soaring valuations and salaries [spya-mcaa4g]."
+    },
+    {
+      "range": [
+        "spya-k850tu",
+        "spya-gxdsbh"
+      ],
+      "depth": 2,
+      "short": "Seeing consciousness in AI is aptly likened to pareidolia—spotting a face in toast—but naming the illusion is only step one; whether artificial consciousness is actually possible needs deeper digging [spya-k850tu].",
+      "long": "Adam Becker's comparison of projecting consciousness onto AI to pareidolia—seeing a face in a piece of toast or a figure in a cinnamon bun—captures why these psychological biases mislead us, but recognizing the illusion doesn't settle the underlying question [spya-k850tu]. That question, whether real artificial consciousness is even possible, requires digging deeper than exposing bias, into the assumptions behind computation and consciousness [spya-k850tu]."
+    },
+    {
+      "range": [
+        "spya-d3g67c",
+        "spya-nuy4fw"
+      ],
+      "depth": 1,
+      "short": "Conscious AI assumes computational functionalism, that the right computation suffices for consciousness, and four arguments undercut it: brains resist the software/hardware split that defines Turing machines [spya-a8jgf4 spya-b0086e]; non-algorithmic dynamics like the Watt governor show computation isn't the only game in town [spya-affgsh spya-sq9v5k]; predictive-processing links consciousness to living, self-sustaining bodies [spya-hj5y6s spya-vys3vj]; and simulating a brain, however detailed, doesn't instantiate it any more than a simulated rainstorm gets you wet [spya-cqh5wq spya-npjt4j].",
+      "long": "The case against conscious AI turns on computational functionalism, the assumption, often unexamined, that implementing the right computation is sufficient for consciousness [spya-wepmnr]. First, brains are not computers: the McCulloch-Pitts marriage of neuroscience and Turing computation underlies today's AI, but real brains lack any clean separation between wetware and mindware, are entangled across scales down to metabolism, and are anchored in physical, continuous time in ways algorithms, defined only by sequence, are not [spya-va8qxr spya-b0086e spya-v2q8qk]. This also sinks Chalmers's neural-replacement thought experiment, since no silicon neuron can perfectly replace a biological one that, say, fires to clear metabolic waste [spya-ahtr6e spya-un9fjn]. Second, other games are in town: continuous, stochastic, and dynamical processes, exemplified by the non-computational Watt steam governor, may matter for brain function without being Turing computations at all [spya-sq9v5k spya-t54yqa]. Third, life may matter: predictive-processing accounts tie conscious experience of emotion and selfhood to the body's need to regulate itself, rooting consciousness in the self-producing, autopoietic nature of living material rather than pure information processing [spya-dp8sem spya-vys3vj]. Fourth, simulation is not instantiation: a simulated brain, like a simulated rainstorm, does not bring about the thing itself unless consciousness just is computation, a point that undermines mind-uploading dreams and exposes Nick Bostrom's simulation hypothesis as resting on an unexamined assumption [spya-npjt4j spya-xdy4fe]. Together the four arguments make computational functionalism look shaky without ruling out artificial consciousness altogether [spya-c5ve5t spya-rn8y3y]."
+    },
+    {
+      "range": [
+        "spya-d3g67c",
+        "spya-cv97j7"
+      ],
+      "depth": 2,
+      "short": "Conscious AI presupposes computational functionalism: the claim that the right computation is sufficient for consciousness [spya-wepmnr]. This is treated as an unexamined article of faith rather than an established fact, and four arguments follow to test it [spya-cv97j7].",
+      "long": "Behind every claim of conscious AI sits an unstated premise, computational functionalism, the idea that implementing the right computation is enough to produce consciousness [spya-wepmnr]. Rather than accept this as obvious, it is named as an assumption to be tested, setting up four arguments—about brains, alternative forms of computation, biological life, and the gap between simulation and instantiation—that together challenge whether digital computation could ever be sufficient [spya-cv97j7]."
+    },
+    {
+      "range": [
+        "spya-sk4su6",
+        "spya-hrbtpu"
+      ],
+      "depth": 2,
+      "short": "Turing's framework depends on cleanly separating software from hardware, substrate-independent algorithms running on any suitable material [spya-cf70dt spya-dfujdu]. Brains offer no such separation: neurons are autopoietic, metabolically entangled, continuous in time, and cannot be swapped for silicon equivalents without reinventing their biology, so the neural-replacement thought experiment used to argue for silicon consciousness fails at the first step [spya-b0086e spya-un9fjn spya-ahtr6e].",
+      "long": "Turing's universal machine works because computation is substrate-independent: an algorithm does the same thing on any adequate hardware, cleanly separating mindware from wetware [spya-cf70dt spya-dfujdu]. McCulloch, Pitts and Kleene showed that simplified neuron-networks are Turing-complete, which is why today's AI descends so naturally from this marriage of neuroscience and computation [spya-va8qxr spya-va72zk]. But real brains resist this separation: a single neuron is a self-sustaining biological machine, generatively entrenched across scales of metabolism and circuitry, so there is no clean line between what the brain does and what it is [spya-cf8rt8 spya-zw2m7u]. Some neurons even fire to clear metabolic waste, meaning a true silicon replacement would need its own silicon metabolism, which undermines Chalmers' popular neural-replacement thought experiment (recently invoked by Hinton) that silicon substitutes could preserve consciousness [spya-un9fjn spya-ahtr6e]. Brains are also anchored in continuous, physical time and entropic resistance in ways algorithms, defined purely by sequence, are not, and conscious experience itself flows rather than stutters between states [spya-v52g4f spya-ecfgkp]. The brain, in short, is not a Turing machine made of meat [spya-uwxe4h]."
+    },
+    {
+      "range": [
+        "spya-affgsh",
+        "spya-gr2k02"
+      ],
+      "depth": 2,
+      "short": "Turing computation cannot capture continuous, stochastic, or dynamical processes, and biological systems are full of these, from neurotransmitter flux to electromagnetic fields [spya-gw0hsq spya-n393ru]. Analogue computing, neuromorphic and 'mortal' computation, and dynamical-systems approaches like van Gelder's steam-governor example suggest brain function, and perhaps consciousness, may depend on non-algorithmic processes tied tightly to their material substrate [spya-zg9me8 spya-sq9v5k spya-t54yqa].",
+      "long": "Turing algorithms map discrete symbol strings and cannot, strictly, capture continuous or stochastic functions, yet biological systems are saturated with exactly these: electromagnetic fields, neurotransmitter flux, and more, any of which might matter for consciousness [spya-gw0hsq spya-n393ru]. History offers alternatives to digital computation, from the ancient analogue Antikythera mechanism to cybernetics, and today to neuromorphic computing and Hinton's 'mortal computation,' all more tightly bound to their material substrate than standard digital algorithms [spya-zg9me8 spya-kjfjgm]. Tim van Gelder's steam-engine governor shows some systems are best understood mechanically, not computationally, at all [spya-sq9v5k]. Dynamical-systems and 4E cognitive science build on this to argue mind may depend on continuous processes like attractors and phase spaces rather than algorithms, though this remains compatible with a broader functionalism, just not the narrower computational kind [spya-t54yqa spya-f0qxnb]. The further one strays from 'Turing world,' the more consciousness seems to depend on how brain-like, not how algorithmic, a system is [spya-gr2k02]."
+    },
+    {
+      "range": [
+        "spya-e7jqx4",
+        "spya-pfkhtt"
+      ],
+      "depth": 2,
+      "short": "Following John Searle's biological naturalism, every system agreed to be conscious is also alive, hinting that life itself, not mere information processing, may be necessary for consciousness [spya-hj5y6s spya-dgf4em]. Predictive processing recasts perception, selfhood, and emotion as the brain's controlled hallucination for keeping the body alive, a process rooted in autopoietic, metabolic, non-algorithmic biology [spya-xhvztm spya-vys3vj].",
+      "long": "Biological naturalism, Searle's term, holds that life is necessary though not sufficient for consciousness, and every agreed case of consciousness happens to be alive [spya-hj5y6s spya-dgf4em]. Predictive processing theories frame conscious experience as a controlled hallucination, the brain's top-down best guesses about sensory causes, continually calibrated by prediction error [spya-dp8sem spya-xhvztm]. This same best-guessing machinery underlies the sense of self and embodiment, including interoceptive inference about the body's internal state, because the brain's core job is keeping the body's physiology alive, which is why emotion and mood feel like matters of valence, things going well or badly [spya-hzp9yz spya-b59nm2 spya-b228ay]. This drive reaches into the metabolic, autopoietic activity of individual cells, making prediction-error minimization inseparable from the materiality of life, and this whole process is continuous and dynamical, not algorithmic [spya-vys3vj spya-da9tvt]. The suggestion that follows is that it may be life, not information processing, that generates experience [spya-pfkhtt]."
+    },
+    {
+      "range": [
+        "spya-cqh5wq",
+        "spya-xdy4fe"
+      ],
+      "depth": 2,
+      "short": "A simulation of digestion does not digest, and a simulated brain will only be conscious if consciousness is itself computational, which begs the very question at issue [spya-npjt4j spya-pbcr03]. This exposes mind-uploading dreams as self-contradictory, and shows Bostrom's simulation hypothesis quietly smuggles in the same unexamined assumption [spya-xvm37k spya-xdy4fe].",
+      "long": "Computers can simulate almost anything, but simulation lacks the causal powers of the thing simulated, a simulated rainstorm makes nothing wet, so simulating a brain instantiates consciousness only if consciousness is itself a computational process, an assumption, not a given [spya-npjt4j spya-pbcr03]. The more detailed and biophysically realistic a brain model becomes, the more it actually undercuts, rather than supports, the case for computational instantiation, since detail is only interesting if things beyond Turing computation matter [spya-tb4wr2]. This exposes a contradiction in mind-uploading fantasies of silicon immortality: an exquisitely detailed brain simulation is no more likely to be conscious than a simulated hailstorm is to be wet [spya-xvm37k]. Even Bostrom's simulation hypothesis, that we may already be living inside someone else's simulation, rests unexamined on exactly this assumption, that a suitably programmed computer would be conscious, which if false collapses the whole argument [spya-xdy4fe]."
+    },
+    {
+      "range": [
+        "spya-uzr60x",
+        "spya-nuy4fw"
+      ],
+      "depth": 2,
+      "short": "The four arguments, against the brain-as-computer metaphor, for non-algorithmic dynamics, for biological necessity, and against conflating simulation with instantiation, converge without depending on each other, together making computational functionalism look shaky and machine consciousness unlikely, though not impossible [spya-ymbpwn spya-nv6tp0 spya-rn8y3y].",
+      "long": "Each argument, that brains are not computers, that other non-algorithmic processes may matter, that life may be necessary, and that simulation is not instantiation, can stand alone, yet together they reinforce one another: doubting computational functionalism strengthens the simulation/instantiation distinction, and alternatives to Turing computation open room for biological naturalism [spya-nv6tp0]. Combined with the psychological biases discussed earlier, they suggest consciousness will not simply emerge as AI grows smarter, and that achieving it may be impossible for the silicon-based digital computers familiar today, though artificial consciousness in some other form is not ruled out entirely [spya-e3cq2m spya-c5ve5t spya-rn8y3y]."
+    },
+    {
+      "range": [
+        "spya-e7fdmb",
+        "spya-d89xf7"
+      ],
+      "depth": 1,
+      "short": "Given how uncertain any theory of consciousness is, nobody should deliberately try to create conscious AI, since that risks introducing new capacities for suffering at exponential scale [spya-yverz7]. Separately, machines that merely seem conscious, like Lemoine's LaMDA, already raise distinct ethical problems, and the feeling that they're conscious can persist even when we know it's an illusion, much like the Muller-Lyer lines [spya-x63ycg spya-xk9gne].",
+      "long": "Because all theories of consciousness remain deeply uncertain, and nobody can say for sure what would create or avoid real machine consciousness, deliberately setting out to build conscious AI is judged an ethical disaster in waiting, since it would introduce new moral subjects and new potential for suffering, possibly at exponential pace, while granting AI systems rights could hamper our ability to control or shut them down [spya-yverz7 spya-gwz5eu]. Worry should extend beyond LLMs to technologies like cerebral organoids grown from stem cells, which might accidentally stumble into consciousness [spya-vs0vpj]. A second, more immediate problem is conscious-seeming AI, systems like LaMDA that persuade us of their sentience whether or not they possess it, which creates a dilemma: extend moral concern and distort it, or withhold it and risk brutalizing our own minds [spya-x63ycg spya-n0bnf9]. Crucially, the feeling that a machine is conscious can be as resistant to counter-argument as a visual illusion like Muller-Lyer, and there is no definitive test to settle the question, a dilemma dramatized as the Garland test in Ex Machina [spya-xk9gne spya-kqs33c]. Although history warns against wrongly denying moral status, human biases here are judged more likely to produce false positives than false negatives, since AI resembles us in ways that don't matter for consciousness, like language, while lacking the one thing that plausibly does, being alive [spya-d89xf7]."
+    },
+    {
+      "range": [
+        "spya-e7fdmb",
+        "spya-yverz7"
+      ],
+      "depth": 2,
+      "short": "No theory of consciousness, biological naturalism included, can claim certainty about what would create real artificial consciousness [spya-zajp75]. Given that, deliberately trying to build conscious AI would be reckless: it would introduce new moral subjects capable of suffering, potentially at exponential scale, and granting them rights would hamper our ability to control or shut them down [spya-yverz7]. Even if standard digital computers can't do it, other routes like neuromorphic computing or synthetic biology might—cerebral organoids grown from stem cells are flagged as a more plausible near-term worry than any LLM [spya-vs0vpj].",
+      "long": "Since all theories of consciousness remain fraught with uncertainty, and even the strongest biological naturalist case might be wrong, nobody can say for sure what would produce, or avoid, real machine consciousness [spya-zajp75]. That uncertainty makes deliberately creating conscious AI ethically indefensible: it would mean introducing new moral subjects into the world and, with them, new possibilities for suffering—potentially at an exponential pace—while granting such systems rights would restrict our ability to control or shut them down [spya-yverz7]. The risk isn't confined to digital computers either, since alternative technologies like analogue or neuromorphic computing and synthetic biology might succeed where standard computation fails, making accidental consciousness in cerebral organoids grown from stem cells a more pressing worry than any new wave of large language models [spya-vs0vpj]."
+    },
+    {
+      "range": [
+        "spya-vs0vpj",
+        "spya-fdefb5"
+      ],
+      "depth": 2,
+      "short": "Actually conscious AI and merely conscious-seeming AI pose distinct ethical problems, and the seeming kind, as Lemoine's case showed, is already here [spya-x63ycg spya-p8ky7g]. Granting unnecessary 'rights' to non-conscious systems could pointlessly restrict control, while either extending or withholding moral concern for such systems risks distorting our ethics or brutalizing our minds, a danger Kant already flagged [spya-n0bnf9]. Figures like Mustafa Suleyman and Yoshua Bengio are starting to notice, but the problem is far from contained [spya-fdefb5].",
+      "long": "Beyond the uncertain question of genuine machine consciousness lies a nearer and more urgent problem: systems that persuasively seem conscious without being so, of which Lemoine's reaction to a Google chatbot is a working example [spya-x63ycg spya-p8ky7g]. Such conscious-seeming systems pose ethical issues that don't depend on whether they are actually conscious—granting them rights they don't need would needlessly hamper our control over them, while the choice between extending moral concern to them or withholding it risks either distorting our circles of moral concern or, per Kant's old warning, brutalizing our own minds by treating apparently minded things as mere objects [spya-n0bnf9]. Prominent voices in AI, including Mustafa Suleyman and Yoshua Bengio, are beginning to register this danger, though it remains far from resolved [spya-fdefb5]."
+    },
+    {
+      "range": [
+        "spya-gwz5eu",
+        "spya-kqs33c"
+      ],
+      "depth": 2,
+      "short": "Even knowing an AI isn't conscious, the feeling that it is may be as stubborn as the Müller-Lyer illusion, which looks wrong no matter how well you understand it [spya-xk9gne]. There is no definitive test for machine consciousness, a dilemma dramatized in Ex Machina's 'Garland test,' which only measures whether a human can be persuaded, not whether the machine actually is conscious [spya-kqs33c].",
+      "long": "Belief and feeling can come apart: even when we know, or believe, an AI is not conscious, the impression that it is may prove as impervious to reasoning as the Müller-Lyer illusion, where two equal lines never stop looking unequal no matter how many times the trick is explained [spya-xk9gne]. Compounding this, there is no consensus on necessary or sufficient conditions for consciousness, so no definitive test exists to settle whether an AI genuinely has it—the dilemma dramatized in Ex Machina, whose 'Garland test' (revealing a robot's mechanical nature to see if a human still feels it's conscious) tests only human persuadability, not machine consciousness itself [spya-kqs33c]."
+    },
+    {
+      "range": [
+        "spya-v98v5u",
+        "spya-w8z40d"
+      ],
+      "depth": 1,
+      "short": "Real artificial consciousness would be a disaster and illusions of it are dangerous in their own right, but AI's future is not fixed, and mistaking our algorithms for reflections of ourselves risks mechanizing the mind [spya-qwvjwn spya-hbueqc spya-vnkr36]. The closing move is to reclaim the soul not as disembodied Cartesian rationality but as an older, embodied idea rooted in breath and the sheer feeling of being alive, more meat than machine [spya-fyrb7m spya-w8z40d].",
+      "long": "AI's real, disruptive challenges are hard enough to navigate without added confusion from overblown claims of coming conscious machines, and there is no inevitability to which direction AI development takes, only choices still to be made [spya-y4vjdg spya-hbueqc]. Shannon Vallor's image of AI as a mirror is invoked to warn that seeing ourselves in our algorithms risks mechanizing the mind, conflating the richness of biological experience with chatbot machinations and thereby underestimating ourselves [spya-vnkr36]. This leads to a reconsideration of the soul: not the Cartesian, disembodied essence of rationality that fuels silicon-rapture fantasies of mind uploading and cloud-based immortality, but older ideas, the Greek psychē tied to breath, the Hindu Atman as pure witnessing awareness, that locate our innermost essence in the plain feeling of being alive [spya-gvzuc4 spya-fyrb7m]. The essay ends on Sherry Turkle's warning that technology can make us forget what we know about life, and the call to remember it: more breath than thought, more meat than machine [spya-w8z40d]."
+    },
+    {
+      "range": [
+        "spya-v98v5u",
+        "spya-qwvjwn"
+      ],
+      "depth": 2,
+      "short": "Real transformation is already underway with AI, and it will be hard enough to handle its genuine challenges and benefits without added confusion from inflated claims about a coming age of conscious machines [spya-y4vjdg]. Truly conscious AI would change everything for the worse, while mere illusions of consciousness carry their own distinct dangers if they distract us from the real work at hand [spya-qwvjwn].",
+      "long": "Navigating AI's real transformation of society is hard enough without exaggerated claims of imminent conscious machines adding confusion, making a clear-eyed view both urgent and essential [spya-y4vjdg]; genuine artificial consciousness would be a change for the worse, while illusions of it pose their own separate dangers by distracting from the actual work of getting AI right, which is the essay's closing motivation for offering tools against both overconfident claims of inevitability and impossibility [spya-qwvjwn]."
+    },
+    {
+      "range": [
+        "spya-zv36xq",
+        "spya-w8z40d"
+      ],
+      "depth": 2,
+      "short": "Setting aside the Cartesian soul—an immaterial, disembodied essence of pure rationality—older traditions offer a different picture: the Greek psychē tied soul to breath, and the Hindu Ātman treated it as pure witnessing awareness beneath any specific thought [spya-zv36xq spya-fyrb7m]. Dreams of mind-uploading and digital immortality are really a regression to that Cartesian, disembodied ideal, promising silicon oblivion rather than transcendence [spya-gvzuc4], when what actually makes us us may be closer to the inchoate feeling of being alive—more breath than thought, more meat than machine [spya-w8z40d].",
+      "long": "The soul worth dismissing is the Cartesian one—an immaterial essence of rationality fully separable from the body—but that isn't the only version on offer: the Greek psychē links soul to breath, and the Hindu Ātman treats our innermost essence as a pure witnessing awareness untouched by any particular thought [spya-zv36xq spya-fyrb7m]. Fantasies of mind-uploading and cloud-based digital afterlives, framed as a silicon rapture, actually revive this disembodied Cartesian ideal and its false promise of pure rationality untainted by the body, offering silicon oblivion rather than posthuman paradise [spya-gvzuc4]. What matters instead is an older, more embodied sense of soul as the inchoate feeling of simply being alive, closer to breath than to thought and more meat than machine, a reminder Sherry Turkle's warning that technology makes us forget what we know about life is meant to revive [spya-w8z40d]."
+    }
+  ],
+  "missing": 0,
+  "generatedAt": "2026-08-27T07:31:11.421Z",
+  "elapsedMs": 102499
+}

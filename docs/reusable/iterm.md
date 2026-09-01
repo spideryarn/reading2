@@ -168,6 +168,9 @@ Four things must hold, and each one has to fail closed:
 
 Then **verify the session is gone** rather than trusting the absence of an error.
 
+Guards 1, 2 and 4 are what make closing *your own* tab a different command rather than an exception —
+see [Closing your own tab](#closing-your-own-tab).
+
 Guard 1 is the one that carries the doc's promise, and it needs bookkeeping rather than cleverness:
 record each UUID `new` returns in a file keyed to your own session, and refuse anything not in it.
 Don't add a force flag to that guard — the whole point is that it cannot be bypassed.
@@ -235,6 +238,26 @@ Details that matter:
 What it still cannot see: a shell running a **builtin** is indistinguishable from a shell at a
 prompt using process data alone. Without Shell Integration there is no fix for that — so treat this
 as a strong last line of defence, not proof, and rely on ownership as the real boundary.
+
+### Closing your own tab
+
+Three of the four guards refuse this by construction: you did not *create* your own tab, it **is**
+you, and your own tty always has the agent running on it. Only the last-tab check applies.
+
+**Nothing technical stops it.** `close` on your own session is the same Apple event as any other;
+iTerm closes the tab and your shell gets `SIGHUP`. The three refusals are policy for the job
+`cmd_close` does — an agent tidying up tabs it made — not a limitation of iTerm.
+
+So it gets a **separate command**, not a force flag on `cmd_close`. The ownership guard there stays
+unbypassable, because the thing it protects is *other people's* tabs, and closing your own disturbs
+nobody but yourself. Only do it when explicitly asked.
+
+One thing genuinely does not carry over: **you cannot verify it.** Success means the process that
+asked is gone — `osascript` is a descendant of the tab's shell and dies with it — so the rule above,
+*verify the session is gone rather than trusting the absence of an error*, cannot be honoured here.
+This is the one close in this doc where absence of an error is all you ever get, which is why the
+script says `closing` rather than `closed`. Make it the last thing you do, and expect no output
+after it.
 
 ### Closing the last tab leaves a husk
 
@@ -312,6 +335,33 @@ So this is fine for a smoke test and useless for capturing real output: have the
 a file and read the file with your normal tools.
 
 `write` also appends to whatever is already on the input line, including half-typed human input.
+
+## Colouring a tab
+
+There is no AppleScript for this. `sdef /Applications/iTerm.app | grep -i 'tab color'` prints nothing
+on 3.6.6 — `background color` exists and is the pane fill, a different thing. The only route from
+*outside* the tab is the Python API (`LocalWriteOnlyProfile.set_tab_color`), which needs *Enable
+Python API*.
+
+From *inside* the tab it is one sequence per channel, written to stdout:
+
+```bash
+printf '\033]6;1;bg;red;brightness;167\a'
+printf '\033]6;1;bg;green;brightness;139\a'
+printf '\033]6;1;bg;blue;brightness;250\a'
+printf '\033]6;1;bg;*;default\a'        # hand it back to the profile
+```
+
+Nothing reads the colour back, so "restore" can only mean "default" — a colour somebody else set
+cannot be put back.
+
+Only write it when you are sure of the terminal: stdout a tty, `TERM_PROGRAM=iTerm.app`, and no
+`TMUX`, `STY`, `SSH_CONNECTION` or `SSH_TTY`. `TERM_PROGRAM` is an ordinary inherited variable,
+exactly like `ITERM_SESSION_ID` above, so under tmux or across ssh it names a terminal that is not in
+front of you — and an unrecognised terminal prints the sequence as text rather than eating it.
+
+To colour a tab you did not create, `write ... text` the printf into it, which is a visible command
+line in that tab, and [Pass data as argv](#pass-data-as-argv-never-by-interpolation) applies.
 
 ## Permissions
 
@@ -647,12 +697,50 @@ end run
 EOF
 }
 
+# Close the tab you are RUNNING IN. Only when explicitly asked.
+#
+# cmd_close refuses this three times over -- you did not create your own tab, it
+# is you, and your own tty always has the agent on it. That is policy for the job
+# cmd_close does, not a technical limit: closing your own session is the same
+# Apple event and works. Hence a separate command, so require_owned above stays
+# unbypassable -- it protects OTHER people's tabs, and this disturbs nobody else.
+#
+# require_self still applies (tmux, ssh and a missing ITERM_SESSION_ID all mean
+# the variable is not this pane), and so does the husk rule. The verification
+# does NOT: success kills the process asking, so there is nothing left to check
+# with. That is why it reports "closing", not "closed".
+cmd_close_self() {
+  local me
+  me=$(require_self) || return 1
+  osa_retry "$(as_close_self)" "$me"
+}
+
+as_close_self() { cat <<EOF
+on run argv
+  set wanted to item 1 of argv
+  tell application "iTerm2"
+    set s to missing value
+    set owner to missing value
+$(walk '          if (id of ss) is wanted then
+            set s to ss
+            set owner to win
+          end if')
+    if s is missing value then error "own session not found"
+    if (count of tabs of owner) is 1 then error "refusing: last tab of its window"
+    close s
+    return "closing " & wanted
+  end tell
+end run
+EOF
+}
+
 case "${1:-}" in
   list)  cmd_list ;;
   new)   cmd_new ;;
   run)   cmd_run "${2:?session id}" "${3:?command}" ;;
   close) cmd_close "${2:?session id}" ;;
-  *) echo "usage: iterm.sh {list | new | run SID CMD | close SID}" >&2; exit 2 ;;
+  close-self) cmd_close_self ;;
+  *) echo "usage: iterm.sh {list | new | run SID CMD | close SID | close-self}" >&2; exit 2 ;;
 esac
 ```
 
@@ -672,6 +760,13 @@ Each guard was confirmed by making it refuse, not by watching it allow:
 | `ps` against a nonexistent tty | exits 1 → treated as busy |
 | `"`-bearing AppleScript payload via `run` | inert; reached the shell as text |
 | a peer closing a tab mid-walk | `-1719`, nothing closed; retried |
+| `close-self` under `TMUX` / `SSH_TTY` | refused, tab still there |
+| `close-self` with `ITERM_SESSION_ID` unset or malformed | refused |
+| `close-self` with a well-formed UUID matching no live session | refused, and said so by UUID |
+
+The self-close path was proved the only way it can be without dying: the identical AppleScript, aimed
+at a scratch tab, resolved it, applied the husk check, closed it, and `list` then showed it gone. The
+final act is the same Apple event with a different target.
 
 …and a **control** alongside them: with every guard in place, creating a tab, running a command in
 it and closing it still works, and the session count returns exactly to where it started. A guard

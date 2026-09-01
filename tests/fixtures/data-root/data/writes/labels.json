@@ -1,0 +1,71 @@
+{
+  "version": "labels/1",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e",
+  "structureHash": "9fa0a24e110d45f7",
+  "structureVersion": "toc/2",
+  "labels": {
+    "spya-hqt79k": "Writes and Write-Nots",
+    "spya-t97070": "The post is framed as a short, three-minute read",
+    "spya-zpa7s8": "Dated October 2024",
+    "spya-tphbr6": "The author predicts few people will be able to write within a couple decades",
+    "spya-vp6ghy": "Writers uniquely know how many people struggle with writing",
+    "spya-ts48cj": "Writing is fundamentally difficult because it requires clear thinking",
+    "spya-u97r7e": "The most prestigious jobs tend to demand the most writing",
+    "spya-xdmpa0": "Pressure from writing expectations drives eminent professors to plagiarize petty boilerplate",
+    "spya-zzw20p": "Before AI, only paying or plagiarizing let people avoid learning to write themselves",
+    "spya-gm3xu0": "AI has dissipated nearly all pressure to learn writing at school and work",
+    "spya-hg7u0a": "The ok-writer middle ground vanishes, leaving only good writers and write-nots",
+    "spya-z79mew": "One might compare this obsolescence to blacksmithing's harmless disappearance",
+    "spya-z7zzwv": "Writing is thinking, echoing Leslie Lamport's point about a unique kind of thought",
+    "spya-arj7ry": "If you're thinking without writing, you only think you're thinking",
+    "spya-xk7vyy": "The writes/write-nots divide is really a thinks/think-nots divide, and the author picks a side",
+    "spya-rqzp97": "Preindustrial strength became a choice once physical labor declined, via exercise",
+    "spya-smzw4j": "Smartness through writing will likewise become something only some choose to pursue",
+    "spya-zz20s6": "Thanks to Jessica Livingston, Ben Miller, and Robert Morris for reading drafts"
+  },
+  "batches": [
+    {
+      "blocks": [
+        "spya-hqt79k",
+        "spya-t97070",
+        "spya-zpa7s8",
+        "spya-tphbr6",
+        "spya-vp6ghy",
+        "spya-ts48cj",
+        "spya-u97r7e",
+        "spya-xdmpa0",
+        "spya-zzw20p",
+        "spya-gm3xu0",
+        "spya-hg7u0a",
+        "spya-z79mew",
+        "spya-z7zzwv",
+        "spya-arj7ry",
+        "spya-xk7vyy",
+        "spya-rqzp97",
+        "spya-smzw4j",
+        "spya-zz20s6"
+      ],
+      "setStarts": [
+        0,
+        3,
+        4,
+        6,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        17
+      ],
+      "inputTokens": 2798,
+      "outputTokens": 532,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "ms": 6816
+    }
+  ]
+}

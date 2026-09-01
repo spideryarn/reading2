@@ -18,6 +18,8 @@ import { describe, expect, it } from "vitest";
 import {
   SESSION_FIELDS,
   SESSION_SENTINEL,
+  bindingsVerdict,
+  buildBindingsScript,
   buildSessionScript,
   parseSessionLine,
   parseSessions,
@@ -238,5 +240,115 @@ describe("buildSessionScript", () => {
   it("reads the two variables we pinned into the session environment, by id", () => {
     expect(script).toContain('tmux show-environment -t "$sid" CLAUDE_SESSION_ID');
     expect(script).toContain('tmux show-environment -t "$sid" GJD_PROVISIONAL');
+  });
+});
+
+/**
+ * Counting what tmux binds.
+ *
+ * The rule the box now holds is that tmux binds NOTHING — no prefix, no keys —
+ * so every keystroke reaches Claude Code. See
+ * docs/project/remote-box.md § tmux keeps sessions alive and does nothing else.
+ *
+ * The trap these tests are built around: a tmux server reads ~/.tmux.conf once,
+ * when it starts, and the box's server outlives provisioning by weeks. So the
+ * FILE being right and the KEYBOARD being right are two different facts, and
+ * the gap between them is invisible — provisioning goes green, `Ctrl-B` is
+ * still eaten. That is why there are two numbers rather than one.
+ */
+describe("buildBindingsScript", () => {
+  const script = buildBindingsScript();
+
+  it("signs off, so an empty reply cannot pass for a clean box", () => {
+    expect(script.trimEnd().endsWith(`echo ${SESSION_SENTINEL}`)).toBe(true);
+  });
+
+  it("refuses to guess when tmux is not there", () => {
+    expect(script).toContain("command -v tmux");
+    expect(script).toContain("GJDERR");
+  });
+
+  /**
+   * The load-bearing one. `tmux list-keys` with no server running prints to
+   * stderr and nothing to stdout, so a bare `grep -c` answers 0 — the same byte
+   * a perfectly configured box gives. `tmux ls` has to gate it so "nothing to
+   * ask" can say so.
+   */
+  it("asks whether a server is running before counting its bindings", () => {
+    expect(script).toContain("if tmux ls >/dev/null 2>&1; then");
+    expect(script).toContain("live=none");
+  });
+
+  it("counts the file on a throwaway socket, not the box's real one", () => {
+    expect(script).toContain('tmux -f "$HOME/.tmux.conf" -L "$sock"');
+    expect(script).toContain("sock=gjddoctor$$");
+  });
+
+  it("cleans up the probe server whether or not it counted", () => {
+    expect(script.match(/tmux -L "\$sock" kill-server/g)?.length).toBe(2);
+  });
+});
+
+describe("bindingsVerdict", () => {
+  const ok = (body: string) => [body, SESSION_SENTINEL].join("\n");
+
+  it("passes when the file and the running server both bind nothing", () => {
+    const v = bindingsVerdict(ok("live=0 conf=0"));
+    expect(v.ok).toBe(true);
+    expect(v.why).toContain("file and server agree");
+  });
+
+  it("passes when there is no server to ask, and says so", () => {
+    const v = bindingsVerdict(ok("live=none conf=0"));
+    expect(v.ok).toBe(true);
+    expect(v.why).toContain("no server running");
+  });
+
+  /**
+   * The case this check exists for: provisioning rewrote the file, the running
+   * server never re-read it, and nothing else on the box looks wrong.
+   */
+  it("fails when the file is right but the running server has not re-read it", () => {
+    const v = bindingsVerdict(ok("live=260 conf=0"));
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("source-file");
+    // Not "re-provision" — provisioning rewrites the file, which is already right.
+    expect(v.why).not.toContain("re-provision");
+  });
+
+  it("fails on the file, and points at provisioning rather than at source-file", () => {
+    const v = bindingsVerdict(ok("live=0 conf=260"));
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("re-provision");
+  });
+
+  /** The file is what every future server on this box reads, so it is named first. */
+  it("names the file when both are wrong", () => {
+    const v = bindingsVerdict(ok("live=260 conf=260"));
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain(".tmux.conf");
+  });
+
+  it("fails closed on a reply that never finished", () => {
+    const v = bindingsVerdict("live=0 conf=0");
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("did not finish");
+  });
+
+  it("fails closed on a reply it cannot parse", () => {
+    const v = bindingsVerdict(ok("live= conf="));
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("could not read");
+  });
+
+  it("passes the box's own error through rather than inventing a verdict", () => {
+    const v = bindingsVerdict(`GJDERR tmux is not on this box\n${SESSION_SENTINEL}`);
+    expect(v.ok).toBe(false);
+    expect(v.why).toBe("tmux is not on this box");
+  });
+
+  /** An empty reply is the shape every other bug in this file wore. */
+  it("fails closed on silence", () => {
+    expect(bindingsVerdict("").ok).toBe(false);
   });
 });

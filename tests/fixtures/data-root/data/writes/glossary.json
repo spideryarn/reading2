@@ -1,0 +1,80 @@
+{
+  "version": "glossary/2",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e",
+  "entries": [
+    {
+      "id": "spya-uup6nt",
+      "name": "Writes and write-nots",
+      "kind": "concept",
+      "aliases": [
+        "write-nots",
+        "writes"
+      ],
+      "senseHere": "The author's coined division of society into people who retain the ability to write well and those who, having offloaded writing to AI, lose the ability entirely — with no middle ground of merely adequate writers left.",
+      "difficulty": 0.5,
+      "centrality": 1,
+      "blocks": [
+        "spya-hqt79k",
+        "spya-hg7u0a",
+        "spya-xk7vyy"
+      ]
+    },
+    {
+      "id": "spya-azuhn9",
+      "name": "John F. Kennedy",
+      "kind": "person",
+      "aliases": [
+        "JFK"
+      ],
+      "background": "35th U.S. President, widely known to have relied on speechwriters (notably Ted Sorensen) for much of his public rhetoric.",
+      "difficulty": 0.2,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-zzw20p"
+      ]
+    },
+    {
+      "id": "spya-t45ayq",
+      "name": "Martin Luther King Jr.",
+      "kind": "person",
+      "aliases": [
+        "MLK"
+      ],
+      "background": "Civil rights leader whose doctoral dissertation and some speeches were later found to contain unattributed borrowings, a plagiarism controversy that surfaced posthumously.",
+      "difficulty": 0.2,
+      "centrality": 0.3,
+      "blocks": [
+        "spya-zzw20p"
+      ]
+    },
+    {
+      "id": "spya-mq4g5w",
+      "name": "Leslie Lamport",
+      "kind": "person",
+      "aliases": [],
+      "background": "Turing Award-winning computer scientist known for foundational work on distributed systems and for creating LaTeX. His remark that writing without thinking is only 'thinking you're thinking' is treated as an authoritative statement on the link between writing and clear thought.",
+      "difficulty": 0.6,
+      "centrality": 0.5,
+      "blocks": [
+        "spya-z7zzwv"
+      ]
+    },
+    {
+      "id": "spya-zt2cc8",
+      "name": "Thinks and think-nots",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's extension of 'writes and write-nots': because writing is inseparable from a certain kind of thinking, the same split becomes a division between those who can think rigorously and those who cannot.",
+      "difficulty": 0.5,
+      "centrality": 0.9,
+      "blocks": [
+        "spya-xk7vyy"
+      ]
+    }
+  ],
+  "passes": 1,
+  "generatedAt": "2026-08-26T06:52:27.009Z",
+  "elapsedMs": 7240
+}

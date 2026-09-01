@@ -1,0 +1,31 @@
+{
+  "version": "tweets/1",
+  "generator": "claude-opus-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e",
+  "limit": 280,
+  "tweets": [
+    {
+      "text": "The author predicts that in a couple of decades there won't be many people who can write — because AI has removed the last pressure forcing people to learn.",
+      "chars": 156
+    },
+    {
+      "text": "The argument starts from why writing is hard: to write well you have to think clearly, and thinking clearly is hard. Set that against jobs that demand writing — the more prestigious, the more of it — and you get enormous pressure.",
+      "chars": 230
+    },
+    {
+      "text": "Until recently the only escapes were paying someone or plagiarising. The author reads the petty, boilerplate thefts of eminent professors as evidence they weren't even halfway decent at writing. Now AI does it for you, in school and at work.",
+      "chars": 241
+    },
+    {
+      "text": "So the middle vanishes: no more good writers, ok writers, and non-writers — just writes and write-nots. That's worse than losing blacksmithing, the author argues, because writing is thinking. Quoting Leslie Lamport: thinking without writing is only thinking you're thinking.",
+      "chars": 274
+    },
+    {
+      "text": "The closing analogy is strength: preindustrial work made people strong, now you work out. There will still be smart people, but only those who choose to be. The piece doesn't say how anyone chooses, or what makes the choice stick.",
+      "chars": 230
+    }
+  ],
+  "generatedAt": "2026-08-25T12:12:58.535Z",
+  "elapsedMs": 6136
+}

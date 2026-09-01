@@ -56,6 +56,14 @@ const TEMPLATE_VARS: Record<string, string> = {
  * section 4, which expands under `set -u`: an unset name there is an error
  * rather than an empty string spliced into a check that then tests nothing.
  */
+/**
+ * Hetzner Cloud's cap on a server's `user_data`, in bytes. The hcloud provider's
+ * own docs for `hcloud_server`: "This field is limited to 32KiB." It is a hard
+ * API limit, checked at server creation, and the provider sends the value as-is
+ * — no gzip, no re-encoding.
+ */
+const USER_DATA_LIMIT = 32 * 1024;
+
 const CHECK_ENV = 'USER_NAME=greg; GJD_NODE_MAJOR=26; SUPABASE_VERSION=2.115.0;';
 
 /**
@@ -74,6 +82,12 @@ const REQUIRED_CHECKS = [
   "node",
   "npm",
   "claude",
+  // Both status line checks by their FULL names. "claude statusline" alone
+  // would be satisfied by either one, so the check that actually runs the
+  // script could disappear while this file stayed green — and that is the
+  // half that can fail on a box where the other half looks perfect.
+  "claude statusline is wired up",
+  "claude statusline shows context %",
   "codex",
   "chrome",
   "playwright",
@@ -137,6 +151,36 @@ let rendered = raw;
 for (const [k, v] of Object.entries(TEMPLATE_VARS)) rendered = rendered.replaceAll("${" + k + "}", v);
 rendered = rendered.replaceAll("$${", "${"); // the escape Terraform consumes
 
+// 1b. SIZE. `user_data` goes to the Hetzner API as one field with a hard cap,
+//     and Terraform stores only a hash of it — so a config that is too big
+//     plans clean, fails at apply, and leaves nothing behind to read. Nothing
+//     else in this repo can see it: `provision.sh` is re-run on the live box by
+//     hand, which is a path with no size limit at all, so the two scripts can
+//     grow for weeks with every check green and only a REBUILD finding out.
+//
+//     Measured on the real base64 of both scripts, not the stubs above.
+{
+  const real: Record<string, string> = {
+    ...TEMPLATE_VARS,
+    provision_b64: readFileSync(PROVISION).toString("base64"),
+    helper_b64: readFileSync(path.join(INFRA, "github-owner-credential-helper.sh")).toString("base64"),
+  };
+  let full = raw;
+  for (const [k, v] of Object.entries(real)) full = full.replaceAll("${" + k + "}", v);
+  const bytes = Buffer.byteLength(full.replaceAll("$${", "${"), "utf8");
+  const kib = (bytes / 1024).toFixed(1);
+  if (bytes > USER_DATA_LIMIT) {
+    fail(
+      `rendered user_data is ${kib} KiB, over Hetzner's ${USER_DATA_LIMIT / 1024} KiB cap — \`terraform apply\` will be rejected when it creates a server. ` +
+        `Base64 costs a third on top, so ${((bytes * 3) / 4 / 1024).toFixed(1)} KiB of script is already too much`,
+    );
+  } else if (bytes > USER_DATA_LIMIT * 0.8) {
+    note(`⚠ rendered user_data is ${kib} KiB of Hetzner's ${USER_DATA_LIMIT / 1024} KiB`);
+  } else {
+    note(`rendered user_data is ${kib} KiB, within Hetzner's ${USER_DATA_LIMIT / 1024} KiB`);
+  }
+}
+
 const bashOk = (script: string, label: string) => {
   const r = spawnSync("bash", ["-n", "-c", script], { encoding: "utf8" });
   if (r.status !== 0) fail(`${label}: ${(r.stderr || "").trim().split("\n")[0]}`);
@@ -183,6 +227,48 @@ for (const b of blocks) {
 //    every `check` line individually: nested quoting is where a check silently
 //    stops testing anything while still reporting ok.
 if (bashOk(provision, "provision.sh syntax")) note("✓ infra/hetzner/provision.sh parses");
+
+// `bash -n` is BLIND to an unterminated heredoc: it warns nothing, exits 0, and
+// treats the rest of the file as data. That is not hypothetical — splicing a
+// script with no trailing newline into `<<'"'"'STATUSLINE'"'"'` produced
+// `printf "%s" "$line"STATUSLINE`, which swallowed the last 40 lines of
+// provision.sh, and every check above this one still passed. So count the
+// delimiters ourselves.
+{
+  const lines = provision.split("\n");
+  let open: { delim: string; dash: boolean; line: number } | undefined;
+  let heredocs = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (open) {
+      // Bash's rule, exactly: `<<DELIM` closes only on DELIM at column zero,
+      // and `<<-DELIM` strips leading TABS and nothing else. Accepting an
+      // indented terminator would let this scanner call closed a heredoc bash
+      // reads to end-of-file — which is the one thing it exists to catch.
+      const candidate = open.dash ? line.replace(/^\t+/, "") : line;
+      if (candidate === open.delim) open = undefined;
+      continue;
+    }
+    const m = /<<(-?)['"]([A-Za-z_][A-Za-z0-9_]*)['"]/.exec(line);
+    if (m?.[2]) {
+      open = { delim: m[2], dash: m[1] === "-", line: i + 1 };
+      heredocs++;
+    }
+  }
+  const openDelim = open?.delim ?? "";
+  const openLine = open?.line ?? 0;
+  if (openDelim) {
+    fail(
+      `heredoc <<'${openDelim}' opened at provision.sh:${openLine} is never closed — bash -n cannot see this, so everything after it is data rather than script`,
+    );
+  } else if (heredocs < 2) {
+    // Parser drift, not a box problem: if this stops finding heredocs it stops
+    // being able to find an unclosed one either, and says so instead of "ok".
+    fail(`found ${heredocs} quoted heredocs in provision.sh — the scanner has drifted from the file`);
+  } else {
+    note(`${heredocs} heredocs, all closed`);
+  }
+}
 
 const checkLines = provision.split("\n").filter((l) => l.trim().startsWith("check "));
 for (const line of checkLines) {

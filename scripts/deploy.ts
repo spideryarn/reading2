@@ -52,6 +52,7 @@ import {
   codeMayNotHaveShipped,
   describeRedirect,
   findSecretsInBundle,
+  GATE_FIXTURE_ROOT,
   judgeClientBuild,
   judgeDeployments,
   judgeHealth,
@@ -525,10 +526,12 @@ function explainBuildFailure(output: string): string {
  * The tests cannot have that today, and this says so rather than being quiet:
  * the suite is **not hermetic**. In a clean worktree 26 files fail — the client
  * ones cannot be collected without `VITE_SUPABASE_URL`, and the pipeline ones
- * `ENOENT` on `data/`, which is gitignored. So `.env.local` is linked and
- * `data/` is **copied**. Copied rather than linked because the tests create and
- * delete directories under `data/`, and a link would point that at the real one.
- * It is 25MB and an APFS clone takes 0.07s, so there is nothing to trade.
+ * `ENOENT` on `data/`, which is gitignored. So `.env.local` is still linked from
+ * the laptop, and `data/`+`output/` are **copied out of the tracked fixture
+ * corpus in the worktree itself** (`GATE_FIXTURE_ROOT`). Only the env file is
+ * personal state now; the artefacts the tests read come from the commit, so this
+ * gate is reproducible on a fresh clone and on the remote box rather than only
+ * on the machine that happens to have run the pipeline.
  */
 function gatesAt(sha: string): void {
   step(`Gates, at ${sha.slice(0, 8)} — in a worktree, not in this tree`);
@@ -601,24 +604,39 @@ function gatesAt(sha: string): void {
      * missing fixture and a broken commit are opposite diagnoses that produced
      * identical output.
      */
-    const missing = missingGateFixtures((rel) => existsSync(path.join(ROOT, rel)));
+    /* **Checked in the worktree, not in this tree.** The corpus is tracked, so
+       the question is whether *the commit* still has it — a commit that deleted
+       a fixture must not pass on the strength of the laptop still having one. */
+    const missing = missingGateFixtures((rel) => existsSync(path.join(wt, rel)));
     gate("fixtures", missing.length === 0, () =>
       [
-        `         missing from this working tree: ${missing.join(", ")}`,
-        "         The suite is not hermetic. Both are gitignored derived artefacts, so without",
-        "         them the tests do not fail honestly — they ENOENT and cascade-skip, which reads",
-        "         exactly like a broken commit. Re-run the pipeline for a slug to rebuild them.",
+        `         missing from the commit: ${missing.join(", ")}`,
+        `         These are tracked files under ${GATE_FIXTURE_ROOT}/, present in every checkout by`,
+        "         construction, so this can only mean the commit deleted or moved them. Restore",
+        "         them, or update GATE_FIXTURES in scripts/deploy-checks.ts if the move was meant.",
+        "         Without them the tests do not fail honestly — they ENOENT and cascade-skip,",
+        "         which reads exactly like a broken commit.",
       ].join("\n"),
     );
 
-    /* Copied rather than linked because the tests create and delete directories
-       underneath these, and a link would point that at the real one.
+    /* **Materialised from the tracked corpus, not from the laptop.** These used
+       to be copied out of the developer's own gitignored `data/`+`output/`,
+       which is why the `test` gate was structurally incapable of passing in a
+       fresh clone and `--force-gate=test` became the only way anyone deployed.
+       docs/plans/260901b-committed-fixture-corpus.md.
 
-       Retried once: several agents share this tree, and a peer's test run
-       deleting a fixture directory mid-copy crashed a whole deploy on
-       2026-08-28 with an uncatchable-looking `directory_iterator` abort. */
+       Still copied rather than linked, for the original reason: the tests create
+       and delete directories underneath these, and a link would point that at
+       the real one — here, at the committed fixtures.
+
+       A missing source is left to the gate above to diagnose rather than
+       reported twice; retried once because several agents share this tree, and a
+       peer's test run deleting a fixture directory mid-copy crashed a whole
+       deploy on 2026-08-28 with an uncatchable-looking `directory_iterator`
+       abort. */
+    const copied: string[] = [];
     for (const dir of ["data", "output"] as const) {
-      const from = path.join(ROOT, dir);
+      const from = path.join(wt, GATE_FIXTURE_ROOT, dir);
       if (!existsSync(from)) continue;
       try {
         cpSync(from, path.join(wt, dir), { recursive: true });
@@ -626,8 +644,16 @@ function gatesAt(sha: string): void {
         info(`${dir}/ moved under the copy (${(err as Error).message.slice(0, 60)}…) — retrying once`);
         cpSync(from, path.join(wt, dir), { recursive: true, force: true });
       }
+      copied.push(`${dir}/`);
     }
-    info("tests run with .env.local linked and data/ + output/ copied — the suite is not hermetic");
+    /* **Says what happened, not what was meant to.** This line used to name both
+       directories unconditionally, so a run where the corpus was absent and
+       nothing was copied printed the same sentence as one where it worked. */
+    info(
+      copied.length === 0
+        ? `nothing copied — ${GATE_FIXTURE_ROOT}/ has neither half; the tests below run against an empty store`
+        : `tests run with .env.local linked and ${copied.join(" + ")} copied from ${GATE_FIXTURE_ROOT}/`,
+    );
 
     const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
     gate("typecheck", tc.code === 0, () => tail(tc.out, 20));

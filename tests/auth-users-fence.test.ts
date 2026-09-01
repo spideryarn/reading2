@@ -118,7 +118,16 @@ describe("drizzle cannot see auth.users", () => {
        subdirectory or a single quote would have walked past it, and the test
        would have gone on reporting an empty list — the shape of guard this repo
        keeps getting caught by. GPT Sol, 2026-08-28. */
-    const offenders = tsFilesUnder("src/db").filter((rel) => AUTH_SCHEMA.test(read(rel)));
+    const files = tsFilesUnder("src/db");
+    /* **And that the walk found the tree**, which the control below cannot say.
+       That one proves the regex fires; this proves the sweep has something to
+       fire at. A walker that returned nothing — a renamed directory, a filter
+       that stopped matching `.ts` — reports an empty offender list, which is
+       the same green as a clean one. docs/reusable/silent-success.md. */
+    expect(files, "the sweep of src/db found no TypeScript files at all").toContain(
+      "src/db/schema.ts",
+    );
+    const offenders = files.filter((rel) => AUTH_SCHEMA.test(read(rel)));
     expect(offenders).toEqual([]);
   });
 

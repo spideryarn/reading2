@@ -1,0 +1,91 @@
+{
+  "version": "ideas/1",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e.9fa0a24e110d45f7",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-pzgh6j",
+      "name": "Letting AI write bypasses your own thinking, not just your typing",
+      "provenance": "assumed",
+      "statement": "When a person has AI generate text for them, the thinking that would normally have occurred during composition simply does not happen, rather than being redirected into prompting, judging, or editing.",
+      "whyYouNeedIt": "The essay's leap from 'AI can produce your writing' to 'you become a write-not and therefore a think-not' only holds if delegating the writing also delegates the thinking; otherwise AI could be a tool that still demands the user's own clear thought.",
+      "occurrences": [
+        {
+          "blockId": "spya-gm3xu0",
+          "quote": "You can have AI do it for you, both in school and at work.",
+          "reasoning": "Treats 'having AI do it' as a clean substitute with no residual thinking required from the person, which is the unstated premise.",
+          "start": 88
+        },
+        {
+          "blockId": "spya-hg7u0a",
+          "quote": "The result will be a world divided into writes and write-nots.",
+          "reasoning": "The dichotomy only makes sense if using AI places someone fully on the write-not side rather than in some hybrid category of AI-assisted thinker.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-xk7vyy",
+          "quote": "So a world divided into writes and write-nots is more dangerous than it sounds. It will be a world of thinks and think-nots.",
+          "reasoning": "Collapses the writing divide into a thinking divide, which requires assuming AI-generated text carries none of the user's own thought.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-wdzn30",
+      "name": "Writing is the mechanism of thought, not its record",
+      "provenance": "introduced",
+      "statement": "Producing coherent prose is not just a way of reporting thoughts you already had; certain kinds of clear thinking can only happen through the act of writing itself.",
+      "occurrences": [
+        {
+          "blockId": "spya-ts48cj",
+          "quote": "To write well you have to think clearly, and thinking clearly is hard.",
+          "reasoning": "States the causal link between the two activities that the rest of the piece depends on.",
+          "start": 85
+        },
+        {
+          "blockId": "spya-z7zzwv",
+          "quote": "writing is thinking. In fact there's a kind of thinking that can only be done by writing.",
+          "reasoning": "Makes the identification explicit and universal, not just correlated.",
+          "start": 60
+        },
+        {
+          "blockId": "spya-arj7ry",
+          "quote": "If you're thinking without writing, you only think you're thinking.",
+          "reasoning": "Sharpens the claim into a falsifiable test: apparent thought without writing is illusory.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-pbckcx",
+      "name": "Skills sustained by necessity vanish once the necessity disappears",
+      "provenance": "introduced",
+      "statement": "When circumstances no longer force people to practice a demanding skill, most people will stop, and the skill will persist only among those who choose to pursue it for its own sake.",
+      "analogy": "Like a factory that stops requiring physical labor: workers who were strong because their jobs demanded it become average, and only people who deliberately go to the gym stay strong.",
+      "occurrences": [
+        {
+          "blockId": "spya-zzw20p",
+          "quote": "if you couldn't buy or steal words, you had to write them yourself. And as a result nearly everyone who was expected to write had to learn how.",
+          "reasoning": "Establishes that necessity, not desire, was what previously produced widespread competence.",
+          "start": 181
+        },
+        {
+          "blockId": "spya-rqzp97",
+          "quote": "In preindustrial times most people's jobs made them strong. Now if you want to be strong, you work out. So there are still strong people, but only those who choose to be.",
+          "reasoning": "States the general pattern directly and applies it as the model for what will happen to writing.",
+          "start": 37
+        },
+        {
+          "blockId": "spya-smzw4j",
+          "quote": "There will still be smart people, but only those who choose to be.",
+          "reasoning": "Applies the necessity-driven-skill pattern to thinking itself as the article's closing claim.",
+          "start": 34
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-08-26T21:42:58.231Z",
+  "elapsedMs": 44495
+}

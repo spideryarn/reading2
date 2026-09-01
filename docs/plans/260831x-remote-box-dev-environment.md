@@ -482,7 +482,10 @@ they agree.
    child's inherited environment, rather than only rewording "local by construction". Sol's second
    review, and it belongs to whoever owns that script. Note the concrete bypass it was reasoning
    about is now closed at `isLocalDatabaseUrl`, so this is defence in depth rather than the hole.
-3. **Nothing verifies GitHub auth actually works, and the tokens expire in 90 days.** `clone` checks
+3. **Nothing verifies GitHub auth actually works.** Less urgent since 2026-08-31, when Greg made
+   both tokens non-expiring — the deadline that made this a matter of time is gone, and what is
+   left is revocation, a repo added under a new owner, or the org policy being flipped. Still worth
+   the one check, because the symptom is indistinguishable from a typo. `clone` checks
    the token file exists and is 0600, not that it authenticates; `doctor` does not test GitHub at
    all; `provision.sh` checks the helper is registered and refuses unknown owners, never a real
    token. Stage 2's own "Done when" — `git push --dry-run` from inside a generated tmux job — was

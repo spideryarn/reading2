@@ -26,8 +26,9 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 
 **The CLI**
 
-- [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new`, `shell`, `resume`,
-  `kill`, `doctor`, `clone`, `push-env`, `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
+- [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
+  `new-shell`, `resume`, `kill`, `doctor`, `clone`, `push-env`, `ssh`, `tunnel`, `forget-key`.
+  `--help` is long on purpose.
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
@@ -38,6 +39,18 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list.
   Split out so it can be tested without a network:
   [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
+- [`scripts/gjd-remote-tab.ts`](../../scripts/gjd-remote-tab.ts) — which iTerm tabs are on the box,
+  below. Split out so the byte sequences and the guards can be tested without a terminal:
+  [`tests/gjd-remote-tab.test.ts`](../../tests/gjd-remote-tab.test.ts). The paint/un-paint lifecycle
+  is tested through the real CLI in a real pty, Ctrl-C included, in
+  [`tests/gjd-remote-tab-lifecycle.test.ts`](../../tests/gjd-remote-tab-lifecycle.test.ts).
+- [`scripts/gjd-remote-run.ts`](../../scripts/gjd-remote-run.ts) — turning what you typed into what
+  runs on the box: `--wait`'s durations and the argv for `ssh <command>`. Split out for the same
+  reason as the rest — `gjd-remote.ts` calls `main()` at import time, so nothing in it can be
+  unit-tested at all: [`tests/gjd-remote-run.test.ts`](../../tests/gjd-remote-run.test.ts).
+- [`scripts/gjd-remote-log.ts`](../../scripts/gjd-remote-log.ts) — the append-only record of what was
+  asked for, and the verdict that says which launches never ran. Tested in
+  [`tests/gjd-remote-log.test.ts`](../../tests/gjd-remote-log.test.ts); see [The log](#the-log).
 
 **The machine**
 
@@ -75,13 +88,47 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md](../plans/260831aa-gjd-remote-ssh-multiplexing-stdin-prompt-tmux-target-colon-fix.md)
   — the timings below, and the bugs found underneath them.
 
+## Which tabs are on the box
+
+A dozen tabs in one window look identical, and the difference that matters is invisible until you
+type into the wrong one. So everything that hands the terminal over — `new-claude`, `new-shell`,
+`resume`, `ssh`, `tunnel` — paints the iTerm tab violet while it holds it, and hands the colour back
+to your profile when it lets go. `GJD_REMOTE_TAB_COLOUR=off`, or a `#rrggbb` for a different one.
+
+It is skipped, silently, anywhere the sequence might be printed instead of obeyed: stdout is not a
+terminal, the terminal is not iTerm, you are inside tmux or screen, you came in over ssh, or `CI` is
+set. The sequence goes to
+`gjd-remote`'s own stdout, because `gjd-remote` runs **in** the tab it is colouring — mosh and ssh
+replace this terminal's contents rather than opening a new one. There is no AppleScript route:
+iTerm 3.6.6 has no tab-colour property in its dictionary at all.
+
+The reasoning, the options passed over, and how it was checked against a live terminal are in
+[../plans/260831ae-gjd-remote-iterm-tab-colour.md](../plans/260831ae-gjd-remote-iterm-tab-colour.md).
+
+## The status line
+
+The box shows the same status line as the laptop — model, directory, git branch, and a ten-cell bar
+for how much of the context window is gone, yellow from 70% and red from 90%. Auto-compaction lands
+around 80%, so the colour arrives before the loss does.
+
+The script is a heredoc inside [`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh)
+rather than a file of its own, because that is the file you re-run on a live box; a second copy is
+the copy that goes stale. Being a heredoc makes it invisible to `bash -n`, so
+[`tests/statusline.test.ts`](../../tests/statusline.test.ts) carves it back out and runs it, and
+`provision.sh` re-runs it on the box itself. Why it is arranged that way, and the unterminated
+heredoc that ate forty lines while every check stayed green, are in
+[infra/hetzner/README.md § The status line](../../infra/hetzner/README.md#the-status-line).
+
+A session already running keeps the status line it started with — settings are read at launch — so
+an existing tmux session needs a restart to pick it up.
+
 ## Starting a session with a prompt
 
 `-p` takes the prompt as an argument; `-p -` reads it from stdin, which is what you want for prose,
 because a heredoc needs no escaping at all:
 
 ```
-gjd-remote new -p - <<'EOF'
+gjd-remote new-claude -p - <<'EOF'
 anything at all — "quotes", `backticks`, $VARS, newlines
 EOF
 ```
@@ -95,6 +142,94 @@ local shell's. Two limits, both deliberate:
 - `-p -` spends stdin on the prompt, so the attach reopens `/dev/tty`. With no controlling terminal
   you get told to use `--no-attach` and `resume`, rather than a hang.
 
+## Starting it later: `--wait`
+
+`gjd-remote new-claude --wait 2h -p - <<'EOF' … EOF` makes the session now and starts Claude in two
+hours. Units are `s m h d`, and **one is required** — `--wait 2` is refused rather than guessed at,
+because seconds and hours are both fair readings of it and they are 3600× apart.
+
+> I wonder if it would be simpler for me to gauge how much there is currently to run, and simply
+> specify a `--wait num_hours` … or even just add "Run unix sleep for num_hours…" to the beginning
+> of the prompt
+>
+> — Greg, 2026-08-31
+
+It is a `sleep` in the job script, before the `claude` line — **not** an instruction in the prompt,
+which was the other half of that suggestion. Putting it in the prompt makes Claude start, spend a
+paid call reading it, and decide whether to obey; the session and its usage are gone before the
+waiting begins. Three things follow from where the sleep is:
+
+- **The guards run before it, not after.** The job checks it can enter the directory and that
+  `claude` is on its PATH, *then* sleeps. Reversed, a box with a stock PATH would say nothing for
+  two hours and then end the session, at the one moment nobody is watching. Verified by reading the
+  generated job back off the box rather than by reading the source that writes it.
+- **It does not attach**, and says so. There is nothing to watch but a sleep.
+- **It says `✓ created`, never `✓ started`.** Claude has not started, and the tick that says it has
+  is the one this tool has had to earn back twice.
+
+Two things it is not. **It is not a queue** — nothing counts how many sessions are running, and ten
+`--wait 2h` jobs all start at once, two hours from now. And **a waiting session does not survive the
+box rebooting**; nothing does, and there is no replay. What there is instead is a record: [The log](#the-log) below, and
+`gjd-remote log --lost`. Why neither was built, and what would have to
+be true to build them, is in
+[../plans/260901a-gjd-remote-wait-duration-and-ssh-command.md](../plans/260901a-gjd-remote-wait-duration-and-ssh-command.md).
+
+The pane and the laptop print the deadline in **different time zones**, each naming its own: the box
+is Europe/London, and the laptop is wherever Greg is. Both are right. The sleep is a duration, so no
+clock can affect how long it actually waits.
+
+## `gjd-remote ssh` takes a command
+
+`gjd-remote ssh 'free -g; tmux ls'` runs it on the box and prints what it said; `gjd-remote ssh` on
+its own is still a shell. No pty when there is a command, like ssh itself, so the output pipes
+cleanly and the exit code is the command's.
+
+Until 2026-09-01 the arguments were **dropped on the floor**: the case ignored its positionals,
+opened a login shell, printed the MOTD and exited 0. Asking the box a question and being handed a
+welcome banner is [silent-success.md](../reusable/silent-success.md) in one line — the exit code
+said the command had run, and it had never existed. Everything after `ssh` now goes through
+unparsed, because a command's own flags are not ours to read.
+
+## The log
+
+Every `gjd-remote` command appends one line to
+`${XDG_STATE_HOME:-~/.local/state}/gjd-remote/gjd-remote.ndjson` — `gjd-remote log --path` prints
+where, `GJD_REMOTE_LOG_DIR` moves it. Launches add a second, richer line, and
+**`gjd-remote log --lost` says which of them never became a Claude**, exiting non-zero if any did
+not.
+
+> My only worry is that we might schedule a prompt with a long wait period, and then something
+> happens (e.g. the remote server gets rebooted) and it gets lost.
+>
+> — Greg, 2026-09-01
+
+That is what it is for. A `--wait` job is a `sleep` in a tmux session, and **a session that a reboot
+ate looks exactly like one that finished** — both are simply absent. So the evidence comes from two
+places: the laptop records the intent, and the job script on the box appends one line to
+`~/gjd-remote/log/starts.ndjson` the instant before it execs Claude. `/home` is a separate volume,
+so that line outlives the machine being rebuilt, not merely rebooted.
+
+Four things about it, each of which is a decision rather than a detail:
+
+- **The transcript cannot answer this**, and was the first design. A session started with no prompt
+  had **no** `~/.claude/projects/*/<uuid>.jsonl` after 45 seconds while its process was running,
+  because the file is written from the first message; with a prompt one appeared within 15 seconds.
+  So a transcript proves Claude ran and its absence proves nothing — the wrong way round.
+- **A job you killed is not a loss.** Kills are recorded too, and matched **by uuid**, because `ls`
+  renames a session to Claude's title and the name you kill is usually not the name it was launched
+  under.
+- **It is not in the repo**, though "git-ignored" is what was asked for: worktrees would split the
+  record across checkouts, and the repo is inside Dropbox, so an append-only file there syncs on
+  every command.
+- **It never holds the prompt** — no argv field, no prompt field, only the length and the path on
+  the box. It does hold the session *name*, and for an unnamed session that name is the first five
+  words of the prompt, so the file is `0600` in a `0700` directory and is not as harmless as it
+  looks.
+
+[../plans/260901c-gjd-remote-log-for-lost-waited-jobs.md](../plans/260901c-gjd-remote-log-for-lost-waited-jobs.md)
+has the reasoning, GPT Sol's review, and the four things it deliberately does not do — including the
+per-uuid remote manifest and the box identity that a v2 would want.
+
 ## How slow it is, and why
 
 Nothing here is CPU-bound. **The cost is ssh handshakes** — about fifteen network round trips each,
@@ -105,7 +240,7 @@ value.
 | | |
 |---|---|
 | `gjd-remote ls` | ~2s — one connection |
-| `gjd-remote new --no-attach` | ~7s — one handshake, then five cheap commands |
+| `gjd-remote new-claude --no-attach` | ~7s — one handshake, then five cheap commands |
 | attaching | **~13s on top**, and see below |
 
 Every subcommand opens **one** ssh master and runs everything down it. The master is scoped to the
@@ -131,7 +266,7 @@ commands from there, and the middle one is the whole of it:
 
 ```
 gjd-remote push-env                 # from the laptop: .env.local, allowlisted keys only
-gjd-remote shell -d ~/code/spideryarn2
+gjd-remote new-shell -d ~/code/spideryarn2
 npm ci && npm run setup             # on the box
 ```
 
@@ -180,6 +315,12 @@ Two things worth knowing:
 - **With nothing bound, you detach by closing the tab** — the session survives, verified. From
   another shell on the box, `tmux detach-client -s NAME`. `gjd-remote resume` brings you back.
   If you want a key for it, `bind -n F12 detach-client` is one line; no TUI here sends F12.
+- **The file being right and the keyboard being right are two facts.** A tmux server reads its
+  config once, at start, and the box's server outlives provisioning by weeks — so provisioning
+  rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
+  ends are now covered: provisioning reloads a running server (skipping it, loudly, if any pane is
+  in copy-mode, because unbinding out from under one strands it), and `gjd-remote doctor` counts
+  both numbers every run as **`tmux keys`**.
 
 [../research/260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md)
 proposed a much larger `.tmux.conf` — mouse on, scroll bindings, a bigger history limit. That was
@@ -205,8 +346,16 @@ written before the keys turned out to be the problem, and it is superseded here.
   runs could otherwise start each other's job. `cmdNew` in
   [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) says why.
 
-## Known hole
+## Known holes
 
 `confirmStarted()` proves that tmux still has a session, not that Claude is running in it. An
 immediate Claude failure — a bad option, an auth problem — leaves a live login shell and still
 prints `✓ started`. Undecided; raised with Greg 2026-08-31.
+
+**A rebuild would currently fail at the Hetzner API.** `user_data` is capped at 32 KiB and ours
+renders to about 79, because `provision.sh` rides inside it base64-encoded and has grown for weeks
+along a path — re-running it on the live box — that has no size limit. Nothing is broken today and
+nothing else could have seen it: Terraform keeps only a hash of the field, so `tofu plan` cannot
+either. `scripts/check-cloud-init.ts` now measures it and fails; the options for fixing it are in
+[infra/hetzner/README.md § The preflight now says `user_data` is too big](../../infra/hetzner/README.md#the-preflight-now-says-user_data-is-too-big-and-it-is-right).
+Raised with Greg 2026-09-01.

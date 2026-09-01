@@ -246,10 +246,19 @@ if (reachable) {
     if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
       continue;
     }
+    /* `ENOENT` only — a peer suite's fixture on its way out is the one error
+       worth reading as "no files"; anything else means the scan is not seeing
+       what is there, and an article dropping out of the corpus in silence is
+       how this suite stops round-tripping the thing it was written for. Same
+       rule, same reason, in tests/store-artefact-manifest.test.ts. */
     const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
-      () => [] as string[],
+      (err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return [] as string[];
+        throw err;
+      },
     );
     if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
+
     /* **An article that cannot be published cannot be exported**, and there is
        one in `data/`. `labels.json` is stage 4's output, and one written
        before it recorded a `sourceHash` gives the publication gate nothing to
@@ -347,6 +356,46 @@ when("a round trip through Postgres", () => {
 
   it("has something to round-trip", () => {
     expect(slugs.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * **And an artefact no article carries is compared by every slug and checked
+   * by none.**
+   *
+   * `preserves %s exactly` reads the file from `data/`, finds it absent, asserts
+   * the export did not invent one, and returns green. That is the right answer
+   * for one article — absent must stay absent — but if *no* article in the
+   * corpus has, say, `quotes.json`, then the whole `it.each` row is that branch
+   * on every slug, and the export could stop writing quotes entirely without a
+   * single test changing colour. Today one article carries `quotes.json` and one
+   * carries `timeline.json`; a corpus trimmed without knowing that silently
+   * withdraws two artefacts from this suite.
+   *
+   * So the coverage is asserted rather than assumed — the same argument the
+   * review test below already makes for reviews, made once for the whole list.
+   * docs/plans/260901b-committed-fixture-corpus.md, ranked silent failure 3.
+   */
+  it("has at least one article carrying each artefact it claims to preserve", async () => {
+    const uncovered: string[] = [];
+    for (const artefact of ARTEFACTS) {
+      let carried = false;
+      for (const slug of slugs) {
+        if ((await readJsonIfPresent(path.join(ROOT, "data", slug, artefact))) !== undefined) {
+          carried = true;
+          break;
+        }
+      }
+      if (!carried) uncovered.push(artefact);
+    }
+    expect(
+      uncovered,
+      uncovered.length
+        ? `No article in the corpus has these, so "preserves %s exactly" is asserting only ` +
+            `that the export invented nothing:\n  ${uncovered.join("\n  ")}\n` +
+            `Either the corpus needs an article that carries them, or the export stopped ` +
+            `writing them and nothing here could tell.`
+        : "",
+    ).toEqual([]);
   });
 
   it("excluded only articles whose labels file predates sourceHash", async () => {

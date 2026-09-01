@@ -84,7 +84,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
@@ -119,6 +119,80 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * equality. GPT Sol's decision 1, 2026-08-28.
  */
 const LEGACY_SLUG = "constitution";
+
+/**
+ * **It is out of the two library comparisons as well, and both stores are
+ * right about it.**
+ *
+ * The filesystem store knows nothing about publication: the article has blocks
+ * and a tree on disk, so `src/api.ts` describes it and puts it on the shelf.
+ * Postgres refuses to publish it — the `describe` block below — and
+ * `onTheShelf` (src/store/pg.ts) drops any article with no current revision, so
+ * it is never in that library at all. That is the legacy article being legacy in
+ * the one place a library can see it, and it is not a parity failure any more
+ * than the refusal itself is.
+ *
+ * **This did not surface until the committed corpus did, and that is the
+ * finding rather than a regression.** On a laptop `data/constitution/shelf.json`
+ * says `archivedAt` — Greg archived it on 2026-08-27, after 199 opens — and
+ * `src/api.ts` filters the library on `!!e.archivedAt === !!opts.archived`. So
+ * the filesystem never listed it, the comparison never met it, and both tests
+ * passed on one machine's reader state rather than on their own property. The
+ * corpus carries no reader state, deliberately, because it is a real reader's
+ * words (tests/fixtures/data-root/README.md) — so there the article is
+ * unarchived, the difference appears, and the tests go red for something that
+ * was always true. docs/plans/260901b-committed-fixture-corpus.md § Ranked
+ * silent failures, 2.
+ *
+ * Excluded by the same constant that keeps it out of `slugs`, and **asserted
+ * rather than merely subtracted** — see `expectPostgresOmitsTheLegacyArticle`.
+ */
+
+/**
+ * Postgres must have no published revision for the article it refused.
+ *
+ * The exclusion above removes a known difference, and a subtraction that is
+ * never checked is how a real difference hides behind a permitted one. This is
+ * the other half, and it enforces what the block below only says in prose: *if
+ * this ever gains a stamp, retire the case.* Stamp `labels.json`, and the load
+ * publishes, and this goes red at the exclusion site rather than the exclusion
+ * quietly covering for it.
+ *
+ * **Asserted against `articles.current_revision_id`, and deliberately NOT
+ * against the library listing, which cannot see this.** The obvious form was
+ * written first —
+ *
+ *     expect(fromPg.map((e) => e.slug)).not.toContain(LEGACY_SLUG)
+ *
+ * — and it was green for the wrong reason, which is the same wrong reason this
+ * whole exclusion exists to document. `src/store/pg.ts:1367` filters the
+ * Postgres library on `articles.archived_at` exactly as `src/api.ts` filters
+ * the filesystem one, and this laptop's database has `constitution` archived
+ * too. Staged with a matching `sourceHash` in a throwaway worktree, the article
+ * published, `loadArticle` served it, the three tests below went red — and that
+ * assertion still passed. The accident had a mirror image on the other side,
+ * and a guard reading the shelf could not have seen either. Measured on
+ * 2026-09-01 rather than reasoned; docs/reusable/silent-success.md.
+ *
+ * The revision pointer is the fact itself, so no filter is in front of it.
+ * Scoped to the owner, like every other read here, so a mis-set `DATABASE_URL`
+ * cannot answer this question about somebody else's article.
+ */
+async function expectPostgresRefusedTheLegacyArticle(): Promise<void> {
+  const [row] = await getDb()
+    .select({ currentRevisionId: articles.currentRevisionId })
+    .from(articles)
+    .where(and(eq(articles.slug, LEGACY_SLUG), eq(articles.ownerId, currentOwnerId())));
+
+  expect(
+    row?.currentRevisionId ?? null,
+    `Postgres has a published revision for ${LEGACY_SLUG}, which the gate is supposed to ` +
+      "refuse. Either labels.json gained a sourceHash — in which case retire the case, as " +
+      "the block below says, rather than restoring the stale file — or the publication gate " +
+      "stopped checking. Both are real changes and neither should be absorbed by the " +
+      "exclusion at the comparison sites.",
+  ).toBeNull();
+}
 
 /** The article with no stage 1, and therefore no `url` and no `fetchedAt`. */
 const NO_FETCH_SLUG = "noema-mythology-of-conscious-ai";
@@ -176,8 +250,17 @@ async function completeArticles(): Promise<string[]> {
        alone — the least useful kind of red. Excluded by name, the same way
        `_jobs` is, rather than left to fail the artefact check by luck. */
     if (entry.name.startsWith("test-")) continue;
+    /* **`ENOENT` only.** A directory listed a millisecond ago can be a peer
+       suite's fixture on its way out, and that is the one error worth reading
+       as "no files". Every other error — a permission, an I/O fault — means the
+       scan is not seeing what is there, and an article silently leaving the
+       corpus is how a parity suite quietly stops comparing the thing it was
+       written for. Same rule, same reason, in tests/store-artefact-manifest.test.ts. */
     const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
-      () => [] as string[],
+      (err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return [] as string[];
+        throw err;
+      },
     );
     if (files.includes("blocks.json") && files.includes("tree.json")) slugs.push(entry.name);
   }
@@ -249,6 +332,25 @@ when("the filesystem and Postgres stores agree", () => {
   it("has something to compare", () => {
     // A parity suite over zero articles passes perfectly and proves nothing.
     expect(slugs.length).toBeGreaterThan(0);
+
+    /* **And a count is satisfied by one, which is not what this file needs.**
+       Two of the corpus's articles are named up top and carry a `describe` each
+       — the legacy one the gate refuses, and the one with no stage 1. Neither
+       block says anything useful about an article that is not there: the
+       missing-fixture red arrives inside whichever assertion happens to touch
+       it first, blaming the store. So the corpus is asked for them by name,
+       here, before any of that runs.
+       docs/plans/260901b-committed-fixture-corpus.md § "Named slugs are not coverage". */
+    expect(
+      onDiskSlugs,
+      `data/${LEGACY_SLUG} is the article whose labels.json predates sourceHash — the whole ` +
+        `case for the publication gate. Without it the block below tests nothing.`,
+    ).toContain(LEGACY_SLUG);
+    expect(
+      slugs,
+      `data/${NO_FETCH_SLUG} is the article with no stage 1, and the only one that proves ` +
+        `Postgres refuses to write url and fetchedAt from the extract step.`,
+    ).toContain(NO_FETCH_SLUG);
   });
 
   it("built every article from nothing, rather than carrying one forward", () => {
@@ -525,7 +627,13 @@ when("the filesystem and Postgres stores agree", () => {
        scoped to articles that exist on disk right now. An extra article that
        DOES have a directory still fails, which is the property worth keeping. */
     const onDisk = new Set(await completeArticles());
-    const present = (entries: LibraryEntry[]) => entries.filter((e) => onDisk.has(e.slug));
+    /* `LEGACY_SLUG` comes out here for the reason written beside its
+       declaration: the filesystem lists an article it can serve, Postgres does
+       not list one it refused to publish, and both are correct. Asserted on the
+       Postgres side rather than left to the filter. */
+    await expectPostgresRefusedTheLegacyArticle();
+    const present = (entries: LibraryEntry[]) =>
+      entries.filter((e) => onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
     /* **A comment whose anchor is not a block id is counted by the files and
        cannot exist in Postgres.**
@@ -534,10 +642,12 @@ when("the filesystem and Postgres stores agree", () => {
        at it; `comments.json` has none, and something wrote a comment on
        `data/writes` anchored to `zzzz00`. The seeder drops it by that rule
        (tests/helpers/seed-reader-state.ts), so the filesystem count is one
-       higher. That is a permitted difference and it is the ONLY permitted one,
-       so it is subtracted here by the same rule rather than by a hardcoded
-       number — the day the corrupt row is deleted, this becomes a no-op instead
-       of becoming wrong. */
+       higher. That is a permitted difference and it is the only one *within* a
+       card, so it is subtracted here by the same rule rather than by a
+       hardcoded number — the day the corrupt row is deleted, this becomes a
+       no-op instead of becoming wrong. (The other permitted difference is about
+       which cards there are rather than what is on one: `LEGACY_SLUG`, excluded
+       just above.) */
     const skipped = new Map<string, number>();
     for (const slug of onDisk) {
       const bad = (await fsCommentStore.load(slug)).filter((c) => !isSpideryarnId(c.blockId));
@@ -705,8 +815,11 @@ when("the filesystem and Postgres stores agree", () => {
       pgArticleReader.listArticles(),
     ]);
     const onDisk = new Set(await completeArticles());
+    /* Same exclusion, same reason, and the same positive assertion — see
+       `expectPostgresOmitsTheLegacyArticle` and the note by `LEGACY_SLUG`. */
+    await expectPostgresRefusedTheLegacyArticle();
     const mine = (entries: LibraryEntry[]) =>
-      entries.filter((e) => !e.fixture && onDisk.has(e.slug));
+      entries.filter((e) => !e.fixture && onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
     // Same articles. Sorted by slug, because the ORDER is the next assertion
     // and comparing both at once reports either failure as the other.

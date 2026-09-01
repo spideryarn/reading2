@@ -1,0 +1,235 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "todo",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0012"
+      ],
+      "range": [
+        "spya-shh76z",
+        "spya-dn2fm3"
+      ],
+      "title": "The Top of My Todo List",
+      "gist": "Reflecting on a nurse's list of dying regrets, the author distills them into a personal anti-cog creed and turns it into daily reminders.",
+      "sourceHeading": "The Top of My Todo List"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0009"
+      ],
+      "range": [
+        "spya-shh76z",
+        "spya-mwupnd"
+      ],
+      "title": "Regrets of the Dying",
+      "gist": "A palliative care nurse's list of common deathbed regrets rings true and reveals a pattern of self-diminishment."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008"
+      ],
+      "range": [
+        "spya-shh76z",
+        "spya-up3g9y"
+      ],
+      "title": "Bronnie Ware's List",
+      "gist": "Bronnie Ware's list of dying people's regrets seems plausible, and the author admits he could make most of these mistakes himself."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-shh76z",
+        "spya-shh76z"
+      ],
+      "title": "",
+      "navLabel": "The Top of My Todo List"
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-zdnrcx",
+        "spya-zdnrcx"
+      ],
+      "title": "",
+      "navLabel": "~1 min read"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-wbrket",
+        "spya-wbrket"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-jgwh3e",
+        "spya-jgwh3e"
+      ],
+      "title": "",
+      "navLabel": "April 2012"
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-up3g9y",
+        "spya-up3g9y"
+      ],
+      "title": "",
+      "navLabel": "Bronnie Ware's list of dying people's regrets seems plausible to the author, who could make 4 of 5 mistakes"
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0010",
+        "n0011"
+      ],
+      "range": [
+        "spya-fvqhme",
+        "spya-mwupnd"
+      ],
+      "title": "Portrait of the Cog",
+      "gist": "These regrets collectively describe a person who shrinks to fit circumstances and dutifully follows a path until it ends, and such lapses happen by default rather than by choice."
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-fvqhme",
+        "spya-fvqhme"
+      ],
+      "title": "",
+      "navLabel": "The 5 regrets paint a portrait of post-industrial man who shrinks to fit circumstances and turns dutifully till he stops"
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-mwupnd",
+        "spya-mwupnd"
+      ],
+      "title": "",
+      "navLabel": "The mistakes producing these regrets are errors of omission, dangerous because made by default"
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0013",
+        "n0016"
+      ],
+      "range": [
+        "spya-ycfbkt",
+        "spya-dn2fm3"
+      ],
+      "title": "Turning Regrets Into Commands",
+      "gist": "Since these default mistakes require active reminders to avoid, the author inverts the five regrets into five commands and pins them atop his todo list."
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [
+        "n0014",
+        "n0015"
+      ],
+      "range": [
+        "spya-ycfbkt",
+        "spya-kr5gze"
+      ],
+      "title": "Inverting the Regrets",
+      "gist": "Because such omissions occur by default, the author reasons he must be actively reminded to avoid them, so he flips the five regrets into five commands."
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-ycfbkt",
+        "spya-ycfbkt"
+      ],
+      "title": "",
+      "navLabel": "Since these mistakes happen by default, the author inverted the 5 regrets into 5 commands to be reminded"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-kr5gze",
+        "spya-kr5gze"
+      ],
+      "title": "",
+      "navLabel": "Don't ignore your dreams; don't work too much; say what you think; cultivate friendships; be happy"
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [
+        "n0017"
+      ],
+      "range": [
+        "spya-dn2fm3",
+        "spya-dn2fm3"
+      ],
+      "title": "Atop the Todo List",
+      "gist": "The author places these five commands at the very top of his todo list as a constant reminder."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-dn2fm3",
+        "spya-dn2fm3"
+      ],
+      "title": "",
+      "navLabel": "The author put these commands at the top of his todo list file"
+    }
+  }
+}

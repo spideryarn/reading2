@@ -1,0 +1,11 @@
+{
+  "lookups": {
+    "spya-uup6nt": {
+      "answer": "Fixture glossary answer. Stands in for a term lookup the reader asked for.",
+      "citations": [],
+      "searches": 0,
+      "model": "anthropic/claude-sonnet-5",
+      "at": "2026-08-26T01:48:00.000Z"
+    }
+  }
+}

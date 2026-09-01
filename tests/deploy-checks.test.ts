@@ -9,6 +9,7 @@
  *
  * See scripts/deploy-checks.ts and docs/plans/260827v-deploy-pipeline.md.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -21,6 +22,7 @@ import {
   declaredBuckets,
   describeRedirect,
   findSecretsInBundle,
+  GATE_FIXTURE_ROOT,
   GATE_FIXTURES,
   judgeClientBuild,
   judgeDeployments,
@@ -809,33 +811,33 @@ describe("the fixtures the gate worktree needs before its tests mean anything", 
          script scratch besides. Leave them out and the old `["data", "output",
          …]` list reports those two missing, which is indistinguishable from it
          working. GPT Sol, 2026-08-29. */
-      "data",
-      "output",
-      "data/writes/chat.json",
-      "data/writes/comments.json",
-      "data/writes/searches.json",
-      "data/writes/shelf.json",
-      "data/writes/glossary-lookups.json",
-      "data/constitution/chat.json",
-      "output/writes.html",
-      "output/writes.blocks.json",
+      "tests/fixtures/data-root/data",
+      "tests/fixtures/data-root/output",
+      "tests/fixtures/data-root/data/writes/chat.json",
+      "tests/fixtures/data-root/data/writes/comments.json",
+      "tests/fixtures/data-root/data/writes/searches.json",
+      "tests/fixtures/data-root/data/writes/shelf.json",
+      "tests/fixtures/data-root/data/writes/glossary-lookups.json",
+      "tests/fixtures/data-root/data/constitution/chat.json",
+      "tests/fixtures/data-root/output/writes.html",
+      "tests/fixtures/data-root/output/writes.blocks.json",
     );
     /* **Spelled out, not derived from `GATE_FIXTURES`.** An expectation
        computed from the list under test agrees with any list, including the one
        this test exists to reject — and including a future list that has quietly
        lost a sentinel. */
     expect(missingGateFixtures(readerStateOnly)).toEqual([
-      "data/writes/raw.json",
-      "data/writes/raw.html",
-      "data/writes/meta.json",
-      "data/writes/tree.json",
-      "data/writes/labels.json",
-      "data/writes/blocks.json",
-      "data/writes/arc.json",
-      "data/writes/tweets.json",
-      "data/writes/glossary.json",
-      "data/writes/ideas.json",
-      "data/constitution/labels.json",
+      "tests/fixtures/data-root/data/writes/raw.json",
+      "tests/fixtures/data-root/data/writes/raw.html",
+      "tests/fixtures/data-root/data/writes/meta.json",
+      "tests/fixtures/data-root/data/writes/tree.json",
+      "tests/fixtures/data-root/data/writes/labels.json",
+      "tests/fixtures/data-root/data/writes/blocks.json",
+      "tests/fixtures/data-root/data/writes/arc.json",
+      "tests/fixtures/data-root/data/writes/tweets.json",
+      "tests/fixtures/data-root/data/writes/glossary.json",
+      "tests/fixtures/data-root/data/writes/ideas.json",
+      "tests/fixtures/data-root/data/constitution/labels.json",
     ]);
   });
 
@@ -844,12 +846,47 @@ describe("the fixtures the gate worktree needs before its tests mean anything", 
      output/ — the other half of the artefact store — was never copied at
      all, and `--force-gate=test` became the only way anyone deployed. */
   it("names the output artefacts when only data/ was copied", () => {
-    const dataOnly = has(...GATE_FIXTURES.filter((f) => f.startsWith("data/")));
-    expect(missingGateFixtures(dataOnly)).toEqual(["output/writes.html", "output/writes.blocks.json"]);
+    const dataOnly = has(...GATE_FIXTURES.filter((f) => f.includes("/data/")));
+    expect(missingGateFixtures(dataOnly)).toEqual([
+      "tests/fixtures/data-root/output/writes.html",
+      "tests/fixtures/data-root/output/writes.blocks.json",
+    ]);
   });
 
   it("passes when every fixture is there", () => {
     expect(missingGateFixtures(has(...GATE_FIXTURES))).toEqual([]);
+  });
+
+  /* **The point of the whole exercise, asserted rather than assumed.** These
+     sentinels used to be `data/writes/…` — the developer's own gitignored
+     scratch store — so the gate really asked "did whoever is deploying happen to
+     have run the pipeline on this laptop", and could not pass in a fresh clone.
+     A sentinel that drifts back outside the tracked corpus silently restores
+     that, and nothing else here would notice: every test above is about which
+     files are named, not about where they live.
+     docs/plans/260901b-committed-fixture-corpus.md. */
+  it("names only tracked files, so the gate asks about the commit and not the laptop", () => {
+    expect(GATE_FIXTURES.filter((f) => !f.startsWith(`${GATE_FIXTURE_ROOT}/`))).toEqual([]);
+  });
+
+  /* And that the corpus really is tracked, which is the claim the rewrite rests
+     on and the one thing no amount of list-shaped testing can see. `.gitignore`
+     carries unanchored `data/` and `output/` lines, and those match a directory
+     of that name **at any depth** — so `tests/fixtures/data-root/data/` was
+     ignored by default, and `git add <dir>` skips ignored files without a word.
+     A corpus that was "committed" and is not in the commit leaves every check
+     above green and puts the gate straight back to asking about the laptop.
+
+     `git ls-files` rather than `git check-ignore`, because tracked beats ignored
+     and tracked is the actual question. */
+  it("names files git is actually carrying", () => {
+    const listed = spawnSync("git", ["ls-files", "-z", "--", ...GATE_FIXTURES], {
+      cwd: path.resolve(import.meta.dirname, ".."),
+      encoding: "utf8",
+    });
+    expect(listed.status).toBe(0);
+    const tracked = new Set(listed.stdout.split("\0").filter(Boolean));
+    expect(GATE_FIXTURES.filter((f) => !tracked.has(f))).toEqual([]);
   });
 });
 
