@@ -38,6 +38,7 @@ import {
   STEPS,
   stepIsDone,
 } from "../src/pipeline.js";
+import { isSlug, urlKey } from "../src/ingest.js";
 import type { RawManifest } from "../src/fetch.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
@@ -977,6 +978,42 @@ describe("running a job", () => {
     // fails, so every one of them leaves a marker, not only this test's.
   });
 
+  /**
+   * **The wiring, not the decision.** `freeSlug` and `slugWithShortId` are
+   * tested above without a queue; this asks whether `enqueue` actually calls
+   * them, which is the half a unit test cannot see — a correct function nobody
+   * reaches is the shape docs/reusable/silent-success.md is about.
+   *
+   * Both doors, because they are two branches of one ternary and only one of
+   * them goes through `freeSlug`: a URL add, and an upload, which has no
+   * address and so mints outright.
+   *
+   * Every job here fails on its first step — there is nothing at that address
+   * and no such upload — which is how this stays offline and free.
+   */
+  it("puts a short id on the slug of every article a reader adds", async () => {
+    const added = await enqueue({
+      slug: "test-enqueue-short-id",
+      url: "https://spideryarn-test.invalid/test-enqueue-short-id",
+      steps: ["fetch"],
+    });
+    const uploaded = await enqueue({
+      slug: "test-enqueue-short-id-upload",
+      upload: { id: "11111111-2222-4333-8444-666666666666", filename: "paper.pdf" },
+      steps: ["fetch"],
+    });
+    try {
+      expect(added.slug).toMatch(/^test-enqueue-short-id-spya-[a-z0-9]{6}$/);
+      expect(uploaded.slug).toMatch(/^test-enqueue-short-id-upload-spya-[a-z0-9]{6}$/);
+    } finally {
+      for (const job of [added, uploaded]) {
+        await settle(job.id).catch(() => undefined);
+        await forgetJob(job.id).catch(() => undefined);
+        await rm(path.join(ROOT_DATA, job.slug), { recursive: true, force: true });
+      }
+    }
+  });
+
   it("writes a readable record, still, after all that", async () => {
     const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
     await settle(job.id);
@@ -988,39 +1025,51 @@ describe("running a job", () => {
 });
 
 /* --------------------------------------------------------------------------
-   Which directory a URL lands in, when something is already in it.
+   Which slug an add lands on, when we may already have the article.
 
    > And will this de-dupe correctly if near-identical versions of the url are
    > used … or if we already have the article?
    >
    > — Greg, 2026-08-26
 
-   `freeSlug` is the only place that answers both halves, and it answers them
-   with one question: *is the thing already called this the same article?* The
-   identity test is `urlKey` (src/ingest.ts, tested there); what is tested here
-   is the ladder built on top of it.
+   `freeSlug` answers one question and then does one of two things: *which slug
+   already holds this URL?* If something does, that slug is adopted and every
+   step skips. If nothing does, a fresh slug is minted with a short id on the
+   end, so two articles can never want the same name.
 
-   The claim lookup is injected, so none of this touches the filesystem, the
-   network or the queue. Its default in src/jobs.ts reads `meta.json` and then
-   the live queue, which is the one line these tests do not cover.
+   **The lookup is by URL, not by slug, and that is what the short id forced.**
+   It used to guess the candidate name and ask what was under it — which only
+   worked because the name was derived from the URL. A slug ending in a random
+   id cannot be guessed, so a probe by name would have found nothing, minted a
+   second article for a URL already on the shelf, and paid for it. The identity
+   test is still `urlKey` (src/ingest.ts, tested there).
+
+   The lookup is injected, so none of this touches the filesystem, the network
+   or the queue. Its default in src/jobs.ts asks the shelf and then the live
+   queue, which is the one line these tests do not cover.
    -------------------------------------------------------------------------- */
 describe("freeSlug", () => {
-  /** A stand-in for "what is already called this", as an in-memory shelf. */
-  const shelf = (entries: Record<string, string>) => async (candidate: string) =>
-    entries[candidate];
+  /** A stand-in for "which article already has this URL", as an in-memory shelf. */
+  const shelf = (entries: Record<string, string>) => async (key: string) =>
+    Object.entries(entries).find(([, url]) => urlKey(url) === key)?.[0];
 
-  it("uses the slug when nothing is called that yet", async () => {
-    expect(await freeSlug("why-trees", "https://example.com/why-trees", shelf({}))).toBe(
-      "why-trees",
-    );
+  it("mints a slug with a short id when nothing has this article yet", async () => {
+    const got = await freeSlug("why-trees", "https://example.com/why-trees", shelf({}));
+    expect(got).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
+    expect(isSlug(got)).toBe(true);
+  });
+
+  it("gives two adds of two different articles two slugs", async () => {
+    const a = await freeSlug("news", "https://a.example/news", shelf({}));
+    const b = await freeSlug("news", "https://b.example/news", shelf({}));
+    expect(a).not.toBe(b);
   });
 
   it("reuses the slug when we already have this article, however it was spelled", async () => {
     // The whole point: every one of these is the article already on the shelf,
-    // so each must land back in `why-trees` and let every step skip — rather
-    // than minting `example-why-trees` and fetching, extracting and paying for
-    // a tree a second time.
-    const have = shelf({ "why-trees": "https://www.example.com/why-trees" });
+    // so each must land back on its slug and let every step skip — rather than
+    // minting a second one and fetching, extracting and paying for a tree again.
+    const have = shelf({ "why-trees-spya-k3m9qt": "https://www.example.com/why-trees" });
     for (const spelling of [
       "https://www.example.com/why-trees",
       "http://www.example.com/why-trees",
@@ -1031,7 +1080,7 @@ describe("freeSlug", () => {
       "https://example.com/why-trees#conclusion",
       "https://example.com/why-trees?utm_source=twitter",
     ]) {
-      expect(await freeSlug("why-trees", spelling, have), spelling).toBe("why-trees");
+      expect(await freeSlug("why-trees", spelling, have), spelling).toBe("why-trees-spya-k3m9qt");
     }
   });
 
@@ -1040,34 +1089,18 @@ describe("freeSlug", () => {
      `/why-trees`, so the key keeps them apart and this is what resolves the
      slug collision that follows — into a visible duplicate rather than into
      the wrong article under the right headline. See `urlKey`. */
-  it("steps aside when only the path's capitalisation differs", async () => {
-    const have = shelf({ "why-trees": "https://www.example.com/why-trees" });
-    expect(await freeSlug("why-trees", "https://example.com/Why-Trees", have)).toBe(
-      "example-why-trees",
-    );
+  it("mints a new slug when only the path's capitalisation differs", async () => {
+    const have = shelf({ "why-trees-spya-k3m9qt": "https://www.example.com/why-trees" });
+    const got = await freeSlug("why-trees", "https://example.com/Why-Trees", have);
+    expect(got).not.toBe("why-trees-spya-k3m9qt");
+    expect(got).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
   });
 
-  it("steps aside for a different article with the same last path segment", async () => {
-    // a.example/news and b.example/news both slug to `news`. Without this the
-    // second reader is shown the FIRST publication's article under the headline
-    // they pasted, and every step reports success — docs/reusable/silent-success.md.
-    const have = shelf({ news: "https://a.example/news" });
-    expect(await freeSlug("news", "https://b.example/news", have)).toBe("b-news");
-  });
-
-  it("numbers when even the host-prefixed name is taken", async () => {
-    const have = shelf({
-      news: "https://a.example/news",
-      "b-news": "https://b.example/other-news",
-    });
-    expect(await freeSlug("news", "https://b.example/news", have)).toBe("news-2");
-  });
-
-  it("gives up rather than looping for ever", async () => {
-    const everything = async () => "https://someone-else.example/whatever";
-    await expect(freeSlug("news", "https://b.example/news", everything)).rejects.toThrow(
-      /Too many articles/,
-    );
+  it("keeps the whole slug inside the length a slug is allowed to be", async () => {
+    const long = "a".repeat(60);
+    const got = await freeSlug(long, "https://example.com/long", shelf({}));
+    expect(isSlug(got)).toBe(true);
+    expect(got).toMatch(/-spya-[a-z0-9]{6}$/);
   });
 });
 

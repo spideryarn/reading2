@@ -73,6 +73,8 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
+import { shortIdInSlug } from "../ingest.js";
+import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
@@ -272,6 +274,11 @@ export const REVISION_CARRY_POLICY: Record<
      carried and correctly reported stale, which is what we want, because every
      year-less date in it was read against the old one. */
   timeline: "carry",
+  /* Carried, like every other artefact column: a new revision starts with the
+     questions the last one had, and the `quiz` step overwrites them if it runs.
+     The `sourceHash` on the artefact is what tells the panel the article moved
+     underneath them — carrying is not a claim that they are still current. */
+  quiz: "carry",
 };
 
 const MINTED = new Set(
@@ -411,9 +418,15 @@ export async function lockOrCreateArticle(
   const found = await lockArticle(tx, slug);
   if (found) return found;
 
+  /* **The short id is minted here because this is where the row is born.**
+     The slug already ends in one (src/ingest.ts § `slugWithShortId`), so the
+     ordinary case is to lift it out rather than mint a second — but a slug from
+     before 2026-08-31, or one a reader later renames, has none, and the column
+     is the copy that has to survive either. `?? mintId()` is what makes it a
+     handle rather than a substring. src/db/schema.ts § `shortId`. */
   const inserted = await tx
     .insert(articles)
-    .values({ ownerId: currentOwnerId(), slug })
+    .values({ ownerId: currentOwnerId(), slug, shortId: shortIdInSlug(slug) ?? mintId() })
     /* Another transaction may have inserted this slug between our lock
        attempt and here — the lock cannot protect a row that does not exist
        yet. `do nothing` plus a re-read is the honest handling; `do update`

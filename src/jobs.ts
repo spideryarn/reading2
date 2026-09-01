@@ -60,16 +60,16 @@ import { pgJobStore } from "./store/pg-jobs.js";
 import { mintAttempt, StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
 import { STORE } from "./store/live.js";
 import { failureKindOf } from "./job-failure.js";
-import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
+import { slugWithShortId, urlKey } from "./ingest.js";
 import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { slugForUrlKey } from "./store/find-article.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { publishingSession } from "./store/publish-session.js";
 import {
-  articleExists,
   contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
@@ -294,6 +294,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      only piece this has ever run on, and the answer budget is 20,000 tokens, so
      a longer piece has room to be slower than anything measured here. */
   timeline: 240_000,
+  /* **MEASURED**, twelve stage-1 generations on 2026-08-31, read from
+     `data/_ai-calls.jsonl` (`job: "quiz"`): 35.1s to 62.8s, one call each under
+     its own `runId`, so the summing trap in this table's header does not apply.
+     Rounded to twice the worst and then some, for `timeline`'s reason: twelve
+     samples on ONE article (data/noema-mythology-of-conscious-ai, 4,000 words)
+     is one article, the answer budget here is 10,000 tokens, and the cost of
+     being under is a mid-step kill rather than a slow step. */
+  quiz: 150_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s
      with the shape-claims section added to the prompt. Rounded up hard, because
@@ -1573,15 +1581,27 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * the same article, and no amount of care about `await` placement in one
    * process could have stopped it.
    *
-   * **20 tries.** `freeSlug` and `freeUploadSlug` already walk to `-99`, so a
-   * loop this long only runs when somebody else takes the name in the gap
-   * between our asking and our inserting — twenty of those in a row is not a
-   * collision, it is a fault.
+   * **20 tries**, and since every minted slug ends in a random short id
+   * (src/ingest.ts § `slugWithShortId`) a second pass now means one of two
+   * things: the slug we adopted for this URL has a job on it doing different
+   * work, which is answered with a 409 below; or a one-in-771-million id
+   * collision. Twenty of those in a row is not a collision, it is a fault.
+   *
+   * **An upload gets a minted slug outright.** There is no address to compare,
+   * so there is nothing that could make two uploads one article —
+   *
+   * > If it was previously uploaded by a different user, then reuse the source
+   * > object, but add a new per-user article object.
+   * >
+   * > — Greg, 2026-08-26
+   *
+   * — and the short id makes that a mint rather than a search. `freeUploadSlug`
+   * and `slugIsSpokenFor` were the search, and both are gone with it.
    */
   let slug = request.url
     ? await freeSlug(request.slug, request.url)
     : request.upload
-      ? await freeUploadSlug(request.slug, request.upload.id)
+      ? slugWithShortId(request.slug)
       : request.slug;
 
   for (let tries = 0; ; tries++) {
@@ -1642,10 +1662,10 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * *naming* one.
        *
        * **A URL or an upload is asking for one.** Re-allocating is right, and
-       * re-allocating rather than appending a counter is right too: the racing
-       * job is in the store now, so `freeSlug` sees it this time and derives the
-       * next free name properly, where a counter would have to guess and could
-       * land on a finished article's slug that only `articleExists` knows about.
+       * asking `freeSlug` again rather than appending a counter is right too:
+       * the racing job is in the store now, so the lookup sees it this time and
+       * either adopts its slug (same URL) or mints a fresh one. A counter would
+       * have to guess, and could land on a finished article's slug.
        *
        * **Anything else is naming one**, and moving it is the worst thing this
        * function could do. `{slug: "paper", steps: ["summary"]}` means *summarise
@@ -1663,7 +1683,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       }
       const next = request.url
         ? await freeSlug(request.slug, request.url)
-        : await freeUploadSlug(request.slug, (request.upload as JobUpload).id);
+        : slugWithShortId(request.slug);
       /* **No progress is not something to retry twenty times.** `freeSlug` will
          keep handing back the same name when the held slug is legitimately this
          URL's — which is exactly what happens to a filesystem job that survived
@@ -1729,17 +1749,6 @@ export function workKeyFor(
     .digest("hex");
 }
 
-/**
- * The job already working on this article, if there is one.
- *
- * Deliberately not exported. The check belongs *inside* `enqueue`, after its
- * awaits and immediately before the insert, because that is the only place with
- * no gap: `enqueue` awaits `ready()` and a read of meta.json, and two requests
- * arriving together will both get past any check made before those.
- */
-async function activeFor(slug: string): Promise<Job | undefined> {
-  return store.activeForSlug(slug, currentOwnerId());
-}
 
 /**
  * The same steps, forced the same way, steered the same way — the only case a
@@ -1783,9 +1792,9 @@ export function sameWork(
 ): boolean {
   if (job.steps.length !== names.length) return false;
   /* **Two uploads are never one piece of work**, whatever they are called and
-     whatever steps they name. This is belt and braces — `freeUploadSlug` never
-     hands two attempts the same slug, so `activeFor` should not have found the
-     other one at all — and it is here because the cost of the two mechanisms
+     whatever steps they name. This is belt and braces — a minted short id
+     never hands two attempts the same slug, so `activeFor` should not have
+     found the other one at all — and it is here because the cost of the two mechanisms
      disagreeing is that a reader watches somebody else's document succeed
      under their own filename. Sol's finding on the plan: `sameWork` compared
      steps, guidance and profile only, and had no upload identity at all. */
@@ -1817,26 +1826,11 @@ export function sameWork(
 }
 
 /**
- * A slug for this URL that is not already some other article's.
+ * **The slug this URL should use: the one it already has, or a fresh one.**
  *
- * `slugFromUrl` takes the last path segment, so `a.example/news` and
- * `b.example/news` both come out as `news` — and the second one is the
- * dangerous case, not the first. Every artefact is already on disk, so all five
- * steps skip, the job reports success in about a second, and the reader is
- * shown *a different publication's article* under the headline they pasted.
- * Nothing errors, and the check anyone would run — "is it on the shelf?" —
- * says yes. [Silent success](docs/reusable/silent-success.md) again.
+ * Two answers and no ladder between them, since 2026-08-31.
  *
- * So: if a directory already holds a `meta.json` for a different URL, move
- * aside. The host first, which is the same disambiguation `slugFromUrl` already
- * applies to bare numeric ids and reads far better than a number; a counter
- * after that, for the case where even the host matches.
- *
- * The add box's preview can therefore be one slug out on a collision. That is
- * the right way round: the box guesses before asking, the server knows, and the
- * job card shows what the server decided.
- *
- * ## "A different URL" is a judgement, not a string comparison
+ * ## The half that must never break: adoption
  *
  * > And will this de-dupe correctly if near-identical versions of the url are
  * > used, e.g. http vs https or without url protocol or capitalised similar
@@ -1844,25 +1838,43 @@ export function sameWork(
  * >
  * > — Greg, 2026-08-26
  *
- * It did not. This compared the two URLs as **strings**, so every one of those
+ * It did not. This compared two URLs as **strings**, so every one of those
  * spellings read as a different article: adding `http://x.test/piece` when the
- * shelf held `https://x.test/piece` stepped aside to `x-piece`, re-fetched it,
- * re-extracted it, and paid for a second tree and a second arc — and then put
- * two cards on the shelf under the same headline. Nothing errored, and the
- * check anyone would run said the article was there. `urlKey` (src/ingest.ts)
- * is the comparison now, and it is the only thing in the codebase that decides
+ * shelf held `https://x.test/piece` stepped aside, re-fetched it, re-extracted
+ * it, and paid for a second tree and a second arc — and then put two cards on
+ * the shelf under the same headline. Nothing errored, and the check anyone
+ * would run said the article was there. `urlKey` (src/ingest.ts) is the
+ * comparison now, and it is the only thing in the codebase that decides
  * whether two addresses are one article.
  *
- * ## The claim lookup, and why it is an argument
+ * ## The lookup is by URL, and the short id is what forced that
  *
- * A slug can be spoken for by two different things, and the second only exists
- * for a few minutes: a `meta.json` on disk, or **a job that is queued or
- * running right now** and has not written one yet. Without the second, two
- * different articles with the same last path segment added within a minute of
- * each other both get the bare slug — and the later one is then handed the
- * earlier one's job by `activeFor` below and quietly never happens.
+ * It used to be by *name*: derive the candidate slug from the URL, ask what
+ * was already under it, and compare that article's URL with this one. That
+ * only worked because the name was a function of the address.
  *
- * Passing the lookup in also means every decision above can be tested without a
+ * Slugs now end in a random short id (`why-trees-spya-k3m9qt`,
+ * src/ingest.ts § `slugWithShortId`), which cannot be guessed — so a probe by
+ * name would find nothing, mint a second article for a URL already on the
+ * shelf, and pay for it. The same bug as 2026-08-26, arriving through the door
+ * the fix for it had left open. So the question is asked the other way round:
+ * *which slug already holds this URL?*
+ *
+ * ## The half that was deleted
+ *
+ * The host prefix and the `-2`…`-99` counter are gone, and so is
+ * `freeUploadSlug` — nothing collides any more, because nothing has to share a
+ * name. docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0.
+ *
+ * ## The lookup is an argument
+ *
+ * A slug can be spoken for by two things, and the second only exists for a few
+ * minutes: an article on the shelf, or **a job that is queued or running right
+ * now** and has not published one yet. Without the second, two adds of one URL
+ * a second apart get two slugs, `enqueueOrGet` sees no conflict (it conflicts
+ * on the slug), and the reader pays twice.
+ *
+ * Passing the lookup in also means every decision here can be tested without a
  * filesystem, a network or a queue, which is
  * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
  * one line those tests do not cover.
@@ -1870,116 +1882,45 @@ export function sameWork(
 export async function freeSlug(
   slug: string,
   url: string,
-  claimedBy: (candidate: string) => Promise<string | undefined> = onShelfOrInFlight,
+  alreadyHolding: (urlKey: string) => Promise<string | undefined> = slugAlreadyHolding,
 ): Promise<string> {
-  const wanted = urlKey(url);
-  const taken = async (candidate: string) => {
-    const claim = await claimedBy(candidate);
-    return claim !== undefined && urlKey(claim) !== wanted;
-  };
-  if (!(await taken(slug))) return slug;
+  return (await alreadyHolding(urlKey(url))) ?? slugWithShortId(slug);
+}
 
-  const host = new URL(normaliseUrl(url)).hostname.replace(/^www\./, "").replace(/\.[a-z]+$/, "");
-  const withHost = `${host.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${slug}`;
-  if (isSlug(withHost) && !(await taken(withHost))) return withHost;
+/**
+ * Which of this reader's slugs already holds this URL — the shelf first, then
+ * the queue.
+ *
+ * The shelf wins outright: a finished article is a fact, and an in-flight job
+ * for the same address is by definition working on that same article.
+ *
+ * **`urlKey` on both sides**, which is why this cannot be a `where` clause.
+ * The comparison is a JavaScript function over a normalised address, so the
+ * rows come back and are matched here — see src/store/find-article.ts for what
+ * that costs and why it is affordable.
+ */
+async function slugAlreadyHolding(key: string): Promise<string | undefined> {
+  return (await slugForUrlKey(key)) ?? (await inFlightSlugForUrlKey(key));
+}
 
-  for (let n = 2; n < 100; n++) {
-    const numbered = `${slug}-${n}`;
-    if (!(await taken(numbered))) return numbered;
+/**
+ * The queued or running job for this address, if there is one.
+ *
+ * A scan rather than a query, because `JobStore` has no lookup by URL and the
+ * list is small by construction — active jobs plus at most `KEEP_FINISHED`
+ * records per reader. Adding a store method for it would mean the same
+ * `urlKey` comparison in two adapters, and `urlKey` is not SQL.
+ *
+ * `queued` and `running` are the two statuses `jobs_active_slug` reserves a
+ * slug for (src/store/pg-jobs.ts § `ACTIVE`); a cancelled or failed job is not
+ * holding anything.
+ */
+async function inFlightSlugForUrlKey(key: string): Promise<string | undefined> {
+  for (const job of await store.list(currentOwnerId())) {
+    if (job.status !== "queued" && job.status !== "running") continue;
+    if (job.url && urlKey(job.url) === key) return job.slug;
   }
-  throw Object.assign(new Error(`Too many articles already called "${slug}".`), { status: 409 });
-}
-
-/**
- * A slug for an uploaded file that is **not already something else's**, ever.
- *
- * The sibling of `freeSlug`, and the difference is the whole of it: `freeSlug`
- * may *adopt* an existing slug, because the thing that decides is `urlKey` and
- * two spellings of one address really are one article. An upload has no address
- * to compare, so there is nothing that could make two of them the same article
- * — and Greg's answer settles what that means:
- *
- * > If it was previously uploaded by a different user, then reuse the source
- * > object, but add a new per-user article object.
- * >
- * > — Greg, 2026-08-26
- *
- * A new article every time. The source object is shared by content hash in the
- * blob store (`canonicalKey`), which is where sharing belongs; the *article* is
- * per-reader and per-upload, so two files called `paper.pdf` get two of them.
- *
- * **The existence check is `articleExists`, not `urlForSlug`.** An uploaded
- * article has no URL in its `meta.json`, so the lookup `freeSlug` uses reads
- * `undefined` for one and calls the slug free. That is the exact collision the
- * plan's test asserts against, and it fails open — every step finds an
- * artefact, skips, and the reader is shown a different document under their own
- * filename in about a second. See docs/reusable/silent-success.md.
- *
- * The counter is deliberately the only fallback. `freeSlug` can prefix a host
- * because a URL has one; a filename has nothing equivalent, and prefixing the
- * upload id would make a directory name nobody can read.
- */
-export async function freeUploadSlug(
-  slug: string,
-  uploadId: string,
-  claimed: (candidate: string, mine: string) => Promise<boolean> = slugIsSpokenFor,
-): Promise<string> {
-  if (!(await claimed(slug, uploadId))) return slug;
-  for (let n = 2; n < 100; n++) {
-    const numbered = `${slug}-${n}`;
-    if (isSlug(numbered) && !(await claimed(numbered, uploadId))) return numbered;
-  }
-  throw Object.assign(new Error(`Too many articles already called "${slug}".`), { status: 409 });
-}
-
-/**
- * Is this slug something *other* than this upload's own article?
- *
- * The `mine` argument is what makes Retry work, and leaving it out is a bug
- * that only shows on the second attempt: without it, retrying a job whose
- * `paper.pdf` already reached stage 3 finds `data/paper/` occupied — by itself
- * — steps aside to `paper-2`, and re-runs from the top, paying for the
- * transcription a second time and leaving a half-built `paper` behind. An
- * article is this upload's own when its manifest says so, which is a fact on
- * disk rather than a flag anyone has to remember to pass.
- *
- * A job in flight counts as a claim too. A finished `meta.json` is not the only
- * way a slug is spoken for — two uploads a few seconds apart would otherwise
- * both find the directory empty and both take it.
- */
-async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean> {
-  const other = await activeFor(candidate);
-  if (other && other.upload?.id !== mine) return true;
-  if (!(await articleExists(candidate))) return false;
-  /* **Through the artefact seam, not `readRaw(contextPaths(...).dir)`.** The
-     value is the same file today — `PATHS.fetch.raw` is `raw.json` — but from
-     2026-08-31 the *writer* is the store rather than the stage
-     (docs/plans/260831b-finish-the-database-move.md § Stage 2c), and a reader that
-     names the path itself is a second definition of where the manifest lives.
-     Two definitions agree on the day they are written.
-
-     **This is not yet fixed for Postgres, and the gap is worth naming.** The
-     manifest read here answers *is this article this upload's own*, and under
-     Postgres the answer is not on the revision at all: `origin` is derivable
-     from the two URLs being null, and the upload id lives on `jobs.upload_id`
-     (src/db/schema.ts). So this needs the branch `articleExists` above already
-     has, over a different table, and it belongs with the store selection in
-     stage 3 rather than here. Until then it is the filesystem's answer — which
-     is what the whole pipeline still is. */
-  const manifest = await pipelineStore.read(candidate, "fetch", "raw");
-  return !(manifest?.origin === "upload" && manifest.uploadId === mine);
-}
-
-/**
- * What already lays claim to a slug: the article on disk, or the job on its way
- * to becoming one.
- *
- * `meta.json` first and it wins outright — a finished article is a fact, and an
- * in-flight job for the same slug is by definition working on that same
- * article, since it got the slug from here in the first place.
- */
-async function onShelfOrInFlight(candidate: string): Promise<string | undefined> {
-  return (await urlForSlug(candidate)) ?? (await activeFor(candidate))?.url;
+  return undefined;
 }
 
 /**
