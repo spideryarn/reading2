@@ -304,6 +304,16 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-embed-account": "ours",
   "ai-embed-down": "retry",
   "ai-embed-busy": "retry",
+  /* Filing a bug report, `fb-`. The distinction is worth more here than
+     anywhere else in this table: `fb-send` is the request that reports failures
+     having failed, so an interface that told the reader "that is a bug, tell
+     somebody" at that exact moment would have handed them a loop. `retry`, and
+     the dialog puts a Copy button beside it for the case where it keeps failing.
+     `fb-store` is a deployment running without the database reports are kept in,
+     which another go cannot fix. See § feedback below, and
+     docs/project/feedback.md. */
+  "fb-send": "retry",
+  "fb-store": "ours",
 };
 
 
@@ -1632,3 +1642,46 @@ export const REFEREE_TEXT_ALREADY_SENT =
  */
 export const REFEREE_DECLARE_IT =
   "Venues that permit AI assistance nearly always require you to say that you used it.";
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * **The report did not reach us**, and the reader still has the only copy.
+ *
+ * `retry` rather than `bug`, and the distinction earns its keep here more than
+ * anywhere else in this file: the request that failed *is* the one that reports
+ * failures. If the API or Postgres is down, the feedback channel is down with
+ * it — that is the cost the plan accepts for relaying through our own server
+ * rather than posting to Sentry from the browser
+ * (docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § The
+ * browser posts to us). A reader told "that is a bug, tell somebody" at the
+ * exact moment the way to tell somebody has broken has been handed a loop.
+ *
+ * So the sentence does the one thing that works when the channel is down: it
+ * says the words are still on screen, and gives somewhere else to put them.
+ * FeedbackDialog.tsx renders a Copy button and an email link beside it.
+ */
+export const FEEDBACK_SEND_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That report did not get through. Your words are still in the boxes above — trying again in a " +
+    "moment usually works, and if it does not, the Copy button puts the whole report on your " +
+    "clipboard so you can send it by email instead. [fb-send]",
+};
+
+/**
+ * Feedback is asking for a database this deployment does not have.
+ *
+ * `ours`, not `retry`: the filesystem store answers this route with a 501 by
+ * design (src/store/index.ts), so trying again is the one thing guaranteed not
+ * to work. It is a developer-machine sentence rather than one a reader meets,
+ * and it is written plainly anyway because the whole point of copy.md is that
+ * we do not know in advance who is reading.
+ */
+export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "This copy of the app cannot file reports — it is running without the database they are kept " +
+    "in. Trying again will not help. The Copy button below puts the report on your clipboard. " +
+    "[fb-store]",
+};

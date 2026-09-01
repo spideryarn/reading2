@@ -59,6 +59,9 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   is not what a quick grep suggests. What reaches it, why a failed step is a 200, and the two gaps.
 - **[ai-gateway.md](ai-gateway.md)** — every paid call goes through one of two seams, and each one
   leaves a row behind. `npm run cost` is how you read them back.
+- **[feedback.md](feedback.md)** — the Feedback button and where a bug report goes: our own Postgres
+  first, Sentry second, and an allowlist between the browser and both. The one place a reader's own
+  prose is deliberately allowed out, which is why the rule for adding a field is written down.
 - **[logging.md](logging.md)** — why Pino, what the levels mean here, why path-based redaction makes
   the message string a rule, and why the CLI's `console.log` is not logging and is staying.
 - **[remote-box.md](remote-box.md)** — the always-on Hetzner box and `gjd-remote`, the one command

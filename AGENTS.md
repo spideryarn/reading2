@@ -46,6 +46,7 @@ listed here; the names under each are files in `docs/project/`.
   `chat-tools.md` (what chat may call) ·
   `live-conversation.md` (talking to the article out loud) ·
   `remember-mode.md` (say what you took from it, and find out) ·
+  `quiz.md` (the other half: the article asks, you answer) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
@@ -69,6 +70,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `debugging.md` (start here when something is broken) · `setup-dev.md` (including which model
   each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
   `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
+  `feedback.md` (the Feedback button, and where a bug report goes) ·
   `remote-box.md` (the always-on box, and `gjd-remote`) ·
   `worktrees.md` (one tree per agent, one day; the runbooks nobody has run yet)
 

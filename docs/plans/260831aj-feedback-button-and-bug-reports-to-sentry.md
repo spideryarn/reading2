@@ -49,9 +49,10 @@ Asked directly, and the answers set the shape of everything below:
 | ✅ | the table and the store | `a072827` |
 | ✅ | the route, and the Sentry mirror | `ba2ff5e` |
 | ✅ | the client log buffer and its seams | `d1b9db0` |
-| 🔧 | **fixing GPT Sol's code review** — five blockers, see below | in progress |
-| ⬜ | the button, the dialog, the diagnostics collector, the screenshot paste | |
-| ⬜ | docs, browser check, second review, ship | |
+| ✅ | **fixing GPT Sol's code review** — five blockers, see below | `c77a976`, `1d4bd8a` |
+| ✅ | the button, the dialog, the diagnostics collector, the screenshot paste | |
+| ✅ | **the third review** — GPT Sol on the UI half, NO-SHIP, see below | |
+| ✅ | the browser pass, and `docs/project/feedback.md` | |
 
 **GPT Sol's code review of the first three stages returned NO-SHIP**, and it was right on every
 count — see [the code review](260831aj-feedback-button-and-bug-reports-to-sentry-code-review-sol.md).
@@ -764,11 +765,11 @@ JPEG paste turns out to matter, the two ways forward are a baseline decoder or a
 
 ### Stage: the button and the dialog
 
-- [ ] `FeedbackButton.tsx`, fixed top-right, mirroring `HomeLogo.tsx`'s fixed top-left.
+- [x] `FeedbackButton.tsx`, fixed top-right, mirroring `HomeLogo.tsx`'s fixed top-left.
       **The bars must reserve the space**, the way they already reserve `--logo-w` on the left —
       `.masthead-inner` and `.bar` run to the right edge and a long title reaches it, so an
       unreserved fixed button lands on top of the article's own title.
-- [ ] `FeedbackDialog.tsx` as a **native `<dialog>` with `showModal()`, following
+- [x] `FeedbackDialog.tsx` as a **native `<dialog>` with `showModal()`, following
       [`Lightbox.tsx`](../../src/web/Lightbox.tsx)** — not `AnnotateDialog`. GPT Sol's correction and
       a good one. `Lightbox`'s own header explains the split: the three hand-rolled
       `<aside role="dialog">` panels are non-modal *on purpose*, because you are meant to keep
@@ -778,19 +779,98 @@ JPEG paste turns out to matter, the two ways forward are a baseline decoder or a
 
       **And `AnnotateDialog`'s first-Escape-clears-the-box would be destructive here**, where there
       are three populated fields to lose.
-- [ ] ⌘/Ctrl+Enter submits; the **synchronous `sending` ref latch**, because `disabled` alone lets
+- [x] ⌘/Ctrl+Enter submits; the **synchronous `sending` ref latch**, because `disabled` alone lets
       two clicks inside one frame through.
-- [ ] A failed submit shows the reader their own text, copyable, with somewhere to send it — the
+- [x] A failed submit shows the reader their own text, copyable, with somewhere to send it — the
       correlated-failure answer above.
-- [ ] `fb-*` classes in `styles.css`, not Tailwind — the house convention for dialogs.
-- [ ] Do **not** add `/api/feedback` to `CACHEABLE` in `lib/api.ts`. There is deliberately no offline
+- [x] `fb-*` classes in `styles.css`, not Tailwind — the house convention for dialogs.
+- [x] Do **not** add `/api/feedback` to `CACHEABLE` in `lib/api.ts`. There is deliberately no offline
       write queue, so a failed submit must tell the reader rather than pretend.
-- [ ] Copy per [copy.md](../project/copy.md): say plainly what the tick-box sends, in the reader's
+- [x] Copy per [copy.md](../project/copy.md): say plainly what the tick-box sends, in the reader's
       words. They are not operating an AI application.
-- [ ] **Name the signed-in mounting condition explicitly**, and test both halves: the button is
+- [x] **Name the signed-in mounting condition explicitly**, and test both halves: the button is
       absent for an anonymous reader, and `POST /api/feedback` still answers 401. GPT Sol asked for
       both; a button hidden in the client is not a gate.
 - [ ] **Stop and show Greg** — this is the first stage with anything to look at.
+
+### Stage: what the third review sent back, 2026-09-01
+
+[The UI review](260831aj-feedback-button-and-bug-reports-to-sentry-ui-review-sol.md) — GPT Sol, on
+the client half, which neither earlier review had seen. **NO-SHIP again**, and right again. Two
+blockers, two highs, two mediums; all fixed below.
+
+The pattern across three reviews is worth naming, because it is the same one every time: **a
+comment that describes the intended behaviour while the code does the opposite, and an author who
+reads past it because they wrote both.** Twice now that has been the finding that mattered most.
+
+1. **Blocker — the draft was destroyed by closing the dialog.** An effect cleared every box whenever
+   `open` became true, under a comment claiming that *"a reader who closed it by accident and
+   reopened it in the same second is the one person this would infuriate"*. It infuriated exactly
+   them: a failed send, an Escape, a reopen, and the only copy of what they had written was gone.
+   The draft now survives dismissal and is cleared in one place — `discard()`, on the way out of the
+   thank-you panel.
+2. **Blocker, the same finding's other half — a stale request could land in a new draft.** Closing
+   mid-flight left the request running; a later success painted "Thank you" over a report that was
+   never sent, and closing *that* threw the new words away. Every completion is now guarded on the
+   report id still being current.
+
+   The report id also moved from `useMemo` to `useState`. **`useMemo` is not storage** — React
+   documents it as a hint that may be discarded and recomputed, so an idempotency key kept there is
+   a key that may silently change, which is the one property it exists to have.
+3. **The test written for blocker 2 found a third bug.** Closing mid-flight left the synchronous
+   `sending` latch set, so on reopening Send did nothing at all — the words were there, the button
+   looked live, and pressing it was silent. Abandoning the attempt is safe *because* the id is
+   durable: press Send again, the same id goes out, and a first request that did land comes back
+   `duplicate`. The awkward test earned its keep the way the easy one would not have.
+4. **High — a screenshot still being re-encoded was silently dropped.** Paste and press ⌘+Enter in
+   the same second and the POST was built from `shot === null`. Now `preparing` disables Send and
+   refuses the keyboard path, and a generation counter means the newest paste wins whichever
+   finishes first.
+5. **High — the narrow controls bar lost the reservation.** `.controls` at `max-width: 731px` set a
+   flat `padding-right: 0.75rem`, overriding § shell's `--feedback-w` term. **This is the third time
+   a flat override has thrown that term away** (the masthead's shorthand did it on the left in
+   August, and again in this query), and it was worse here: the bar is `overflow-x: auto` at that
+   width, so the last control does not merely sit under the button, it *scrolls* under it.
+6. **Medium — the failed-send fallback had no destination.** The panel offered Copy while the
+   sentence beside it said to send the report by email, and named nobody. It now carries a
+   `mailto:` to `ADMIN_EMAIL` — the same constant that decides who sees `/admin`, so there is one
+   answer to "who runs this" — with the report id in the subject, and it says so when the browser
+   refuses the clipboard.
+7. **Medium — `x-vercel-id` was kept raw in the ring buffer** and validated only at collection,
+   against the buffer's own first rule (*redact at write time*). Validated at write time now, with
+   the collector and server checks kept as redundancy.
+8. **`Error.name` was shape-checked but not closed** — `throw { name: "PROVIDER_BODY_MARKER" }` is
+   an identifier and would have travelled. Replaced with a closed vocabulary at both ends. No live
+   leak: nothing in this app assigns search text or a provider body to `Error.name`. It is the same
+   argument `SAFE_PROPS` and `public/dto.ts` have already had — an allowlist drops the value nobody
+   thought about, and a shape check does not.
+9. **The client-keeps / server-drops class, audited in full.** A value the client sends in a shape
+   the server does not accept **vanishes with no error at either end**, which is indistinguishable
+   from a value that was never collected — the same invisible failure as everything else in this
+   plan's history. Two were closed (`errors[].name`, `api[].vercelId`) and the rest audited:
+
+   - **Fixed, because it was the expensive one.** The server drops an entire *call* when its path
+     will not template, taking the status, the timing and the **`x-vercel-id`** with it — and that
+     id is the only thing in this app that ties a browser to a line in a Vercel log. The request
+     odd enough to lose its path is the one most worth correlating. The collector now sends `/:x`,
+     the server's own word for a segment it will not repeat, and the row survives.
+   - **Left, and named rather than fixed**: `article.level` and `article.blockCount` (out of range
+     → that field becomes null, the rest of the article survives); `device.userAgent`,
+     `device.language`, `device.timezone` (the browser writes them and the server shapes them —
+     that is the design, and the cost of a loss is one fact about a machine); `job.step` and
+     `job.status` (a shape here, a closed list there — and `job` is `null` in v1 anyway).
+
+     Each loses one field rather than a row, which is why they are worth naming and not worth code.
+     If a report ever arrives with a suspiciously empty `device`, this is the paragraph to read.
+
+10. **Test gaps Sol named, now covered**: the visibility test ran only on `/` and would have passed
+   if the button were mounted on the reading view alone, so it now covers anonymous `/read/<slug>`
+   — the one address an anonymous person sees a real page at — and a second signed-in route.
+
+   **And one of my own tests was proving nothing.** The stale-request test passed with the guard
+   removed, because the sequence I wrote never diverged the id. The damaging sequence needs a report
+   to have been *filed* in between, since that is the only thing that mints a new one. Rewritten,
+   and red without the guard.
 
 ### Stage: the client log buffer and the diagnostics
 
@@ -812,18 +892,43 @@ JPEG paste turns out to matter, the two ways forward are a baseline decoder or a
 - [x] **Strip the query string from every recorded path.** `apiFetch("/api/library/search?q=…")`
       otherwise captures reader-typed text — the same leak as `location.href`, one layer down, and
       worth stating twice because it was missed twice.
-- [ ] Build the collector **before** the tick-box that offers it, so the checkbox never promises
+- [x] Build the collector **before** the tick-box that offers it, so the checkbox never promises
       something that is not there.
 - [x] Update the header of [`src/web/lib/api.ts`](../../src/web/lib/api.ts), which currently says
       there should not be a client logger, with the reasoning above.
-- [ ] Read `x-vercel-id` off responses in `apiFetch`. Same-origin, so it is readable; this is the
-      only thing in the repo that would tie a browser to a Vercel log line.
-- [ ] The uncaught-error listener, with messages put through `authored()` from `monitoring-scrub.ts`.
-- [ ] The always-on context: `location.href`, build commit, viewport, and `fitView`'s derived state
-      (`columns`, `spine`, `modeW`, `overflowing`) which is the part *not* already in the URL.
-- [ ] A test proving the diagnostics blob contains no article prose, built from a fixture that has
+- [x] Read `x-vercel-id` off responses in `apiFetch`. Same-origin, so it is readable; this is the
+      only thing in the repo that would tie a browser to a Vercel log line. Landed with the buffer.
+- [x] The uncaught-error listener — `window`'s `error` and `unhandledrejection`, recording the
+      error's **name only** into the buffer.
+
+      **And `safeDiagnosticError()` was not built, which is a correction to this plan rather than
+      an omission.** The bullet above used to say the listener would put messages through
+      `authored()`. There is nowhere for a message to go: `FeedbackClientError` on the wire is
+      `{ name, at }`, so a function whose job is to decide what may be said about an error would
+      have had nothing to decide and no caller. It becomes necessary the day a message or a frame
+      is admitted to the wire shape, and not before. Written down because a plan that quietly drops
+      a named function is how the next reader concludes it was forgotten.
+- [x] The always-on context: **route kind, validated slug, and build commit. Never `location.href`**
+      — this bullet said otherwise until 2026-09-01 and was left standing after the section above
+      had already reversed it, which is exactly the drift the reviews keep finding. The device and
+      viewport facts moved behind the tick-box, where facts about a person belong.
+- [x] A test proving the diagnostics blob contains no article prose, built from a fixture that has
       prose in every field it could leak from. **A check you have never seen fail is not evidence**
-      ([silent-success.md](../reusable/silent-success.md)) — make it red first.
+      ([silent-success.md](../reusable/silent-success.md)) — make it red first. It was seen red
+      three separate ways, one per field it protects.
+
+#### Two fields that ship as `null`, and they are not the same kind of gap
+
+- **`job`** — nothing publishes into it. The ingest queue became a tab-level service
+  ([`src/web/jobEngine.ts`](../../src/web/jobEngine.ts)) on 2026-09-01 and both it and `useJobs.ts`
+  were being rewritten while this was built, so wiring a publisher into somebody else's in-flight
+  work was the wrong trade. The reader half exists and is tested; finishing it is one
+  `setFeedbackJobContext(…)` in one effect.
+- **`revisionId`** — this one cannot be finished on the client at all. `Article` in
+  [`src/types.ts`](../../src/types.ts) does not carry the revision it was projected from, and
+  nothing under `src/web/` knows it. It needs the read payload to carry it, which is a different
+  piece of work. The field stays in the shape so that when it lands it is a publisher change rather
+  than a wire change — and a report that names a deploy but not a revision is still worth having.
 
 ### Stage: the screenshot
 

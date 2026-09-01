@@ -6,6 +6,7 @@ import { App } from "./App.js";
 import { CALLBACK_HREF, settleAddress } from "./router.js";
 import { startPerf } from "./perf.js";
 import { watchConnection } from "./offline.js";
+import { watchUncaughtErrors } from "./log-buffer.js";
 import { OfflineStrip } from "./OfflineStrip.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
@@ -178,6 +179,14 @@ if (!onCallback) {
  * because `navigator.onLine` says `true` on a captive portal. See offline.ts.
  */
 watchConnection();
+
+/**
+ * Put the throws nobody caught into the client log buffer, so a bug report can
+ * show them in order against the requests around them. Sentry already has the
+ * throw itself, with its stack; this is the ordering, which it cannot show.
+ * See log-buffer.ts § watchUncaughtErrors.
+ */
+watchUncaughtErrors();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

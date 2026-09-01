@@ -11,7 +11,7 @@
  * See docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md
  * § The client log buffer.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   LOG_BUFFER_CAPACITY,
@@ -20,6 +20,7 @@ import {
   readLogBuffer,
   recordLog,
   serialiseLogBuffer,
+  watchUncaughtErrors,
 } from "../src/web/log-buffer.js";
 
 /**
@@ -31,6 +32,11 @@ const PROSE = "Nagel-the-bat-considered-as-an-unread-appendix";
 
 beforeEach(() => {
   clearLogBuffer();
+  vi.unstubAllGlobals();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("what the buffer keeps", () => {
@@ -78,17 +84,22 @@ describe("what the buffer keeps", () => {
     for (const entry of entries) expect(typeof entry.at).toBe("number");
   });
 
+  /**
+   * Counted on `bytes` rather than on a name, because a name is a closed
+   * vocabulary now and two hundred distinguishable names do not exist. A
+   * number field is the right thing to count a ring with anyway.
+   */
   it("keeps the newest, oldest-first, and never grows past its capacity", () => {
     for (let i = 0; i < LOG_BUFFER_CAPACITY + 37; i++) {
-      recordLog({ kind: "client-error", source: "boundary", name: `E${i}` });
+      recordLog({ kind: "upload", phase: "done", status: 200, bytes: i, ms: null });
     }
 
     const entries = readLogBuffer();
     expect(entries).toHaveLength(LOG_BUFFER_CAPACITY);
 
-    const names = entries.map((e) => (e.kind === "client-error" ? e.name : ""));
-    expect(names[0]).toBe("E37");
-    expect(names.at(-1)).toBe(`E${LOG_BUFFER_CAPACITY + 36}`);
+    const sizes = entries.map((e) => (e.kind === "upload" ? e.bytes : null));
+    expect(sizes[0]).toBe(37);
+    expect(sizes.at(-1)).toBe(LOG_BUFFER_CAPACITY + 36);
   });
 });
 
@@ -161,14 +172,30 @@ describe("what the buffer refuses to keep", () => {
     expect(blob).toContain("[redacted]");
   });
 
+  /**
+   * On `contentType`, which is the longest-lived plain string left in the
+   * union: `name` and `error` no longer reach `truncate` at all, because a
+   * closed vocabulary has already replaced anything long with `"Error"`.
+   */
   it("truncates a long string at write time, not on the way out", () => {
-    recordLog({ kind: "client-error", source: "boundary", name: "x".repeat(5_000) });
+    recordLog({
+      kind: "api",
+      outcome: "not-json",
+      method: "GET",
+      path: "/api/library",
+      status: 200,
+      ms: null,
+      vercelId: null,
+      bytes: null,
+      contentType: "x".repeat(5_000),
+      error: null,
+    });
 
     const entry = readLogBuffer()[0];
-    const name = entry && entry.kind === "client-error" ? entry.name : "";
+    const type = entry && entry.kind === "api" ? (entry.contentType ?? "") : "";
     // Resident already short: the value never sat in memory at full length.
-    expect(name.length).toBeLessThanOrEqual(LOG_MAX_CHARS + 1);
-    expect(name.endsWith("…")).toBe(true);
+    expect(type.length).toBeLessThanOrEqual(LOG_MAX_CHARS + 1);
+    expect(type.endsWith("…")).toBe(true);
   });
 
   /**
@@ -219,13 +246,13 @@ describe("when the serialising happens", () => {
     const stringify = vi.spyOn(JSON, "stringify");
     try {
       for (let i = 0; i < 20; i++) {
-        recordLog({ kind: "client-error", source: "boundary", name: `E${i}` });
+        recordLog({ kind: "upload", phase: "done", status: 200, bytes: i, ms: null });
       }
       expect(stringify).not.toHaveBeenCalled();
 
       const blob = serialiseLogBuffer();
       expect(stringify).toHaveBeenCalledTimes(1);
-      expect(blob).toContain("E19");
+      expect(blob).toContain('"bytes":19');
     } finally {
       stringify.mockRestore();
     }
@@ -241,5 +268,181 @@ describe("when the serialising happens", () => {
     } finally {
       stringify.mockRestore();
     }
+  });
+});
+
+/**
+ * **The two global listeners, which nothing exercised until GPT Sol said so.**
+ *
+ * `watchUncaughtErrors` is the one door into the buffer that a *reader's* page
+ * can push arbitrary values through: `event.error` is whatever was thrown, and
+ * `Error.name` is a writable string, so `{ name: "PROVIDER_BODY_MARKER" }` and
+ * `err.name = "reader_search_term"` are both things a throw can carry. Sol's
+ * second review, 2026-08-31, listed six cases and observed that none of them
+ * had a test. These are those six, plus the control that stops the whole
+ * describe passing because the vocabulary rejects everything.
+ *
+ * A fake `window` rather than jsdom: the two listeners are the entire surface,
+ * and holding them by hand means the test can throw a getter at them.
+ */
+function watch(): { fire: (type: "error" | "unhandledrejection", event: unknown) => void } {
+  const handlers = new Map<string, (event: unknown) => void>();
+  vi.stubGlobal("window", {
+    addEventListener: (type: string, fn: (event: unknown) => void) => {
+      handlers.set(type, fn);
+    },
+  });
+  watchUncaughtErrors();
+  /* Both listeners exist, checked here rather than assumed: a `fire` for a
+     listener that was never registered would silently do nothing, and every
+     assertion below would then be about an empty buffer. */
+  expect([...handlers.keys()].sort()).toEqual(["error", "unhandledrejection"]);
+  return {
+    fire: (type, event) => {
+      handlers.get(type)!(event);
+    },
+  };
+}
+
+/** The names recorded, in order. */
+function recordedNames(): string[] {
+  return readLogBuffer().map((e) => (e.kind === "client-error" ? e.name : ""));
+}
+
+describe("what an uncaught throw is recorded as", () => {
+  /** The control. Without it, a vocabulary that rejected everything would pass. */
+  it("records a genuine built-in by its real name, from both listeners", () => {
+    const { fire } = watch();
+    fire("error", { error: new TypeError("Cannot read properties of null") });
+    fire("unhandledrejection", { reason: new RangeError("Maximum call stack size exceeded") });
+
+    expect(readLogBuffer().map((e) => (e.kind === "client-error" ? e.source : ""))).toEqual([
+      "window",
+      "rejection",
+    ]);
+    expect(recordedNames()).toEqual(["TypeError", "RangeError"]);
+    // The browser's own words are not in there — only the name ever was.
+    expect(serialiseLogBuffer()).not.toContain("Cannot read");
+  });
+
+  /** One of ours, so the authored half of the vocabulary is load-bearing too. */
+  it("records an error class this app wrote", () => {
+    const { fire } = watch();
+    const authored = new Error("504 from /api/chat");
+    authored.name = "HttpError";
+    fire("error", { error: authored });
+
+    expect(recordedNames()).toEqual(["HttpError"]);
+  });
+
+  /**
+   * **Sol's first example.** A thrown object literal with a `name` that is a
+   * perfectly good identifier and is not a name at all. A shape check passes
+   * this; a list does not.
+   */
+  it("reduces a thrown object whose name is a marker rather than a name", () => {
+    const { fire } = watch();
+    fire("error", { error: { name: "PROVIDER_BODY_MARKER" } });
+
+    expect(recordedNames()).toEqual(["Error"]);
+    expect(serialiseLogBuffer()).not.toContain("PROVIDER_BODY_MARKER");
+  });
+
+  /**
+   * **Sol's second.** `Error.name` is writable, so a real `Error` can carry a
+   * reader's search term in the one field this buffer keeps.
+   */
+  it("reduces a real Error whose name has been overwritten", () => {
+    const { fire } = watch();
+    const err = new Error("nothing to see");
+    err.name = "reader_search_term";
+    fire("unhandledrejection", { reason: err });
+
+    expect(recordedNames()).toEqual(["Error"]);
+    expect(serialiseLogBuffer()).not.toContain("reader_search_term");
+  });
+
+  /** A cross-origin script failure. The event arrives with nothing in it. */
+  it("records a null error as Error rather than dropping the row", () => {
+    const { fire } = watch();
+    fire("error", { error: null });
+
+    expect(recordedNames()).toEqual(["Error"]);
+  });
+
+  /** A `name` getter that throws. There is nothing to learn from it, and no throw out. */
+  it("survives a name getter that throws", () => {
+    const { fire } = watch();
+    const hostile = {
+      get name(): string {
+        throw new Error(PROSE);
+      },
+    };
+    expect(() => fire("error", { error: hostile })).not.toThrow();
+
+    expect(recordedNames()).toEqual(["Error"]);
+    expect(serialiseLogBuffer()).not.toContain("Nagel");
+  });
+
+  /** `throw "…"` and `throw 7`. Neither is an object, so neither has a name. */
+  it("records a thrown primitive as Error, and none of the string", () => {
+    const { fire } = watch();
+    fire("error", { error: `TypeError: ${PROSE}` });
+    fire("unhandledrejection", { reason: 7 });
+
+    expect(recordedNames()).toEqual(["Error", "Error"]);
+    expect(serialiseLogBuffer()).not.toContain("Nagel");
+  });
+
+  /** Nothing at all where the event should be. The listener must not be the bug. */
+  it("does not throw when the event itself is not what it should be", () => {
+    const { fire } = watch();
+    expect(() => fire("error", {})).not.toThrow();
+    expect(() => fire("unhandledrejection", { reason: undefined })).not.toThrow();
+
+    expect(recordedNames()).toEqual(["Error", "Error"]);
+  });
+});
+
+describe("the one value that came off a response header", () => {
+  /**
+   * `x-vercel-id` is the only thing in the buffer that `apiFetch` did not
+   * write itself, and rule 1 of this file is *redact at write time, not at send
+   * time*. The collector and the route check it too; those are redundancy. What
+   * this asserts is that the raw header value is never **resident** — Sol's
+   * finding 6, and the reason `serialiseLogBuffer` cannot expose it.
+   */
+  it("keeps a real request id and stores nothing at all for a bogus one", () => {
+    const bogus = ["not a vercel id", `lhr1::${PROSE} and more`, PROSE, "lhr1:no-double-colon"];
+    recordLog({
+      kind: "api",
+      outcome: "response",
+      method: "GET",
+      path: "/api/library",
+      status: 200,
+      ms: 3,
+      vercelId: "lhr1::abcde-1234567890-0123456789ab",
+      bytes: null,
+      contentType: null,
+      error: null,
+    });
+    for (const value of bogus) {
+      recordLog({
+        kind: "api",
+        outcome: "response",
+        method: "GET",
+        path: "/api/library",
+        status: 200,
+        ms: 3,
+        vercelId: value,
+        bytes: null,
+        contentType: null,
+        error: null,
+      });
+    }
+
+    const ids = readLogBuffer().map((e) => (e.kind === "api" ? e.vercelId : "?"));
+    expect(ids).toEqual(["lhr1::abcde-1234567890-0123456789ab", null, null, null, null]);
+    expect(serialiseLogBuffer()).not.toContain("Nagel");
   });
 });

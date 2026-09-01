@@ -69,6 +69,15 @@
  */
 
 /**
+ * The one import, and it is the closed vocabularies this file holds its two
+ * name fields and its one header field to. Shared with the server on purpose:
+ * `src/feedback-payload.ts` is what `POST /api/feedback` validates an arriving
+ * report against, and a browser copy of the same list would be a second
+ * allowlist with the looser one winning (tests/client-imports.test.ts § SHARED).
+ */
+import { safeDiagnosticName, safeVercelId } from "../feedback-payload.js";
+
+/**
  * How many entries are kept. Two hundred covers minutes of ordinary reading and
  * the seconds before a reader reaches for the Feedback button, which is the
  * window that matters.
@@ -77,8 +86,9 @@ export const LOG_BUFFER_CAPACITY = 200;
 
 /**
  * The longest any single string may be. Everything stored here is a path, a
- * status, a media type or an error's *name* — none of which is legitimately
- * long — so this is a backstop rather than a budget.
+ * status or a media type — none of which is legitimately long — so this is a
+ * backstop rather than a budget. An error's *name* never reaches it: a closed
+ * vocabulary has already replaced anything unrecognised with `"Error"`.
  */
 export const LOG_MAX_CHARS = 300;
 
@@ -124,6 +134,10 @@ export interface ApiLogEntry {
    * and it is the only thing in this repo that ties a browser to a server log
    * line. Greg's *"anything else that will help us correlate it with our Vercel
    * logs"*, answered.
+   *
+   * **The only field here whose value came off a response header**, so it is
+   * held to its shape by `clean` at write time rather than on the way out; see
+   * `safeVercelId`. Anything else that header contained is `null`.
    */
   vercelId: string | null;
   /** How many characters the reply body had. **Never any of them.** */
@@ -131,10 +145,10 @@ export interface ApiLogEntry {
   /** The reply's media type, without parameters. */
   contentType: string | null;
   /**
-   * The failure's `name` — `TypeError`, `AbortError`. **Never its message**: a
-   * browser's network message is its own words, and one of ours can be an
-   * article (see `monitoring-scrub.ts`, which withholds a message for exactly
-   * this reason).
+   * The failure's `name` — `TypeError`, `AbortError` — from the same closed
+   * vocabulary `name` below is held to. **Never its message**: a browser's
+   * network message is its own words, and one of ours can be an article (see
+   * `monitoring-scrub.ts`, which withholds a message for exactly this reason).
    */
   error: string | null;
 }
@@ -160,7 +174,15 @@ export interface UploadLogEntry {
  * Where a caught client-side failure came from. Closed, and extended
  * deliberately — a free-text source is a free-text field.
  */
-export type ClientErrorSource = "boundary" | "tweets";
+export type ClientErrorSource =
+  /** `AppBoundary.componentDidCatch` — React tore a subtree down. */
+  | "boundary"
+  /** `Tweets.tsx`, which catches its own failure and so reaches neither of the others. */
+  | "tweets"
+  /** `window.onerror` — a throw nothing caught. See `watchUncaughtErrors`. */
+  | "window"
+  /** `unhandledrejection` — a promise nobody was waiting on. */
+  | "rejection";
 
 /**
  * A failure the app caught itself.
@@ -171,14 +193,21 @@ export type ClientErrorSource = "boundary" | "tweets";
  * is provably ours is `authored()` in `monitoring-scrub.ts`, which is private on
  * purpose. When the diagnostics stage adds the shared `safeDiagnosticError()`
  * that plan calls for, a message can be admitted here through that and nothing
- * else. Until then the name, the source and the timestamp are what a run-up
- * needs: the throw itself is already going to Sentry with its stack.
+ * else — its name half already exists, as `safeDiagnosticName` in
+ * [`feedback-payload.ts`](../feedback-payload.js). Until then the name, the
+ * source and the timestamp are what a run-up needs: the throw itself is already
+ * going to Sentry with its stack.
  */
 export interface ClientErrorLogEntry {
   kind: "client-error";
   at: number;
   source: ClientErrorSource;
-  /** `Error.name`. Identifier-shaped — but `name` is writable, so it is truncated like everything else. */
+  /**
+   * `Error.name`, **held to the closed vocabulary** in
+   * [`feedback-payload.ts`](../feedback-payload.js) — `name` is writable, so it
+   * is a value off a caller rather than a fact, and everything not on the list
+   * is stored as `"Error"`.
+   */
   name: string;
 }
 
@@ -216,32 +245,29 @@ const DENIED_KEYS = [
 const REDACTED = "[redacted]";
 
 /**
- * Fields that must look like the *name* of a failure and not like a sentence.
+ * Fields that hold the *name* of a failure, and may hold nothing else.
  *
  * `error` and `name` are the two places a message could get in by a call site
  * passing `err.message` where `err.name` was meant — a one-word slip, and the
  * one-word slip is how an `Error.message` in this codebase has four times
- * turned out to contain the article. So the shape is checked here rather than
+ * turned out to contain the article. So the value is checked here rather than
  * trusted there, exactly as `safeEvent` checks an exception's `type` rather
  * than trusting whatever built it.
+ *
+ * It used to be a *shape* check — an identifier expression — and GPT Sol's
+ * second review, 2026-08-31, was right that a shape is not a check here:
+ * `Error.name` is writable, and `PROVIDER_BODY_MARKER` and
+ * `reader_search_term` are both perfectly good identifiers. So both fields now
+ * go through `safeDiagnosticName`, the **closed vocabulary** in
+ * [`feedback-payload.ts`](../feedback-payload.js), which is the same list the
+ * server holds an arriving report to. Anything not on it becomes `"Error"` —
+ * reduced rather than dropped, because a failure that happened is worth a row
+ * in the timeline even when its name is one we will not repeat.
  *
  * Found by the prose fixture in `tests/log-buffer.test.ts` going red, which is
  * what that test is for.
  */
-const IDENTIFIER_FIELDS = new Set(["error", "name"]);
-
-/**
- * The value if it is identifier-shaped, and `"Error"` if it is not.
- *
- * Anything with a space, a hyphen, a comma or a quotation mark in it is prose
- * wearing a name's clothes — `"Failed to fetch"`, `"Unexpected token 'A'…"`,
- * an article's own sentence — and is dropped whole rather than trimmed. Length
- * is deliberately not part of the test; `truncate` runs afterwards and handles
- * that on its own.
- */
-function identifierOnly(value: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$.]*$/.test(value) ? value : "Error";
-}
+const ERROR_NAME_FIELDS = new Set(["error", "name"]);
 
 /* A pre-allocated fixed-capacity ring: `head` is where the next entry goes,
    `count` is how many are live. Overwrite in place, no allocation per write, no
@@ -304,7 +330,15 @@ function clean(entry: LogEntry): LogEntry {
     }
     if (typeof value === "string") {
       if (key === "path") out[key] = truncate(safePath(value));
-      else if (IDENTIFIER_FIELDS.has(key)) out[key] = truncate(identifierOnly(value));
+      else if (ERROR_NAME_FIELDS.has(key)) out[key] = safeDiagnosticName(value);
+      /* **The one value in here that came off a response header.** `apiFetch`
+         reads `x-vercel-id` and hands over whatever was in it, and rule 1 says
+         a value is made safe on the way in rather than on the way out — a raw
+         header held live in the ring for two hundred entries, and exposed by
+         `serialiseLogBuffer`, is precisely what that rule refuses. The
+         collector and the route check it again; those are redundancy and are
+         meant to stay. */
+      else if (key === "vercelId") out[key] = safeVercelId(value);
       else out[key] = truncate(value);
       continue;
     }
@@ -340,6 +374,62 @@ export function recordLog(input: LogInput): void {
   } catch {
     /* Nothing to do and nobody to tell. */
   }
+}
+
+/**
+ * A thrown value's `name`, and `"Error"` for everything else.
+ *
+ * `event.error` is whatever was thrown, which need not be an `Error` at all: a
+ * string, a number, `null` on a cross-origin script failure, or an object whose
+ * `name` getter throws. So the read is guarded and the answer is a constant
+ * rather than a coercion — `String(thrown)` is exactly how an article ends up in
+ * a diagnostic, and `clean` would only turn it back into `"Error"` one step
+ * later anyway.
+ */
+function nameOfThrown(thrown: unknown): string {
+  try {
+    if (typeof thrown === "object" && thrown !== null) {
+      /* `safeDiagnosticName` and not the raw string: `name` is writable, so
+         `{ name: "PROVIDER_BODY_MARKER" }` is a thing a caller can throw and
+         `err.name = "reader_search_term"` is a thing a caller can assign.
+         `clean` would reduce both a step later; doing it here as well makes
+         this function's own contract true rather than conditional on the door
+         it happens to be walked through. */
+      return safeDiagnosticName((thrown as { name?: unknown }).name);
+    }
+  } catch {
+    /* A getter threw. There is nothing to learn from it. */
+  }
+  return "Error";
+}
+
+/**
+ * Record the throws and the rejections nothing caught.
+ *
+ * Called once, from the client entry point, beside `watchConnection` — the
+ * shape [`offline.ts`](offline.js) establishes, where the module that owns the
+ * state also owns the listener that fills it.
+ *
+ * **Sentry already sees both of these**, globally and with the stack
+ * (src/web/monitoring.ts), so this is not a second reporter. It is here so that
+ * a failure is *ordered against the API calls around it* — "the GET returned
+ * 500 and four hundred milliseconds later something threw" is the sentence a
+ * report needs and the one thing Sentry cannot show, because breadcrumbs are
+ * locked off three separate ways and for good reasons that have not changed.
+ *
+ * The name only, and it goes through `safeDiagnosticName` twice — once in
+ * `nameOfThrown` and once in `clean` — because `Error.name` is writable, so a
+ * name is a claim rather than a fact and is checked against the vocabulary
+ * rather than trusted.
+ */
+export function watchUncaughtErrors(): void {
+  if (typeof window === "undefined") return;
+  window.addEventListener("error", (event: ErrorEvent) => {
+    recordLog({ kind: "client-error", source: "window", name: nameOfThrown(event.error) });
+  });
+  window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+    recordLog({ kind: "client-error", source: "rejection", name: nameOfThrown(event.reason) });
+  });
 }
 
 /** What is in the buffer, oldest first. A fresh array; the entries are shared. */

@@ -97,10 +97,12 @@ export interface FeedbackApiCall {
  * An uncaught error or a rejected promise, **by name only** in v1.
  *
  * No message. `Error.message` in this codebase has four times turned out to
- * contain the article (src/monitoring-scrub.ts), and the decided answer — a
- * shared `safeDiagnosticError()` that returns an identifier-shaped type, an
- * authored message and parsed allowlisted frames — belongs to the stage that
- * builds the client log buffer. Until it exists, a name is what may travel.
+ * contain the article (src/monitoring-scrub.ts), so a name is what may travel —
+ * and only a name on the closed list `safeDiagnosticName` below holds it to.
+ * The plan's larger `safeDiagnosticError()`, which would also return an
+ * authored message and parsed allowlisted frames, is still unbuilt; the name
+ * half of it is here because GPT Sol's second review showed that an identifier
+ * *shape* is not a check when `Error.name` is writable.
  */
 export interface FeedbackClientError {
   name: string;
@@ -180,18 +182,144 @@ const JOB_STATUSES = ["queued", "running", "done", "error", "cancelled"] as cons
 /* ------------------------------------------------------------ the shapes -- */
 
 /**
- * `TypeError`, `SpideryarnError` — an identifier and nothing else.
+ * **Every error name a report may carry, and nothing else.**
  *
- * `Error.name` is writable, so this is checked rather than assumed: a name that
- * is not identifier-shaped is a message wearing a hat.
+ * `Error.name` is a writable string, so an identifier *shape* is not a check —
+ * `PROVIDER_BODY_MARKER` and `reader_search_term` are both syntactically
+ * perfect identifiers, and both are data. GPT Sol's second review, 2026-08-31:
+ *
+ * > I would insist on an explicit vocabulary of built-in and authored error
+ * > names, with everything unknown reduced to `"Error"`, at both ends.
+ *
+ * So this is a **list, not a pattern**, and it is the same call `SAFE_PROPS`
+ * makes in src/monitoring-scrub.ts and the rebuild-don't-filter rule makes in
+ * src/public/dto.ts: an allowlist drops the value nobody thought about, which
+ * is always the one that leaks.
+ *
+ * Three groups, and the reason each is safe to keep is that **every string in
+ * it is a constant somebody wrote down** — a spec's name or this repo's own —
+ * so none of them can carry a character the reader or the article supplied.
+ * That is also why the DOM group is the *whole* `DOMException` name table
+ * rather than the handful we have met so far: a name with no information
+ * content costs nothing to keep, and a short list is a list that turns a real
+ * `ConstraintError` into `"Error"` the first time IndexedDB has an opinion.
+ *
+ * The authored group is the useful one, and it is short because only three
+ * classes under `src/web/` set a `name`. A server-side class (`FetchFailure`,
+ * `ProviderRefused`, …) is deliberately absent: those never reach a browser as
+ * a thrown `Error` — they arrive as a JSON body and become `HttpError` — so
+ * listing them would be listing names that can only arrive by forgery.
+ *
+ * **Adding to this list is the intended way to keep a name.** If a new client
+ * error class sets `this.name`, put it here in the same commit; the cost of
+ * forgetting is one `"Error"` in a report, not a broken build.
  */
-const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$.]{0,63}$/;
+const DIAGNOSTIC_ERROR_NAMES: ReadonlySet<string> = new Set([
+  /* ECMAScript's own constructors. `InternalError` is Firefox-only and not in
+     the language, and it is here because "too much recursion" is a real bug a
+     reader would file and it has no other name. */
+  "Error",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+  "AggregateError",
+  "InternalError",
+
+  /* `DOMException`'s name table, whole — WebIDL § exception names, both the
+     legacy list and the modern additions — plus `OverconstrainedError`, which
+     is its own interface rather than a `DOMException` and is what
+     `getUserMedia` rejects with in src/web/useDictation.ts. */
+  "DOMException",
+  "IndexSizeError",
+  "HierarchyRequestError",
+  "WrongDocumentError",
+  "InvalidCharacterError",
+  "NoModificationAllowedError",
+  "NotFoundError",
+  "NotSupportedError",
+  "InUseAttributeError",
+  "InvalidStateError",
+  "InvalidModificationError",
+  "NamespaceError",
+  "InvalidAccessError",
+  "TypeMismatchError",
+  "SecurityError",
+  "NetworkError",
+  "AbortError",
+  "URLMismatchError",
+  "QuotaExceededError",
+  "TimeoutError",
+  "InvalidNodeTypeError",
+  "DataCloneError",
+  "EncodingError",
+  "NotReadableError",
+  "UnknownError",
+  "ConstraintError",
+  "DataError",
+  "TransactionInactiveError",
+  "ReadOnlyError",
+  "VersionError",
+  "OperationError",
+  "NotAllowedError",
+  "OptOutError",
+  "OverconstrainedError",
+
+  /* Ours, and every one of them is a `class … extends Error` under `src/web/`
+     that assigns `this.name`. Nobody has to remember to add the next one:
+     tests/feedback-payload.test.ts sweeps `src/web/` for `this.name =` and goes
+     red naming any assignment this list has not heard of — the same way that
+     file pins `STEPS` against the real `STEP_ORDER`. */
+  "HttpError",
+  "StreamStalled",
+  "MarkStopped",
+]);
+
+/**
+ * A name from the vocabulary, and `"Error"` for everything else.
+ *
+ * **Reduced, never dropped.** A failure that happened is worth a row in the
+ * timeline even when its name is one we will not repeat: the `at` beside it is
+ * half of what the buffer is for, and an error that vanishes looks exactly like
+ * an error that never happened.
+ *
+ * Used at both ends — src/web/log-buffer.ts applies it at write time, and
+ * `clientErrors` below applies it again to whatever arrives off the wire — so
+ * neither end is trusting the other. It also settles a silent-drop mismatch the
+ * earlier length-capped expression had: a 65-character name the client kept and
+ * the server quietly discarded is now `"Error"` on both sides.
+ */
+export function safeDiagnosticName(value: unknown): string {
+  return typeof value === "string" && DIAGNOSTIC_ERROR_NAMES.has(value) ? value : "Error";
+}
 /** The same expression `isSlug` uses in src/ingest.ts, which cannot be imported here. */
 const SLUG = /^[a-z0-9][a-z0-9-]{0,199}$/;
 /** A revision id is `uuid` — src/db/schema.ts § article_revisions. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** `lhr1::abcde-1234567890-0123456789ab`, and its two- and three-region forms. */
 const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
+
+/**
+ * The request id if it is one, and `null` if it is not.
+ *
+ * Exported for the same reason `safeDiagnosticName` is: `x-vercel-id` is the
+ * only value the client log buffer holds that came off **a response header**,
+ * and src/web/log-buffer.ts's first rule is *redact and truncate at write time,
+ * not at send time* — a header held raw in a ring for two hundred entries is
+ * exactly the live reference that rule exists to refuse. GPT Sol, 2026-08-31:
+ * *"I would validate it while recording and retain the collector/server checks
+ * as redundancy."*
+ *
+ * So there are three checks on one value and only two definitions of its shape:
+ * this one, used by the buffer at write time and by `apiCalls` below on
+ * arrival, and the deliberate copy in src/web/feedback-diagnostics.ts, which is
+ * the redundant middle layer and says so.
+ */
+export function safeVercelId(value: unknown): string | null {
+  return shaped(value, VERCEL_ID);
+}
 /** BCP 47, as loosely as a browser writes one: `en`, `en-GB`, `zh-Hans-CN`. */
 const LANGUAGE = /^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8}){0,3}$/;
 /** `Europe/London`, `UTC`, `America/Argentina/Buenos_Aires`. */
@@ -336,7 +464,7 @@ function apiCalls(value: unknown): FeedbackApiCall[] {
       path: where,
       status: num(source.status, 100, 599),
       ms: num(source.ms, 0, 24 * 60 * 60 * 1000),
-      vercelId: shaped(source.vercelId, VERCEL_ID),
+      vercelId: safeVercelId(source.vercelId),
       at: instant(source.at),
     });
   }
@@ -349,9 +477,12 @@ function clientErrors(value: unknown): FeedbackClientError[] {
   for (const entry of value.slice(0, MAX_ERRORS)) {
     const source = asObject(entry);
     if (!source) continue;
-    const name = shaped(source.name, IDENTIFIER);
-    if (name === null) continue;
-    out.push({ name, at: instant(source.at) });
+    /* A missing name is not an error record at all, so that entry is dropped.
+       A *present* one is reduced rather than dropped — see
+       `safeDiagnosticName`, and note that the client has already done this
+       once, at write time, in src/web/log-buffer.ts. */
+    if (typeof source.name !== "string") continue;
+    out.push({ name: safeDiagnosticName(source.name), at: instant(source.at) });
   }
   return out;
 }
