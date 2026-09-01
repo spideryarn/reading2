@@ -46,7 +46,7 @@ Still to build: the setup layer, ports, the database lease, and `worktree:sweep`
 ```bash
 # from a worktree, when a piece of work is done
 git fetch origin dev
-git rebase origin/dev          # INTENDED, not yet authorised — see below
+git merge origin/dev           # NOT rebase — see below
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
 ```
@@ -57,15 +57,34 @@ Three things follow from `push origin HEAD:dev`, and they are all improvements:
   question shrinks to the trunk itself.
 - **The "did it land?" test becomes one command** — `git merge-base --is-ancestor HEAD origin/dev` —
   which is what makes a safe sweep possible at all.
-- **Rebase inside a worktree is the intended workflow, and is not authorised yet.** Read that
-  literally: AGENTS.md bans rebasing, AGENTS.md wins, and until Greg approves the exception you do not
-  rebase anywhere. This doc cannot grant it — a lower-level doc that contradicts AGENTS.md is worse
-  than one that waits. The reason it is needed: with a dozen agents pushing to one branch, a
-  non-fast-forward rejection is routine and fetch-and-rebase is the fix, so an agent applying the
-  blanket ban cannot finish the workflow. The exception must land **no later than the first thing that
-  creates a worktree**, and it should be scoped to a linked, single-agent worktree rather than to a
-  branch name — a branch name is not evidence of who else is in the tree. Rebasing stays banned in the
-  shared primary for ever.
+- **Integrate by merging, never by rebasing** — and note this needs no change to any rule, because
+  the ban on rebasing in [AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share) and
+  [version-control.md](version-control.md) stays exactly as written. An earlier draft of this doc had
+  it the other way round and claimed the workflow *required* rebase. It does not. It requires
+  **integration** before a push to a moved `dev`, and merge is integration. Why merge, specifically:
+
+  1. **Your shas survive.** This repo references commits everywhere — Sol reviews cite them, plans say
+     "done (`96c7661`)", postmortems are built around the commit that introduced a bug. Rebase rewrites
+     every commit it moves, and those references do not break loudly; they keep looking fine and point
+     at nothing.
+  2. **You push what you tested.** After a merge the pushed commit is the one `npm test` ran on. After
+     a rebase, and especially after losing the push race twice, the tested arrangement no longer
+     exists.
+  3. **A conflict arrives once, not once per commit.** Rebase replays each of your commits over the new
+     base, so one conflict can surface N times — and with
+     [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)'s "make a proposal,
+     don't make changes yet" rule, N replays means N round trips with Greg.
+  4. **It degrades better under contention.** Losing the race is routine with a dozen agents. A merge
+     retry costs one more merge commit; a rebase retry replays your whole stack against a new base.
+  5. **A stopped merge is a state you can read.** Interrupted mid-rebase you are on a detached HEAD
+     with a rebase in progress, and the ways out — `git rebase --abort`, `--skip` — are indistinguishable
+     from the throw-work-away commands you are told never to run, so a stuck agent is stuck between two
+     rules. An interrupted merge leaves you on your own branch with markers in files.
+
+  What it costs is a braided log on `dev`; `git log --first-parent` reads it back. The sweep is
+  indifferent — `git merge-base --is-ancestor HEAD origin/dev` answers "did it land?" the same either
+  way. And most landings never conflict at all: a plain non-fast-forward merges automatically, so the
+  proposal rule only fires on real textual conflicts.
 
 `main` is still written **only** by a gated `npm run deploy`, which pushes one gated sha
 (`git push origin <sha>:refs/heads/main`) rather than the branch you are standing on. That is why
@@ -234,12 +253,15 @@ Two things to do at the same time, both independent of worktrees:
 
 Rule changes to AGENTS.md go one approved set at a time
 ([edit-important-docs.md](../reusable/edit-important-docs.md)), and they would be wrong to land before
-`dev` exists. Two are needed when it does:
+`dev` exists. One is needed when it does:
 
 1. Under **Working in a tree several agents share** — commit and push to `dev`; `main` is written only
    by `npm run deploy`.
-2. Same section — the rebase ban applies to the shared primary, not to your own worktree, and
-   fetch-and-rebase onto `origin/dev` before pushing is the expected move.
+
+**And that is the only one**, because the workflow merges rather than rebases. An earlier draft wanted
+a second change carving out a rebase exception for worktrees; choosing merge deletes it, and leaves the
+"never run a git command that throws work away" rule whole. That is an argument for merge in itself —
+[The workflow](#the-workflow) has the rest.
 
 And [version-control.md](version-control.md) is a **required** step of the runbook, not an
 afterthought: it currently says "`main`, and only `main`" and describes the old topology, so an agent

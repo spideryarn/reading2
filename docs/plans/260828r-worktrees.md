@@ -92,8 +92,14 @@ That deletes the preview-build problem for agent branches, removes stray refs fr
 collapses the sweep's "did it land?" test to `git merge-base --is-ancestor HEAD origin/dev`. It costs
 one thing worth naming: **in-progress worktree commits have no remote copy**, so the
 push-at-the-end-of-a-piece-of-work convention is now the whole backup story rather than half of it.
-And it makes fetch-and-rebase mandatory before pushing, which is why the rebase ban has to be scoped
-to the shared primary — an agent applying it inside a worktree cannot complete the workflow.
+And it makes **integration before pushing** mandatory, which a first draft of this wrote up as
+fetch-and-rebase, and therefore as needing the rebase ban scoped to the shared primary. **Wrong.**
+Greg asked the obvious question on 2026-09-01 — does rebase make things harder for agents than
+always-merge? — and merge wins on six counts, the two repo-specific ones being that rebase silently
+dangles every sha this repo cites (reviews, plans, postmortems) and that a replayed conflict means one
+"make a proposal, don't change anything yet" round trip per commit rather than one per landing. It
+also needs **no rule change**, so the ban on throwing work away stays whole. See
+[worktrees.md § The workflow](../project/worktrees.md#the-workflow).
 
 **Step 1 of the old seven is done and committed (`96c7661`, 2026-08-28). Nothing creates a worktree
 yet.** Steps 2 and 5 are largely deleted by the above. Read this section, [Step 0](#step-0-the-dev-branch-and-what-it-costs)
