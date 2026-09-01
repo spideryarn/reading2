@@ -114,13 +114,22 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "shelf.json" },
     bundle: { exported: true, into: "article.json" },
   },
-  /* The current revision. Its columns fan out across most of both outputs —
-     the extracted HTML, the blocks' parent, and every artefact column from
-     `tree` to `labels`. The file named here is where its *identity* lands, and
-     that is what the sentinel follows. */
+  /* The current revision. Some of its columns are files of their own in both
+     outputs — the HTML, and every artefact column from `tree` to `labels` — but
+     the file named here is where **the row itself** lands, and that is what
+     both checks in tests/store-export-covers-tables.test.ts follow.
+
+     **The bundle's answer said `manifest.json` until 2026-09-01, and that was
+     the bug.** The manifest carries exactly one column of this table — `title` —
+     so of forty-six columns, fifteen were files of their own and the other
+     thirty were in no file in the zip at all: `byline`, `siteName`, `excerpt`,
+     `publishedAt` and `wordCount` among them. The sentinel went into `title`, so
+     one column out of forty-six satisfied the guard for the whole table. Naming
+     the file the **whole row** goes into, rather than a file some of it reaches,
+     is what lets the column check in that test ask the right question. */
   article_revisions: {
     rollback: { exported: true, into: "meta.json" },
-    bundle: { exported: true, into: "manifest.json" },
+    bundle: { exported: true, into: "content/revision.json" },
   },
   revision_blocks: {
     rollback: { exported: true, into: "blocks.json" },
@@ -371,6 +380,28 @@ export interface ArticleRows {
  * A rollback wants the article as it is being served, not an archive, and the
  * bundle makes the same product choice deliberately rather than out of
  * necessity — revisions do carry lineage (`basedOnRevisionId`).
+ *
+ * ## The invariant the owner scoping rests on, once `ownedSlug` has answered
+ *
+ * **`ownedSlug` is the only owner predicate in this function.** The nine child
+ * reads below are `where article_id = …` and nothing else, and that is correct
+ * *today* for one reason worth writing down rather than rediscovering: **every
+ * row that hangs off an article was written by that article's owner.** Every
+ * write path stamps `currentOwnerId()`, and the public surface — a shared
+ * article a stranger reads — is read-only, so a stranger's row cannot exist.
+ *
+ * **The schema does not itself forbid the other case.** `glossary_lookups` is
+ * the clearest example: its primary key is `(article_id, entry_id)` and
+ * `owner_id` sits outside it, so a row whose owner differs from the article's is
+ * a legal row that nothing rejects. Several of the others are the same shape.
+ *
+ * So the day anyone can annotate, comment on or chat about **someone else's**
+ * shared article, this walk starts exporting their rows into the owner's
+ * download, and every test here will stay green: the article is the right
+ * article, the query is the right query, and the rows are simply somebody
+ * else's. That change is the trigger to add `owner_id` to these predicates —
+ * not a redundant one now, which would read as the guard and hide the fact that
+ * the guarantee currently comes from the write paths.
  *
  * ## The orderings, all of which are load-bearing
  *

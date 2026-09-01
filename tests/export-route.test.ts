@@ -418,7 +418,6 @@ when("downloading one article's data", { timeout: 20_000 }, () => {
     const tooBig = BUNDLE_BYTE_CAP + 1;
     seen.instead = async (slug: string) => ({
       slug,
-      filename: `spideryarn-${slug}.zip`,
       /* Not `tooBig` bytes of anything: the route must refuse on the reported
          size, and allocating five megabytes to prove it would be the test
          asserting something the route is not allowed to look at. */

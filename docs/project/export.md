@@ -16,8 +16,8 @@ how it leaves.
 > — Greg, 2026-09-01
 
 Parent: [architecture.md](architecture.md). The work is
-[260901h-export-article-data.md](../plans/260901h-export-article-data.md), and **the route and the
-button are not written yet** — its stages D and F. The bundle builds; nothing calls it.
+[260901h-export-article-data.md](../plans/260901h-export-article-data.md), and it is built: the
+bundle, `GET /api/export/:slug`, and the button on the Metadata page.
 
 ## What comes out
 
@@ -29,14 +29,16 @@ file-by-file list, and the thing to edit when the layout changes.
     manifest.json     what this export is, when it was made, and what was left out
     article.json      the article on your shelf: your title, your purpose, sharing state
     README.md         the above, for whoever writes an importer
-    content/          stamped.html, extracted.html, blocks.json, block-identities.json, assets.json
+    content/          revision.json, stamped.html, extracted.html, blocks.json,
+                      block-identities.json, assets.json
     augmentations/    tree, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, arc,
                       tweets, labels, comments, chat, searches, referee-claims, referee-criteria
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
-has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md` and
-`content/block-identities.json`, which are always written, the last even when empty. Anything
-holding a list wraps it in a single-key object, so the format has somewhere to grow.
+has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,
+`content/revision.json` and `content/block-identities.json`, which are always written, the last even
+when empty. Anything holding a list wraps it in a single-key object, so the format has somewhere to
+grow.
 
 `articleBundle(slug)` is owner-scoped through `readArticleRows` and throws `ArticleNotFound` for a
 slug that is not this reader's, which a route turns into a 404 rather than a 500.
@@ -98,6 +100,22 @@ of columns it drops, so a column added to [`src/db/schema.ts`](../../src/db/sche
 reader's download without anybody remembering it. Fidelity by construction rather than by memory:
 `tools`, `stance`, `criterionId` and `valence` each went missing from `export.ts` for weeks, one
 field list at a time.
+
+**That last sentence was a claim before it was true, and how it failed is the more useful half.**
+For a day, `article_revisions` — the biggest table here — was the one table whose row was never
+serialised: `manifest.json` named `title` and a url, the HTML and artefact columns were files of
+their own, and `byline`, `siteName`, `excerpt`, `publishedAt`, `wordCount` and twenty-five others
+were in **no JSON file in the zip**. The rollback's `meta.json` wrote most of them, so on that one
+table the faithful export was the less faithful of the two. It is `content/revision.json` now.
+
+The guard could not see it because it was **table-level**: one sentinel string per table, and this
+table's went into `title` — the one column of it that did ship. One column out of forty-six
+satisfied the check for the whole table.
+[`tests/store-export-covers-tables.test.ts`](../../tests/store-export-covers-tables.test.ts) now
+also compares the keys each file actually carries against `getTableColumns`, so a dropped column
+fails and a deliberate omission has to be written down in words beside it. It covers the bundle
+only: the rollback renames as it goes (`extract_method` lands as `method`), so there is no key set
+there to compare, and `store-roundtrip` already pins its bytes.
 
 The middle option — a synthesized model both sides project from — was proposed in review and turned
 down. It would have to be rich enough for the bundle *and* lossily projectable back to a pinned

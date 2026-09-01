@@ -21,6 +21,22 @@
  * pins them; this file does not, so a column added to `src/db/schema.ts` arrives
  * in the reader's download without anybody remembering it.
  *
+ * **That was a claim before it was true.** For the first day of this feature
+ * `article_revisions` — the biggest table here, and the one carrying the
+ * article's own identity — was the one table `rowJson` was never called on:
+ * `manifest.json` named `title` and a url, `contentFiles` named the HTML
+ * columns, `augmentationFiles` named the ten artefact columns, and the other
+ * thirty were in no JSON file in the zip at all. It is `content/revision.json`
+ * now, built the same way as every other table. Two things ship by field list
+ * and both are deliberate: `manifest.json` (`title` and the url, so an importer
+ * knows what it has before opening anything) and `index.html` (a page for a
+ * person). Neither is where a table's data lives.
+ *
+ * The guard that missed it is fixed too, and that is the more important half:
+ * `tests/store-export-covers-tables.test.ts` now compares the keys each file
+ * actually carries against `getTableColumns`, rather than looking for one
+ * sentinel string somewhere in it.
+ *
  * ## It never touches the bucket
  *
  * No image bytes and no original document (Greg's call), so nothing here reads
@@ -87,10 +103,23 @@ export interface BundleEntry {
   readonly bytes: number;
 }
 
+/**
+ * **There is deliberately no `filename` here.**
+ *
+ * There was one — `spideryarn-${slug}.zip` — with a comment saying the route put
+ * it in the header. The route did not: `sendExport` sends
+ * `contentDisposition(`${slug}.zip`, "attachment")`, the client sets its own
+ * `download` attribute, and `spideryarn-<slug>.zip` appeared nowhere else in the
+ * repo. A field nothing read, under a comment that was false, and a *third*
+ * spelling of a name the two live call sites already agree on.
+ *
+ * It could have been made the source of truth instead, and was not: the client
+ * cannot read the header through a blob, so it would still need the name from
+ * somewhere — and the thing that caused the confusion was a third spelling, not
+ * a missing one.
+ */
 export interface ArticleBundle {
   readonly slug: string;
-  /** What the download should be called. The route puts this in the header. */
-  readonly filename: string;
   readonly bytes: Uint8Array;
   /** `bytes.byteLength`, said out loud so a caller need not measure it. */
   readonly byteLength: number;
@@ -265,7 +294,6 @@ export async function articleBundle(slug: string): Promise<ArticleBundle> {
   );
   return {
     slug,
-    filename: `spideryarn-${slug}.zip`,
     bytes,
     byteLength,
     overCap,
@@ -309,9 +337,63 @@ function articleJson(rows: ArticleRows): string {
   return json(rowJson(rows.article, ["id", "currentRevisionId", "fixture"]));
 }
 
+/**
+ * The revision's columns that are **already in the zip as their own file**, and
+ * would otherwise be written twice.
+ *
+ * Two payloads and twelve artefacts: `stampedHtml` and `extractedHtml` are the
+ * article's own markup, `assets` is the image manifest, and the ten artefact
+ * columns from `tree` to `labels` are each a file under `augmentations/`. A zip
+ * that carried them here as well would be roughly twice the size for nothing,
+ * and would give an importer two copies to disagree about.
+ *
+ * **`id` is ours, not the reader's** — an internal uuid that names nothing else
+ * in the zip. `basedOnRevisionId` stays, even though it names a revision the
+ * bundle does not carry: it is the lineage of the piece, a fact about the
+ * article rather than a key into our database, and only this export says it.
+ *
+ * Everything else ships, and it ships by not being named.
+ */
+const REVISION_WRITTEN_ELSEWHERE = [
+  "id",
+  "stampedHtml",
+  "extractedHtml",
+  "assets",
+  "tree",
+  "arc",
+  "tweets",
+  "glossary",
+  "ideas",
+  "quotes",
+  "timeline",
+  "quiz",
+  "sketch",
+  "labels",
+] as const;
+
 function contentFiles(rows: ArticleRows): Map<string, string> {
   const { revision, blocks } = rows;
   const out = new Map<string, string>();
+  /* **The revision's row, whole** — the piece's own identity and provenance:
+     byline, site name, language, excerpt, the publisher's date, the note, both
+     URLs, how it was fetched and how it was extracted, and the counts.
+
+     It is here because for the first day of this feature it was **nowhere**.
+     `manifest.json` named `title` and a url, `contentFiles` named the two HTML
+     columns and `assets`, `augmentationFiles` named ten artefact columns, and
+     the other thirty were not in any JSON file in the zip — they survived only
+     incidentally inside the article's own prose. Meanwhile the rollback's
+     `meta.json`, which this file's docstring calls the lossy one, wrote
+     `byline`, `siteName`, `excerpt`, `publishedAt` and the rest. On this one
+     table the faithful export was the less faithful of the two, and the guard
+     could not see it because its sentinel went into `title` and `title` was one
+     of the three fields that did ship. tests/store-export-covers-tables.test.ts
+     now compares column names, not one string.
+
+     `title` and the url are in `manifest.json` as well, and that is deliberate:
+     the manifest is what an importer reads to know what it has before it opens
+     anything else. Two small strings, said twice, from the same row. */
+  out.set("content/revision.json", json(rowJson(revision, REVISION_WRITTEN_ELSEWHERE)));
   if (revision.stampedHtml) out.set("content/stamped.html", revision.stampedHtml);
   /* **The rollback never writes this one** — `grep extractedHtml src/store/export.ts`
      returns nothing — so it is one of the three fidelity claims
@@ -431,6 +513,10 @@ one thing that will make the rest of these files make sense.
     README.md              This file.
 
     content/
+      revision.json        This reading of the article, as data: the byline, the site, the
+                           language, the excerpt, the date the publisher gave it, the note, both
+                           URLs, when it was fetched, how it was extracted, and the counts.
+                           Everything about the piece that is not the piece itself.
       stamped.html         The article as Spideryarn reads it, with a block id on every element.
                            This is the one to use.
       extracted.html       The same article before ids were stamped on. Rarely what you want.
@@ -469,9 +555,9 @@ lists the same files for a person to read, minus itself and the manifest, for th
 
 A file is absent when there is nothing in it. An article you never chatted about has no
 \`chat.json\`. That is not an error, and an importer should treat every file as optional —
-except \`index.html\`, \`manifest.json\`, \`article.json\`, \`README.md\` and
-\`content/block-identities.json\`, which are always written, the last of them even when it is
-empty.
+except \`index.html\`, \`manifest.json\`, \`article.json\`, \`README.md\`,
+\`content/revision.json\` and \`content/block-identities.json\`, which are always written, the
+last of them even when it is empty.
 
 Every file holding a list wraps it in a single-key object — \`{ "comments": [...] }\`,
 \`{ "threads": [...] }\` — so that the format has somewhere to grow. The artefact files
@@ -595,6 +681,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "article.json": "The article on your shelf: your title, your purpose, sharing state.",
   "README.md": "The format, file by file, for whoever writes an importer.",
   "index.html": "This page.",
+  "content/revision.json": "This reading of the article: byline, site, language, excerpt, published date, how it was fetched and extracted, and the counts.",
   "content/stamped.html": "The article as Spideryarn reads it, with a block id on every element. This is the one to open.",
   "content/extracted.html": "The same article before the ids were stamped on. Rarely what you want.",
   "content/blocks.json": "Every block as data: id, position, tag, kind, text, word count, and its own HTML.",

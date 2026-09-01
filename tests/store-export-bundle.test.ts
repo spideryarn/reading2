@@ -358,8 +358,19 @@ when("the bundle is the faithful projection", () => {
     const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
     expect(shelf).not.toContain("visibility");
     /* And nothing of ours rides along: `ownerId` is an auth uuid that says
-       nothing about the article. */
-    expect(bundled.get("article.json")).not.toContain(owner());
+       nothing about the article.
+
+       **Over the whole zip, not over `article.json`.** Ten tables carry an
+       owner column and the bundle serialises whole rows, so checking the one
+       file would leave nine unwatched — and would miss the case that actually
+       needs watching: a *future* owner column under another name (`createdBy`,
+       `sharedWith`) is not in `OURS_NOT_THEIRS`, so `rowJson` would ship it, and
+       only a search for the uuid itself can see that. The reader's own id is not
+       a secret from the reader; it is simply not their article's data, and a
+       file they may forward is the wrong place for it. */
+    for (const [file, text] of bundled) {
+      expect(text, `${file} carries the owner's auth uuid`).not.toContain(owner());
+    }
   });
 
   it("leaves out a file with nothing in it, and keeps the README", () => {

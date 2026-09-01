@@ -277,6 +277,53 @@ and "Not built yet"; Delete still last.
       manifest, each with a real note — so a file added to the bundle without one turns it red.
 - [x] Built for real: `fowler-phrenology` 13 entries / 95 KB, `noema…` 19 entries / 176 KB.
 
+**Stage H — what the code review found.** ✅ **Done.** The second review (code, not plan) found a
+real bug, and it was the one the design claimed to have abolished.
+
+- [x] **`article_revisions` was field-listed, not row-serialised.** The whole argument for the bundle
+      is that whole rows cannot forget a field — true for nine tables and **false for the biggest
+      one**. Measured against the real database: `"byline"`, `"siteName"`, `"excerpt"`,
+      `"publishedAt"` and `"wordCount"` were in **no JSON file in the zip**, surviving only
+      incidentally inside article prose. The rollback's `meta.json` keeps most of them, so on this
+      table *the faithful export was the less faithful one* — and nobody saw it, because the audit
+      only ever looked for losses in the rollback direction. Fixed with `content/revision.json` via
+      `rowJson`, dropping only `id` and the sixteen payloads already written as their own files.
+- [x] **Why it hid, and the guard that now catches it.** The coverage check was table-level. Sol's
+      *plan* review said so — "it cannot see a dropped column" — and Stage B fixed only the other
+      half. One column of forty-six (`title`, into the manifest) satisfied the guard for the whole
+      table. There is now a column-level check comparing emitted keys against
+      `getTableColumns()`, with every difference requiring a written reason, **and it checks both
+      directions** so a stale "left out" claim is also red.
+- [x] **Watched red before the fix**, naming all 30 missing columns, with the other ten tables
+      passing — a specific failure, not a new test failing everything. Then a second control, since
+      30 columns at once does not prove it catches one: dropping `byline` alone turned it red too.
+- [x] The rollback is deliberately **not** covered by the column check, and the test says why: that
+      projection renames as it goes (`extract_method`→`method`), so there is no key set to compare,
+      and `store-roundtrip` already pins its bytes.
+- [x] Deleted `ArticleBundle.filename` — dead, and its docstring claimed the route used it. The name
+      was already spelled consistently in two places; a third, unused spelling was the whole problem.
+- [x] Recorded the owner-isolation invariant on `readArticleRows`: the child reads carry no owner
+      predicate, which is correct **today** only because every write path stamps `currentOwnerId()`
+      and the public surface is read-only. `glossary_lookups`' PK is `(article_id, entry_id)` with
+      `owner_id` outside it, so the schema does not forbid the other case. The trigger is the day
+      anyone can annotate someone else's shared article — at which point every test here stays green.
+- [x] The owner-uuid assertion now sweeps the **whole zip**, not just `article.json`, so a future
+      owner column under another name (`createdBy`) that `rowJson` would happily ship is caught.
+- [x] `Cache-Control: private, no-store` on `sendExport`, as `/api/admin/users` does — a zip of one
+      reader's whole article is the response most likely to sit in a disk cache.
+- [x] `export.md` no longer says the route and button are unbuilt.
+- [x] **The reviewer's arithmetic was corrected rather than copied**: one column of forty-six, not
+      three — `manifest.json`'s `slug`/`shortId` come off `articles` and its `url` is a renamed
+      derivation.
+
+**The rollback did not move, proved without running the contended suite.** Two peer test runs held
+the fixture job slots, so `store-roundtrip` could not start. Instead: `src/store/export.ts` is
+**byte-identical** to `bb0aff5`, the commit at which it was watched passing 263/263, and the only
+executable change in `article-rows.ts` since is the `bundle` destination string — a field
+`export.ts` never reads, since it goes through `.rollback` alone via `RollbackTable`. A stand-in
+diff against `data/` was built and **thrown away as invalid evidence**, because Postgres has drifted
+from `data/` under other agents' work and it diffs red on an unmodified codebase.
+
 ## What this is deliberately not doing
 
 - **Image bytes** (Greg's call) — `assets.json` names every image, hash and URL, so the bundle

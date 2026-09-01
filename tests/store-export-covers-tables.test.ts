@@ -412,6 +412,161 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
   };
 }
 
+/* ------------------------------------------------ the list is true, column by column -- */
+
+/**
+ * **The sentinel check above is table-level, and a table-level check cannot see
+ * a dropped column.**
+ *
+ * GPT Sol said so while reviewing the plan — "table-level, not column-level; it
+ * cannot see a dropped column" — and Stage B fixed only the other half of it,
+ * the projection that receives a row and discards it. What was left is exactly
+ * how the `article_revisions` bug survived Stage C. That table has forty-six
+ * columns: fifteen are files of their own in the zip, **one** — `title` — was in
+ * `manifest.json`, and the other thirty were in no file at all, `byline`,
+ * `siteName`, `excerpt`, `publishedAt` and `wordCount` among them. The sentinel
+ * went into `title`. One column out of forty-six satisfied the check for the
+ * whole table, and every test in the suite was green.
+ *
+ * So: for each table the record says the bundle exports, compare the keys the
+ * bundle **actually emitted** against `getTableColumns` — the schema, read at
+ * runtime, never a second list — and require every difference to be declared
+ * below in words. Both directions, because a note claiming a column is left out
+ * while it ships is the same drift the other way round.
+ *
+ * ## Why this covers the bundle and not the rollback
+ *
+ * The bundle serialises whole rows, so its keys **are** column names and a key
+ * comparison is meaningful. The rollback's projection is hand-listed by design
+ * and renames as it goes — `extract_method` lands as `method`, `final_url` as
+ * `url`, and `meta.json` is a `Meta`, not a row — so there is no key set to
+ * compare against, and `tests/store-roundtrip.test.ts` already pins its output
+ * byte for byte against what the filesystem store writes. A key check there
+ * would either be a third copy of those field lists or vacuous. It is
+ * deliberately not attempted.
+ */
+
+/**
+ * The columns `export-bundle.ts` strips from **every** row, and why in words.
+ *
+ * Deliberately a second, independently-written copy of that file's
+ * `OURS_NOT_THEIRS` rather than an import of it: a guard that reads its answer
+ * out of the code it is guarding agrees with that code by construction. Dropping
+ * one of these from the bundle turns the `stale` check below red, which is the
+ * point.
+ */
+const DROPPED_EVERYWHERE: Readonly<Record<string, string>> = {
+  ownerId: "An auth uuid that says nothing about the article, and is not the reader's data.",
+  articleId: "An internal key. The zip is one article, and nothing in it is addressed by this.",
+  revisionId: "An internal key. The zip is one revision, and nothing in it is addressed by this.",
+  fts: "A generated tsvector: a search index, unreadable, and big enough to double blocks.json.",
+};
+
+/**
+ * Per table, the columns the bundle deliberately keeps out of its row JSON —
+ * each with the reason, in the same "say it in words" style the coverage record
+ * itself uses. A shrug is not a reason: the next reader has to be able to tell
+ * a decision from an oversight, which is the whole failure this file exists for.
+ */
+const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> = {
+  articles: {
+    id: "An internal uuid naming nothing else in the zip; `shortId` is the reader-facing one.",
+    currentRevisionId: "An internal uuid, and the zip holds exactly that revision already.",
+    fixture: "Says this is the shipped demo article — about our deployment, not the reader's data.",
+  },
+  article_revisions: {
+    id: "An internal uuid. `basedOnRevisionId` is kept because lineage is a fact about the piece.",
+    stampedHtml: "Written whole as content/stamped.html — the one file a reader opens.",
+    extractedHtml: "Written whole as content/extracted.html.",
+    assets: "Written whole as content/assets.json, the image manifest.",
+    tree: "Written whole as augmentations/tree.json.",
+    arc: "Written whole as augmentations/arc.json.",
+    tweets: "Written whole as augmentations/tweets.json.",
+    glossary: "Written whole as augmentations/glossary.json.",
+    ideas: "Written whole as augmentations/ideas.json.",
+    quotes: "Written whole as augmentations/quotes.json.",
+    timeline: "Written whole as augmentations/timeline.json.",
+    quiz: "Written whole as augmentations/quiz.json.",
+    sketch: "Written whole as augmentations/sketch.json.",
+    labels: "Written whole as augmentations/labels.json.",
+  },
+  revision_blocks: {},
+  block_identities: {},
+  comments: {},
+  chat_threads: {},
+  chat_messages: {
+    threadId: "Each message is nested inside its thread in chat.json, so the key would be noise.",
+  },
+  search_runs: {},
+  referee_criteria: {},
+  referee_claims: {},
+  glossary_lookups: {},
+};
+
+/** A property of `value`, or `undefined` if it is not an object. */
+function at(value: unknown, key: string): unknown {
+  if (value === null || typeof value !== "object") return undefined;
+  return (value as Record<string, unknown>)[key];
+}
+
+/** The array under `key`, or empty — an alarm the caller reads as "found nothing". */
+function listAt(value: unknown, key: string): unknown[] {
+  const found = at(value, key);
+  return Array.isArray(found) ? found : [];
+}
+
+/**
+ * Where one table's rows sit inside the file `ARTICLE_TABLE_COVERAGE` names for
+ * it — the only hand-written thing here, and it is about the *shape of the
+ * file*, not about which columns are in it.
+ *
+ * Keyed by the record's own destination rather than by a path written twice, so
+ * a table whose `into` changes is read out of the file it now claims.
+ */
+const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
+  articles: (parsed) => [parsed],
+  article_revisions: (parsed) => [parsed],
+  revision_blocks: (parsed) => listAt(parsed, "blocks"),
+  block_identities: (parsed) => listAt(parsed, "identities"),
+  comments: (parsed) => listAt(parsed, "comments"),
+  chat_threads: (parsed) => listAt(parsed, "threads"),
+  chat_messages: (parsed) =>
+    listAt(parsed, "threads").flatMap((thread) => listAt(thread, "messages")),
+  search_runs: (parsed) => listAt(parsed, "runs"),
+  referee_criteria: (parsed) => listAt(parsed, "criteria"),
+  referee_claims: (parsed) => [at(parsed, "run")],
+  glossary_lookups: (parsed) => listAt(parsed, "lookups"),
+};
+
+/** Every key any of these rows carries. */
+function keysOf(rows: readonly unknown[]): Set<string> {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    if (row === null || typeof row !== "object") continue;
+    for (const key of Object.keys(row)) keys.add(key);
+  }
+  return keys;
+}
+
+/** Every drizzle table by its SQL name — from the schema, not from a list. */
+function tablesByName(): Map<string, PgTable> {
+  return new Map(schemaTables().map((table) => [getTableName(table), table]));
+}
+
+/**
+ * The bundled tables the two records above can actually answer for.
+ *
+ * `declaredIn` is typed over every table in the record, so this narrows. **A
+ * table it filters out is skipped in silence**, which is the shape of thing this
+ * file exists to prevent — so the `it` above holds `declaredIn("bundle")`
+ * against these two records and goes red before this ever quietly shrinks.
+ */
+function checkableBundledTables(): BundledTable[] {
+  return declaredIn("bundle").filter(
+    (table): table is BundledTable => table in ROWS_IN && table in COLUMNS_LEFT_OUT,
+  );
+}
+
 const { reachable } = await pgReady({
   suite: "tests/store-export-covers-tables.test.ts",
   tables: [
@@ -570,6 +725,83 @@ when("what the record calls exported, both exports were watched writing", () => 
       }
     });
   }
+
+  it("has a column list and a row-finder for every table the bundle exports", () => {
+    /* The typed `Record<BundledTable, …>` above says this at compile time, and
+       `npm test` does not typecheck — the same reason the fixture check exists. */
+    const declared = declaredIn("bundle");
+    const missing = declared.filter(
+      (table) => !(table in COLUMNS_LEFT_OUT) || !(table in ROWS_IN),
+    );
+    expect(
+      missing,
+      `ARTICLE_TABLE_COVERAGE calls ${missing.join(", ")} exported by the bundle ` +
+        "and the column check below has no entry for it, so it would be skipped " +
+        "in silence. Add one to COLUMNS_LEFT_OUT (`{}` if the bundle keeps every " +
+        "column) and one to ROWS_IN saying where its rows sit in the file.",
+    ).toEqual([]);
+    for (const [table, columns] of Object.entries(COLUMNS_LEFT_OUT)) {
+      for (const [column, why] of Object.entries(columns)) {
+        // A reason, not a shrug — same rule as the table-level omissions.
+        expect(
+          why.length,
+          `${table}.${column} is left out of the bundle and says why in too few words`,
+        ).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  it("puts every column of every table it exports into the zip, or says why not", () => {
+    /* The check the sentinel above cannot make. One string in one column proves
+       the table was read; it proves nothing about the other forty-five. */
+    const tables = tablesByName();
+    for (const table of checkableBundledTables()) {
+      const destination = ARTICLE_TABLE_COVERAGE[table].bundle;
+      /* Narrowing for the compiler; `declaredIn` already filtered. */
+      if (!destination.exported) continue;
+      const drizzle = tables.get(table);
+      expect(drizzle, `src/db/schema.ts has no table called ${table}`).toBeDefined();
+      if (!drizzle) continue;
+
+      const text = bundled.get(destination.into);
+      expect(text, `the bundle wrote no ${destination.into}`).toBeDefined();
+      const rows = ROWS_IN[table](JSON.parse(text ?? "null"));
+      const emitted = keysOf(rows);
+      /* The reader's own alarm. A row-finder that has fallen out of step with
+         the file's shape finds nothing, and "found nothing" would otherwise read
+         as "the bundle dropped every column" — a true-looking failure pointing
+         at the wrong file. */
+      expect(
+        emitted.size,
+        `ROWS_IN[${table}] found no row objects in ${destination.into}. That is ` +
+          "this test being wrong about the file's shape, not the bundle being " +
+          "wrong about the table.",
+      ).toBeGreaterThan(0);
+
+      const left = { ...DROPPED_EVERYWHERE, ...COLUMNS_LEFT_OUT[table] };
+      const columns = Object.keys(getTableColumns(drizzle));
+      const dropped = columns.filter((column) => !emitted.has(column) && !(column in left));
+      expect(
+        dropped,
+        `${table} loses ${dropped.join(", ")} on the way into ${destination.into}. ` +
+          "The bundle is meant to serialise whole rows, so a column added to " +
+          "src/db/schema.ts reaches the reader without anybody remembering it. " +
+          "Either serialise the row (rowJson) rather than naming fields, or add " +
+          "the column to COLUMNS_LEFT_OUT with the reason in words.",
+      ).toEqual([]);
+
+      const stale = Object.keys(left).filter(
+        (column) => emitted.has(column) && columns.includes(column),
+      );
+      expect(
+        stale,
+        `COLUMNS_LEFT_OUT/DROPPED_EVERYWHERE say ${table} leaves out ` +
+          `${stale.join(", ")}, and ${destination.into} carries it. A note that ` +
+          "claims a column is dropped while it ships is the same drift the other " +
+          "way round: delete the entry.",
+      ).toEqual([]);
+    }
+  });
 
   it("reports every declared table among the ones the rollback actually wrote", () => {
     /* `ExportResult.tables` is appended to by `put` as the export runs, so it is
