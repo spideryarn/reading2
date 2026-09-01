@@ -18,10 +18,25 @@ Private because the whole history went up in a single push and unpublishing is n
 to do. The name is Greg's call: `reading2`, beside the original app's `spideryarn/reading`, rather
 than `spideryarn2`, which is only ever the name of this directory.
 
-**A push is not a deploy, and a deploy is not a push.** There is no GitHub Action, nothing rebuilds
-on push, and Vercel is not connected to this repo — `vercel deploy` uploads your *working tree*.
-See [deployment.md](deployment.md), including the part about that tree containing somebody else's
-half-finished edit.
+**A push to `main` IS a deploy.** Vercel's git integration is connected, `vercel.json` sets
+`git.deploymentEnabled` to `{"**": false, "main": true}`, and a push to `main` builds on Vercel's
+machine and goes live. [`scripts/deploy.ts`](../../scripts/deploy.ts) depends on exactly that: it
+pushes one gated sha by name and then polls for the production deployment *that push causes*.
+
+**So the invariant that matters is that only `npm run deploy` writes `main`.** Agents commit locally
+and do not push it. Anything that starts pushing to `main` — a worktree landing its work, say —
+turns every landing into an unreviewed production deploy, which is the thing the whole gate exists to
+prevent. Land on a branch that is not `main`; the wildcard above already stops those building.
+
+> **This paragraph said the opposite until 2026-09-01**, and it was wrong rather than merely out of
+> date: *"There is no GitHub Action, nothing rebuilds on push, and Vercel is not connected to this
+> repo."* True once, and left behind when the git integration was connected. Recorded because it is
+> not a harmless staleness — an agent reasoning from it would conclude that pushing to `main` is
+> free, and that is the one mistake here that reaches real readers.
+
+There is still no GitHub Action, and `vercel deploy` does upload your *working tree* — which is a
+separate hazard, since that tree contains somebody else's half-finished edit. See
+[deployment.md](deployment.md).
 
 ## The reason this doc exists: one tree, several agents
 
