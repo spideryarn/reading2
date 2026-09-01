@@ -279,7 +279,13 @@ actually reaches is not always the one on its command line, and both mistakes pr
 
 ### Writing code
 
-- **Prefer boring.** Filesystem over database, one server process, TypeScript + ESM, `tsx` to run,
+- **The store is moving from files to the database, and it is nearly done.** Anything new — a
+  feature, a store, a test — goes to Postgres and Supabase Storage, and **that includes your
+  laptop**: run with `SPIDERYARN_STORE=postgres` rather than against the filesystem default. A
+  feature exercised only on files is a feature that ships broken, which has already happened once.
+  [database.md](docs/project/database.md); the move itself is
+  [260831b-finish-the-database-move.md](docs/plans/260831b-finish-the-database-move.md).
+- **Prefer boring.** One server process, TypeScript + ESM, `tsx` to run,
   no framework churn while the ideas are still moving. Two exceptions exist, both Greg's, both
   weighed rather than slipped past: **Postgres** (a single writable disk is what serverless doesn't
   have) and **shadcn + Tailwind v4**. Check
