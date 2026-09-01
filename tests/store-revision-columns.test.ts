@@ -204,6 +204,10 @@ const READS = [
      on `DATED_FINGERPRINT_COLUMNS` — the cited set plus `published_at` — because
      it is the only stage judged on the publication date. */
   "timeline",
+  /* Added 2026-09-01 with the `quiz` stage. Its projection is
+     `CITED_FINGERPRINT_COLUMNS`, like `ideas` and `sketch`, because it sends
+     `articleWithIds` and so its `sourceHash` covers the `URL:` line. */
+  "quiz",
   /* Added 2026-08-31 with `pgArticleReader.loadSource`. The only read that
      takes bytes, which is why it is a projection of its own rather than columns
      bolted onto `article` — src/store/pg.ts § `rawSource`. */
@@ -342,7 +346,9 @@ describe("the query actually uses its projection", () => {
    * src/source-hash.ts § `articleFingerprint`.
    */
   it("gives the tree to every read whose staleness compares it, and no other", () => {
-    const compares = new Set(["tweets", "glossary", "ideas", "sketch", "arc", "timeline"]);
+    const compares = new Set([
+      "tweets", "glossary", "ideas", "sketch", "arc", "timeline", "quiz",
+    ]);
     for (const read of READS) {
       /* `article`, `metadata` and `publish` render or validate the tree rather
          than fingerprinting it, and the library asks about it in SQL. Those

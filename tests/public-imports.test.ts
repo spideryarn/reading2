@@ -124,6 +124,12 @@ const SPENDS = [
   "src/search.ts",
   "src/models.ts",
   "src/term-lookup.ts",
+  /* The mark: a model call in a request handler, on the reader's own answer.
+     It stores nothing, so it is not a WRITER — but a stranger's door must not
+     reach it, because a quiz answer is a record of what somebody did not know
+     and marking is spend a signed-in reader pays for.
+     docs/plans/260831al-review-quiz-sub-mode.md § What gets logged. */
+  "src/quiz-mark.ts",
 ];
 
 /** The pipeline stages, which write as well as spend. */
@@ -144,6 +150,15 @@ const WRITERS = [
      nothing goes red when a writer is left out, so the guard simply stops
      covering it. docs/plans/260831i-timeline-mode.md. */
   "src/timeline.ts",
+  /* Writes `quiz.json`, and spends. Listed for `timeline`'s reason: a *missing*
+     row here is a silent gap — nothing goes red when a writer is left out, so
+     the guard simply stops covering it.
+
+     **`src/quiz-mark.ts` is not here and belongs in `SPENDS` instead**, which
+     it already is by way of the OpenRouter check: it writes nothing at all. It
+     is a model call in a request handler that stores no row, which is the one
+     thing about this feature a stranger's door must never reach. */
+  "src/quiz.ts",
   "src/jobs.ts",
 ];
 

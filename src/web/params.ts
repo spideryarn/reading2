@@ -974,6 +974,75 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
+/* -------------------------------------------------- review's two sub-modes --
+   docs/plans/260831al-review-quiz-sub-mode.md. */
+
+/** Free recall, or the questions the piece asks you back. */
+export const REVIEW_VIEWS = ["recall", "quiz"] as const;
+export type ReviewView = (typeof REVIEW_VIEWS)[number];
+
+/**
+ * Which half of Review is open — `recall` (the default, omitted) or `quiz`.
+ *
+ * **This does not break url-state.md's rule the way `?stance=` would have.** A
+ * stance changes nothing on screen and is therefore component state; a sub-mode
+ * changes the entire band, and a reader who lands on a shared link must land
+ * where the link-maker was. Same shape as `?diagram=` and `?referee=` — *which
+ * thing, within this mode* — and it pushes history for the same reason:
+ * switching is a deliberate act on the view and Back should undo it.
+ *
+ * **Its collision with `?thread=` is defined rather than left to fall out**,
+ * because `?mode=review&review=quiz&thread=<id>` would otherwise leave a review
+ * conversation selected and invisible. The three rules are implemented in
+ * `ReviewBand` (src/web/App.tsx), not here, because they are navigations rather
+ * than parsing:
+ *
+ * - switching to Quiz sets `review=quiz` **and clears `thread`, in one
+ *   navigation** — two would put a half-state on the Back stack;
+ * - opening a review conversation sets `review=recall` and `thread=<id>`, also
+ *   in one;
+ * - a pasted URL carrying both: **Quiz wins**, and `thread` is dropped with a
+ *   *replace*, so the reader's Back button does not land them on the broken
+ *   combination they were just rescued from.
+ *
+ * **Which question is open, and whether the list is expanded, stay OUT of the
+ * URL** — a deliberate exception, decided rather than overlooked. The rule
+ * those parameters serve is that a shared link lands you where the link-maker
+ * was; here the thing a link would frame is an answer that does not survive a
+ * reload anyway, so the parameter would promise a continuity v1 does not have.
+ * It arrives with stored attempts, which is what would make it true.
+ *
+ * An unknown value degrades to the default rather than throwing, the same rule
+ * as every other parser in this file.
+ */
+export const reviewParam = createParser<ReviewView>({
+  parse: (v) => (REVIEW_VIEWS.includes(v as ReviewView) ? (v as ReviewView) : null),
+  serialize: (v) => v,
+})
+  .withDefault("recall")
+  .withOptions({ history: "push" });
+
+/**
+ * **Which criteria are painting the prose** — `?crits=a,b` and `?crits=none`.
+ *
+ * `parseAsIdList` unchanged, which is the whole point of it being a value
+ * rather than a shape to copy: the empty set's own spelling, the drop-one-bad-
+ * id rule, the preserved order and the `replace` history are all decisions
+ * `?runs=` already argued through, and a second list parser would be a second
+ * place for `?crits=` and `?runs=` to disagree about what an empty one means.
+ *
+ * **The default is the empty set, and it is a rule rather than a nicety.**
+ * Marks are default-off, exactly as saved searches are and for the reason the
+ * glossary and the summaries already follow: *the article acquires marks when
+ * the reader asks for them and at no other time.* Here it earns its keep twice
+ * over, because it is also the cheap 80% of the anchoring problem the plan's
+ * § 1 is about — the referee reads the paper before the model paints on it.
+ *
+ * No legacy singular to reconcile, so there is no `resolveCrits` beside
+ * `resolveRuns`: this parameter was born plural.
+ */
+export const critsParam = parseAsIdList.withOptions({ history: "replace" });
+
 /* -------------------------------------------------------- the library --- */
 
 /**

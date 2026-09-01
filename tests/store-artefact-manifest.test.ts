@@ -191,6 +191,10 @@ const HOMES: Record<string, string> = {
      call every time**, so until he runs it this row says where the artefact goes
      and the database does not yet have the column. */
   "timeline.json": "article_revisions.timeline",
+  /* `drizzle/0046_quiz.sql`, applied locally on 2026-09-01. It also carries the
+     `revision_step_runs_step` CHECK that drizzle-kit will not write — the sixth
+     migration in a row to have to. */
+  "quiz.json": "article_revisions.quiz",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",
@@ -287,6 +291,15 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      a real run against `data/openai-huggingface` produced one, the assertion
      below duly failed, and the exemption had to be deleted rather than left to
      go on excusing a name that had arrived. docs/project/quotes.md. */
+
+  /* `quiz.json` arrived here on 2026-09-01, the day the `quiz` step was
+     registered. Stage 1 of that plan ran the generator twelve times through its
+     own CLI, which *prints* the batch rather than writing it — the file is
+     written by the pipeline, and no job has run the step against a real article
+     yet. It has a home in `HOMES` and always did; the first real run will make
+     the assertion below fail and this line will have to go.
+     docs/plans/260831al-review-quiz-sub-mode.md. */
+  "quiz.json": "the quiz step landed 2026-09-01 and no job has run it yet",
 };
 
 /** The scan both tests below run: every filename beside an article in `data/`. */

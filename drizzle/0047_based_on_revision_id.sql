@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "based_on_revision_id" uuid;--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_based_on_revision_id_article_revisions_id_fk" FOREIGN KEY ("based_on_revision_id") REFERENCES "spideryarn"."article_revisions"("id") ON DELETE set null ON UPDATE no action;

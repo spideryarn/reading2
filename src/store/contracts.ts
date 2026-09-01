@@ -48,6 +48,8 @@ import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { AnswerPatch, NewComment } from "../comments.js";
+import type { RefereeCriterionConfig } from "../referee-criteria.js";
+import type { SavedCriterion } from "../saved-criteria.js";
 import type {
   Article,
   ArticleMetadata,
@@ -71,6 +73,7 @@ import type {
   ArcFound,
   IdeasFound,
   SketchFound,
+  QuizFound,
   TimelineFound,
   ThreadFound,
   ThreadKind,
@@ -206,6 +209,30 @@ export interface ArticleReader {
    * when something happened.
    */
   loadTimeline(slug: string): Promise<TimelineFound>;
+
+  /**
+   * The questions the piece can ask you back, plus whether they still describe
+   * the article.
+   *
+   * Staleness is answered as `loadIdeas` answers it — at read time, against the
+   * blocks, the tree and the **cited** metadata head, because this stage sends
+   * `articleWithIds`. Not against the publication date: no date appears in this
+   * prompt, so hashing one would spend a paid model call every time a publisher
+   * re-dated a post.
+   *
+   * `QuizFound` has **two** staleness facts where most of its neighbours have
+   * three: there is no `profileChanged`, because this stage was not written for
+   * a profile. That is a deferral rather than a judgement that a profile would
+   * be wrong here — how hard a question is really does depend on who is reading
+   * — and it costs no migration to reverse, because `profileHash` would be a
+   * field on the JSON artefact.
+   * docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+   *
+   * **Owner-only, and there is no public twin.** A quiz is a private activity,
+   * and a record of what somebody did not know is the most private thing in
+   * this app after a selection. `timeline` made the same call.
+   */
+  loadQuiz(slug: string): Promise<QuizFound>;
 
   /**
    * The arc, plus whether it still describes the article.
@@ -759,6 +786,75 @@ export interface SearchStore {
 }
 
 /**
+ * **A peer reviewer's own criteria, run over the paper** — Referee mode's first
+ * sub-mode, docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1.
+ *
+ * `SearchStore` method for method, including the attempt fence and what it is
+ * for, because it is the same problem with the same two stores behind it: a run
+ * is the referee's question, an attempt is one model call, and only Postgres
+ * has attempts as rows. Read that interface first; only the differences are
+ * written out here.
+ *
+ * - **`begin` takes a config as well as a criterion.** A criterion has a kind,
+ *   and `diverging` carries the two poles and the ramp. The whole union goes in
+ *   rather than three loose fields, so a half-configured `diverging` row cannot
+ *   be assembled from arguments — `criterionProblem` refuses it before it gets
+ *   here, and the database's `referee_criteria_diverging_shape` refuses it
+ *   again.
+ * - **`recolour` is the categorical hue, not the diverging ramp.** Which
+ *   criterion a mark in the prose came from, and nothing about which way a
+ *   passage cuts. Sol's finding 7: those two channels must not become one.
+ */
+export interface RefereeCriteriaStore {
+  load(slug: string): Promise<SavedCriterion[]>;
+
+  /** The article's fingerprint right now — see `SearchStore.sourceHash`. */
+  sourceHash(slug: string): Promise<string | undefined>;
+
+  /**
+   * Record a `pending` criterion before the model is called.
+   *
+   * A `wantedId` naming an existing row is a **retry only when the criterion
+   * text matches and that row's status is `error`** — the three-condition rule
+   * this repo carries a postmortem for. The config is deliberately not one of
+   * the three: a reset adopts the new one, because a `diverging` row whose
+   * poles were nonsense is exactly the row a referee fixes and runs again.
+   * `withCriterion` in src/referee-criteria-store.ts holds the decision, and
+   * both stores call it.
+   */
+  begin(
+    slug: string,
+    criterion: string,
+    config: RefereeCriterionConfig,
+    wantedId?: string,
+    now?: () => string,
+  ): Promise<{ row: SavedCriterion; attempt: string | undefined }>;
+
+  /**
+   * Write the answer, if this attempt is still the live one.
+   *
+   * `attempt` is optional in the type because the filesystem store has none;
+   * the Postgres store **refuses a call without it** rather than falling back
+   * to identity, which would put back the cross-process race the column exists
+   * to close. `patch.status` must be `done` or `error`.
+   */
+  finish(
+    slug: string,
+    id: string,
+    patch: Partial<SavedCriterion>,
+    attempt?: string,
+  ): Promise<SavedCriterion | undefined>;
+
+  remove(slug: string, id: string): Promise<SavedCriterion[]>;
+
+  /** The reader's palette slot for one criterion — `null` puts it back on auto. */
+  recolour(slug: string, id: string, colour: number | null): Promise<SavedCriterion[]>;
+
+  /** Turn abandoned `pending` criteria into `error`. See `SweepOptions`. */
+  sweepPending(slug: string, opts: SweepOptions): Promise<SavedCriterion[]>;
+}
+
+/**
  * What the reader has asked the web about, one answer per glossary entry.
  *
  * Keyed by entry id, which is why the Postgres table is keyed
@@ -1123,7 +1219,13 @@ export interface FeedbackReport extends Omit<NewFeedback, "screenshot"> {
   /** ISO. */
   createdAt: string;
   screenshotBytes: number | null;
-  /** ISO, and `null` until Sentry took it. The query that finds anything stranded. */
+  /**
+   * ISO, and `null` until the report was **handed to** Sentry.
+   *
+   * The half of the old `mirroredAt` that was always true. See `markMirrorAttempted`.
+   */
+  mirrorAttemptedAt: string | null;
+  /** ISO, and `null` until Sentry **acknowledged** it. See `markMirrored`. */
   mirroredAt: string | null;
   sentryEventId: string | null;
 }
@@ -1195,14 +1297,34 @@ export interface FeedbackStore {
    */
   read(id: string): Promise<FeedbackReport | null>;
   /**
-   * **Sentry took it.** Written after the mirror, never before: `mirrored_at`
-   * is a record of what happened, and the crash window between the insert and
-   * this is accepted rather than engineered away (an outbox is more machinery
-   * than an alpha feedback button is worth). `mirrored_at is null` is the query
-   * that finds anything stranded.
+   * **We handed it over.** Written the moment `captureFeedback` returns an
+   * event id, which is a thing we know.
+   *
+   * It is *not* delivery, and the two used to be one column, which was wrong:
+   * the SDK sends asynchronously, `sendEvent` does not return the send promise,
+   * and `sendEnvelope` swallows every transport failure and resolves an empty
+   * result. So a network failure, a rate limit or a disabled transport all
+   * wrote `mirrored_at` for a report that went nowhere — GPT Sol's code review,
+   * 2026-08-31, and precisely the shape docs/reusable/silent-success.md warns
+   * about, in the one column that finds a stranded report.
+   */
+  markMirrorAttempted(id: string): Promise<void>;
+  /**
+   * **Sentry acknowledged it** — a 2xx from the transport, carried by the SDK's
+   * `afterSendEvent` hook. Written after the mirror, never before.
+   *
+   * Together with the column above this makes
+   * `mirror_attempted_at is not null and mirrored_at is null` a trustworthy
+   * query for a report Sentry did not take. The crash window between the insert
+   * and either write is accepted rather than engineered away — an outbox is more
+   * machinery than an alpha feedback button is worth.
+   *
+   * **Conditional on `mirrored_at` being null**, and it answers whether a row
+   * actually changed: a second mark must not silently overwrite the first, and a
+   * mark that matched nothing must not look like one that did.
    *
    * `sentryEventId` may be `null` — the SDK does not always hand one back, and
    * "mirrored, id unknown" is a truer row than "not mirrored".
    */
-  markMirrored(id: string, sentryEventId: string | null): Promise<void>;
+  markMirrored(id: string, sentryEventId: string | null): Promise<boolean>;
 }

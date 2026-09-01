@@ -1,0 +1,60 @@
+-- Quiz: the questions the piece can ask you back, and the second sub-mode of
+-- Review — docs/plans/260831al-review-quiz-sub-mode.md.
+--
+-- One column and a constraint.
+--
+-- `article_revisions.quiz` is one JSONB column beside `ideas`, `quotes`,
+-- `timeline` and `sketch`, for the reason src/db/schema.ts gives on all of them:
+-- the WHOLE artefact, because `sourceHash` is what lets the panel ask whether
+-- the article has moved underneath the questions. Two of its fields do work no
+-- other artefact's do:
+--
+--   sourceHash   `articleWithIdsFingerprint` — blocks, tree and a metadata head
+--   batchId      minted per generation, and every mark binds to it
+--
+-- The second is the one worth stating in a migration. Between a reader seeing a
+-- question and pressing Answer, a forced regeneration can rewrite every
+-- reference answer in this column while the document's shape stays identical.
+-- `POST /api/quiz/:slug/mark` reads the question, the reference answer and the
+-- evidence out of this column server-side and answers **409** when the batch
+-- the reader was shown is not the batch that is here — never a silent
+-- fall-forward. It is also what keeps the stored-attempts door open: an attempt
+-- row can point at an immutable batch instead of copying the question into
+-- itself.
+--
+-- **No attempts table, and no `profileHash` on the artefact.** v1 stores no
+-- answers; adding a profile later needs no migration at all, because
+-- `profileHash` would be a field on the JSON rather than a column.
+--
+-- **The CHECK is hand-written, and this comment is the sixth in a row saying
+-- so.** `drizzle-kit generate` diffs src/db/schema.ts and has no idea a check
+-- expression exists — which is how `'summary'`, `'assets'` (0029), `'sketch'`
+-- (0031) and `'timeline'` (0035) were each left behind or nearly so in turn. The
+-- failure is a job dying inside `revision_step_runs` with a
+-- `23514 check_violation` a long way from the cause.
+-- `tests/db-step-constraint.test.ts` reads these files statically and is what
+-- makes there not be another: it went red the moment `'quiz'` entered
+-- `STEP_ORDER` and stayed red until this statement was written.
+--
+-- Dropped and re-added rather than altered because Postgres has no ALTER for a
+-- check expression. Nothing narrows here — 'quiz' is only ever ADDED to the
+-- list — so there is no row in `revision_step_runs` this can fail to validate
+-- against, which is the trap the other direction has (0036 and the note in
+-- tests/db-step-constraint.test.ts).
+--
+-- `'summary'` is NOT in the list: it was taken out by
+-- drizzle/0036_drop_summary_column.sql, which deleted that step's runs first for
+-- exactly the reason above.
+--
+-- **Written by hand against the next free number, without `drizzle-kit
+-- generate`.** 0041–0045 were taken by peers over two days while this plan was
+-- being written and reviewed — 0045 landed *during* this session — and
+-- generating into a `_journal.json` somebody else is holding produces two
+-- migrations with the same index. `meta/0046_snapshot.json` was therefore
+-- written by hand too, from 0045's, with this column and the new check value
+-- added; it is what the NEXT `drizzle-kit generate` diffs against, so if it were
+-- missing the next generated migration would re-emit the column.
+
+ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "quiz" jsonb;--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_step" CHECK ("spideryarn"."revision_step_runs"."step_name" in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch'));

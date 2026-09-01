@@ -35,13 +35,15 @@
  * `PublishRefused`, and the throw takes the publication, the step completion and
  * the job's ending back with it.
  *
- * It is exact for a draft this claim **minted**. For one it **reopened** — a job
- * handed back between steps — the base is the article's current revision read at
- * reopen, because `openOrBeginJobDraft` deliberately does not guess at lineage
- * and there is no `based_on_revision_id` column to read. See `DraftBase` for the
- * full statement of the difference; closing it is a migration and not this
- * piece of work. **This file tests the minted case**, which is the one a fresh
- * claim always takes.
+ * It is exact for a draft this claim **minted**, and since 2026-09-01 it is
+ * exact for one it **reopened** too — a job handed back between steps — because
+ * the draft records what it was copied from in
+ * `article_revisions.based_on_revision_id` (drizzle/0047) and the reopen reads
+ * that column rather than asking the article what it is serving now. Cases 3 and
+ * 4 below are the reopened pair, and case 3 is the race Sol's finding 1 named:
+ * the old code recorded *the publication that landed in the gap* as the draft's
+ * own base, so the guard compared a number with itself and let R1's copy bury
+ * R2. See `DraftBase` in src/store/pg-session.ts.
  *
  * ## The two mutations, watched red on 2026-08-31
  *
@@ -67,6 +69,28 @@
  * And the positive control below passed under the mutation as well as after the
  * fix, which is what says the guard refuses the race rather than refusing
  * publication.
+ *
+ * ## The reopened pair, watched red on 2026-09-01
+ *
+ * Case 3 against the code as it stood — the base read off
+ * `articles.current_revision_id` at reopen:
+ *
+ * ```
+ * AssertionError: promise resolved "{ kind: 'ended', job: { …(8) }, …(1) }" instead of rejecting
+ * ```
+ *
+ * Case 4 passed then and passes now, which is the assertion that stops the cheap
+ * fix: "reopened drafts fail closed" would satisfy case 3 and break every job of
+ * more than one step, because all of them reopen their draft.
+ *
+ * And the lineage assertion in case 3 was watched red by deleting
+ * `based_on_revision_id` from `beginDraftIn`'s insert — the carry-forward trap,
+ * where a denylist puts artefacts in a draft nothing in this run wrote:
+ *
+ * ```
+ * AssertionError: the draft does not record the revision it was copied from:
+ *   expected null to be 'd8b1…'
+ * ```
  *
  * ## Contention
  *
@@ -412,6 +436,20 @@ async function claimWithSession(slug: string, names: StepName[]): Promise<Claime
   return { jobId, attempt, session, steps: job.steps };
 }
 
+/**
+ * The **second** claim on a job that already has a draft — the reopen.
+ *
+ * The shape a walk of more than one step always takes: request 1 mints the
+ * draft and hands the claim back, request 2 claims again and
+ * `openOrBeginJobDraft` finds the draft the job still points at.
+ */
+async function reopenWithSession(slug: string, jobId: string): Promise<Claimed> {
+  const attempt = mintAttempt();
+  const job = await claimWhenSlotFree(jobId, attempt);
+  const session = await openPgStoreSession({ slug, job: { id: jobId, attemptId: attempt } });
+  return { jobId, attempt, session, steps: job.steps };
+}
+
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
   const { dir, htmlFile } = contextPaths(slug);
@@ -450,6 +488,16 @@ async function runRow(revisionId: string, step: StepName) {
     .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, step)))
     .limit(1);
   return row;
+}
+
+/** What a revision says it was copied from — the column, not an inference. */
+async function basedOnOf(revisionId: string): Promise<string | null> {
+  const [row] = await db()
+    .select()
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  return row?.basedOnRevisionId ?? null;
 }
 
 async function draftOf(jobId: string): Promise<string | null> {
@@ -590,5 +638,133 @@ when("publishing a draft whose base has moved", () => {
     expect(published).not.toBe(fixture.publishedRevisionId);
     expect(await arcTextOf(published as string)).toBe(ARC_JOB);
     expect(await draftOf(claimed.jobId)).toBeNull();
+  });
+
+  /* ------------------------------------------------------------------ 3 -- */
+
+  /**
+   * **The same race, one claim later — the reopened draft.**
+   *
+   * A walk is one HTTP request per step, so a job that runs two steps hands its
+   * claim back in between and the *next* request reopens the draft it already
+   * owns (`openOrBeginJobDraft`). Until 2026-09-01 the base for that draft was
+   * `articles.current_revision_id` read at reopen, which is the very number the
+   * publication is about to compare itself against — so a publication landing
+   * in the gap was recorded as the draft's own lineage and the guard waved it
+   * through. GPT Sol, finding 1 of
+   * docs/plans/260831b-stage3-items3and4-review-sol.md.
+   */
+  mine("refuses a reopened draft whose base moved between the two claims", async () => {
+    const slug = `${SLUG_PREFIX}reopened-moved`;
+    const fixture = await publishR1(slug);
+
+    /* 1. The first claim mints D from R1. */
+    const first = await claimWithSession(slug, ["arc"]);
+    const draftId = await draftOf(first.jobId);
+    expect(draftId, "the first claim did not open a draft").toBeTruthy();
+
+    /* **The lineage is on the row, and only this mint could have put it there.**
+       `REVISION_CARRY_POLICY` is a denylist, so an artefact can appear in a
+       draft without this run writing it — but not this value: R1 is the
+       article's first revision and its own `based_on_revision_id` is null, so a
+       carried column would read null here rather than R1. */
+    expect(
+      await basedOnOf(draftId as string),
+      "the draft does not record the revision it was copied from",
+    ).toBe(fixture.publishedRevisionId);
+
+    /* 2. The claim is handed back with the draft still on the job — the
+       ordinary end of a request in the middle of a walk, not a failure. */
+    await pgJobStore.releaseStep(first.jobId, first.attempt, first.steps, {});
+    expect(await draftOf(first.jobId), "releasing the claim let go of the draft").toBe(draftId);
+
+    /* 3. R2 publishes while nobody holds the job. */
+    const r2 = await publishR2(fixture);
+    expect(await currentRevisionOf(slug)).toBe(r2);
+
+    /* 4. The next claim reopens D. It is still the copy of R1. */
+    const second = await reopenWithSession(slug, first.jobId);
+    expect(
+      await draftOf(first.jobId),
+      "the second claim minted a fresh draft instead of reopening this job's own",
+    ).toBe(draftId);
+
+    await second.session.beginStep(slug, "arc");
+    await expect(
+      second.session.commit(
+        contextFor(slug),
+        fakeArc(),
+        second.attempt,
+        { detail: "one entry", parts: { arc: arcSaying(slug, fixture.blocks, ARC_JOB) } },
+        {
+          kind: "end",
+          jobId: second.jobId,
+          attempt: second.attempt,
+          ending: { status: "done", steps: second.steps },
+        },
+      ),
+      "a reopened draft copied from R1 published over R2",
+    ).rejects.toMatchObject({ name: "PublishRefused", status: 409 });
+
+    /* What the refusal is for, in the same two soft assertions case 1 uses. */
+    expect.soft(await currentRevisionOf(slug), "the job's draft was published over R2").toBe(r2);
+    expect
+      .soft(await arcTextOf((await currentRevisionOf(slug)) as string), "R2's work is gone")
+      .toBe(ARC_R2);
+
+    const [row] = await db()
+      .select()
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, draftId as string))
+      .limit(1);
+    expect(row?.status).toBe("draft");
+    expect(await draftOf(first.jobId)).toBe(draftId);
+  });
+
+  /* ------------------------------------------------------------------ 4 -- */
+
+  /**
+   * **The positive control for the reopened case, and it is the one that stops
+   * the cheap fix.**
+   *
+   * "Reopened drafts fail closed" would pass case 3 and break every ingest in
+   * the app, because *every* job of more than one step reopens its draft. This
+   * is the same sequence with nothing published in the gap: the draft still
+   * knows it was copied from R1, R1 is still what the article serves, and it
+   * publishes.
+   */
+  mine("publishes a reopened draft when nothing moved underneath it", async () => {
+    const slug = `${SLUG_PREFIX}reopened-unmoved`;
+    const fixture = await publishR1(slug);
+
+    const first = await claimWithSession(slug, ["arc"]);
+    const draftId = await draftOf(first.jobId);
+    await pgJobStore.releaseStep(first.jobId, first.attempt, first.steps, {});
+
+    const second = await reopenWithSession(slug, first.jobId);
+    expect(await draftOf(first.jobId)).toBe(draftId);
+    expect(
+      await basedOnOf(draftId as string),
+      "the reopened draft lost the lineage its mint recorded",
+    ).toBe(fixture.publishedRevisionId);
+
+    await second.session.beginStep(slug, "arc");
+    const settled = await second.session.commit(
+      contextFor(slug),
+      fakeArc(),
+      second.attempt,
+      { detail: "one entry", parts: { arc: arcSaying(slug, fixture.blocks, ARC_JOB) } },
+      {
+        kind: "end",
+        jobId: second.jobId,
+        attempt: second.attempt,
+        ending: { status: "done", steps: second.steps },
+      },
+    );
+
+    expect(settled.kind).toBe("ended");
+    expect(await currentRevisionOf(slug), "the reopened draft is what got published").toBe(draftId);
+    expect(await arcTextOf(draftId as string)).toBe(ARC_JOB);
+    expect(await draftOf(first.jobId)).toBeNull();
   });
 });

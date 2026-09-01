@@ -28,6 +28,8 @@
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
+ *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
+ *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
@@ -50,6 +52,11 @@
  *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
  *   PATCH  /api/search/:slug/:id  { colour } — the reader's palette slot, or null for auto
  *   DELETE /api/search/:slug/:id
+ *   GET    /api/referee/criteria/:slug      every saved criterion for the article
+ *   POST   /api/referee/criteria/:slug      { id?, criterion, kind, poles?, scale? } → **a stream**,
+ *                                           see `runRefereeCriterion`
+ *   PATCH  /api/referee/criteria/:slug/:id  { colour } — the palette slot, or null for auto
+ *   DELETE /api/referee/criteria/:slug/:id
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
  *   GET    /api/uploads/:id      what became of one upload
  *   GET    /api/jobs             every ingest job this server knows about
@@ -85,6 +92,7 @@ import {
   librarySearch,
   listArticles,
   readerStore,
+  refereeCriteriaStore,
   searchStore,
   shelfStore,
   loadArticle,
@@ -94,6 +102,7 @@ import {
   loadIdeas,
   loadQuotes,
   loadSketch,
+  loadQuiz,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -106,6 +115,25 @@ import {
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
 import { CommentIdTaken, NotAnExplanation } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
+/* Referee mode's Criteria sub-mode — the model call, and the rules a request
+   has to satisfy before one is made. `referee-criteria.js` is pure (it reaches
+   nothing but `quote-match`, `types` and `urls`), so importing its validators
+   here drags nothing along; `referee-criteria-run.js` is the paying call, and
+   it is imported for the same reason `findPassagesStream` above is. */
+import {
+  LITERATURE_TIMEOUT_MS,
+  runCriterionStream,
+} from "./referee-criteria-run.js";
+import {
+  criterionProblem,
+  DEFAULT_DIVERGING_SCALE,
+  type DivergingScale,
+  isDivergingScale,
+  isRefereeCriterionKind,
+  type RefereeCriterionConfig,
+  type RefereeResult,
+} from "./referee-criteria.js";
+import type { SavedCriterion } from "./saved-criteria.js";
 /* A pure predicate, so importing it here does not drag the filesystem store
    into a file that must work with either one — the same rule the `withEdit` /
    `withRetry` import above states. The palette's *size* is deliberately not in
@@ -132,10 +160,18 @@ import {
    `dataCollection` argument in src/monitoring.ts, applied one seam over. */
 import {
   FEEDBACK_DIAGNOSTICS_VERSION,
-  type FeedbackScreenshot,
+  MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES,
   parseFeedbackDiagnostics,
-  sniffScreenshot,
 } from "./feedback-payload.js";
+/* The screenshot's own module, and server-only: it needs `node:zlib`, which
+   nothing the dialog imports may pull behind it. Every byte we store or forward
+   is written by `reencodeScreenshot` rather than passed through — read its
+   header, which is where the argument for that lives. */
+import {
+  type FeedbackScreenshot,
+  MAX_SCREENSHOT_EDGE,
+  reencodeScreenshot,
+} from "./feedback-image.js";
 /* The Sentry half. It cannot throw and it cannot fail this request — read its
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
@@ -143,6 +179,7 @@ import { mirrorFeedback } from "./feedback.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
+import { markAnswerStream } from "./quiz-mark.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
@@ -245,6 +282,10 @@ import {
   FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
+  /* A value, and the same number the panel's textarea counts against — one
+     declaration, so the button that disables itself and the route that answers
+     413 cannot drift apart. */
+  MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
 /* A value, not a type — the one list the stance is validated against, shared
    with the client's picker so a fifth stance cannot be accepted here and
@@ -277,14 +318,35 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
  * caller gives away the thing the limit was for.
  *
- * Base64 is four characters per three bytes, plus the JSON wrapper, plus three
- * 4,000-character answers, plus the diagnostics blob — 96 KB of headroom for the
- * lot. Every one of those is capped again *inside* the body by the validator, so
- * this number only has to be big enough not to refuse a legitimate report before
- * anything can say why.
+ * **Derived from the schema, term by term, because the guessed version was too
+ * small.** It used to be the screenshot's base64 expansion plus 96 KB of
+ * headroom "for the lot", and GPT Sol's code review, 2026-08-31, constructed a
+ * body that satisfied every inner limit at 662,501 bytes against an outer limit
+ * of 631,640 — refused by `readBody` with a bare 413 before the validator could
+ * explain anything. The largest report the validator accepts has to fit through
+ * the door in front of it, or the door is the limit and nothing says so.
+ *
+ * So each term is the worst case of a thing that is separately capped:
+ *
+ * - the screenshot, base64, which is four characters per three bytes;
+ * - three answers at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per UTF-16
+ *   unit `JSON.stringify` can produce for a control character;
+ * - the diagnostics blob, whose own ceiling is computed in
+ *   src/feedback-payload.ts from the caps that file enforces;
+ * - the rest of the envelope — the id, the slug, the build stamp, the keys.
+ *
+ * The headroom is gone deliberately: every term is now a number with a reason,
+ * so a limit that changes anywhere moves this one with it.
+ * tests/feedback-route.test.ts posts the largest valid body there is and
+ * watches it through.
  */
 const MAX_FEEDBACK_BODY_BYTES =
-  Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 + 96 * 1024;
+  Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 +
+  3 * MAX_FEEDBACK_ANSWER_CHARS * 6 +
+  MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES +
+  /* The id, the route kind, the slug, the build stamp, the two booleans, every
+     key, and the braces and commas around all of it. */
+  4 * 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -915,6 +977,164 @@ async function answer(
     frame("done", { ...comment, ...patch });
   } finally {
     release();
+    res.end();
+  }
+}
+
+/* ----------------------------------------------------------------- quiz --
+   The second reader-facing model call in this file, after `answer` above, and
+   the second deliberate exception to "LLM calls happen in the pipeline, not in
+   request handlers" — for the same reason as the first: the input is the
+   reader's own answer, which does not exist until they write it.
+   docs/plans/260831al-review-quiz-sub-mode.md § Marking. */
+
+/**
+ * Mark one answer against one question, a few words at a time.
+ *
+ * `POST /api/quiz/:slug/mark`, body `{ batchId, questionId, answer }`, SSE out.
+ *
+ * ## The body carries three ids and the reader's words, and nothing else
+ *
+ * **The question, the reference answer and the evidence are read out of the
+ * artefact here**, never taken from the request. A body that could carry them
+ * would let a tampered client make the model mark against a question the
+ * article never asked, and — much more likely than an attack — would let a
+ * stale tab mark against a reference answer that no longer exists.
+ *
+ * ## And the lookup is bound to the batch
+ *
+ * A `questionId` is unique within a batch and is minted fresh on every run,
+ * because this stage inherits no ids (src/pipeline.ts § the `quiz` step). So a
+ * forced regeneration between the reader seeing a question and pressing Answer
+ * replaces every reference answer in the column while nothing about the request
+ * looks wrong. Three refusals, and none of them falls forward:
+ *
+ * - a `batchId` that is not the current one → **409**, saying the questions
+ *   were rewritten;
+ * - a source-stale quiz → **409**, rather than a mark against an article that
+ *   has moved underneath the question;
+ * - a `questionId` that is not in the current batch → **404**.
+ *
+ * Falling forward to "the question with that id in the current batch" would be
+ * the tempting repair and is the bug: the ids are minted per batch, so a match
+ * across batches is a coincidence rather than the same question.
+ *
+ * ## The stream has to be able to say it failed
+ *
+ * Zero or more `delta` frames, then **exactly one terminal frame** — `done` on
+ * success, `error` on anything else. Every failure `markAnswerStream` can reach
+ * (timeout, stall, provider error, truncation, empty output, a stream that ends
+ * without finishing) arrives here as a throw and leaves as `error`, carrying
+ * whatever partial text had already been shown so the reader is not left
+ * wondering whether the half-sentence in front of them is the whole reply.
+ *
+ * **The client ticks a question answered only on `done`.** A stream that simply
+ * stops — a dropped connection, a killed instance — produces neither frame, and
+ * that is the case a mocked complete transcript cannot test:
+ * tests/quiz-mark-stream.test.ts emits two deltas and then closes.
+ *
+ * **Validation happens before a single header is written**, so a bad request is
+ * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
+ * half-opened stream. Everything after `sse(res)` is frames, including failure.
+ *
+ * **Nothing is stored.** No attempt row, no thread, no `pending` write to
+ * recover — which is why this handler has none of `answer`'s three writes. A
+ * reload starts the quiz fresh; the questions persist because they are an
+ * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not stored.
+ */
+async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
+  const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
+  if (typeof batchId !== "string" || !batchId) throw httpError(400, "batchId must be a string");
+  if (typeof questionId !== "string" || !questionId) {
+    throw httpError(400, "questionId must be a string");
+  }
+  /* **Trimmed before it is measured, and refused when empty.** An answer of
+     whitespace is a button the reader pressed by accident, and paying for a
+     model call to be told "you have written nothing" is worse than a message.
+     The messages here never quote the body — they are logged as `reason`, and
+     redaction is path-based and cannot reach a string. */
+  if (typeof answer !== "string") throw httpError(400, "answer must be a string");
+  const written = answer.trim();
+  if (!written) throw httpError(400, "answer must not be empty");
+  if (written.length > MAX_QUIZ_ANSWER_CHARS) {
+    throw httpError(413, `answer must be at most ${MAX_QUIZ_ANSWER_CHARS} characters`);
+  }
+
+  /* Both reads before anything is written, so a slug that is not an article is
+     a clean 404 and a stale batch is a clean 409. `loadQuiz` throws 404 when
+     nobody has written the questions yet — which is the right answer to a mark
+     against a quiz that does not exist. */
+  const found = await loadQuiz(slug);
+  /* **Stale first, then the batch**, because the two failures have different
+     sentences and the staler fact is the more useful one: a reader told "the
+     questions were rewritten" when in fact the *article* moved would go and
+     press the wrong button. */
+  if (found.stale) {
+    throw httpError(
+      409,
+      "The article has changed since these questions were written, so this answer " +
+        "cannot be marked against them. Write the questions again.",
+    );
+  }
+  if (found.quiz.batchId !== batchId) {
+    throw httpError(
+      409,
+      "These questions have been rewritten since you opened them, so this answer " +
+        "belongs to a batch that no longer exists. Reload to get the current ones.",
+    );
+  }
+  const at = found.quiz.questions.findIndex((q) => q.id === questionId);
+  const question = found.quiz.questions[at];
+  if (!question) throw httpError(404, "questionId is not a question in this quiz");
+
+  const article = await loadArticle(slug);
+
+  const { frame } = sse(res);
+  let text = "";
+  try {
+    for await (const event of markAnswerStream({
+      meta: article.meta,
+      blocks: article.blocks,
+      /* The three things the request may not name. */
+      question: question.question,
+      referenceAnswer: question.referenceAnswer,
+      evidence: question.evidence,
+      answer: written,
+      telemetry: {
+        /* Content-free, all five of them: three ids, an ordinal and the slug.
+           `markAnswerStream` writes the one line per mark and adds the counts.
+           Never the answer, the question, the reference answer or the reply — a
+           quiz answer is a record of what somebody did not know.
+           docs/project/logging.md. */
+        attemptId: randomUUID(),
+        batchId: found.quiz.batchId,
+        questionId: question.id,
+        ordinal: at + 1,
+        slug,
+      },
+    })) {
+      if (event.type === "delta") {
+        text += event.text;
+        frame("delta", { text: event.text });
+        continue;
+      }
+      /* **The one explicit `done`**, and the only frame that lets the client
+         tick this question answered. */
+      frame("done", { reply: event.reply, model: event.model });
+    }
+  } catch (err) {
+    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+       function owns the response and the outer catch never sees the error — so
+       a failure inside a stream is invisible to the seam in `serveApi`, and a
+       stream is exactly where a model call fails. Same reasoning as `answer`
+       and `streamChat`. */
+    captureFailure(err, { route: "quiz-mark", slug });
+    /* The partial reply travels with the failure, exactly as chat's does. Half
+       a mark and a reason beats a spinner that turns into nothing, and the
+       reader has already read the half — but it arrives as `error`, so the
+       question stays un-ticked and the reply stays retryable. */
+    frame("error", { error: (err as Error).message, text });
+  } finally {
     res.end();
   }
 }
@@ -2536,6 +2756,239 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   }
 }
 
+
+/* ---------------------------------------------- referee criteria (stage 3) --
+   A peer reviewer's own criteria, run over the paper.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1.
+
+   **Search's four routes, and deliberately so.** Sol's finding 5 warned that
+   Criteria growing "separate routes, stores and rendering machinery" is where
+   the duplication becomes fatal, and the answer taken here is not to avoid the
+   separation — the data model genuinely differs, finding 6 — but to make every
+   piece of it the same shape as the one it is modelled on, so a reader of one
+   is a reader of both. The store is `SearchStore` method for method, the stream
+   frames are `begin` / `result` / `done` against search's `begin` / `hit` /
+   `done`, the sweep is the same sweep, and the ownership checks are the same
+   checks because they are literally the same `assertOwner` this dispatcher runs
+   for every `/api/` route. */
+
+/**
+ * The criteria this process is running right now, as `slug/id`.
+ *
+ * The same job `searching` does above, for the same reason: `pending` in the
+ * store does not mean "an answer is coming", because it is written *before* the
+ * model call precisely so a crash leaves evidence.
+ */
+const refereeing = new Set<string>();
+
+/** What this process is running *in this article*, as bare ids — `liveRuns`. */
+function liveCriteria(slug: string): Set<string> {
+  const prefix = `${slug}/`;
+  const ids = new Set<string>();
+  for (const key of refereeing) {
+    if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
+  }
+  return ids;
+}
+
+/**
+ * How long an abandoned `pending` criterion may stay silent before another
+ * process may bury it.
+ *
+ * **Measured against the longest clock a criterion can have**, which is
+ * `LITERATURE_TIMEOUT_MS` rather than the 60s the other two kinds get — a
+ * `literature` run goes to the web, and a grace window sized for the short pair
+ * would have another process burying a run that is still waiting on its fourth
+ * search. That is the failure `SEARCH_ORPHAN_GRACE_MS` exists to prevent,
+ * arriving through the one kind that has a different deadline.
+ */
+export const CRITERION_ORPHAN_GRACE_MS = 150_000;
+
+if (CRITERION_ORPHAN_GRACE_MS <= LITERATURE_TIMEOUT_MS) {
+  throw new Error(
+    `CRITERION_ORPHAN_GRACE_MS (${CRITERION_ORPHAN_GRACE_MS}ms) must be longer than ` +
+      `LITERATURE_TIMEOUT_MS (${LITERATURE_TIMEOUT_MS}ms), or a sweep buries criteria that ` +
+      "are still running.",
+  );
+}
+
+/** Turn abandoned `pending` criteria into `error`, so they can be run again. */
+function sweepCriteria(slug: string): Promise<SavedCriterion[]> {
+  return refereeCriteriaStore.sweepPending(slug, {
+    keep: liveCriteria(slug),
+    graceMs: CRITERION_ORPHAN_GRACE_MS,
+  });
+}
+
+/**
+ * The criterion a POST is asking for, or a 400 saying which half is missing.
+ *
+ * **Everything is checked before `begin` writes anything**, which is the rule
+ * `search` above states and the reason a bad request is still an ordinary JSON
+ * 400 rather than a thrown `httpError` landing on a half-opened stream.
+ *
+ * The kind is read from the body and **narrowed by `isRefereeCriterionKind`**
+ * rather than cast, so the union in src/referee-criteria.ts is the only list of
+ * kinds and a fourth one cannot arrive through a request. `criterionProblem`
+ * then answers the question the *database* also answers
+ * (`referee_criteria_diverging_shape`): a two-ended criterion needs a word for
+ * each end, or its valence is signed against nothing and the panel cannot print
+ * the direction in words — which docs/project/colour-scales.md requires, because
+ * colour may never be the only carrier.
+ */
+function readCriterionRequest(body: unknown): {
+  id: string | undefined;
+  criterion: string;
+  config: RefereeCriterionConfig;
+} {
+  /* Checked before it is destructured — `readBody` will happily return a bare
+     JSON `null`, and destructuring that throws a `TypeError` the generic
+     handler turns into a 500. GPT Sol's review, 2026-08-27. */
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object");
+  }
+  const { id, criterion, kind, poles, scale } = body as Record<string, unknown>;
+
+  if (typeof criterion !== "string" || criterion.trim() === "") {
+    throw httpError(400, "Expected { criterion }");
+  }
+  // The whole paper goes in the prompt, so a criterion is not the expensive
+  // part — but an unbounded one is still a way to push the paper out of the
+  // context window from the outside. Search's number, for search's reason.
+  if (criterion.length > 500) {
+    throw httpError(400, "A criterion must be 500 characters or fewer");
+  }
+  if (!isRefereeCriterionKind(kind)) {
+    throw httpError(400, "Expected { kind } to be single, diverging or literature");
+  }
+
+  let config: RefereeCriterionConfig;
+  if (kind === "diverging") {
+    const { against, favour } = (poles ?? {}) as Record<string, unknown>;
+    if (typeof against !== "string" || typeof favour !== "string") {
+      throw httpError(400, "Expected { poles: { against, favour } } on a diverging criterion");
+    }
+    // A pole is printed in the panel and sent to the model; the same bound as
+    // the criterion for the same reason, and long before either is interesting.
+    if (against.length > 200 || favour.length > 200) {
+      throw httpError(400, "A pole must be 200 characters or fewer");
+    }
+    config = {
+      kind,
+      poles: { against: against.trim(), favour: favour.trim() },
+      /* An absent scale is the default rather than a 400: `rg` is what the
+         referee gets if they never touch it, and a *wrong* one is refused
+         rather than silently corrected, because a name this narrow either
+         matches a block in styles/colourscales.css or draws nothing at all. */
+      scale: scale === undefined ? DEFAULT_DIVERGING_SCALE : requireScale(scale),
+    };
+  } else {
+    config = { kind };
+  }
+
+  const problem = criterionProblem({ criterion: criterion.trim(), config });
+  if (problem) throw httpError(400, problem);
+
+  return {
+    id: typeof id === "string" ? id : undefined,
+    criterion: criterion.trim(),
+    config,
+  };
+}
+
+/** A diverging ramp we actually have, or a 400. See `DivergingScale`. */
+function requireScale(value: unknown): DivergingScale {
+  if (!isDivergingScale(value)) {
+    throw httpError(400, "Expected { scale } to be rg or br");
+  }
+  return value;
+}
+
+/**
+ * Run one criterion, streaming passages as they arrive, and store the result.
+ *
+ * **`search` above, with three differences and no fourth.** Read its docstring
+ * for every decision repeated here — validation before `begin`, the `pending`
+ * row written before a header goes out, a model failure being a `done` frame
+ * rather than an HTTP error, nothing past `sse(res)` being allowed to throw,
+ * and the deleted-mid-run case ending the stream quietly because the headers
+ * are long gone.
+ *
+ * The three differences:
+ *
+ * - The middle frame is `result` rather than `hit`, and carries a
+ *   `RefereeResult` — which is three shapes, discriminated by the criterion's
+ *   own kind.
+ * - A `literature` criterion may sit silent for a long time while the provider
+ *   searches the web. Nothing here has to do anything about that (the clocks
+ *   are `runCriterionStream`'s and the sweep's grace window is sized for it),
+ *   but it is the reason the first `result` frame can be a minute late.
+ * - The `dropped` counts come back on the outcome and are **not** sent to the
+ *   client. They are a log line and an alarm; a panel that showed "4 results
+ *   were unusable" would be reporting the model's manners rather than anything
+ *   a referee can act on. src/referee-criteria-run.ts logs them.
+ */
+async function runRefereeCriterion(
+  slug: string,
+  body: unknown,
+  res: ServerResponse,
+): Promise<void> {
+  const { id, criterion, config } = readCriterionRequest(body);
+
+  const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
+  const key = `${slug}/${row.id}`;
+  refereeing.add(key);
+
+  const { frame } = sse(res);
+  frame("begin", row);
+
+  let patch: Partial<SavedCriterion>;
+  try {
+    const article = await loadArticle(slug);
+    let results: RefereeResult[] = [];
+    let model = "";
+    for await (const event of runCriterionStream({
+      meta: article.meta,
+      blocks: article.blocks,
+      criterion: row.criterion,
+      config: row.config,
+    })) {
+      if (event.type === "result") {
+        frame("result", { result: event.result });
+        continue;
+      }
+      results = event.outcome.results;
+      model = event.outcome.model;
+    }
+    patch = { status: "done", results, model };
+  } catch (err) {
+    captureFailure(err, { route: "referee-criteria", slug, id: row.id });
+    patch = { status: "error", error: (err as Error).message };
+  } finally {
+    refereeing.delete(key);
+  }
+
+  try {
+    /* The attempt goes back with the answer, and the Postgres store refuses a
+       `finish` without one rather than falling back to identity. A criterion
+       keeps its id across a retry — that is what makes it the same question —
+       so identity alone cannot say which model call is reporting. */
+    const stored = await refereeCriteriaStore.finish(slug, row.id, patch, attempt);
+    /* `undefined` means one of two things and both are silence: the referee
+       deleted this criterion while the model was thinking, or this attempt is
+       no longer the live one and a newer answer is on its way. */
+    if (stored) frame("done", stored);
+  } catch (storeErr) {
+    log("store").error(
+      { ...errorFields(storeErr), slug, id: row.id },
+      `could not record a referee criterion for ${slug}`,
+    );
+    captureFailure(storeErr, { route: "referee-criteria", slug, phase: "record-result" });
+  } finally {
+    res.end();
+  }
+}
+
 /* ------------------------------------------------ reading the path apart --
    TWO functions, and picking the wrong one is a path traversal.
 
@@ -3520,7 +3973,15 @@ async function transcribeDictation(
      added has never done anything. GPT Sol's code review, item 9. */
   for (const key of Object.keys(sent)) {
     if (key !== "audio" && key !== "format" && key !== "context") {
-      throw httpError(400, `Unexpected field: ${key}`);
+      /* **Fixed prose, and the key is not in it.** A JSON key is a string the
+         caller wrote, `httpError`'s message is what `logRequest` writes as
+         `reason`, and the two together are an authenticated caller streaming
+         whatever they like into our logs a request at a time, without ever
+         reaching a rate limit. Pre-existing here from c5c7e37 and found by GPT
+         Sol's review of the feedback route, which had copied it. The rule it
+         breaks is docs/plans/260826p-error-boundary.md's: no arbitrary string
+         crosses a log boundary. */
+      throw httpError(400, "That request has a field this endpoint does not take");
     }
   }
 
@@ -3611,6 +4072,16 @@ const BASE64 = /^[A-Za-z0-9+/]*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-
 const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
 
 /**
+ * `lhr1::abcde-1234567890-0123456789ab`, and its multi-region forms.
+ *
+ * The same expression src/feedback-payload.ts holds the *diagnostics* Vercel ids
+ * to. Two copies, because that file may not import this one — and both are
+ * exercised, so a change to one that is not made to the other shows up as a
+ * report whose ids stop arriving rather than as nothing at all.
+ */
+const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
+
+/**
  * One of the three answers, trimmed — or `null` for a box the reader left empty.
  *
  * **No part of the answer reaches a thrown message**, and that is the rule this
@@ -3663,7 +4134,16 @@ function feedbackEnvironment(): FeedbackEnvironment {
 function requestVercelId(req: IncomingMessage): string | null {
   const raw = req.headers["x-vercel-id"];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  /* **Shape-checked, not merely truncated.** It becomes a Sentry tag and a
+     column, and the old version relied on Vercel overwriting whatever a caller
+     sent — which is true on Vercel and is not an invariant this code
+     establishes. Anywhere else (a proxy, a laptop, a preview behind something
+     else) the header is whatever arrived, and 200 characters of it would be 200
+     characters of anything. So: the shape Vercel actually writes, or nothing.
+     GPT Sol's code review, 2026-08-31. */
+  return VERCEL_ID.test(trimmed) ? trimmed : null;
 }
 
 /**
@@ -3710,13 +4190,22 @@ function feedbackWhere(sent: Record<string, unknown>): {
 }
 
 /**
- * A pasted screenshot, decoded and **identified by its own bytes**.
+ * A pasted screenshot, decoded and **written again by us**.
  *
- * Three refusals, in the order that costs least: the encoding, then the decoded
- * size, then whether it is a picture at all. The last is the one worth stating —
- * client-side downscaling is not validation, and without a check on the magic
- * bytes this field is a 400 KB hole through which anything at all, an article
- * included, reaches a third party as an attachment.
+ * Four refusals, in the order that costs least: the encoding, then the encoded
+ * size, then the decoded size, then whether it is a picture we can take apart
+ * and rebuild. The last is the one worth stating, and it is stronger than it
+ * used to be.
+ *
+ * The first version sniffed eight bytes of PNG signature or three of JPEG and
+ * forwarded the rest. GPT Sol's code review, 2026-08-31: `PNG_SIGNATURE ||
+ * articleProse` passes that, and a real PNG can carry text chunks, EXIF, or
+ * anything at all appended after `IEND`. So the bytes are now taken apart and a
+ * new file is written from the raster — src/feedback-image.ts, which is also
+ * where the reason JPEG is refused is argued.
+ *
+ * **No part of the caller's bytes reaches the message.** The messages below are
+ * three constants and one number.
  */
 function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
   if (value === undefined || value === null) return null;
@@ -3724,18 +4213,21 @@ function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
   if (!value) return null;
   if (!BASE64.test(value)) throw httpError(400, "screenshot is not valid base64 [fb-shot]");
   const bytes = Buffer.from(value, "base64");
-  if (bytes.length > MAX_FEEDBACK_SCREENSHOT_BYTES) {
+  const result = reencodeScreenshot(bytes, MAX_FEEDBACK_SCREENSHOT_BYTES);
+  if (result.ok) return result.screenshot;
+  if (result.reason === "too-big") {
     throw httpError(
       413,
       `That screenshot is too big. The limit is about ${
         Math.round((MAX_FEEDBACK_SCREENSHOT_BYTES / 1024 / 1024) * 10) / 10
-      } MB. [fb-shot-big]`,
+      } MB, and at most ${MAX_SCREENSHOT_EDGE} pixels on a side. [fb-shot-big]`,
     );
   }
-  const sniffed = sniffScreenshot(bytes);
-  /* The message says the two formats and never what arrived. */
-  if (!sniffed) throw httpError(400, "A screenshot has to be a PNG or a JPEG. [fb-shot]");
-  return sniffed;
+  /* Both remaining refusals say the same sentence. "Not a PNG" and "a PNG that
+     does not decode" are the same thing to act on — take the screenshot again —
+     and telling the two apart would be telling a caller how far into our parser
+     their bytes got. */
+  throw httpError(400, "A screenshot has to be a PNG. [fb-shot]");
 }
 
 /**
@@ -3761,9 +4253,16 @@ function parseFeedback(
   const sent = body as Record<string, unknown>;
   for (const key of Object.keys(sent)) {
     if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
-      /* **The key, never its value.** A key is a name a client wrote in its own
-         source; a value is whatever the reader typed. */
-      throw httpError(400, `Unexpected field: ${key.slice(0, 40)} [fb-field]`);
+      /* **Fixed prose. Not the key, not forty characters of it.**
+         The first version put the key in, on the argument that a key is a name a
+         client wrote in its own source rather than something the reader typed.
+         That is true of *our* client and of nothing else: `httpError`'s message
+         is written to the log as `reason`, so an authenticated caller could post
+         `{"<forty characters of anything>": 1}` in a loop and write prose into
+         our logs, without touching the rate limiter, which counts reports and
+         not refusals. GPT Sol's code review, 2026-08-31, and it breaks this
+         plan's own rule that no request text reaches an `httpError` message. */
+      throw httpError(400, "A report has a field this endpoint does not take [fb-field]");
     }
   }
 
@@ -3889,14 +4388,26 @@ async function fileFeedback(
     "feedback report accepted",
   );
 
-  if (answer.kind === "created") {
-    await mirrorFeedback({ report: answer.report, user, screenshot });
-  }
+  /**
+   * **Started before the answer goes out, awaited after it.**
+   *
+   * `mirrorFeedback` waits for Sentry to acknowledge the event before it writes
+   * `mirrored_at` — that is the whole point of the two columns, and it costs a
+   * network round trip. Doing it before `send` would put that round trip in
+   * front of a reader who has already finished writing; doing it after means the
+   * response is complete and all that is being held open is a warm function.
+   *
+   * It cannot throw (rule 2 of src/monitoring.ts) so there is nothing to catch,
+   * and `res.end` has already happened, so there is nothing left it could break.
+   */
+  const mirror =
+    answer.kind === "created" ? mirrorFeedback({ report: answer.report, user, screenshot }) : null;
   send(res, answer.kind === "created" ? 201 : 200, {
     id: answer.report.id,
     createdAt: answer.report.createdAt,
     status: answer.kind,
   });
+  if (mirror) await mirror;
 }
 
 
@@ -4397,6 +4908,16 @@ export async function serveAuthenticatedApi(
      rebuilding it is
      POST /api/jobs { slug, steps: ["timeline"] }. */
   const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(url);
+  /* The quiz. GET only for the artefact, for the reason `ideas` and `timeline`
+     have no DELETE: the step replaces rather than appends, so rewriting the
+     questions is POST /api/jobs { slug, steps: ["quiz"] }.
+
+     `mark` below is the exception, and it is the same exception the glossary's
+     `lookup` is: *writing* the questions is one call over a whole article and so
+     is a job, but marking ONE answer is a single question with a reader sitting
+     in front of it. It stores nothing — see `markOneAnswer`. */
+  const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(url);
+  const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(url);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -4447,6 +4968,13 @@ export async function serveAuthenticatedApi(
   const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(url);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  /* Referee mode's criteria. Two patterns and the same split as the two above:
+     the collection, and one row. `criteria` sits inside the path rather than as
+     `/api/referee/:slug` because the mode has four sub-modes and three of them
+     will want routes of their own — `/api/referee/claims/:slug` next — and a
+     namespace decided now is cheaper than a rename later. */
+  const criteria = /^\/api\/referee\/criteria\/([\w.%-]+)$/.exec(url);
+  const oneCriterion = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
   const uploads = url === "/api/uploads";
   const upload = /^\/api\/uploads\/([\w-]+)$/.exec(url);
@@ -4688,6 +5216,30 @@ export async function serveAuthenticatedApi(
          `TimelineResponse` in src/types.ts has two fields where the others have
          three. docs/plans/260831i-timeline-mode.md § Freshness. */
       send(res, 200, await loadTimeline(slugPart(timeline, 1)));
+      return;
+    }
+    if (quiz && req.method === "GET") {
+      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
+         omission: this artefact was never written for a profile, so there is no
+         third staleness fact to add and offering one would be a banner about a
+         thing that cannot have happened. `QuizResponse` in src/types.ts has two
+         fields where `IdeasResponse` has three.
+         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
+      send(res, 200, await loadQuiz(slugPart(quiz, 1)));
+      return;
+    }
+    if (quizMark && req.method === "POST") {
+      /* One of the handful of endpoints here that does not answer with JSON —
+         it writes its own headers and ends the response. It is still reached
+         through `send` for its *failures*: every validation and both 409s throw
+         before a header is written, so a stale batch is an ordinary 409 rather
+         than an error frame the client would have to parse. */
+      const at = slugPart(quizMark, 1);
+      const markBody = await readBody(req);
+      /* **The article goes on every row this request writes**, or "what has
+         this piece cost me" would cover writing the questions and none of the
+         answering. src/ai-spend.ts § `withSpendAttribution`. */
+      await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
       return;
     }
     if (sketch && req.method === "GET") {
@@ -4983,6 +5535,59 @@ export async function serveAuthenticatedApi(
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
       send(res, 200, { runs: await searchStore.remove(slug, id) });
+      return;
+    }
+    if (criteria && req.method === "GET") {
+      const slug = slugPart(criteria, 1);
+      /* Both halves in one response, and read close together, for the reason
+         `readSearches` gives: the paper can be re-extracted between them, and a
+         list read before a hash read would be compared against an article none
+         of its criteria ever saw. */
+      send(res, 200, {
+        criteria: await sweepCriteria(slug),
+        sourceHash: await refereeCriteriaStore.sourceHash(slug),
+      });
+      return;
+    }
+    if (criteria && req.method === "POST") {
+      /* The fourth endpoint in this file that does not answer with JSON — see
+         `answer` and `search`. It is still reached through `send` for its
+         *failures*: `readCriterionRequest` throws before a header is written,
+         so a bad request is an ordinary 400. */
+      const criteriaBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(criteria, 1) }, () =>
+        runRefereeCriterion(slugPart(criteria, 1), criteriaBody, res),
+      );
+      return;
+    }
+    if (oneCriterion && req.method === "PATCH") {
+      // Slug becomes a directory; the id is only ever matched against a list.
+      const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
+      const body = await readBody(req);
+      // Checked before it is destructured — a bare JSON `null` is valid JSON,
+      // and destructuring it is a `TypeError` the generic handler makes a 500.
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw httpError(400, "Expected a JSON object");
+      }
+      const { colour } = body as Record<string, unknown>;
+      /* **`{ colour }` and nothing else**, exactly as the search PATCH beside
+         it. A criterion's text, kind and poles are not editable through this
+         route — changing the question is what POST does, because a changed
+         question needs a fresh model call and this route makes none.
+
+         `null` is a real value: it is how the referee says "put this row back
+         on whatever colour it would have had". So the check cannot be a
+         truthiness one, and it cannot be `!colour` either — slot **0** is a
+         colour. */
+      if (colour !== null && !isStorableColour(colour)) {
+        throw httpError(400, "Expected { colour } to be null or a small whole number");
+      }
+      send(res, 200, { criteria: await refereeCriteriaStore.recolour(slug, id, colour) });
+      return;
+    }
+    if (oneCriterion && req.method === "DELETE") {
+      const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
+      send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
       return;
     }
     if (allJobs && req.method === "GET") {

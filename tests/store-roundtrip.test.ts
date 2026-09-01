@@ -72,6 +72,7 @@ const ARTEFACTS = [
   "ideas.json",
   "quotes.json",
   "timeline.json",
+  "quiz.json",
   "sketch.json",
   "labels.json",
   "comments.json",

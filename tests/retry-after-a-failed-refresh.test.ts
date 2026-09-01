@@ -41,14 +41,24 @@
  * is a job-scoped `/tmp` the next job cannot see. That is landing D2, and it is a
  * reason to want D2 sooner rather than an argument against decision 8.
  *
- * ## Why these are unit tests and where the gap is
+ * ## Why these are unit tests, and where the wiring is tested
  *
  * `forceForRetry` and `cascadeForce` are the two pure functions the whole fault
- * turns on, and `enqueue` composes them in exactly the way case 2 below does
- * (src/jobs.ts § `enqueue`). What is **not** proved here is the consequence: a
- * real forced job, failed at `hierarchy` against a real Postgres draft, retried, and
- * the article read back. That wants a network fetch and a paid `hierarchy` call, so it
- * is left undone and said out loud rather than approximated.
+ * turns on, and this file is about what they answer.
+ *
+ * **What it deliberately does not prove is that anything calls them.** Case 2
+ * composes them by hand, the way `enqueue` does, so it would stay green if
+ * `retryJob` stopped passing the force set on, if `enqueue` dropped it, or if
+ * the flags never reached the record — GPT Sol,
+ * docs/plans/260831b-stage3-items3and4-review-sol.md finding 4. That is
+ * `tests/retry-is-only-for-a-failed-job.test.ts`, which drives a real forced job
+ * to a real failure over fake steps and then reads the retry's flags back out of
+ * `data/_jobs/`.
+ *
+ * **An earlier version of this note said such a test would need a network fetch
+ * and a paid `hierarchy` call, and that was wrong.** Injected stages reproduce the
+ * discarded-draft sequence for nothing; only the *article read back at the end*
+ * would have wanted the real pipeline, and it is not what the fault is about.
  */
 import { describe, expect, it } from "vitest";
 
@@ -76,7 +86,7 @@ const forced = (name: StepName, status: JobStep["status"]): JobStep => ({
  * and `cascadeForce` turns it into a force flag on every step of the job — which
  * is why all five carry one here.
  */
-const REFRESH_THAT_DIED_AT_TOC: JobStep[] = [
+const REFRESH_THAT_DIED_AT_HIERARCHY: JobStep[] = [
   forced("fetch", "done"),
   forced("extract", "done"),
   forced("blocks", "done"),
@@ -96,7 +106,7 @@ describe("a retry after a failed forced refresh", () => {
    * see. The retry has to acquire the article again.
    */
   it("re-forces the steps whose work went with the discarded draft", () => {
-    expect(forceForRetry(REFRESH_THAT_DIED_AT_TOC)).toEqual([
+    expect(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)).toEqual([
       "fetch",
       "extract",
       "blocks",
@@ -105,7 +115,7 @@ describe("a retry after a failed forced refresh", () => {
     ]);
     /* The half that matters most, said on its own so a partial fix cannot pass:
        the retry must go back to the *front* of what was forced. */
-    expect(forceForRetry(REFRESH_THAT_DIED_AT_TOC)[0]).toBe("fetch");
+    expect(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)[0]).toBe("fetch");
   });
 
   /* --------------------------------------------------------------- 2 -- */
@@ -120,8 +130,8 @@ describe("a retry after a failed forced refresh", () => {
    * forcing nothing at all while every test of the first function passed.
    */
   it("makes the new job re-run every step the refresh had asked for", () => {
-    const names = REFRESH_THAT_DIED_AT_TOC.map((s) => s.name);
-    const forcedAgain = cascadeForce(names, new Set(forceForRetry(REFRESH_THAT_DIED_AT_TOC)));
+    const names = REFRESH_THAT_DIED_AT_HIERARCHY.map((s) => s.name);
+    const forcedAgain = cascadeForce(names, new Set(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)));
     expect([...forcedAgain]).toEqual(["fetch", "extract", "blocks", "hierarchy", "assets"]);
   });
 
@@ -176,5 +186,33 @@ describe("a retry after a failed forced refresh", () => {
     expect(
       forceForRetry([forced("fetch", "done"), forced("extract", "skipped")]),
     ).toEqual(["fetch", "extract"]);
+  });
+
+  /* --------------------------------------------------------------- 6 -- */
+
+  /**
+   * **Why the whole forced set, rather than the earliest of them.**
+   *
+   * `forceForRetry`'s own comment makes this argument and nothing exercised it
+   * until now: `cascadeForce` refuses to sweep in a step in
+   * `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts) that nobody named, so handing it
+   * the first forced step alone reconstructs four of these five and silently
+   * drops `tweets` — the one the reader explicitly asked to be redone.
+   *
+   * Both halves are here because only the pair says anything: the cascade from
+   * `fetch` is what the thrifty version would have asked for, and the cascade
+   * over the whole set is what the retry actually asks for.
+   */
+  it("keeps a `tweets` the reader named, which the cascade cannot put back", () => {
+    const refresh = [...REFRESH_THAT_DIED_AT_HIERARCHY, forced("tweets", "pending")];
+    const names = refresh.map((s) => s.name);
+
+    expect(
+      [...cascadeForce(names, new Set(["fetch"]))],
+      "the cascade sweeps in by position, and `tweets` is exempt from that",
+    ).not.toContain("tweets");
+
+    expect(forceForRetry(refresh)).toContain("tweets");
+    expect([...cascadeForce(names, new Set(forceForRetry(refresh)))]).toEqual(names);
   });
 });

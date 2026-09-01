@@ -6,7 +6,7 @@
  * this file owns the two parts of a report that are *shaped* rather than named —
  * the opt-in diagnostics blob and the pasted screenshot.
  *
- * ## Why it is its own module, and why it imports nothing
+ * ## Why it is its own module, and what it may import
  *
  * The client builds the blob and the server validates it, and the rule the plan
  * states for this whole seam is **build the payload, do not clean it** — the
@@ -14,11 +14,15 @@
  * allowlists, one at each end, from one declaration: that is the
  * `dataCollection` argument in src/monitoring.ts (redundant, and free).
  *
- * So it imports nothing at all. Nothing under `src/web/` may reach a server
- * module (tests/client-imports.test.ts), and a shared shape that pulls `pg` or
- * `node:fs` behind it is a shape only one end can have.
+ * So it imports **only vocabularies, and only from modules that themselves
+ * import nothing heavy**: src/ids.ts, src/modes.ts, src/read-address.ts.
+ * Nothing under `src/web/` may reach a server module
+ * (tests/client-imports.test.ts), and a shared shape that pulls `pg` or
+ * `node:fs` behind it is a shape only one end can have. The screenshot used to
+ * be here too and is not any more — it needs `node:zlib`, so it moved to
+ * src/feedback-image.ts, which only the server imports.
  *
- * ## Two things this file refuses, and they are the point of it
+ * ## Three things this file refuses, and they are the point of it
  *
  * 1. **A field nobody named.** `parseFeedbackDiagnostics` builds its answer key
  *    by key. Anything else the browser sent is dropped without being looked at,
@@ -28,7 +32,33 @@
  *    `apiFetch("/api/library/search?q=…")` carries reader-typed search text, and
  *    that is the same leak as sending `location.href` one layer down — the plan
  *    missed it twice, so it is enforced here rather than remembered.
+ * 3. **A value that is the wrong *shape* for the slot it is in.** This is the
+ *    correction GPT Sol's code review forced, 2026-08-31: the first version
+ *    length-capped these fields and nothing else, so
+ *
+ *    > `blockIds` accepts 200 arbitrary 64-character strings … A caller can
+ *    > place article prose or a provider body inside those named slots.
+ *
+ *    which is exactly true, and 12,800 characters of prose in a field called
+ *    `blockIds` is no better than 12,800 characters of prose in a field called
+ *    `prose`. So every field here is now an **identifier, a closed vocabulary,
+ *    a number in range, or a timestamp** — never a capped string, except the
+ *    user-agent, which is noted where it is defined.
+ *
+ * ## The vocabularies that are copied rather than imported
+ *
+ * `STEP_ORDER` lives in src/pipeline.ts and `JobStatus` is a type rather than an
+ * array, so `STEPS` and `JOB_STATUSES` below are second copies. That is the
+ * same trade src/db/schema.ts makes for its CHECK constraints, and it is pinned
+ * the same way — behaviourally, by tests/feedback-payload.test.ts, which feeds
+ * every value of the real `STEP_ORDER` through this file and watches it survive.
+ * A step added to the pipeline and not to the list here does not break a report;
+ * it makes one field of one blob go null, which the test turns into a red line
+ * before anybody has to notice.
  */
+import { isSpideryarnId } from "./ids.js";
+import { MODES } from "./modes.js";
+import { ARTICLE_VIEWS } from "./read-address.js";
 
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
 export const FEEDBACK_DIAGNOSTICS_VERSION = 1;
@@ -55,7 +85,7 @@ export interface FeedbackDevice {
  */
 export interface FeedbackApiCall {
   method: string;
-  /** Cut at `?` — see the header. */
+  /** A route template — `/api/chat/:x/live`. Cut at `?`, then templated; see `path`. */
   path: string;
   status: number | null;
   ms: number | null;
@@ -117,13 +147,65 @@ export interface FeedbackDiagnosticsV1 {
 const MAX_API_CALLS = 50;
 const MAX_ERRORS = 20;
 const MAX_BLOCK_IDS = 200;
-/** Long enough for a path with a slug in it, short enough that nothing hides. */
-const MAX_SHORT = 200;
-/** A user-agent string, which is the longest of these by some way. */
-const MAX_LONG = 500;
 
 /** The methods this app's own client uses. A closed set, like every other. */
-const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
+
+/** `prefers-color-scheme` has three answers and this is all of them. */
+const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
+
+/**
+ * `STEP_ORDER` in src/pipeline.ts, copied. See the header for why it is copied
+ * and what keeps the copy honest.
+ */
+const STEPS = [
+  "fetch",
+  "extract",
+  "blocks",
+  "hierarchy",
+  "assets",
+  "arc",
+  "tweets",
+  "glossary",
+  "quotes",
+  "ideas",
+  "timeline",
+  "quiz",
+  "sketch",
+] as const;
+
+/** `JobStatus` in src/types.ts, which is a type and so cannot be imported as one. */
+const JOB_STATUSES = ["queued", "running", "done", "error", "cancelled"] as const;
+
+/* ------------------------------------------------------------ the shapes -- */
+
+/**
+ * `TypeError`, `SpideryarnError` — an identifier and nothing else.
+ *
+ * `Error.name` is writable, so this is checked rather than assumed: a name that
+ * is not identifier-shaped is a message wearing a hat.
+ */
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$.]{0,63}$/;
+/** The same expression `isSlug` uses in src/ingest.ts, which cannot be imported here. */
+const SLUG = /^[a-z0-9][a-z0-9-]{0,199}$/;
+/** A revision id is `uuid` — src/db/schema.ts § article_revisions. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** `lhr1::abcde-1234567890-0123456789ab`, and its two- and three-region forms. */
+const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
+/** BCP 47, as loosely as a browser writes one: `en`, `en-GB`, `zh-Hans-CN`. */
+const LANGUAGE = /^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8}){0,3}$/;
+/** `Europe/London`, `UTC`, `America/Argentina/Buenos_Aires`. */
+const TIMEZONE = /^[A-Za-z][A-Za-z0-9_+-]{0,23}(\/[A-Za-z0-9_+-]{1,24}){0,2}$/;
+/**
+ * **The one capped string left**, and it is named rather than hidden.
+ *
+ * A user-agent is free text by specification, so no shape says what it is. It is
+ * kept because it is the single most useful line in a bug report, and it is held
+ * to printable ASCII on one line and 300 characters — which is a channel, and a
+ * small one, and the smallest this field can be made without dropping it. The
+ * reader's own browser writes it, and the reader consented to sending it.
+ */
+const USER_AGENT = /^[\x20-\x7e]{1,300}$/;
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -131,12 +213,18 @@ function asObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** A bounded string, or null. Never a coercion: a number is not a language. */
-function text(value: unknown, max: number): string | null {
+/** A string matching a shape, or null. Never a coercion, never a truncation. */
+function shaped(value: unknown, pattern: RegExp): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed.slice(0, max);
+  return pattern.test(trimmed) ? trimmed : null;
+}
+
+/** One of a closed list, or null. */
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : null;
 }
 
 /** A finite number in range, or null. `NaN` and `Infinity` are not sizes. */
@@ -150,19 +238,67 @@ function bool(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+/** The window a timestamp in a bug report can sensibly be in. */
+const EARLIEST = Date.UTC(2020, 0, 1);
+const LATEST = Date.UTC(2100, 0, 1);
+/** `2026-08-31T12:00:00.000Z`, and nothing else. */
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+
 /**
- * A path, **cut at the first `?` or `#`**.
+ * An instant, **normalised by us**.
  *
- * The same reduction `safeFrame` makes on a stack frame's `filename`, for the
- * same reason and against the same hazard. Anything that is not an absolute
- * path is dropped rather than repaired: a full URL here would be
- * `location.href` arriving by another door.
+ * Not a capped string: `at` is a 200-character slot in a named field, and a
+ * named slot is exactly where prose goes when everything else is closed. Parsed,
+ * range-checked and written out again, so the value that is stored is one this
+ * function produced.
  */
+function instant(value: unknown): string | null {
+  const raw = shaped(value, ISO);
+  if (raw === null) return null;
+  const ms = Date.parse(raw);
+  if (!Number.isFinite(ms) || ms < EARLIEST || ms > LATEST) return null;
+  return new Date(ms).toISOString();
+}
+
+/**
+ * A path, **cut at the first `?` or `#`, then reduced to a route template**.
+ *
+ * The cut is the same reduction `safeFrame` makes on a stack frame's
+ * `filename`, for the same reason and against the same hazard. The templating
+ * after it is GPT Sol's, 2026-08-31: a 200-character path with arbitrary
+ * segments in it is a 200-character free-text field wearing a slash.
+ *
+ * So each segment is either **a single lowercase word** — which is what every
+ * endpoint in this app is called: `article`, `chat`, `comments`, `glossary`,
+ * `blocks`, `visibility`, `search`, `advance` — or it is replaced by `:x`.
+ * `/api/chat/why-trees-spya-k3m9qt/live` becomes `/api/chat/:x/live`, which
+ * says which endpoint went wrong and carries nothing the `slug` column does not
+ * already carry.
+ *
+ * **What this does not claim.** A caller could still spell a paragraph as
+ * `/four/score/and/seven`, eight words per call and fifty calls in a blob. That
+ * is not the risk this is for, and it is worth being plain about why: the
+ * reader's own three answers are 12,000 characters of free text that this
+ * feature forwards to Sentry **on purpose**, so somebody who wants prose in
+ * Sentry types it into the boxes. What a shape check is actually for is *our own
+ * client* putting reader or article data into a named slot by accident and
+ * nobody noticing because the slot was merely length-capped — and a path that
+ * has stopped being a path is exactly what that looks like.
+ */
+const SEGMENT = /^[a-z][a-z0-9]{0,23}$/;
+const MAX_SEGMENTS = 8;
+const MAX_PATH_CHARS = 120;
+
 function path(value: unknown): string | null {
-  const raw = text(value, MAX_SHORT);
-  if (raw === null || !raw.startsWith("/")) return null;
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw.startsWith("/")) return null;
   const cut = raw.split(/[?#]/)[0] ?? "";
-  return cut === "" ? null : cut;
+  const segments = cut.split("/").slice(1).filter(Boolean);
+  if (segments.length === 0) return "/";
+  if (segments.length > MAX_SEGMENTS) return null;
+  const built = `/${segments.map((one) => (SEGMENT.test(one) ? one : ":x")).join("/")}`;
+  return built.length > MAX_PATH_CHARS ? null : built;
 }
 
 function device(value: unknown): FeedbackDevice | null {
@@ -172,11 +308,11 @@ function device(value: unknown): FeedbackDevice | null {
     viewportW: num(source.viewportW, 0, 100_000),
     viewportH: num(source.viewportH, 0, 100_000),
     devicePixelRatio: num(source.devicePixelRatio, 0, 100),
-    userAgent: text(source.userAgent, MAX_LONG),
-    language: text(source.language, MAX_SHORT),
+    userAgent: shaped(source.userAgent, USER_AGENT),
+    language: shaped(source.language, LANGUAGE),
     online: bool(source.online),
-    timezone: text(source.timezone, MAX_SHORT),
-    colorScheme: text(source.colorScheme, MAX_SHORT),
+    timezone: shaped(source.timezone, TIMEZONE),
+    colorScheme: oneOf(source.colorScheme, COLOUR_SCHEMES),
     reducedMotion: bool(source.reducedMotion),
   };
 }
@@ -187,30 +323,25 @@ function apiCalls(value: unknown): FeedbackApiCall[] {
   for (const entry of value.slice(0, MAX_API_CALLS)) {
     const source = asObject(entry);
     if (!source) continue;
-    const method = text(source.method, 10)?.toUpperCase() ?? null;
+    const method = oneOf(
+      typeof source.method === "string" ? source.method.toUpperCase() : source.method,
+      METHODS,
+    );
     const where = path(source.path);
     /* A call with no method or no path says nothing and would only be a row of
        nulls in whatever reads this later. Dropped rather than kept as one. */
-    if (method === null || !METHODS.includes(method) || where === null) continue;
+    if (method === null || where === null) continue;
     out.push({
       method,
       path: where,
       status: num(source.status, 100, 599),
       ms: num(source.ms, 0, 24 * 60 * 60 * 1000),
-      vercelId: text(source.vercelId, MAX_SHORT),
-      at: text(source.at, MAX_SHORT),
+      vercelId: shaped(source.vercelId, VERCEL_ID),
+      at: instant(source.at),
     });
   }
   return out;
 }
-
-/**
- * `TypeError`, `SpideryarnError` — an identifier and nothing else.
- *
- * `Error.name` is writable, so this is checked rather than assumed: a name that
- * is not identifier-shaped is a message wearing a hat.
- */
-const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$.]{0,63}$/;
 
 function clientErrors(value: unknown): FeedbackClientError[] {
   if (!Array.isArray(value)) return [];
@@ -218,9 +349,9 @@ function clientErrors(value: unknown): FeedbackClientError[] {
   for (const entry of value.slice(0, MAX_ERRORS)) {
     const source = asObject(entry);
     if (!source) continue;
-    const name = text(source.name, 64);
-    if (name === null || !IDENTIFIER.test(name)) continue;
-    out.push({ name, at: text(source.at, MAX_SHORT) });
+    const name = shaped(source.name, IDENTIFIER);
+    if (name === null) continue;
+    out.push({ name, at: instant(source.at) });
   }
   return out;
 }
@@ -228,20 +359,27 @@ function clientErrors(value: unknown): FeedbackClientError[] {
 function article(value: unknown): FeedbackArticleState | null {
   const source = asObject(value);
   if (!source) return null;
+  /* **Block ids, held to the one contract everything else here is held to.**
+     `isSpideryarnId` is the same predicate the router, the citations and the
+     internal links use — AGENTS.md § The one contract that matters. Two hundred
+     of these is 2,200 characters of `spya-` and nothing else. */
   const ids = Array.isArray(source.blockIds)
     ? source.blockIds
         .slice(0, MAX_BLOCK_IDS)
-        .map((id) => text(id, 64))
-        .filter((id): id is string => id !== null)
+        .filter((id): id is string => typeof id === "string" && isSpideryarnId(id))
     : [];
   return {
-    slug: text(source.slug, MAX_SHORT),
-    revisionId: text(source.revisionId, MAX_SHORT),
-    view: text(source.view, MAX_SHORT),
-    mode: text(source.mode, MAX_SHORT),
-    level: num(source.level, 0, 100),
+    slug: shaped(source.slug, SLUG),
+    revisionId: shaped(source.revisionId, UUID),
+    view: oneOf(source.view, ARTICLE_VIEWS),
+    mode: oneOf(source.mode, MODES),
+    /* The granularity ladder is short. 100 was a cap on nothing. */
+    level: num(source.level, 0, 20),
     blockCount: num(source.blockCount, 0, 1_000_000),
-    rootBlockId: text(source.rootBlockId, 64),
+    rootBlockId:
+      typeof source.rootBlockId === "string" && isSpideryarnId(source.rootBlockId)
+        ? source.rootBlockId
+        : null,
     blockIds: ids,
   };
 }
@@ -250,11 +388,44 @@ function job(value: unknown): FeedbackJobState | null {
   const source = asObject(value);
   if (!source) return null;
   return {
-    id: text(source.id, MAX_SHORT),
-    step: text(source.step, MAX_SHORT),
-    status: text(source.status, MAX_SHORT),
+    /* A job id is a minted Spideryarn id — src/db/schema.ts § `jobs_id_format`. */
+    id: typeof source.id === "string" && isSpideryarnId(source.id) ? source.id : null,
+    step: oneOf(source.step, STEPS),
+    status: oneOf(source.status, JOB_STATUSES),
   };
 }
+
+/**
+ * **The largest this blob can be as JSON, derived rather than guessed.**
+ *
+ * src/routes.ts builds `MAX_FEEDBACK_BODY_BYTES` out of this, so that the outer
+ * byte cap cannot refuse a body the validator below would have accepted — which
+ * it did, by about 30 KB, until GPT Sol constructed one. The point is not the
+ * number; it is that the number is computed from the same constants the
+ * validator enforces, so the two cannot drift.
+ *
+ * Six bytes per character is the worst case `JSON.stringify` can produce for one
+ * UTF-16 unit: a control character becomes `\u0001`, and a character outside the
+ * BMP is two units and at most twelve bytes. Generous on purpose — everything it
+ * bounds is separately capped by shape, so the headroom cannot be spent.
+ */
+const WORST_BYTES_PER_CHAR = 6;
+const DEVICE_BYTES = (300 + 35 + 64 + 16 + 200) * WORST_BYTES_PER_CHAR;
+const API_CALL_BYTES = (10 + 200 + 8 + 12 + 80 + 24 + 120) * WORST_BYTES_PER_CHAR;
+const ERROR_BYTES = (64 + 24 + 40) * WORST_BYTES_PER_CHAR;
+const ARTICLE_BYTES =
+  (200 + 36 + 16 + 32 + 16 + 12 + 11 + 200) * WORST_BYTES_PER_CHAR +
+  MAX_BLOCK_IDS * 16 * WORST_BYTES_PER_CHAR;
+const JOB_BYTES = (11 + 16 + 12 + 60) * WORST_BYTES_PER_CHAR;
+
+export const MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES =
+  DEVICE_BYTES +
+  MAX_API_CALLS * API_CALL_BYTES +
+  MAX_ERRORS * ERROR_BYTES +
+  ARTICLE_BYTES +
+  JOB_BYTES +
+  /* The wrapper: five keys, their braces and their commas. */
+  512;
 
 /**
  * The blob, **rebuilt from an allowlist**, or `null` if there was nothing in it.
@@ -280,38 +451,4 @@ export function parseFeedbackDiagnostics(value: unknown): FeedbackDiagnosticsV1 
     built.api.length === 0 &&
     built.errors.length === 0;
   return empty ? null : built;
-}
-
-/**
- * What a screenshot is stored and forwarded as — **our words, not the
- * caller's**.
- *
- * `filename` and `contentType` are chosen here from the bytes. A client-supplied
- * MIME type or filename is never forwarded to Sentry and never stored: the
- * schema has no column for either, and this is why.
- */
-export interface FeedbackScreenshot {
-  bytes: Uint8Array;
-  contentType: string;
-  filename: string;
-}
-
-/**
- * Is this actually a picture? **The magic bytes, not a header the caller wrote.**
- *
- * Two formats, because those are the two a browser produces: a PrtScn paste is a
- * PNG, and the dialog's downscale step is a JPEG. Anything else is refused, and
- * that refusal is doing real work rather than being tidy — without it the
- * screenshot field is a 400 KB hole through which any bytes at all, an article
- * included, reach a third party as an attachment.
- */
-export function sniffScreenshot(bytes: Uint8Array): FeedbackScreenshot | null {
-  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (png.every((byte, i) => bytes[i] === byte)) {
-    return { bytes, contentType: "image/png", filename: "screenshot.png" };
-  }
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return { bytes, contentType: "image/jpeg", filename: "screenshot.jpg" };
-  }
-  return null;
 }

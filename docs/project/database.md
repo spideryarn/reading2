@@ -210,11 +210,12 @@ refused, and the reader's shelf stayed empty.
 **A draft may only replace the revision it was copied from.** `beginDraftIn` copies whatever is
 published when the draft opens, and the job then runs for minutes; if something else publishes in
 between, moving the pointer to that draft buries work nobody meant to lose, and every check involved
-reports success. So the publication compares the base it recorded when the draft opened with the
-revision it is about to replace, and refuses — `refuseIfBaseMoved` in
-[`src/store/pg-session.ts`](../../src/store/pg-session.ts), whose `DraftBase` says how exact each
-answer is and why a reopened draft's is weaker. It is exact for the draft a claim minted, which is
-the case that matters once the pipeline commits through Postgres
+reports success. So the revision records its own base in `based_on_revision_id`, set once when the
+draft is minted and never touched again — a recorded lineage, not a value recomputed from whatever
+happens to be current at the moment something asks for it. Publication compares that recorded base
+with the revision it is about to replace, and refuses if they differ — `refuseIfBaseMoved` in
+[`src/store/pg-session.ts`](../../src/store/pg-session.ts), whose `DraftBase` reads the column rather
+than reasking the question, including for a draft a later request only reopened
 ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3).
 
 That is a carry-across, not the end state: an ingest still needs a writable disk for the length of

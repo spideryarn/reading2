@@ -297,6 +297,21 @@ export interface DroppedResults {
    */
   subOneValence: number;
   /**
+   * Diverging results that never said which way the passage cuts — no
+   * `valence` at all, or one that is not a finite number.
+   *
+   * **Dropped, never defaulted.** This used to become `0`, and 0 is not a
+   * missing answer here: it is the real, meaningful one that says "this passage
+   * counts neither for nor against", and a referee reading the panel cannot
+   * tell a fabricated neutral from a considered one. Inventing it is the same
+   * mistake `clampValence` exists to prevent, made one line later —
+   * see `DivergingResult.valence`. So it goes the way `uncited` goes: out of
+   * the results, into a count, where "the model answered and did not judge" is
+   * a visible fact rather than a row of quiet zeros. GPT Sol's finding 6,
+   * docs/plans/260831an-referee-mode-code-review-sol.md.
+   */
+  missingValence: number;
+  /**
    * Literature results with no usable citation. Dropped, because the plan
    * forbids showing one, and counted, because "answered but unverifiable" and
    * "found nothing" are different facts that must not render the same.
@@ -314,6 +329,7 @@ function noneDropped(): DroppedResults {
     clampedValence: 0,
     subOneConfidence: 0,
     subOneValence: 0,
+    missingValence: 0,
     uncited: 0,
     truncated: 0,
   };
@@ -415,10 +431,17 @@ export function validateResults(
     }
 
     if (kind === "diverging") {
-      const rawValence =
-        typeof row.valence === "number" && Number.isFinite(row.valence)
-          ? (row.valence as number)
-          : 0;
+      /* **No valence is not a valence of zero.** A diverging criterion asked
+         which way the passage cuts, and a result that does not say has not
+         answered the question the row is for. Defaulting it made up a neutral
+         judgement the model never gave; dropping and counting it is what this
+         module does with every other incomplete result (`uncited` above), and
+         it never rescales or invents. See `DroppedResults.missingValence`. */
+      if (typeof row.valence !== "number" || !Number.isFinite(row.valence)) {
+        dropped.missingValence++;
+        continue;
+      }
+      const rawValence = row.valence;
       if (rawValence !== 0 && Math.abs(rawValence) <= 1) dropped.subOneValence++;
       const valence = clampValence(rawValence);
       if (valence !== Math.round(rawValence)) dropped.clampedValence++;

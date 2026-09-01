@@ -9,11 +9,15 @@
  * the cross-family review that rewrote most of it, and the spike that measured
  * the rest: docs/plans/260831al-review-quiz-sub-mode.md.
  *
- * **Stage 1 of that plan is this file, src/quiz-mark.ts and evals/quiz.ts, and
- * nothing else.** There is no `StepName`, no store row, no route and no panel
- * yet — deliberately, because in this feature the prompt *is* the product and
+ * **Stage 2 wired it up.** It is a `StepName`, a `PipelineStep` in
+ * src/pipeline.ts, a `quiz` jsonb column (drizzle/0046_quiz.sql),
+ * `GET /api/quiz/:slug`, and a band behind `?mode=review&review=quiz`. Stage 1
+ * was this file, src/quiz-mark.ts and evals/quiz.ts and nothing else —
+ * deliberately, because in this feature the prompt *is* the product and
  * everything else is plumbing around a page of instructions. The registration
- * checklist is in the plan.
+ * checklist is in the plan, and the two entries on it that fail *silently* are
+ * `STAMP_SOURCE` and the stamp field names below;
+ * tests/quiz-step-registration.test.ts asks for both.
  *
  * ## What the model is asked for, and what it is not
  *

@@ -344,7 +344,17 @@ export type Task =
      rather than search's because a call billed under another job's name is spend
      nobody can find later — the mistake `quiz-mark` exists to have stopped
      making. */
-  | "referee-mirror";
+  | "referee-mirror"
+  /* One of the referee's own criteria, run over the paper —
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1. Search's shape
+     (one JSON object, passages by block id) and, on a `literature` criterion,
+     explain's web search as well, which is why it cannot be either of them: it
+     is the only job that sometimes sends tools and sometimes does not, and both
+     halves have to bill under the name a referee would look for. Its own task
+     rather than `search`'s for the reason `referee-mirror` above states, which
+     is the reason `quiz-mark` exists to have stopped making: a call billed
+     under another job's name is spend nobody can find later. */
+  | "referee-criteria";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -443,6 +453,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   "quiz-mark": "capable",
   search: "capable",
   "referee-mirror": "capable",
+  /* Capable, like search — this reads a whole paper and answers with quoted
+     block ids, which is the same job of work. */
+  "referee-criteria": "capable",
 };
 
 /**
@@ -531,6 +544,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "quiz-mark": "chat",
   search: "chat",
   "referee-mirror": "chat",
+  "referee-criteria": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -600,6 +614,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
+  "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */

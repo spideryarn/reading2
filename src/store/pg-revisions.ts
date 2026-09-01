@@ -73,6 +73,8 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
+import { shortIdInSlug } from "../ingest.js";
+import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
@@ -112,10 +114,16 @@ export type RevisionColumnPolicy = "mint" | "derive" | "carry";
  * **Carry-by-default is the dangerous default, not the safe one**, and a review
  * was right to push back on the first version of this design, which built the
  * carry set as "everything minus two short lists". A later `validated_at`,
- * `published_at`, `based_on_revision_id`, `job_id` or `attempt_id` would be
- * actively harmful copied: new content inheriting an old certification, or an
- * old worker's ownership. So the map is exhaustive and an unclassified column is
- * an error rather than a carry.
+ * `published_at`, `job_id` or `attempt_id` would be actively harmful copied:
+ * new content inheriting an old certification, or an old worker's ownership. So
+ * the map is exhaustive and an unclassified column is an error rather than a
+ * carry.
+ *
+ * That paragraph named `based_on_revision_id` as a fourth hypothetical until
+ * 2026-09-01, when it became a real column — and it is the sharpest case for
+ * the rule: carried, every draft would inherit *its parent's* base, so the
+ * publication guard would compare the wrong pair and pass exactly the race it
+ * exists to refuse. It is `mint`, and the entry below says so out loud.
  */
 export const REVISION_CARRY_POLICY: Record<
   keyof typeof articleRevisions.$inferSelect,
@@ -129,6 +137,16 @@ export const REVISION_CARRY_POLICY: Record<
   articleId: "mint",
   /** A copied `status` would publish a draft the moment it was created. */
   status: "mint",
+  /**
+   * **The lineage, and it is written by `beginDraftIn` rather than copied.**
+   *
+   * The new row's value is the revision *this* mint copied from — `basedOn`
+   * below — which is the whole content of the column (src/db/schema.ts). A
+   * carry would give a draft its grandparent, quietly, and `refuseIfBaseMoved`
+   * (src/store/pg-session.ts) would then wave through the publication it is
+   * there to refuse.
+   */
+  basedOnRevisionId: "mint",
   /**
    * When this revision was made — the revision's own clock, not its parent's.
    *
@@ -272,6 +290,11 @@ export const REVISION_CARRY_POLICY: Record<
      carried and correctly reported stale, which is what we want, because every
      year-less date in it was read against the old one. */
   timeline: "carry",
+  /* Carried, like every other artefact column: a new revision starts with the
+     questions the last one had, and the `quiz` step overwrites them if it runs.
+     The `sourceHash` on the artefact is what tells the panel the article moved
+     underneath them — carrying is not a claim that they are still current. */
+  quiz: "carry",
 };
 
 const MINTED = new Set(
@@ -411,9 +434,15 @@ export async function lockOrCreateArticle(
   const found = await lockArticle(tx, slug);
   if (found) return found;
 
+  /* **The short id is minted here because this is where the row is born.**
+     The slug already ends in one (src/ingest.ts § `slugWithShortId`), so the
+     ordinary case is to lift it out rather than mint a second — but a slug from
+     before 2026-08-31, or one a reader later renames, has none, and the column
+     is the copy that has to survive either. `?? mintId()` is what makes it a
+     handle rather than a substring. src/db/schema.ts § `shortId`. */
   const inserted = await tx
     .insert(articles)
-    .values({ ownerId: currentOwnerId(), slug })
+    .values({ ownerId: currentOwnerId(), slug, shortId: shortIdInSlug(slug) ?? mintId() })
     /* Another transaction may have inserted this slug between our lock
        attempt and here — the lock cannot protect a row that does not exist
        yet. `do nothing` plus a re-read is the honest handling; `do update`
@@ -641,13 +670,22 @@ async function beginDraftIn(
         carried.map((name) => sql.identifier(articleRevisions[name].name)),
         sql`, `,
       );
+      /* **`based_on_revision_id` is written here, as a literal, and is not one
+         of the copied columns.** It is the id this statement is selecting
+         *from*, so the row records what it was actually made of rather than
+         what its parent was made of — which is the difference between a lineage
+         and a rumour. Inside this transaction, which holds the article lock, so
+         the value cannot be a revision that stopped being current between the
+         read above and the write here. */
       await tx.execute(sql`
-        insert into ${articleRevisions} (${sql.identifier("id")}, ${sql.identifier("article_id")}, ${sql.identifier("status")}, ${columnList})
-        select ${revisionId}::uuid, ${article.id}::uuid, 'draft', ${columnList}
+        insert into ${articleRevisions} (${sql.identifier("id")}, ${sql.identifier("article_id")}, ${sql.identifier("status")}, ${sql.identifier("based_on_revision_id")}, ${columnList})
+        select ${revisionId}::uuid, ${article.id}::uuid, 'draft', ${basedOn}::uuid, ${columnList}
         from ${articleRevisions}
         where ${articleRevisions.id} = ${basedOn}
       `);
     } else {
+      /* No `basedOnRevisionId`: this is the article's first draft, copied from
+         nothing, and null is the honest answer rather than a missing one. */
       await tx
         .insert(articleRevisions)
         .values({ id: revisionId, articleId: article.id, status: "draft" });
@@ -840,7 +878,18 @@ export async function openOrBeginJobDraft(opts: {
          article?" branch here. It was taken before the job row precisely so
          that this branch never has to take it. */
       const [draft] = await tx
-        .select({ id: articleRevisions.id, status: articleRevisions.status })
+        .select({
+          id: articleRevisions.id,
+          status: articleRevisions.status,
+          /* **The lineage, read inside this transaction's article lock**, which
+             is what makes the reopen branch's answer as exact as the mint's:
+             nothing can publish between this read and the caller's use of it
+             without taking the same lock. Reading it after the transaction —
+             which is what `draftBaseOf` used to do against
+             `articles.current_revision_id` — left a gap in which a publication
+             was mistaken for this draft's own base. */
+          basedOn: articleRevisions.basedOnRevisionId,
+        })
         .from(articleRevisions)
         .where(
           and(
@@ -854,11 +903,20 @@ export async function openOrBeginJobDraft(opts: {
         return {
           revisionId: draft.id,
           articleId: article.id,
-          /* Unknown from here, and `null` would be a lie — it means "this
-             article's first draft". The two counts are `0` because this call
-             copied nothing; whatever the minting call copied is already in the
-             row. A caller that needs the lineage reads the revision. */
-          basedOn: null,
+          /* **The row's own record of what it was copied from**, not a guess.
+             This answered `null` until 2026-09-01 — "unknown from here, and
+             `null` would be a lie" — and the caller filled the gap by reading
+             the article's current revision, which is the number the publication
+             guard is about to compare itself against and therefore always
+             agreed with it. `based_on_revision_id` is written at mint and never
+             carried, so the answer is a fact about this row. Null still means
+             "copied from nothing", and for a draft minted before that column
+             existed it means "nobody recorded it" — the guard refuses either
+             way, which is the safe direction.
+
+             The two counts are `0` because this call copied nothing; whatever
+             the minting call copied is already in the row. */
+          basedOn: draft.basedOn,
           blocksCopied: 0,
           stepRunsCopied: 0,
           created: false,

@@ -58,6 +58,9 @@ of compression, down the page for position and across for detail. Read that firs
   rows on the test article carry no date, and drawing them alike throws away what the article said.
 - **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
   search painted into the spine. Long; open it for the confidence unit or the colours.
+- **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
+  them a verdict: four sub-modes, an evidence base with two numbers in it, and a confidentiality
+  notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
   cannot promise, the five that were cut, and why nothing was installed to draw them.
 

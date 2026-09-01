@@ -60,6 +60,11 @@ import {
   PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
 } from "../timeline.js";
 import {
+  inputFingerprint as quizFingerprint,
+  isStale as quizIsStale,
+  PROMPT_VERSION as QUIZ_PROMPT_VERSION,
+} from "../quiz.js";
+import {
   inputFingerprint as sketchFingerprint,
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
@@ -90,6 +95,8 @@ import type {
   Block,
   Glossary,
   GlossaryFound,
+  Quiz,
+  QuizFound,
   Quotes,
   QuotesFound,
   Ideas,
@@ -296,6 +303,7 @@ type RevisionReader =
   | "quotes"
   | "ideas"
   | "timeline"
+  | "quiz"
   | "sketch"
   | "arc"
   /**
@@ -328,11 +336,20 @@ const REVISION_READ_POLICY: Record<
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", arc: "value", timeline: "value", rawSource: "value",
+    sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
   status: { publish: "value" },
+  /* **No reader, and that is the whole intent of the column.** The lineage a
+     draft records at mint (src/db/schema.ts, drizzle/0047) is read by exactly
+     one place — `openOrBeginJobDraft` in src/store/pg-revisions.ts, inside the
+     transaction that reopens the draft — and handed to the publication guard as
+     a `DraftBase` (src/store/pg-session.ts). That read is the store's own
+     lifecycle, not one of these projections, and nothing a reader draws depends
+     on which revision a draft was copied from. A grant here would widen a
+     projection for a fact no page prints. */
+  basedOnRevisionId: {},
 
   /* `metaFrom` — the reading view's masthead and the library card. */
   /* `metadata` reads these three because the freshness fingerprint of every
@@ -347,17 +364,17 @@ const REVISION_READ_POLICY: Record<
   title: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", timeline: "value",
+    sketch: "value", timeline: "value", quiz: "value",
   },
   byline: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", timeline: "value",
+    sketch: "value", timeline: "value", quiz: "value",
   },
   siteName: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", timeline: "value",
+    sketch: "value", timeline: "value", quiz: "value",
   },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
@@ -388,6 +405,12 @@ const REVISION_READ_POLICY: Record<
     /* `timeline` sends `articleWithIds` too, so its head prints the same
        `URL:` line — it is the cited set plus the date, not a set of its own. */
     timeline: "value",
+    /* `quiz` for the same reason as `ideas` and `sketch`: it sends
+       `articleWithIds`, whose head prints a `URL:` line, so its freshness
+       fingerprint covers it. A read that could not see the column would compute
+       a fingerprint with an empty URL in it and report every quiz stale for
+       ever, on every article that has one. */
+    quiz: "value",
   },
   fetchedAt: { article: "value", library: "value" },
   rawSha256: { article: "value", library: "value" },
@@ -420,7 +443,7 @@ const REVISION_READ_POLICY: Record<
        cost is small where it lands — each of these reads already pulls every
        block's id and text through `blockHashInputs` to compute the same
        fingerprint, which is the whole article. */
-    arc: "value", sketch: "value", timeline: "value",
+    arc: "value", sketch: "value", timeline: "value", quiz: "value",
     tweets: "value", glossary: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
@@ -472,6 +495,10 @@ const REVISION_READ_POLICY: Record<
      list of forty articles is exactly the cost docs/plans/260828c-library-read-latency.md
      was written about. */
   sketch: { metadata: "value", sketch: "value" },
+  /* Its own reader and the metadata page, and **not the library**, on the same
+     call `quotes`, `timeline` and `sketch` make: a card shows four ticks and a
+     fifth would not fit. */
+  quiz: { metadata: "value", quiz: "value" },
 
   /* **Read by nobody through here**, and the first three are why this map
      exists. `raw_bytes` is up to 32 MiB of source document. The two HTML
@@ -681,6 +708,7 @@ export const REVISION_PROJECTIONS = {
     quotes: articleRevisions.quotes,
     ideas: articleRevisions.ideas,
     timeline: articleRevisions.timeline,
+    quiz: articleRevisions.quiz,
     /* For `timeline`, and for it alone — this page asks every step "would we
        write this again today", so it needs whatever the widest of them is
        judged on, and `timeline` is judged on the publication date. */
@@ -721,6 +749,16 @@ export const REVISION_PROJECTIONS = {
     id: articleRevisions.id,
     timeline: articleRevisions.timeline,
     ...DATED_FINGERPRINT_COLUMNS,
+  },
+  /* `CITED_FINGERPRINT_COLUMNS`, exactly like `ideas` and `sketch`: this stage
+     sends `articleWithIds`, whose head prints a `URL:` line, so the cited set
+     is the one its `sourceHash` covers. Not the dated set — no date appears in
+     this prompt, so hashing one would spend a paid model call every time a
+     publisher re-dated a post. */
+  quiz: {
+    id: articleRevisions.id,
+    quiz: articleRevisions.quiz,
+    ...CITED_FINGERPRINT_COLUMNS,
   },
   sketch: {
     id: articleRevisions.id,
@@ -1074,6 +1112,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   quotes: ["article_revisions.quotes"],
   ideas: ["article_revisions.ideas"],
   timeline: ["article_revisions.timeline"],
+  quiz: ["article_revisions.quiz"],
   sketch: ["article_revisions.sketch"],
 };
 
@@ -1730,6 +1769,7 @@ export const pgArticleReader: Pick<
   | "loadQuotes"
   | "loadIdeas"
   | "loadTimeline"
+  | "loadQuiz"
   | "loadSketch"
   | "loadArc"
   | "loadSource"
@@ -2051,6 +2091,33 @@ export const pgArticleReader: Pick<
             },
           );
         }
+        /* The same shape as `ideas`, over the same three values and the same
+           **cited** head, because this stage sends `articleWithIds` too.
+
+           **Written out here rather than left to `default: true`**, which is
+           the arm that has caught `ideas`, `sketch` and `timeline` in turn: a
+           missing case makes the one page whose job is to say whether a stage
+           is current answer "yes" about every completed run for ever, while
+           `loadQuiz` a few hundred lines below correctly calls the same
+           artefact stale. Two answers to one question, and the confident one
+           wrong. tests/store-revision-columns.test.ts holds every stamped step
+           to having an arm. */
+        case "quiz": {
+          const quiz = revision.quiz as Quiz | null;
+          if (!quiz || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: quiz.sourceHash,
+              promptVersion: quiz.version,
+              model: quiz.generator,
+            },
+            {
+              inputHash: quizFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: QUIZ_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* The same shape as `ideas`, and absent until 2026-08-31 — see
            `sketchIsCurrent`. tests/store-revision-columns.test.ts now holds
            every stamped step to having an arm here, rather than naming the one
@@ -2345,6 +2412,44 @@ export const pgArticleReader: Pick<
         !tree ||
         timelineIsStale(timeline, blocks, tree, datedMetaFingerprintOf(found.revision)),
       outdated: timeline.version !== TIMELINE_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The quiz on its own — the Postgres half of `loadQuiz`.
+   *
+   * Three inputs like `loadIdeas` above and the same **cited** head, because
+   * this stage sends `articleWithIds`: the fingerprint covers the tree and the
+   * metadata as well as the blocks, so comparing only the blocks here would
+   * call a re-sectioned or renamed article's questions current while the
+   * filesystem store called them stale.
+   *
+   * **A 404 is the ordinary case**, like the sketch below and unlike the
+   * timeline above: `quiz` is off `DEFAULT_INGEST_STEPS`, so most articles have
+   * never had questions written, and the panel's job on a 404 is to offer the
+   * button rather than to report a failure. An artefact with an EMPTY
+   * `questions` list cannot exist — `buildQuiz` throws rather than write one
+   * (`SHAPE.quiz`, src/store/artifacts.ts) — so there is no third state here.
+   */
+  async loadQuiz(slug: string): Promise<QuizFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "quiz");
+    if (!found) throw notFound(slug);
+
+    const quiz = found.revision.quiz as Quiz | null;
+    if (!quiz) {
+      throw Object.assign(
+        new Error(`No quiz for "${slug}" yet. Build one with \`npm run quiz -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      quiz,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || quizIsStale(quiz, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: quiz.version !== QUIZ_PROMPT_VERSION,
     };
   },
 

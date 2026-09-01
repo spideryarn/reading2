@@ -309,6 +309,34 @@
       "when": 1788215712359,
       "tag": "0043_referee_criteria_owner_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788217585300,
+      "tag": "0044_article_short_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788218295519,
+      "tag": "0045_feedback_mirror_attempted",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788219000000,
+      "tag": "0046_quiz",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1788241363734,
+      "tag": "0047_based_on_revision_id",
+      "breakpoints": true
     }
   ]
 }

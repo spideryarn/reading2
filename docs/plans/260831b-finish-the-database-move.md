@@ -1,20 +1,42 @@
 # Finish the move from files to the database
 
-**Status, 2026-08-31 evening: stages 1 and 2 are built, reviewed and committed. Stage 2.4 — which
-was not in the plan and had to be — is repaired locally and guarded (`e07a519`). Stage 2.5 is
-next, and its two conditions may already hold: measure before refetching anything.** Seven GPT Sol
-reviews so far, all NO-SHIP or SHIP-WITH-CHANGES, all accepted.
+**Status, 2026-09-01 07:00, resumed after the overnight run.** Stage 2.4 (new — `db:migrate` was
+applying nothing) is done and reviewed. Stage 2.5 is measured and passing. Stage 3 items 0, 1 and 5
+are done; items 3 and 4 are built but carry an unanswered GPT Sol NO-SHIP that is being answered
+now. **Only item 6 — the flip itself — and stage 4 remain.** Nine GPT Sol reviews so far; the two on
+the overnight work were both NO-SHIP and both right.
 
-**And one thing the rest of this document assumes that is no longer true.** Stage 2.5 below says the
-corpus arrived through the importer and therefore carries `stamped_html` with `extracted_html` null.
-On this laptop, as of 2026-08-31, **no revision is in that state and not one has `raw_bytes` at
-all** — so the corpus was not written by the importer, and stage 2.5's first condition is already
-met. Its second, that every stored source reference resolves to a readable object, wants measuring
-the same way. `npx tsx scripts/db-corpus-readiness.ts` answers both and exits non-zero if either
-fails; `--seed-a-bad-row` makes a real row bad inside a rolled-back transaction so the checks can be
-watched failing, because on an empty or already-clean corpus both of them pass trivially.
-**Measure with no `vitest` running** — the DB-backed suites create and delete articles as they go,
-and a reading taken during a test run is somebody else's corpus.
+**THREE THINGS WERE OWED at 06:30 and two are discharged** — the orphan migrations in `main` were
+fixed by another session, and stage 2.5 has now been measured on a quiet machine. The NO-SHIP is the
+one that remains.
+
+| item | state |
+|---|---|
+| 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem, NO-SHIP answered |
+| 3 item 1 — prove the coordinator | **done** (`132be8d`) — and it found the carry hazard below |
+| 3 item 3 — `forceForRetry` | built in `265356b`; **Sol NO-SHIP being answered 2026-09-01** |
+| 3 item 4 — exact base | built in `265356b` but **did not close the race**; durable `based_on_revision_id` being added 2026-09-01 |
+| 3 item 5 — delete the importer | **done** (`b73ad74`) |
+| 3 item 0 — short-id slugs | **done** — landed via `74e2915`, `1010a60`; `freeUploadSlug` and `slugIsSpokenFor` gone, `src/store/find-article.ts` committed |
+| 3 item 6 — the flip | not started |
+| 2.5 refetch | **done** — measured 2026-09-01 on a quiet machine, `✓ ready` |
+| 4 | deliberately not started |
+
+**The three things that were owed, and where each stands:**
+
+1. ~~**`main` currently carries two orphan migrations.**~~ **Fixed by another session overnight.**
+   `drizzle/meta/_journal.json` is committed and runs to `0046_quiz`; `src/db/schema.ts` carries
+   `shortId` at `HEAD`, so the snapshot is no longer ahead of the schema. Verified 2026-09-01:
+   `db-repair-migration-ledger.ts` reports 47 journal entries, 47 ledger rows, nothing unreachable,
+   nothing pending, no orphans. The history is kept because the *class* is not fixed — the orphan
+   check still reads the working tree, so it cannot see this on the machine that causes it.
+
+2. **Sol's NO-SHIP on items 3 and 4 is unanswered**, and item 3's half created a money hole:
+   `retryJob` checks only that the job exists, so POSTing `/retry` on a *successful* forced PDF
+   refresh now re-runs and re-pays, repeatedly. See § *Stage 3 — the flip* item 3.
+3. ~~**Stage 2.5 has never been measured on a quiet machine.**~~ **Measured 2026-09-01 06:35** at
+   load average 2.5, and it passes: 0 revisions with stamped-but-not-extracted HTML, 1 source
+   reference read back and 0 unreadable, over 15 articles and 4 revisions. `✓ ready`.
 
 | | what | commits |
 |---|---|---|
@@ -906,7 +928,73 @@ an argument against the decision.
 **Write the failing test first.** It is four steps of fixture and it will not be obvious afterwards
 that it was ever wrong — a retry that reports success is exactly the shape that gets re-broken.
 
+#### What GPT Sol's flip-readiness review found, 2026-09-01
+
+Full text in [260901d-flip-readiness-sol.md](260901d-flip-readiness-sol.md). Verdict: **not ready as
+described**, for one reason, and it is a fault the flip would *introduce*.
+
+**The precondition holds.** Every step returns correct `parts`, checked declaration against return,
+and the `(step, kind)` mapping in `src/store/artifacts-pg.ts` covers every pair. So
+`LEGACY_UNCONVERTED_STEPS` being empty reflects reality rather than bookkeeping, and
+`publish-session.ts`'s header — which says `pgStoreSession` "cannot be the answer yet" for exactly
+this reason — is now stale and goes with the decorator. **Correction while we are here: the pipeline
+has 13 steps, not the eleven this document and several comments still say.**
+
+**The blocker: the replacement catches less than the thing it replaces.** `publishingSession`
+catches **every** non-stale publication failure on the all-skipped door, terminalizes the job with a
+sanitized error, fails the draft and rethrows (`src/store/publish-session.ts:377`). The `walkClaim`
+fix written for Sol's earlier finding 2 catches only `PublishRefused`. So after the flip a database
+error out of `settleJob(done)` escapes to the outer catch, which handles only `StaleAttemptError`,
+and **the job stays `running` holding its draft until the lease expires.**
+
+Two things make that worse than it sounds. A job stuck `running` is neither `error` nor `cancelled`,
+so the newly-restricted `retryJob` correctly refuses it and **the reader has no button**. And the
+failure is invisible on a laptop, because nothing throws there. Widen the catch, sanitize the
+non-`PublishRefused` wording through `guardDbStore` (a raw Drizzle message carries query text and
+bound parameters — one rendered on the homepage on 2026-08-27), and test it with a non-refusal
+`StoreFailure`.
+
+**Deleting `publish-session.ts` is not just deleting a file.** `tests/jobs-publish-finalizer.test.ts`
+and `tests/publish-session-cleanup-log.test.ts` import it directly, and docs link to it.
+**`copyArtefacts` stays** — fixture and test loaders still use it, and only its use *from the
+decorator* goes.
+
+**D2 is not a correctness prerequisite, and that is a real relief.** After the flip exactly two paths
+still write under `dataRoot()`: `pdf-chunks/<key>.json` and `labels-progress.json`, both checkpoints.
+Completed step products survive a handback because they live in the draft, not in `/tmp`. So the
+cost of skipping D2 is **money and latency on an interrupted transcription or labelling run**, not a
+wrong or missing article. Sol notes a laptop running Postgres masks this, because its repository-root
+scratch survives across jobs and a deployment's job-scoped `/tmp` does not.
+
+**The migration ordering is safe.** `0047` is additive and nullable, old code never names the column,
+and `scripts/deploy.ts` migrates before it pushes. A draft minted by old code inside the window gets
+`NULL` and the new code fails it closed rather than burying a revision — one wasted retry, which is
+the right way to be wrong.
+
+**And the corpus-readiness probe Sol could not run has since been run:** `✓ ready`, on a quiet
+machine, 2026-09-01. That was the one non-code precondition it had to leave open.
+
 #### Done means
+
+**This section used to say a deployment was required. Sol says otherwise, and it is right.** A
+deterministic local proof of the flip itself is available and is *stronger* than an ordinary laptop
+ingest: drive the real `claimSession` with `STORE=postgres` against real Postgres and a real
+deterministic stage, giving successive claims **different empty scratch roots** (or separate child
+processes) so that filesystem persistence cannot quietly do the work — that is the trick, because
+sharing a scratch root is precisely what makes a laptop unable to show these faults. Then exercise
+ingest, an all-skipped second claim, a late single-step job, and a failed forced job followed through
+`retryJob`, asserting the published revision, the step-run rows, the job's terminal state and a
+cleared draft pointer.
+
+What that still does **not** prove, and so what the deployed run remains a canary for: Vercel
+bundling, production environment variables, Supabase Storage credentials, route and auth wiring,
+migration state, and real external calls.
+
+Note `tests/pg-session-real-step.test.ts` deliberately injects `openPgStoreSession`, so it does not
+prove `claimSession`'s production selection — the thing the flip actually changes. That is the gap
+the local proof above closes.
+
+#### The original done-means, kept because the deployed canary still matters
 
 - A real ingest, a real single-step job (`{ steps: ["tweets"] }` on a published article) and a real
   retry, end to end against Postgres, **on a deployed instance** — the laptop cannot show this,
@@ -918,6 +1006,77 @@ that it was ever wrong — a retry that reports success is exactly the shape tha
   behave differently once a draft exists.
 
 ### Stage 4 — delete the files
+
+**Re-inventoried 2026-09-01 against `f5d6720`, and this stage's own description was wrong in eight
+places.** What follows below is the original reasoning, which still holds; these are the corrections
+to its facts. They are listed first because every one of them would have cost an agent time.
+
+- **`src/store/fs.ts` (533 lines) is missing from the deletion list entirely**, and it is the biggest
+  single item: **nine of the ten `guarded(...)` filesystem halves live there** (`fsArticleReader`,
+  `fsChatStore`, `fsSearchStore`, `fsRefereeCriteriaStore`, `fsGlossaryLookupStore`,
+  `fsCommentStore`, `fsShelfStore`, `fsLibrarySearch`, `fsReaderStore`); only `fsSourceStore` is in
+  `artifacts-fs.ts`. Two further `fs*` uses in `src/store/index.ts` are **not** `guarded()` pairs and
+  so would be missed by a sweep for that word: `fsGlossaryStore` in the `deleteGlossary` ternary, and
+  `fsAssertWritableGlossary`, which exists specifically to 403 the committed `example/` article —
+  **deleting `example/` and that function is one decision, not two.**
+- **`REVISION_CARRY_POLICY` is in [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts):182,
+  not `src/store/pg.ts`.** `pg.ts` holds a *different* exhaustive per-column map,
+  `REVISION_READ_POLICY`. Both are keyed on every column, so a column change touches both.
+  `tests/store-revision-policy.test.ts` asserts every declared column is classified, which is the
+  guard that makes "drop the column and forget the policy entry" impossible — good news, and the
+  reason to do the two together rather than carefully.
+- **`readArticleFromDir` is 13 call sites, 8 of them production** — `tweets`, `ideas`, `arc`,
+  `quotes`, `glossary`, `timeline`, `quiz`, `sketch` — not the tidy single seam this section implies.
+  Two more hide inside spawned-subprocess source strings (`tests/parse-json`, `tests/stop-details`)
+  where a grep for the import does not find them. It is still worth deleting; it is not a morning.
+- **`dataRoot()` has only two direct production importers** (`artifacts-fs.ts:41`,
+  `find-article.ts:56`), which is better than feared. But **`StepContext.htmlFile` is not
+  checkpoint-only** — stage 3 reads and writes ids into it and `src/api.ts:974` uses it — so the
+  claim above that "several stages still take a `dir` for checkpoints alone" is true of `dir` and
+  false of `htmlFile`.
+- **"28 of 400" is wrong and should never have been written down.** Recounted: the denominator is
+  **431** test files, and the numerator is **75** by the same method that produced the original 76
+  (non-comment lines naming `example/`, `data/` or `output/`). No method reproduces 28. The 76 was
+  right all along; the 28 was a mismeasurement that made this stage look four times smaller than it
+  is. Roughly **49** test files compute their own `ROOT/data` and so would not follow a
+  `SPIDERYARN_DATA_ROOT` change.
+- **The enumerator list above is half wrong.** Of the seven named, only `store-artefact-manifest`,
+  `store-parity` and `store-roundtrip` enumerate the *corpus*. `store-guarded`, `ai-call` and
+  `auth-users-fence` walk `src/`, and `glossary-lookups` readdirs one scratch slug it just made — a
+  shrinking corpus does nothing to any of them. Missed enumerators that do matter:
+  `store-export-raw`, `store-block-roles-pg`, `helpers-load-article`, `helpers-seed-reader-state`,
+  `chat-anchor`, `owner-isolation`, and eight over `data/_jobs`.
+- **Two of the four "names specific slugs" files are wrong.** `stage2c-raw-bytes` uses tmpdirs and
+  `example.test` URLs; `timeline-time:19` explicitly says it *avoids* reading the corpus because
+  `data/` is gitignored. The real list is 28 files, headed by `artefact-copy`, `block-roles`,
+  `chat-tools`, `quotes`, `router`, `slug`, `store-parity` and `timeline-resolve`.
+- **The deploy-gate trap is already fixed and is no longer part of this stage.** `scripts/deploy.ts`
+  no longer copies the laptop's `data/`+`output/`; it copies from the tracked fixture corpus inside
+  the gate worktree (`GATE_FIXTURE_ROOT`), and `deploy-checks.ts`'s 13 sentinels all live under
+  `tests/fixtures/data-root/`. Commit `30e2b1b`, *"The gate asked which laptop, not which commit"*.
+  What remains here is that the sentinel list needs rewriting **again** when the filesystem store
+  goes.
+
+**And the largest change: half of this stage's test work has already been done by somebody else.**
+[260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md) is **built and landed** —
+a committed corpus at `tests/fixtures/data-root/` (57 files, 1.14 MB, five slugs),
+`tests/helpers/require-fixture.ts` which fails closed at each consumption boundary, and
+`tests/fixture-corpus.test.ts`, which is exactly the *"declared inventory that a test asserts"* this
+section asked for. It **deliberately defers the ~76-file sweep to this stage**, on Greg's call, so
+that the same files are not moved twice. Three things it hands over:
+
+1. **A file collision to coordinate**: `scripts/deploy-checks.ts` §§ around 574–614 has to be
+   rewritten to match whatever lands, and this stage plans to touch the same file. Whoever goes
+   second must know.
+2. **Its Sol review already settled a question this section was going to ask.** A test-side article
+   loader **must not wrap `readArticleFromDir`**, because that function is on this deletion list —
+   the same conclusion this section reached independently, now confirmed and accepted there.
+   `fixtureArticle()` was deliberately not built.
+3. **Known-open, inherited**: `store-artefact-manifest` still fails against the corpus (`raw.pdf` and
+   `labels-progress.json` read as unhomed); `doc-links` is green only because `data/reader.json`
+   happens to exist on this laptop; and the gate symlinks `.env.local`, so a gate run writes
+   corpus-derived reader state into the laptop's local Postgres.
+
 
 Deletion, and it is the largest stage by file count and the least dangerous by consequence: every
 mistake here is a compile error rather than a wrong artefact.
@@ -977,6 +1136,18 @@ places nobody thinks of as storage:
   [the deploy test gate cannot pass](../project/deployment.md) because the gate worktree has no
   gitignored `output/`, so ~12 tests fail structurally and forcing became routine. **Fixing that is
   part of this stage**, because after it there is no `output/` to be missing.
+
+**`checkNoteFields` is a stage-4 question, and the answer is probably "delete".** `src/block-fields.ts`
+was rescued out of the importer at item 5 and has no production caller; its own header says the
+decision is Greg's. It is a stage-4 decision rather than a live one, and here is why: the only path
+that could want it is `copyArtefacts` → `writeBlocks`, which reads a `blocks.json` off a disk — the
+same "somebody else's JSON" the validator was written for. **That path is on this stage's deletion
+list.** Once it is gone, blocks only ever reach the store from `src/blocks.ts` in the same process
+that minted them, and a validator for untrusted block data has nothing untrusted left to validate.
+So: delete it with the disk-reading path, unless stage 4 finds a caller that survives. The database
+CHECKs it overlaps with (`revision_blocks_role` and friends) stay either way; what would be lost is
+the two id *shapes* and `footnote ⇒ supplement`, and `tests/block-roles.test.ts` records what those
+were.
 
 **Remove every application reference to `raw_bytes`, and drop the column in the same stage** —
 Greg's decision 9. It used to be two stages and two deploys; the paragraph under § *~~Stage 5~~*

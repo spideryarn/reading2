@@ -85,7 +85,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, jobs as jobsTable } from "../db/schema.js";
+import { jobs as jobsTable } from "../db/schema.js";
 import { assertProduced } from "../pipeline.js";
 import type { StepName } from "../types.js";
 import {
@@ -158,29 +158,46 @@ interface Announcement {
  * - **`minted`** — this claim created the draft, so `beginDraftIn` handed back
  *   the id it actually copied. Exact.
  * - **`reopened`** — this claim found a draft an *earlier request of the same
- *   job* had minted, and `openOrBeginJobDraft` deliberately answers `null` for
- *   its lineage ("unknown from here, and `null` would be a lie"). So this is the
- *   article's current revision read at reopen, which is the true base unless
- *   something published between the mint and the reopen. What it then proves is
- *   narrower and still worth having: **nothing published this article while this
- *   claim held it.**
+ *   job* had minted, and the draft's own `based_on_revision_id` says what that
+ *   request copied. Also exact, and read under the article lock inside
+ *   `openOrBeginJobDraft`'s transaction. It says the same thing `minted` says:
+ *   **this is the revision the draft's blocks, columns and step runs came
+ *   from.**
  * - **`unknown`** — nobody could answer, and the check is skipped. It carries a
  *   `why` because a guard that turns itself off has to say when, and the one
  *   caller is named there.
  *
- * What would make the last two exact is a `based_on_revision_id` column on the
- * revision — named in `REVISION_CARRY_POLICY`'s comment (src/store/pg.ts) as a
- * column that would be harmful to *carry*, and which does not exist. Adding it
- * is a migration, so it is not this piece of work; `articleHasPublishedBlocks`
- * in src/store/artifacts-pg.ts reaches the same conclusion from the other end.
- * In practice the gap is small: `jobs_active_slug` allows one active job per
- * article, so between a mint and a reopen of the same job the only things that
- * can publish are `db:import` and a hand-run `publishRevision`.
+ * ## The column, and what it replaced
+ *
+ * Until 2026-09-01 there was no `based_on_revision_id`, and a reopened draft was
+ * given *the article's current revision read at reopen*. That is the number the
+ * publication is about to compare itself against, so the guard agreed with
+ * itself and passed the exact race it exists to refuse: mint from R1, hand the
+ * claim back, R2 publishes, the next claim reopens and records R2 as the base,
+ * and the R1 copy buries R2. GPT Sol, finding 1 of
+ * docs/plans/260831b-stage3-items3and4-review-sol.md. The column is written once
+ * by `beginDraftIn` and is `mint` in `REVISION_CARRY_POLICY`
+ * (src/store/pg-revisions.ts) — carried, a draft would inherit its parent's base
+ * and the hole would reopen one generation along.
+ *
+ * A draft minted before that column existed carries `null`, which is
+ * indistinguishable from "this article's first draft" and is refused whenever
+ * the article is serving anything. That is fail-closed and it costs at most one
+ * re-run of a job that was in flight at the deploy.
  */
 export type DraftBase =
   | {
       readonly how: "minted" | "reopened";
-      /** The revision the draft was copied from — `null` for an article's first. */
+      /**
+       * **The revision the draft was actually copied from** — `null` for an
+       * article's first draft, and for one minted before the column existed.
+       *
+       * True of `reopened` as well as `minted` since 2026-09-01: both read
+       * `article_revisions.based_on_revision_id`, which is written at mint and
+       * never changed. It is not "what the article is serving now", and the two
+       * being confused is the bug this type is here to make impossible to
+       * repeat.
+       */
       readonly revisionId: string | null;
     }
   | { readonly how: "unknown"; readonly why: string };
@@ -188,19 +205,16 @@ export type DraftBase =
 /**
  * What `openOrBeginJobDraft` just answered, read as a base.
  *
- * A second statement rather than a wider return from that function, because the
- * reopen branch has nothing to say about lineage and inventing something there
- * would put the guess where callers cannot see it. Here it is one line above the
- * session that uses it.
+ * **One line, and no query.** It was a second *statement* — a SELECT of
+ * `articles.current_revision_id` — for as long as the reopen branch had nothing
+ * to say about lineage, and that was two faults rather than one: the number was
+ * the wrong number, and it was read outside the transaction that had just
+ * decided which draft this is, so a publication landing in between was read as
+ * the base too. Both close the same way: `openOrBeginJobDraft` returns the
+ * lineage it read under the article lock, and this only labels it.
  */
-export async function draftBaseOf(draft: OpenDraftResult, db: Db): Promise<DraftBase> {
-  if (draft.created) return { how: "minted", revisionId: draft.basedOn };
-  const [row] = await db
-    .select({ current: articles.currentRevisionId })
-    .from(articles)
-    .where(eq(articles.id, draft.articleId))
-    .limit(1);
-  return { how: "reopened", revisionId: row?.current ?? null };
+export function draftBaseOf(draft: OpenDraftResult): DraftBase {
+  return { how: draft.created ? "minted" : "reopened", revisionId: draft.basedOn };
 }
 
 /**
@@ -273,10 +287,12 @@ export async function openPgStoreSession(opts: {
       jobId: opts.job.id,
       attemptId: opts.job.attemptId,
     },
-    /* Read now rather than at publication, which is the whole point: the
-       question is what this draft was made from, and by the time it publishes
-       the article may be serving something else. */
-    base: await draftBaseOf(draft, getDb()),
+    /* The draft's own record of what it was made from, carried straight off
+       `openOrBeginJobDraft`'s answer. The question is never "what is the
+       article serving" — by the time this draft publishes the article may be
+       serving something else, and that is precisely the case the guard refuses.
+       See `DraftBase`. */
+    base: draftBaseOf(draft),
   });
 }
 

@@ -228,6 +228,18 @@ interface Props {
    */
   stance: ReviewStance;
   onStance(next: ReviewStance): void;
+  /**
+   * **The Recall | Quiz control**, when this panel is the Recall half of
+   * Review. Absent in chat mode.
+   *
+   * A slot rather than a `subMode` value with a callback, because the control
+   * belongs to `ReviewBand` (src/web/App.tsx): the navigation rules behind it —
+   * clearing `?thread=` in one step, Quiz winning a pasted collision — are
+   * about two parameters this panel knows nothing about. Handing down a rendered
+   * node keeps that knowledge where it is, and keeps `ChatPanel` unaware there
+   * is a second sub-mode at all.
+   */
+  subMode?: React.ReactNode;
 }
 
 /**
@@ -327,6 +339,7 @@ export function ChatPanel({
   kind,
   stance,
   onStance,
+  subMode,
   live,
   onStartLive,
 }: Props) {
@@ -423,6 +436,7 @@ export function ChatPanel({
     >
       <div className="chat-head">
         <h2>{open ? open.title : review ? "Review" : "Chat"}</h2>
+        {subMode}
         {open ? (
           <>
             {/* The same delete the list offers, where the reader actually is.

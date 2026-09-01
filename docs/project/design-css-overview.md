@@ -174,7 +174,7 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
   as `td.text.kind-heading` in [`styles.css`](../../src/web/styles.css).
 
 `TableView` writes `kind-<the splitter's kind>` onto every cell, so that hook now carries two more:
-`kind-callout`, an indent and a big faint quote mark ([callout-blocks.md](../plans/callout-blocks.md)),
+`kind-callout`, an indent and a big faint quote mark ([260831ae-callouts-the-box-the-author-drew.md](../plans/260831ae-callouts-the-box-the-author-drew.md)),
 and `kind-caption`, which had never been styled at all.
 
 ### Weight, and the variable axis

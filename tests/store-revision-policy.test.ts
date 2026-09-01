@@ -64,13 +64,17 @@ describe("the carry-forward policy", () => {
     expect(stale, "a policy entry for a column that no longer exists").toEqual([]);
   });
 
-  it("mints the four that identify a row and derives the five the library prints", () => {
+  it("mints the five that belong to the row itself and derives the five the library prints", () => {
     /* Pinned by name, not counted. A count passes when somebody moves
        `block_count` from `derive` to `carry` and adds a new derived column in
        the same breath — and moving `block_count` to `carry` is precisely the
        resurrect-dead-data bug the split exists to prevent. */
+    /* `basedOnRevisionId` joined them on 2026-09-01, and it is the one where
+       carrying is worst: a draft would inherit its *parent's* base, so
+       `refuseIfBaseMoved` (src/store/pg-session.ts) would compare the wrong
+       pair and publish over work nobody asked to lose. */
     const of = (policy: string) => classified.filter((k) => REVISION_CARRY_POLICY[k as never] === policy).sort();
-    expect(of("mint")).toEqual(["articleId", "createdAt", "id", "status"]);
+    expect(of("mint")).toEqual(["articleId", "basedOnRevisionId", "createdAt", "id", "status"]);
     expect(of("derive")).toEqual([
       "blockCount",
       "partCount",

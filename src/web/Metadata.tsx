@@ -156,6 +156,7 @@ import {
   ListOrdered,
   ListTree,
   MessageCircle,
+  MessageCircleQuestionMark,
   PenLine,
   RefreshCw,
   ScanLine,
@@ -240,6 +241,11 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* The same clock the Dock puts on the Timeline button, so the stage row and
      the mode button a reader has already met say the same thing. */
   timeline: Clock,
+  /* A question mark in a bubble: the questions the piece asks back, and the one
+     stage here whose artefact is a prompt to the reader rather than a reading
+     of the article. Not `FileQuestion`, which this page already uses for the
+     "no raw document" state a few rows down. */
+  quiz: MessageCircleQuestionMark,
   sketch: PenLine,
 };
 

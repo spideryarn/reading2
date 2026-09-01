@@ -228,6 +228,10 @@ const STAGES = [
   "quotes",
   "sketch",
   "timeline",
+  /* Added the day the stage was registered, 2026-09-01, rather than the day
+     somebody noticed — the mistake this list's own header records about
+     `timeline`, which went uncovered from the day it shipped. */
+  "quiz",
   "assets",
 ] as const;
 type Stage = (typeof STAGES)[number];
@@ -307,6 +311,32 @@ function scriptFor(stage: Stage, article: Article): string[] {
               order: 1,
               modality: "happened",
               occurrences: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
+            },
+          ],
+        }),
+      ];
+    case "quiz":
+      /* **One question**, anchored to a real block with a real quote, and one
+         question only. `bandQuota` is `min(3, floor(kept / 4))`, so a batch of
+         one is required to carry no particular band and this stub cannot fail
+         on a spread rule that has nothing to do with hashing — see
+         tests/quiz.test.ts, which asks the quota itself.
+
+         The question still has to survive `toQuestions`, and that is deliberate
+         rather than incidental: `buildQuiz` throws when nothing is left, so a
+         stub whose block id or quote stopped resolving fails loudly instead of
+         writing an empty quiz. An empty one would carry a perfectly good
+         `sourceHash` and this row would go on passing while testing nothing —
+         docs/reusable/silent-success.md. */
+      return [
+        JSON.stringify({
+          questions: [
+            {
+              question: "What does the piece say about this passage?",
+              referenceAnswer: "It says the thing the quoted sentence says. Then it moves on.",
+              band: "easy",
+              value: 4,
+              evidence: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
             },
           ],
         }),

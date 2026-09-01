@@ -91,9 +91,53 @@ Two consequences, both deliberate:
   data, it captures on **two fresh scopes**. Building the parameters field by field is *not* enough:
   measured against a hostile scope with a fake transport, extras, contexts, tags, breadcrumbs and a
   `user` carrying `username` and `ip_address` all reached the envelope.
-  [`tests/feedback-mirror.test.ts`](../../tests/feedback-mirror.test.ts) asserts on the final
-  envelope rather than on the object handed to the SDK, because a test that captures on a clean
-  scope proves nothing.
+
+### Two fresh scopes were not enough either
+
+`prepareEvent` starts from the **global** scope and merges the other two into it, and an event
+processor runs after all three. So the guard that actually closes this seam sits at the
+**envelope**, on the line before the transport: [`src/feedback-envelope.ts`](../../src/feedback-envelope.ts),
+which **rebuilds** the outgoing feedback item from what `mirrorFeedback` registered before it
+captured. Only `event_id` and `timestamp` are taken off the event, both shape-checked; every
+attachment is written from the registration, so an ambient scope attachment wearing our own filename
+is not merely filtered, it is never copied.
+
+`server_name` no longer rides, reversing a line in the plan: it is a free-form string an event
+processor can write and no check can tell a hostname from a paragraph. `contexts.runtime` stays,
+rebuilt from two shape-checked fields.
+
+[`tests/feedback-mirror.test.ts`](../../tests/feedback-mirror.test.ts) asserts on the final envelope
+rather than on the object handed to the SDK, because a test that captures on a clean scope proves
+nothing — and it now seeds global extras, a global attachment and an event processor, each of which
+was verified to reach the envelope before the guard went in.
+
+### `mirrored_at` used to mean "we asked", and now says what it means
+
+`captureFeedback` returns an event id **synchronously** and the SDK sends later: `Client.sendEvent`
+does not return the send promise, and `sendEnvelope` catches every transport failure and resolves an
+empty result. So a row could say Sentry had taken a report that never arrived — the shape
+[silent-success.md](../reusable/silent-success.md) is about, in the one column that finds a stranded
+report. Since 2026-09-01 there are two:
+
+| column | written when |
+|---|---|
+| `mirror_attempted_at` | the event was handed to the SDK — a thing we know |
+| `mirrored_at` | the transport answered **2xx**, via the SDK's `afterSendEvent` hook |
+
+So **`mirror_attempted_at is not null and mirrored_at is null` is the query for a report Sentry did
+not take.** The acknowledgement is best-effort with a two-second ceiling and is awaited *after* the
+reader has been answered, so it costs a warm function and never a spinner; if it does not arrive the
+row honestly says attempted-not-confirmed.
+
+### A screenshot is decoded and written again, and only PNG
+
+The bytes a reader pastes are taken apart and a new file is written from the raster
+([`src/feedback-image.ts`](../../src/feedback-image.ts)) — so text chunks, EXIF, private chunks and
+anything appended after `IEND` are never copied rather than filtered out. **JPEG is refused**,
+because its entropy-coded scan cannot be length-checked without a baseline decoder. `@napi-rs/canvas`
+would decode both and is already a dependency; naming it from the API function was measured at
+**+34 MB** in the Vercel bundle and turns `tests/pdf-bundle-trace.test.ts` red, so that trade is
+Greg's to make rather than one to slip into a bug fix.
 
 The reasoning in full, including the table of what leaked, is in
 [260831aj-feedback-button-and-bug-reports-to-sentry.md](../plans/260831aj-feedback-button-and-bug-reports-to-sentry.md).

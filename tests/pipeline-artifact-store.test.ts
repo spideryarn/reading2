@@ -48,6 +48,10 @@ import {
   inputFingerprint as timelineFingerprint,
   PROMPT_VERSION as TIMELINE_VERSION,
 } from "../src/timeline.js";
+import {
+  inputFingerprint as quizFingerprint,
+  PROMPT_VERSION as QUIZ_VERSION,
+} from "../src/quiz.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -181,6 +185,11 @@ const META = { slug: SLUG, title: "A title" };
  */
 const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE, META);
 const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE, META);
+/* `quiz` uses the same `articleWithIdsFingerprint` as `ideas` and `sketch`, so
+   this is the same number — computed through its own module all the same,
+   because the day the two stop agreeing is the day a shared constant would hide
+   it. */
+const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -358,6 +367,45 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     version: TIMELINE_VERSION,
     events: [],
     orderConflicts: 0,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* Same two reasons as `ideas` — its own fingerprint function, and no
+     `profileHash`, because this stage was never written for one — plus a third
+     that is `quotes`' and `sketch`'s rather than `timeline`'s: **`questions`
+     must be non-empty**, because `SHAPE.quiz` in src/store/artifacts.ts refuses
+     a quiz with none. An empty quiz is indistinguishable from a working one
+     until a reader opens the panel, which is why that rule lives at the store
+     boundary where a fixture cannot slip past it.
+
+     `batchId` is here because it is a field on the artefact from the start —
+     the mark route binds to it — and not because anything in this file reads
+     it. */
+  await writeJson(pathFor(at, "quiz", "quiz"), {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: QUIZ_SOURCE_HASH,
+    version: QUIZ_VERSION,
+    batchId: "spya-bbbbbb",
+    questions: [
+      {
+        id: "spya-zzzzzz",
+        question: "What does the paragraph say?",
+        referenceAnswer: "It says one thing. Then it stops.",
+        evidence: [{ blockId: BODY.id, quote: "One paragraph", start: 0 }],
+        band: "easy",
+        value: 3,
+      },
+    ],
+    dropped: {
+      unknownIds: 0,
+      unquoted: 0,
+      truncated: 0,
+      overCap: 0,
+      malformed: 0,
+      duplicate: 0,
+      unanchored: 0,
+    },
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

@@ -69,6 +69,11 @@ import {
   previousTimelineFrom,
   PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
 } from "./timeline.js";
+import {
+  generateQuiz,
+  inputFingerprint as quizFingerprint,
+  PROMPT_VERSION as QUIZ_PROMPT_VERSION,
+} from "./quiz.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateSketch,
@@ -175,6 +180,18 @@ export const STEP_ORDER: StepName[] = [
      Off `DEFAULT_INGEST_STEPS`, like the four before it: it costs a model call
      over the whole article and it is a mode somebody goes to. */
   "timeline",
+  /* Beside `timeline`, for the third time and the same argument: `high` effort
+     and the `ids` renderer, so `ideas`, `timeline`, `quiz` and `sketch` are one
+     cache group and this list keeps them contiguous. A `quiz` placed anywhere
+     else in this array would still work and would quietly stop sharing the
+     cached article prefix with the three stages it is identical to — the
+     failure `sharesArticleCache` exists to prevent, and the one nothing throws
+     about (tests/article-cache-group.test.ts).
+
+     Off `DEFAULT_INGEST_STEPS`, like the five before it: it costs a model call
+     over the whole article and it is a thing somebody asks for.
+     docs/plans/260831al-review-quiz-sub-mode.md. */
+  "quiz",
   /* Last, and off `DEFAULT_INGEST_STEPS`: nothing reads what it writes, and it
      is the slowest single model call in the app at 121–194 seconds measured.
      docs/project/diagram.md § Sketch. */
@@ -321,6 +338,16 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      article really has moved it re-runs without being forced. And like `ideas`
      and unlike the glossary, forcing it replaces rather than appends. */
   "timeline",
+  /* The same two reasons a fourth time: it reads `blocks.json` and `tree.json`,
+     nothing else in the pipeline reads what it writes, so the positional
+     cascade would buy a model call for nothing. And forcing it replaces rather
+     than appends — with one consequence worth naming, because it is the whole
+     of why the mark route has a 409 in it: a forced run mints a NEW `batchId`,
+     so every question a reader is part-way through answering stops being
+     markable. That is correct — the reference answers have been rewritten —
+     and it is why an unnamed force must never reach this step.
+     docs/plans/260831al-review-quiz-sub-mode.md § Marking. */
+  "quiz",
   /* The same two reasons, and a third that is about the clock rather than the
      money. `sketch` is the slowest call here — 194s measured on the
      constitution — and every step self-aborts at 400s inside an 800s
@@ -2486,6 +2513,116 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: { timeline: run.timeline },
         detail: `${total} ${total === 1 ? "event" : "events"}, ${dated} dated`,
+      };
+    },
+  },
+  /* Stage 5j — the quiz. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
+     the reason `tweets`, `glossary`, `quotes`, `ideas` and `timeline`
+     established: everything up to `arc` makes the article readable, everything
+     after it is a thing somebody asks for.
+
+     **No `previous`, and therefore no `BASELINE` row in
+     src/store/artifacts.ts.** `ideas`, `quotes`, `glossary` and `timeline` all
+     read their last artefact to lend its ids forward, because a reader holds
+     `?idea=` and `?event=` links that must survive a re-run. A quiz question
+     has no consumer that outlives its batch — v1 stores no attempts and there
+     is no `?quiz=<id>` — so inheritance here would be machinery serving
+     nothing, and `readBaseline` throws for a kind with no row precisely so that
+     nobody can half-add it. docs/plans/260831al-review-quiz-sub-mode.md.
+     A forced re-run therefore mints a fresh `batchId` and every question id
+     with it, which is exactly what the mark route's 409 is about. */
+  quiz: {
+    name: "quiz",
+    label: "Writing the questions",
+    outputs: (ctx) => [path.join(ctx.dir, "quiz.json")],
+    produces: ["quiz"],
+    /**
+     * `articleWithIdsFingerprint`, the one `ideas` and `sketch` use — the
+     * blocks, the tree and a metadata head that carries `URL:`.
+     *
+     * The tree is in it for `ideas`' reason: `renderPrompt` shows the model the
+     * skeleton before the article, so re-cutting the sections changes the
+     * question being asked while every block stays byte-identical.
+     *
+     * **And no `profileHash`**, like `timeline` and unlike `ideas` and
+     * `sketch`. There is a real argument for one — how hard a question is
+     * depends on who is reading — and it was deferred rather than overlooked,
+     * with the six touchpoints it would cost written down in the plan. Adding
+     * it later needs no migration, because `profileHash` is a field on the JSON
+     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+     */
+    stamp: async (ctx, store) => {
+      /* `tryReadArticle`, where `run` below takes `readArticle` — the same
+         asymmetry every stamped stage here has, and for the same reason: this
+         asks *what stamp would this step write if it ran now*, and an
+         unreadable article means we cannot tell, which `stepIsDone` turns into
+         "not current, so re-run". A throw here would be a failed job. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        /* **`article.meta`, `null` and all — never a stub.** `generateQuiz`
+           builds `{ title: fallbackHeadTitle(tree) }` for the PROMPT when there
+           is no metadata and hands the fingerprint the real value, so both
+           sides hash the same thing. Hashing the stub here instead would make
+           every article without metadata report stale for ever, on every run,
+           with nothing red — src/quiz.ts § `generateQuiz`.
+           tests/stage-stamp-agreement.test.ts is what asks this out loud. */
+        inputHash: quizFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: QUIZ_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateQuiz({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const questions = run.quiz.questions;
+      const bands = { easy: 0, medium: 0, hard: 0 };
+      for (const q of questions) bands[q.band]++;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "quiz",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          questions: questions.length,
+          /* The band spread, because it is the one thing about a batch that is
+             invisible from outside and that the ordering depends on entirely.
+             A batch of twelve that is all `medium` fails the quota and never
+             gets here; a batch of three that is all `medium` passes, correctly,
+             and is worth being able to see afterwards. */
+          easy: bands.easy,
+          medium: bands.medium,
+          hard: bands.hard,
+          /* The quality signals, in the shape `ideas` and `timeline` established
+             and for the same reason: every one of them is invisible from
+             outside, because a dropped question looks exactly like a question
+             the model chose not to ask. `unanchored` is the one to watch — it
+             is this stage asking about a theme instead of a passage.
+
+             **Never a question, a reference answer or a quote.** This is a
+             count of what was thrown away, not a record of it.
+             docs/project/logging.md. */
+          unanchored: run.dropped.unanchored,
+          unknownIds: run.dropped.unknownIds,
+          unquoted: run.dropped.unquoted,
+          truncated: run.dropped.truncated,
+          overCap: run.dropped.overCap,
+          malformed: run.dropped.malformed,
+          duplicate: run.dropped.duplicate,
+        },
+        `quiz ${ctx.slug}: ${questions.length} questions`,
+      );
+      return {
+        parts: { quiz: run.quiz },
+        detail: `${questions.length} ${questions.length === 1 ? "question" : "questions"}`,
       };
     },
   },

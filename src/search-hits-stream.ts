@@ -114,6 +114,17 @@
  * hit arriving late — via `done` rather than as a preview — which the safety
  * property already allows; it was considered and is deliberately not chased.
  *
+ * **The key is a parameter, and that is the whole of what Referee's Criteria
+ * added.** `hitExtractor()` still means `"hits"` and search still calls it with
+ * no argument; `hitExtractor("results")` watches the same brace counter for the
+ * array `validateResults` reads (src/referee-criteria.ts). Everything above —
+ * the key-not-position rule, `hitsArrayOpen`, the duplicate-key refusal — is
+ * about *a* depth-1 key rather than about the word "hits", so generalising it
+ * changed four comparisons and no behaviour. **A second copy of this brace
+ * counter was the alternative and was explicitly not wanted**: the safety
+ * property stated above has been got wrong three times, and a fork would have
+ * to be got right again in a file nobody would think to reread.
+ *
  * Beyond all of the above: `text()` returns every character fed to it,
  * unmodified and in order, so the caller can still run the whole response
  * through `parseHits` + `validateHits` once the stream ends, exactly as it
@@ -123,16 +134,20 @@
  * to the buffer `text()` reads back — it only ever reads from that buffer,
  * never changes it.
  */
-export function hitExtractor(): {
+export function hitExtractor(key: string = "hits"): {
   /** Feed the next chunk of streamed text. Returns any hit objects that completed within it, in order. */
   push(chunk: string): unknown[];
   /** Everything fed so far, so the caller can still run the strict whole-object parse at the end. */
   text(): string;
   /**
-   * Did the reply carry more than one top-level `hits` key?
+   * Did the reply carry more than one top-level array key?
    *
    * If so the caller must refuse the whole reply rather than store the final
    * parse, because a preview has already been shown from a different array.
+   *
+   * Still spelled `Hits` after the key became a parameter, and deliberately:
+   * renaming it would touch search.ts and its tests for nothing, and this
+   * module is search's before it is anybody else's.
    */
   duplicateHitsKey(): boolean;
 } {
@@ -231,7 +246,7 @@ export function hitExtractor(): {
             ch === "[" &&
             hitsArrayDepth !== -1 &&
             stack.length === 1 &&
-            lastDepth1String === "hits"
+            lastDepth1String === key
           ) {
             // A second one. Stop emitting; the caller refuses the reply.
             duplicateKey = true;
@@ -241,7 +256,7 @@ export function hitExtractor(): {
             hitsArrayDepth === -1 &&
             stack.length === 1 &&
             stack[0] === "{" &&
-            lastDepth1String === "hits"
+            lastDepth1String === key
           ) {
             hitsArrayDepth = stack.length + 1;
             hitsArrayOpen = true;

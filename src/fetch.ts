@@ -571,11 +571,12 @@ function credentialsSeen(): string {
  * `data/constitution` and `data/noema-mythology-of-conscious-ai` — and the
  * answer for them is a re-fetch (Greg, 2026-08-30: the corpus is expendable).
  *
- * What still calls this is `slugIsSpokenFor` in src/jobs.ts, which reads a
- * candidate slug's manifest during *enqueue* to decide whether an upload would
- * collide with an article already there. That read is listed as stage 1b of
- * docs/plans/260831b-finish-the-database-move.md and is not converted yet, so this
- * function stays exactly as it was.
+ * What still calls this is `articleMetadata` in src/api.ts, which shows the
+ * metadata page where a document came from. `slugIsSpokenFor` in src/jobs.ts
+ * called it too until 2026-08-31, to decide whether an upload would collide
+ * with an article already there; that question no longer exists — every slug
+ * carries a globally unique short id, so nothing collides
+ * (docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0).
  */
 export async function readRaw(dir: string): Promise<RawManifest | null> {
   try {

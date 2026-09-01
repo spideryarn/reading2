@@ -27,6 +27,7 @@ import {
   loadGlossary,
   loadArc,
   loadIdeas,
+  loadQuiz,
   loadQuotes,
   loadSketch,
   loadSource,
@@ -72,6 +73,16 @@ import {
   recolourRun,
   update as updateRuns,
 } from "../searches.js";
+import {
+  beginCriterion,
+  CRITERION_SWEPT,
+  deleteCriterion,
+  finishCriterion,
+  loadCriteria,
+  recolourCriterion,
+  update as updateCriteria,
+} from "../referee-criteria-store.js";
+import type { SavedCriterion } from "../saved-criteria.js";
 import { loadShelf, patchShelf, recordOpen } from "../shelf.js";
 import type {
   ArticleReader,
@@ -81,6 +92,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   ReaderStore,
+  RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
   SweepOptions,
@@ -97,6 +109,7 @@ export const fsArticleReader: ArticleReader = {
   loadArc,
   loadIdeas,
   loadTimeline,
+  loadQuiz,
   loadSketch,
   loadSource,
 };
@@ -442,6 +455,60 @@ export const fsSearchStore: SearchStore = {
     log("store").warn(
       { slug, orphans: swept.filter((r) => r.status === "error").length },
       "swept abandoned search(es)",
+    );
+    return swept;
+  },
+};
+
+/**
+ * A referee's criteria, on files. `attempt` is always `undefined`, for the
+ * reason `fsSearchStore` gives about itself: the filesystem has no attempt
+ * column and cannot usefully grow one, so this side stays fenced by identity
+ * alone and the divergence is written down rather than papered over.
+ */
+export const fsRefereeCriteriaStore: RefereeCriteriaStore = {
+  load: loadCriteria,
+  /* The same `currentSourceHash` the searches use — imported, not reimplemented.
+     Two fingerprints of one article can only ever disagree, and the day they do
+     one artefact reports itself fresh against a rule nothing else uses
+     (src/source-hash.ts). */
+  sourceHash: currentSourceHash,
+  remove: deleteCriterion,
+  recolour: recolourCriterion,
+
+  async begin(slug, criterion, config, wantedId, now) {
+    /* Read **before** the update, not inside it: `update` holds the
+       process-wide write queue, and a file read in there stalls every other
+       write for the length of a disk read. Same call, same reason, and the same
+       millisecond-wide window as `beginRun` in src/searches.ts documents. */
+    const sourceHash = await currentSourceHash(slug);
+    return {
+      row: await beginCriterion(slug, criterion, config, wantedId, now, sourceHash),
+      attempt: undefined,
+    };
+  },
+
+  async finish(slug, id, patch): Promise<SavedCriterion | undefined> {
+    const rows = await finishCriterion(slug, id, patch);
+    return rows.find((c) => c.id === id);
+  },
+
+  async sweepPending(slug: string, opts: SweepOptions): Promise<SavedCriterion[]> {
+    const rows = await loadCriteria(slug);
+    /* `graceMs` is ignored here, exactly as it is for searches: today's sweep
+       errors any `pending` row this process did not start, immediately. The
+       filesystem has no other processes to be wrong about, and giving it a
+       grace window would be an improvement smuggled in under a migration. */
+    const orphaned = (c: SavedCriterion) => c.status === "pending" && !opts.keep.has(c.id);
+    if (!rows.some(orphaned)) return rows;
+    const swept = await updateCriteria(slug, (current) =>
+      current.map((c) =>
+        orphaned(c) ? { ...c, status: "error" as const, error: CRITERION_SWEPT } : c,
+      ),
+    );
+    log("store").warn(
+      { slug, orphans: swept.filter((c) => c.status === "error").length },
+      "swept abandoned criteri(a)",
     );
     return swept;
   },

@@ -242,10 +242,17 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           That doesn't look like a URL yet.
         </p>
       )}
+      {/* **The trailing dash and ellipsis are not decoration.** Since
+          2026-08-31 the server puts a short id on the end of every new slug
+          (src/ingest.ts § `slugWithShortId`), and it is random, so the box
+          cannot know it. Naming the readable half and showing that something
+          follows is the true statement; printing `why-trees` on its own was a
+          promise about an address that will not exist.
+          docs/project/ingest-queue.md § Every slug carries a short id. */}
       {slug && (
         <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
           It'll be on the shelf as{" "}
-          <code className="tw:font-mono tw:text-foreground">{slug}</code>.
+          <code className="tw:font-mono tw:text-foreground">{slug}-…</code>.
         </p>
       )}
 

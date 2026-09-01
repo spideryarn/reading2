@@ -131,15 +131,17 @@ staging key is left alone. A sweep after `SWEEP_GRACE_MS` is not built;
 which is what stops somebody adding the obvious `remove` later.
 
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
-prove two addresses are one piece. An upload has no address, so `freeUploadSlug` in
-[`src/jobs.ts`](../../src/jobs.ts) always finds a slug nothing else has — two files called
-`paper.pdf` get two articles, per [Greg's answer](../plans/260826u-pdf-upload-and-storage.md#gregs-answers-2026-08-26).
-The existence check is `articleExists` and **not** `urlForSlug`, which is the trap: an uploaded
-article has no URL in its `meta.json`, so the lookup `freeSlug` uses reads `undefined` and calls
-the slug free. Every step would then find an artefact, skip, and show the reader a different
-document under their own filename in about a second. It also takes the *upload's own id*, so a
-Retry keeps the article it already started rather than stepping aside from itself and paying for
-the transcription twice.
+prove two addresses are one piece. An upload has no address, so there is nothing that could make
+two of them one article — two files called `paper.pdf` get two, per
+[Greg's answer](../plans/260826u-pdf-upload-and-storage.md#gregs-answers-2026-08-26).
+
+**Since 2026-08-31 that is a mint rather than a search.** Every new slug ends in a globally unique
+short id (`paper-spya-k3m9qt`, [`src/ingest.ts`](../../src/ingest.ts) § `slugWithShortId`), so an
+upload takes a name nothing else can want. `freeUploadSlug` and `slugIsSpokenFor` walked a `-2`…`-99`
+counter and read the candidate's fetch manifest to ask *is this article this upload's own*; both are
+gone, and so is the Retry bug that question existed to avoid — a retry now mints a fresh name, which
+costs nothing, rather than finding its own slug occupied by itself and paying for the transcription
+twice. See [the plan](../plans/260831b-finish-the-database-move.md) § Stage 3 item 0.
 
 ### `/add/upload/<id>` has to survive a reload, and for a day it did not
 
@@ -344,9 +346,10 @@ merged four things it should not have, and each is now a test:
 | `?a=1&&b=2` and `?a=1&b=2` | an empty query field is part of the request target; only *tracking* pairs are dropped |
 
 The path-case one is worth dwelling on, because the argument *for* lower-casing was not silly: the
-slug is lower-cased already, so `/Why-Trees` and `/why-trees` collide on the slug whatever the key
-says. But that collision is exactly what `freeSlug`'s ladder is for, and it resolves it into the
-cheap failure rather than the expensive one. Credentials are not dropped from the key — they are
+slug is lower-cased already, so `/Why-Trees` and `/why-trees` want the same readable name whatever
+the key says. But wanting the same name costs nothing now — the short id makes them two slugs — so
+the key deciding they are two articles resolves it into the cheap failure rather than the expensive
+one. Credentials are not dropped from the key — they are
 refused by `normaliseUrl` outright, since an `/add/…` URL now lives in browser history and in
 whatever access log sees the request, and percent-encoding hides a password from nobody.
 
@@ -354,22 +357,47 @@ Query-string **order between different names** stays significant for the same re
 deliberate non-merge: nobody reorders a URL they copied, so the merge buys nothing, and it cannot be
 had without the sort that broke the repeated-parameter case.
 
-**What else it will not merge:** a different host (`a.example/news` and `b.example/news` are what
-`freeSlug`'s ladder exists for), a real subdomain (`blog.example.com` is a site; only `www.` is
+**What else it will not merge:** a different host (`a.example/news` and `b.example/news` are two
+articles, and they now get two slugs without anybody stepping aside), a real subdomain (`blog.example.com` is a site; only `www.` is
 decoration), a non-default port, and any query parameter not on the tracking list — `?ref=`, `?s=`
 and `?id=` are used both ways, so they stay.
 
-Both are tested exhaustively in [`tests/ingest.test.ts`](../../tests/ingest.test.ts), and the ladder
+Both are tested exhaustively in [`tests/ingest.test.ts`](../../tests/ingest.test.ts), and what is
 built on top of them in [`tests/jobs.test.ts`](../../tests/jobs.test.ts) § `freeSlug`.
 
-### Two things claim a slug, and one of them only exists for a minute
+### Every slug carries a short id, so nothing has to step aside
 
-`freeSlug` now takes its claim lookup as an argument, which is what makes every decision above
-testable without a filesystem, a network or a queue. The default consults **`meta.json` first, and
-then the live queue** — because a job that is queued or running has taken a slug and not yet written
-a `meta.json` for it. Without that second half, two different articles with the same last path
-segment added within a minute of each other both get the bare slug, and the later one is then handed
-the earlier one's job by `activeFor` and quietly never happens.
+> Yes, let's add a short id — and actually then we could in future allow users to rename the slug,
+> and redirect/find it from the short id. So make sure it's globally unique. I'm fine with adding
+> that to all slugs.
+>
+> — Greg, 2026-08-31
+
+So a new article is `why-trees-spya-k3m9qt` ([`src/ingest.ts`](../../src/ingest.ts) §
+`slugWithShortId`, minting through `src/ids.ts` so there is one id shape and not two). Two articles
+can no longer want the same name, which deleted the ladder `freeSlug` used to walk — the host prefix
+(`b-news`), then `-2`…`-99` — and `freeUploadSlug` and `slugIsSpokenFor` with it. Existing slugs are
+untouched and nothing is backfilled.
+
+The id is **also a column**, `articles.short_id`, and that is the second half of the decision rather
+than a copy for convenience: a slug the reader renames no longer contains one, and the column is the
+handle a rename would redirect through. `slugForShortId`
+([`src/store/find-article.ts`](../../src/store/find-article.ts)) is that lookup. The rename itself is
+not built.
+
+### What the short id changed about adoption, and it is not nothing
+
+`freeSlug` still *adopts* — adding an article we already have comes back to its slug, so every step
+skips — but it can no longer find it by name. It used to derive the candidate slug from the URL and
+ask what was under it; a slug ending in a random id cannot be derived, so that probe would find
+nothing and mint a second article for a URL already on the shelf. **The question is now asked the
+other way round:** *which slug already holds this `urlKey`?*
+
+The lookup is an argument, which is what makes every decision above testable without a filesystem, a
+network or a queue. Its default asks the shelf and then **the live queue** — because a job that is
+queued or running has taken a slug and not yet published an article for it. Without that second
+half, two adds of one URL a second apart get two slugs, the queue's `jobs_active_slug` conflict
+(which is on the slug) never fires, and the reader pays twice.
 
 ### What it still cannot know
 
@@ -808,9 +836,12 @@ retry costs minutes of pipeline and another billed model call, which is a good d
 same mistake on a chat message.
 
 **What makes a failure permanent is Retry's own shape.** For an ordinary job `forceForRetry` forces
-nothing, so **a retry never re-runs a step that succeeded**. A stage that failed while reading an
-artefact an earlier step wrote will read that identical artefact again. That is what separates the
-two lists:
+nothing, so a retry never *forces* a step that already succeeded — but that is not the same as never
+rerunning one. Under Postgres a failed attempt's draft is discarded, and whatever its steps wrote
+went with it, so the new attempt's own freshness checks may find them gone and correctly rerun them
+anyway; only on the filesystem store, where an artefact really does stay on disk, is the skip
+guaranteed. A stage that failed while reading an artefact an earlier step wrote will read that
+identical artefact again. That is what separates the two lists:
 
 | Cannot come out differently | Might |
 |---|---|

@@ -51,6 +51,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
+import { DIRECT_ADD_SENT_TEXT_AWAY } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
@@ -212,6 +213,31 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           That isn't a web address we can fetch. A host and a path is enough —{" "}
           <code className="tw:font-mono">example.com/an-essay</code> — and the{" "}
           <code className="tw:font-mono">https://</code> is optional.
+        </p>
+      )}
+
+      {/* **What happened to the text, said on the page where it already has.**
+          The shelf's add box says the present-tense half beside the Add button
+          (`ADDING_SENDS_TEXT_AWAY`, src/web/AddArticle.tsx), because there the
+          reader still has a choice to make. This page has no button and no
+          form — a bookmarklet or a share sheet handed us an address, and the
+          effect above queues it before the first paint — so by the time anyone
+          reads this the POST has gone. Hence the past tense, and hence no
+          checkbox: the two sentences differ on purpose, exactly as Referee
+          mode's notice does (`REFEREE_TEXT_ALREADY_SENT`), and making them
+          agree would mean making one of them false. A confirmation gate here
+          is a product decision about a deliberately frictionless surface, and
+          it is Greg's rather than ours.
+          docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+
+          Behind `ok`, because that is the flag on the effect that posts: an
+          address we refused to queue is the one case where nothing was sent,
+          and the past tense would be a lie about it. Above the progress card
+          rather than under it, so it is read in the seconds spent watching the
+          steps rather than after the navigation has already left. */}
+      {ok && (
+        <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
+          {DIRECT_ADD_SENT_TEXT_AWAY}
         </p>
       )}
 

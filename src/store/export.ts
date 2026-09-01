@@ -381,6 +381,7 @@ export async function exportArticle(
   if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.quotes) await put("quotes.json", revision.quotes);
   if (revision.timeline) await put("timeline.json", revision.timeline);
+  if (revision.quiz) await put("quiz.json", revision.quiz);
   if (revision.sketch) await put("sketch.json", revision.sketch);
   if (revision.labels) await put("labels.json", revision.labels);
 
