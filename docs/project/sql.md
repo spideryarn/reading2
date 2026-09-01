@@ -44,9 +44,28 @@ whole transaction on the unique index, not just its own statement.
 
 Insert **`on conflict do nothing`, targeted at the key**, then read the row back and work from what
 came back rather than from what you tried to write.
-[`lockOrCreateArticle`](../../src/store/pg-revisions.ts) is the pattern. It needs `read committed`,
-PostgreSQL's default: under `repeatable read` the read back comes from a snapshot taken before the
-racing transaction committed, and finds nothing.
+[`lockOrCreateArticle`](../../src/store/pg-revisions.ts) is the pattern.
+
+It needs `read committed`, PostgreSQL's default, and **the transaction has to ask for it** rather
+than inherit it — a `default_transaction_isolation` on the role or the database changes it silently
+and nothing fails on a laptop. Above `read committed`, `do nothing` stops being an escape at all:
+an `on conflict do nothing` that meets a conflicting row from outside its own snapshot raises
+`40001 could not serialize access due to concurrent update` at the *insert*, so the read back is
+never reached — and nothing in `src/` retries `40001`, so the whole transaction is lost and the
+reader is told it was "a moment's trouble". Measured, 2026-09-01, both arrival orders.
+
+So pin it where the transaction opens, as [`pg-session.ts`](../../src/store/pg-session.ts) §
+`READ_COMMITTED` and [`pg-feedback.ts`](../../src/store/pg-feedback.ts) do, and prove the pin by
+asking the transaction — `select current_setting('transaction_isolation')` inside it, down a
+connection whose default is *wrong*, which is what
+[`tests/store-session-isolation.test.ts`](../../tests/store-session-isolation.test.ts) sets up.
+Asserting that an option was passed is not the same check and does not survive a refactor.
+
+**The rest of `src/store/` still inherits its level.** Of 21 Postgres transactions, two files pin:
+`pg-session.ts` (three) and `pg-feedback.ts` (one). The unpinned ones that depend on the level are in
+`pg-revisions.ts`, `pg-chat.ts`, `pg-searches.ts`, `pg-referee-criteria.ts`, `pg-referee-claims.ts`,
+`pg-visibility.ts` and `pg-jobs.ts` — every one of them takes a lock or an upsert and then reads.
+Pinning them is a separate, mechanical piece of work.
 
 It hides, because the collision needs the row to be absent and it is absent only the first time
 anybody writes it. Suspect it whenever a duplicate-key error names a table keyed by something that is

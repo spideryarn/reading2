@@ -123,12 +123,26 @@ Two details are load-bearing:
 The target is named rather than a bare `on conflict do nothing`, so it absorbs the one conflict it is
 about and would still raise on a constraint added later.
 
-**And it rests on `read committed`**, which is written into the function's comment rather than
-inherited. Under `repeatable read` the read back would use a snapshot established before the racing
-transaction committed, so the row the insert had just waited for would be invisible. That is the same
-dependency [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts) writes down after GPT Sol's
-review of 2026-08-31 — a `default_transaction_isolation` on the role or the database would break both
-silently, and neither would fail on a laptop.
+**And it rests on `read committed`** — which, when this was written, was said in a comment and
+nowhere else. The production caller opened its transaction with no isolation option and inherited
+`default_transaction_isolation` from the role or the database. GPT Sol's final review the same day
+refused to accept that, and was right: a stated dependency nobody enforces is not a defence.
+
+The transaction is now pinned where it opens —
+[`src/store/pg-session.ts`](../../src/store/pg-session.ts) § `READ_COMMITTED`, on all three of
+`commit`, `settleJob` and `beginStep` — matching what
+[`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts) already did after Sol's review of
+2026-08-31.
+
+**And the failure above `read committed` is worse than either of us thought.** Sol predicted the read
+back would find nothing. Measured on 2026-09-01, it never gets there: at `repeatable read` an
+`insert … on conflict do nothing` that meets a conflicting row from outside its own snapshot raises
+`40001 could not serialize access due to concurrent update` **at the insert** — both when it waits
+for an uncommitted writer and when the winner had already committed. `do nothing` is only an escape
+from a concurrent writer at `read committed`. Nothing in `src/` retries `40001`, so the abort takes
+the whole revision commit exactly as the duplicate key did, and reaches the reader through
+`guardDbStore` as *"a moment's trouble … trying again generally works"* about something that would
+happen every time.
 
 ## What would have caught the class
 
@@ -173,6 +187,10 @@ recognising an instance, which is why the audit above is a table rather than a s
 ## Files
 
 - [`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts) — the fix
+- [`src/store/pg-session.ts`](../../src/store/pg-session.ts) — `READ_COMMITTED`, where the
+  dependency stopped being a comment
+- [`tests/store-session-isolation.test.ts`](../../tests/store-session-isolation.test.ts) — the real
+  `commit`, driven down a connection that defaults to `repeatable read`, asked what level it got
 - [`tests/store-raw-source-race.test.ts`](../../tests/store-raw-source-race.test.ts) — the
   deterministic case, the barrier case, and the `RawSourceDisagrees` case that must survive it
 - [`tests/load-article-serialisation.test.ts`](../../tests/load-article-serialisation.test.ts) — was

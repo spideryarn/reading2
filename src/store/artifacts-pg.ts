@@ -1035,14 +1035,31 @@ export class RawSourceDisagrees extends Error {
  * precisely the corruption the check exists to stop: two different documents
  * sharing a hash row, one of them silently getting the other's size.
  *
- * **This rests on `read committed`**, PostgreSQL's default, and it is written
- * down here rather than inherited for the same reason src/store/pg-feedback.ts
- * writes it down: under `repeatable read` the read back would be taken from a
- * snapshot established *before* the racing transaction committed, so the row
- * the insert just waited for would not be visible and this would throw. A
- * `default_transaction_isolation` set on the role or the database would do that
- * silently, and nothing would fail on a laptop. The caller owns the transaction,
- * so this cannot set the level itself — it can only say what it needs.
+ * **This rests on `read committed`, and the caller now asks for it.** `do
+ * nothing` is only an escape from a concurrent writer at that level. Measured
+ * on 2026-09-01: at `repeatable read` an `insert … on conflict do nothing` that
+ * meets a conflicting row from outside its own snapshot raises `40001 could not
+ * serialize access due to concurrent update` at the **insert** — both when it
+ * waits for an uncommitted writer and when the winner had already committed —
+ * so the read back below is never reached at all. Nothing in `src/` retries
+ * `40001`, so that aborts the whole revision commit, which is the same loss
+ * this rewrite was for. A `default_transaction_isolation` set on the role or
+ * the database would do it silently, and nothing would fail on a laptop.
+ *
+ * This function owns no transaction, so it still cannot set the level itself;
+ * it says what it needs and **the transaction that opens is pinned**, in
+ * src/store/pg-session.ts § `READ_COMMITTED` — all three of `commit`,
+ * `settleJob` and `beginStep`. Until 2026-09-01 that was a comment and nothing
+ * else, and GPT Sol's final review (finding 3,
+ * docs/plans/260901d-final-review-sol.md) is right that a stated dependency
+ * nobody enforces is not a defence. tests/store-session-isolation.test.ts is
+ * the check: it drives the real `commit` down a connection that defaults to
+ * `repeatable read` and asks the transaction what level it actually got.
+ *
+ * **The other callers of `writeArtefacts` are not pinned** and are all tests —
+ * tests/helpers/load-article.ts's `copyArtefacts`, and the race suite's own
+ * `getDb().transaction`. They inherit the database default, which is the thing
+ * production no longer does.
  *
  * ## `verified_at` is not touched when the row is already there
  *
@@ -1102,16 +1119,19 @@ async function writeRawSource(
     .limit(1);
 
   /* Not reachable under `read committed`: the insert above either put the row
-     there or waited for the transaction that did. The two ways to see this are
-     a delete landing in the gap — nothing in the request path deletes from this
-     table — and the isolation level having been changed underneath us, which
-     the note above is about. Either way it is a fault worth naming rather than
-     a `!` that would one day be a null reference with no explanation. */
+     there or waited for the transaction that did. Nor, it turns out, under
+     `repeatable read` — that raises `40001` at the insert and never gets here
+     (see the note above). What is left is a delete landing in the gap, and
+     nothing in the request path deletes from this table. So this is a fault
+     worth naming rather than a `!` that would one day be a null reference with
+     no explanation, and the level is still named in it because a wrong level is
+     the first thing anybody reading it will want ruled out. */
   if (!stored) {
     throw new Error(
       `the raw_sources row for ${storedSha256} (${kind}) was not there on the read back, writing ` +
         `"${slug}". Either something is deleting from that table under a live write, or this ` +
-        `transaction is not running at read committed — see writeRawSource.`,
+        `transaction is not running at read committed — see writeRawSource, and ` +
+        `READ_COMMITTED in src/store/pg-session.ts, which is where the commit path pins it.`,
     );
   }
 
