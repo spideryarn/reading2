@@ -64,6 +64,8 @@
  *                                           One run per article; a second POST replaces the first
  *   POST   /api/referee/mirror/:slug        no body → **a stream**, see `runMirror`. Reads the
  *                                           referee's own comments back to them; never the paper
+ *   GET    /api/referee/scan/:slug          the deterministic injection scan of the stored raw
+ *                                           source — no model, no cost, and no verdict
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
  *   GET    /api/uploads/:id      what became of one upload
  *   GET    /api/jobs             every ingest job this server knows about
@@ -155,6 +157,11 @@ import type { SavedCriterion } from "./saved-criteria.js";
    reason `findPassagesStream` and `runCriterionStream` above are. */
 import { runClaimsStream } from "./referee-claims-run.js";
 import type { Claim, ClaimsRun } from "./referee-claims.js";
+/* Referee mode's rule 5, and the one thing under it that costs nothing: the
+   deterministic scan of the stored raw source. No model, no gateway, no spend
+   attribution — src/source-scan.ts is the caller and src/injection-scan.ts is
+   the scanner. */
+import { scanArticleSource } from "./source-scan.js";
 /* Referee mode's Mirror sub-mode. The generator, and only the generator: the
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
@@ -5513,6 +5520,12 @@ export async function serveAuthenticatedApi(
      asks for and nothing is stored, so there is nothing to GET, nothing to
      PATCH and nothing to DELETE. */
   const refereeMirror = /^\/api\/referee\/mirror\/([\w.%-]+)$/.exec(path);
+  /* The source scan, and the one route under `/api/referee/` that is not a
+     sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
+     about the document that bears on Criteria, Claims, Mirror and Candidates
+     alike. GET only, and nothing to POST: the answer is a pure function of bytes
+     already stored, so asking for it is reading. */
+  const refereeScan = /^\/api\/referee\/scan\/([\w.%-]+)$/.exec(path);
   const allJobs = path === "/api/jobs";
   const uploads = path === "/api/uploads";
   const upload = /^\/api\/uploads\/([\w-]+)$/.exec(path);
@@ -6159,6 +6172,33 @@ export async function serveAuthenticatedApi(
       await withSpendAttribution({ articleSlug: slugPart(refereeClaims, 1) }, () =>
         runRefereeClaims(slugPart(refereeClaims, 1), res),
       );
+      return;
+    }
+    if (refereeScan && req.method === "GET") {
+      const slug = slugPart(refereeScan, 1);
+      /* **Ask whose article this is before reading a byte of it**, exactly as
+         `sendSource` does and for the same reason: this route reads the
+         reader's original manuscript off disk or out of the bucket, and the
+         Postgres reader's own `ownedSlug` filter is the second refusal rather
+         than the only one. tests/owner-isolation.test.ts pins that ordering
+         there; tests/referee-scan-route.test.ts pins it here. The answer is
+         discarded — it is asked as a question. */
+      await shelfStore.read(slug);
+      /* **No `withSpendAttribution`**, and its absence is the point rather than
+         an omission: this is the one thing in Referee mode that calls no model.
+         It is deterministic, free, and it reports without deciding anything —
+         see src/injection-scan.ts § *It reports. It does not decide.*
+
+         It can take several seconds on a large paper, which is why the panel
+         fetches it beside the band rather than in front of it: the band opens
+         at once and this lands when it lands (src/web/useSourceScan.ts). */
+      const { scan } = await scanArticleSource(slug);
+      /* **`scan: null` is "this article kept no source document"**, and it is
+         sent rather than turned into a 404 because the two mean different
+         things to a referee: a 404 says *no such paper*, and this says *there
+         is nothing here to check, so a clean report would be a lie*. A dangling
+         reference is neither — `loadSource` throws a 500 for that, above. */
+      send(res, 200, { scan });
       return;
     }
     if (refereeMirror && req.method === "POST") {

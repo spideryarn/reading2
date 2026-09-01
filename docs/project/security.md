@@ -890,6 +890,21 @@ white-on-white and near-match colours, zero and near-zero font sizes, `display:n
 including the **tag characters**, U+E0000–U+E007F, which are a copy of ASCII that renders as
 absolutely nothing and which the scan decodes back into the sentence they spell.
 
+**Since 2026-09-01 something calls it.** For a day it was a module with a corpus and no caller,
+which is a defence in the same sense a fire extinguisher in a locked cupboard is one — GPT Sol's
+review of the built code said so
+([260831an-referee-mode-code-review-sol.md](../plans/260831an-referee-mode-code-review-sol.md),
+finding 2). The path is now `GET /api/referee/scan/:slug` →
+[`src/source-scan.ts`](../../src/source-scan.ts) → `scanRawSource`, over the document `loadSource`
+hands back, with the answer drawn in the Referee band by
+[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx). It reads the **raw source**
+rather than the extracted blocks on purpose: extraction throws hidden text away with everything else
+it does not keep, so a scan of the blocks would report a clean paper about a hostile one. It is at
+the **mode** level and not inside a sub-mode, because a hidden instruction bears on all four of
+them. It calls no model and costs nothing, so it is the one route under `/api/referee/` with no
+spend attribution round it — and, like every route that reads somebody's original manuscript, it
+asks `shelfStore.read` whose article it is before it reads a byte.
+
 Three properties, and each is a decision rather than an implementation detail:
 
 - **It runs before the model, not by it.** The first draft of Referee mode made this a *criterion* —
@@ -932,7 +947,10 @@ a clean result means less than it looks:
 
 Every one of those is named in the result: `blindSpots` is **never empty** (`approximated-cascade`
 is always on it), so the list of what was not checked travels with the findings instead of being
-something a reader has to remember.
+something a reader has to remember — and the panel prints it beside every clean result rather than
+behind a disclosure, which is the half a type cannot enforce.
+`tests/source-scan-notice.test.tsx` is where that, the PDF branch, and the sorting of labelled
+findings are held; each was watched red against a mutated panel before it was believed.
 
 The scan is also **not** what stops an injected instruction from working. Nothing does. It is a way
 for a referee to find out that somebody tried.

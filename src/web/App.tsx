@@ -69,6 +69,12 @@ import { ClaimsBand } from "./ClaimsPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
 import { MirrorBand } from "./MirrorPanel.js";
 import { CandidatesBand } from "./CandidatesPanel.js";
+/* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
+   the deterministic scan of the document's own source, drawn above the chips
+   because a hidden instruction bears on all four panels. src/injection-scan.ts
+   is the scanner and it calls no model. */
+import { SourceScanNotice } from "./SourceScanNotice.js";
+import { useSourceScan } from "./useSourceScan.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
@@ -4452,6 +4458,10 @@ function RefereeBand({
 }) {
   useRenderCount("RefereeBand");
   const [view, setView] = useQueryState("referee", refereeParam);
+  /* Held by the band rather than by a panel: the answer is about the document,
+     not about a sub-mode, and a hook inside `RefereeSubMode` would re-run the
+     scan every time the referee pressed a different chip. */
+  const scan = useSourceScan(slug);
 
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
@@ -4466,6 +4476,14 @@ function RefereeBand({
         <p>{REFEREE_TEXT_ALREADY_SENT}</p>
         <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
       </div>
+
+      {/* **Above the chips, and outside `.ref-panel`**, so it is on screen
+          whichever sub-mode is open — rule 5 says the scan runs before anything
+          else, and a fifth chip would have made it one more thing a referee can
+          fail to press. It is fetched beside the band rather than in front of
+          it: the scan takes hundreds of milliseconds on a short paper and about
+          nine seconds on a large one, and nothing here waits for it. */}
+      <SourceScanNotice state={scan} />
 
       <RefereeViews view={view} onView={(next) => void setView(next)} />
 

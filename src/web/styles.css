@@ -6128,6 +6128,88 @@ td.text.has-hit[data-hues="8"] {
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
 
+/* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
+   confidentiality notice and the sub-mode chips because it belongs to the mode
+   rather than to a panel: a hidden instruction is a fact about the document.
+
+   Styled as a notice, not as an error, for the same reason `.ref-notice` above
+   is: most articles have nothing in them and the ordinary state of this box is
+   a sentence saying what was and was not checked. `.ref-scan-warn` takes full
+   `--ink` rather than a colour — *not checked at all* is neither a finding nor a
+   failure, and a red box would make a referee read it as one and dismiss it.
+
+   The list is capped and scrolls. `MAX_FINDINGS` is 100, and a badly built HTML
+   export really can produce that many; a band whose first screen is a wall of
+   navigation chrome is a band a referee stops reading, which is the failure
+   src/injection-scan.ts is most afraid of. */
+.ref-scan {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-scan-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ref-scan-line {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.ref-scan-line + .ref-scan-line { margin-top: 0.4rem; }
+.ref-scan-warn { color: var(--ink); }
+/* The cap notice and the forgeability sentence: true, and not the thing being
+   read first. */
+.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: 0.72rem; }
+
+.ref-scan-list {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  list-style: none;
+}
+/* One block per finding, every field on its own line, because a referee reading
+   this is going to go and look at the source and needs the path and the words
+   separately. */
+.ref-scan-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+/* **Dimmed, never hidden.** The `ordinary` label is read off class names and is
+   therefore forgeable, so a labelled finding is sorted last and drawn quieter —
+   and it is still here, with its own words on screen. docs/project/security.md. */
+.ref-scan-item.explained { opacity: 0.7; }
+.ref-scan-kind { color: var(--ink); font-weight: 600; }
+.ref-scan-tag { color: var(--ink-faint); font-style: italic; }
+.ref-scan-where, .ref-scan-detail {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+/* The words themselves, which is the thing the referee actually needs to see. */
+.ref-scan-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+/* Why this one may be innocent — required on the type for a visible
+   instruction, and drawn so it cannot be read with the certainty hidden text
+   earns. */
+.ref-scan-caveat { color: var(--ink-faint); }
+
 /* The sub-modes. Deliberately the same shape as the summary panel's depth
    pills and the quotes panel's order buttons, because it is the same gesture:
    one of these is on, you press another, the panel below changes. The markup is

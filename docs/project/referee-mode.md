@@ -37,13 +37,20 @@ transcript. It is a third `ThreadKind` on chat's own machinery
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
 its four rules is enforced, and for the two that are only half-enforceable.
 
-**Two things are built and not connected**, and both are the kind of thing that looks finished from
-a test file:
+**The deterministic injection scan is wired**, as of 2026-09-01, and it is the one part of the mode
+that calls no model. For a day it had a fixture corpus, 82 passing tests and **no production
+caller**, which the cross-family review put plainly: *"it does not run before a model, its findings
+cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothing found'."*
+`GET /api/referee/scan/:slug` now runs it over the stored **raw source**
+([`src/source-scan.ts`](../../src/source-scan.ts)), and
+[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer at the
+**mode** level — above the sub-mode chips, on screen whichever panel is open — because a hidden
+instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
+alike. Rule 5 below says where each of its rules is enforced.
 
-- The deterministic injection scan ([`src/injection-scan.ts`](../../src/injection-scan.ts)) has a
-  fixture corpus and passing tests, and **no production caller**. It does not run before a model,
-  its findings cannot reach a referee, and its `coverage` cannot stop a panel saying "nothing
-  found". Rule 5 below describes a defence that is not yet in the path.
+**One thing is built and not connected**, and it is the kind of thing that looks finished from a
+test file:
+
 - The `comments.criterionId` and `comments.valence` columns **now cross the application boundary**,
   as of 2026-09-01: `Comment` and `NewComment` carry them, `POST /api/comments/:slug` accepts and
   validates them, and both stores write and read them. So the referee's *own* judgement — the
@@ -419,11 +426,37 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    only cheap rule fires on every decorative element. [security.md](security.md) has the full list
    of what it cannot see, which matters more than what it can.
 
-   **Nothing in the mode calls it yet**, so rule 5 describes a defence that is not in the path. It
-   is written, tested against a fixture corpus and a smoke test over fourteen real articles, and it
-   is dead code until it is wired — which is the honest state and the next piece of work. It also
-   takes about 22 seconds on a large article, so its home is a cached artefact keyed on the source
-   hash, not a request path.
+   **Where it runs, and where a referee reads it.** `GET /api/referee/scan/:slug` →
+   [`src/source-scan.ts`](../../src/source-scan.ts) → `scanRawSource`, over the document `loadSource`
+   hands back — the **raw source**, never the extracted blocks, because extraction throws hidden
+   text away with everything else it does not keep. The panel is
+   [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn by
+   [`RefereeBand`](../../src/web/App.tsx) above the sub-mode chips rather than as a fifth chip: rule
+   5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
+   opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
+   because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
+   one.
+
+   **Four rules, and each is code rather than an intention.** A PDF says *not checked at all* and
+   can never say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no
+   `findings` to count. `blindSpots` is printed beside every clean result, never behind a
+   disclosure. A finding wearing an `ordinary` label is **sorted last and still drawn**, with the
+   sentence saying the label is read off class names and is therefore forgeable. And a
+   `visible-instruction` prints its required `caveat`, because hidden text has no innocent
+   explanation and visible text usually does. `tests/source-scan-notice.test.tsx` holds all four,
+   `tests/referee-scan-route.test.ts` holds the wire, and `tests/source-scan.test.ts` holds the
+   cache.
+
+   **The result is cached in memory on the sha256 of the bytes that were scanned, and nowhere
+   else.** That is a decision rather than a stage on the way to a table, and the reasoning is on
+   [`src/source-scan.ts`](../../src/source-scan.ts): the scan costs no money and is deterministic,
+   so a cache miss is CPU rather than a different answer; a *durable* cache would need a scanner
+   fingerprint somebody has to remember to bump, which is the bug
+   [`src/pdf-read.ts`](../../src/pdf-read.ts) shipped and wrote up; and a result that cannot outlive
+   the code that made it cannot go stale. If a cold scan ever proves too slow in production the next
+   step is a **pipeline artefact produced at ingest**, not a bespoke table. Unlike Claims, nothing
+   here is store-shaped, so a Postgres deployment gets a real scan rather than a `notMigrated`
+   refusal.
 6. **Confidentiality**, below.
 
 ## Confidentiality: exact, and unflinching about the tense
@@ -510,7 +543,11 @@ feedback of this shape*, which is a different question from how confident anyone
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
   [`src/referee-claims.ts`](../../src/referee-claims.ts),
   [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.
-- [`src/injection-scan.ts`](../../src/injection-scan.ts) — the deterministic scan.
+- [`src/injection-scan.ts`](../../src/injection-scan.ts) — the deterministic scan, and
+  [`src/injection-scan-types.ts`](../../src/injection-scan-types.ts), the one declaration of its
+  answer that both the server and the browser import.
+  [`src/source-scan.ts`](../../src/source-scan.ts) calls it and caches it;
+  [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) is what a referee reads.
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.
 - [search.md](search.md) — the machinery Criteria is built on.

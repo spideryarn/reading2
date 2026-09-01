@@ -274,6 +274,21 @@ const SHARED = new Set([
      See src/referee-candidates.ts and
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4. */
   "referee-candidates.js",
+  /* What the deterministic injection scan answers with — the finding kinds, the
+     `ordinary` labels, the blind spots, and the union that says whether anything
+     was examined at all. On the list because it imports **nothing at all**: it
+     is a `.ts` of type declarations only, on the model of `public-types.js` and
+     `referee-mirror-types.js` above, and it exists because of this test rather
+     than in spite of it — the scanner itself parses documents with jsdom.
+
+     The browser needs it for the reason `sketch-scene.js` is here, and with more
+     riding on it than any of them: `SourceScan.findings` exists **only** on the
+     examined arm, so a PDF — which is not scanned at all — cannot be rendered
+     from `findings.length` as a clean bill of health. A second declaration under
+     `src/web/` would be a second answer to *did we look*, and the looser one
+     would be the one a referee reads.
+     See src/injection-scan-types.ts and docs/project/referee-mode.md § rule 5. */
+  "injection-scan-types.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

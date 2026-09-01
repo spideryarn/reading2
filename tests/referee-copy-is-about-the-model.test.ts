@@ -80,6 +80,15 @@ const REFEREE_SURFACES = [
      phrase list below does not catch that one, so `ALL_DROPPED` and
      `NO_NAMES_YET` are checked as values in their own block further down. */
   "src/web/CandidatesPanel.tsx",
+  /* **The source scan joined on 2026-09-01**, and it is the one surface here
+     whose null result comes from no model at all — src/injection-scan.ts is
+     deterministic. It is on the list anyway, because the failure it can produce
+     is the same one in a worse place: a referee reading *nothing found* as *this
+     manuscript is clean*, when what was actually checked was one HTML string
+     with the cascade approximated, no stylesheet fetched, no script run and a
+     PDF not opened at all. The phrases below are the wrong sentences for it too.
+     tests/source-scan-notice.test.tsx holds the rules that are its own. */
+  "src/web/SourceScanNotice.tsx",
 ];
 
 /**
