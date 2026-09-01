@@ -27,8 +27,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`, `tunnel`,
-  `forget-key`. `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`,
+  `tunnel`, `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
@@ -43,6 +43,11 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list.
   Split out so it can be tested without a network:
   [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
+- [`scripts/gjd-remote-resume-all.ts`](../../scripts/gjd-remote-resume-all.ts) — `resume-all`: one
+  new iTerm tab per session, each attached to its own. The AppleScript, and which of it may be
+  retried. Split out so the scripts and the guards can be asserted without a terminal:
+  [`tests/gjd-remote-resume-all.test.ts`](../../tests/gjd-remote-resume-all.test.ts). The reasoning
+  is in [../plans/260901f-gjd-remote-resume-all-opens-every-session-in-its-own-iterm-tab.md](../plans/260901f-gjd-remote-resume-all-opens-every-session-in-its-own-iterm-tab.md).
 - [`scripts/gjd-remote-tab.ts`](../../scripts/gjd-remote-tab.ts) — which iTerm tabs are on the box,
   below. Split out so the byte sequences and the guards can be tested without a terminal:
   [`tests/gjd-remote-tab.test.ts`](../../tests/gjd-remote-tab.test.ts). The paint/un-paint lifecycle
@@ -138,6 +143,14 @@ iTerm 3.6.6 has no tab-colour property in its dictionary at all.
 
 The reasoning, the options passed over, and how it was checked against a live terminal are in
 [../plans/260831ae-gjd-remote-iterm-tab-colour.md](../plans/260831ae-gjd-remote-iterm-tab-colour.md).
+
+`gjd-remote resume-all` opens one new tab per session on the box and types `gjd-remote resume <name>`
+into each, so every tab paints itself by the mechanism above rather than a second one — which is why
+a tab is its profile colour for the second or two before mosh connects. It has to drive iTerm rather
+than write to its own tab, so AppleScript is unavoidable there, and everywhere the colour merely
+skips itself, `resume-all` refuses outright and says which condition it was. It leaves
+**already-attached** sessions alone, because `resume` runs `tmux attach -d` and taking a session over
+blanks the tab you already had it in; `--include-attached` says you meant it.
 
 ## The status line
 

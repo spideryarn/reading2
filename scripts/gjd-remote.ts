@@ -51,6 +51,18 @@ import {
   colourSequence,
   wantedColour,
 } from "./gjd-remote-tab.js";
+import {
+  type Here,
+  isSessionUuid,
+  newTabScript,
+  openTabsRefusal,
+  parseHere,
+  planTabs,
+  resolveScript,
+  resumeCommand,
+  selectScript,
+  selfSessionUuid,
+} from "./gjd-remote-resume-all.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
@@ -873,6 +885,129 @@ function cmdLs(): void {
       }`,
     );
   }
+}
+
+/**
+ * Run one AppleScript, with its data in argv and never in the script text.
+ *
+ * Interpolating a shell variable into a quoted AppleScript literal is an
+ * injection hole: a `"` in the value closes the literal and the rest runs AS
+ * AppleScript. Nothing here builds a script around a value.
+ *
+ * `retry` is for the read-only walks only. A walk over every window can be
+ * invalidated by a peer closing a tab mid-flight — AppleScript raises -1719 and
+ * aborts the whole script — and the only cure is to run it again. That cure is
+ * poison for the script that creates a tab, which is why that one is addressed
+ * by window id and never retried.
+ *
+ * stderr is folded into stdout so a permission failure (-1743) can be reported
+ * rather than swallowed. Every caller therefore validates the SHAPE of what
+ * comes back instead of trusting it.
+ */
+function osa(script: string, args: string[], opts: { retry: boolean }): { ok: boolean; out: string } {
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync("osascript", ["-", ...args], { input: script, encoding: "utf8" });
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+    const transient = /-1719|Invalid index|-1728/.test(out);
+    if (r.status === 0 || !opts.retry || !transient || attempt >= 3) return { ok: r.status === 0, out };
+    // Deliberately blocking: this is a whole-tree race that clears in
+    // milliseconds, and there is nothing else for this process to do.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
+  }
+}
+
+/**
+ * The `gjd-remote` to type into a new tab.
+ *
+ * Resolved to an absolute path here rather than left as a bare name, because
+ * the tab gets a fresh login shell whose PATH is not necessarily this one's.
+ * `GJD_REMOTE_BIN` overrides it; the last resort is this very checkout, run the
+ * way the shim in ~/bin runs it — absolute both times, because `npx tsx`
+ * resolves tsx from the CURRENT directory and a new tab starts in the home
+ * directory.
+ */
+function resumeBin(): string {
+  const override = process.env.GJD_REMOTE_BIN;
+  if (override) return shq(override);
+  const which = spawnSync("command", ["-v", "gjd-remote"], { encoding: "utf8", shell: true });
+  const found = (which.stdout ?? "").trim().split("\n")[0] ?? "";
+  if (which.status === 0 && found.startsWith("/") && existsSync(found)) return shq(found);
+  return `${shq(path.join(REPO, "node_modules/.bin/tsx"))} ${shq(path.join(REPO, "scripts/gjd-remote.ts"))}`;
+}
+
+/**
+ * A tab per session, each one attached to it.
+ *
+ * The colour is not set here. Every tab is handed the ordinary
+ * `gjd-remote resume <name>` line and paints itself violet the way it does when
+ * you type it — one mechanism for "this tab is on the box", in
+ * scripts/gjd-remote-tab.ts, rather than a second one that could disagree.
+ *
+ * Order of operations, and each part is load-bearing:
+ *  1. read the box's sessions FIRST, so a box that is down costs nothing and
+ *     opens no tabs;
+ *  2. find my own window, and which tab is selected in it, BEFORE creating
+ *     anything — `create tab` selects the new tab, so afterwards `current tab`
+ *     is already the new one and "restoring" it is a no-op that looks like a fix;
+ *  3. one tab at a time, stopping at the first failure rather than spraying;
+ *  4. put the keyboard back.
+ */
+function cmdResumeAll(opts: { includeAttached: boolean; transport?: "ssh" | undefined }): void {
+  const refusal = openTabsRefusal(process.env, Boolean(process.stdout.isTTY));
+  if (refusal) {
+    die(
+      `resume-all opens iTerm tabs, and I cannot: ${refusal}.\n` +
+        `  'gjd-remote ls' lists the sessions; 'gjd-remote resume <name>' attaches to one here.`,
+    );
+  }
+  const me = selfSessionUuid(process.env);
+  if (!me) return die("ITERM_SESSION_ID is unset or malformed"); // openTabsRefusal already checked; this is for the types.
+
+  const plan = planTabs(adoptTitles(sessions()), { includeAttached: opts.includeAttached });
+  for (const s of plan.skipped) console.log(dim(`skipped ${s.name} — ${s.why}`));
+  if (plan.open.length === 0) {
+    console.log(dim(plan.skipped.length > 0 ? "nothing left to open." : "no sessions. `gjd-remote new-claude` to start one."));
+    return;
+  }
+
+  const resolved = osa(resolveScript(), [me], { retry: true });
+  const here: Here | undefined = resolved.ok ? parseHere(resolved.out) : undefined;
+  if (!here) {
+    die(
+      `could not find my own iTerm window (session ${me}).\n` +
+        (resolved.out ? `  osascript said: ${resolved.out}\n` : "") +
+        `  If this is a permissions problem, System Settings → Privacy & Security → Automation.`,
+    );
+  }
+
+  const bin = resumeBin();
+  const opened: string[] = [];
+  for (const name of plan.open) {
+    // No retry: this creates a tab, and a retried create is two tabs for one
+    // session. It addresses the window by id, so the -1719 that retries exist
+    // for cannot arise here.
+    const made = osa(newTabScript(), [String(here.windowId), resumeCommand(bin, name, opts.transport), "0.4"], {
+      retry: false,
+    });
+    if (!made.ok || !isSessionUuid(made.out)) {
+      console.error(red(`✗ opening a tab for ${name} failed: ${made.out || "no output"}`));
+      break;
+    }
+    opened.push(name);
+    console.log(`${green("✓")} ${name}`);
+  }
+
+  // Last, and unconditional: a run that stopped halfway has stolen the keyboard
+  // just as thoroughly as one that finished.
+  const back = osa(selectScript(), [here.selectedSession], { retry: true });
+  if (!back.ok) console.error(dim(`could not select the tab you were in: ${back.out}`));
+
+  const missed = plan.open.length - opened.length;
+  console.log(
+    missed === 0
+      ? dim(`${opened.length} tab${opened.length === 1 ? "" : "s"} — each attaches on its own; they go violet as they connect.`)
+      : red(`${opened.length} of ${plan.open.length} opened; ${missed} not started.`),
+  );
 }
 
 /**
@@ -2032,6 +2167,8 @@ ${bold("SESSIONS")}
   new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
   resume [name]           reattach; with no name, the most recent session
+  resume-all              one new iTerm tab per session, each attached to its own
+      --include-attached    take over sessions something else is already in
   kill <name>             end a session
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
@@ -2178,6 +2315,14 @@ ${bold("WHICH TABS ARE ON THE BOX")}
   back to your profile when it lets go. It is skipped, silently, anywhere the
   sequence might be printed instead of obeyed: not a terminal, not iTerm, or
   inside tmux or screen.
+  ${dim("resume-all")} opens the tabs and types ${dim("gjd-remote resume <name>")} into each, so every
+  one paints itself the same way — there is no second colouring mechanism. It
+  needs to drive iTerm rather than write to its own tab, so it refuses outright
+  in all of those places instead of carrying on uncoloured, and it leaves
+  ALREADY-ATTACHED sessions alone: attaching detaches whoever is there, which
+  would blank the tab you already had it in. ${dim("--include-attached")} to say you meant it.
+  The tab you were in gets the keyboard back at the end, but not during — the
+  new tab steals it each time, so let it finish before typing.
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
@@ -2252,6 +2397,21 @@ function main(): void {
         die(`no session '${name}'. Live: ${live.map((x) => x.name).join(", ") || "none"}`);
       }
       return attach(name, rest.includes("--ssh") ? "ssh" : undefined);
+    }
+
+    case "resume-all": {
+      const { values } = parseArgs({
+        args: rest,
+        allowPositionals: false,
+        options: {
+          "include-attached": { type: "boolean", default: false },
+          ssh: { type: "boolean", default: false },
+        },
+      });
+      return cmdResumeAll({
+        includeAttached: values["include-attached"],
+        transport: values.ssh ? "ssh" : undefined,
+      });
     }
 
     case "kill": {
