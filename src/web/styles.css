@@ -6100,6 +6100,67 @@ td.text.has-hit[data-hues="8"] {
    for the title row and `.gloss-quiet` for the placeholder lines — so this
    section stays the size of what is genuinely new. */
 
+/* **The mode's own preamble — the notice and the scan — capped at 40% of the
+   band and scrolling inside it.**
+
+   Without this the mode was unusable at an ordinary window size, and had been
+   since the scan was wired. `.mode-band` is `position: fixed` with a computed
+   height and `overflow: visible`, so a child that does not fit is neither
+   scrolled to nor clipped: it is simply drawn past the bottom of the band and
+   off the screen, with nothing to say it is there. `.ref-panel` below carried
+   `min-height: 0` — every band's scroller does, or it refuses to shrink — so it
+   was the one child flexbox was willing to squeeze, and it went to **zero**
+   while the boxes above it kept their full content height.
+
+   Measured at 1280 × 720 on an article whose scan found **three** things, which
+   is a small result: head 41 + notice 214 + scan 386 + chips 46 = 687 in a
+   636px band. `.ref-views` started at y=700 in a 720px window, so the sub-mode
+   chips were themselves below the fold, and `.ref-panel` was `height: 0` with
+   321px of content in it. Criteria, Claims, Mirror and Candidates were all
+   unreachable, on every window shorter than about 1400px, and the referee had
+   nothing to scroll because there was nothing scrollable.
+
+   **40% is the number that keeps both halves honest.** The notice is 214px in a
+   400px band, so 40% of 636 = 254px shows all of it without scrolling at
+   1280 × 720 — a first-time referee still meets the confidentiality sentence
+   whole — while leaving `.ref-panel` 295px, which is a panel rather than a
+   sliver. Below that the notice scrolls, and it is still the first thing in the
+   box.
+
+   **Two other fixes were weighed.** A `min-height` on `.ref-panel` alone does
+   not work: nothing above it would give way, so the overflow would move rather
+   than go, and a band that overflows here draws over the dock instead of
+   scrolling. And making the notice collapsible — the most attractive of the
+   three, since after one reading it is 214px of chrome — was already decided
+   against, with reasons, in App.tsx § RefereeBand: it is not dismissible, and
+   remembering that a referee had dismissed it has no right home (localStorage
+   is banned, a column is a migration for a checkbox). A layout bug is not the
+   place to reopen that.
+
+   `.ref-scan-list` keeps its own 14rem cap inside this one. Two nested
+   scrollers is not lovely, but the inner cap is what stops a hundred findings
+   from making this box's scrollbar meaningless, and it is the rule that was
+   already there. */
+.ref-brief {
+  /* Shrinkable, so that on a very short band this box gives way rather than the
+     panel; `.ref-panel`'s flex basis is 0, so all of the shrinking lands here. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  /* **Overflow has to be discoverable**, and here more than anywhere: what is
+     below the fold in this box is the injection scan's findings. Measured in
+     Chrome on 2026-09-01, this scroller's `clientWidth` equals its
+     `offsetWidth` — the scrollbar is an overlay and takes no width, so a box
+     with 616px of content in 254px looks exactly like one that ends where it
+     stops. A trailing fade is the answer this file already gives twice — the
+     table that runs off the right edge
+     (`.reader:has(table.zoom.overflowing)::after`) and `.ctx-panel`'s own mask.
+     It is drawn whether or not there is anything below it, which is the price
+     of a rule that cannot ask. */
+  mask-image: linear-gradient(to bottom, black calc(100% - 1.1rem), transparent);
+}
+
 /* **The confidentiality notice, and the one rule about it is that it is not an
    error.** Nothing has gone wrong: the referee is being told, in the past tense,
    where this article's text has already been, and which manuscripts this mode is
@@ -6249,12 +6310,21 @@ td.text.has-hit[data-hues="8"] {
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
    child inside it — without one the panel's last rows sit below the bottom of
    the band with no way to reach them, and it looks perfectly fine on a tall
-   window. The ideas panel shipped without one; see § ideas mode. There is
-   nothing tall in here yet, and it is here now so that stage 2 does not have to
-   discover it. */
+   window. The ideas panel shipped without one; see § ideas mode.
+
+   **`min-height` is `5rem` and not the usual `0`**, and the pair with
+   `.ref-brief`'s cap above is what makes this band hold at any height. `0` says
+   "squeeze me first", and flexbox obliged: with an unconstrained notice and
+   scan above, this panel was 0px tall on an ordinary 1280 × 720 window and
+   every sub-mode was unreachable. A floor on its own would only move the
+   overflow into the band, which clips nothing; a floor *plus* a shrinkable,
+   scrolling `.ref-brief` gives the band a child that can give way, so at 900 ×
+   337 — a 253px band — the brief drops to 86px and this keeps its 80. It still
+   overrides the `auto` that `min-height: 0` was there to override, so the
+   panel's own content never sets a floor of its own. */
 .ref-panel {
   flex: 1;
-  min-height: 0;
+  min-height: 5rem;
   overflow-y: auto;
 }
 

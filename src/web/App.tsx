@@ -4498,20 +4498,29 @@ function RefereeBand({
         <h2>Referee</h2>
       </div>
 
-      {/* Always, above everything, and before any sub-mode has been pressed.
-          src/messages.ts owns both sentences. */}
-      <div className="ref-notice">
-        <p>{REFEREE_TEXT_ALREADY_SENT}</p>
-        <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
-      </div>
+      {/* **The two things that belong to the mode rather than to a sub-mode**,
+          in one box so that together they can be given a share of the band and
+          made to scroll inside it. They are not merely two siblings that happen
+          to be adjacent: the wrapper is what stops them from pushing the chips
+          and the panel off the bottom of a `position: fixed` band that clips
+          nothing and scrolls nowhere. src/web/styles.css § referee mode,
+          `.ref-brief`, has the measurements. */}
+      <div className="ref-brief">
+        {/* Always, above everything, and before any sub-mode has been pressed.
+            src/messages.ts owns both sentences. */}
+        <div className="ref-notice">
+          <p>{REFEREE_TEXT_ALREADY_SENT}</p>
+          <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+        </div>
 
-      {/* **Above the chips, and outside `.ref-panel`**, so it is on screen
-          whichever sub-mode is open — rule 5 says the scan runs before anything
-          else, and a fifth chip would have made it one more thing a referee can
-          fail to press. It is fetched beside the band rather than in front of
-          it: the scan takes hundreds of milliseconds on a short paper and about
-          nine seconds on a large one, and nothing here waits for it. */}
-      <SourceScanNotice state={scan} />
+        {/* **Above the chips, and outside `.ref-panel`**, so it is on screen
+            whichever sub-mode is open — rule 5 says the scan runs before anything
+            else, and a fifth chip would have made it one more thing a referee can
+            fail to press. It is fetched beside the band rather than in front of
+            it: the scan takes hundreds of milliseconds on a short paper and about
+            nine seconds on a large one, and nothing here waits for it. */}
+        <SourceScanNotice state={scan} />
+      </div>
 
       <RefereeViews view={view} onView={(next) => void setView(next)} />
 

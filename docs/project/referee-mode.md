@@ -622,6 +622,30 @@ front of something already done would itself imply that ticking it makes prohibi
 permissible. A blocking attestation at ingest is a real product question and is Greg's to make, not
 this mode's.
 
+## The band has to fit, and for a day it did not
+
+Both of the boxes above the sub-mode chips are always on screen and neither is collapsible — that is
+the decision above, and it stands. What nobody had checked is what they cost. Measured in Chrome on
+2026-09-01 at **1280 × 720**, an ordinary window, on an article whose scan found **three** things:
+the head 41px + the notice 214 + the scan 386 + the chips 46 = **687px inside a 636px band**. The
+chips started below the fold, `.ref-panel` was **0px tall with 321px of content in it**, and
+`.mode-band` is `position: fixed` with `overflow: visible`, so there was nothing to scroll and
+nothing clipped — Criteria, Claims, Mirror and Candidates were all simply unreachable, on any window
+shorter than about 1400px. Every test was green throughout, because jsdom has no layout engine.
+
+The fix is a `.ref-brief` wrapper around the notice and the scan, capped at 40% of the band with its
+own scroll, and a `min-height` floor under `.ref-panel` so it is no longer the one child flexbox is
+willing to squeeze — [`src/web/styles.css`](../../src/web/styles.css) § *referee mode* carries the
+measurements and the two fixes that were passed over. A referee still meets the whole
+confidentiality notice without scrolling at 1280 × 720; below the notice, the scan is one scroll
+away behind a trailing fade, and the panel keeps 294px. Verified across four sub-modes at seven
+viewport sizes from 1280 × 1400 down to 390 × 560 and 900 × 337.
+
+[`tests/referee-band-fits.test.ts`](../../tests/referee-band-fits.test.ts) holds the half a test can
+reach: the rules exist and say the right thing, and the markup they are aimed at still puts the
+notice and the scan inside the wrapper and the chips and the panel outside it. It is explicit that
+it cannot measure anything, and why a test that tried would have passed before the fix.
+
 ## What the evidence actually says, and where the plan overstated it
 
 Two numbers carry nearly all of the design:
