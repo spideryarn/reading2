@@ -1,0 +1,327 @@
+/**
+ * The narrow column beside every paragraph — see docs/plans/prose-gutter-icons.md.
+ *
+ * Greg, 2026-08-31: *"a very narrow vertical gutter alongside the text …
+ * instead of showing the block-id, show a permalink icon (with tooltip showing
+ * the block-id) … then add a small flag or comment icon next to any blocks that
+ * have a Comment."*
+ *
+ * One governing rule, or a gutter becomes a dashboard: **it is the reader's
+ * column — your marks on this text, and the address of it.** Nothing
+ * machine-generated goes here. Search hits already have the bar down the other
+ * edge of this cell, glossary terms are underlined in place, and a footnote's
+ * marker is the superscript; each of those is the right form for what it says,
+ * and an icon would be a worse duplicate.
+ *
+ * And one grammar, which is what keeps it quiet: **at rest the gutter shows
+ * *state*, on hover it shows *affordances*.** On an article you have never
+ * marked it is empty all the way down until the pointer lands on a row.
+ *
+ * Three slots, top to bottom:
+ *
+ *     1  permalink      every block, on hover
+ *     2  comment mark   only when this block has comments
+ *     3  chat           every block on hover; always when the block has chats
+ *
+ * **Two of them are fixed and the middle one is not**, which is the honest
+ * version of a claim this file used to overstate. The permalink and the chat
+ * button are rendered on every block whether or not they are visible, so
+ * *hovering* never moves anything — which is the property that matters. Adding
+ * or deleting a comment does move the chat button, between the second slot and
+ * the third; that happens when the reader writes something, not when they wave
+ * the pointer at a paragraph. GPT Sol, 2026-08-31.
+ *
+ * **This is also where the chat button finally arrives in the gutter.** Until
+ * today `.block-chat` had no `position` at all, so it was an in-flow box
+ * sitting above the first line of prose at the prose's own left edge — 21px of
+ * height on every block in the article, and a stylesheet full of comments
+ * describing a layout it did not produce. Measured, not read:
+ * docs/postmortems/block-chat-was-never-in-the-gutter.md.
+ */
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Bookmark, Check, Link2, MessageSquare, TriangleAlert } from "lucide-react";
+import type { BlockId, Comment } from "../types.js";
+import { blockHref, blockPermalink, shortBlockId } from "./BlockRef.js";
+
+/** How the last copy went. `idle` is also "the reader has moved on". */
+type CopyState = "idle" | "copied" | "failed";
+
+/** Long enough to read a tick, short enough not to look like a mode. */
+const SETTLE_MS = 1500;
+
+interface Props {
+  id: BlockId;
+  /**
+   * Every comment on this block, in reading order, or absent for none.
+   *
+   * **From `commentsByBlock`, which groups on `blockId` alone** — never from
+   * the resolved marks. A comment whose quoted words were edited away resolves
+   * to nothing and draws no underline in the prose, and the gutter is then the
+   * only place it exists. See comment-nav.ts.
+   */
+  comments?: readonly Comment[] | undefined;
+  /** Conversations anchored anywhere in this block, whole-block or selection. */
+  chatCount: number;
+  onOpenComment(id: string): void;
+  onChatAbout(id: BlockId): void;
+  /**
+   * Go to this block without a page load, writing `?at=` as it goes — App's
+   * own jump, the one every gist cell and arrow key uses.
+   *
+   * The gutter needs it for the two paths where this element has to behave like
+   * the link it says it is: keyboard activation, and a copy that failed. A bare
+   * `<a href>` left to the browser would **reload the reading view**, which
+   * re-fetches the article to arrive at the paragraph already on screen; there
+   * is no global anchor interception in this app (router.ts), so nothing else
+   * would stop it.
+   */
+  onJump(id: BlockId): void;
+  /**
+   * Say something into the table's one live region.
+   *
+   * The tick is invisible to a screen reader, so without this a copy is a
+   * button that does nothing perceivable — silent success with the sign
+   * pointing the other way.
+   */
+  announce(said: string): void;
+}
+
+export function BlockGutter({
+  id,
+  comments,
+  chatCount,
+  onOpenComment,
+  onChatAbout,
+  onJump,
+  announce,
+}: Props) {
+  const [copy, setCopy] = useState<CopyState>("idle");
+  /**
+   * One timer and one token, and both are about the same thing: a clipboard
+   * write is a promise, so its result can arrive after the reader has moved on.
+   *
+   * GPT Sol found two ways that went wrong, 2026-08-31. Click twice and the
+   * *older* write can settle last, replacing the newer tick with its own
+   * result; click and navigate away, and the continuation still calls
+   * `setCopy` and starts a timer after the cleanup has run. `op` is bumped on
+   * every press and checked in every continuation, so a stale one is simply
+   * dropped.
+   */
+  const op = useRef(0);
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (settle.current) clearTimeout(settle.current);
+    };
+  }, []);
+  const later = useCallback((state: CopyState, mine: number) => {
+    if (!alive.current || mine !== op.current) return;
+    setCopy(state);
+    if (settle.current) clearTimeout(settle.current);
+    settle.current = setTimeout(() => {
+      if (alive.current) setCopy("idle");
+    }, SETTLE_MS);
+  }, []);
+
+  /**
+   * Put the whole address on the clipboard.
+   *
+   * **A pointer click copies; every other way of activating this link
+   * navigates.** That is the line GPT Sol drew and it is the right one: the
+   * element announces itself as a link, so Enter from the keyboard — and a
+   * screen reader's own "activate link" — must do what a link does, or the role
+   * and the behaviour disagree for exactly the readers who cannot see which
+   * they got.
+   *
+   * **`pointerType` first, `detail` as the fallback**, and the order matters.
+   * `detail === 0` is the classic test and it is *nearly* right: Enter gives 0,
+   * a mouse gives 1, and a touch tap gives 1 — which is what puts a phone on the
+   * copying side, where it belongs, since a phone has no right-click. But
+   * assistive technology that emulates a mouse can produce a `detail` of 1 for
+   * something that was never a pointer at all. `pointerType` is empty on those
+   * and names the device when there is one, so it answers the question being
+   * asked; `detail` covers browsers that do not populate it. Verified with
+   * trusted events: a real click arrives `detail: 1`, a real Enter `detail: 0`.
+   *
+   * "Navigates" means App's own `onJump`, not the browser's default, and the
+   * difference is not pedantic: an unprevented anchor click here **reloads the
+   * reading view** — this app intercepts no links globally — so Enter on a
+   * permalink would re-fetch the whole article to arrive at the paragraph
+   * already under the cursor. `onJump` writes the same `?at=` and moves in
+   * place, which is what `BlockRef` has always done with a plain click.
+   *
+   * A keyboard reader is not left without a way to copy: it is a real `<a>`, so
+   * the context-menu key offers *copy link address*, which copies the resolved
+   * absolute URL. A long press does the same on a phone.
+   *
+   * **The tick waits for the promise.** `writeText` rejects for real reasons —
+   * a document without focus, a permissions policy — and an optimistic tick is
+   * a copy that reports success while the clipboard holds what it held before.
+   * docs/reusable/silent-success.md.
+   *
+   * **A failure says so and does nothing else.** It used to jump, on the
+   * reasoning that `preventDefault` has already run so the cancelled navigation
+   * has to be performed by hand. That was wrong, and Sol's counter-example is
+   * the whole argument: the rejection can arrive *seconds later*, after the
+   * reader has opened a dialog or moved down the page, and a scroll and a
+   * history entry then arrive out of nowhere. A failed copy is a failed copy.
+   */
+  const onCopy = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      // Never let the cell's own jump handler see this, whatever happens next.
+      // `stopPropagation` leaves the browser's behaviour alone, so ⌘-click
+      // still opens its tab.
+      event.stopPropagation();
+      if (event.defaultPrevented) return;
+      /* `MouseEvent` is what React types a click handler with, and a click is
+         in fact a `PointerEvent` in every browser that has them — the DOM lib
+         just does not know it here. Read through a narrow cast rather than
+         widening the handler's type, which would make every other field lie. */
+      const from = (event.nativeEvent as Partial<PointerEvent>).pointerType;
+      const pointer = from ?? (event.detail > 0 ? "mouse" : "");
+      if (!pointer) {
+        event.preventDefault();
+        onJump(id);
+        return;
+      }
+      if (event.button !== 0) return;
+      // Every modified click belongs to the browser: ⌘/ctrl opens a tab, shift
+      // a window, alt downloads. Taking those would be taking away the reason
+      // this is an <a> at all.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      const said = shortBlockId(id);
+      const mine = ++op.current;
+      const failed = () => {
+        later("failed", mine);
+        if (alive.current && mine === op.current) {
+          announce(`Couldn't copy the link to ${said}.`);
+        }
+      };
+      /* A statement, not `navigator.clipboard?.writeText(…)`: where there is no
+         clipboard object the optional chain evaluates to undefined and `.catch`
+         throws on it. ChatPanel.tsx has the long version. */
+      if (!navigator.clipboard) {
+        failed();
+        return;
+      }
+      navigator.clipboard
+        .writeText(blockPermalink(id))
+        .then(() => {
+          later("copied", mine);
+          if (alive.current && mine === op.current) announce(`Copied the link to ${said}.`);
+        })
+        .catch(failed);
+    },
+    [id, announce, later, onJump],
+  );
+
+  const first = comments?.[0];
+
+  return (
+    <div className="blk-gutter">
+      {/* **A real `<a href>`, and that is not negotiable** — BlockRef.tsx makes
+          the argument and it holds here: the status bar says where it goes,
+          right-click offers "copy link address", ⌘-click opens the block in a
+          new tab. A <button> throws all three away, and the third is the one a
+          reader on a phone cannot get any other way.
+
+          What changes is the plain left click: the id used to jump, and jumping
+          to the paragraph you are already hovering was close to a no-op. This
+          slot is for quoting and linking, which is what the id was for too.
+          `BlockRef` still jumps everywhere else — gist ranges, summary entries,
+          chat citations — and is untouched. */}
+      <a
+        className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
+        href={blockHref(id)}
+        /* The tooltip Greg asked for, carrying the full id. `title` rather than
+           the Tooltip component on purpose: that is a Floating UI instance per
+           trigger, and this is one trigger per block on an article that can run
+           to several hundred. It is also what `.block-chat` beside it has
+           always used. */
+        title={
+          copy === "copied"
+            ? `Copied — ${id}`
+            : copy === "failed"
+              ? `Couldn't copy. Use the link's own menu — ${id}`
+              : `${id} — click to copy a link to this paragraph`
+        }
+        /* Names it as the link it is, and carries the full id — which is the
+           condition on using `title` for the hint at all, since a native title
+           is delayed, is not reliably exposed on keyboard focus, and does not
+           exist on touch. */
+        aria-label={`Link to this paragraph, ${id}`}
+        onClick={onCopy}
+      >
+        {copy === "copied" ? (
+          <Check size={12} aria-hidden="true" />
+        ) : copy === "failed" ? (
+          <TriangleAlert size={12} aria-hidden="true" />
+        ) : (
+          <Link2 size={12} aria-hidden="true" />
+        )}
+      </a>
+
+      {/* The reader's mark on this paragraph, and it is *state*, so it is
+          visible whether or not you are on the row.
+
+          A `Bookmark` rather than the flag or speech bubble Greg offered,
+          because comments.md is explicit that a comment *is* a bookmark — the
+          words and the AI answer are both optional — and because a second
+          message-square next to the chat button below would read as a second
+          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
+          uses in the prose, so the gutter and the passage read as one thing. */}
+      {first && (
+        <button
+          type="button"
+          className="blk-cmt"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenComment(first.id);
+          }}
+          title={
+            comments && comments.length > 1
+              ? `Your notes on this paragraph (${comments.length})`
+              : "Your note on this paragraph"
+          }
+          aria-label={
+            comments && comments.length > 1
+              ? `Open your notes on this paragraph, ${comments.length} of them`
+              : "Open your note on this paragraph"
+          }
+        >
+          <Bookmark size={12} aria-hidden="true" />
+          {comments && comments.length > 1 && (
+            <span className="blk-n">{comments.length}</span>
+          )}
+        </button>
+      )}
+
+      {/* Unchanged in behaviour, class and count — it has only moved into a
+          container that positions it. */}
+      <button
+        type="button"
+        className={`block-chat${chatCount ? " has" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onChatAbout(id);
+        }}
+        title={
+          chatCount
+            ? `Chat about this paragraph (${chatCount} already)`
+            : "Chat about this paragraph"
+        }
+        aria-label="Chat about this paragraph"
+      >
+        <MessageSquare size={12} aria-hidden="true" />
+        {/* Every conversation anchored to this block, selections included —
+            counting only the whole-block ones would make the number disagree
+            with the marks sitting beside it. */}
+        {!!chatCount && <span className="block-chat-n">{chatCount}</span>}
+      </button>
+    </div>
+  );
+}

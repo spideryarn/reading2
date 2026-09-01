@@ -2,11 +2,17 @@
  * A block id, drawn the way you want to read one and behaving the way you want
  * to click one.
  *
- * Ids are on screen in five places — the gutter beside every paragraph, the
- * range under a gist in both the table's cells and a column panel, the same
- * range under each entry of the summary panel, and the ids the model cites
- * inside a chat answer or a summary (Cited.tsx) — so they get one component
- * rather than five spans that drift apart.
+ * Ids are drawn as characters in four places — the range under a gist in both
+ * the table's cells and a column panel, the same range under each entry of the
+ * summary panel, and the ids the model cites inside a chat answer or a summary
+ * (Cited.tsx) — so they get one component rather than four spans that drift
+ * apart.
+ *
+ * **The gutter beside every paragraph was the fifth and is no longer one of
+ * them.** Since 2026-08-31 it is a permalink icon with the id in its `title`
+ * (BlockGutter.tsx), which uses `blockHref` below and renders none of this.
+ * The gutter is also the one place a plain left-click no longer jumps, so read
+ * the third bullet as being about the four that are left.
  *
  * Three things it does:
  *
@@ -31,6 +37,9 @@
  * gutter id so a click selected the whole thing, and it cannot coexist with a
  * click that navigates. Right-click → copy gives the URL, which is more useful
  * than the bare id it replaced.
+ *
+ * `blockPermalink` below is the same address with an origin on it, for the one
+ * caller that puts it on the clipboard rather than in an `href`.
  */
 import type { MouseEvent } from "react";
 import { ID_PREFIX } from "../ids.js";
@@ -56,6 +65,19 @@ export function blockHref(id: BlockId): string {
   const params = new URLSearchParams(location.search);
   params.set("at", id);
   return `${location.pathname}?${params}`;
+}
+
+/**
+ * The same address with an origin on the front — what goes on the clipboard.
+ *
+ * `blockHref` returns a path, which is right for an `href` and useless in a
+ * message to somebody else. Its own function rather than an argument to
+ * `blockHref`, so the two callers cannot get the wrong one by omission: a
+ * relative URL pasted into a chat window is not a broken link, it is a link to
+ * whatever host the reader happens to be on, which is worse.
+ */
+export function blockPermalink(id: BlockId): string {
+  return new URL(blockHref(id), location.origin).toString();
 }
 
 interface RefProps {

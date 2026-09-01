@@ -132,7 +132,7 @@ ingest path bypasses the seam, this is not a store-adapter job" — and the cond
 
 **2. A finished job does not put an article on the shelf.** This is the one that decides it, and it
 was missed entirely when the plan was written. `publishRevision` is called only by
-[`src/store/import.ts`](../../src/store/import.ts) and tests. **Nothing in
+`src/store/import.ts` and tests. **Nothing in
 [`src/jobs.ts`](../../src/jobs.ts) or [`src/pipeline.ts`](../../src/pipeline.ts) calls it.** So even
 with perfectly durable artefacts, a green ingest leaves the production shelf unchanged — Sol's
 phrase is "the most dangerous quiet-success case". There is therefore **no route to working imports

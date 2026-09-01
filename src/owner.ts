@@ -218,7 +218,7 @@ export function runAsOwner<T>(owner: OwnerId, fn: () => T): T {
  * and the isolation added on 2026-08-27 would have been dead code that looked
  * like it was working. docs/reusable/silent-success.md.
  *
- * Outside a request — the CLI, the pipeline, `npm run db:import`, a test — the
+ * Outside a request — the CLI, the pipeline, a test — the
  * environment is the only answer there is, and that is unchanged.
  */
 export function currentOwnerId(): OwnerId {

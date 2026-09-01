@@ -335,22 +335,30 @@ describe("readMode, and the mode a shared address asked for", () => {
   });
 
   it("lands an unknown one on the default rather than failing", () => {
-    /* The rule `modeParam` already keeps on the client: a link from a future
-       version, or a pre-2026-08-29 `?mode=toc` link, degrades to the article
-       rather than to an error. `toc` is the real case — it named this very
-       view until the rename. */
+    /* The rule `modeParam` already keeps on the client: a link naming a mode
+       this version has not got degrades to the article rather than to an error.
+
+       **`DEFAULT_MODE`, not the literal `"hierarchy"` it was.** `toc` is in this
+       list as one unrecognised string among six and nothing more. It used to be
+       here as *the* case, because it named the hierarchy until 2026-08-29 and
+       old links carrying it survived on this very rule landing them on a default
+       that happened to be that view. Moving the default to `plain` on 2026-08-31
+       ended that, deliberately — Greg, asked directly: *"I'm not worried about
+       breaking urls — we're in alpha and have no users yet."* What is left is
+       the rule itself, which is worth keeping and is about the default rather
+       than about any particular mode. */
     for (const asked of ["toc", "", "HIERARCHY", "glossary ", "../../etc/passwd", "%zz"]) {
-      expect(readMode(`/read/some-article?mode=${asked}`), asked).toBe("hierarchy");
+      expect(readMode(`/read/some-article?mode=${asked}`), asked).toBe(DEFAULT_MODE);
     }
   });
 
   it("and on the default when the address says nothing about it", () => {
-    expect(readMode("/read/some-article")).toBe("hierarchy");
-    expect(readMode("/read/some-article?at=spya-k3m9qt")).toBe("hierarchy");
+    expect(readMode("/read/some-article")).toBe(DEFAULT_MODE);
+    expect(readMode("/read/some-article?at=spya-k3m9qt")).toBe(DEFAULT_MODE);
     /* A stranger controls this string, and a throw here would be a 500 on an
        address that only wanted a tab title. */
-    expect(readMode("/read/some-article?%")).toBe("hierarchy");
-    expect(readMode("")).toBe("hierarchy");
+    expect(readMode("/read/some-article?%")).toBe(DEFAULT_MODE);
+    expect(readMode("")).toBe(DEFAULT_MODE);
   });
 
   /**
@@ -535,7 +543,7 @@ describe("the older legacy entrances, which must not fire under /read/", () => {
        the server's title is right and must not become a Metadata one. */
     for (const query of ["?slug=other", "?add=https://example.com/x"]) {
       expect(viewFor(query), query).toBe("article");
-      expect(readMode(`/read/an-article${query}`), query).toBe("hierarchy");
+      expect(readMode(`/read/an-article${query}`), query).toBe(DEFAULT_MODE);
     }
   });
 });

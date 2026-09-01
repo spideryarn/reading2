@@ -77,7 +77,7 @@ describe("the job lease and the platform's kill", () => {
    * way to find out.
    *
    * The costs are measurements, not guesses, and each is the worst observed:
-   * `toc` from the ledger, `assets` from a real run against the 10-image
+   * `hierarchy` from the ledger, `assets` from a real run against the 10-image
    * article (7.1s measured, but its 180s cap is what bounds it), and the three
    * cheap steps rounded generously upward.
    */
@@ -100,7 +100,7 @@ describe("the job lease and the platform's kill", () => {
       /* MEASURED 2026-08-30, worst in data/_ai-calls.jsonl: one call, so sum
          and wall clock agree and no grouping argument applies. This is the
          number the whole budget turns on. */
-      toc: 320_400,
+      hierarchy: 320_400,
       /* A CAP, not a measurement — the step's own wall clock. Measured cost on
          the corpus's worst article (10 images) is 7.1s; the cap exists for a
          hanging publisher, where 10 images cost ~151s. */
@@ -121,7 +121,7 @@ describe("the job lease and the platform's kill", () => {
    * `busy`, backs off, and the card catches up when the poll sees it finish.
    * The work lands and the model spend is not thrown away.
    *
-   * **Turning it on would silently make every disconnect fatal**, mid-`toc`,
+   * **Turning it on would silently make every disconnect fatal**, mid-`hierarchy`,
    * with the money already spent — and somebody will one day have an entirely
    * good reason to add it for an unrelated route. It is a one-line change in a
    * file that looks like deployment trivia, with nothing local to warn them.
@@ -140,12 +140,12 @@ describe("the job lease and the platform's kill", () => {
     /* **Wall time per step, grouped by `runId`** — which is the unit the
        deadline actually bounds, and getting that wrong is how this number was
        first derived. From data/_ai-calls.jsonl on 2026-08-30, the longest step
-       any real run has taken is a `toc` of **320.4s in a single call**.
+       any real run has taken is a `hierarchy` of **320.4s in a single call**.
 
        Two corrections worth keeping, because both were reported to other
        sessions before they were checked. `summarise` was cited as 240.3s and
        does **not** belong here: that is ten calls *summed*, and its wall time
-       is 91.3s, because they overlap. And the earlier `toc` figure of "324.0s
+       is 91.3s, because they overlap. And the earlier `hierarchy` figure of "324.0s
        over three calls" was three unrelated runs five hours apart, collapsed
        together by a null slug. Sum a step's calls and you overstate a
        concurrent step and understate nothing; only wall time answers "did this

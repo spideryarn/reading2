@@ -1,6 +1,6 @@
 /**
- * **The reader's eleven middle-band modes, named once, in a module that imports
- * nothing.**
+ * **The reader's thirteen middle-band modes, named once, in a module that
+ * imports nothing.**
  *
  * This vocabulary was in src/web/params.ts, which is where it is used and where
  * its history is. It moved here on 2026-08-30 because a **second** reader of it
@@ -17,16 +17,61 @@
  */
 
 export const MODES = [
+  /* **The article and nothing else** — no band, and no gist columns either.
+     The twelfth to arrive, 2026-08-31, and the only one that is not numbered
+     below, because it is first in the list: it is the default, and it is the way
+     *out* of every other mode, which is the job Greg asked it to do:
+
+     > a (default?) mode that's empty, i.e. where the middle columns are closed
+     > … that can be the first (and largest?) icon in the bottom-bar, to make it
+     > easy for the user to use that to get out of a mode to the text
+     >
+     > — Greg, 2026-08-31
+
+     It is a mode rather than a `?cols=none` preset for one reason: the dock is a
+     radiogroup, and a button in it that is not a mode has no checked state to
+     show, so the reader could not see where they were. That is the same trade
+     this list already made for `hierarchy`, whose own button is what makes the
+     radiogroup honest (src/web/Dock.tsx).
+
+     docs/plans/plain-mode-and-the-way-out.md. */
+  "plain",
   /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
      "Hierarchy" and the code now says the same word. It also ends a collision
      that had lasted as long as the list — `toc` was simultaneously this mode and
      the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
      one word meant two things in one repo. The step keeps the name; the mode
-     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3. */
+     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.
+
+     Superseded on 2026-08-31: Greg reversed the second half, and the pipeline
+     step is being renamed `toc` → `hierarchy` too, so the UI, the code and the
+     database all say one word. The collision is gone rather than resolved in
+     the mode's favour. docs/plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md. */
   "hierarchy",
   "chat",
   "glossary",
   "search",
+  /* The thirteenth, 2026-08-31: the mode for somebody who has been **asked to
+     peer-review** the piece — their own criteria run over it, what the piece
+     promises against where it delivers, and the model reading their review
+     rather than the paper.
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+     **`referee` and not `reviewer`, because `review` is already in this list**
+     further down, and it is a different thing: there the reader says what
+     they took from a piece they have read for themselves. A `reviewer` mode
+     beside a `review` mode is one word meaning two things, which is the exact
+     collision `toc`/`hierarchy` above cost this repo a rename to get out of.
+     `referee` is also what journals call the person, so the word is the plainer
+     one as well as the free one. The plan § The name is `referee`, not
+     `reviewer` records that Greg had not seen it: the button's word is one
+     string in `MODE_LABEL` (src/title-text.ts) and one in `MODES_UI`
+     (src/web/Dock.tsx) if he wants "Reviewer" there instead.
+
+     It sits **after Search** because it is Search's kind of thing — a pass over
+     the piece looking for passages — rather than a restatement of it. Its
+     sub-modes are their own vocabulary, in src/web/referee-views.ts. */
+  "referee",
   "summary",
   "diagram",
   "ideas",
@@ -81,19 +126,33 @@ export type Mode = (typeof MODES)[number];
  * src/web/Dock.tsx, which omits the parameter when it is writing this value. A
  * literal in both would be two copies of one decision, and the copy that drifts
  * is the one that puts a redundant `?mode=` back into every URL.
+ *
+ * **`plain` since 2026-08-31**, and it was `hierarchy` before that. Greg's call:
+ * you land on the article, and reach for a mode when you want one. What it cost
+ * is written up in docs/plans/plain-mode-and-the-way-out.md § Plain as the
+ * default — chiefly that `?mode=hierarchy` now appears in copied URLs where
+ * nothing appeared before, and that the pre-rename `?mode=toc` links which used
+ * to survive on the unknown-value rule no longer land where they meant. Greg,
+ * asked directly, said not to preserve them: *"we're in alpha and have no users
+ * yet"*.
  */
-export const DEFAULT_MODE: Mode = "hierarchy";
+export const DEFAULT_MODE: Mode = "plain";
 
 /**
  * **Is this string one of the modes?** — the guard the server needs and the
  * client already had inside `modeParam`.
  *
  * An unrecognised value is not an error anywhere: `modeParam` parses it to the
- * default so that a link from a future version, or a pre-2026-08-29 `?mode=toc`
- * link, degrades to the article rather than to an error page. The server does
- * the same with this, which is the point of it being one function — a second
- * spelling of "is this a mode" on the server would be a second answer, and the
- * looser one would be the one nobody read.
+ * default so that a link from a future version — or from a past one, naming a
+ * mode since renamed — degrades to the article rather than to an error page. The
+ * server does the same with this, which is the point of it being one function —
+ * a second spelling of "is this a mode" on the server would be a second answer,
+ * and the looser one would be the one nobody read.
+ *
+ * **It is a safety net and no longer a promise about any particular old link.**
+ * It used to carry the pre-2026-08-29 `?mode=toc` links, which worked because
+ * the default happened to be the view `toc` named; moving the default to `plain`
+ * ended that, deliberately (see `DEFAULT_MODE`).
  */
 export function isMode(value: string | null | undefined): value is Mode {
   return value !== null && value !== undefined && (MODES as readonly string[]).includes(value);

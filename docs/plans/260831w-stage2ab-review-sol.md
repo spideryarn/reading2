@@ -41,7 +41,7 @@ The production code appears correct, but two claimed regression protections admi
 
 3. **[P2] The ToC atomicity explanation is false on the filesystem.**
 
-   [toc.ts:1526](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:1526) says all three artefacts “land together or not at all”; [pipeline.ts:1782](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1782) repeats it. But [session.ts:402](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/session.ts:402) correctly states that `fsStoreSession` has no transaction, and its write is sequential.
+   [toc.ts:1526](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:1526) says all three artefacts “land together or not at all”; [pipeline.ts:1782](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1782) repeats it. But [session.ts:402](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/session.ts:402) correctly states that `fsStoreSession` has no transaction, and its write is sequential.
 
    The conversion is safe, but for different reasons:
 

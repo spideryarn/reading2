@@ -19,7 +19,7 @@ label, a claimed heading must exist — are both unsatisfiable against it.
 
 ## The confound, resolved first
 
-A peer was refactoring [`src/toc.ts`](../../src/toc.ts) during the run and the dev server restarted
+A peer was refactoring [`src/toc.ts`](../../src/hierarchy.ts) during the run and the dev server restarted
 eleven times, so some attempts may have run half-saved code. That is why the first thing done here
 was to reproduce on HEAD rather than to read diffs. Both halves reproduce on `93e1cf8`, one of them
 deterministically. The refactor is not involved.

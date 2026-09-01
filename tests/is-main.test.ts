@@ -36,7 +36,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { isMain } from "../src/is-main.js";
 
 /**
- * **The spelling `src/fetch.ts` and `src/toc-flatten.ts` carried**, and that six
+ * **The spelling `src/fetch.ts` and `src/hierarchy-flatten.ts` carried**, and that six
  * other files' comments name as wrong without ever having been run against it.
  * Copied character for character rather than paraphrased: a paraphrase of a bug
  * is a different bug.
@@ -186,7 +186,7 @@ describe("isMain", () => {
   describe("the guards this replaces, and exactly what each one gets wrong", () => {
     const broken: [string, (entry: string) => boolean, string[]][] = [
       [
-        "endsWith(basename) — src/fetch.ts and src/toc-flatten.ts",
+        "endsWith(basename) — src/fetch.ts and src/hierarchy-flatten.ts",
         endsWithGuard,
         [
           "the same basename in another directory, imported rather than started",

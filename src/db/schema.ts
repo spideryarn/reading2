@@ -65,11 +65,16 @@ import {
 
 import { ID_PATTERN } from "../ids.js";
 import type { Assets } from "../assets.js";
+/* Referee mode's stored result shape. It lives in src/referee-criteria.ts
+   rather than src/types.ts because the validator that guarantees it is in the
+   same file, and the two are one decision — see that file's header. */
+import type { RefereeResult } from "../referee-criteria.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
   Citation,
+  FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
   JobStep,
@@ -340,7 +345,7 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`
+ * Only `fetch`, `extract` and `blocks` mint a revision. `hierarchy`, `arc`, `tweets`
  * and `glossary` write their own column onto the revision that is
  * already published, in one `UPDATE`. That weakens the plain reading of
  * "immutable" and it belongs here rather than arriving as a surprise to
@@ -353,9 +358,9 @@ export const articleVisibilityChanges = spideryarn.table(
  * difference — a single-column `UPDATE` is already atomic.
  *
  * **The limit of that licence, which a review found and which the code
- * enforces:** `toc` is not one of the five. It owns `tree` *and* `labels`, and
- * a job that runs `toc` then `arc` would otherwise show every reader the new
- * tree beside the old arc for the length of a model call. So `toc` mints a
+ * enforces:** `hierarchy` is not one of the five. It owns `tree` *and* `labels`, and
+ * a job that runs `hierarchy` then `arc` would otherwise show every reader the new
+ * tree beside the old arc for the length of a model call. So `hierarchy` mints a
  * revision like the structural steps do, and only genuinely independent
  * on-demand artefacts update in place.
  */
@@ -477,7 +482,7 @@ export const articleRevisions = spideryarn.table(
      *
      * **That rule is intent, not a guard. Nothing enforces it today**, and this
      * comment said `publishRevision` did until 2026-08-27, which was simply
-     * untrue: that function checks blocks, the tree, `checkTree` and the `toc`
+     * untrue: that function checks blocks, the tree, `checkTree` and the `hierarchy`
      * run, and has never looked at these two columns. Nothing writes them yet
      * either, so the claim was vacuous rather than merely wrong — there is no
      * revision it could have been false about.
@@ -690,8 +695,8 @@ export const articleRevisions = spideryarn.table(
      * **Not a `nav_label` column on `revision_blocks`, even though the key
      * would fit.** That would give stage 4b write access to stage 3's rows, and
      * a re-run of labels would mutate rows that are otherwise immutable once
-     * the revision is published. `labels.json` is one of the `toc` step's
-     * OUTPUTS (src/pipeline.ts), so its currency rides with the `toc` row in
+     * the revision is published. `labels.json` is one of the `hierarchy` step's
+     * OUTPUTS (src/pipeline.ts), so its currency rides with the `hierarchy` row in
      * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
      * own. Checked against the code, not assumed — an earlier draft of this
      * work had it as a step and would have added a CHECK value for it.
@@ -810,6 +815,27 @@ export const revisionBlocks = spideryarn.table(
      * decide, and `NOTE_ID_PATTERN` is where stage 3 enforces it.
      */
     noteId: text("note_id"),
+    /**
+     * **The authored box this block sits inside** — `Block.context` in
+     * src/types.ts, recognised at stage 2 before Readability deletes the markup
+     * that says so.
+     *
+     * Two columns rather than a membership table, and the reason is that
+     * nothing can produce the case a table would buy: stage 2 collapses a
+     * callout inside a callout into one, so a block has at most one context by
+     * construction. This is also the path `role`, `treatment` and `note_id`
+     * already cut, and a second way to say "this block belongs to an authored
+     * group" is exactly what the work that added these was avoiding. When a
+     * second context type has to co-exist with the first, this becomes
+     * `revision_block_contexts` — with a real case to design against.
+     * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+     *
+     * **Not an address.** Comments, URLs and the tree address block ids, which
+     * are permanent (docs/project/block-ids.md). This is revision-local, and it
+     * is stable across re-runs only so a diff shows real changes.
+     */
+    contextId: text("context_id"),
+    contextType: text("context_type"),
 
     /**
      * The block's prose, as Postgres's full-text type — the home page's search box.
@@ -843,9 +869,20 @@ export const revisionBlocks = spideryarn.table(
     index("revision_blocks_fts").using("gin", t.fts),
     unique("revision_blocks_revision_ordinal").on(t.revisionId, t.ordinal),
     check("revision_blocks_ordinal", sql`${t.ordinal} >= 0`),
+    /**
+     * `callout` joined the list on 2026-08-31 (migration 0033). Widening a
+     * CHECK is the safe direction — every row that satisfied the old one still
+     * satisfies this — but it has to land *before* an article extracted by the
+     * new stage 2 is imported. Blocks are written in one batched statement
+     * inside a transaction (src/store/import.ts, src/store/artifacts-pg.ts), so
+     * the failure is loud and total: the statement is refused and the whole
+     * revision rolls back. It does not leave half an article. `npm run deploy`
+     * migrates before it pushes code, which is the right order.
+     * docs/plans/260831ae-callouts-the-box-the-author-drew.md.
+     */
     check(
       "revision_blocks_kind",
-      sql`${t.kind} in ('heading','text','quote','code','media','caption','other')`,
+      sql`${t.kind} in ('heading','text','quote','callout','code','media','caption','other')`,
     ),
     /**
      * The two closed axes, nullable — so `is null or in (…)`, where `kind`
@@ -853,6 +890,19 @@ export const revisionBlocks = spideryarn.table(
      * by null anyway (`null in (…)` is null, not false, and a CHECK passes on
      * null), so writing the null arm out is documentation rather than logic.
      */
+    /**
+     * The context columns agree with each other, and the type is closed.
+     *
+     * Both-or-neither is the constraint worth having: a `context_id` with no
+     * type is a group nothing can draw, and a type with no id is a claim with
+     * no members. Postgres enforces it for every writer, including the
+     * backfill somebody runs at midnight.
+     */
+    check(
+      "revision_blocks_context",
+      sql`(${t.contextId} is null) = (${t.contextType} is null)`,
+    ),
+    check("revision_blocks_context_type", sql`${t.contextType} is null or ${t.contextType} in ('callout')`),
     check(
       "revision_blocks_role",
       sql`${t.role} is null or ${t.role} in ('footnote','reference','acknowledgment','credit','appendix')`,
@@ -881,6 +931,174 @@ export const revisionBlocks = spideryarn.table(
       columns: [t.articleId, t.blockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
+  ],
+);
+
+/* ----------------------------------------------------- referee criteria -- */
+
+/**
+ * **One criterion a peer reviewer is judging a paper against, and what came
+ * back when it was run over the piece.**
+ *
+ * Reader state, article-scoped, `(article_id, id)` — the same shape as
+ * comments, chat threads and searches, for the same reasons.
+ *
+ * **It sits here, above `comments`, because `comments` references it.** The
+ * natural home is beside `search_runs`, which it is modelled on almost column
+ * for column; a table's definition has to precede anything whose foreign key
+ * names it, and the referee's own mark lives on a comment. See
+ * `comments.criterion_id` below for why the mark is a comment rather than a
+ * table of its own.
+ *
+ * ## It is not `search_runs` with a column added
+ *
+ * The plan for this said `search_runs` "has the right shape already". GPT Sol's
+ * review, finding 6, showed it does not: no criterion kind, no poles, no
+ * citations, no scale — and, the one that would have broken first,
+ * `SearchHit.confidence` is a 0–100 *match strength* whose validator clamps
+ * negatives to zero (`validateHits`, src/search.ts). A signed valence pushed
+ * through that field does not arrive wrong, it arrives as `0`, and every
+ * negative judgement the referee asked for is gone with nothing to see.
+ *
+ * So there are two numbers in this feature and they are never one field.
+ * `results` carries the model's `confidence` (0–100) and, on a `diverging`
+ * criterion, its `valence` (−100…+100); `comments.valence` carries the
+ * *referee's own* placement. All three are separate on purpose, and
+ * src/referee-criteria.ts is where the rules are written down and tested.
+ *
+ * **`results` stays JSONB**, for the reason `search_runs.hits` gives in full: it
+ * is one model call's wholesale output, generated together, replaced together,
+ * never edited one at a time, and the only key splitting it would buy is one
+ * onto `block_identities` that we specifically do not want. The poles and the
+ * scale are *columns*, because docs/project/sql.md says the default is a column
+ * and a blob has to argue for itself — and a pole is a short string the database
+ * can constrain.
+ */
+export const refereeCriteria = spideryarn.table(
+  "referee_criteria",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * **What sort of question this is** — `single`, `diverging` or `literature`.
+     *
+     * A discriminator rather than a flag, because the three differ in what a
+     * *result* carries: `diverging` adds a signed valence, `literature` adds
+     * citations and a search count. `REFEREE_CRITERION_KINDS` in
+     * src/referee-criteria.ts is the same list, and the check below is what
+     * makes it true for every writer rather than only for the ones that went
+     * through that TypeScript.
+     */
+    kind: text("kind").notNull(),
+    /** What the reader typed, in their own words. **Never logged** — it is prose. */
+    criterion: text("criterion").notNull(),
+    /**
+     * **What the two ends of a `diverging` criterion mean, in the referee's own
+     * words.** `pole_against` is −100 and prints as "counts against";
+     * `pole_favour` is +100 and prints as "counts for".
+     *
+     * Null on the other two kinds, and the check below makes that both-or-
+     * neither: a diverging criterion with one pole has a signed number pointing
+     * at nothing, and the panel could not print the direction in words — which
+     * docs/project/colour-scales.md requires, because colour may never be the
+     * only carrier of a good/bad judgement.
+     */
+    poleAgainst: text("pole_against"),
+    poleFavour: text("pole_favour"),
+    /**
+     * **Which diverging ramp this criterion is drawn with**, `rg` or `br`, and
+     * **`rg` — red ↔ green — is the default on purpose.**
+     *
+     * docs/project/colour-scales.md calls `--div-*` (blue ↔ red) "the one to
+     * use", because red–green confusion is what colour blindness overwhelmingly
+     * is. The same page permits `--div-rg-*` under one stated condition: *use it
+     * where the reader already knows which end is which from something other
+     * than the colour — a printed number, a label, a position.* Referee mode
+     * meets that condition by construction — every row prints the rank, the
+     * signed number, the direction in words, and the referee's own mark beside
+     * the model's — and Greg asked for red ↔ green three times.
+     *
+     * **If the panel ever stops printing the direction in words, this default
+     * stops being permitted.** That is the condition, and it is written here as
+     * well as on `DivergingScale` (src/referee-criteria.ts) so that a change to
+     * one has somewhere to find the other.
+     *
+     * The check is deliberately narrow rather than open, unlike
+     * `search_runs.colour`: this is a name for a stylesheet block that either
+     * exists or does not, and an unrecognised one would draw nothing at all.
+     */
+    scale: text("scale"),
+    /** Written before the model is called, so a crash leaves a visible unfinished run. */
+    status: text("status").notNull(),
+    /**
+     * The passages this criterion turned up — a `RefereeResult[]`, discriminated
+     * by `kind`, validated by `validateResults` in src/referee-criteria.ts. Every
+     * one is anchored by `blockId` + `quote` (+ `start` as a disambiguator only),
+     * which is the contract in docs/project/block-ids.md.
+     */
+    results: jsonb("results").$type<RefereeResult[]>().notNull().default([]),
+    model: text("model"),
+    error: text("error"),
+    createdAt: createdAt(),
+    /**
+     * **The article this run was answered against** — `hashBlocks`,
+     * src/source-hash.ts. Same field, same function and same word for it as
+     * `search_runs`, the glossary and the summaries carry, and null counts as
+     * stale for the same reason: not knowing is not the same as knowing it is
+     * fine.
+     */
+    sourceHash: text("source_hash"),
+    /**
+     * **Which attempt is in flight, so a second server cannot kill it.** The
+     * full argument is on `search_runs.attempt_id` and is not repeated; the
+     * short version is that an in-process `Set` of running work is wrong the
+     * moment two processes share a database, which on Vercel is the ordinary
+     * shape rather than an edge case.
+     */
+    attemptId: text("attempt_id"),
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+    /**
+     * **The palette slot the reader picked** — null means "whichever one the
+     * hash gives it". The same column, the same loose bound and the same
+     * reasoning as `search_runs.colour`: the database does not know what colour
+     * a slot is, so a value past the end of the palette is ignored by
+     * `assignSlots` and the row falls back to its automatic hue.
+     *
+     * This is the *categorical* colour that says **which criterion** a mark in
+     * the prose came from. It is not `scale`, which says which way a valence
+     * runs. Sol's finding 7 is that those two must not be the same channel.
+     */
+    colour: integer("colour"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("referee_criteria_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("referee_criteria_kind", sql`${t.kind} in ('single','diverging','literature')`),
+    check("referee_criteria_status", sql`${t.status} in ('pending','done','error')`),
+    check(
+      "referee_criteria_colour",
+      sql`${t.colour} is null or (${t.colour} >= 0 and ${t.colour} < 64)`,
+    ),
+    /* Poles and scale are exactly the diverging kind's, and all three arrive or
+       none of them does. Half a diverging criterion is one that cannot be drawn
+       and cannot be described in words, and it would reach the panel looking
+       fine. */
+    check(
+      "referee_criteria_diverging_shape",
+      sql`(${t.kind} = 'diverging') = (${t.poleAgainst} is not null and ${t.poleFavour} is not null and ${t.scale} is not null)`,
+    ),
+    check("referee_criteria_scale", sql`${t.scale} is null or ${t.scale} in ('rg','br')`),
+    /* An attempt is both columns or neither — see `search_runs_attempt_both`.
+       Half of one is a run that either cannot be swept (no age) or cannot be
+       finished (no id), and both fail by leaving `pending` on screen for ever. */
+    check(
+      "referee_criteria_attempt_both",
+      sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
+    ),
   ],
 );
 
@@ -938,6 +1156,41 @@ export const comments = spideryarn.table(
     attemptId: uuid("attempt_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     createdAt: createdAt(),
+
+    /**
+     * **Which referee criterion this note is answering** — null on an ordinary
+     * reading note, which is every comment written before 2026-08-31.
+     *
+     * Added for Referee mode (docs/plans/260831an-referee-mode-for-peer-reviewers.md).
+     * The referee's own mark **is a comment**: their words, anchored to a
+     * passage, in a table that already has the anchoring discipline, the
+     * gutter, the API and the export. A second store would mean two places to
+     * write about one passage, and Mirror would have to read both.
+     *
+     * It also answers, better than a boolean would, the question of how to tell
+     * a review comment from a reading note: **a comment with a criterion is a
+     * review comment, one without is a reading note.** The distinction falls
+     * out of the data rather than being a separate switch nothing keeps in step.
+     */
+    criterionId: text("criterion_id"),
+
+    /**
+     * **The referee's own placement of this passage on that criterion's scale**,
+     * −100…+100, or null if they wrote prose and did not score it.
+     *
+     * **This is not the model's valence and must never be reconciled with it.**
+     * The model's lives on a `DivergingResult` in `referee_criteria.results`;
+     * this one is the person's. The whole value is in the gap between them —
+     * a passage the referee put at +70 and the model at −40 is a disagreement
+     * about the paper, and it is the row worth opening. Averaging them, or
+     * letting a write of one touch the other, deletes exactly that. See
+     * `valenceGap` in src/referee-criteria.ts.
+     *
+     * Signed, and the check below says so, because the failure this whole
+     * feature was designed around is a signed number travelling through a
+     * field that clamps negatives to zero (`validateHits`, src/search.ts).
+     */
+    valence: integer("valence"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -966,6 +1219,56 @@ export const comments = spideryarn.table(
       name: "comments_identity_fk",
       columns: [t.articleId, t.blockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }),
+    /**
+     * A placement needs something to be a placement *on*. A `valence` with no
+     * `criterion_id` is a number against nothing, and the one thing it could
+     * plausibly be taken for later — "how the reader feels about this passage in
+     * general" — is a feature nobody has asked for and would be a second meaning
+     * for one column.
+     *
+     * The other direction is allowed: a criterion with no valence is a referee
+     * who wrote a sentence about the criterion and did not score it, which is
+     * the ordinary case.
+     */
+    check(
+      "comments_valence_needs_criterion",
+      sql`${t.valence} is null or ${t.criterionId} is not null`,
+    ),
+    check(
+      "comments_valence_range",
+      sql`${t.valence} is null or (${t.valence} >= -100 and ${t.valence} <= 100)`,
+    ),
+    check(
+      "comments_criterion_id_format",
+      sql`${t.criterionId} is null or ${t.criterionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    /**
+     * **`no action`, not `cascade` and not `restrict`** — and the difference
+     * between the last two is the whole reason this comment exists.
+     *
+     * `cascade` is wrong on its face: deleting a criterion would delete the
+     * referee's own sentences about the paper, which are theirs and are not
+     * derived from anything.
+     *
+     * `restrict` says the right thing — you cannot delete a criterion people
+     * have written against — but says it too early. It is checked row by row as
+     * a delete cascades, so deleting the *article* (which cascades into both
+     * this table and `referee_criteria`, in an order Postgres does not promise)
+     * could hit this constraint while the comment rows are still there and
+     * refuse a delete that is entirely legitimate.
+     *
+     * `no action` is the same rule checked at the end of the statement instead.
+     * Deleting a criterion on its own still fails, loudly, with rows to point
+     * at; deleting the article succeeds, because by then neither row exists.
+     * Verified against the local database rather than reasoned about, and the
+     * check is in tests/db-schema.test.ts. It is the same choice
+     * `revision_blocks_identity_fk` above makes, for a related reason.
+     */
+    foreignKey({
+      name: "comments_criterion_fk",
+      columns: [t.articleId, t.criterionId],
+      foreignColumns: [refereeCriteria.articleId, refereeCriteria.id],
     }),
   ],
 );
@@ -1352,9 +1655,9 @@ export const revisionStepRuns = spideryarn.table(
        * the `summary` step runs before it narrows the constraint. It does, in
        * that order.
        *
-       * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
+       * `labels` is deliberately NOT here. `labels.json` is one of the `hierarchy`
        * step's OUTPUTS rather than a step of its own, so its currency rides
-       * with the `toc` row. Verified against src/pipeline.ts rather than
+       * with the `hierarchy` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
       /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
@@ -1364,7 +1667,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','sketch')`,
     ),
     check(
       "revision_step_runs_status",
@@ -1512,7 +1815,7 @@ export const aiCalls = spideryarn.table(
      * column summed across both without this is a number with no meaning.
      */
     wire: text("wire").notNull(),
-    /** Which job made the call: `toc`, `chat`, `embeddings`, … */
+    /** Which job made the call: `hierarchy`, `chat`, `embeddings`, … */
     purpose: text("purpose").notNull(),
     requestedModel: text("requested_model").notNull(),
     /** Which model answered, when the response said. Not always the one asked for. */
@@ -2058,6 +2361,11 @@ export const glossaryLookups = spideryarn.table(
  * exactly one profile per reader, so there is nothing for a second key to
  * distinguish. `src/store/pg-reader.ts` upserts on it — see
  * src/store/pg-lookups.ts for the same shape used for the same reason.
+ *
+ * **It is the reader's row rather than only their prose**, which is what makes
+ * `experimental_since` below belong here rather than in a settings table of its
+ * own: one nullable column on a row that already exists, against a table, a
+ * foreign key and a join, for one switch. Revisit at three or four settings.
  */
 export const readerProfiles = spideryarn.table("reader_profiles", {
   /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
@@ -2065,8 +2373,277 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
   /** Absent (no row) and empty are treated the same by src/profile.ts; this
       column is simply `null` for "never written". */
   profile: text("profile"),
+  /**
+   * **Experimental features: null is off, a timestamp is on since then.**
+   *
+   * A nullable `timestamptz` rather than a `boolean not null default false`, at
+   * Greg's direction and for the reason docs/project/sql.md now states
+   * generally: the same storage carries strictly more of the truth. "On" and
+   * "on since Tuesday" are one column; "on" and a second `experimental_set_at`
+   * beside it are two columns that can disagree.
+   *
+   * Nullable also means **nothing to backfill**: every existing row is already
+   * off, because off is what the absence of a date means. (A `not null default
+   * false` would not have rewritten the table either — Postgres has stored a
+   * constant default as metadata since 11 — but it would have put a value in
+   * every reader's row to mean "nobody ever asked them".)
+   *
+   * `src/store/pg-reader.ts` keeps the *first* date across a re-assertion —
+   * turning it on when it is already on must not move it, or the value answers
+   * "when did the client last send true" instead of "since when".
+   * docs/project/experimental-features.md.
+   */
+  experimentalSince: timestamp("experimental_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* -------------------------------------------------------------- feedback -- */
+
+/**
+ * **A bug report, filed by the reader who is looking at the thing that went
+ * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+ *
+ * Sentry hears about a *throw*. It does not hear about a summary that is subtly
+ * wrong, a column that will not scroll, or a job that reports success and
+ * produces nothing — and docs/reusable/silent-success.md says that last class is
+ * most of what goes wrong here. The reader is the only instrument that detects
+ * those, and this table is the wire from that instrument.
+ *
+ * ## The row is the authoritative report, which is why it holds everything
+ *
+ * A copy also goes to Sentry, and Sentry is the *second* destination: the row is
+ * written first, and its success is what the reader is told about. So the row has
+ * to be the whole report rather than a stub beside it — which is why
+ * `diagnostics` and `screenshot` are stored here as well, and why an earlier
+ * draft that left screenshot storage undecided was refused in review. If part of
+ * a report exists only in Sentry, "the durable row is the report" is false for
+ * that part.
+ *
+ * `mirrored_at` records that Sentry took it. The crash window between the insert
+ * and the mirror is real, small, and accepted rather than engineered away; an
+ * outbox is more machinery than an alpha feedback button is worth, and
+ * `mirrored_at is null` is the query that finds anything stranded.
+ *
+ * ## Three answers, three columns
+ *
+ * *Steps to reproduce*, *what you expected*, *what you saw* are three `text`
+ * columns and not one blob, so "how many reports mention scrolling" is a query
+ * rather than a regex over prose — docs/project/sql.md. All three are nullable
+ * (a reader may leave one blank) and all three are non-empty when present, the
+ * same rule and the same reason as `comments_body_nonempty`: empty and absent
+ * must not be two spellings of one fact.
+ *
+ * ## What is deliberately NOT here
+ *
+ * **The URL.** Not `location.href`, not the query string, not the `/add/`
+ * target. This app's addresses carry `?q=` and `?find=`, which are reader-typed
+ * search text, and `/add/<a whole third-party URL>`, which may carry a token —
+ * and `httpContext` and `urlQueryParams` are already off in both halves of
+ * monitoring so that a URL does not leave. `route_kind` and `slug` are the part
+ * of the location that may, and they are a closed vocabulary and a validated
+ * slug rather than a string that was in the address bar.
+ *
+ * **Article prose.** The diagnostics blob carries block *ids*, never block text
+ * — docs/project/block-ids.md is why an id is enough, and src/monitoring-scrub.ts
+ * is why the text may not go. Greg's own question contains the argument:
+ * *"presumably we already have it in our database"*.
+ *
+ * ## No foreign key on `slug`
+ *
+ * `articles.slug` is unique, so one is possible, and it is wrong. A report is a
+ * historical fact about a moment; deleting the article must not delete the
+ * report of the bug, and must not fail because a report exists. The slug is
+ * recorded as what the reader was looking at, and it is looked up by hand
+ * afterwards.
+ */
+export const feedback = spideryarn.table(
+  "feedback",
+  {
+    /**
+     * **Client-minted, and the idempotency key**, exactly as `comments.id` is:
+     * a double-clicked Save and a retried POST carry the id the browser already
+     * has, so the second one finds the first and files nothing.
+     */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in a custom migration, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * **A snapshot of the gate's email, not a join.** `auth.users` is not ours
+     * and an address can change; what we want months later is the address this
+     * reader had when they wrote to us. Never a value the browser supplied.
+     */
+    reporterEmail: text("reporter_email").notNull(),
+    /** *Steps to reproduce.* */
+    steps: text("steps"),
+    /** *What you expected to see.* */
+    expected: text("expected"),
+    /** *What you saw instead.* */
+    actual: text("actual"),
+    /**
+     * Whether the reader ticked *Send extra diagnostics*, recorded as its own
+     * fact rather than inferred from `diagnostics` being present: "they said yes
+     * and there was nothing to collect" and "they said no" are different
+     * answers, and only one of them is a bug in the collector.
+     */
+    consented: boolean("consented").notNull(),
+    routeKind: text("route_kind").notNull(),
+    /** The article they were on, where there was one. No FK — see the header. */
+    slug: text("slug"),
+    /** `__SPIDERYARN_BUILD_COMMIT__`, so a report names a deploy and its source maps. */
+    buildCommit: text("build_commit"),
+    environment: text("environment").notNull(),
+    /**
+     * `x-vercel-id` for the submit itself — Greg's *"anything else that will
+     * help us correlate it with our Vercel logs"*, and the only thing in this
+     * repo that ties a browser to a line in one.
+     */
+    requestVercelId: text("request_vercel_id"),
+    /**
+     * The opt-in diagnostics, as **one opaque blob**.
+     *
+     * The JSONB exception docs/project/sql.md allows, and here is the sentence
+     * it demands: this is a versioned artefact that only means anything as a
+     * whole, its shape will change, and **no part of it is queried** — the
+     * fields worth pivoting on (the route, the slug, the build, the Vercel id)
+     * are columns beside it, precisely so that nothing ever needs to index into
+     * this. `article_revisions.summary` is the precedent.
+     */
+    diagnostics: jsonb("diagnostics").$type<FeedbackDiagnosticsPayload>(),
+    /**
+     * Which shape `diagnostics` has. A column rather than a key inside the blob,
+     * so an old report can be found without reading every blob — and so there is
+     * one copy of the number rather than two that can disagree.
+     */
+    diagnosticsVersion: integer("diagnostics_version"),
+    /**
+     * A screenshot the reader pasted in — already downscaled, and capped here in
+     * **decoded** bytes because client-side downscaling is not validation.
+     *
+     * `bytea` and not a bucket reference: it is small, it is bounded, and a
+     * reference would give the report a second place to be incomplete.
+     * 400,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
+     * here for the same reason the answer cap is. The filename and content type
+     * are never stored — the route writes a constant pair, so a client-supplied
+     * MIME type or filename can never be forwarded.
+     */
+    screenshot: bytea("screenshot"),
+    /** Null until Sentry took it. See the header on the crash window. */
+    mirroredAt: timestamp("mirrored_at", { withTimezone: true }),
+    sentryEventId: text("sentry_event_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /**
+     * **The composite key IS the idempotency key**, the same shape
+     * `comments` uses for the same reason: the id is minted by a browser, so it
+     * is unique within the thing it was minted for and not globally. One
+     * constraint doing both jobs rather than a surrogate key plus a unique
+     * index that nothing else ever uses.
+     */
+    primaryKey({ columns: [t.ownerId, t.id] }),
+    /** The same CHECK every other minted id is held to — `mintId()`, one regex. */
+    check("feedback_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /**
+     * **The two closed vocabularies, written out by hand** — like
+     * `comments_status` and `checkpoints_namespace` above, and unlike the
+     * temptation.
+     *
+     * `FEEDBACK_ROUTE_KINDS` and `FEEDBACK_ENVIRONMENTS` in src/types.ts are the
+     * same lists, and building these constraints *from* those arrays was tried
+     * and reverted: it would make this file import src/types.ts at **runtime**,
+     * and src/store/public-slug.ts imports this one — so the public read path's
+     * import graph would grow a node, which tests/public-imports.test.ts calls a
+     * regression whatever the node is.
+     *
+     * So the lists are in two places, and the drift is caught **behaviourally**
+     * instead: tests/feedback-store.test.ts files a report under every value of
+     * each union and watches the database take it. A value added to a union and
+     * not to the CHECK below goes red there, at the insert, which is where it
+     * would have hurt.
+     */
+    check(
+      "feedback_route_kind",
+      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
+    ),
+    check(
+      "feedback_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /**
+     * Non-empty when present, and **capped**, on all three answers.
+     *
+     * The cap is the one that matters: it is what stops one paste of an entire
+     * article becoming an attachment on its way to Sentry. In the database as
+     * well as in the route, because a rule enforced in TypeScript holds only for
+     * the callers that went through that TypeScript.
+     *
+     * **4,000 is `MAX_FEEDBACK_ANSWER_CHARS`** in src/types.ts, which is where
+     * the dialog's `maxlength` and the route's refusal read it from. Written out
+     * here rather than imported for the reason the vocabularies above are — and
+     * pinned to that constant behaviourally by tests/feedback-store.test.ts,
+     * which writes exactly the cap and exactly one character more.
+     */
+    check(
+      "feedback_steps_shape",
+      sql`${t.steps} is null or (length(btrim(${t.steps})) > 0 and length(${t.steps}) <= 4000)`,
+    ),
+    check(
+      "feedback_expected_shape",
+      sql`${t.expected} is null or (length(btrim(${t.expected})) > 0 and length(${t.expected}) <= 4000)`,
+    ),
+    check(
+      "feedback_actual_shape",
+      sql`${t.actual} is null or (length(btrim(${t.actual})) > 0 and length(${t.actual}) <= 4000)`,
+    ),
+    /**
+     * **A report with nothing in it is not a report.** The dialog refuses one
+     * too; this is the half that holds for every other writer.
+     */
+    check(
+      "feedback_says_something",
+      sql`${t.steps} is not null or ${t.expected} is not null or ${t.actual} is not null`,
+    ),
+    check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
+    /**
+     * **Diagnostics cannot exist without consent.** The tick-box is the whole
+     * argument for this feature being an exception to
+     * src/monitoring-scrub.ts's rule, so it is a constraint rather than an
+     * intention: a row that carries diagnostics the reader did not agree to is
+     * a state this database does not have.
+     *
+     * The screenshot is deliberately not covered. Pasting a picture into the
+     * box *is* the consent for that picture, and it is a separate act from the
+     * tick-box — gating it on `consented` would refuse a report a reader
+     * knowingly assembled.
+     */
+    check("feedback_diagnostics_consented", sql`${t.consented} or ${t.diagnostics} is null`),
+    /** The blob and its version arrive together or not at all. */
+    check(
+      "feedback_diagnostics_version",
+      sql`(${t.diagnostics} is null) = (${t.diagnosticsVersion} is null)`,
+    ),
+    check(
+      "feedback_screenshot_size",
+      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 400000`,
+    ),
+    /**
+     * An event id without a time it was mirrored would be a row that says Sentry
+     * both did and did not take this. `markMirrored` writes both in one
+     * statement; this is what makes that the only possibility.
+     */
+    check(
+      "feedback_mirrored_pair",
+      sql`${t.sentryEventId} is null or ${t.mirroredAt} is not null`,
+    ),
+    /**
+     * **The rate cap's only query**, and the reason it can be a `count` rather
+     * than a scan: ten reports an hour, per owner, counted over
+     * `(owner_id, created_at)` inside the transaction that is about to insert.
+     * src/store/pg-feedback.ts.
+     */
+    index("feedback_owner_created_idx").on(t.ownerId, t.createdAt),
+  ],
+);
 
 /* ----------------------------------------------------------- checkpoints -- */
 
@@ -2145,7 +2722,7 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
-    check("checkpoints_namespace", sql`${t.namespace} in ('toc-labels','pdf-chunk')`),
+    check("checkpoints_namespace", sql`${t.namespace} in ('hierarchy-labels','pdf-chunk')`),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
      * filesystem adapter turns this string into a **file name**. A key the

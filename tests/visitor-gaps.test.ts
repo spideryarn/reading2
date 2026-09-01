@@ -195,31 +195,42 @@ describe("what a visitor is told, mode by mode", () => {
    * Before it, every mode but `toc` was marked and the only question was which
    * excuse to show. Now a marked button means the reader really cannot open the
    * band — and the sweep is written as a derivation from `MODES` rather than a
-   * list, so a ninth mode is covered whether or not whoever adds it remembers.
+   * list, so an eleventh mode is covered whether or not whoever adds it
+   * remembers.
    */
   it("marks only what a visitor cannot have, and derives that from MODES", () => {
     /* Nothing built: everything but the table of contents is marked, which is
        the old behaviour and still right for an article with no artefacts. */
-    /* `outline` joins `toc` as a mode a visitor always gets: like the table of
-       contents it is drawn from the tree in the payload they already hold and
-       reaches no artefact at all. docs/plans/260828aw-outline-mode.md.
+    /* `outline` joins `hierarchy` as a mode a visitor always gets: like the
+       table of contents it is drawn from the tree in the payload they already
+       hold and reaches no artefact at all. docs/plans/260828aw-outline-mode.md.
 
        **And `summary` joined them on 2026-08-31.** It used to be gated on a
        `summary.json`; the generated ladder is gone and the panel draws the
        tree's own gists, so there is nothing left for a visitor to be missing.
-       docs/plans/260831s-gist-only-summaries.md. */
-    const ALWAYS_FREE: Mode[] = ["hierarchy", "outline", "summary"];
+       docs/plans/260831s-gist-only-summaries.md.
+
+       `plain` is the fourth, and the least expensive of them: it reaches no
+       artefact *and* renders no band — it is the article and nothing else, so
+       there is nothing a visitor could be short of.
+       docs/plans/plain-mode-and-the-way-out.md. */
+    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
         .slice()
         .sort(),
     );
     /* Everything built: the artefact modes drop out, and what is left is
-       the five that spend a model call. `timeline` is the fifth since
+       the six that spend a model call. `timeline` is the fifth since
        2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
-       marked however much has been built. */
+       marked however much has been built — and `referee` is the sixth, the same
+       night, for the same reason. It is marked by `visitorGap`'s fail-closed
+       fall-through rather than by a `COSTS` entry, and that is the arrangement
+       working rather than an omission: a mode arrives owners-only until
+       somebody says otherwise, and this one will spend money in stage 2.
+       docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "review", "search", "timeline"].sort(),
+      ["chat", "diagram", "referee", "review", "search", "timeline"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes"] as const) {
@@ -231,6 +242,7 @@ describe("what a visitor is told, mode by mode", () => {
     for (const mode of MODES) {
       const gap = visitorGap(mode, EVERYTHING_BUILT);
       if (
+        mode === "plain" ||
         mode === "hierarchy" ||
         mode === "outline" ||
         mode === "glossary" ||

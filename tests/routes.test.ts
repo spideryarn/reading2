@@ -379,32 +379,52 @@ describe("the reader routes", () => {
        the panel would then read "no purpose written" off a question nobody
        asked. There is no slug here, so there is no article to have one.
        docs/plans/260830c-profile-panel.md. */
-    expect(r.body).toEqual({ profile: null, purpose: null, purposeFailed: false, hasProfile: false });
+    expect(r.body).toEqual({
+      profile: null,
+      purpose: null,
+      purposeFailed: false,
+      hasProfile: false,
+      /* **Present and null, like `purpose`.** Off is the absence of a date, and
+         a field that is simply missing when the switch is off is the one a
+         boundary drops — leaving a client to read "not sent" as "off" by luck
+         rather than by contract. docs/project/experimental-features.md. */
+      experimentalSince: null,
+    });
   });
 
   it("stores a profile and reads it back", async () => {
     const w = await call("PATCH", "/api/reader", { profile: "  A physicist.  " });
     expect(w.status).toBe(200);
     // Normalised on the way in, so the value stored is the value hashed.
-    expect(w.body).toEqual({ profile: "A physicist." });
+    /* **Both fields, whichever one the body changed.** A reply whose shape
+       follows the request is one a client reads as "the other thing is unset".
+       `routes.ts` § patchReader. */
+    expect(w.body).toEqual({ profile: "A physicist.", experimentalSince: null });
     expect((await call("GET", "/api/reader")).body).toEqual({
       profile: "A physicist.",
       purpose: null,
       purposeFailed: false,
       hasProfile: true,
+      experimentalSince: null,
     });
   });
 
   it("treats null and blank as clearing it", async () => {
     await call("PATCH", "/api/reader", { profile: "A physicist." });
-    expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({ profile: null });
+    expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({
+      profile: null,
+      experimentalSince: null,
+    });
     await call("PATCH", "/api/reader", { profile: "A physicist." });
-    expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({ profile: null });
+    expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({
+      profile: null,
+      experimentalSince: null,
+    });
   });
 
-  it("refuses a body with no profile in it, rather than answering 200", async () => {
-    /* This body has exactly one field, so a request without it meant something
-       else — and a 200 would report a save that did not happen. */
+  it("refuses a body that changes nothing, rather than answering 200", async () => {
+    /* A request naming neither field meant something else — and a 200 would
+       report a save that did not happen. */
     const r = await call("PATCH", "/api/reader", {});
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/Nothing to change/);
@@ -427,6 +447,7 @@ describe("the reader routes", () => {
         purpose: null,
         purposeFailed: false,
         hasProfile: false,
+        experimentalSince: null,
       });
       /* …and the article still has one. `purpose` comes back as the reader's
          own words rather than as a flag, because the panel prints each box
@@ -439,10 +460,100 @@ describe("the reader routes", () => {
         purpose: "the evidence",
         purposeFailed: false,
         hasProfile: true,
+        experimentalSince: null,
       });
     } finally {
       await rm(DIR, { recursive: true, force: true });
     }
+  });
+
+  /* -------------------------------------------- the experimental switch -- */
+
+  it("is off until it is switched on, and says when it was", async () => {
+    const on = await call("PATCH", "/api/reader", { experimental: true });
+    expect(on.status).toBe(200);
+    const since = (on.body as unknown as { experimentalSince: string | null }).experimentalSince;
+    /* A date, not `true`. The column stores when, so the wire carries when —
+       one fact, one spelling, and no boolean beside it to drift out of step.
+       docs/project/experimental-features.md. */
+    expect(since).toBeTypeOf("string");
+    expect(Number.isNaN(Date.parse(since as string))).toBe(false);
+
+    const read = await call("GET", "/api/reader");
+    expect((read.body as unknown as { experimentalSince: string | null }).experimentalSince).toBe(
+      since,
+    );
+  });
+
+  it("does not move the date when it is switched on twice", async () => {
+    /* **The value answers *since when*.** Re-asserting a switch that is already
+       on — a second tab, a double click, a retried request — must not restamp
+       it, or the date silently means "when did the client last send true" and
+       the one question it exists to answer has no answer. */
+    const first = await call("PATCH", "/api/reader", { experimental: true });
+    const since = (first.body as unknown as { experimentalSince: string }).experimentalSince;
+    const again = await call("PATCH", "/api/reader", { experimental: true });
+    expect((again.body as unknown as { experimentalSince: string }).experimentalSince).toBe(since);
+  });
+
+  it("clears the date when it is switched off", async () => {
+    await call("PATCH", "/api/reader", { experimental: true });
+    expect((await call("PATCH", "/api/reader", { experimental: false })).body).toEqual({
+      profile: null,
+      experimentalSince: null,
+    });
+    expect(
+      (await call("GET", "/api/reader")).body as unknown as { experimentalSince: null },
+    ).toMatchObject({ experimentalSince: null });
+  });
+
+  it("keeps the profile and the switch out of each other's way", async () => {
+    /* The regression this pins is a real one that was live for the length of
+       one edit: the filesystem writer built the whole file from its single
+       argument, so saving a profile deleted the switch — and both writes
+       reported success. src/profile.ts § patchReaderFile. */
+    await call("PATCH", "/api/reader", { experimental: true });
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    const body = (await call("GET", "/api/reader")).body as unknown as {
+      profile: string | null;
+      experimentalSince: string | null;
+    };
+    expect(body.profile).toBe("A physicist.");
+    expect(body.experimentalSince).toBeTypeOf("string");
+
+    // …and the other way round: changing the switch must not touch the prose.
+    await call("PATCH", "/api/reader", { experimental: false });
+    expect(
+      ((await call("GET", "/api/reader")).body as unknown as { profile: string | null }).profile,
+    ).toBe("A physicist.");
+  });
+
+  it("refuses to change both halves in one request", async () => {
+    /* Two store operations and no transaction across them: a body carrying both
+       could save the profile, fail on the switch, and answer with an error
+       having already committed half of what it was asked. No client sends both.
+       GPT Sol's review of the built code, 2026-08-31. */
+    const r = await call("PATCH", "/api/reader", { profile: "A physicist.", experimental: true });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/one at a time/);
+    // …and nothing was stored on the way to refusing.
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: null,
+      experimentalSince: null,
+    });
+  });
+
+  it("refuses anything but a boolean for the switch", async () => {
+    /* `"false"` and `0` are exactly what a client sends by mistake, and
+       truthiness would answer both confidently and one of them backwards. */
+    for (const bad of ["true", 1, 0, null]) {
+      expect((await call("PATCH", "/api/reader", { experimental: bad })).status, `${bad}`).toBe(400);
+    }
+    // Nothing was stored on the way past.
+    expect(
+      ((await call("GET", "/api/reader")).body as unknown as { experimentalSince: string | null })
+        .experimentalSince,
+    ).toBeNull();
   });
 
   it("refuses a profile that is not a string or null", async () => {
@@ -458,6 +569,7 @@ describe("the reader routes", () => {
       purpose: null,
       purposeFailed: false,
       hasProfile: false,
+      experimentalSince: null,
     });
   });
 
@@ -489,6 +601,7 @@ describe("the reader routes", () => {
         purpose: null,
         purposeFailed: false,
         hasProfile: false,
+        experimentalSince: null,
       });
     } finally {
       await rm(DIR, { recursive: true, force: true });
@@ -513,6 +626,7 @@ describe("the reader routes", () => {
         purpose: "the evidence",
         purposeFailed: false,
         hasProfile: true,
+        experimentalSince: null,
       });
     } finally {
       await rm(DIR, { recursive: true, force: true });

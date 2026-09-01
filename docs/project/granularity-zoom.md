@@ -55,8 +55,8 @@ invariant makes that literal.
 > We give each paragraph a unique ID. We generate a table of contents that's quite deeply nested —
 > all the way down to a paragraph level.
 
-That deeply-nested ToC and this tree are **the same structure**, not two — see
-[architecture.md § Pipeline](architecture.md#pipeline). The ToC is it rendered as navigation; the
+That deeply-nested table of contents and this tree are **the same structure**, not two — see
+[architecture.md § Pipeline](architecture.md#pipeline). Hierarchy is it rendered as navigation; the
 zoom view is it rendered as text.
 
 The article is a flat sequence of blocks with stable ids (`spya-k3m9qt…`) — see
@@ -95,9 +95,9 @@ interface Node {
   parent: NodeId | null;
   children: NodeId[];      // [] for leaves
   range: [BlockId, BlockId];  // inclusive, contiguous; resolved via the blocks.json index
-  title: string;           // 2–6 words, for the ToC and the spine
+  title: string;           // 2–6 words, for Hierarchy and the spine
   gist?: string;           // ONE sentence — what the level above renders. Absent on leaves.
-  navLabel?: string;       // leaves only — a ToC row's text. Never rendered in the reading view.
+  navLabel?: string;       // leaves only — a Hierarchy row's text. Never rendered in the reading view.
   summary?: string;        // 2–4 sentences, shown on hover/expand, optional
   sourceHeading?: string;  // the author's own heading, if this node came from one
   treatment?: "supplement";   // the apparatus — see below. Authored title, NO gist.
@@ -105,17 +105,17 @@ interface Node {
 ```
 
 **Leaves carry no `gist`, but they do carry a `navLabel`.** These are different things, and keeping
-them separate is what lets the ToC go "all the way down to a paragraph level" without breaking
+them separate is what lets Hierarchy go "all the way down to a paragraph level" without breaking
 [principle 1](vision.md#principles).
 
 - A **gist** is *substitutable prose*. It appears in the reading view **in place of** the text it
   compresses. Leaves never get one, because at the rightmost level the real paragraph is right
   there, and a summary must never be shown where the real sentence could be.
-- A **navLabel** is *a pointer to prose*. It appears only in the ToC and the spine — navigation
+- A **navLabel** is *a pointer to prose*. It appears only in Hierarchy and the spine — navigation
   chrome, never the reading column. Clicking it takes you to the paragraph; it is never displayed
   instead of the paragraph.
 
-Principle 1 asks that "every generated line should be a door, not a wall". A ToC row is definitively
+Principle 1 asks that "every generated line should be a door, not a wall". A Hierarchy row is definitively
 a door: its whole purpose is to be clicked and left behind. The rule that matters is not "leaves
 have no generated text" but **"the reading view never substitutes generated text for prose that
 could be shown"** — and that rule is intact.
@@ -128,7 +128,7 @@ Two consequences worth stating, because they are easy to get wrong:
   they are wildly different, so three words distinguish it. A paragraph has twenty siblings all
   about the same subtopic, so three words do not. An entry needs only enough words to tell itself
   apart from its neighbours — and that demand rises as you descend. See
-  [table-of-contents.md](table-of-contents.md) for the length rules.
+  [hierarchy.md](hierarchy.md) for the length rules.
 
 ### The supplement node
 
@@ -195,7 +195,7 @@ Bottom-up, one pass, precomputed for the whole article and cached.
              (from block text)  (from children)   (from children)   (from children)
 ```
 
-(The leftmost step writes leaves' `navLabel`s — the ToC rows for individual paragraphs. Leaves have
+(The leftmost step writes leaves' `navLabel`s — the Hierarchy rows for individual paragraphs. Leaves have
 no `gist`; the first *gists* appear one level up. See [Node shape](#node-shape).)
 
 Each parent is written from its children's gists and titles, not from the raw text underneath it.
@@ -516,7 +516,7 @@ Three decisions worth keeping:
   table does not leave a gap, it shifts every later cell in the row one column left, so the whole
   view would silently misalign. Every part gets a cell whether or not the arc has words for it.
 - **It is a separate artefact, joined by range.** `arc.json`, not a field on `tree.json`, because
-  the tree is stage 4's and `npm run toc` rewrites it wholesale — anything merged in would vanish
+  the tree is stage 4's and `npm run hierarchy` rewrites it wholesale — anything merged in would vanish
   without a trace on the next run. Entries are matched to parts by block range and never by node id:
   ids are positional, a re-run renumbers them, and matching by index would hand every sentence to
   its neighbour while still looking perfectly plausible. An entry that no longer matches is dropped.

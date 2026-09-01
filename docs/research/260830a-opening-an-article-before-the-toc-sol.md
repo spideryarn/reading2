@@ -164,7 +164,7 @@ Three are plan-changing:
 
 - **Image privacy:** `assets` is in the default precisely to stop the reader’s browser disclosing its IP to publisher CDNs. Opening after blocks or structure but before assets either reintroduces that leak or requires suppressing external images until the manifest arrives. See [pipeline.ts:166](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:166) and [pipeline.ts:1378](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1378).
 
-- **Stage 3 does not publish reader blocks:** it writes `output/<slug>.blocks.json`; the ToC stage copies the matching blocks into `data/<slug>/blocks.json`. A placeholder “at stage 3” must publish both blocks and tree, probably as a separate stage or publication boundary. See [pipeline.ts:1160](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1160) and [toc.ts:826](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:826).
+- **Stage 3 does not publish reader blocks:** it writes `output/<slug>.blocks.json`; the ToC stage copies the matching blocks into `data/<slug>/blocks.json`. A placeholder “at stage 3” must publish both blocks and tree, probably as a separate stage or publication boundary. See [pipeline.ts:1160](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1160) and [toc.ts:826](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:826).
 
 - **No live tree replacement:** an open article holds the fetched `Article` in component state. Neither the completion of structure nor labels currently replaces that payload. This affects A, B, and C, not just polish.
 

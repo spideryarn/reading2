@@ -73,7 +73,7 @@
  *    decision two paragraphs up, and the reversal is narrower than it looks:
  *    what was wrong about mtimes was the *verdict* drawn from them, never the
  *    number. Nothing compares two of these. The staleness question is exactly
- *    as unanswered as it was, and a person reading "toc ran 3 days ago, arc ran
+ *    as unanswered as it was, and a person reading "hierarchy ran 3 days ago, arc ran
  *    in March" can draw the conclusion this page still refuses to draw for them.
  *  - **Where a PDF came from** — `CameFrom`, below. Their Document Information
  *    had a "file type" row and ours never took it, because until 2026-08-26
@@ -112,7 +112,7 @@
  *
  * **Whether anything is stale.** The first version of this page led with a red
  * warning when a later artefact was older than an earlier one. That check is
- * wrong: a *successful* toc run writes `tree.json` and then copies
+ * wrong: a *successful* hierarchy run writes `tree.json` and then copies
  * `blocks.json` beside it, so every correct run tripped it. More deeply, an
  * mtime records when a file was written, not what it was written *from*. Until
  * `tree.json` and `arc.json` carry a hash of the blocks they consumed — the way
@@ -178,6 +178,7 @@ import type {
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
+import { isWebUrl } from "../urls.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -229,7 +230,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   fetch: Download,
   extract: FileText,
   blocks: Blocks,
-  toc: ListTree,
+  hierarchy: ListTree,
   assets: Image,
   arc: Waypoints,
   tweets: ListOrdered,
@@ -694,7 +695,7 @@ export function Metadata({
                     key={stage.step}
                     stage={stage}
                     generator={
-                      stage.step === "toc"
+                      stage.step === "hierarchy"
                         ? `${tree.generator} · ${tree.version}`
                         : stage.step === "arc" && arc
                           ? `${arc.generator} · ${arc.version}`
@@ -1043,6 +1044,21 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
      they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
      other branch says what is actually true: we have no record of one. */
   const uploaded = meta.source === "pdf";
+  /* **We hold an address, and it is not one anybody can follow.** `webSource`
+     refuses anything that is not `http(s)`, because an imported article's
+     metadata goes straight into the row, so a `javascript:` or `data:` value is
+     reachable and an anchor here would be an active URL sink (src/urls.ts,
+     docs/project/security.md; GPT Sol, 2026-08-31, the third of three sinks on
+     this field). A `file://` from `npm run pdf` lands here too.
+
+     **Only the sentence changes; the address itself is never printed.** An
+     earlier version of this line showed the refused value as inert text, on the
+     argument that this is the page whose job is saying what we hold. It is not
+     worth it: the commonest such value is `file:///Users/<somebody>/…`, which is
+     a home directory on a page, and tests/metadata-origin.test.tsx pins that it
+     stays off. What *is* worth keeping is not saying something false — "no web
+     address was recorded" about a row that recorded one. */
+  const unfollowable = Boolean(meta.url && !isWebUrl(meta.url));
   return (
     <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
       {uploaded ? (
@@ -1053,7 +1069,9 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
       <span>
         {uploaded
           ? "Uploaded from a file — there is no web address to go back to."
-          : "No web address was recorded for this article."}
+          : unfollowable
+            ? "The address recorded for this article is not one a browser can follow."
+            : "No web address was recorded for this article."}
       </span>
       {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
           and an uploaded HTML document has nothing a reader would want opened
@@ -1612,7 +1630,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         <Chip icon={Icon} />
         <span className="tw:font-mono tw:text-sm tw:text-foreground">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
-            and the arc, which are in hand because the article loaded — so a toc
+            and the arc, which are in hand because the article loaded — so a hierarchy
             stage whose blocks copy is missing would otherwise print a model
             name next to the words "not run". */}
         {done && generator && (

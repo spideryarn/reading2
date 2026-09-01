@@ -48,7 +48,7 @@ The expensive wrinkle is migration compatibility. You need two key families:
 
 Otherwise target replacement keeps the old block id, or the first post-stage-2 run remints the corpus. Cost: parsing previous block HTML and maintaining dual carry-over buckets.
 
-8. The construction is safe, with one ordering correction. Root ranges are not re-derived after `buildTree`; `mergeLabels` preserves internal nodes at [src/labels.ts:992](/Users/greg/Dropbox/dev/experim/spideryarn2/src/labels.ts:992). There is also no later gist-composition pass: composition is an instruction to the ToC model at [src/toc.ts:105](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:105), and `buildTree` merely copies the returned gist at [src/toc.ts:442](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:442).
+8. The construction is safe, with one ordering correction. Root ranges are not re-derived after `buildTree`; `mergeLabels` preserves internal nodes at [src/labels.ts:992](/Users/greg/Dropbox/dev/experim/spideryarn2/src/labels.ts:992). There is also no later gist-composition pass: composition is an instruction to the ToC model at [src/toc.ts:105](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:105), and `buildTree` merely copies the returned gist at [src/toc.ts:442](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:442).
 
 Append the supplement after the body model result but before `generateLabels`. Labels record `structureHash(opts.tree)` at [src/labels.ts:1466](/Users/greg/Dropbox/dev/experim/spideryarn2/src/labels.ts:1466); appending afterwards makes `labels.json` stale at birth. Pass the full tree and blocks into labels, with batching and coverage changed to `isStructural`, then run the expanded full-tree validator.
 

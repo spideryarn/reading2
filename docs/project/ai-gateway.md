@@ -61,7 +61,7 @@ fail without saying so.
 
 ## What it replaced
 
-Until that day there were two vendors. The seven pipeline stages — [`toc`](../../src/toc.ts),
+Until that day there were two vendors. The seven pipeline stages — [`hierarchy`](../../src/hierarchy.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
 [`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
@@ -356,7 +356,7 @@ obvious ways to reconstruct that are each wrong in a different direction:
 |---|---|---|
 | `sum(durationMs)` for a step | a step whose calls run **concurrently** | `summarise` reported as 240.3s; its wall time is 91.3s across ten overlapping calls. Nav labels reported as 65.2s; actually 23.1s |
 | group by `runId` | a **batch** — a CLI or eval walking several articles in one process | a `sketch` "step" of 408.1s was three *different articles* run sequentially by `evals/sketch/run.ts`, each one call of 125–145s |
-| group by `(slug, job)` | unrelated runs, when `slug` is **null** | three `toc` runs *five hours apart* collapsed into one 324s step |
+| group by `(slug, job)` | unrelated runs, when `slug` is **null** | three `hierarchy` runs *five hours apart* collapsed into one 324s step |
 
 **What actually answers "did this step fit?"** — wall clock, over rows that belong to one step:
 
@@ -370,7 +370,7 @@ and a row belongs to one step only if you have checked **`scopeKind`** as well a
 cannot separate them either.
 
 **The one case where all four agree is a single-call step**, which is why the number that survived
-every correction is `toc` at **320.4s in one call** — sum, wall, and any grouping give the same
+every correction is `hierarchy` at **320.4s in one call** — sum, wall, and any grouping give the same
 answer when there is nothing to aggregate. That is the measurement
 [`tests/jobs-lease-budget.test.ts`](../../tests/jobs-lease-budget.test.ts) pins the step deadline
 against, and it is deliberately the only one it cites.
@@ -394,7 +394,7 @@ Three properties of that write are load-bearing and none of them is obvious:
   take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
 
 **A CLI stage run is in the ledger too**, via one line at each stage's `isMain`
-([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run toc` is money that appears in
+([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run hierarchy` is money that appears in
 `npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
 every run rather than being quietly partial.
 
@@ -543,6 +543,29 @@ The report keeps the two apart and says which half it has never checked.
 
 Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md).
 
+## The exception that is coming, and what it costs the rule
+
+Everything above rests on one vendor. **Live Conversations — interactive voice dialogue on OpenAI's
+Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. Nothing is built yet,
+so the "no exceptions" claim at the top of this file is still true; the day it ships, it stops being.
+
+The decision was made in advance rather than discovered in a diff, and it is in
+[realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md): a **third first-class
+seam**, not a [declared bypass](../../src/spend-declarations.ts) — *"a permanent product feature is
+not an admitted bypass"* — with the rule restated as *every paid operation goes through one of three
+owned seams; OpenRouter owns messages/chat/embeddings, OpenAI owns realtime.*
+
+Two things about it are worth knowing before you touch this file's claims:
+
+- **The usage numbers will come from the reader's browser**, because with browser WebRTC the
+  `response.done` events land there and there is no way to ask OpenAI afterwards. So realtime rows
+  carry a new `usageSource` field: `CostSource` says who did the arithmetic, and that is a different
+  question from whether the numbers were observed or reported.
+- **`beginSpend`'s guarantee does not stretch that far.** It holds the pending call in memory
+  ([`src/ai-spend.ts`](../../src/ai-spend.ts)), which is honest about itself — *"if the process dies,
+  this dies with it"* — and a five-minute conversation across many Vercel invocations is the case
+  that makes it bite. Realtime gets its own durable session lifecycle instead.
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
@@ -575,6 +598,12 @@ clause.
   were spending into no total, and the scan that stops a ninth
 - [260827f-openrouter-as-sole-gateway.md](../research/260827f-openrouter-as-sole-gateway.md) — the research, with the
   catalogue of ways caching breaks silently in other people's projects
+- [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the one paid call
+  that will not fit through OpenRouter, and how it is accounted for instead
+- [realtime-voice-cost-tracking-web.md](../research/realtime-voice-cost-tracking-web.md) — what the
+  Realtime API emits as usage, current pricing, and the survey of tools that mostly cannot help
+- [realtime-voice-vercel-transport.md](../research/realtime-voice-vercel-transport.md) — why a
+  server cannot ask for a session's cost afterwards, and what Vercel can hold open now
 - [prompt-caching.md](prompt-caching.md) — the three caches and how to tell whether they are working
 - [setup-dev.md](setup-dev.md) — which model each job uses
 - [logging.md](logging.md) — where the per-step cost fields go and why they are logged from the seam

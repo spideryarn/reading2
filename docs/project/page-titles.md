@@ -106,13 +106,20 @@ has.
 
 ### The default mode leaves no trace
 
-Six of the seven modes are named in the title. `toc` — the table-of-contents columns, which is the
-default — is not.
+Nine of the ten modes are named in the title. The default is not — and the rule is *whichever mode
+is the default*, not any particular one, which is what
+[`pageTitle`](../../src/web/page-title.ts) implements and what
+`tests/page-title.test.ts` asserts.
 
-This looks like an omission and is the point. `hierarchy` is where a reader spends most of their
-time, so a "Hierarchy" in nearly every tab distinguishes nearly nothing, while spending twelve
-characters at the end of a string that is already being cut. **Front-loading is not only about order; it is about only
-saying what is different about this tab.**
+That mattered on 2026-08-31, when the default moved from `hierarchy` to `plain`
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). The unwritten mode moved
+with it: `Hierarchy` is spelled out in a tab now like any other, and Plain is the one that says
+nothing.
+
+This looks like an omission and is the point. The default is where a reader spends most of their
+time, so naming it in nearly every tab distinguishes nearly nothing, while spending characters at
+the end of a string that is already being cut. **Front-loading is not only about order; it is about
+only saying what is different about this tab.**
 
 It also agrees with the URL, which leaves the default mode out for a related reason
 ([params.ts § modeParam](../../src/web/params.ts), over the list in [modes.ts](../../src/modes.ts)) — so a reader who learns the rule in one place has
@@ -393,7 +400,8 @@ anyone remembering to add it.
 
 The server learns the mode rather than the client dropping it, because the client's rule — the mode
 distinguishes tabs, so it belongs in the title — is the one with the argument behind it (§ *The
-default mode leaves no trace* above). `readMode` in [`src/vercel.ts`](../../src/vercel.ts) reads it,
+default mode leaves no trace* above). `readMode` in
+[`src/read-address.ts`](../../src/read-address.ts) reads it,
 and resolves anything unrecognised to the default through the same `isMode` the client's `modeParam`
 uses, so a `?mode=` from a future version degrades to the article on both sides identically. The mode
 reaches the `<title>` only: `og:title` and `og:url` are about the article, not about which panel the
@@ -559,8 +567,9 @@ there in the end:
   name is last on every page but the two homepages.
 - **Adding the strapline "for consistency".** Same shape: reads as tidier, and is the thing Google's
   guidance names as the reason it overrides titles. There is a test for that too.
-- **Spelling out `Hierarchy` for the default mode.** Reads like completing a list. Costs every tab in
-  the window twelve characters to say the thing they all have in common.
+- **Spelling out the default mode.** Reads like completing a list. Costs every tab in the window a
+  dozen characters to say the thing they all have in common. (`Hierarchy` used to be the mode this
+  named; the point was never about that word.)
 - **A new page with no `useDocumentTitle`.** It inherits whatever the last page set, so a stale title
   sits on the new page looking entirely plausible. Nothing catches this but noticing.
 - **A live region created and written in the same tick**, or emptied and refilled in one. Both are

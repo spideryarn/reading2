@@ -113,8 +113,8 @@ The positioning rule inside the varying part is one rule, not two: **the thing t
 actually do goes last.** So chat and explain put the profile before the question; the batch stages
 put it near the top with the other framing.
 
-**Not the structural stages.** The ToC, the arc and the section labels never see it. The tree is
-[the one structure](granularity-zoom.md#the-tree) that the ToC, the zoom, the summaries and the spine
+**Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
+[the one structure](granularity-zoom.md#the-tree) that Hierarchy, the zoom, the summaries and the spine
 all address, and a reader-specific tree is one that shifts under a reader who edits their profile.
 Structure stays shared; only the prose *about* it is personalised. **Not semantic search** either:
 "where does this piece say X" has an answer that does not depend on who is asking.
@@ -619,6 +619,7 @@ The measurements, both reviews and the two bugs the tests found after the review
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `ReaderStore`, and `ShelfStore.patch`'s third key |
 | [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | the Postgres half; `reader_profiles`, one row per owner |
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
+| [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
 | [`tests/route-profile-concurrency.test.ts`](../../tests/route-profile-concurrency.test.ts) | that the profile read really starts before the artefact read has finished, and that the artefact's error still wins |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
@@ -718,5 +719,7 @@ next that nobody is checking. That is why the removal has a test and not just a 
   and the button that announced its state twice
 - [browser-testing.md](browser-testing.md) — why a hidden tab makes the level meter read zero
 - [library.md](library.md) — the shelf record `purpose` joins
+- [experimental-features.md](experimental-features.md) — the other thing on `/profile`: a switch for
+  features that are not finished. Same page, same row in the database, different question
 - [silent-success.md](../reusable/silent-success.md) — a profile that silently stops reaching a
   prompt returns a perfectly good answer

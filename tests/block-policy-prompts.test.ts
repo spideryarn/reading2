@@ -226,8 +226,8 @@ describe("the automatic stages never see the note", () => {
        and the supplement node is appended afterwards (src/supplement.ts), so
        the model is never handed a note at all. Handing it one with a label
        would not have been a fix. */
-    const { generateToc } = await import("../src/toc.js");
-    const prompt = await promptOf(() => generateToc({ blocks, slug: "block-policy-prompts" }));
+    const { generateHierarchy } = await import("../src/hierarchy.js");
+    const prompt = await promptOf(() => generateHierarchy({ blocks, slug: "block-policy-prompts" }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -257,9 +257,9 @@ describe("the automatic stages never see the note", () => {
     // fallback path, or the test is about the ordinary one all over again.
     expect(splitBlocks(stranded).groups).toEqual([]);
 
-    const { generateToc } = await import("../src/toc.js");
+    const { generateHierarchy } = await import("../src/hierarchy.js");
     const prompt = await promptOf(() =>
-      generateToc({ blocks: stranded, slug: "block-policy-prompts" }),
+      generateHierarchy({ blocks: stranded, slug: "block-policy-prompts" }),
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);

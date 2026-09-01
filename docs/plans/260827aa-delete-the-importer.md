@@ -14,7 +14,7 @@
 He is right about where this ends up and wrong about one word. `db:import` is not *legacy* — it is
 the **only** way an article's content reaches Postgres today. [`src/jobs.ts:49`](../../src/jobs.ts)
 hardwires `fsArtifacts` and runs every stage through it, and the only content-bearing `insert` into
-`article_revisions` outside [`src/store/import.ts:559`](../../src/store/import.ts) is `beginDraftIn`,
+`article_revisions` outside `src/store/import.ts:559` is `beginDraftIn`,
 which copies from a previous row or mints an empty draft. So the importer cannot be deleted; it has
 to be **replaced**, and the replacement is [260827j-transactional-stage-runner.md](260827j-transactional-stage-runner.md)
 landings B–D, which we need anyway.
@@ -531,7 +531,7 @@ arriving."* **The first half is not true once the publication gate is on**, and 
 would least have liked to discover during the demolition.
 
 Every revision the importer wrote has a `fetch` step row with `status = 'done'`
-([`src/store/import.ts:800-837`](../../src/store/import.ts)) and a null `raw_source_sha256`, because
+(`src/store/import.ts:800-837`) and a null `raw_source_sha256`, because
 the importer does not write the new reference. And `beginDraftIn` copies the step-run rows **row for
 row, status included** ([`src/store/pg-revisions.ts:593-611`](../../src/store/pg-revisions.ts)) while
 carrying the null source pair. So the moment the gate is on, *any* later job on an existing article
@@ -740,7 +740,7 @@ Both existing checkpoints already say what the key is, and neither is the revisi
 
 | checkpoint | what gates reuse at all | what identifies one entry | what losing it costs |
 |---|---|---|---|
-| `labels-progress.json` — [`src/labels.ts:650`, `667-694`](../../src/labels.ts) | `version`, `generator`, `slug` and `sourceHash`, all four exact | a per-batch `fingerprint` — the prompt that asked the question | one paid labelling call per batch; the comment at [`src/toc.ts:717-722`](../../src/toc.ts) puts it as "a 429 eight batches into a book costs the one batch rather than the eight" |
+| `labels-progress.json` — [`src/labels.ts:650`, `667-694`](../../src/labels.ts) | `version`, `generator`, `slug` and `sourceHash`, all four exact | a per-batch `fingerprint` — the prompt that asked the question | one paid labelling call per batch; the comment at [`src/toc.ts:717-722`](../../src/hierarchy.ts) puts it as "a 429 eight batches into a book costs the one batch rather than the eight" |
 | `pdf-chunks/<key>.json` — [`src/pdf-read.ts:753`, `774-787`](../../src/pdf-read.ts) | nothing outside the key | a sha256 over `rawSha256`, the chunk's pages, its context, the prompt fingerprint, the reader id and `maxTokens` | one paid page-reading call per chunk, and these are the expensive ones |
 
 Both are addressed by **what the work was about**, never by which attempt happened to be running.
@@ -2269,7 +2269,7 @@ lookups and the reader profile all build their own `data/` paths and never touch
 `data/` does not disappear at the end of D, and this plan should stop implying that it does.
 
 **One hazard to name rather than discover.** Three CLI `main()`s default `dataDir` to
-`data/<slug>` ([`src/fetch.ts:1286`](../../src/fetch.ts), [`src/toc.ts:675`](../../src/toc.ts),
+`data/<slug>` ([`src/fetch.ts:1286`](../../src/fetch.ts), [`src/toc.ts:675`](../../src/hierarchy.ts),
 [`src/pdf-read.ts:1329`](../../src/pdf-read.ts), and `src/extract.ts`'s
 `opts.dataDir ?? path.join("data", slug)`). That default is the dangerous shape: forget to pass a
 store and you get a *working filesystem write* rather than an error — the same hazard the required
@@ -2435,7 +2435,7 @@ there is no per-artefact JSON column, and `writeBlocks` takes `value.blocks` and
 beside it. `sanitizer` already disappears through that path and gets away with it only because it is a
 global constant the exporter re-stamps. A per-run hash is not reconstructible, so it would not.
 `blocksArtefact` is also a choke point called from three sites, and two of them — stage 4's copy at
-[`src/toc.ts:836`](../../src/toc.ts) and the exporter at
+[`src/toc.ts:836`](../../src/hierarchy.ts) and the exporter at
 [`src/store/export.ts:439`](../../src/store/export.ts) — have no value to supply and today silently
 drop fields they do not name. Stage 3 would write the field and stage 4 would lose it on the next run,
 with nothing going red.
@@ -2755,7 +2755,7 @@ keeps its draft pointer, and the retry builds a different draft. So `StoreSessio
 artefact is rejected.
 
 **One hazard outside the runner entirely.** The importer bypasses the job constraints and can replace
-`current_revision_id` during a model call ([`src/store/import.ts:586`, `:1014`](../../src/store/import.ts)),
+`current_revision_id` during a model call (`src/store/import.ts:586`, `:1014`),
 and publication does not check that the current revision is still the one the draft was copied from —
 so a job can overwrite a concurrent import, and `--prune` can delete the article and draft underneath
 one. While the importer exists, **import and prune refuse any slug with an active job.** The planned
@@ -3012,7 +3012,7 @@ Unchanged, and last.
 
 Once D can publish, **leaving `db:import` runnable is actively unsafe rather than merely redundant.**
 Re-import an article that D has already published and, if the block text is unchanged, the importer
-updates the current revision in place ([`src/store/import.ts:453-468`, `509-561`](../../src/store/import.ts)).
+updates the current revision in place (`src/store/import.ts:453-468`, `509-561`).
 `revisionValues` rewrites `raw_bytes`, `raw_content_type`, `raw_encoding`, `raw_sha256` and both URLs
 — and **omits** `rawSourceSha256` and `rawSourceKind`. The reference survives while everything around
 it is replaced from files. The both-or-neither CHECK and the composite FK stay green throughout,

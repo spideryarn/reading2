@@ -4,7 +4,7 @@
  *
  * Anthropic answers a blocked request with `stop_reason: "refusal"` and a
  * `stop_details` object beside it. Seven pipeline stages — arc, glossary, ideas,
- * labels, toc, tweets — see that object, and until 2026-08-26 every one of
+ * labels, hierarchy, tweets — see that object, and until 2026-08-26 every one of
  * them threw `` `Model refused: ${JSON.stringify(message.stop_details)}` ``.
  * A thrown message is not a private thing: src/jobs.ts logs a failed step with
  * `errorFields`, which keeps `message` and `stack`, and copies the same string
@@ -87,7 +87,7 @@ const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
  * old way on purpose.
  */
 const LEAK = {
-  toc: "ZQTOCAAAAA",
+  hierarchy: "ZQTOCAAAAA",
   arc: "ZQARCBBBBB",
   tweets: "ZQTWEETSCC",
   glossary: "ZQGLOSSDDD",
@@ -103,7 +103,7 @@ const LEAK = {
  * one stage added after this harness was written was the one stage never checked
  * for the leak the harness exists to catch. GPT Sol pointed it out twice.
  */
-const STAGES = ["toc", "arc", "tweets", "glossary", "ideas", "labels"] as const;
+const STAGES = ["hierarchy", "arc", "tweets", "glossary", "ideas", "labels"] as const;
 
 /**
  * One line per stage, plus the control. Counted rather than guessed, so that a
@@ -195,7 +195,7 @@ beforeAll(async () => {
       return new Response(refusal(), { status: 200, headers: { "content-type": "text/event-stream" } });
     };
 
-    const { generateToc } = await import(${src("toc.ts")});
+    const { generateHierarchy } = await import(${src("hierarchy.ts")});
     const { generateArc } = await import(${src("arc.ts")});
     const { generateTweets } = await import(${src("tweets.ts")});
     const { generateGlossary } = await import(${src("glossary.ts")});
@@ -233,7 +233,7 @@ beforeAll(async () => {
       }
     };
 
-    await step("toc", () => generateToc({ blocks, slug: "stop-details" }));
+    await step("hierarchy", () => generateHierarchy({ blocks, slug: "stop-details" }));
     await step("arc", () => generateArc({ article }));
     await step("tweets", () => generateTweets({ article }));
     await step("glossary", () => generateGlossary({ article, previous: null }));

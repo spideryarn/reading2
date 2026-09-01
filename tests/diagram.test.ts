@@ -41,6 +41,7 @@ import {
   type DiagramLink,
   type DiagramNode,
   MAX_DRAWN_DEPTH,
+  paragraphStops,
   stepStops,
   nodeAt,
   walk,
@@ -293,6 +294,110 @@ describe("stepStops", () => {
     // The panel disables both buttons off `stops.length`, so a phantom rung
     // would leave a live button that steps to a node that is not there.
     expect(stepStops([], rows)).toEqual([]);
+  });
+});
+
+describe("paragraphStops", () => {
+  /**
+   * A scatter's nodes, as `dots()` really hands them over: **one dot per
+   * embedded paragraph, with ranges that tile the article anyway.**
+   *
+   * That second half is the whole reason this function can exist, so the
+   * fixture has to have it. Dots on rows 0, 3 and 7 of an eight-row article;
+   * the first answers for everything above it, each for everything up to the
+   * next, and the last for everything below. Rows 1, 2, 4, 5 and 6 are the
+   * short paragraphs that were never embedded — the ones a dot ladder walks
+   * straight past, which is the bug.
+   */
+  function dots(): DiagramNode[] {
+    const at = (id: string, row: number, startRow: number, endRow: number): DiagramNode => ({
+      id: id as NodeId,
+      blockId: `spya-p${row}` as BlockId,
+      depth: 1,
+      number: "",
+      title: `dot ${row}`,
+      blocks: 1,
+      startRow,
+      endRow,
+      part: 0,
+      x: 0,
+      y: 0,
+      w: 0,
+      h: 0,
+      labelX: 0,
+      labelY: 0,
+      anchor: "start" as const,
+      lines: [],
+      titleLines: 0,
+      hasChildren: false,
+      collapsed: false,
+    });
+    return [at("d0", 0, 0, 2), at("d3", 3, 3, 6), at("d7", 7, 7, 7)];
+  }
+
+  /** Eight body rows, the last two of them endnotes. */
+  function article(): Block[] {
+    return Array.from({ length: 8 }, (_, i) => ({
+      id: `spya-p${i}` as BlockId,
+      tag: "p",
+      kind: "prose" as const,
+      text: `paragraph ${i}`,
+      words: 3,
+      html: `<p>paragraph ${i}</p>`,
+      gistable: true,
+      ...(i >= 6 && { treatment: "supplement" as const }),
+    }));
+  }
+
+  it("gives one rung per paragraph, not one per dot", () => {
+    /* Greg, 2026-08-31: "If I press down, it seems to jump more than one
+       paragraph." Three dots over six body rows is the shape that does it. */
+    const stops = paragraphStops(article(), dots());
+    expect(stops.map((s) => s.row)).toEqual([0, 1, 2, 3, 4, 5]);
+    /* And what the dot ladder gave on the same picture, which is the bug
+       itself: three rungs over six paragraphs, so ↓ moved the reader three
+       rows at a time and one of them was an endnote. */
+    const rowOf = new Map(article().map((b, i) => [b.id, i]));
+    expect(stepStops(dots(), rowOf).map((s) => s.row)).toEqual([0, 3, 7]);
+  });
+
+  it("jumps to the paragraph's own block, not to the dot's", () => {
+    // What makes the press move the article by one. The dot is what lights up;
+    // the block is where the reader goes.
+    const stops = paragraphStops(article(), dots());
+    expect(stops.map((s) => s.blockId)).toEqual([
+      "spya-p0",
+      "spya-p1",
+      "spya-p2",
+      "spya-p3",
+      "spya-p4",
+      "spya-p5",
+    ]);
+  });
+
+  it("lights the dot that answers for the row, which is `nodeAt`'s answer", () => {
+    /* The two must not be worked out separately: the mark on the picture is
+       `nodeAt(nodes, readerRow)`, and a rung that lit a different dot would
+       make the press disagree with where it had just put the reader. */
+    const nodes = dots();
+    const stops = paragraphStops(article(), nodes);
+    expect(stops.map((s) => s.id)).toEqual(["d0", "d0", "d0", "d3", "d3", "d3"]);
+    for (const s of stops) expect(s.id).toBe(nodeAt(nodes, s.row));
+  });
+
+  it("stops at the argument, leaving the endnotes off the ladder", () => {
+    /* Both scatters plot the body only — `nowY` is deliberately null in the
+       apparatus (scatter.ts § bodyRowOf) — so a rung on an endnote would step
+       the reader somewhere the picture says nothing at all about. */
+    const stops = paragraphStops(article(), dots());
+    expect(stops.map((s) => s.row)).not.toContain(6);
+    expect(stops.map((s) => s.row)).not.toContain(7);
+  });
+
+  it("is empty for a picture with nothing on it, rather than one rung per row", () => {
+    // Same rule as `stepStops`: the panel disables both buttons off the
+    // ladder's length, so a phantom rung leaves a live button stepping at air.
+    expect(paragraphStops(article(), [])).toEqual([]);
   });
 });
 

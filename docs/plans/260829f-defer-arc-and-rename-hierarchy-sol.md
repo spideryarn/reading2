@@ -110,7 +110,7 @@ Checked:
 
 Therefore request count does not establish the saving. The relevant quantity is arc wall time divided by total ToC-plus-arc wall time.
 
-Arc does not consume `navLabel`, so in principle it could overlap label generation after the structural tree exists. Today that intermediate tree is not published until labels have merged: [src/toc.ts:756–837](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:756). Exposing it would add a new intermediate artefact or callback, so I do not consider that a cheap change.
+Arc does not consume `navLabel`, so in principle it could overlap label generation after the structural tree exists. Today that intermediate tree is not published until labels have merged: [src/toc.ts:756–837](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:756). Exposing it would add a new intermediate artefact or callback, so I do not consider that a cheap change.
 
 Change: measure the baseline before changing defaults. Treat label deferral/overlap as separate work.
 

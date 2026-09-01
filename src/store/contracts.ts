@@ -43,6 +43,7 @@
  */
 
 import type { AdminUser } from "../admin.js";
+import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
@@ -54,6 +55,9 @@ import type {
   ChatMessage,
   ChatThread,
   Comment,
+  FeedbackDiagnostics,
+  FeedbackEnvironment,
+  FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
@@ -82,9 +86,55 @@ import type {
  * simply does not exist would start reporting as a server fault. That is the
  * kind of divergence a parity test on the happy path never sees.
  */
+/**
+ * **The document an article was made from, ready to be handed back.**
+ *
+ * `null` from `loadSource` means *this article kept no source document* — an
+ * ordinary state, and a 404. It does **not** mean the bytes could not be found:
+ * a revision that names a stored object and cannot produce it is a broken
+ * invariant, and the adapter throws (`MissingRawObject` / `CorruptRawObject` in
+ * src/store/raw-document.ts, both `status: 500`). Collapsing the two would tell an
+ * owner their paper never existed because a bucket was misconfigured. GPT Sol
+ * made this the third of four blockers on the plan, 2026-08-31.
+ */
+export interface RawSource {
+  bytes: Uint8Array;
+  /**
+   * **The recorded kind, not a sniffed one**, wherever a record exists.
+   *
+   * It decides the `Content-Type`, and `raw_content_type` cannot: that column is
+   * the *origin's* header, so a perfectly good PDF fetched as
+   * `application/octet-stream` would be served as one — with `nosniff` set, which
+   * means the browser will not rescue it. GPT Sol, 2026-08-31.
+   */
+  kind: DocumentKind;
+  /**
+   * What the reader called the file when they uploaded it, if they uploaded it.
+   *
+   * Reader-controlled text on its way into a response header, so whoever builds
+   * the `Content-Disposition` escapes it — see `contentDisposition` in
+   * src/routes.ts. Absent for anything we fetched.
+   */
+  filename: string | null;
+}
+
 export interface ArticleReader {
   /** Everything needed for every zoom level. 404 when there are no artefacts. */
   loadArticle(slug: string): Promise<Article>;
+
+  /**
+   * **The raw document this article was made from**, or `null` if it kept none.
+   *
+   * The one read whose answer is bytes rather than JSON, and the one the reading
+   * view's *"view the original"* control is behind. Each adapter answers from
+   * where **its own** store keeps them and never from the other's: the
+   * filesystem one from `data/<slug>/`, the Postgres one from the object store
+   * the revision names — falling back, inside itself, to the legacy `raw_bytes`
+   * column for rows written before references existed. A Postgres deployment
+   * reaching for a local file is how this feature spent its life 404ing on
+   * Vercel while working on a laptop.
+   */
+  loadSource(slug: string): Promise<RawSource | null>;
 
   /**
    * The shelf. Never throws for an empty library — that is `[]`, not a fault.
@@ -735,6 +785,10 @@ export interface GlossaryLookupStore {
  * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
  * does the normalising, capping and atomic write; the Postgres adapter is
  * `reader_profiles`, one row per `owner_id`.
+ *
+ * **It holds the reader's settings too**, since 2026-08-31 — the switch below
+ * is on the same row rather than in a store of its own, for the reason
+ * src/db/schema.ts gives beside the column.
  */
 export interface ReaderStore {
   /** `null` when the reader has not written one yet — not a fault. */
@@ -748,6 +802,27 @@ export interface ReaderStore {
    * **Refused, not truncated**, past `MAX_PROFILE_CHARS` — see src/profile.ts.
    */
   writeProfile(text: string | null): Promise<string | null>;
+
+  /**
+   * **Experimental features: when they were switched on, or `null` for off.**
+   *
+   * An ISO 8601 string rather than a `Date`, because that is what crosses the
+   * wire and what the filesystem store holds; a `Date` here would mean one
+   * adapter parsing what the other stringifies for no reader's benefit.
+   * docs/project/experimental-features.md.
+   */
+  readExperimental(): Promise<string | null>;
+
+  /**
+   * Switch experimental features on or off, and answer with what is now stored.
+   *
+   * **`true` twice does not move the date.** An already-on switch keeps the
+   * date it has, so the value answers *since when* rather than *when did the
+   * client last send true* — which is the whole reason this is a timestamp and
+   * not a boolean. `false` clears it outright, so on-off-on is honestly a new
+   * date: the first spell ended.
+   */
+  writeExperimental(on: boolean): Promise<string | null>;
 }
 
 /**
@@ -810,9 +885,31 @@ export interface AdminStore {
  * the route says the same sentence for "no such document" and "not a PDF", so
  * the store need not tell them apart.
  */
+/**
+ * The PDF and the name to hand it to the reader under.
+ *
+ * **The filename is not decoration.** `raw_filename` is what the browser sent
+ * when somebody uploaded a document, and it is the name they will recognise on
+ * their own disk — `<slug>.pdf` is a fallback, not an equivalent. It is also
+ * reader-controlled text on its way into a response header, which is why
+ * `contentDisposition` in src/routes.ts escapes it rather than interpolating
+ * it; see that function for what a name can legally contain.
+ *
+ * `null` for anything we fetched: there was no reader and no name, and the
+ * route falls back to the slug.
+ *
+ * A pair rather than a bare `Uint8Array` because the alternative was a second
+ * store call for one string, and because the name and the bytes come off the
+ * same row — asking twice is how they come to be about different revisions.
+ */
+export interface SourcePdf {
+  bytes: Uint8Array;
+  filename: string | null;
+}
+
 export interface SourceStore {
   /**
-   * The PDF, or `null` when this article was not made from one.
+   * The PDF and its name, or `null` when this article was not made from one.
    *
    * **`null` is "there is no PDF here", never "I could not fetch it".** A
    * reference that points at nothing, or at bytes that do not hash to their own
@@ -826,7 +923,7 @@ export interface SourceStore {
    * somebody else's paper. `src/routes.ts` authorises through `shelfStore` first
    * regardless, which is the ordering tests/owner-isolation.test.ts pins.
    */
-  readPdf(slug: string): Promise<Uint8Array | null>;
+  readPdf(slug: string): Promise<SourcePdf | null>;
 }
 
 /* ------------------------------------------------------------- sharing -- */
@@ -935,4 +1032,177 @@ export interface CostStore {
   forJob(jobId: string): Promise<LedgerRead>;
   /** How big the ledger has got, in bytes, or `null` where that is not a question. */
   size(): Promise<number | null>;
+}
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * `read`, `add`, `profile`… — **re-exported from [src/types.ts](../types.ts)**,
+ * like `Visibility` above, so a caller already importing the rest of a report's
+ * shape from this file does not have to know where the vocabulary lives. The
+ * dialog imports the same names from `types.ts` directly, because nothing under
+ * src/web/ may import this file.
+ */
+export type {
+  FeedbackDiagnostics,
+  FeedbackEnvironment,
+  FeedbackRouteKind,
+} from "../types.js";
+
+/**
+ * **What the reader filed** — everything the row is built from, and nothing
+ * else.
+ *
+ * A closed, named shape rather than a bag off the wire, because this is the one
+ * channel on which a reader's own words leave this machine on purpose and the
+ * rule at that seam is the one `safeEvent` follows: *build the payload, do not
+ * clean it*. Nothing here is spread from a request body; the route names each
+ * field.
+ *
+ * `null` rather than optional throughout, deliberately. `exactOptionalPropertyTypes`
+ * is on, so "absent" and "null" would be two spellings of the same fact, and
+ * every one of these fields is a column that is genuinely nullable.
+ */
+export interface NewFeedback {
+  /**
+   * **Client-minted, and the idempotency key.** A double-clicked Save and a
+   * retried POST carry the id the browser already has, and must file one
+   * report — see `FeedbackSubmission` below for what the second one gets back.
+   * A Spideryarn id (`spya-k3m9qt`), so the CHECK in the schema is the same one
+   * every other minted id is held to.
+   */
+  id: string;
+  /**
+   * **The gate's email, snapshotted.** Not a join onto `auth.users`, which is
+   * not ours and where an address can change: what we want months later is the
+   * address this reader had when they wrote to us. Never a value the browser
+   * supplied — src/routes.ts has a `VerifiedUser` at the seam that sets the
+   * owner.
+   */
+  reporterEmail: string;
+  /** *Steps to reproduce.* Length-capped at `MAX_FEEDBACK_ANSWER_CHARS`. */
+  steps: string | null;
+  /** *What you expected to see.* */
+  expected: string | null;
+  /** *What you saw instead.* */
+  actual: string | null;
+  /**
+   * Whether the reader ticked *Send extra diagnostics*. Recorded as its own
+   * fact rather than inferred from `diagnostics` being present: "they said yes
+   * and there was nothing to collect" and "they said no" are different, and
+   * only one of them is a bug in the collector.
+   */
+  consented: boolean;
+  routeKind: FeedbackRouteKind;
+  /** The article they were on, where there was one. Validated by the route. */
+  slug: string | null;
+  /** `__SPIDERYARN_BUILD_COMMIT__` — the string the release and the source maps went up under. */
+  buildCommit: string | null;
+  environment: FeedbackEnvironment;
+  /**
+   * `x-vercel-id` for **this submit**, so the report names a line in the Vercel
+   * log even when the reader sent no diagnostics at all. The ids of the
+   * requests that went *wrong* ride in the diagnostics blob, behind the
+   * tick-box.
+   */
+  requestVercelId: string | null;
+  /** The opt-in blob, versioned. `null` unless `consented`, which the database also enforces. */
+  diagnostics: FeedbackDiagnostics | null;
+  /** A screenshot the reader pasted in. Decoded bytes, capped by the schema. */
+  screenshot: Uint8Array | null;
+}
+
+/**
+ * **A report as it was stored** — the durable half, which is the authoritative
+ * one. The screenshot's bytes are deliberately not read back: nothing that has
+ * the row wants them, and a report list that drags 300 KB per row through
+ * memory to show a tick is the wrong default. `screenshotBytes` says whether
+ * one exists and how big it was.
+ */
+export interface FeedbackReport extends Omit<NewFeedback, "screenshot"> {
+  /** ISO. */
+  createdAt: string;
+  screenshotBytes: number | null;
+  /** ISO, and `null` until Sentry took it. The query that finds anything stranded. */
+  mirroredAt: string | null;
+  sentryEventId: string | null;
+}
+
+/**
+ * **Three answers, and they are genuinely different things** — so a union, not
+ * a row plus two booleans nobody checks.
+ *
+ * Only `created` may be mirrored to Sentry: feedback events are *not* deduped
+ * there (verified against the SDK — see the plan), so mirroring a retry would
+ * file the same report twice. Making that a type the caller must narrow is the
+ * point; `{ report, wasDuplicate }` would let the mirror forget.
+ */
+export type FeedbackSubmission =
+  /** Written. This one, and only this one, gets mirrored. */
+  | { kind: "created"; report: FeedbackReport }
+  /**
+   * This id is already filed for this reader, and **nothing was written**. The
+   * report handed back is the one that is stored, not the one just submitted —
+   * so a retry that differs in its text is reported as the retry it is rather
+   * than silently overwriting what the reader first sent.
+   */
+  | { kind: "duplicate"; report: FeedbackReport }
+  /** The per-owner hourly cap. `retryAfterMs` is until the oldest report in the window ages out. */
+  | { kind: "limited"; retryAfterMs: number };
+
+/**
+ * **Ten reports an hour, per owner.**
+ *
+ * Said plainly, and the plan says it too: this stops a loop and one account
+ * hammering. It is not a defence against account farming and does not pretend
+ * to be. It is the first authenticated write in this repo with no natural
+ * ceiling — a comment is bounded by passages, a job by articles — which is why
+ * it has one at all.
+ */
+export const FEEDBACK_HOURLY_CAP = 10;
+
+/** The window the cap counts over. */
+export const FEEDBACK_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * **A bug report, filed by a reader who is looking at the thing that went
+ * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+ *
+ * **Postgres only.** Not `guarded(...)` like the reads: there is a Postgres
+ * implementation and a filesystem *refusal*, the same asymmetry `AdminStore`
+ * and `VisibilityStore` have. A files adapter would be twenty lines written
+ * against a module that docs/plans/260831b-finish-the-database-move.md deletes
+ * this week, plus a parity obligation to keep two implementations agreeing until
+ * one of them goes.
+ *
+ * The refusal has to reach the reader as a sentence saying the report was not
+ * saved — a button that can only fail is worse than no button, because pressing
+ * it is how you find out.
+ */
+export interface FeedbackStore {
+  /**
+   * File one report. **Append-only, idempotent, and rate-limited, in one
+   * transaction.**
+   *
+   * The owner comes from `currentOwnerId()`, like every other write here; it is
+   * never an argument, so a caller cannot file a report as somebody else.
+   */
+  submit(input: NewFeedback): Promise<FeedbackSubmission>;
+  /**
+   * One report of **this reader's**, or `null`. Owner-scoped like everything
+   * else: another reader's id is simply not found, which is the same rule as
+   * `ownedSlug` and for the same reason — 404 rather than a 403 that confirms.
+   */
+  read(id: string): Promise<FeedbackReport | null>;
+  /**
+   * **Sentry took it.** Written after the mirror, never before: `mirrored_at`
+   * is a record of what happened, and the crash window between the insert and
+   * this is accepted rather than engineered away (an outbox is more machinery
+   * than an alpha feedback button is worth). `mirrored_at is null` is the query
+   * that finds anything stranded.
+   *
+   * `sentryEventId` may be `null` — the SDK does not always hand one back, and
+   * "mirrored, id unknown" is a truer row than "not mirrored".
+   */
+  markMirrored(id: string, sentryEventId: string | null): Promise<void>;
 }

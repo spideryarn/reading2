@@ -34,7 +34,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [260826a-chat-mode.md](../plans/260826a-chat-mode.md) | push | `?mode=chat` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md) | push | `?mode=chat` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
@@ -62,7 +62,7 @@ line.
 
 **Diagram mode's one exception, and it is deliberate**: which sections the
 reader has *collapsed* is not in the URL at all. Node ids are positional and a
-re-run of `npm run toc` renumbers them ([block-ids.md](block-ids.md)), so a
+re-run of `npm run hierarchy` renumbers them ([block-ids.md](block-ids.md)), so a
 pasted link would open the wrong sections on an article that had been
 re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
 they are stable words rather than ids, so no amount of re-ingesting can make
@@ -171,12 +171,27 @@ instead of on a 404.
 
 **A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
 the middle band between the spine and the prose ([260826a-chat-mode.md](../plans/260826a-chat-mode.md),
-[glossary.md](glossary.md), [search.md](search.md)); the default, `hierarchy`, is the gist columns.
-It was called `toc` until 2026-08-29, and this paragraph used to add "and never appears in a URL",
-which was false — `withMode` in [`Dock.tsx`](../../src/web/Dock.tsx) wrote the parameter for every
-mode including the default, so links carrying `?mode=toc` are real. They still work, because an
-unrecognised mode falls back to the default; `withMode` now omits the parameter when it is the
-default, so new links are canonical. They push history, because a mode is where you are rather than a glance. Each
+[glossary.md](glossary.md), [search.md](search.md)).
+
+**The default is `plain` since 2026-08-31**, and it was `hierarchy` before that. Plain is the
+article and nothing else — no band, and no gist columns either — so a bare `/read/<slug>` opens the
+prose, and `?mode=hierarchy` is what asks for the gist columns
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). Two consequences:
+`?mode=hierarchy` now appears in copied URLs where nothing appeared before, since `withMode` in
+[`Dock.tsx`](../../src/web/Dock.tsx) omits whichever mode is the default; and **every link written
+before that day that said nothing about a mode now opens Plain rather than the hierarchy.** So does
+every `?mode=toc` link, from before the 2026-08-29 rename, which used to survive on the
+unrecognised-value rule landing it on a default that happened to be the view it named. Greg, asked:
+
+> Can we tidy up/get rid of `toc` altogether. I'm not worried about breaking urls — we're in alpha
+> and have no users yet.
+>
+> — Greg, 2026-08-31
+
+What is left of that rule is still true and still worth having: **an unrecognised mode lands on the
+default**, so a link from a future version degrades to the article rather than to an error page.
+
+Modes push history, because a mode is where you are rather than a glance. Each
 carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
 term, `?run=` for the saved search being shown, all `replace` because stepping between them is
 browsing. `?sort=` orders the glossary and `?order=` orders the search results; both push, because
@@ -330,6 +345,11 @@ not "does the address equal the section I just measured" — those are the same 
 every value in the address is a section, and the day one was not, the spy wrote the section's first
 block over the paragraph when the queued position write landed. The mark moved and sprang back, and
 the next press, computing from the top of the section again, moved nothing at all.
+
+Since 2026-08-31 that panel **measures** the reader's row off the page rather than reading it out of
+`?at=`, so the address is no longer the input to its next press — but the rule above stays, because
+the address is still what a paragraph-fine jump leaves behind and springing back over it would still
+move the mark.
 
 The other half of that rule is that **a jump of ours in flight writes nothing.** `glide`
 ([`scroll.ts`](../../src/web/scroll.ts)) animates by calling `window.scrollTo` on every frame, so a

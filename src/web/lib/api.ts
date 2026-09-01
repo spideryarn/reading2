@@ -25,13 +25,32 @@
  *
  * The second half of the same report: **no `console.error` was logged**, so a
  * server failure showed the reader a JavaScript parser message and left no
- * trace in devtools. There is no client-side logger here and there should not
- * be one — docs/project/logging.md is about the server, and a browser already
- * has a console. But something has to reach it, and nothing did.
+ * trace in devtools. So every failure goes through `logFailure` below, once,
+ * with the status, the URL and the first of the body. The reader gets a short
+ * sentence; whoever is debugging gets the rest.
  *
- * So every failure goes through `logFailure` below, once, with the status, the
- * URL and the first of the body. The reader gets a short sentence; whoever is
- * debugging gets the rest.
+ * ## There is a client-side logger now, and this file used to say there must not be
+ *
+ * Until 2026-08-31 the paragraph above ended: *"There is no client-side logger
+ * here and there should not be one — docs/project/logging.md is about the
+ * server, and a browser already has a console."*
+ *
+ * **That reason is true for a developer sitting at the machine and false for a
+ * reader on their own laptop, whose console we will never see.** That gap is
+ * the whole thing the Feedback button exists to close: on 2026-08-28 every
+ * ingest on the live site had been failing and the way we found out was Greg
+ * trying to read an article. So `recordLog` below writes each request into
+ * [`../log-buffer.ts`](../log-buffer.ts) — a two-hundred-entry ring that is
+ * normally thrown away and can be attached to a bug report the reader chooses
+ * to send. Corrected here rather than quietly contradicted; see
+ * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md
+ * § It reverses a written decision, and that is deliberate.
+ *
+ * **The rule underneath it survives intact, and gains a clause:** a response
+ * body never becomes a user-facing message, and now also never becomes a log
+ * entry. What is recorded is the status, the path with its query string
+ * removed, the duration and `x-vercel-id` — never a body, never a query, never
+ * an error's message.
  *
  * ## The rule about the body
  *
@@ -66,6 +85,7 @@ import {
   writeCached,
 } from "./offline-store.js";
 import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.js";
+import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
 import { supabase } from "./supabase.js";
 
@@ -99,6 +119,62 @@ function logFailure(res: Response, text: string, parsed: boolean): void {
     bytes: text.length,
     body: text.length > SNIPPET ? `${text.slice(0, SNIPPET)}…` : text,
   });
+
+  /* **The body stays in the console and goes no further.** What the buffer gets
+     is how big it was and what it claimed to be — which is the pair that
+     actually identifies the commonest failure here, Vercel's single-page
+     fallback answering a request the API should have had: four kilobytes of
+     `text/html` with a 200 on it. Three hundred characters of somebody's
+     article with a stack trace in it is not a row anybody can pivot on, and it
+     is the thing `src/web/monitoring.ts` locks breadcrumbs off three ways to
+     keep out.
+
+     `attempt` has already written a `response` row for the same request; this
+     one is not a duplicate of it, because only here is it known whether the
+     body parsed and what it weighed. */
+  recordLog({
+    kind: "api",
+    outcome: parsed ? "error-body" : "not-json",
+    /* A `Response` does not carry the method that produced it, and guessing is
+       worse than saying so. */
+    method: null,
+    path: res.url ?? "",
+    status: res.status,
+    ms: null,
+    vercelId: header(res, "x-vercel-id"),
+    bytes: text.length,
+    contentType: mediaType(res),
+    error: null,
+  });
+}
+
+/** `application/json`, `text/html` — the media type with its parameters cut off. */
+function mediaType(res: Response): string | null {
+  const type = (header(res, "content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  return type ? type : null;
+}
+
+/**
+ * A response header, or `null` — and **never a throw**.
+ *
+ * `recordLog` swallows its own failures, and that turned out not to be enough:
+ * the *arguments* to it are evaluated first, and not every `Response` this code
+ * meets is a real one. A hand-built stub with no `headers` made
+ * `res.headers.get("x-vercel-id")` throw **inside `attempt`'s `try`**, where the
+ * catch reported a perfectly good 200 as a transport failure and served a
+ * cached copy instead — a diagnostic silently changing the behaviour it was
+ * added to observe, which is the worst possible way for one to fail.
+ *
+ * Twelve tests in `tests/use-search.test.ts` and `tests/use-chat-recovery.test.ts`
+ * went red on it, 2026-08-31. The rule it leaves behind: **anything read only
+ * for the log buffer is read through a function that cannot throw.**
+ */
+function header(res: Response, name: string): string | null {
+  try {
+    return res.headers?.get(name) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Log it, then say it in one sentence a reader can act on. */
@@ -358,15 +434,52 @@ async function attempt(
   init: RequestInit,
   run: () => Promise<Response>,
 ): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const started = Date.now();
   try {
     const res = await run();
     /* A reply of any status means the server was reachable — a 404 is not a
        network problem, and treating it as one would leave the strip saying
        "no connection" to somebody whose connection is fine. */
     noteReachedServer();
+    /* **Every reply, not only the bad ones.** "Recent API calls" is a timeline,
+       and a timeline made only of failures cannot show that the three requests
+       before the broken one were fine — which is most of what makes it worth
+       reading. `x-vercel-id` is read here because this is where a `Response` is
+       first in hand: it is the request id Vercel logs under, it is readable
+       because these are same-origin requests, and it is the only thing in this
+       repo that ties a browser to a server log line. */
+    recordLog({
+      kind: "api",
+      outcome: "response",
+      method,
+      path: input,
+      status: res.status,
+      ms: Date.now() - started,
+      vercelId: header(res, "x-vercel-id"),
+      bytes: null,
+      contentType: null,
+      error: null,
+    });
     return res;
   } catch (e) {
-    const method = (init.method ?? "GET").toUpperCase();
+    /* The transport failed — there is no status, and there never will be one
+       for this request. Its `name` and nothing else: a browser's network
+       message is its own words (*"Failed to fetch"*, *"NetworkError when
+       attempting to fetch resource"*), and the buffer refuses a sentence
+       anyway. */
+    recordLog({
+      kind: "api",
+      outcome: "transport-failed",
+      method,
+      path: input,
+      status: null,
+      ms: Date.now() - started,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: e instanceof Error ? e.name : "Error",
+    });
     if (method !== "GET") throw e;
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     if (init.signal?.aborted) throw e;
@@ -475,8 +588,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
-  const type = (res.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
-  return type === "application/json";
+  return mediaType(res) === "application/json";
 }
 
 /**
@@ -657,20 +769,52 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
      function is generic and swallows its own failures by design, so a future
      caller sending something large would fail completely silently. Better to
      say so in the console than to be that silent. GPT Sol, 2026-08-27. */
+  const method = (init.method ?? "GET").toUpperCase();
   const body = init.body;
   if (typeof body === "string" && body.length > KEEPALIVE_LIMIT) {
     console.error(
       `[api] not sending ${input} on page exit: ${body.length} bytes is over the ~${KEEPALIVE_LIMIT} keepalive budget.`,
     );
+    /* Its own failure path, and its own outcome. A `pagehide` can be a bfcache
+       suspend rather than a close, so the page — and this buffer — may well
+       still be here afterwards; and a save that never left is exactly the sort
+       of thing a reader files a report about half a minute later. */
+    recordLog({
+      kind: "api",
+      outcome: "not-sent",
+      method,
+      path: input,
+      status: null,
+      ms: null,
+      vercelId: null,
+      bytes: body.length,
+      contentType: null,
+      error: null,
+    });
     return;
   }
 
   const headers = new Headers(init.headers);
   const token = cachedToken;
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  /* `keepalive` lets the request outlive the page. Deliberately unawaited and
-     unhandled: there is no one left to tell. */
-  void fetch(input, { ...init, headers, keepalive: true }).catch(() => {});
+  /* `keepalive` lets the request outlive the page. Deliberately unawaited: there
+     is no one left to tell — but the buffer is not a person, and if the page
+     turns out to survive (a bfcache suspend rather than a close) the row is
+     there. */
+  void fetch(input, { ...init, headers, keepalive: true }).catch((e: unknown) => {
+    recordLog({
+      kind: "api",
+      outcome: "transport-failed",
+      method,
+      path: input,
+      status: null,
+      ms: null,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: e instanceof Error ? e.name : "Error",
+    });
+  });
 }
 
 /** The browser's keepalive body budget, less a little for headers. */

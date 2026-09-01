@@ -1,0 +1,4 @@
+ALTER TABLE "spideryarn"."revision_blocks" ADD COLUMN "context_id" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_blocks" ADD COLUMN "context_type" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_blocks" ADD CONSTRAINT "revision_blocks_context" CHECK (("spideryarn"."revision_blocks"."context_id" is null) = ("spideryarn"."revision_blocks"."context_type" is null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_blocks" ADD CONSTRAINT "revision_blocks_context_type" CHECK ("spideryarn"."revision_blocks"."context_type" is null or "spideryarn"."revision_blocks"."context_type" in ('callout'));

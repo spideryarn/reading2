@@ -23,6 +23,9 @@ import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
    them. See noteFieldsFor. */
 import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
+/* The namespace and the one template-aware scrub, shared with stage 2 — see
+   src/reserved.ts, which is the only file allowed to name one of these. */
+import { CONTEXT_ATTRS, CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
 import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
@@ -35,7 +38,7 @@ import { SANITIZER_VERSION } from "./sanitize-policy.js";
 
    An `import type` is erased, so this does not put jsdom in anyone's bundle —
    the reason types.ts gives for staying declaration-only still holds. */
-import type { Block, BlockKind } from "./types.js";
+import type { Block, BlockContext, BlockKind } from "./types.js";
 /* Types only, so nothing runtime crosses from the store into stage 3. Stage 3
    asks the store two questions and does not care which store answers. */
 import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
@@ -45,7 +48,7 @@ import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
  * block and the `<ul>` around it is not. Containers become nodes in the tree
  * instead, which is what lets the ToC choose its own granularity: one row for a
  * list of terse bullets, one row per item for a list of real arguments.
- * See docs/project/table-of-contents.md#granularity.
+ * See docs/project/hierarchy.md#granularity.
  */
 const LEAF_BLOCKS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
@@ -215,6 +218,24 @@ function describeBlock(
     note = "boilerplate label";
   }
 
+  /* **A context changes no policy, and that is a rule rather than an
+     oversight.** For half a day this line read `context !== undefined ||`, so a
+     callout repeating body text was demoted to `gistable: false` — which reads
+     as tidy and quietly wires presentation into the argument machinery.
+
+     The consequence was concrete, and GPT Sol traced it: `gistable` is not in
+     `hashBlocks` (src/source-hash.ts), so a publisher removing a callout
+     wrapper flipped a block from `false` back to `true` with the article's
+     fingerprint unchanged — same tag, same text, same id — and the hierarchy
+     step, which has no currency stamp of its own, skipped. The paragraph came
+     back into the argument with no navigation label and nothing said so.
+
+     The fix is not a bigger fingerprint. It is that a box drawn round a
+     paragraph is how it is *set*, and the five policy questions stay with
+     `gistable` and `treatment` (src/block-policy.ts), exactly as
+     docs/plans/260831af-carrying-markup-facts-past-readability.md says. A real
+     pull-quote is a `<blockquote>` or lives in a `<figure>`, and both were
+     already covered before callouts existed. */
   // Pull-quotes repeat a sentence that is already in the prose. Giving them
   // gists would put the same claim in the ToC twice.
   if (gistable && (kind === "quote" || el.closest("figure"))) {
@@ -226,6 +247,41 @@ function describeBlock(
   }
 
   return { kind, level, gistable, note };
+}
+
+/**
+ * **The box the author drew round this block, read off stage 2's stamp**
+ * (src/callouts.ts) — the class that said so is gone by now, deleted with the
+ * `<div>` it was on before Readability handed us the page.
+ *
+ * **A context, not a `kind`, and that distinction is the whole point.** `kind`
+ * is what this block *is* — the granularity tree is built from heading levels,
+ * and a `<blockquote>` in a box is still a quotation — while a context is the
+ * authored grouping it *belongs to*. `kind: "callout"` was shipped first and was
+ * wrong in a way that showed immediately: a heading inside a callout has to keep
+ * `kind: "heading"`, and so lost the box altogether.
+ * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+ *
+ * `closest` rather than `hasAttribute`, because the stamp is on the container
+ * *and* on the block-level elements inside it, and which of the two survives
+ * Readability depends on the page.
+ *
+ * The id is re-validated here even though we minted it a stage ago: this is the
+ * seam where a string stops being a DOM attribute and becomes a value in
+ * `blocks.json`, Postgres and the public payload, and the scrub at stage 2 is
+ * the only thing standing between those and a page that wrote its own.
+ */
+function contextFor(el: Element): BlockContext | undefined {
+  /* **The registry, not a second hard-coded `"callout"`.** `CONTEXT_ATTRS` maps
+     each transport attribute to the context type it means, and until the typed
+     sidecar exists that map *is* the type system for this — so a reader that
+     spells the type again is the drift the map was added to prevent. GPT Sol
+     noticed the map was exported and unused, 2026-08-31. */
+  for (const { attr, type } of CONTEXT_ATTRS) {
+    const id = el.closest(`[${attr}]`)?.getAttribute(attr);
+    if (id && CONTEXT_ID_PATTERN.test(id)) return { id, type };
+  }
+  return undefined;
 }
 
 /** What `noteFieldsFor` can add to a block. All three absent for body prose. */
@@ -746,8 +802,9 @@ function carryOverIds(
  * single block's html is serialised. Nothing with these attributes on it has
  * ever reached `blocks.json`, and tests/blocks.test.ts pins that.
  */
-const WAS_ID = "data-spya-was-id";
-const WAS_NAME = "data-spya-was-name";
+const WAS_ID = RESERVED_ATTRS.wasId;
+const WAS_NAME = RESERVED_ATTRS.wasName;
+/** Both of them as a selector, for reading them back. The scrub is shared. */
 const STAMPS = `[${WAS_ID}], [${WAS_NAME}]`;
 
 /**
@@ -761,13 +818,7 @@ const STAMPS = `[${WAS_ID}], [${WAS_NAME}]`;
  * worse than one nobody claimed. Found by GPT Sol's review, 2026-08-26.
  */
 function scrubStamps(root: ParentNode): void {
-  for (const el of Array.from(root.querySelectorAll(STAMPS))) {
-    el.removeAttribute(WAS_ID);
-    el.removeAttribute(WAS_NAME);
-  }
-  for (const t of Array.from(root.querySelectorAll("template"))) {
-    scrubStamps((t as HTMLTemplateElement).content);
-  }
+  scrubReserved(root, [WAS_ID, WAS_NAME]);
 }
 
 /**
@@ -997,7 +1048,14 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
     Array.from(doc.querySelectorAll("[id]"), (el) => el.id).filter(Boolean),
   );
 
-  // Prose text, for spotting pull-quotes that merely repeat it.
+  /* Prose text, for spotting pull-quotes that merely repeat it.
+
+     **Callouts are back in this list**, which is where they were before they
+     were recognised at all: they are ordinary paragraphs as far as this rule is
+     concerned, and the rule no longer asks about them (see `describeBlock`).
+     While it did, they had to be excluded here or every callout matched itself
+     — nine of nine on the article the feature was built for. Both halves are
+     gone; a context changes no policy. */
   const proseText = elements
     .filter((el) => el.tagName === "P" && !el.closest("figure, blockquote"))
     .map((el) => normalize(el.textContent ?? ""));
@@ -1010,6 +1068,27 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
      once — whether a folded bucket is ambiguous cannot be answered until every
      claimant is known — so every candidate has to exist before any id is handed
      out. See carryOverIds. */
+  /* **The contexts are read here, and the transport is taken off the document
+     immediately afterwards.**
+
+     Stage 2's callout stamp is on the container and on everything inside it, so
+     without this it is serialised into every block's html and reaches the
+     reader — the same fact twice, in `block.context` and in the markup, with
+     nothing keeping them in step. The note stamps *do* cross on purpose, because
+     the browser reads them (src/web/notes-view.ts); nothing reads this one.
+     GPT Sol, 2026-08-31.
+
+     Before the ids are settled rather than after, so the html `exactKey` matches
+     on for a text-less block — an image, a rule — is the same string whether or
+     not the block was in a box. */
+  const contextOf = new Map<Element, BlockContext | undefined>(
+    elements.map((el) => [el, contextFor(el)]),
+  );
+  scrubReserved(
+    doc,
+    CONTEXT_ATTRS.map((c) => c.attr),
+  );
+
   const found = elements.map((el) => {
     const content = ownContent(el);
     return { el, content, text: extractText(content) };
@@ -1083,6 +1162,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
     const content = ownContent(el);
 
     const { kind, level, gistable, note } = describeBlock(el, text, proseText);
+    const context = contextOf.get(el);
     return {
       id,
       tag: el.tagName.toLowerCase(),
@@ -1093,6 +1173,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       html: content.outerHTML,
       gistable,
       ...(note ? { note } : {}),
+      ...(context ? { context } : {}),
       /* Read from `el`, which is still in the document: the note stamps are
          `data-*`, so neither the sanitiser nor `scrubStamps` (which only takes
          WAS_ID/WAS_NAME off) has touched them. */
@@ -1144,7 +1225,7 @@ export interface BlocksRun extends SplitResult {
 /**
  * The contents of a `blocks.json`, cleaned and then stamped. **Every writer of
  * that file must go through this**, and there are three of them: stage 3 here,
- * stage 4 in src/toc.ts, and the Postgres export in src/store/export.ts.
+ * stage 4 in src/hierarchy.ts, and the Postgres export in src/store/export.ts.
  *
  * The stamp is what lets the read seam tell an artefact cleaned by the current
  * policy from one cleaned by nothing (`sanitizeStoredBlocks` in

@@ -41,8 +41,9 @@ The first feature built on this is [granularity zoom](granularity-zoom.md).
 1. **The text is the destination, not the source material.** Summaries exist to route the reader
    into the prose. Every generated line should be a door, not a wall. (Concretely: **the reading
    view never substitutes generated text for prose it could show instead** — leaves carry no `gist`,
-   so at the rightmost level you get the real paragraph. Navigation is a separate matter: a ToC row
-   *is* a door, so leaves do carry a short `navLabel` that appears only in the ToC and the spine.
+   so at the rightmost level you get the real paragraph. Navigation is a separate matter: a Hierarchy
+   row *is* a door, so leaves do carry a short `navLabel` that appears only in Hierarchy and the
+   spine.
    See [granularity-zoom.md § Node shape](granularity-zoom.md#node-shape).)
 2. **Speak the author's language.** Summaries reuse the author's own terms and framing where possible,
    so that when the reader arrives at the passage, they recognise it. Avoid the flattening "the author

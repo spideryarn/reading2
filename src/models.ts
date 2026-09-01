@@ -8,7 +8,7 @@
  * > later.
  *
  * Before this, four files each declared `const MODEL = "claude-opus-5"` at the
- * top — src/toc.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
+ * top — src/hierarchy.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
  * fourth of them spelled it differently from the other three. Changing the
  * model meant finding all four and knowing which spelling each wanted.
  *
@@ -175,7 +175,7 @@ import { EMBEDDING_MODEL } from "./embeddings.js";
 
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
- * (src/toc.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
+ * (src/hierarchy.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
  * src/glossary.ts) pass this straight to `messages.create`.
  *
  * They all ask for `thinking: { type: "adaptive" }`, which is the only on-mode
@@ -298,7 +298,7 @@ export type Tier = "capable" | "quick";
  * below, so that "not a tier decision" stops meaning "invisible".
  */
 export type Task =
-  | "toc"
+  | "hierarchy"
   | "labels"
   | "arc"
   | "tweets"
@@ -321,9 +321,30 @@ export type Task =
      prefix rather than arc's. It is the one stage that never asks the model for
      a date: src/timeline.ts § the header. */
   | "timeline"
+  /* The questions the piece can ask you back — docs/plans/260831al-review-quiz-sub-mode.md.
+     Article-reading like `ideas`, and like `ideas` every piece of evidence names
+     a block id, so it renders with `articleWithIds` and joins that cached
+     prefix rather than arc's. */
+  | "quiz"
   | "explain"
   | "chat"
-  | "search";
+  /* **Marking a reader's answer, and its own job rather than a mode of `quiz`.**
+     Generation is unwatched pipeline work on the Messages wire; marking happens
+     in a request handler with a person waiting, on chat/completions. One `Task`
+     cannot describe both wires — and calling `openRouterStream("explain", …)`
+     because it is already there would attribute every mark to Explain in the
+     cost report, quietly and for ever. GPT Sol's finding 9. */
+  | "quiz-mark"
+  | "search"
+  /* The model reading a referee's own notes rather than the paper —
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
+     paying job that never sees the article: its input is the referee's comments
+     and the passages they are anchored to, so it renders neither `articleText`
+     nor `articleWithIds` and shares no cached prefix with anything. Its own task
+     rather than search's because a call billed under another job's name is spend
+     nobody can find later — the mistake `quiz-mark` exists to have stopped
+     making. */
+  | "referee-mirror";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -402,12 +423,12 @@ export type AiJob = Task | NonTaskAiJob | EvalAiJob;
  *   gistable block, every article — so it is where the tenth-of-the-price would
  *   actually be felt. It is also the core of the product: the gist columns *are*
  *   granularity zoom. Cheapest to move, most expensive to get wrong.
- * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `toc`** all
+ * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `hierarchy`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
  */
 export const TASK_TIER: Record<Task, Tier> = {
-  toc: "capable",
+  hierarchy: "capable",
   labels: "capable",
   arc: "capable",
   tweets: "capable",
@@ -416,9 +437,12 @@ export const TASK_TIER: Record<Task, Tier> = {
   quotes: "capable",
   sketch: "capable",
   timeline: "capable",
+  quiz: "capable",
   explain: "capable",
   chat: "capable",
+  "quiz-mark": "capable",
   search: "capable",
+  "referee-mirror": "capable",
 };
 
 /**
@@ -492,7 +516,7 @@ export type Wire = "messages" | "chat" | "embeddings";
  * what ran. Two copies of that pair disagree silently.
  */
 export const TASK_WIRE: Record<Task, Wire> = {
-  toc: "messages",
+  hierarchy: "messages",
   labels: "messages",
   arc: "messages",
   tweets: "messages",
@@ -501,9 +525,12 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quotes: "messages",
   sketch: "messages",
   timeline: "messages",
+  quiz: "messages",
   explain: "chat",
   chat: "chat",
+  "quiz-mark": "chat",
   search: "chat",
+  "referee-mirror": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -558,7 +585,7 @@ export const REQUEST_PATH_TASKS: readonly Task[] = ALL_TASKS.filter(
  * `effortFor` is where it lives.
  */
 export const MODEL_ENV_VAR: Record<Task, string | null> = {
-  toc: null,
+  hierarchy: null,
   labels: null,
   arc: null,
   tweets: null,
@@ -567,9 +594,12 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quotes: null,
   sketch: null,
   timeline: null,
+  quiz: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
+  "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
+  "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */
@@ -760,7 +790,8 @@ export type ArticleStage =
   | "quotes"
   | "ideas"
   | "sketch"
-  | "timeline";
+  | "timeline"
+  | "quiz";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -866,6 +897,19 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      downstream to correct it. Untested, like every effort choice that has not
      been through evals/results/effort-vs-quality.md. */
   timeline: "high",
+  /* `high`, and it is the fourth member of that group rather than a fifth
+     cache: same effort, same `ids` renderer, so `quiz` shares a cached article
+     with `ideas`, `sketch` and `timeline`.
+
+     The judgment it is being paid for is the `hard` band — a question whose
+     answer is a move the argument makes across several passages, which is
+     multi-step inference over the whole article at once, and the same thing
+     `ideas` is paid `high` for. An `easy` question needs none of it, and
+     `medium` is what a model reaches for when it has stopped reading the
+     argument, so a batch that skews there is the failure this stage has.
+     Untested, like every effort choice that has not been through
+     evals/results/effort-vs-quality.md. */
+  quiz: "high",
 };
 
 /**
@@ -910,6 +954,11 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      with `ideas` and `sketch` on every article, to save nothing.
      src/timeline.ts § `renderPrompt`. */
   timeline: "ids",
+  /* Every piece of evidence names a block id — that is what ties a reference
+     answer to the page rather than to the model's memory of it — so the ids
+     have to be on the page. Same consequence as the three above: no shared
+     prefix with the four `articleText` stages. */
+  quiz: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

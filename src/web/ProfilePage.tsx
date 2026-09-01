@@ -29,6 +29,12 @@
  * may not import a server module), and the recent list is `GET /api/library`,
  * which the shelf already fetches.
  *
+ * **Settings arrived on 2026-08-31**, and they are a different kind of thing
+ * from the rest of this page: the profile box says what the model is told, and
+ * a setting says what the app does. One switch so far — experimental features,
+ * off by default — in SettingsSection.tsx, with
+ * docs/project/experimental-features.md behind it.
+ *
  * Not here, and each was considered rather than forgotten: **expertise
  * sliders** (the original's beginner/intermediate/expert axis, rejected twice
  * in this repo — the free-text box above *is* the single global setting its own
@@ -38,7 +44,7 @@
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, Cpu, TriangleAlert, User, UserCheck } from "lucide-react";
+import { ArrowLeft, BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
@@ -46,6 +52,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { SettingsSection } from "./SettingsSection.js";
 import { useProfile } from "./useProfile.js";
 import { useSlow } from "./useSlow.js";
 
@@ -191,8 +198,11 @@ export function ProfilePage() {
       </Link>
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
+      {/* Two halves now, and the sentence says both: what the model is told,
+          and what you have switched on. It used to name only the first, which
+          was the whole page until Settings landed. */}
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">
-        What the model knows about who it is writing for.
+        What the model knows about who it is writing for, and what you have switched on.
       </p>
 
       {/* ---------------------------------------------------------- account -- */}
@@ -238,6 +248,18 @@ export function ProfilePage() {
             <em className="tw:not-italic tw:text-muted-foreground">written for an older profile</em>
             . Nothing is regenerated on its own — each panel offers to rewrite when you want it.
           </p>
+        </div>
+      </Section>
+
+      {/* --------------------------------------------------------- settings -- */}
+      {/* **Below "about you", above everything that is only a read-out.** The
+          two boxes above are what the model is told; this is what the app does.
+          Both are things the reader sets, so they belong together and ahead of
+          "recently read" and "what's running", neither of which is a control.
+          docs/project/experimental-features.md. */}
+      <Section icon={SlidersHorizontal} label="Settings">
+        <div className={`${CARD} tw:p-4`}>
+          <SettingsSection />
         </div>
       </Section>
 

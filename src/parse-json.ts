@@ -189,7 +189,7 @@ export function parseJsonFrom<T>(text: string, source: string): T {
  * Strip a stray code fence if the model wraps its JSON despite instructions.
  *
  * Every stage that asks a model for JSON needs this — arc, glossary, ideas,
- * labels, search, summarise, toc and tweets all did, in two spellings that were
+ * labels, search, summarise, hierarchy and tweets all did, in two spellings that were
  * checked against each other on eighteen awkward inputs (bare fence, `json`
  * fence, CRLF, backticks inside a string, a missing close fence, prose before,
  * prose after, no fence at all, and ten more) and agreed on every one. The
@@ -219,7 +219,7 @@ export function parseJsonFrom<T>(text: string, source: string): T {
  * that is itself embedded in another string. It reaches neither the message nor
  * the stack. src/labels.ts is where that was written down first.
  *
- * The history is the argument for one copy. src/toc.ts learned this the hard
+ * The history is the argument for one copy. src/hierarchy.ts learned this the hard
  * way; src/labels.ts was then written without it and a review caught it. Five
  * files carrying the same fifteen lines is five chances for the sixth file to be
  * written by someone who never read them.

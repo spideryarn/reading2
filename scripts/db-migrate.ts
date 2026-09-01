@@ -31,10 +31,20 @@
 import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
+import {
+  hashMigrationFiles,
+  MIGRATION_LOCK_KEY,
+  MIGRATIONS_SCHEMA,
+  MIGRATIONS_TABLE,
+  postflightProblems,
+  readJournal,
+  reconcileLedger,
+  type LedgerRow,
+} from "./migration-ledger.js";
 
 /**
  * **The shell's `DATABASE_URL`, read before `.env.local` can bury it.**
@@ -120,23 +130,153 @@ if (ssl.mode === "encrypted-unverified") {
   console.warn(`\u26a0 ${ssl.why}`);
 }
 
-/** One connection, used once. `max: 1` because a migrator has no concurrency. */
-const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl });
+/**
+ * Two connections, on purpose.
+ *
+ * One of them holds a **session advisory lock** for the whole run and is never
+ * given back to the pool; the other is what `migrate()` uses. drizzle takes no
+ * lock of its own, so without this two invocations read the same watermark and
+ * both attempt the same DDL — one of them fails halfway through with something
+ * that reads like a broken migration. GPT Sol, 2026-08-31.
+ */
+const pool = new Pool({ connectionString: url, max: 2, ssl: ssl.ssl });
 
+/** The ledger, or an empty one when the bookkeeping table does not exist yet. */
+async function readLedger(client: PoolClient): Promise<LedgerRow[]> {
+  const there = await client.query<{ oid: string | null }>(
+    "select to_regclass($1)::text as oid",
+    [`${MIGRATIONS_SCHEMA}.${MIGRATIONS_TABLE}`],
+  );
+  /* Asked rather than caught. A first run against an empty database is not an
+     error, and swallowing an error to find that out would also swallow
+     "permission denied for schema spideryarn_migrations" — which is what the
+     WRONG credential says, and which must not be read as "nothing applied
+     yet". docs/project/database.md § The migration role that cannot exist. */
+  if (!there.rows[0]?.oid) return [];
+  const r = await client.query<LedgerRow>(
+    `select hash, created_at from ${MIGRATIONS_SCHEMA}.${MIGRATIONS_TABLE} order by created_at asc`,
+  );
+  return r.rows;
+}
+
+/**
+ * Say what is wrong, then leave.
+ *
+ * **Two situations, and they must not share a sentence.** The preflight runs
+ * before any DDL and nothing has happened yet; the postflight runs after
+ * `migrate()` has *committed*, so telling the reader "nothing has changed"
+ * there would be a lie about the one thing they need to know. One message did
+ * both jobs until GPT Sol pointed at it, 2026-08-31 — and the wrong half of it
+ * is the reassuring half, which is the direction that costs.
+ */
+function refuse(
+  headline: string,
+  problems: readonly string[],
+  aftermath: "nothing-ran" | "migrate-already-committed",
+): never {
+  console.error(`\n✗ ${headline}`);
+  for (const p of problems) console.error(`  • ${p}`);
+  console.error(
+    aftermath === "nothing-ran"
+      ? "\nNo migration has been applied and nothing has changed.\n" +
+          "  docs/project/database.md § A watermark is not a ledger."
+      : "\n⚠ This is AFTER the event. migrate() has already committed whatever it ran,\n" +
+          "  so the database has changed and this exit does not undo it. Read the ledger\n" +
+          "  before running anything else: npx tsx scripts/db-repair-migration-ledger.ts\n" +
+          "  docs/project/database.md § A watermark is not a ledger.",
+  );
+  process.exit(1);
+}
+
+let lock: PoolClient | null = null;
 try {
-  const db = drizzle(pool);
   const folder = path.resolve(import.meta.dirname, "../drizzle");
-  console.log(`Applying migrations from ${path.relative(process.cwd(), folder)} …`);
+  const journal = readJournal(folder);
+  const hashes = hashMigrationFiles(folder);
+
+  lock = await pool.connect();
+  const got = await lock.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [
+    MIGRATION_LOCK_KEY,
+  ]);
+  if (!got.rows[0]?.ok) {
+    refuse(
+      "another process is migrating this database",
+      [`advisory lock ${MIGRATION_LOCK_KEY} is already held`, "wait for it to finish and run this again"],
+      "nothing-ran",
+    );
+  }
+
+  /**
+   * **The preflight, and it runs before any DDL.**
+   *
+   * A check after `migrate()` would be too late: the migrator commits every
+   * pending file in one transaction, so by the time a post-hoc check noticed
+   * the gap, the migrations *after* the gap would already have run against a
+   * schema that never had the missing one applied. GPT Sol, 2026-08-31,
+   * §§ 4-5.
+   *
+   * `isLocalDatabaseUrl` decides the unknown-row policy, and it is the same
+   * test that decides TLS and that guards remote runs above. One test, so
+   * "local" cannot mean one thing to the guard and another to the thing it
+   * guards.
+   */
+  const before = await readLedger(lock);
+  const state = reconcileLedger(journal, hashes, before, { allowHistoricalExtras: isLocal });
+  if (state.problems.length > 0) {
+    refuse(
+      "the journal and this database's migration ledger do not reconcile",
+      state.problems,
+      "nothing-ran",
+    );
+  }
+  if (state.unknown.length > 0) {
+    console.warn(
+      `⚠ ${state.unknown.length} ledger row(s) from migrations this journal no longer contains ` +
+        `(stamped ${state.unknown.map((r) => r.created_at).join(", ")}). ` +
+        "Historical extras from renumbered local migrations; nothing is pending, so carrying on.",
+    );
+  }
+
+  const db = drizzle(pool);
+  if (state.pending.length === 0) {
+    console.log("Nothing pending — the database is in step with the journal.");
+  } else {
+    console.log(
+      `Applying ${state.pending.length} migration(s) from ${path.relative(process.cwd(), folder)}: ` +
+        state.pending.map((e) => e.tag).join(", "),
+    );
+  }
   await migrate(db, {
     migrationsFolder: folder,
     // Must match drizzle.config.ts. They are two copies of one fact, and the
     // migrator silently starts a FRESH history if they disagree — every
     // migration re-applies, and the first CREATE TABLE fails with "already
     // exists", which reads like a broken migration rather than a typo here.
-    migrationsTable: "__drizzle_migrations",
-    migrationsSchema: "spideryarn_migrations",
+    migrationsTable: MIGRATIONS_TABLE,
+    migrationsSchema: MIGRATIONS_SCHEMA,
   });
+
+  /* The postflight. Necessary and NOT sufficient — it reads the ledger, not
+     the schema, so it cannot tell a real migration from a hand-inserted row.
+     postflightProblems()'s own comment says so, and `npm run db:check` is the
+     half it does not cover. */
+  const after = await readLedger(lock);
+  const missed = postflightProblems(journal, hashes, after);
+  if (missed.length > 0) {
+    refuse(
+      "migrate() returned, but the ledger does not account for every migration",
+      missed,
+      "migrate-already-committed",
+    );
+  }
+
   console.log("✓ migrations applied");
 } finally {
+  /* Releasing the lock is what `pool.end()` does anyway by closing the
+     session; doing it explicitly keeps the release next to the acquire. */
+  if (lock) {
+    await lock.query("select pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY]).catch(() => {});
+    lock.release();
+  }
   await pool.end();
 }

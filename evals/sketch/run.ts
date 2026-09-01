@@ -9,7 +9,7 @@
  *
  * It spends money through `generateSketch`, which is the shipping stage — **not
  * through a copy of the prompt**. A harness with its own copy of the prompt
- * measures a recipe nothing runs, which is the trap `evals/toc-structure/`
+ * measures a recipe nothing runs, which is the trap `evals/hierarchy-structure/`
  * names in its header. `--system` is the one exception and it exists so a
  * variant can be tried without editing src/; whatever wins gets written into
  * src/sketch.ts before it is believed.

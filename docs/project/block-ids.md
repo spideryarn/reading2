@@ -73,7 +73,7 @@ chosen to prevent.
 So stage 3 also **carries ids over from the previous run's blocks** when there are any, matching a
 new block to an old one by its text. A paragraph keeps its id as long as its words are unchanged, no
 matter how far it has moved. Blocks with no text — images, figures — match on their `src` instead,
-so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
+so a Hierarchy row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
 several identical short paragraphs cannot hand the same id to two blocks.
 
 #### Where the previous run comes from, and the three answers it can give
@@ -292,18 +292,18 @@ the index rather than in the id string.
 Blocks are the **finest** unit a reader takes in as one thing — so an `<li>` is a block and the
 `<ul>` around it is not; the list becomes a *node* in the tree instead. See
 [architecture.md § What a block is](architecture.md#what-a-block-is) for that decision and why it
-matters to the ToC.
+matters to the hierarchy.
 
 Some blocks get an id but never get a gist (`gistable: false`): images, horizontal rules, and
-pull-quotes that repeat body text verbatim. They stay addressable — the ToC may well want to point
+pull-quotes that repeat body text verbatim. They stay addressable — Hierarchy may well want to point
 at a diagram — they simply must not generate a row of their own. On the test article all 11
-pull-quotes are word-for-word repeats of body sentences, so without this the ToC would grow eleven
+pull-quotes are word-for-word repeats of body sentences, so without this Hierarchy would grow eleven
 phantom rows quoting text it had already listed.
 
-### A bare `<svg>` gets no id, and the ToC cannot point at a diagram
+### A bare `<svg>` gets no id, and Hierarchy cannot point at a diagram
 
 **Known hole, found 2026-08-28** while measuring extraction
-([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says the ToC
+([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says Hierarchy
 may well want to point at a diagram. For a `<figure>`-wrapped one it can. For a bare inline `<svg>`
 it cannot, and nothing says so:
 
@@ -323,7 +323,7 @@ escapes by accident — a formula has text.
 That matters because keeping inline diagrams was a deliberate choice — Greg, 2026-08-25, recorded in
 [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts), knowingly accepting that foreign content is
 where most historical mXSS bypasses live. We take that risk to keep the diagram and then cannot
-address it: no ToC row, no note anchored to it, nothing for zoom to fold.
+address it: no Hierarchy row, no note anchored to it, nothing for zoom to fold.
 
 The fix is small — a lower-case leaf set — and is **not** made here, because widening what gets an id
 is this document's decision and not an extraction eval's. Note if it is taken: adding `"SVG"` to
@@ -429,7 +429,7 @@ one saying where you were and one saying where you asked to go ([url-state.md](u
 
 An article that ships an `id` in **our** format — `<h2 id="spya-k3m9qt">` — is believed. Stage 3
 treats it as an id it minted on a previous run and reuses it, which means a page can name a block id
-belonging to somebody else's paragraph and take every comment, search hit and ToC row anchored to
+belonging to somebody else's paragraph and take every comment, search hit and Hierarchy row anchored to
 it. Nothing about that is hard to do once you know an id — and ids are printed beside every
 paragraph and pasted into links, so **knowing one is not a barrier**. What keeps it narrow today is
 that articles are fetched once from addresses a reader chose. It stops being narrow the moment an
@@ -439,11 +439,17 @@ discover this by accident.
 
 ## Showing an id
 
-Ids are on screen in five places: the gutter beside every paragraph; both ends of the block range
-under a gist, in a table cell and in a column panel; and — since 2026-08-26 — the same range under
-each entry of the summary panel, plus the ids the model cites inside a chat answer or a summary. All
-of them draw [`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that
-come out of model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+Ids are on screen in four places: both ends of the block range under a gist, in a table cell and in
+a column panel; the same range under each entry of the summary panel; and the ids the model cites
+inside a chat answer or a summary. All of them draw
+[`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that come out of
+model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+
+**The fifth place was the gutter beside every paragraph, and since 2026-08-31 it is not text.** The
+id there is now a permalink icon, with the id itself in the `title` and in the `aria-label` — so
+beside the prose the id is a thing you copy rather than a thing you read
+([prose-gutter-icons.md](../plans/prose-gutter-icons.md)). Everything below about *what a shown id
+is* still holds; what changed is that one of the five stopped showing characters.
 
 A cited id is drawn as a **chip with a hover card carrying the paragraph itself**, which is the one
 thing that makes a model's claim checkable without leaving the sentence you are reading — see
@@ -476,9 +482,19 @@ Two things this costs, both deliberate:
   `BlockRef` stops the click from bubbling. Without that, clicking the far end of a range would
   quietly take you to the near end — the click would work, and go to the wrong place.
 
-The type is small, faint and Courier (`--font-id` in
+**The gutter's permalink splits that plain left-click by how it was made**
+([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)): a pointer click copies the absolute URL, and
+keyboard activation jumps. It is still an `<a href>`, and it has to be — the element announces itself
+as a link, so pressing Enter on it must do what a link does, and every modified click still belongs
+to the browser. It jumps through App's `onJump` rather than by navigation, because **this app
+intercepts no anchor clicks globally**: an unprevented one would reload the reading view to arrive at
+the paragraph already on screen.
+
+Where an id is still drawn as characters, the type is small, faint and Courier (`--font-id` in
 [`styles/tokens.css`](../../styles/tokens.css)), at Greg's asking: an id is machine text sitting
-beside prose and should read as a footnote to the block, not as part of it.
+beside prose and should read as a footnote to the block, not as part of it. That was also the
+argument for taking it out of the gutter — beside a paragraph, a footnote to the block is still a
+column of machine text running the length of the article.
 
 ## If this ever changes
 
@@ -489,7 +505,7 @@ version and let stale caches be *detectable* rather than silently wrong — neve
 
 - [architecture.md](architecture.md) — where stage 3 sits, and the `blocks.json` shape
 - [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) — what is built on top of these ids
-- [table-of-contents.md](table-of-contents.md) — the ToC that addresses blocks by id
+- [hierarchy.md](hierarchy.md) — stage 4's tree, whose rows address blocks by id
 - [url-state.md](url-state.md) — the `?at=` an id links to, and what else rides in the URL
 - [web-client.md](web-client.md) — the reading view these ids are drawn in
 - [open-questions.md](open-questions.md) — what is still undecided

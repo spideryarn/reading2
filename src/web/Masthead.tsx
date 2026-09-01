@@ -49,7 +49,10 @@ import { useMemo, type ReactNode } from "react";
 import { ArrowLeft, ExternalLink, FileQuestion, Upload } from "lucide-react";
 import type { Article, Meta } from "../types.js";
 /* The shared one, which drops a leading `www.` — three copies of this used to
-   live in the client and its header asks the next caller not to make a fourth. */
+   live in the client and its header asks the next caller not to make a fourth.
+   `isWebUrl` is not imported here any more: the one URL sink in this file is the
+   heading anchor, and `webSource` below already refuses everything that is not
+   `http(s)` — one test rather than two spellings of it. */
 import { hostOf } from "../urls.js";
 import { Link } from "./Link.js";
 import { SourceLink, webSource } from "./SourceLink.js";
@@ -112,9 +115,21 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   /**
    * Where this article came from — `null` when there is no web address for it.
    *
-   * `webSource` rather than `meta.url` so that a `file://` from the local PDF
-   * command is not drawn as a link that goes nowhere and prints somebody's home
-   * directory on the way. SourceLink.tsx owns the question.
+   * `webSource` rather than `meta.url`, and it does two jobs at once.
+   *
+   * A `file://` from the local PDF command is not drawn as a link that goes
+   * nowhere and prints somebody's home directory on the way. SourceLink.tsx owns
+   * the question.
+   *
+   * **And it is the allowlist on a URL sink**, which is not decoration.
+   * `meta.url` is the revision's `final_url`, which the fetcher validates — but
+   * an *imported* article's metadata is written straight into the row, so a
+   * `javascript:` or `data:` value is reachable here and this anchor would be an
+   * active sink. `webSource` refuses those the same way `isWebUrl` does
+   * (src/urls.ts, docs/project/security.md). GPT Sol found it while reviewing
+   * the plan that added a *second* link to the same field, 2026-08-31 — the new
+   * one is in the controls bar (SourceLink.tsx § TheOriginal) and checks the
+   * same way.
    */
   const source = webSource(meta);
 

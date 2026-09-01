@@ -13,6 +13,11 @@ not have, so the choice is a database or no deploy. The work is
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); there are 27 migrations under `drizzle/` and
 the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
 
+**Before you add a column or a table, read [sql.md](sql.md)** — the shape we want the schema to have,
+in Greg's words: real columns rather than JSON, foreign keys rather than good intentions, and a
+nullable timestamp wherever a boolean would throw away when it happened. This file is the operating
+manual; that one is the taste.
+
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
 
@@ -47,7 +52,7 @@ data/writes/
   raw.html      fetched bytes          (stage 1)
   meta.json     title, url, fetched-at
   blocks.json   the sanitised blocks   (stage 3)
-  tree.json     the ToC / zoom tree    (stages 4-5)
+  tree.json     the hierarchy / zoom tree (stages 4-5)
   arc.json
   comments.json
   tweets.json
@@ -116,7 +121,7 @@ through it, and [glossary.md](glossary.md) says why it has to.) [library.md](lib
 **Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
 that is only half true — it is the *read* seam. The write path is
 `PipelineStep.outputs(ctx): string[]`, an interface that returns **file paths**, implemented across
-seven stage modules (`fetch`, `extract`, `blocks`, `toc`, `arc`, `tweets`, `glossary`). Any estimate that treats
+seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treats
 the Postgres move as a one-file change is wrong, and this is where that mistake starts.
 
 Why files at all: *"Prefer boring: filesystem over database, one server process"* —
@@ -143,10 +148,10 @@ reads succeed, an incomplete stamp lets a **stale artefact skip**.
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1. `assets` keeps the
 narrow blocks-only hash, honestly: it fetches the images the blocks name and has no prompt.
 
-`toc` still uses `stepIsDone`, an
+`hierarchy` still uses `stepIsDone`, an
 `access()` existence check — a file exists, therefore the step is done, whatever it was generated
 from. That is deliberate rather than pending, and
-[`src/pipeline.ts`](../../src/pipeline.ts) § `toc` explains at length why a stamp there needs
+[`src/pipeline.ts`](../../src/pipeline.ts) § `hierarchy` explains at length why a stamp there needs
 consumer invalidation first. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
 `hashBlocks` hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because
 those bytes change when an unread field is recomputed and *don't* change when two blocks swap ids —
@@ -202,6 +207,16 @@ publishes it, in one transaction with the job's own finish
 Before that the ingest produced files on disk and an empty draft revision that `publishRevision`
 refused, and the reader's shelf stayed empty.
 
+**A draft may only replace the revision it was copied from.** `beginDraftIn` copies whatever is
+published when the draft opens, and the job then runs for minutes; if something else publishes in
+between, moving the pointer to that draft buries work nobody meant to lose, and every check involved
+reports success. So the publication compares the base it recorded when the draft opened with the
+revision it is about to replace, and refuses — `refuseIfBaseMoved` in
+[`src/store/pg-session.ts`](../../src/store/pg-session.ts), whose `DraftBase` says how exact each
+answer is and why a reopened draft's is weaker. It is exact for the draft a claim minted, which is
+the case that matters once the pipeline commits through Postgres
+([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3).
+
 That is a carry-across, not the end state: an ingest still needs a writable disk for the length of
 the job, so the host question is unchanged and only the *publication* has moved. The plan for the
 other half — stages that return their products instead of writing files — is
@@ -221,8 +236,7 @@ to be asked for. [260827aa-delete-the-importer.md § D1](../plans/260827aa-delet
 
 ```bash
 npm run db:seed-owner   # the auth.users rows: the row-owner, and the account you sign in as
-npm run db:import       # data/<slug>/ → Postgres, idempotent
-npm run db:export -- --out /tmp/rollback   # and back out again
+npm run db:export -- --out /tmp/rollback   # Postgres → data/<slug>/, the rollback
 ```
 
 **`db:export` needs the bucket as well as the database.** A revision row holds a *reference* to its
@@ -245,7 +259,7 @@ checked in two. [silent-success.md](../reusable/silent-success.md) ·
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |
 | [`src/store/index.ts`](../../src/store/index.ts) | which store is in use. **No fallback lives here**, by design |
 | [`src/store/pg.ts`](../../src/store/pg.ts) · [`pg-comments.ts`](../../src/store/pg-comments.ts) | the Postgres reader and comment store |
-| [`src/store/import.ts`](../../src/store/import.ts) · [`export.ts`](../../src/store/export.ts) | the importer, and the exporter that is the rollback |
+| [`src/store/export.ts`](../../src/store/export.ts) | the exporter that is the rollback. **There is no importer** — `npm run db:import` and `src/store/import.ts` were deleted on 2026-09-01, because a re-import writes `raw_bytes` and leaves the source reference alone, describing two different acquisitions in one row. [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 |
 | [`src/owner.ts`](../../src/owner.ts) | who owns a row — the request-scoped owner, and the environment's when there is no request |
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
@@ -375,6 +389,94 @@ and nothing else; a migration role with DDL; and the browser's publishable key, 
 only because `spideryarn` is not an exposed schema. The `postgres` password must not go near Vercel.
 Creating those roles is the one genuinely manual step — it needs passwords, which do not belong in a
 migration file — and it is [step 1](../plans/260825f-postgres-migration.md#the-order-of-work).
+
+## A watermark is not a ledger
+
+**drizzle does not track which migrations ran.** Its node-postgres migrator reads *one* row —
+`select … from __drizzle_migrations order by created_at desc limit 1` — **once**, before its loop,
+and then applies every journal entry whose `when` is strictly greater than that number. It never
+compares the hashes it stored, and it never asks whether an older entry is missing. Read it in
+`node_modules/drizzle-orm/pg-core/dialect.cjs`, `PgDialect.migrate`; the hash is `sha256` of the
+whole `.sql` file (`node_modules/drizzle-orm/migrator.cjs`).
+
+So **an entry stamped below the newest applied row is skipped for ever, in silence**, under a
+`✓ migrations applied`. On 2026-08-31 that was four migrations on Greg's laptop —
+`0032_jobs_concurrency_cap`, `0033_quotes`, `0034_flowery_wolfsbane`, `0036_drop_summary_column` —
+none of which could ever run again. `article_revisions.quotes` did not exist while the command that
+was supposed to create it reported success. [silent-success.md](../reusable/silent-success.md)
+again, and the same shape as [the accident above](#the-four-migrations-that-were-not-there-and-the-command-that-said-they-were).
+
+Two things sank them:
+
+- `0035_timeline`'s journal entry was written **by hand** with a round `when` of `1788200000000`,
+  later than every migration around it including `0036`'s real `1788175229610`. Any database that
+  applies `0035` can never apply `0036`.
+- two local migrations, generated later the same evening and then renumbered into
+  `0037_experimental_features_and_callout_blocks`, left ledger rows that raised the watermark above
+  origin's `0032`–`0034`.
+
+**The published timestamps were not corrected**, and must not be. Production may have applied
+`0032`–`0035` correctly; re-stamping them makes them re-run there and fail.
+
+### The guard
+
+[`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts) holds the judgements, and
+[`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) runs them **before** `migrate()` as well as
+after. Before matters: the migrator commits every pending file in one transaction, so a post-hoc
+check would notice the gap only once the migrations *after* it had already run against a schema that
+never had it.
+
+The preflight refuses — exit non-zero, no DDL, and no `✓` — unless all of:
+
+1. the applied journal entries are a contiguous prefix **in journal order**, which is not timestamp
+   order;
+2. the pending ones are the remaining suffix;
+3. **every pending entry's `when` clears the newest `created_at` in the ledger.** This is the one
+   that catches the defect. A database through `0034` is fine — both `0035` and `0036` clear its
+   watermark, inverted stamps and all. A database through `0035` is broken, because `0036` never
+   can;
+4. every applied row's hash matches the file on disk;
+5. the journal itself has no duplicate tags, no duplicate stamps, no broken indices, a `.sql`
+   file for every entry — **and an entry for every `.sql` file**.
+
+The last half of 5 is the direction that was missing until 2026-08-31, and it is the one that
+happened. Two sessions in this tree ran `drizzle-kit generate` minutes apart without pulling; both
+produced an `0032`, the journal named one of them, and `0032_experimental_features.sql` sat in the
+folder never running while nothing said so. A file the journal does not name is either a migration
+that will never run or debris, and only a person can tell which, so it is fatal. It is checked in
+`journalProblems`, which needs no database, so
+[tests/migration-journal.test.ts](../../tests/migration-journal.test.ts) catches it in CI on every
+branch rather than on whoever migrates next. Predicted as failure row 8 of
+[260828r-worktrees.md](../plans/260828r-worktrees.md), for two worktrees; it happened between two
+sessions in one tree.
+
+**Rows the journal has never heard of** get a policy rather than a rule, because a laptop
+legitimately carries them and production never should. Remote: refuse. Laptop with anything still
+pending: refuse, because an orphan row may be the same DDL as a pending migration under a new
+number — clear it before migrating. Laptop with nothing pending: report and carry on, so a
+renumbered local migration does not wedge the machine for ever. "Remote" is
+`isLocalDatabaseUrl` in [`src/db/ssl.ts`](../../src/db/ssl.ts), the same test that decides TLS and
+that guards remote runs, so local cannot mean one thing to the guard and another to the thing it
+guards.
+
+The **postflight** asserts that every journal entry ends with exactly one matching `(when, hash)`
+row. It is metadata, not schema: it is green by construction for anyone who inserts bookkeeping rows
+by hand, so it catches "the migrator said yes and applied nothing" and cannot catch "the row is
+there and the column is not". `npm run db:check` and
+[`src/db/schema-drift.ts`](../../src/db/schema-drift.ts) are the other half — and that file's own
+header says which things it does not cover.
+
+The whole run holds a **session advisory lock**. drizzle takes none, so without it two invocations
+read the same watermark and both attempt the same DDL.
+
+**Never hand-write a `when`.** [tests/migration-journal.test.ts](../../tests/migration-journal.test.ts)
+fails on any entry stamped no later than one above it in the journal. The published `0035`/`0036`
+pair is grandfathered by name *and* by both timestamps, so regenerating either file takes the
+exemption away rather than inheriting it.
+
+The whole story, including why `0033_quotes` could not be replayed verbatim and what the repair
+recorded instead, is in
+[the postmortem](../postmortems/260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md).
 
 ## Roles
 
@@ -511,7 +613,7 @@ process.env.DATABASE_URL = process.env.REMOTE_DATABASE_URL!;   // then override 
 await import("../scripts/db-migrate.ts");
 ```
 
-The same trap catches `npm run db:import` and anything else pointed at the remote from this
+The same trap catches `npm run db:export` and anything else pointed at the remote from this
 directory. It is [silent-success.md](../reusable/silent-success.md) exactly: the check you would
 naturally run — "did it say it worked?" — shares its assumption with the code.
 
@@ -659,6 +761,42 @@ spellings are one fact and must produce identical bytes. Strict `!== null` where
 between built and not-built is the thing being transmitted — and then make callers spell `null` out,
 because the type system will not.
 
+## `restrict` and `no action` are the same rule at two different moments
+
+They look interchangeable — both mean *you may not delete a row something else points at* — and
+[sql.md](sql.md#referential-integrity-on-purpose-and-by-name) is right that `on delete` is a decision
+rather than a default. The decision has a third option, and picking the wrong one of the two obvious
+ones breaks something that has nothing to do with the constraint.
+
+**`restrict` is checked row by row as a delete happens. `no action` is checked at the end of the
+statement.** That is the whole difference, and it decides what happens when *two tables that both
+cascade from `articles`* also point at each other.
+
+`referee_criteria` and `comments` are exactly that pair — the referee's own mark on a passage is a
+comment carrying a `criterion_id`
+([260831an](../plans/260831an-referee-mode-for-peer-reviewers.md), `drizzle/0042`). Three choices:
+
+- **`cascade`** would delete the referee's own sentences about the paper when a criterion is deleted.
+  Their words are theirs and are not derived from anything. Wrong on its face.
+- **`restrict`** says the right thing and says it too early. Deleting the **article** cascades into
+  both tables in an order Postgres does not promise, so it can fire while the comment rows are still
+  there and refuse a delete that is entirely legitimate — a bug that would appear as "this article
+  cannot be deleted", months later, only for articles with referee marks on them.
+- **`no action`** is the same rule at end of statement. Deleting a criterion on its own still fails,
+  loudly, with rows to point at; deleting the article succeeds, because by then neither row exists.
+
+**Verified against the local database rather than reasoned about**, and pinned by two tests in
+[`tests/db-referee-criteria.test.ts`](../../tests/db-referee-criteria.test.ts) that do the delete both
+ways round — the pair is the only thing saying `no action` was chosen rather than left there by
+drizzle-kit's default. The house already had one instance of this shape and did not say why:
+`revision_blocks_identity_fk` is "no cascade, and no `restrict` either".
+
+The same table pair is worth reading for a second reason: `referee_criteria` is `search_runs` with a
+kind, two poles and a scale, and [`src/db/schema.ts`](../../src/db/schema.ts) states beside it why it
+could not be `search_runs` with a column added. The short version is a unit: `SearchHit.confidence`
+is a 0–100 match strength whose validator clamps negatives to zero, so a signed valence sent through
+it arrives as `0` and every negative judgement is gone with nothing to see.
+
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in
@@ -684,7 +822,7 @@ because the type system will not.
 
 ## Checkpoints — work a failed attempt already paid for
 
-Two stages keep working state that has to **survive their own failure**: `toc` writes a batch of nav
+Two stages keep working state that has to **survive their own failure**: `hierarchy` writes a batch of nav
 labels to `labels-progress.json` as each one comes back, and the PDF reader writes each transcribed
 chunk to `pdf-chunks/<key>.json`. A 429 eight batches into a book then costs one batch rather than
 eight, and these are the expensive calls.
@@ -747,3 +885,4 @@ adapter uses `getDb()` and takes no `tx`.
 - [auth.md](auth.md) — why the auth provider and the database are the same decision
 - [library.md](library.md) — the homepage, and the one file a move to Postgres goes behind
 - [block-ids.md](block-ids.md) — the spine every table keys on
+- [sql.md](sql.md) — how we use SQL: columns over JSON, keys over conventions, dates over booleans

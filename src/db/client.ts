@@ -127,7 +127,7 @@ export function getDb(): Db {
 
 /**
  * Close the pool. For tests and for CLI scripts that would otherwise hang —
- * an open pool keeps the event loop alive, so a `tsx src/toc.ts` that touched
+ * an open pool keeps the event loop alive, so a `tsx src/hierarchy.ts` that touched
  * the database never exits.
  */
 export async function closeDb(): Promise<void> {

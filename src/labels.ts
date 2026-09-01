@@ -4,7 +4,7 @@
  *
  *   npm run labels -- data/constitution
  *
- * **Why this is not part of src/toc.ts's call any more.** A nav label is written
+ * **Why this is not part of src/hierarchy.ts's call any more.** A nav label is written
  * for every gistable block, so this is the one output in the whole pipeline that
  * grows with the article without a bound — measured at 73% of stage 4's answer
  * on a 360-block article, against 27% for the entire tree. One model response
@@ -22,7 +22,7 @@
  * > Generate siblings together; generate disjoint sibling groups in parallel.
  *
  * A label's documented job is to tell its paragraph apart from its neighbours
- * (docs/project/table-of-contents.md), so every pair a reader compares must have
+ * (docs/project/hierarchy.md), so every pair a reader compares must have
  * been written in the same call. `planBatches` therefore packs whole sibling
  * sets and never splits one. Batching on a token window instead would break
  * exactly that and nothing else, which is why it would be hard to notice.
@@ -392,7 +392,7 @@ export interface LabelsFile {
    *   the model, which is titles and nothing else — two trees that cut the
    *   article in completely different places print the same outline, so it was
    *   claiming more than it checked.
-   * - `structureVersion` — the toc prompt version off the tree, so the pair of
+   * - `structureVersion` — the hierarchy prompt version off the tree, so the pair of
    *   prompt versions is recorded rather than just this file's own.
    *
    * **`sourceHash` is read; the other two are still evidence.** `STAMP_SOURCE`
@@ -400,7 +400,7 @@ export interface LabelsFile {
    * at the tree, precisely because the tree carries no such field — so
    * `stampFor` returns this hash and `assertStampAgrees` refuses a write whose
    * declared `inputHash` contradicts it. That refusal is what checks the
-   * pipeline's own bookkeeping: the `toc` step records `hashBlocks` of the
+   * pipeline's own bookkeeping: the `hierarchy` step records `hashBlocks` of the
    * blocks it handed to stage 4, `reasonsNotToPublish` compares that recorded
    * hash against the stored blocks, and a step that recorded a hash of some
    * *other* array would make the article unpublishable with nothing to say why
@@ -408,7 +408,7 @@ export interface LabelsFile {
    * store in one write, the two are compared before either lands.
    *
    * `structureHash` and `structureVersion` are the ones nothing reads yet, and
-   * that is the honest state of it: the `toc` step has no freshness check of its
+   * that is the honest state of it: the `hierarchy` step has no freshness check of its
    * own, so the pipeline still decides it is done by whether its artefacts are
    * there. Recording them is what makes writing that check a small job rather
    * than a re-run of every article; until it is written, they are evidence
@@ -438,7 +438,7 @@ export interface LabelsFile {
    * Absent and empty mean different things and both are fine here: absent is a
    * file written before there was such a thing as a dropped label, empty is a
    * run that dropped none. Nothing branches on the difference; what reads it is
-   * evals/toc-labels.ts, which without this field can only see coverage below 1
+   * evals/hierarchy-labels.ts, which without this field can only see coverage below 1
    * and call it INCOMPLETE — a repair inside the code under measurement
    * silently redefining the measurement, which is the mistake the R2/R3 build
    * made and wrote down. See `LabelRun.dropped`.
@@ -605,8 +605,8 @@ export function oversizedSets(batches: Batch[], max = MAX_BATCH): SiblingSet[] {
  * an older version of this pipeline or edited by hand, and a mixed node would
  * make `walk` recurse straight past its leaf children without complaining.
  *
- * `checkCoverage` in src/toc.ts would catch the result — but only on the path
- * that goes through `generateToc`. `npm run labels -- <dir>` on its own merges
+ * `checkCoverage` in src/hierarchy.ts would catch the result — but only on the path
+ * that goes through `generateHierarchy`. `npm run labels -- <dir>` on its own merges
  * and writes `tree.json` without it, so on that path a lost block would reach
  * disk as a paragraph with no sidebar row and nothing anywhere saying why. That
  * is docs/reusable/silent-success.md, and the fix is to put the check where both
@@ -1006,7 +1006,7 @@ function describeShape(value: unknown): string {
  *
  * Ordinals are safe to interpolate. They are integers this file generated from
  * the batch's own length, never a value read out of the model's response as
- * text — see `nameValue` in src/toc.ts for the rule and why it matters here.
+ * text — see `nameValue` in src/hierarchy.ts for the rule and why it matters here.
  */
 function paragraphList(ns: number[]): string {
   const shown = ns.slice(0, 5).join(", ");
@@ -1137,7 +1137,7 @@ export function parseShortfall(
 function readPairs(raw: string): Map<number, string> {
   /* `stripFence` then `parseJsonFrom`, never bare `JSON.parse`. The reasoning
      that used to sit here — including that `redact` is path-based and so reaches
-     neither the message nor the stack, and that src/toc.ts learned this before
+     neither the message nor the stack, and that src/hierarchy.ts learned this before
      this file was written without it — is now in src/parse-json.ts §
      `stripFence`, next to the code it is about. */
   const parsed = parseJsonFrom<{ labels?: unknown }>(stripFence(raw), "the nav labels");
@@ -1203,7 +1203,7 @@ export function isHeading(block: Block): boolean {
 
 /* Small on purpose. A long stopword list would start deleting the author's own
    vocabulary, which is the thing these words are used to detect. Exported so
-   evals/toc-labels.ts measures with exactly the same rule the gate below uses —
+   evals/hierarchy-labels.ts measures with exactly the same rule the gate below uses —
    a measure that disagreed with its gate would be worse than no measure. */
 const STOPWORDS = new Set(
   ("the a an and or but of to in on at by for with from as is are was were be been being that this " +
@@ -1381,8 +1381,8 @@ export function mergeLabels(tree: Tree, labels: Record<string, string>): Tree {
  * Every gistable block came back with a label — checked before anything is
  * written, on **both** paths into this stage.
  *
- * `generateToc` has `checkCoverage` after its merge, but `npm run labels --
- * <dir>` does not go through `generateToc`: it merges and rewrites `tree.json`
+ * `generateHierarchy` has `checkCoverage` after its merge, but `npm run labels --
+ * <dir>` does not go through `generateHierarchy`: it merges and rewrites `tree.json`
  * on its own. Leaving the only gate in the caller meant the advertised
  * standalone command was the one path with nothing between a short answer and
  * the disk. So the check lives here, at the end of the stage, where both callers
@@ -1432,12 +1432,12 @@ export function assertEveryBlockLabelled(
  * backstop for exactly that.
  *
  * **Here rather than in the caller, because there are two callers.**
- * `generateToc` applied the floor after its merge and `npm run labels -- <dir>`
+ * `generateHierarchy` applied the floor after its merge and `npm run labels -- <dir>`
  * did not — it merged and rewrote `tree.json` with nothing between a
  * heavily-dropped run and the disk. So the advertised backstop depended on which
  * supported command you typed, which is the same fault `assertCoversEveryBlock`
  * and `assertEveryBlockLabelled` were both moved in here to fix. `checkCoverage`
- * in src/toc.ts still runs on the pipeline path and is not redundant with this:
+ * in src/hierarchy.ts still runs on the pipeline path and is not redundant with this:
  * it counts labelled *leaves of the tree*, so it is the one that would notice a
  * merge losing labels this function never hears about. GPT Sol, finding 4.
  *
@@ -1553,8 +1553,8 @@ export interface LabelRun {
    * as one. Nothing is inconsistent if this is never called; the next run pays
    * again if it is called too early.
    *
-   * `generateToc` does not call it at all: it passes this function out on
-   * `TocRun` so that the caller that stores the three artefacts is the one that
+   * `generateHierarchy` does not call it at all: it passes this function out on
+   * `HierarchyRun` so that the caller that stores the three artefacts is the one that
    * closes the gap, which on the pipeline path is after the store has them
    * rather than after this function returns.
    */
@@ -1829,7 +1829,7 @@ async function repairShortfall(
  * It was **0.95** when one model call wrote the whole tree, because the model
  * was allowed to skip a trivial transition sentence — an unlabelled gistable
  * leaf is still only a *warning* in [validate-tree.ts](./validate-tree.ts) for
- * that reason (docs/project/table-of-contents.md). The floor told a used escape
+ * that reason (docs/project/hierarchy.md). The floor told a used escape
  * hatch apart from an answer that had quietly stopped early.
  *
  * It was tightened to **1** when the label pass split out, on the argument that
@@ -1859,8 +1859,8 @@ async function repairShortfall(
  * `LabelRun.dropped` — printed by the CLI, logged by the step, recorded in
  * `labels.json` — is how anybody finds out it has stopped being.
  *
- * **Moved here from src/toc.ts on 2026-08-31, and it is applied here now too.**
- * `generateToc` checked it after its merge and `npm run labels -- <dir>` did
+ * **Moved here from src/hierarchy.ts on 2026-08-31, and it is applied here now too.**
+ * `generateHierarchy` checked it after its merge and `npm run labels -- <dir>` did
  * not, so the advertised backstop depended on which supported entry point ran:
  * twenty small batches each spending their floor could publish a tree missing a
  * fifth of its rows through the standalone command and be refused through the
@@ -2510,8 +2510,8 @@ export function serialise(fn: () => Promise<void>): () => Promise<void> {
 /**
  * Write JSON so that it is either wholly there or not there at all.
  *
- * The twin of `writeAtomic` in src/toc.ts, deliberately duplicated rather than
- * shared: src/toc.ts already imports this file, so a shared helper would have to
+ * The twin of `writeAtomic` in src/hierarchy.ts, deliberately duplicated rather than
+ * shared: src/hierarchy.ts already imports this file, so a shared helper would have to
  * move to a third module for four lines, and the two copies cannot drift in a
  * way that matters — either writes atomically or it does not, and there is no
  * middle behaviour to disagree about.
@@ -2555,12 +2555,12 @@ async function main(): Promise<void> {
 
   const merged = mergeLabels(tree, run.labels);
   /* Beside-then-rename, and the tree second, for the same reason `main()` in
-     src/toc.ts does it: `writeFile` truncates its target before it has anything
+     src/hierarchy.ts does it: `writeFile` truncates its target before it has anything
      to put there, so a process killed mid-write leaves a `tree.json` that exists
      and is not JSON — and existence is what src/pipeline.ts reads as "this step
      is done". This command rewrites the tree of an article somebody may already
      be reading, which makes it the worse of the two places to get this wrong.
-     Both of those are command lines writing separate files. The `toc` *stage* no
+     Both of those are command lines writing separate files. The `hierarchy` *stage* no
      longer writes anything: it returns its three artefacts and its caller stores
      them in one go, where a half-written set is not a state that exists. */
   await writeAtomic(path.join(dir, "labels.json"), run.file);
@@ -2596,7 +2596,7 @@ async function main(): Promise<void> {
       : `Cache:     off — the shared prefix is under the model's ${CACHE_FLOOR_TOKENS}-token floor`,
   );
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nEval:      npm run eval:toc -- ${dir}`);
+  console.log(`\nEval:      npm run eval:hierarchy -- ${dir}`);
 }
 
 /* **`stageCli`, not a bare `main()`.** Every batch here is a paid call, and

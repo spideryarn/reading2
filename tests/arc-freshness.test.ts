@@ -4,13 +4,13 @@
  * `arc.json` recorded `version`, `generator` and `slug` and nothing about its *input*, so
  * `stepIsDone` fell back to "the file exists" (src/pipeline.ts § `stepIsDone`) and the step
  * reported itself done for ever. What kept that from biting was position, not knowledge: `arc` sat
- * in `DEFAULT_INGEST_STEPS` directly behind `toc`, so `cascadeForce` swept it whenever an earlier
+ * in `DEFAULT_INGEST_STEPS` directly behind `hierarchy`, so `cascadeForce` swept it whenever an earlier
  * step was forced.
  *
  * Two things follow, and the second is why this file exists rather than being part of the deferral:
  *
  *  - `cascadeForce` only ever names steps **already in that job** (src/jobs.ts), so a forced
- *    `steps: ["toc"]` has never reached `arc`. **This bug is live today**, not one the deferral
+ *    `steps: ["hierarchy"]` has never reached `arc`. **This bug is live today**, not one the deferral
  *    introduces — anybody who has refreshed just the table of contents has a silently truncated arc.
  *  - Taking `arc` out of the default steps makes that the ordinary refresh path rather than an edge
  *    case, so the check has to exist first.

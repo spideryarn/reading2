@@ -1,12 +1,26 @@
 # Finish the move from files to the database
 
-**Status, 2026-08-31: stages 1 and 2 are built, reviewed and committed. Stage 2.5 is next and
-nothing has been done on it.** Six GPT Sol reviews so far, all NO-SHIP, all accepted.
+**Status, 2026-08-31 evening: stages 1 and 2 are built, reviewed and committed. Stage 2.4 — which
+was not in the plan and had to be — is repaired locally and guarded (`e07a519`). Stage 2.5 is
+next, and its two conditions may already hold: measure before refetching anything.** Seven GPT Sol
+reviews so far, all NO-SHIP or SHIP-WITH-CHANGES, all accepted.
+
+**And one thing the rest of this document assumes that is no longer true.** Stage 2.5 below says the
+corpus arrived through the importer and therefore carries `stamped_html` with `extracted_html` null.
+On this laptop, as of 2026-08-31, **no revision is in that state and not one has `raw_bytes` at
+all** — so the corpus was not written by the importer, and stage 2.5's first condition is already
+met. Its second, that every stored source reference resolves to a readable object, wants measuring
+the same way. `npx tsx scripts/db-corpus-readiness.ts` answers both and exits non-zero if either
+fails; `--seed-a-bad-row` makes a real row bad inside a rolled-back transaction so the checks can be
+watched failing, because on an empty or already-clean corpus both of them pass trivially.
+**Measure with no `vitest` running** — the DB-backed suites create and delete articles as they go,
+and a reading taken during a test run is somebody else's corpus.
 
 | | what | commits |
 |---|---|---|
 | Stage 1 | every input comes from the store; the fingerprints and the blocks guard repaired | `6e3ee67` |
 | Stage 2 | every stage returns its product; `LEGACY_UNCONVERTED_STEPS` is empty | `5e8f744`, `5cf7827` |
+| **Stage 2.4** | **`db:migrate` was applying nothing — repaired, and guarded** | |
 | **Stage 2.5** | **refetch the corpus — by hand, not a script** | |
 | Stage 3 | item 0 (slugs, parallelisable) then the flip | |
 | Stage 4 | delete the filesystem store, **and drop `raw_bytes` with it** | |
@@ -74,6 +88,42 @@ average 38 reported 65 failures, and the same twelve files passed 142/142 as a s
   2026-08-31.
 - **Ask Greg before anything that writes to a database**, every time, including a migration that
   looks routine. Local is a lower bar but still ask before wiping.
+
+**A second piece of work wants the same four files, and it is deliberately going first.**
+[260831ah-toc-on-request-and-the-tree-that-costs-nothing.md](260831ah-toc-on-request-and-the-tree-that-costs-nothing.md)
+takes the 320-second `toc` step off the ingest path: the reader lands on a free tree built from the
+author's own headings, and the model call happens when somebody opens Hierarchy. It is the other
+half of the same 2026-08-30 ask this plan came from — Greg ordered it *latency first, then
+concurrency, then the database move* — so it is a sibling, not a competitor.
+
+**The one contract it has to loosen is yours, and only the internal half of it.**
+[`src/article-input.ts`](../../src/article-input.ts) says *"The blocks and the tree are not optional:
+a stage with neither has nothing to be about"*, and `tree: Tree` is required both there and in the
+public payload. Deferring `toc` makes a tree-less **draft** an ordinary state, so the stage-input seam
+learns to answer "not yet" instead of throwing.
+
+**The public payload stays non-null**, and that is GPT Sol's correction to us rather than our own
+judgment: the reader builds geometry from `article.tree` unconditionally, even in Plain mode
+([`src/web/App.tsx`](../../src/web/App.tsx):1132), and both database readers already refuse a
+tree-less revision on purpose ([`src/store/pg.ts`](../../src/store/pg.ts):1786,
+[`src/store/public-reader.ts`](../../src/store/public-reader.ts):438). **Broad nullability would
+weaken a contract this plan relies on and buy nothing**, so we are not doing it. If you see a change
+widening `tree` beyond the stage-input seam, it is not ours and it is probably wrong.
+
+**It also touches** `src/pipeline.ts` (the `toc` step's registration and `DEFAULT_INGEST_STEPS`) and
+`src/jobs.ts` — which this plan declares one-agent-at-a-time, and that rule holds for both of us.
+
+**One thing you must not take from us: `LEASE_MS` cannot shrink.** An earlier draft of our plan said
+that with `toc` off the ingest path a claim covers ~27 seconds of work, so the 760s lease could come
+down. **That is false and Sol caught it.** An on-demand `toc` is still a job on the same claim
+machinery with the same 320.4s budget ([`src/jobs.ts`](../../src/jobs.ts) § `STEP_BUDGET_MS`), so a
+lease sized for a 27-second ingest self-aborts the one call the reader is actually waiting for. After
+your flip a handoff gets cheap and the lease can be revisited, but it must still exceed `toc` plus the
+deadline margin. Do not inherit the 27-second arithmetic from anything we wrote.
+**The sequencing agreed with Greg, 2026-08-31:** the ToC work uses the gap before stage 2.5 starts to
+land the contract change while these files are clean, so the flip is built on top of it rather than
+colliding with it mid-flight. If you reach `claimSession` and `Article.tree` is already optional,
+that is expected and nothing has gone wrong.
 
 ## Why now
 
@@ -606,13 +656,58 @@ allow, and the agent holding the file was the only one who could see it.
   filesystem adapter turns `ENOENT` into `null`, so `RawDocumentUnavailable` reaches the route as a
   500. Both comments now say the true thing.
 
+### Stage 2.4 — `db:migrate` had been applying nothing, and saying it had
+
+**Not in the original staging, and it had to come first: the merged code needed an
+`article_revisions.quotes` column the laptop did not have, and about 34 suites were red
+because of it.** Found on 2026-08-31 while merging, by probing the catalogue for each
+migration's effect rather than by reading the journal — which cannot show this, because
+the journal is the list of migrations that exist, not the list that ran.
+
+Four published migrations were unreachable here: `0032_jobs_concurrency_cap`,
+`0033_quotes`, `0034_flowery_wolfsbane` and `0036_drop_summary_column`. drizzle's migrator
+keeps a **watermark, not a ledger** — one row, read once, and only entries strictly newer
+than it are applied — so anything whose `when` slips below it is skipped for ever, in
+silence. `0035_timeline`'s hand-written round `when` of `1788200000000` put `0036` below
+the line for everybody, **probably including production**; a branch's own newer generated
+timestamps put the other three below it here.
+
+The whole write-up, including why `0033_quotes` **must not be replayed verbatim** — its
+final CHECK predates `timeline` and would reject rows that now exist — is in
+[260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md](../postmortems/260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md).
+GPT Sol's review is [260831ag-migration-watermark-repair-sol.md](260831ag-migration-watermark-repair-sol.md).
+
+**Done, locally:** [`scripts/db-repair-migration-ledger.ts`](../../scripts/db-repair-migration-ledger.ts)
+reconciled all four plus `0037`, in one transaction under an advisory lock, with every
+effect re-probed after the commit. `0036` destroyed nothing here — zero summary step runs,
+zero non-null summary values. No journal entry is unreachable any more.
+
+**Done, and it is the part that stops this recurring** (`e07a519`): `scripts/migration-ledger.ts`
+holds the judgements, and `db:migrate` runs a preflight before `migrate()` as well as a postflight
+after, under a session advisory lock because drizzle takes none. The preflight refuses — exit 1, no
+DDL, no tick — unless the applied entries are a contiguous prefix **in journal order** (not
+timestamp order: `0035` sits before `0036` and is stamped later, so sorting by `when` would call a
+healthy database broken), every pending entry clears the watermark, and every applied row's hash
+matches its file. `tests/migration-journal.test.ts` fails on any new inversion, with the published
+`0035`/`0036` one grandfathered rather than the rule weakened.
+
+**The postflight is weaker than it reads**, and its own author says so: it compares metadata with
+metadata, and the repair *writes* that metadata, so a bad insert makes it green by construction. The
+catalogue probes are the half that proves the schema.
+
+**Owed on production, and nobody has looked:** there are no production credentials in this
+tree, so the claim that `0036` is unreachable there is an inference from timestamps, not
+an observation. Expect the preflight to refuse the first time it runs against production.
+**That refusal is the guard working, not a reason to force the gate** — the runbook is
+Sol's § 5.
+
 ### Stage 2.5 — refetch the corpus, **before** the flip and not after
 
 **Moved here from stage 4 on 2026-08-31, on Sol's third review.** The plan had refetching as
 tidying-up after the switchover. It is a prerequisite, and the reason is concrete:
 
 The importer writes `extractedHtml: null` while setting `stampedHtml`
-([`src/store/import.ts`](../../src/store/import.ts)), and draft creation carries both columns
+(`src/store/import.ts`), and draft creation carries both columns
 forward. Every article in the corpus arrived that way. So after the flip, a `blocks`-only job over an
 imported article copies `extractedHtml = null`, fails the new guard, and **has no
 `BLOCKS_INPUT_HTML` for the converted stage 3 to run from at all**. Not a degraded result — no input.
@@ -849,7 +944,33 @@ places nobody thinks of as storage:
 
 - **Local dev and the fixtures.** `example/` and `data/` are what every test and every laptop reads.
   76 of 320 test files referenced `example/`, `data/` or `output/` when last counted — an upper
-  bound, grepped by path. Expect this to be most of the work.
+  bound, grepped by path. **28 of 400 as of 2026-08-31.** Expect this to be most of the work.
+
+  **This is being designed by [260828r-worktrees.md](260828r-worktrees.md) rather than here**, and on
+  Greg's decision the ~76-file sweep is deferred until this stage gives it a durable target. Four
+  things came out of that work that change what this stage must do, and three of them correct this
+  document:
+
+  - **`SPIDERYARN_DATA_ROOT` does not redirect a test that computes its own root.**
+    `store-roundtrip:48`, `artefact-copy:55` and `store-parity:109` each do
+    `path.resolve(import.meta.dirname, "..")`. So they follow no store-side change this stage makes,
+    and two of them are enumerators — **this stage could move the seam, watch the suite stay green,
+    and conclude the corpus had followed it.** It would not have.
+  - **Several suites enumerate the corpus rather than naming slugs** — `store-artefact-manifest`,
+    `jobs`, `parse-json`, `store-guarded`, `glossary-lookups`, `ai-call`, `auth-users-fence` all
+    `readdir`. A corpus that shrinks makes them quieter, not redder, and an empty one passes
+    everything. Whatever replaces `data/` needs a **declared inventory that a test asserts**.
+  - **A test-side article loader must take a fixture-shaped contract, not wrap `readArticleFromDir`** —
+    that function is on this stage's own deletion list below, and wrapping it would cancel the payoff
+    the list is claiming ("a function to delete rather than seven `readFile`s to hunt").
+  - **`example/` is already committed** — 6 tracked files, 76 KB, a complete small article. That is
+    the precedent for a committed fixture corpus, and it has been there the whole time.
+
+  **And a constraint that is not technical.** `data/<slug>/chat.json`, `comments.json` and
+  `searches.json` are **Greg's real reading** — his conversations and annotations, not test data;
+  `noema`'s `chat.json` alone is 92 KB. A committed fixture corpus changes what is in this repository
+  for ever. Fixtures that need reader state should **synthesise it rather than copy his**, and
+  nothing under `data/` belongs in a review prompt sent off this machine.
 - **The deploy scripts.** [`scripts/deploy.ts`](../../scripts/deploy.ts) copies `data/` and
   `output/` into the deploy-test worktree, and `deploy-checks.ts` gates on sentinel files beneath
   them. Both need rewriting off that layout, and there is a known trap:
@@ -1020,10 +1141,39 @@ apart. If you extend this list, say which kind each new line is.
   transient store failure *not* classified as corruption.
 - An upload's own slug on retry (`tests/pipeline-slug-claim-files.test.ts`).
 
+**Proven 2026-08-31, and it closes item 1:** the direct `openPgStoreSession` → `pgStoreSession` →
+`commit` path, driven with a **real stage's product** — a real queued `{ steps: ["blocks"] }` job,
+really claimed, through the real `STEPS` registry and `advanceJobWith`, nothing mocked
+(`tests/pg-session-real-step.test.ts`). Read back on another connection: a new revision published,
+`stamped_html` stage 3's own output, `revision_blocks` carrying the ids forward, the step run `done`,
+`jobs.draft_revision_id` cleared. `blocks` because it is the only real stage that costs nothing —
+`fetch`/`extract` want the network, the other eight are paid calls.
+
+**Item 1's heading overstated the gap, and that is worth correcting rather than quietly fixing.**
+`tests/store-pg-session.test.ts` has driven this path through `advanceJobWith` against local Postgres
+since 2026-08-30, sixteen cases, each mutation-tested. What was actually missing was a *real stage's
+product*: every case there uses `fakeArc`/`fakeTweets` returning hand-built literals. § *What is
+proven* worded it correctly ("never executed **in production or in a real ingest**"); the item did not.
+
 **Not proven, and each is a place to be careful:**
 
-- **The direct `pgStoreSession` commit path has never executed** in production or in a real ingest.
-  Stage 3 item 1 is about this and nothing else.
+- **The flip inherits a silent-success hazard, now observed rather than inferred.** With `commit`
+  writing nothing at all, the job still reported `done: true`, published a revision and cleared its
+  pointer. `REVISION_CARRY_POLICY` is a **denylist**, so `blocks`, `stampedHtml` and every late
+  artefact carry into a draft, and `assertProduced` reads the carried copy back and cannot tell a
+  written artefact from an inherited one. **After the flip, a stage whose write silently fails
+  publishes last revision's work and reports success.** The proving test only catches it because it
+  plants markers the real stage cannot reproduce — and neither marker is in `hashBlocks` or
+  `checkTree`, so the publication gate passes anyway. **Any future test of a post-flip stage needs a
+  deliberately-stale fixture or it proves nothing.**
+- **The publication gate reads the `toc` run row and no other.** A mutation that never called
+  `finishStep` published a revision whose `blocks` run was still `running`.
+  [`pg-session.ts`](../../src/store/pg-session.ts)'s own comment predicts this; it is now observed.
+- **A fresh ingest is still only covered by fakes** — `openOrBeginJobDraft` with no published
+  revision to copy needs the network. So is a multi-step walk: only the terminal `done` commit has
+  been driven with a real stage.
+- **The direct commit path has still never executed in production**, which is a different claim from
+  the one above and remains true.
 - **A pair corrupted consistently in both halves**, and any change outside a block (the `<title>`,
   say), are invisible to every guard here *and* to `blocksMatchTheirHtml`. Stated rather than fixed.
 - **A store that lies in `head` as well as in `get`** makes an over-long body surface as an ordinary

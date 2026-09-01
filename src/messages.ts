@@ -488,7 +488,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, toc, glossary, tweets, quotes — each
+ * Six pipeline stages — arc, labels, hierarchy, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress
@@ -1524,3 +1524,83 @@ export const TIMELINE_NO_CHRONOLOGY =
  */
 export const TIMELINE_THIN =
   "This piece is not really telling a story in time. Here is everything it puts in a sequence.";
+
+/* ----------------------------------------------------------------- referee --
+   What a peer reviewer is told in Referee mode, and what everybody is told at
+   the point of adding an article.
+
+   Not a failure and not an error, which is the thing to keep hold of when these
+   get styled: nothing has gone wrong, and nothing here is a refusal. They are
+   facts about where the text goes, put where a person can see them.
+   docs/project/copy.md's first rule still governs the words — say what happens,
+   in words that assume none of this.
+
+   **The tense is the whole point of these two.** The first draft of Referee
+   mode carried a notice saying that using it would send the manuscript to a
+   third-party service. That was false, and falsely reassuring: by the time
+   anybody reaches Referee mode the text has *already* gone — `DEFAULT_INGEST_STEPS`
+   in src/pipeline.ts runs extraction, hierarchy and gists at ingest, and a PDF
+   is read by a model before it is anything else. GPT Sol's review of the plan
+   found it and called it the most serious thing in the draft. So the sentence
+   at the *add* surface is present tense and comes first in the reader's life,
+   and the one in the mode is past tense and does not pretend a choice is still
+   open. docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+
+   There is deliberately **no acknowledgement to tick** in either place. A box
+   that says "I understand" in front of something already done would imply that
+   ticking it makes prohibited use permissible, which is the opposite of true. A
+   blocking attestation at ingest is a real product question and it is Greg's,
+   not ours. */
+
+/**
+ * **One sentence at the point of adding an article**, before any of it happens.
+ *
+ * True of everything this app does, so it belongs on that page whatever happens
+ * to Referee mode — and it is the sentence that makes the past-tense notice
+ * below honest rather than a surprise. No gate, no checkbox, no attestation:
+ * the reader is told, and then they decide.
+ *
+ * It says *processing* rather than naming steps or the provider. Which model
+ * ran which stage is our machinery and changes; that the text leaves this app
+ * is the fact a person needs. src/web/AddArticle.tsx is where it is shown.
+ */
+export const ADDING_SENDS_TEXT_AWAY =
+  "The article's text is sent to a third-party model provider for processing.";
+
+/**
+ * **What a peer reviewer is told, in the past tense, because it has happened.**
+ *
+ * Every publisher and funder checked — NIH, NSF, Elsevier, Springer Nature,
+ * Wiley, NeurIPS, ICLR — treats sending a manuscript under review to a
+ * third-party AI service as a confidentiality breach *in itself*, separately
+ * from anything about who writes the review. Naming them rather than saying
+ * "publishers generally" is deliberate: a referee can go and check the one that
+ * applies to them, and a vague warning is the kind a person scrolls past.
+ *
+ * **It names the audience the mode is for** — public preprints, open-review
+ * submissions, and drafts shared with the reader with the author's consent —
+ * rather than telling somebody to check an agreement they have already
+ * breached. That is the honest instruction at this point in the story: the
+ * text has gone, so the useful sentence is about which manuscripts belong here
+ * at all.
+ *
+ * No hedging, and it must not be styled as an alarm — see
+ * src/web/styles.css § referee mode.
+ */
+export const REFEREE_TEXT_ALREADY_SENT =
+  "This article's text has already been sent to a third-party model provider — that happened when " +
+  "it was added to your library. NIH, NSF, Elsevier, Springer Nature, Wiley, NeurIPS and ICLR all " +
+  "count sending a manuscript that is under review to a third-party AI service as a breach of " +
+  "confidentiality on its own, whoever writes the review. This mode is meant for public preprints, " +
+  "open-review submissions, and drafts shared with you with the author's consent.";
+
+/**
+ * **The second fact, and it applies to the venues that said yes.**
+ *
+ * A separate sentence rather than a fourth clause above, because it is for a
+ * different reader — somebody whose venue permits this — and burying it in the
+ * paragraph they have just decided does not apply to them is how it gets
+ * missed.
+ */
+export const REFEREE_DECLARE_IT =
+  "Venues that permit AI assistance nearly always require you to say that you used it.";

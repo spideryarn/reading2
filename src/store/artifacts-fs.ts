@@ -95,12 +95,12 @@ export function fsLocations(slug: string): ArtifactLocations {
  * Every path this project writes a pipeline artefact to. **The one place.**
  *
  * Keyed by step and then by kind, because two kinds share a path and one kind
- * has two paths — see the header. Read it as: *when `toc` produces `blocks`, it
+ * has two paths — see the header. Read it as: *when `hierarchy` produces `blocks`, it
  * goes here*.
  *
- * `blocks` appearing under both `blocks` and `toc` is not a mistake and must
+ * `blocks` appearing under both `blocks` and `hierarchy` is not a mistake and must
  * not be tidied away. Stage 3's copy is the one stage 3 checks, so that a
- * `{ steps: ["blocks"] }` job can skip itself without `toc` having run; stage
+ * `{ steps: ["blocks"] }` job can skip itself without `hierarchy` having run; stage
  * 4's copy is the one the later stages read, so that the tree and the blocks it
  * was built from are guaranteed to be a pair. Removing either breaks something
  * that is currently right.
@@ -134,7 +134,7 @@ export const PATHS: {
     blocks: (at) => at.htmlFile.replace(/\.html$/, ".blocks.json"),
     stampedHtml: (at) => at.htmlFile,
   },
-  toc: {
+  hierarchy: {
     tree: (at) => path.join(at.dir, "tree.json"),
     labels: (at) => path.join(at.dir, "labels.json"),
     blocks: (at) => path.join(at.dir, "blocks.json"),
@@ -389,7 +389,7 @@ async function readOne(
 /**
  * Write, then move into place.
  *
- * The same recipe as `writeAtomic` in src/toc.ts and src/labels.ts, which is
+ * The same recipe as `writeAtomic` in src/hierarchy.ts and src/labels.ts, which is
  * where it was written first — copied rather than reinvented, and the reason
  * this file exists is so it stops being copied a third time. `rename` within a
  * directory is atomic on every filesystem we care about, so a reader sees
@@ -542,7 +542,7 @@ export function createFsArtifactStore(
      * The one thing this must not do is guess. GPT Sol, 2026-08-28.
      */
     async hasEarlierBlocks(slug) {
-      const outcome = await readOutcome(locate(slug), slug, "toc", "blocks");
+      const outcome = await readOutcome(locate(slug), slug, "hierarchy", "blocks");
       if (outcome.state === "absent") return false;
       if (outcome.state === "unusable") return true;
       const blocks = (outcome.value as ArtifactMap["blocks"]).blocks;
@@ -693,6 +693,17 @@ export const fsSourceStore: SourceStore = {
        answers 404 on `err.code === "ENOENT"`, which the filesystem blob store
        still raises for a missing object, so the route's behaviour is
        unchanged. */
-    return await readRawBytes(manifest, { slug });
+    const bytes = await readRawBytes(manifest, { slug });
+    /* **The reader's own name for the file, and only when it is theirs.** A
+       fetched document has no name anybody chose, and `manifest.filename` is
+       absent for it; `origin` is what tells the two apart, and it is absent —
+       meaning `"url"` — on every manifest written before uploads existed
+       (src/fetch.ts § `RawManifest.origin`). The route falls back to the slug.
+       Carried across when `sendSource` moved to this seam on 2026-08-31: the
+       Postgres half reads the same fact out of `raw_filename`. */
+    return {
+      bytes,
+      filename: manifest.origin === "upload" ? (manifest.filename ?? null) : null,
+    };
   },
 };

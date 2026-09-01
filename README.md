@@ -115,7 +115,7 @@ are indexed — list the folder and read the file names.
 
 ## The one contract that matters
 
-Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — ToC, summaries,
+Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Hierarchy, summaries,
 scroll position, highlights, notes, questions — addresses text by that id, never by character offset
 or CSS selector. Ids are minted once and preserved on every later run, so they survive re-extraction.
 

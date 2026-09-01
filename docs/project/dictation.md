@@ -343,6 +343,18 @@ once for that origin. And the origin includes the port, which Vite moves.
 - **Contextual biasing in the browser.** Chrome ships `SpeechRecognitionPhrase` with a `boost`,
   which would improve the *live* half the same way the vocabulary improves the final one. Unused.
 
+## This is not two-way voice
+
+Worth saying plainly, because the UI implies otherwise. The chat composer's button says **"Talk"**
+and flips to **"Listening…"**, and review mode wears a `Speech` icon under *"Say what you took from
+this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
+sound.** There is no text-to-speech, no WebRTC, no WebSocket, and no speech-to-speech anywhere.
+
+A voice-dialogue feature would be entirely greenfield, and the accounting for it has already been
+decided in [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the OpenAI
+Realtime API cannot go through OpenRouter, so it would be the first paid call in the product that
+does not.
+
 ## See also
 
 [reader-profile.md](reader-profile.md) · [comments.md](comments.md) · [glossary.md](glossary.md) ·
@@ -350,4 +362,5 @@ once for that origin. And the origin includes the port, which Vite moves.
 [copy.md](copy.md) · [logging.md](logging.md) ·
 [260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md) ·
 [260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md) ·
-[260827b-microphone-library-options.md](../research/260827b-microphone-library-options.md)
+[260827b-microphone-library-options.md](../research/260827b-microphone-library-options.md) ·
+[realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)

@@ -1,5 +1,5 @@
 /**
- * **The eight stage CLIs listed below open the ledger before they spend** — and
+ * **The stage CLIs listed below open the ledger before they spend** — and
  * nothing here claims that is every CLI that spends. What is checked and what
  * is not is spelled out under *The edge of this*, because the first version of
  * this header said "every paid CLI" and one of the npm scripts in this very
@@ -7,7 +7,7 @@
  *
  * [`src/cli-ledger.ts`](../src/cli-ledger.ts) says what this is for:
  *
- * > **Run a CLI command with the ledger open**, so that `npm run toc` is money
+ * > **Run a CLI command with the ledger open**, so that `npm run hierarchy` is money
  * > that appears in `npm run cost` rather than money that vanishes.
  *
  * Eight npm scripts start a module that spends money — the seven Messages
@@ -117,7 +117,7 @@
  *
  * Four tests, and each is narrower than the sentence people will remember:
  *
- * - **`wraps every listed stage CLI entrypoint`** checks the nine modules in
+ * - **`wraps every listed stage CLI entrypoint`** checks the ten modules in
  *   `PAID_CLIS`, and nothing else. It says nothing about evals, which open the
  *   ledger with the `"eval"` scope.
  * - **`names every package.json entry module that imports a provider seam`**
@@ -167,7 +167,8 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
   "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
   "src/quotes.ts": "npm run quotes — streamMessage",
   "src/timeline.ts": "npm run timeline — streamMessage",
-  "src/toc.ts": "npm run toc — streamMessage",
+  "src/quiz.ts": "npm run quiz — streamMessage",
+  "src/hierarchy.ts": "npm run hierarchy — streamMessage",
   "src/tweets.ts": "npm run tweets — streamMessage",
 };
 
@@ -1380,7 +1381,7 @@ describe("the listed stage CLIs open the ledger", () => {
      * the file.
      *
      * **Both tails, because the migration is deliberately partial.**
-     * `src/toc.ts` still ends with the guard-and-`withLedger` pair; the three
+     * `src/hierarchy.ts` still ends with the guard-and-`withLedger` pair; the three
      * files that could be edited on 2026-08-28 end with
      * `await stageCli(import.meta.url, main)`. Five of the eight were dirty with
      * other agents' work, which is why this list is not eight long — and holding
@@ -1396,12 +1397,12 @@ describe("the listed stage CLIs open the ledger", () => {
 
     const realFiles: readonly RealControl[] = [
       {
-        file: "src/toc.ts",
+        file: "src/hierarchy.ts",
         tail: 'if (isMain) void withLedger("cli", main);',
         mutations: [
           [
             "if (isMain) void main();",
-            'src/toc.ts — the entrypoint branch calls main() directly rather than withLedger("cli", …)',
+            'src/hierarchy.ts — the entrypoint branch calls main() directly rather than withLedger("cli", …)',
           ],
           [
             /* **The bypass the first version of this gate passed.** The wrapper
@@ -1409,7 +1410,7 @@ describe("the listed stage CLIs open the ledger", () => {
                is handed to `.then`, so the whole stage runs after the ledger has
                closed. Greg reproduced this one on this file by hand. */
             'if (isMain) void withLedger("cli", async () => {}).then(main);',
-            'src/toc.ts — withLedger("cli", …) is not passed main(), so main() runs outside the ledger',
+            'src/hierarchy.ts — withLedger("cli", …) is not passed main(), so main() runs outside the ledger',
           ],
         ],
       },
@@ -1754,7 +1755,7 @@ describe("stageCli itself opens the ledger", () => {
         'src/cli-ledger.ts — stageCli() does not open withLedger with the "cli" scope',
       ],
       [
-        /* The same bypass Greg reproduced by hand on `src/toc.ts`, one level
+        /* The same bypass Greg reproduced by hand on `src/hierarchy.ts`, one level
            down: the ledger opens around nothing and the stage runs after it has
            closed. Here it would do that to every CLI at once. */
         "the wrapper handed an empty function, with main chained onto it",

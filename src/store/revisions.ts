@@ -68,7 +68,7 @@
  *   a publishable Postgres revision, it produced files.
  * - A **re-extraction** of an article already in Postgres gets a draft carrying
  *   the *previous* blocks, while the new ones land on disk. `recordStep` then
- *   stamps `toc` with the hash of the blocks it really ran against, the
+ *   stamps `hierarchy` with the hash of the blocks it really ran against, the
  *   publication guard compares that against the draft's blocks, and the publish
  *   is refused — *"the tree was built from different blocks"*. Also correct,
  *   and it is the guard catching exactly the divergence it was written for.

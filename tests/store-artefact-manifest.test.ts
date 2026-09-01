@@ -28,7 +28,7 @@
  *
  * - **A pipeline artefact** → a whole-artefact JSONB column on
  *   `article_revisions`, plus an entry in the `revision_step_runs` CHECK **if
- *   it is a `StepName`** (`labels.json` is not — it is one of `toc`'s outputs).
+ *   it is a `StepName`** (`labels.json` is not — it is one of `hierarchy`'s outputs).
  * - **Reader state** → its own table keyed `(article_id, …)` with an
  *   `owner_id`, and **never** on a revision: a revision-keyed blob is deleted
  *   by re-extraction, which is the exact failure the identity split exists to
@@ -155,7 +155,7 @@ const HOMES: Record<string, string> = {
   "meta.json": "article_revisions.{title,byline,site_name,lang,excerpt,note,final_url,fetched_at}",
   "blocks.json": "revision_blocks (+ block_identities)",
   "tree.json": "article_revisions.tree",
-  "labels.json": "article_revisions.labels — a `toc` output, NOT a step of its own",
+  "labels.json": "article_revisions.labels — a `hierarchy` output, NOT a step of its own",
   /* The manifest is the column. The image bytes are content-addressed objects
      in the `sources` bucket and get no row of their own — an image is not the
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
@@ -178,7 +178,7 @@ const HOMES: Record<string, string> = {
      once it is in Postgres: on the filesystem `scripts/checkpoints-sweep.ts`
      sweeps the `data/` root, which is a filesystem answer that does not carry
      over. docs/plans/260827aa-delete-the-importer.md § D2 records it as open. */
-  "labels-progress.json": "checkpoints (namespace 'toc-labels') — decided, not yet wired",
+  "labels-progress.json": "checkpoints (namespace 'hierarchy-labels') — decided, not yet wired",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
@@ -230,7 +230,7 @@ const NOT_MIGRATED: Record<string, string> = {
      That decision was reversed and this list was never told. `src/db/schema.ts`
      § checkpoints names **both** checkpoint forms as the table's Postgres home,
      and `src/store/checkpoints.ts`'s namespace is a closed set containing
-     exactly `toc-labels` and `pdf-chunk`. So it is migrated in the only sense
+     exactly `hierarchy-labels` and `pdf-chunk`. So it is migrated in the only sense
      this list asks about: it has a home, and the home was chosen deliberately.
 
      It stays in this list rather than moving to `HOMES` for one reason — it is

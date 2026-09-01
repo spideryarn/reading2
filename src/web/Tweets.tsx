@@ -75,6 +75,7 @@ import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
+import { recordLog } from "./log-buffer.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
@@ -150,6 +151,17 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
          instead. docs/project/logging.md describes the same split for the
          server. */
       console.error(`[tweets] could not read the thread for ${slug}`, err);
+      /* **This one reaches neither the global handler nor `AppBoundary`.** It is
+         caught here and turned into a sentence, which is right for the reader
+         and means nothing anywhere else knows it happened — so without this line
+         a thread that will not load is a bug report with an empty timeline
+         behind it. The name only; the message is what the console line above is
+         for. See src/web/log-buffer.ts. */
+      recordLog({
+        kind: "client-error",
+        source: "tweets",
+        name: err instanceof Error ? err.name : "Error",
+      });
       /* **A failed reload must not take the thread away.** `load` is not only
          the opening read — `onFinished` below calls it again when a job
          finishes — and the posts render only in the `ready` branch, so

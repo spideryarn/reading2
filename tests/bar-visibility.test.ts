@@ -8,8 +8,7 @@
  * completely broken implementation is indistinguishable from a working one. On
  * 2026-08-27 it was indistinguishable from a working one for ten minutes.
  *
- * So the arithmetic lives outside the listener and is pinned here instead —
- * the same move, for the same reason, as `nextModeIndex` in Dock.tsx.
+ * So the arithmetic lives outside the listener and is pinned here instead.
  */
 import { describe, expect, it } from "vitest";
 import { BAR_HIDE_AFTER, BAR_KEEP_UNTIL, stepBar } from "../src/web/scroll.js";

@@ -118,8 +118,11 @@ interface Advanced {
  *
  * **This used to say "the reading view has one for the thread panel, one for
  * the glossary and one for summaries", and that is not true.** The bands are
- * mutually exclusive — `mode === …` in App.tsx — and the default mode is `toc`,
- * which opens no band, so the reading view mounts *none*. The comment was
+ * mutually exclusive — `mode === …` in App.tsx — and the default mode opens no
+ * band, so the reading view mounts *none*. (That default was `toc` when this was
+ * written, `hierarchy` after the 2026-08-29 rename, and `plain` since 2026-08-31;
+ * src/modes.ts § `DEFAULT_MODE` is the one to read. The conclusion survived all
+ * three, which is why the sentence no longer names one.) The comment was
  * written when it was true and outlived it. It is called out rather than
  * quietly corrected because it cost real time in 2026-08-27's CPU work: the
  * investigation started from "six pollers on the reading view", which is a

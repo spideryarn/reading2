@@ -112,7 +112,7 @@ renderer was that fact.
 
 ### And on the normal path, the pipeline breakpoints lose money
 
-`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, toc, arc`
+`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy, arc`
 ([src/pipeline.ts:102](../../src/pipeline.ts)) — `tweets`, `glossary` and `summary` are things a
 reader asks for later, by Greg's decision of 2026-08-25. So adding an article runs `arc` and nothing
 that could read what `arc` wrote, and a top-up minutes or days later has long missed the 5-minute
@@ -140,7 +140,7 @@ optimisation, which is the wrong way round. It costs less than it sounds — the
 first touch, it is that explain used to hit a cache *never* and chat re-paid the article on *every
 turn*.
 
-**Not cached, on purpose:** the table of contents (one call per article — a prefix used once costs
+**Not cached, on purpose:** the hierarchy (one call per article — a prefix used once costs
 1.25× and earns nothing back) and summaries (each batch sends only the slice its scope covers, so
 batches mostly share nothing; the `repair` retry was moved out of position zero as the prerequisite,
 but the breakpoint is not in yet).

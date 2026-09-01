@@ -549,6 +549,7 @@ describe("the public article payload", () => {
     role: "footnote",
     treatment: "supplement",
     noteId: "spya-note-0123456789",
+    context: { id: "c-0123456789", type: "callout" },
   };
 
   it("carries every Block field that crosses, and drops the one that does not", () => {
@@ -571,6 +572,9 @@ describe("the public article payload", () => {
     /* Exact rather than `toContain`, in both directions at once: a field that
        stopped crossing fails here just as loudly as one that started. */
     expect(keyPaths(out).filter((k) => k.startsWith("blocks[]")).sort()).toEqual([
+      "blocks[].context",
+      "blocks[].context.id",
+      "blocks[].context.type",
       "blocks[].gistable",
       "blocks[].html",
       "blocks[].id",
@@ -584,6 +588,48 @@ describe("the public article payload", () => {
       "blocks[].words",
     ]);
     expect(JSON.stringify(out)).not.toContain("PRIVATE-EDITORIAL-NOTE-CANARY");
+  });
+
+  /**
+   * **A nested object is where "rebuilt field by field" is easiest to lose.**
+   *
+   * `Required<Block>` above catches a new field on the *block*. It cannot catch
+   * a new field on `Block.context`, because the fixture satisfies the type
+   * whatever else the object carries at runtime — and a spread of the whole
+   * context would pass that through. So the canary is inside the nested value.
+   * GPT Sol's review, 2026-08-31.
+   */
+  it("rebuilds the context rather than passing the object through", () => {
+    const out = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [
+        {
+          ...EVERY_BLOCK_FIELD,
+          context: {
+            id: "c-0123456789",
+            type: "callout",
+            ownerOnly: "PRIVATE-CONTEXT-CANARY",
+          } as Block["context"],
+        },
+      ],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(JSON.stringify(out)).not.toContain("PRIVATE-CONTEXT-CANARY");
+    expect(keyPaths(out).filter((k) => k.startsWith("blocks[].context")).sort()).toEqual([
+      "blocks[].context",
+      "blocks[].context.id",
+      "blocks[].context.type",
+    ]);
   });
 
   /**

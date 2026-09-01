@@ -109,6 +109,19 @@ describe("proseOf", () => {
     ]);
     expect(text).toBe("Seth argues otherwise.");
   });
+
+  /* A callout is the author's own voice in a box — src/callouts.ts — and on the
+     article that kind was invented for, the names ("PHASEONE10841",
+     "Persistent-Astra") are said mostly inside them. Leaving the new kind out
+     would have cost the reader exactly those words in dictation, silently.
+     GPT Sol's review, 2026-08-31. */
+  it("reads a callout too, because a callout is the author speaking", () => {
+    const text = proseOf([
+      { kind: "callout", text: "PHASEONE10841 sent the first message." },
+      { kind: "text", text: "Seth argues otherwise." },
+    ]);
+    expect(text).toBe("PHASEONE10841 sent the first message.\nSeth argues otherwise.");
+  });
 });
 
 describe("pack", () => {

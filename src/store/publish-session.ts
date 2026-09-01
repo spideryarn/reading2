@@ -98,6 +98,7 @@ import {
   openOrBeginJobDraft,
   publishRevisionIn,
 } from "./pg-revisions.js";
+import { type DraftBase, refuseIfBaseMoved } from "./pg-session.js";
 import type { JobEndTransition, JobTransition, StoreSession } from "./session.js";
 
 /**
@@ -162,6 +163,26 @@ export function publishingSession(
    */
   const publishAndFinish = async (ending: JobEnding): Promise<Job> => {
     const draft = await openOrBeginJobDraft({ slug, job });
+    /* **What this draft was copied from**, read before the transaction that
+       replaces it. See `DraftBase` in pg-session.ts.
+
+       **Worth far less here than it is there, and saying so is the point.** This
+       decorator opens its draft lazily, at the moment of publication, so the
+       base is a few milliseconds old and almost nothing can have moved in
+       between. `pgStoreSession` opens its draft when the claim starts and
+       publishes minutes later, which is the window the guard is really for —
+       stage 3 item 4 of docs/plans/260831b-finish-the-database-move.md, and it
+       becomes reachable at the flip rather than before it.
+
+       So the reopen branch is not resolved here at all. `pgStoreSession` reads
+       the article's current revision for it, which is worth a query there
+       because the draft may be minutes old; here it would be a query to compare
+       a value with itself, and the case it stands for — a draft this job opened
+       on an earlier claim and could not publish — is exactly the one where the
+       answer is not knowable without the column that does not exist. */
+    const base: DraftBase = draft.created
+      ? { how: "minted", revisionId: draft.basedOn }
+      : { how: "unknown", why: "a draft reopened by publishingSession records no lineage" };
     const ref: JobDraftRef = {
       slug,
       articleId: draft.articleId,
@@ -217,6 +238,20 @@ export function publishingSession(
         /* Fences on the live attempt and clears `jobs.draft_revision_id` as it
            goes, so no pointer is left for the sweeper to treat as ownership. */
         published = await publishRevisionIn(tx, { slug, revisionId: ref.revisionId, job });
+        /* **The base has to still be the base.** The article identity check
+           above catches a slug re-created under us; this catches the commoner
+           thing, which is a *revision* published under us — by `db:import`, by
+           a hand-run `publishRevision`, or by another job — between this draft
+           being copied and this statement. Without it the copy quietly wins and
+           the other publication is gone. Stage 3 item 4 of
+           docs/plans/260831b-finish-the-database-move.md. The throw rolls the
+           publication and `finishIn` back together. */
+        refuseIfBaseMoved({
+          slug,
+          revisionId: ref.revisionId,
+          base,
+          publishedOver: published.previousRevisionId,
+        });
 
         /* **Last, and inside the same transaction as the publication.** This is
            Sol's critical 2: `importArticle` committed its own transaction before

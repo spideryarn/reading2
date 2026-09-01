@@ -16,7 +16,7 @@
  * **It was red for the steps with no freshness check and green for the three
  * that had one**, and that difference is the whole argument for `has()`
  * parsing. `threadIsCurrent` read `tweets.json` itself and answered false when
- * it would not parse, so `tweets` was never exposed; `arc`, `toc`, `extract`
+ * it would not parse, so `tweets` was never exposed; `arc`, `hierarchy`, `extract`
  * and `blocks` had no such function, and were.
  *
  * Written in the past tense since D0, because the accident of protection has
@@ -249,9 +249,9 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   await writeFile(pathFor(at, "extract", "extractedHtml"), STAMPED_HTML, "utf-8");
   await writeJson(pathFor(at, "extract", "meta"), META);
   await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
-  await writeJson(pathFor(at, "toc", "blocks"), { blocks: BLOCKS });
-  await writeJson(pathFor(at, "toc", "tree"), TREE);
-  await writeJson(pathFor(at, "toc", "labels"), {
+  await writeJson(pathFor(at, "hierarchy", "blocks"), { blocks: BLOCKS });
+  await writeJson(pathFor(at, "hierarchy", "tree"), TREE);
+  await writeJson(pathFor(at, "hierarchy", "labels"), {
     version: "labels/1",
     generator: CAPABLE_MODEL,
     slug: SLUG,
@@ -404,8 +404,8 @@ describe("a half-written artefact must not report its step finished", () => {
   const cases: { step: StepName; kind: ArtifactKind }[] = [
     { step: "extract", kind: "meta" },
     { step: "blocks", kind: "blocks" },
-    { step: "toc", kind: "tree" },
-    { step: "toc", kind: "labels" },
+    { step: "hierarchy", kind: "tree" },
+    { step: "hierarchy", kind: "labels" },
     { step: "arc", kind: "arc" },
     { step: "tweets", kind: "tweets" },
     { step: "glossary", kind: "glossary" },
@@ -508,7 +508,7 @@ describe("what a step says it produces, and where that lands", () => {
      would lose. */
   it("keeps the two blocks.json files apart", () => {
     const where = fsLocations("x");
-    expect(pathFor(where, "blocks", "blocks")).not.toBe(pathFor(where, "toc", "blocks"));
+    expect(pathFor(where, "blocks", "blocks")).not.toBe(pathFor(where, "hierarchy", "blocks"));
     expect(pathFor(where, "extract", "extractedHtml")).toBe(
       pathFor(where, "blocks", "stampedHtml"),
     );
@@ -547,10 +547,10 @@ describe("the file store round-trips every kind", () => {
     },
     { step: "blocks", kind: "blocks", from: "writes", file: "output/writes.blocks.json" },
     { step: "blocks", kind: "stampedHtml", from: "writes", file: "output/writes.html" },
-    { step: "toc", kind: "blocks", from: "writes", file: "data/writes/blocks.json" },
-    { step: "toc", kind: "tree", from: "writes", file: "data/writes/tree.json" },
+    { step: "hierarchy", kind: "blocks", from: "writes", file: "data/writes/blocks.json" },
+    { step: "hierarchy", kind: "tree", from: "writes", file: "data/writes/tree.json" },
     {
-      step: "toc",
+      step: "hierarchy",
       kind: "labels",
       from: "noema-mythology-of-conscious-ai",
       file: "data/noema-mythology-of-conscious-ai/labels.json",
@@ -799,10 +799,10 @@ describe("glossary currency, through the stamp rather than a function", () => {
     over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
     await writeJson(pathFor(where, "glossary", "glossary"), glossary);
-    await writeJson(pathFor(where, "toc", "tree"), over.tree ?? TREE);
+    await writeJson(pathFor(where, "hierarchy", "tree"), over.tree ?? TREE);
     await writeJson(pathFor(where, "extract", "meta"), over.meta ?? META);
-    if (blocks) await writeJson(pathFor(where, "toc", "blocks"), { blocks });
-    else await rm(pathFor(where, "toc", "blocks"), { force: true });
+    if (blocks) await writeJson(pathFor(where, "hierarchy", "blocks"), { blocks });
+    else await rm(pathFor(where, "hierarchy", "blocks"), { force: true });
     return stepIsDone(STEPS.glossary, { ...ctxAt(where), slug }, store);
   }
 
@@ -872,7 +872,7 @@ describe("a corrupt artefact does not put the article in a log line", () => {
   const PROSE = "Consciousness is not a spreadsheet and never was";
 
   it("reads null and says nothing about what the file contained", async () => {
-    const file = pathFor(where, "toc", "blocks");
+    const file = pathFor(where, "hierarchy", "blocks");
     await mkdir(path.dirname(file), { recursive: true });
     /* A file holding article prose rather than JSON — an artefact clobbered by
        a write that went to the wrong path, or one whose first bytes are the
@@ -897,7 +897,7 @@ describe("a corrupt artefact does not put the article in a log line", () => {
     expect(raw).toContain("Consciousn");
 
     // And now the thing itself: reading through the store surfaces nothing.
-    expect(await store.read(SLUG, "toc", "blocks")).toBeNull();
+    expect(await store.read(SLUG, "hierarchy", "blocks")).toBeNull();
   });
 
   it("describes the breakage without quoting it", () => {
@@ -944,12 +944,12 @@ describe("a step that started and did not finish must not report itself done", (
    */
   it("catches a generation half-replaced by a run that died", async () => {
     await writeWholeArticle(at);
-    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
+    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(true);
 
-    const attempt = await store.beginStep(SLUG, "toc");
+    const attempt = await store.beginStep(SLUG, "hierarchy");
     // Generation B's tree, valid in every way, landing beside generation A's
     // labels and blocks.
-    await writeJson(pathFor(at, "toc", "tree"), {
+    await writeJson(pathFor(at, "hierarchy", "tree"), {
       version: "toc/2",
       generator: CAPABLE_MODEL,
       slug: SLUG,
@@ -965,7 +965,7 @@ describe("a step that started and did not finish must not report itself done", (
         },
       },
     });
-    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(false);
+    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(false);
 
     /* And the marker is the *only* thing holding it back — clearing it says
        done again, over exactly the mixed generation above.
@@ -976,8 +976,8 @@ describe("a step that started and did not finish must not report itself done", (
        is that nothing tells it that unless a run really did return. A review
        read the first version of this test as claiming more than that, which it
        did. */
-    await store.finishStep(SLUG, "toc", attempt);
-    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
+    await store.finishStep(SLUG, "hierarchy", attempt);
+    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(true);
   });
 
   /**
@@ -991,16 +991,16 @@ describe("a step that started and did not finish must not report itself done", (
   it("will not let one runner's success clear another runner's attempt", async () => {
     await writeWholeArticle(at);
 
-    const first = await store.beginStep(SLUG, "toc");
-    const second = await store.beginStep(SLUG, "toc"); // overwrites the marker
+    const first = await store.beginStep(SLUG, "hierarchy");
+    const second = await store.beginStep(SLUG, "hierarchy"); // overwrites the marker
 
-    await store.finishStep(SLUG, "toc", first);
-    expect(await store.interrupted(SLUG, "toc"), "the second attempt is still live").toBe(
+    await store.finishStep(SLUG, "hierarchy", first);
+    expect(await store.interrupted(SLUG, "hierarchy"), "the second attempt is still live").toBe(
       true,
     );
 
-    await store.finishStep(SLUG, "toc", second);
-    expect(await store.interrupted(SLUG, "toc")).toBe(false);
+    await store.finishStep(SLUG, "hierarchy", second);
+    expect(await store.interrupted(SLUG, "hierarchy")).toBe(false);
   });
 
   it("says so for every step, artefacts or no artefacts", async () => {
@@ -1145,7 +1145,7 @@ describe("every stamped step covers everything its prompt reads", () => {
    */
   it("not done once the tree has been re-cut underneath them", async () => {
     const after = await statesAfter(async () => {
-      await writeJson(pathFor(at, "toc", "tree"), {
+      await writeJson(pathFor(at, "hierarchy", "tree"), {
         ...TREE,
         nodes: {
           n0000: { ...(TREE as Tree).nodes.n0000, gist: "A different gist entirely." },
@@ -1574,8 +1574,8 @@ describe("valid JSON of the wrong shape is not an artefact", () => {
   });
 
   const wrong: { step: StepName; kind: ArtifactKind; body: unknown }[] = [
-    { step: "toc", kind: "tree", body: { nodes: [] } },
-    { step: "toc", kind: "labels", body: { labels: [] } },
+    { step: "hierarchy", kind: "tree", body: { nodes: [] } },
+    { step: "hierarchy", kind: "labels", body: { labels: [] } },
     { step: "blocks", kind: "blocks", body: { blocks: {} } },
     { step: "arc", kind: "arc", body: { entries: {} } },
     { step: "extract", kind: "meta", body: { slug: "" } },

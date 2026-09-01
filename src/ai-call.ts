@@ -146,6 +146,36 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Mirror — the referee's own notes read back to them** (src/referee-mirror.ts).
+     Search's shape and search's route, with one of search's two reasons and not
+     the other.
+
+     `require_parameters` carries over unchanged: it means "only upstreams that
+     support the parameters actually sent", and a provider that quietly drops
+     one answers something the validator then throws away as unreadable.
+
+     The `order` pin does NOT carry over for the caching reason the entries
+     above give — this is the one paying job that never sends the article, so
+     there is no cached prefix here to keep landing on and no `cache_control`
+     anywhere in the request. It is pinned for a different reason: this call is
+     a page of instructions about what not to say, and the only evidence it
+     works is a transcript read by a person (evals/referee-mirror.ts). A silent
+     switch of upstream changes the thing that transcript is evidence about,
+     and nothing in the answer would look any different. */
+  "referee-mirror": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
+  /* The same policy as `explain` and for the same two reasons. The upstream is
+     pinned so that a reader working through a batch of questions keeps hitting
+     the cached article rather than paying for it once per answer; and
+     `require_parameters` is what stops a fallback serving the request having
+     silently dropped `cache_control`, which is a full-price answer that looks
+     exactly like a cheap one. */
+  "quiz-mark": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   dictation: {
     path: "/v1/chat/completions",
     provider: { zdr: true, require_parameters: true },
@@ -199,7 +229,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
  */
 export type ChatJob = Exclude<
   AiJob,
-  | "toc"
+  | "hierarchy"
   | "labels"
   | "arc"
   | "tweets"
@@ -208,6 +238,9 @@ export type ChatJob = Exclude<
   | "ideas"
   | "sketch"
   | "timeline"
+  /* Generation only. `quiz-mark` is a separate `Task` and stays IN — it is a
+     request-path call on chat/completions and needs a route below. */
+  | "quiz"
 >;
 
 /**

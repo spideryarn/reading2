@@ -418,6 +418,8 @@ export function publicBlocksQuery(
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
+      contextId: revisionBlocks.contextId,
+      contextType: revisionBlocks.contextType,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -470,6 +472,9 @@ export const pgPublicReader: PublicArticleReader = {
               ? {}
               : { treatment: row.treatment as NonNullable<PublicBlock["treatment"]> }),
             ...(row.noteId === null ? {} : { noteId: row.noteId }),
+            ...(row.contextId === null || row.contextType === null
+              ? {}
+              : { context: { id: row.contextId, type: row.contextType as "callout" } }),
           }),
         ),
         undefined,

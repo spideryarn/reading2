@@ -177,6 +177,14 @@ const COSTS: Partial<Record<Mode, string>> = {
  * either. src/web/public-artefacts.ts.
  */
 export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap | null {
+  /* **Plain is the article and nothing else**, so there is nothing here a
+     visitor could be short of: no artefact is read, no model call is made, and
+     the prose is the payload they already hold. Named by hand rather than left
+     to the fall-through for the reason Outline had to be — the fall-through is
+     fail-closed, and the mode after next will be owners-only until somebody
+     says otherwise. */
+  if (mode === "plain") return null;
+
   /* The table of contents, the granularity zoom and the spine are the whole
      point of the feature and cost nothing: they are drawn from the tree in the
      payload the visitor already has. */

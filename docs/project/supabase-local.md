@@ -53,7 +53,7 @@ sqlstate `23503`, a foreign key such as `uploads_owner_fk` with no owner row. Fo
 
 | | | |
 |---|---|---|
-| `dev@spideryarn.local` | `DEV_OWNER_ID` | what rows written *outside* a request belong to — the CLI, the pipeline, `db:import`. [`src/owner.ts`](../../src/owner.ts) |
+| `dev@spideryarn.local` | `DEV_OWNER_ID` | what rows written *outside* a request belong to — the CLI and the pipeline. [`src/owner.ts`](../../src/owner.ts) |
 | `greg@gregdetre.com` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
 
 The second has a password, so signing in is the email form on the landing page — no Google, nothing
@@ -103,7 +103,7 @@ much the CLI has ingested: those rows belong to `DEV_OWNER_ID`. The setting that
 SPIDERYARN_OWNER_ID=<the admin id from src/admin.ts>
 ```
 
-which puts CLI, pipeline and `db:import` work on the shelf you actually look at. It is on
+which puts CLI and pipeline work on the shelf you actually look at. It is on
 `gjd-remote push-env`'s allowlist ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)),
 so a box gets it from the laptop rather than needing a line typed on the box — which that file would
 destroy at the next push, since it rebuilds `.env.local` rather than merging into it.

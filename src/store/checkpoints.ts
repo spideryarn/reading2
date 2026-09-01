@@ -130,14 +130,14 @@
 /**
  * Which checkpoint. **Not a `StepName`**: `labels` is not a step — the
  * `revision_step_runs_step` CHECK rejects it, because `labels.json` is one of
- * the `toc` step's outputs — and two different checkpoints sharing one step's
+ * the `hierarchy` step's outputs — and two different checkpoints sharing one step's
  * name would share a key space for no reason. Closed, and matched by a CHECK on
  * the table, so a typo cannot open a namespace nothing ever reads.
  */
-export type CheckpointNamespace = "toc-labels" | "pdf-chunk";
+export type CheckpointNamespace = "hierarchy-labels" | "pdf-chunk";
 
 /** Every namespace, for the CHECK, the tests and anything that has to enumerate. */
-export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = ["toc-labels", "pdf-chunk"];
+export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = ["hierarchy-labels", "pdf-chunk"];
 
 /**
  * What a key may be, and it is narrower than "any string" for one reason: the

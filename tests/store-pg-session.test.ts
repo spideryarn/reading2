@@ -533,7 +533,7 @@ async function publishArticle(
   /* The publication gate compares this against `hashBlocks` of the stored
      blocks and refuses when they differ, so it is the one run row that has to
      carry a real hash. */
-  await stepRun(begun.revisionId, "toc", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
   if (arcText !== undefined) await stepRun(begun.revisionId, "arc");
   /* The column is not enough on its own: `hasArtefacts` reads the run row
      first and answers `false` without one, so a thread with no `done` run

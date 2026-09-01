@@ -48,11 +48,13 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
 } from "./sketch.js";
+import { readRaw } from "./fetch.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { createFsArtifactStore } from "./store/artifacts-fs.js";
+import type { RawSource } from "./store/contracts.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "./library-scalars.js";
 import { readingMinutes } from "./reading-time.js";
 import { sanitizeStoredBlocks } from "./sanitize.js";
@@ -522,6 +524,59 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
 }
 
 /**
+ * **The raw document this article was made from — the filesystem half.**
+ *
+ * `null` is *this article kept no source*, which is every HTML article fetched
+ * before manifests and every article whose `raw.json` names a file that is not
+ * there. A 404 for the reader, and an ordinary state.
+ *
+ * **It reads the filesystem and nothing else**, which is the whole point of it
+ * being the filesystem adapter: `sendSource` in src/routes.ts used to do this
+ * unconditionally, so a Postgres deployment on Vercel — which has no such disk —
+ * answered every *view the original* with a 404 while a laptop worked
+ * perfectly. The Postgres half is `pgArticleReader.loadSource`, and neither
+ * falls back to the other (src/store/fs.ts § this is not where a fallback
+ * lives).
+ *
+ * The kind comes off the manifest, which stage 1 wrote and which is the only
+ * recorded answer there is here.
+ *
+ * **The route does not call this any more**, and that is a merge rather than a
+ * mistake. `GET /api/source/:slug` goes through `SourceStore.readPdf`
+ * (docs/plans/260831b-finish-the-database-move.md, stage 1b), which is narrower
+ * on purpose: it hands back the one kind a route may set a content type for.
+ * This stays because it is the whole-document read — both kinds, with the
+ * manifest's own answer for which — and `db:export` and the Postgres half are
+ * built on the same question.
+ */
+export async function loadSource(slug: string): Promise<RawSource | null> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const manifest = await readRaw(dir);
+  if (!manifest) return null;
+  /* `ENOENT` is the article that has a manifest and no file beside it — a
+     half-written directory, or one restored without its payload. Absent, not a
+     fault: there is nothing here to serve and nothing to repair on the server.
+     Anything else is a real filesystem failure and is allowed to throw. */
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path.join(dir, manifest.file));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+  return {
+    bytes,
+    kind: manifest.kind,
+    filename: manifest.origin === "upload" ? (manifest.filename ?? null) : null,
+  };
+}
+
+/**
  * The article's timeline, and whether it still describes it — the filesystem
  * half. docs/project/timeline.md.
  *
@@ -809,8 +864,8 @@ async function articleDir(slug: string): Promise<string | null> {
  *
  * **Whether an artefact is stale.** The obvious check — is `tree.json` older
  * than the `blocks.json` it was built from — is wrong here, and wrong in the
- * direction that matters: a *successful* toc run writes `tree.json` first and
- * copies `blocks.json` second (src/toc.ts), so every correct run would come
+ * direction that matters: a *successful* hierarchy run writes `tree.json` first and
+ * copies `blocks.json` second (src/hierarchy.ts), so every correct run would come
  * back marked stale. An earlier version of this function shipped that check.
  *
  * The deeper problem is that mtimes cannot prove provenance at all. They record
@@ -832,7 +887,7 @@ async function articleDir(slug: string): Promise<string | null> {
  * it looks — **what was wrong was the verdict, not the number**. Nothing here
  * compares two timestamps, and nothing infers anything from one; the page shows
  * when a stage last wrote, says so as a plain fact, and leaves the staleness
- * question exactly as unanswered as it was. A person reading "toc ran 3 days
+ * question exactly as unanswered as it was. A person reading "hierarchy ran 3 days
  * ago, arc ran in March" can draw their own conclusion, which is the thing this
  * page is for and the thing a red banner takes away from them.
  *
@@ -972,7 +1027,7 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
  * When these files were last written, and what they weigh together.
  *
  * The newest mtime rather than the oldest or the first: a stage writes its
- * files in whatever order suits it (src/toc.ts writes the tree last on purpose),
+ * files in whatever order suits it (src/hierarchy.ts writes the tree last on purpose),
  * so the only one that answers "when did this stage last run" is the last one
  * written.
  *
@@ -1288,7 +1343,7 @@ export async function listArticles(opts: ListOptions = {}): Promise<LibraryEntry
   }
 
   // debug rather than warn: a run in progress hits this legitimately on every
-  // homepage load until its toc lands, so at warn the shelf would cry wolf
+  // homepage load until its hierarchy lands, so at warn the shelf would cry wolf
   // through every ingest. It becomes interesting only when it doesn't go away.
   //
   // A count, and at most five names. The names are what make it actionable —

@@ -134,7 +134,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "The remote-box CLI. Names a credential only in help text and in the error it prints when the box lacks one. No transport of any kind.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
-  "evals/toc-structure/verify-costs.ts":
+  "evals/hierarchy-structure/verify-costs.ts":
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/declared-spend.ts":
     "The bypass wrapper itself, and the guarded fetch that makes one safe.",
@@ -144,16 +144,24 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "tests/declared-spend.test.ts":
     "Exercises the guarded transport against a stubbed global fetch. Listed by name rather than by a blanket tests/ exemption, because a test that really did reach a provider is a thing worth being told about.",
 
-  /* **Six that only ask whether the key is configured.** Each reads
+  /* **Nine that only ask whether the key is configured.** Each reads
      `OPENROUTER_API_KEY` to fail with a sentence a person can act on, and then
      makes its request through the seam; none of them names an endpoint. Listed
-     one by one rather than exempted by a rule, because a *seventh* place
-     learning to resolve credentials for itself is how the dictation benches
-     came to parse `.env.local` with a regular expression, and that is worth
-     one line of friction to find out about. */
+     one by one rather than exempted by a rule, because *another* place learning
+     to resolve credentials for itself is how the dictation benches came to
+     parse `.env.local` with a regular expression, and that is worth one line of
+     friction to find out about.
+
+     It was seven, and referee mode added two: `referee-criteria-run.ts` and
+     `referee-mirror.ts`. The second of those landed in `bd2f38e` without its
+     line here and turned this test red for about an hour, which is the test
+     doing its job — a new paying file is exactly what it exists to notice. */
   "src/converse.ts": "Presence check only; the call goes through openRouterStream.",
   "src/explain.ts": "Presence check only; the call goes through openRouterStream.",
+  "src/quiz-mark.ts": "Presence check only; the call goes through openRouterStream.",
   "src/search.ts": "Presence check only; the call goes through openRouterStream.",
+  "src/referee-criteria-run.ts": "Presence check only; the call goes through openRouterStream.",
+  "src/referee-mirror.ts": "Presence check only; the call goes through openRouterStream.",
   "src/transcribe.ts": "Presence check only; the call goes through openRouterJson.",
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
   "src/embeddings.ts":

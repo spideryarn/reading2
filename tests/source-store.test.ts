@@ -180,7 +180,32 @@ describe("the filesystem source store", () => {
 
   it("hands back the bytes the manifest names", async () => {
     await fixture("fs-pdf", { kind: "pdf", file: "raw.pdf" }, PDF);
-    expect(await fsSourceStore.readPdf("fs-pdf")).toEqual(PDF);
+    /* `filename: null` because this manifest has no `origin`, which means
+       `"url"` — we fetched it, and nobody named it. The route falls back to
+       `<slug>.pdf`. */
+    expect(await fsSourceStore.readPdf("fs-pdf")).toEqual({ bytes: PDF, filename: null });
+  });
+
+  /**
+   * **The reader's own name for their own file**, carried from the manifest to
+   * the `Content-Disposition`.
+   *
+   * It came onto this seam when the two 2026-08-31 source-reading changes were
+   * merged: the route used to be handed the whole document, name included, and
+   * `readPdf` originally answered with bytes alone — which would have renamed
+   * every download to `<slug>.pdf` without anything going red. `origin` is what
+   * distinguishes an upload from a fetch, and a name is only kept for an upload.
+   */
+  it("carries the name a reader uploaded the file under", async () => {
+    await fixture(
+      "fs-uploaded",
+      { kind: "pdf", file: "raw.pdf", origin: "upload", filename: "O'Brien (draft).pdf" },
+      PDF,
+    );
+    expect(await fsSourceStore.readPdf("fs-uploaded")).toEqual({
+      bytes: PDF,
+      filename: "O'Brien (draft).pdf",
+    });
   });
 
   it("answers null for an article that came from a web page", async () => {
@@ -248,6 +273,12 @@ const LEGACY_HTML_REVISION_ID = "00000000-0000-4000-8000-0000000000cc";
 const REFERENCED = new TextEncoder().encode("%PDF-1.7\nthe object in the bucket\n");
 const LEGACY = new TextEncoder().encode("%PDF-1.7\nthe column, from before the bucket\n");
 const SHA = createHash("sha256").update(REFERENCED).digest("hex");
+/* What the browser sent when somebody uploaded it. The route puts this in the
+   `Content-Disposition` rather than `<slug>.pdf`, so the download is called what
+   the reader calls it — and it is reader-controlled text on its way into a
+   response header, which is why `contentDisposition` in src/routes.ts escapes
+   it. `null` on every other fixture here, which is what a fetch leaves. */
+const UPLOADED_AS = "the reader's own paper.pdf";
 const KEY = canonicalKey(SHA, "pdf");
 
 /**
@@ -346,9 +377,10 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
     );
     await sql(
       `insert into spideryarn.article_revisions
-         (id, article_id, status, title, source, raw_source_sha256, raw_source_kind)
-       values ($1, $2, 'published', 'A scanned paper', 'pdf', $3, 'pdf')`,
-      [REVISION_ID, ARTICLE_ID, SHA],
+         (id, article_id, status, title, source, raw_source_sha256, raw_source_kind,
+          raw_filename)
+       values ($1, $2, 'published', 'A scanned paper', 'pdf', $3, 'pdf', $4)`,
+      [REVISION_ID, ARTICLE_ID, SHA, UPLOADED_AS],
     );
     /* The era before the reference: `raw_bytes` and nothing pointing out of the
        row. Every article the importer has ever written is one of these
@@ -405,8 +437,11 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
 
   const withObject = () => createPgSourceStore(() => bucket(new Map([[KEY, REFERENCED]])));
 
-  it("serves the object the revision points at", async () => {
-    expect(await withObject().readPdf(SLUG)).toEqual(REFERENCED);
+  it("serves the object the revision points at, under the name it was given", async () => {
+    expect(await withObject().readPdf(SLUG)).toEqual({
+      bytes: REFERENCED,
+      filename: UPLOADED_AS,
+    });
   });
 
   /**
@@ -414,8 +449,8 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
    *
    * `null` here would report an article with a PDF as an article with none, and
    * the reader would be told "that article did not come from a PDF" about the
-   * scan they are looking at. src/store/export.ts's `readRawDocument` refuses
-   * for the same reason.
+   * scan they are looking at. `readRawDocument` in src/store/raw-document.ts
+   * refuses for the same reason.
    */
   it("refuses a dangling reference rather than calling the article sourceless", async () => {
     const empty = createPgSourceStore(() => bucket(new Map()));
@@ -432,7 +467,9 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
 
   /** The rows written before the `sources` bucket existed still have a source. */
   it("still serves a revision that only has raw_bytes", async () => {
-    expect(await withObject().readPdf(LEGACY_SLUG)).toEqual(LEGACY);
+    /* No `raw_filename` on this one — the importer wrote it and there was no
+       reader to name it. The route falls back to `<slug>.pdf`. */
+    expect(await withObject().readPdf(LEGACY_SLUG)).toEqual({ bytes: LEGACY, filename: null });
   });
 
   /**

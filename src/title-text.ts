@@ -217,7 +217,7 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
 };
 
 /**
- * **Which of the eleven middle-band modes, by the name the Dock uses**, so that
+ * **Which of the thirteen middle-band modes, by the name the Dock uses**, so that
  * the tab and the button the reader pressed to get there say the same word.
  *
  * Here rather than in src/web/page-title.ts because the server composes this
@@ -229,6 +229,7 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
  * than title *characters*.
  */
 export const MODE_LABEL: Record<Mode, string> = {
+  plain: "Plain",
   hierarchy: "Hierarchy",
   outline: "Outline",
   summary: "Summary",
@@ -237,6 +238,7 @@ export const MODE_LABEL: Record<Mode, string> = {
   quotes: "Quotes",
   timeline: "Timeline",
   search: "Search",
+  referee: "Referee",
   diagram: "Diagram",
   chat: "Chat",
   review: "Review",

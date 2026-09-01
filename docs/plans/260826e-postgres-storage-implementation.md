@@ -70,7 +70,7 @@ until that file settles — it is being heavily edited for the streaming work:
 
 **The import reconciles, and the direction it reconciles in reverses at cutover.** The importer
 deletes an article's reader-state rows inside its transaction before re-inserting them from the
-files ([`src/store/import.ts`](../../src/store/import.ts), *"The files win, so the rows the files no
+files (`src/store/import.ts`, *"The files win, so the rows the files no
 longer have must go"*), so a comment deleted on disk does not live on in Postgres. That is the right
 choice while `data/` is authoritative: "import only ever runs into an empty article" would break
 re-running the importer after any edit made through the files, which is the whole migration period.
@@ -78,7 +78,7 @@ re-running the importer after any edit made through the files, which is the whol
 **Step 13 has to turn it round.** Once the app writes reader state straight to Postgres — comments
 already do, and step 10 does the rest — running the importer again would *delete* everything added
 since the last export, because it still believes the files are the truth. Flagged at
-[`import.ts`](../../src/store/import.ts) where the delete happens, and it is the reason cutover is a
+`import.ts` where the delete happens, and it is the reason cutover is a
 step rather than a flag flip.
 
 > Checked on 2026-08-26 rather than assumed. `tests/store-import-convergence.test.ts` asserts the
@@ -396,7 +396,7 @@ and the one it led with turned out not to be this work at all — which is the r
 | **Blocker:** `archived_at`, `title_override`, `opens`, `last_opened_at` are in the schema and in `pg.ts` but in no migration | **Real, not mine** | Those columns arrived in the working tree *after* commit `351c054`, in another agent's uncommitted shelf work. Sol reviewed the tree, not the commits, and even noticed `schema.ts` growing under it mid-review. Passed on rather than fixed — see [Rules for this work](#rules-for-this-work) on staying inside your stage |
 | The exporter filters chat messages on `thread_id` alone, so two articles sharing a thread id mix | **Real** | Fixed. Thread ids are per-article by design, so this was one reader's conversation landing under someone else's article. [tests/store-export-isolation.test.ts](../../tests/store-export-isolation.test.ts) reproduces it |
 | `create()` in the comment store races: two overlapping requests both insert | **Real** | Fixed — one `insert … on conflict do update` instead of select-then-branch. The red test holds a transaction open by hand, because two concurrent calls pass either way |
-| `on conflict do nothing` means a re-import never removes what the files dropped | **Real, and already happening** | `data/writes/comments.json` held two comments while Postgres held three. The importer now replaces reader state inside its transaction, and [tests/store-import-convergence.test.ts](../../tests/store-import-convergence.test.ts) asserts it |
+| `on conflict do nothing` means a re-import never removes what the files dropped | **Real, and already happening** | `data/writes/comments.json` held two comments while Postgres held three. The importer now replaces reader state inside its transaction, and tests/store-import-convergence.test.ts asserts it |
 | The exporter has no `order by`, so array order is luck | **Real** | Fixed. It broke the same afternoon: the convergence fix changed the physical row order and `searches.json` came back shuffled |
 | `order by created_at, id` does not reproduce the file's array order | **Real** | `data/noema-…/comments.json` has a hand-written comment sitting out of date order. Not fixed and deliberately so: nothing reads array order — [comment-nav.ts](../../src/web/comment-nav.ts) sorts into document order first — so the round trip now says "every row, unchanged" rather than "byte-identical" |
 | `isLocalDatabaseUrl` pattern-matches the whole URL, and that answer authorises destructive commands | **Real** | Fixed — parse the URL, compare the hostname, fail closed on anything unparseable |
@@ -1668,7 +1668,7 @@ entangling slug allocation with lease machinery.
 All three were on the "what is not done" list below. They are one bug wearing three hats: **the
 importer could add and it could update, and it could not notice a deletion.** So a second run did
 not leave the database in the state a first run leaves it, which is the property the header of
-[`import.ts`](../../src/store/import.ts) has always claimed. Each was reproduced with a failing test
+`import.ts` has always claimed. Each was reproduced with a failing test
 before it was touched, and each fix was then deliberately broken again to check the test could still
 see it.
 
@@ -1756,11 +1756,11 @@ reader-state delete carries, and the reason both live in a tool nobody runs by a
 
 ### Tests
 
-- [`tests/store-import-revision.test.ts`](../../tests/store-import-revision.test.ts) — "replaces the
+- `tests/store-import-revision.test.ts` — "replaces the
   metadata columns, keeping the same revision"; "records the content type and encoding the manifest
   recovered"; "drops the step row for an artefact that has been deleted"; "leaves a step row it did
   not infer alone".
-- [`tests/store-import-prune.test.ts`](../../tests/store-import-prune.test.ts) — three pure tests of
+- `tests/store-import-prune.test.ts` — three pure tests of
   the rule ("names a slug the database has and the disk does not"; "refuses to prune when the disk
   looks empty"; "says nothing when the database is empty, even with an empty disk") and three
   against the database ("does not call an article an orphan while its directory is there"; "does not

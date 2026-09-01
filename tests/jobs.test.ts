@@ -84,7 +84,7 @@ describe("the pipeline", () => {
   });
 
   it("recognises only real step names", () => {
-    expect(isStepName("toc")).toBe(true);
+    expect(isStepName("hierarchy")).toBe(true);
     expect(isStepName("summarise")).toBe(false);
     expect(isStepName("")).toBe(false);
     expect(isStepName(null)).toBe(false);
@@ -122,25 +122,25 @@ describe("the pipeline", () => {
   it("sorts `tweets` after the steps it reads", () => {
     // Order is about running, not about forcing — `tweets` is exempt from the
     // force-cascade (below) but it still has to run after the stages whose
-    // artefacts it reads, which are `blocks` and `toc`. A name missing from
+    // artefacts it reads, which are `blocks` and `hierarchy`. A name missing from
     // STEP_ORDER sorts to the FRONT, because `indexOf` gives it -1, so
-    // `{ steps: ["toc", "tweets"] }` would have written the thread from the
+    // `{ steps: ["hierarchy", "tweets"] }` would have written the thread from the
     // previous tree and then replaced that tree.
-    expect(orderSteps(["tweets", "toc", "blocks"])).toEqual(["blocks", "toc", "tweets"]);
+    expect(orderSteps(["tweets", "hierarchy", "blocks"])).toEqual(["blocks", "hierarchy", "tweets"]);
   });
 });
 
 describe("orderSteps", () => {
   it("sorts into pipeline order whatever order they arrived in", () => {
     // The steps are a chain: each consumes what the one before it wrote. Run
-    // ["arc", "toc"] as asked and the arc is built from the previous tree,
+    // ["arc", "hierarchy"] as asked and the arc is built from the previous tree,
     // which is then replaced — two successes and an arc describing an article
     // nobody is reading.
-    expect(orderSteps(["arc", "toc", "fetch"])).toEqual(["fetch", "toc", "arc"]);
+    expect(orderSteps(["arc", "hierarchy", "fetch"])).toEqual(["fetch", "hierarchy", "arc"]);
   });
 
   it("de-duplicates", () => {
-    expect(orderSteps(["toc", "toc", "toc"])).toEqual(["toc"]);
+    expect(orderSteps(["hierarchy", "hierarchy", "hierarchy"])).toEqual(["hierarchy"]);
   });
 
   it("leaves an already-ordered list alone", () => {
@@ -158,7 +158,7 @@ describe("cascadeForce", () => {
       "fetch",
       "extract",
       "blocks",
-      "toc",
+      "hierarchy",
       /* `assets` IS swept in, unlike the four steps after `arc`, and the reason
          is the one the cascade encodes: a refresh from source is a request to
          get this article again, and the article's figures are part of it.
@@ -176,7 +176,7 @@ describe("cascadeForce", () => {
        it has always been the other way in, and that is unchanged. */
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc", "blocks"]))]).toEqual([
       "blocks",
-      "toc",
+      "hierarchy",
       "assets",
       "arc",
     ]);
@@ -187,17 +187,17 @@ describe("cascadeForce", () => {
   });
 
   it("cascades within the job's own steps, not the whole pipeline", () => {
-    /* A job of {toc, arc} that forces toc must not invent a fetch step nobody
+    /* A job of {hierarchy, arc} that forces hierarchy must not invent a fetch step nobody
        asked for. It no longer forces `arc` either: since 2026-08-29 `arc` can
        tell for itself whether it is current, so it is in FORCE_ONLY_WHEN_NAMED
        and an unforced run re-does it exactly when its inputs have moved. */
-    expect([...cascadeForce(["toc", "arc"], new Set(["toc"]))]).toEqual(["toc"]);
+    expect([...cascadeForce(["hierarchy", "arc"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
     // Named, it is forced like anything else.
-    expect([...cascadeForce(["toc", "arc"], new Set(["toc", "arc"]))]).toEqual(["toc", "arc"]);
+    expect([...cascadeForce(["hierarchy", "arc"], new Set(["hierarchy", "arc"]))]).toEqual(["hierarchy", "arc"]);
   });
 
   it("ignores a forced step the job isn't running", () => {
-    expect([...cascadeForce(["toc", "arc"], new Set(["fetch"]))]).toEqual([]);
+    expect([...cascadeForce(["hierarchy", "arc"], new Set(["fetch"]))]).toEqual([]);
   });
 
   it("does not sweep `tweets` in by position", () => {
@@ -210,7 +210,7 @@ describe("cascadeForce", () => {
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc"]))]).toEqual(["arc"]);
     /* `arc` is absent here for the same reason `tweets` is, as of 2026-08-29 —
        both can now judge their own freshness. */
-    expect([...cascadeForce(["toc", "arc", "tweets"], new Set(["toc"]))]).toEqual(["toc"]);
+    expect([...cascadeForce(["hierarchy", "arc", "tweets"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
   });
 
   it("does not sweep `glossary` in by position either, and this one appends", () => {
@@ -222,7 +222,7 @@ describe("cascadeForce", () => {
        make the reader's glossary longer. */
     expect(FORCE_ONLY_WHEN_NAMED.has("glossary")).toBe(true);
     expect([...cascadeForce([...STEP_ORDER], new Set(["fetch"]))]).not.toContain("glossary");
-    expect([...cascadeForce(["toc", "glossary"], new Set(["toc"]))]).toEqual(["toc"]);
+    expect([...cascadeForce(["hierarchy", "glossary"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
   });
 
   it("still forces `glossary` when it is named — that is the Find more button", () => {
@@ -236,8 +236,8 @@ describe("cascadeForce", () => {
     /* `arc` is not here, and its absence is the same rule doing its job: it left
        the positional cascade on 2026-08-29 and was not named. `assets` stays,
        because it never left. */
-    expect([...cascadeForce([...STEP_ORDER], new Set(["toc", "tweets"]))]).toEqual([
-      "toc",
+    expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy", "tweets"]))]).toEqual([
+      "hierarchy",
       "assets",
       "tweets",
     ]);
@@ -253,7 +253,7 @@ describe("cascadeForce", () => {
 
        Worth knowing that position was never quite the signal it looked like:
        `cascadeForce` only names steps already in the job, so a forced
-       `{ steps: ["toc"] }` never reached `arc` even then, and the stale arc that
+       `{ steps: ["hierarchy"] }` never reached `arc` even then, and the stale arc that
        resulted lost entries in silence. The stamp is what actually closed that.
        docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1. */
     expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(true);
@@ -263,8 +263,8 @@ describe("cascadeForce", () => {
        one thing the stamp cannot answer. A rotated imgix signature changes
        nothing about the blocks. */
     expect(FORCE_ONLY_WHEN_NAMED.has("assets")).toBe(false);
-    expect([...cascadeForce([...STEP_ORDER], new Set(["toc"]))]).toEqual([
-      "toc",
+    expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy"]))]).toEqual([
+      "hierarchy",
       "assets",
     ]);
   });
@@ -283,29 +283,45 @@ describe("forceForRetry", () => {
     ).toEqual([]);
   });
 
-  it("does not make a retry re-do the stages a refresh already redid", () => {
-    // A refresh forces all five. Copying those flags across meant Retry
-    // re-fetched, re-extracted and re-split an article whose first three
-    // stages had just succeeded — and paid for the model call again.
+  /* **These three asserted the opposite until 2026-08-31**, and the reason they
+     gave was the money: a refresh forces all five steps, so re-forcing them on
+     Retry re-fetches, re-extracts and re-splits an article whose first three
+     stages had just succeeded, and pays for the model call again.
+
+     That reasoning was right about the filesystem and wrong about Postgres,
+     which is the fourth fault of docs/plans/260831b-finish-the-database-move.md.
+     The steps that "succeeded" wrote into a draft; the failure discarded it; the
+     retry's draft is copied from the revision the reader is still on. So the
+     thrift was buying nothing and losing the refresh in silence. Greg's decision
+     8: a failed refresh starts over. The narrative fixture is
+     tests/retry-after-a-failed-refresh.test.ts; these three are the shapes. */
+  it("re-forces what the refresh forced, back to the earliest of them", () => {
     expect(
       forceForRetry([
         forced("fetch", "done"),
         forced("extract", "done"),
         forced("blocks", "done"),
-        forced("toc", "error"),
+        forced("hierarchy", "error"),
         forced("arc", "pending"),
       ]),
-    ).toEqual(["toc"]);
+    ).toEqual(["fetch", "extract", "blocks", "hierarchy", "arc"]);
   });
 
   it("forces from the front when a forced job failed at its first step", () => {
     expect(forceForRetry([forced("fetch", "error"), forced("extract", "pending")])).toEqual([
       "fetch",
+      "extract",
     ]);
   });
 
-  it("forces nothing when every step finished", () => {
-    expect(forceForRetry([forced("fetch", "done"), forced("extract", "skipped")])).toEqual([]);
+  it("re-forces even when every step finished, because the publication did not", () => {
+    // All steps `done` and a job at Retry means something after the steps
+    // failed — the publication, which is what turns the draft into the article.
+    // Nothing was published, so nothing those steps did survived.
+    expect(forceForRetry([forced("fetch", "done"), forced("extract", "skipped")])).toEqual([
+      "fetch",
+      "extract",
+    ]);
   });
 });
 
@@ -327,26 +343,26 @@ describe("what a step counts as done", () => {
   };
 
   it("lists every file a step writes, not just the first", () => {
-    // `extract` writes the HTML and meta.json; `toc` writes tree.json,
+    // `extract` writes the HTML and meta.json; `hierarchy` writes tree.json,
     // labels.json and its copy of blocks.json. Checking only one would let a
     // crash between the writes leave a step reporting itself finished with half
     // its output — and the stage after it would then consume the missing half.
     //
-    // `toc` went from two files to three when the nav labels became a second
+    // `hierarchy` went from two files to three when the nav labels became a second
     // model pass (docs/plans/260826h-toc-scaling.md). A tree with no labels.json beside
-    // it is a half-run step, not a finished one, which is also why src/toc.ts
+    // it is a half-run step, not a finished one, which is also why src/hierarchy.ts
     // writes tree.json last of the three.
     expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
-    expect(STEPS.toc.outputs(ctx)).toHaveLength(3);
+    expect(STEPS.hierarchy.outputs(ctx)).toHaveLength(3);
     expect(STEPS.extract.outputs(ctx).some((f) => f.endsWith("meta.json"))).toBe(true);
-    expect(STEPS.toc.outputs(ctx).some((f) => f.endsWith("blocks.json"))).toBe(true);
-    expect(STEPS.toc.outputs(ctx).some((f) => f.endsWith("labels.json"))).toBe(true);
+    expect(STEPS.hierarchy.outputs(ctx).some((f) => f.endsWith("blocks.json"))).toBe(true);
+    expect(STEPS.hierarchy.outputs(ctx).some((f) => f.endsWith("labels.json"))).toBe(true);
   });
 
   it("checks its own artefact, not the copy a later stage makes", () => {
     // Stage 3 writes beside the HTML; stage 4 copies into data/. Checking the
     // data copy here would mean a finished `blocks` step reporting itself
-    // unfinished until `toc` had also run.
+    // unfinished until `hierarchy` had also run.
     expect(STEPS.blocks.outputs(ctx)).toContain(ctx.htmlFile.replace(/\.html$/, ".blocks.json"));
     expect(STEPS.blocks.outputs(ctx).some((f) => f.startsWith(ctx.dir))).toBe(false);
   });
@@ -378,7 +394,7 @@ describe("sweepStopped", () => {
       step("fetch", "done"),
       step("extract", "done"),
       step("blocks", "running"),
-      step("toc", "pending"),
+      step("hierarchy", "pending"),
     ]);
     expect(sweepStopped(j)).toBe(true);
     expect(j.status).toBe("queued");
@@ -394,7 +410,7 @@ describe("sweepStopped", () => {
       step("fetch", "done"),
       step("extract", "done"),
       step("blocks", "running"),
-      step("toc", "pending"),
+      step("hierarchy", "pending"),
     ]);
     sweepStopped(j);
     expect(j.steps.map((s) => s.status)).toEqual(["done", "done", "pending", "pending"]);
@@ -458,7 +474,7 @@ describe("parseJobRequest", () => {
        the whole raw URL came back in as `reason`, credentials and all, at warn.
        A source URL is untrusted input and can carry a token or basic-auth
        credentials — docs/project/logging.md, and it is the same shape as the
-       toc.ts title and the chat.ts `reason` field.
+       hierarchy.ts title and the chat.ts `reason` field.
 
        Nothing is lost by dropping it: the caller sent the URL, so quoting it
        back tells them nothing they do not have.
@@ -564,7 +580,7 @@ describe("parseJobRequest", () => {
     // the runner, where the message is about a property of undefined rather
     // than about the request that caused it.
     expect(() => parseJobRequest({ slug: "a", steps: ["summarise"] })).toThrow(/steps must be/);
-    expect(() => parseJobRequest({ slug: "a", steps: "toc" })).toThrow(/steps must be/);
+    expect(() => parseJobRequest({ slug: "a", steps: "hierarchy" })).toThrow(/steps must be/);
     expect(() => parseJobRequest({ slug: "a", force: ["nope"] })).toThrow(/force must be/);
   });
 

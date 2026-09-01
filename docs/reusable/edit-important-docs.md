@@ -26,6 +26,13 @@ Two aims at once: make the document as good as it can be, and keep it easy to im
 A plan, a postmortem or a research note you just wrote is **not** important in this sense. Edit those
 freely.
 
+**And neither is a signpost.** Adding a new doc's name to the `↳` list in AGENTS.md, and the one line
+linking it from the entry point that owns it, is bookkeeping the doc-links test requires — not a rule
+change. Make those edits and say what you added; do not stop for approval. Greg, 2026-08-31:
+*"you don't need explicit authorisation just for adding minimal signposts like these"*. Anything that
+changes what a sentence in one of those files **tells an agent to do** still goes through the process
+below.
+
 ## How to go about it
 
 - **Group first, then prioritise.** Handed a list of ideas, don't work through it in the order given.

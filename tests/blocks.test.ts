@@ -151,7 +151,7 @@ describe("id stability", () => {
  * this, what should we do?" is seven words of genuine argument and pivots the
  * whole piece, while one of its captions runs to 94 words. Length tells you
  * nothing here, and a word-count rule would silently drop real prose out of the
- * ToC. See docs/project/table-of-contents.md.
+ * ToC. See docs/project/hierarchy.md.
  */
 describe("caption detection is by marker, not by length", () => {
   const { blocks } = splitIntoBlocks(`

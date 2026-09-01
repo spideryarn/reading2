@@ -50,6 +50,8 @@ import type { Block, BlockId, NodeId, SimilarPair } from "../types.js";
 
 import type { SummaryNode } from "./tree.js";
 import { type LinkKind, MAX_DRAWN_DEPTH, walk } from "./diagram.js";
+/* The stage-2 stamps by their one spelling — src/reserved.ts. */
+import { NOTE_BACK_ATTR, NOTE_REF_ATTR } from "./notes-view.js";
 
 /** One node of the graph: a part or a section, with what it is made of. */
 export interface GraphNode {
@@ -552,7 +554,7 @@ function collectAnchorLinks(
        twelve arbitrary ones; it does not make them mean anything. Now that
        stage 2 stamps the marker and the back-link, they can simply be refused.
        src/notes.ts holds the attribute names. */
-    if (a.hasAttribute("data-spya-note-ref") || a.hasAttribute("data-spya-note-back")) continue;
+    if (a.hasAttribute(NOTE_REF_ATTR) || a.hasAttribute(NOTE_BACK_ATTR)) continue;
     const row = rowOfElement(a);
     if (row === null) continue;
 

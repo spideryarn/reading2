@@ -44,7 +44,7 @@ The code that changed:
 - [`src/glossary.ts`](../../src/glossary.ts), [`src/arc.ts`](../../src/arc.ts),
   [`src/tweets.ts`](../../src/tweets.ts) — article moved into a cached `system` block
 - `src/summarise.ts` — `repair` moved out of position zero
-- [`src/pipeline.ts`](../../src/pipeline.ts), [`src/toc.ts`](../../src/toc.ts) — cache counts logged
+- [`src/pipeline.ts`](../../src/pipeline.ts), [`src/toc.ts`](../../src/hierarchy.ts) — cache counts logged
 - **New** [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts),
   [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts) and
   [`evals/reorder-quality.ts`](../../evals/reorder-quality.ts)

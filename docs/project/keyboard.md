@@ -107,20 +107,38 @@ to whatever is under the pointer. You can hold a level without holding your hand
 it back by doing the thing you were going to do anyway. Nothing to get stuck in, because the way out
 is the way you already navigate.
 
-**Clicking a bar button must not take the keys.** Greg, same day, when the button was
-still called Contents:
+**No control on this page takes the arrow keys, and that took two goes.** Greg, on 2026-08-26,
+when the mode button was still called Contents:
 
 > I noticed that if I'd just clicked the bottom-bar "Contents" button, say, then left/right changed
 > within that radio group, rather than the Contents columns (which should be the priority for those
 > keys).
 
-The bottom bar's mode switch is a `role="radiogroup"`, and that role is a promise about the arrow
-keys, so it takes them whenever focus is inside it. Which is right when the reader *tabbed* there,
-and wrong when they clicked — clicking Hierarchy is how you get to the hierarchy, so the next arrow
-you press is meant for it, and nobody thinks the button they let go of is still listening.
-So a pointer-driven click blurs the button afterwards and a keyboard-driven one does not
-(`e.detail > 0` tells them apart — Enter and Space report 0). The role keeps every promise it made
-to anyone who arrived by keyboard. See [`Dock.tsx`](../../src/web/Dock.tsx) § The one collision.
+The first answer was narrow: three controls — the bottom bar's mode switch, the diagram's three
+chips and the search panel's two matchers — were each a `role="radiogroup"`, and that role is a
+*promise about the arrow keys*, so each took them whenever focus was inside it. Clicking one
+therefore blurred it afterwards (`e.detail > 0` tells a pointer click from Enter or Space, which
+report 0), so the keys went back to the article, while a reader who had *tabbed* in kept the
+behaviour the role advertised.
+
+That left the exception standing, and on 2026-08-31 Greg asked for it gone:
+
+> I don't really like the way the keyboard changes modes or sub-modes, so if it helps, we can remove
+> that functionality. I'd rather up/down *always* moves the text, and we can use left/right for
+> mode-specific behaviours?
+
+So all three lost their arrow keys and their roving tabindex, and each button became its own tab
+stop: Tab reaches every one, Enter, Space or a click selects. **The rule at the top of this page now
+holds everywhere, with no exception to remember.** It is a deliberate departure from the ARIA
+authoring practice for a radiogroup, and there is a second reason for it that is worth knowing —
+selecting a mode now *starts a model call* when that mode has never been built, so an arrow key that
+selected as it traversed was several paid jobs from one keypress. The full reasoning and what the
+extra tab stops cost is in [`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch; the assertion is
+`tests/arrows-belong-to-the-article.test.tsx`.
+
+The blur on click survives all of that, and still earns its place: nothing eats the arrows now, but a
+focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
+the reader asked for.
 
 Both indicators already exist and both keep working: the aimed column header lights up — exactly
 one column, even where the arc and Parts share a stride, because the reader has to be able to see
@@ -185,16 +203,18 @@ and a list is the version that silently goes stale the next time some component 
 nobody remembers to come back here.
 
 **The dock had already hit this and solved it locally.** `DockModes` in [`Dock.tsx`](../../src/web/Dock.tsx)
-calls `stopPropagation()` alongside its `preventDefault()`, with a comment saying in as many words
-that it is there to stop `keynav.ts` also stepping the article. That is the same bug, found earlier,
-fixed one component at a time — and it is the argument for putting the rule in `keynav` instead:
-every future widget with arrow keys would otherwise have to know that this listener exists and
-remember to shout past it. The dock's `stopPropagation()` is now redundant and is left alone; it is
-still correct, and it also stops the press reaching anything else.
+called `stopPropagation()` alongside its `preventDefault()`, with a comment saying in as many words
+that it was there to stop `keynav.ts` also stepping the article. That was the same bug, found
+earlier, fixed one component at a time — and it is the argument for putting the rule in `keynav`
+instead: every future widget with arrow keys would otherwise have to know that this listener exists
+and remember to shout past it.
 
-The audit behind the change: the only two places in this app that `preventDefault()` an ArrowUp or
-ArrowDown are the dock's mode switcher and the diagram's picture. Everything else that handles keys
-handles Enter and Escape.
+The audit behind the change found only two places in the app that `preventDefault()` an ArrowUp or
+ArrowDown: the dock's mode switcher and the diagram's picture. **The dock is no longer one of them**
+— it stopped handling arrows altogether on 2026-08-31 (see above) — so the rule now has exactly one
+beneficiary, the diagram's `role="tree"`. It stays anyway, and the reason is the one it was written
+for: a list of elements to skip goes stale, and `defaultPrevented` is how a handler says *this key
+was mine* whoever writes the next one.
 
 ### Rapid presses chain from the last target, not from the page
 

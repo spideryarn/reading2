@@ -189,23 +189,45 @@ describe("a picture on screen while another is being drawn", () => {
   });
 
   /**
-   * **A radiogroup with a roving tabstop and no arrow handler is not a
-   * radiogroup**, and this one said in a comment that it was.
+   * **Every scene reachable by Tab, and the arrows left to the article.**
    *
-   * Only the selected scene carries `tabIndex={0}`; the rest are `-1`. That is
-   * the right half of the pattern, and without the arrow keys it means a
-   * keyboard reader can reach the scene they are already on and none of the
-   * others — the picture has more parts and no way to get to them. It read as
-   * deliberate precisely because the roving tabstop was there. ⟨Sol⟩,
-   * 2026-08-30, on a surface this work had touched for other reasons.
+   * This assertion has now been made in both directions, and the reversal is
+   * the point of the docstring.
+   *
+   * ⟨Sol⟩, 2026-08-30, found that the scene row had the *right half* of the
+   * radiogroup pattern and not the left: a roving `tabIndex` — only the
+   * selected scene at 0, the rest at -1 — and no arrow handler at all. So a
+   * keyboard reader could reach the scene they were already on and none of the
+   * others, and it read as deliberate precisely because the roving tabstop was
+   * there. The fix was to add the arrows, and this test held them.
+   *
+   * **On 2026-08-31 the arrows went instead**, across all five switchers in the
+   * app. Sol's finding was right and is still honoured — the row is fully
+   * reachable by keyboard — but the remedy is the other one: drop the roving
+   * tabstop rather than complete the pattern around it. The reason is local and
+   * Sol could not have weighed it, because it is about the *page* rather than
+   * the control: ↑ / ↓ step the article and ← / → choose the granularity
+   * stride (docs/project/keyboard.md), and every one of these handlers called
+   * `stopPropagation` to take those keys whenever one held focus. Greg met that
+   * as a bug and asked for the behaviour removed.
+   *
+   * So the two halves swap: what was `tabIndex={-1}` plus arrows is now
+   * `tabIndex={0}` plus none. `src/web/Dock.tsx` § the mode switch has the full
+   * reasoning and what the extra tab stops cost; the app-wide sweep that stops
+   * the roving pattern coming back is
+   * tests/arrows-belong-to-the-article.test.tsx.
    */
-  it("lets the keyboard move along the scene row", async () => {
+  it("gives every scene its own tab stop, and leaves the arrows alone", async () => {
     serving([]);
     await mount();
     const scenes = [...host.querySelectorAll<HTMLElement>(".sk-scene")];
     expect(scenes.length, "the scene row is not drawn").toBe(2);
     expect(scenes[0]?.getAttribute("aria-checked"), "the overview should be selected").toBe("true");
-    expect(scenes[1]?.tabIndex, "the unselected scene should be off the tab order").toBe(-1);
+    /* The half of Sol's finding that stands: the reader can get to the scene
+       they are NOT on. It used to be -1 here, reachable only by arrow. */
+    for (const scene of scenes) {
+      expect(scene.tabIndex, "a scene is off the tab order with no arrows to reach it").toBe(0);
+    }
 
     await act(async () => {
       scenes[0]?.focus();
@@ -214,21 +236,36 @@ describe("a picture on screen while another is being drawn", () => {
     });
 
     const after = [...host.querySelectorAll<HTMLElement>(".sk-scene")];
-    expect(after[1]?.getAttribute("aria-checked"), "the arrow moved nothing").toBe("true");
-    expect(after[0]?.getAttribute("aria-checked")).toBe("false");
-    /* **And focus follows**, or the newly-checked radio is the tab stop while
-       the old one still has focus — the next press steps from the same place
-       and you reach the neighbour and nothing past it. */
-    expect(document.activeElement, "focus stayed on the scene we left").toBe(after[1]);
-    /* Wrapping, as the radio pattern specifies. */
+    expect(
+      after[0]?.getAttribute("aria-checked"),
+      "an arrow press still moves the scene row — the arrows belong to the article",
+    ).toBe("true");
+    expect(after[1]?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  /**
+   * **And the press reaches the window**, which is the half a deletion could
+   * quietly get wrong: a handler that stopped *selecting* while still calling
+   * `stopPropagation` would leave the arrows dead in the scene row rather than
+   * handing them back, and nothing above would notice.
+   */
+  it("lets an arrow press through to the window", async () => {
+    serving([]);
+    await mount();
+    const scene = host.querySelector<HTMLElement>(".sk-scene");
+    expect(scene).not.toBeNull();
+
+    let reached = false;
+    const spy = () => {
+      reached = true;
+    };
+    window.addEventListener("keydown", spy);
     await act(async () => {
-      after[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      scene?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       await new Promise((r) => setTimeout(r, 0));
     });
-    expect(
-      host.querySelectorAll<HTMLElement>(".sk-scene")[0]?.getAttribute("aria-checked"),
-      "the row does not wrap",
-    ).toBe("true");
+    window.removeEventListener("keydown", spy);
+    expect(reached, "the scene row swallowed the key").toBe(true);
   });
 
   /**

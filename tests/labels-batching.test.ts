@@ -343,7 +343,7 @@ describe("planBatches", () => {
     // tree.json off disk, and `walk` recurses straight past a mixed node's leaf
     // children without noticing.
     //
-    // On the generateToc path checkCoverage would catch the result. On the
+    // On the generateHierarchy path checkCoverage would catch the result. On the
     // `npm run labels -- <dir>` path nothing would: the merged tree reaches disk
     // with paragraphs that have no sidebar row and nothing saying why. So the
     // check lives where both callers pass through.
@@ -615,7 +615,7 @@ describe("mergeLabels", () => {
 
   it("never labels an internal node", () => {
     // A gist and a navLabel are different lengths for different columns
-    // (docs/project/table-of-contents.md). Crossing them would render one in
+    // (docs/project/hierarchy.md). Crossing them would render one in
     // the other's place with nothing to see.
     const labels = Object.fromEntries(blocks.map((b) => [b.id, "A label of about the right length"]));
     const merged = mergeLabels(tree, labels);
@@ -833,7 +833,7 @@ describe("assertEveryBlockLabelled", () => {
   });
 
   it("refuses a gap, and names where it is", () => {
-    // `npm run labels -- <dir>` does not go through generateToc, so this is the
+    // `npm run labels -- <dir>` does not go through generateHierarchy, so this is the
     // only thing between a short answer and a rewritten tree.json on that path.
     const { [blocks[0]!.id]: _gone, ...short } = complete;
     expect(() => assertEveryBlockLabelled(short, blocks)).toThrow(/came back without one/);

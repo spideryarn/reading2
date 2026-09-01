@@ -445,6 +445,21 @@ returns `null` when it is gone. A comment whose quote has vanished draws no mark
 in the list and still openable. Losing the anchor is the safe failure, exactly as in
 [block-ids.md § The cost we accepted](block-ids.md#the-cost-we-accepted).
 
+**And since 2026-08-31 it is not invisible either.** Every commented block carries a `Bookmark` in
+the prose gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)), counted from `comments` by
+**`blockId` alone** — never from the resolved marks. That is the point of it: the block id is the
+half of the anchor that cannot drift, so a comment whose quote has been re-extracted away still has
+somewhere to show. Click it and the dialog opens on the block's first comment in reading order.
+
+Two things follow, and both are easy to get wrong:
+
+- Anything drawing the gutter marker must group on `blockId`, which is what
+  [`commentsByBlock`](../../src/web/comment-nav.ts) exists to be the only copy of. Deriving it from
+  the marks instead would compile, run, and quietly lose exactly the comments the marker is for.
+- It recovers a comment whose **block** still exists. A comment whose block is gone entirely has no
+  row to sit beside; `orderComments` sorts it to the end of the dialog list and that is where it
+  stays.
+
 ### The offset space is the *rendered* text, not `block.text` <a id="offset-space"></a>
 
 > [!WARNING]
@@ -517,6 +532,8 @@ must not be able to dress itself up as the article.
 | [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a box, and the tick-box |
 | [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
+| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
+| [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
 | [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same four operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | `data/<slug>/comments.json`, and the write serialisation |

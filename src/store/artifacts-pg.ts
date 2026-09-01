@@ -41,7 +41,7 @@
  * 1. **`blocks` has one home, not two.** On disk `output/<slug>.blocks.json`
  *    (stage 3) and `data/<slug>/blocks.json` (stage 4) are separate files, and
  *    stage 4's copy exists so the tree and its blocks are a guaranteed pair.
- *    Here both `(blocks, blocks)` and `(toc, blocks)` are the same
+ *    Here both `(blocks, blocks)` and `(hierarchy, blocks)` are the same
  *    `revision_blocks` rows, which cannot disagree.
  * 2. **`extractedHtml` and `stampedHtml` have two homes, not one.** On disk
  *    they are one path written twice, so stage 3 destroys stage 2's output and
@@ -211,7 +211,7 @@ export const STORAGE: {
     blocks: { at: "blocks" },
     stampedHtml: { at: "column", column: "stampedHtml" },
   },
-  toc: {
+  hierarchy: {
     tree: { at: "column", column: "tree" },
     labels: { at: "column", column: "labels" },
     /**
@@ -461,6 +461,8 @@ async function readBlocks(
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
+      contextId: revisionBlocks.contextId,
+      contextType: revisionBlocks.contextType,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -481,6 +483,9 @@ async function readBlocks(
       ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
       ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
       ...(row.noteId === null ? {} : { noteId: row.noteId }),
+      ...(row.contextId === null || row.contextType === null
+        ? {}
+        : { context: { id: row.contextId, type: row.contextType as "callout" } }),
     })),
   };
 }
@@ -668,13 +673,13 @@ async function runRowFor(
  * apart — and `beginDraftIn` copies the step runs forward too, in the same
  * transaction, so a coherent revision stays coherent.
  *
- * ## `toc` has no special case, and an earlier version of the plan said it did
+ * ## `hierarchy` has no special case, and an earlier version of the plan said it did
  *
- * The rule was going to be: for `toc`, compare the row's `input_hash` against
+ * The rule was going to be: for `hierarchy`, compare the row's `input_hash` against
  * the stored blocks. It is wrong twice. It is a freshness rule, in the one
- * function that must not have one. And it re-runs `toc` whenever stage 3 has
+ * function that must not have one. And it re-runs `hierarchy` whenever stage 3 has
  * run since — which moves the tree's boundaries, which silently drops every
- * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
+ * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `hierarchy` stamp was withdrawn to avoid,
  * reached by a different door. GPT Sol, 2026-08-28;
  * docs/plans/260828b-artifacts-pg-has-sol.md.
  *
@@ -1149,6 +1154,8 @@ async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): 
         role: b.role ?? null,
         treatment: b.treatment ?? null,
         noteId: b.noteId ?? null,
+        contextId: b.context?.id ?? null,
+        contextType: b.context?.type ?? null,
       })),
     );
   }
@@ -1189,7 +1196,7 @@ async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): 
  *
  * ## The one stamp field the caller must supply that no `stamp()` produces
  *
- * `toc` has no `PipelineStep.stamp`, and it must still be written with an
+ * `hierarchy` has no `PipelineStep.stamp`, and it must still be written with an
  * `inputHash` of `hashBlocks(blocks)` — because `reasonsNotToPublish` compares
  * that column against the stored blocks and refuses the publication when they
  * differ. Having no expected stamp and recording no input are different things.

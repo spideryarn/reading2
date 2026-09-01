@@ -82,6 +82,11 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   answers.clear();
   answers.set("/api/models", () => Promise.resolve({ tasks: [] }));
+  /* The Settings card asks who is reading, for the experimental switch. Posed
+     rather than mocked away: this page has three fetches now, and a test that
+     silently answered only two would report a `readJson` throw as an ordinary
+     card state. docs/project/experimental-features.md. */
+  answers.set("/api/reader", () => Promise.resolve({ experimentalSince: null }));
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);

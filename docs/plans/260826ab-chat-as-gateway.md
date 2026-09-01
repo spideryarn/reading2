@@ -224,7 +224,7 @@ Sol found four, all of them silent:
 
 - [`src/store/export.ts`](../../src/store/export.ts) builds a thread from named fields and would
   simply not export the anchor.
-- [`src/store/import.ts`](../../src/store/import.ts) inserts a thread from named fields and would
+- `src/store/import.ts` inserts a thread from named fields and would
   discard it on the way back in.
 - **Import must mint the `block_identities` row** an anchor names, exactly as it already does for
   comments — otherwise, with the foreign key above, importing an archive whose anchored block is not
@@ -673,7 +673,7 @@ retry and deepen ever needed.
 | [`src/converse.ts`](../../src/converse.ts) | the anchor rendered into the final user block, every turn, fenced as article data |
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `begin`'s turn grows `anchor?`; `summaries()`; `cancelFirstTurn()` |
 | [`src/store/fs.ts`](../../src/store/fs.ts), [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts) | read/write the anchor (insert-only columns); the conditional delete |
-| [`src/store/export.ts`](../../src/store/export.ts), [`src/store/import.ts`](../../src/store/import.ts) | carry the anchor; **import mints the identity row** |
+| [`src/store/export.ts`](../../src/store/export.ts), `src/store/import.ts` | carry the anchor; **import mints the identity row** |
 | [`src/routes.ts`](../../src/routes.ts) | `?summary=1`; anchor validation and its own length limit; `409` on a re-anchor; the `cancel` endpoint; comments POST requires an existing id |
 | [`src/web/useChat.ts`](../../src/web/useChat.ts) | `send(…, anchor?)`; `cancelAndDiscard`; frame suppression after cancel |
 | `src/web/useChatAnchors.ts` | **new** — the summary fetch, and local patching on create/delete |

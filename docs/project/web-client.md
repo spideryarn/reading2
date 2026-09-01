@@ -26,13 +26,14 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Beside the title is **one mark saying where the piece came from** — ↗ out to the publisher, or ⬆ meaning it was uploaded and there is nowhere to go back to |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the five-mode switch, your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **three** kinds — navigate, open a drawer, switch mode — and the markup says which. The order is Greg's, set by hand; the way home and the dimmed placeholders both left it on 2026-08-26 |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (twelve of them, `MODES_UI`), your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **three** kinds — navigate, open a drawer, switch mode — and the markup says which. The order is Greg's, set by hand; the way home and the dimmed placeholders both left it on 2026-08-26 |
 | [`src/web/HomeLogo.tsx`](../../src/web/HomeLogo.tsx) | the Spideryarn wordmark fixed in the very top-left of the window, and the way home — everywhere except the library, which *is* home. Read its header before resizing anything: the corner is only free because `--spine-w` is wide, and the masthead and controls bar reserve `--logo-w` for it when it is not — [260825c-bottom-bar.md § Home left the bar](../plans/260825c-bottom-bar.md#home-left-the-bar-and-the-app-got-a-logo) |
-| [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the way to the reader's own uploaded PDF, and `webSource(meta)` — *does this article have a web address at all?* **A missing address is never evidence of an upload:** for a visitor it may be one `publicSourceUrl` withheld, and even for an owner it may be a lost `meta.json`. Only `meta.source === "pdf"` says "uploaded" |
+| [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the way to the reader's own uploaded PDF, and `webSource(meta)` — *does this article have a web address at all?* **A missing address is never evidence of an upload:** for a visitor it may be one `publicSourceUrl` withheld, and even for an owner it may be a lost `meta.json`. Only `meta.source === "pdf"` says "uploaded". `webSource` is also the allowlist on that field's `href`s, so a `javascript:` from an import never becomes a link |
 | [`src/web/stats.ts`](../../src/web/stats.ts) | word, block, part, section and depth counts, pure — used by the masthead's facts line and the metadata page |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
+| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: permalink, comment mark, chat — [prose-gutter-icons.md](../plans/prose-gutter-icons.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
@@ -77,9 +78,16 @@ is **whatever mode you are in**. Greg's framing, which is the whole of it:
 > — Greg, 2026-08-25
 
 So two things are permanent — **where you are** (the spine) and **what you are reading** (the
-prose) — and the band between them is the working surface. `?mode=` says which mode owns it,
-absent meaning the granularity columns; `fitView` reserves the band's width; and four CSS rules add
-a `--mode-w` term that is `0px` in the default mode.
+prose) — and the band between them is the working surface. `?mode=` says which mode owns it;
+`fitView` reserves the band's width; and four CSS rules add a `--mode-w` term that is `0px` whenever
+no band is open.
+
+**Two modes open no band at all**, and they differ in what is left: `hierarchy` is the granularity
+columns beside the prose, and `plain` — the default since 2026-08-31 — is the prose on its own, with
+the columns gone as well ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
+So *a mode is open* and *a band is open* are two questions now, named `inMode` and `bandOpen` in
+[`App.tsx`](../../src/web/App.tsx). Reading either one as the other is the mistake `proseVisible`
+below already exists because of.
 
 "Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
 still true. It is not a promise the reader cannot put the rail away themselves: the `Spine` pill in
@@ -87,7 +95,8 @@ the controls bar does exactly that, in every mode, and it is the one granularity
 stays on screen in one ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
 in the hierarchy mode and nowhere else, which is what `proseVisible` in
-[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice.
+[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice. (Plain is not an
+exception: the prose is all it has, so `?text=0` there would leave nothing.)
 
 Chat is the first mode that is not the hierarchy
 ([260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Adding a second — the Glossary in Greg's example — is a

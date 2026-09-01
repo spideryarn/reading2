@@ -53,8 +53,8 @@ the usage numbers are wanted for logging. Same pair again for multimodal inputs.
 literal in a dedicated module, with a typed argument object, gets the same two benefits and no
 dependency. What we should copy exactly is the *discipline*: one module per prompt, its inputs
 typed, and the words kept where a person can read them all at once. Our
-[`src/toc.ts`](../../../src/toc.ts) and [`src/arc.ts`](../../../src/arc.ts) already lean this way;
-[table-of-contents.md § The generation prompt](../table-of-contents.md#the-generation-prompt) keeps
+[`src/toc.ts`](../../../src/hierarchy.ts) and [`src/arc.ts`](../../../src/arc.ts) already lean this way;
+[hierarchy.md § The generation prompt](../hierarchy.md#the-generation-prompt) keeps
 the reasoning in the doc, which is better still.
 
 **Their XML delimiter house style is worth keeping** — the article wrapped in a named tag, always.

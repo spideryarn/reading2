@@ -18,114 +18,27 @@ import { sameCommit } from "./build-stamp.js";
 /* Migrations                                                          */
 /* ------------------------------------------------------------------ */
 
-/** One row of `drizzle/meta/_journal.json`. */
-export interface JournalEntry {
-  idx: number;
-  tag: string;
-  /** Milliseconds. Drizzle compares this against the ledger's `created_at`. */
-  when: number;
-}
-
-export interface MigrationState {
-  /** Migrations in the journal that the database has not applied, in order. */
-  pending: JournalEntry[];
-  /**
-   * The database has applied more than the journal knows about.
-   *
-   * Normal on a laptop — an agent generates `0018`, applies it, and has not
-   * committed it yet — and **never** normal on the remote. Reported separately
-   * from `pending` because the two are opposite problems and the arithmetic
-   * that finds one would quietly report the other as zero.
-   */
-  ahead: number;
-}
-
 /**
- * What is pending, decided the same way drizzle decides it.
+ * **These moved to scripts/migration-ledger.ts on 2026-08-31** and are
+ * re-exported here so this file stays the one import `scripts/deploy.ts`
+ * reaches for.
  *
- * **By timestamp, not by count and not by tag.** `migrate()` finds the most
- * recent row in `__drizzle_migrations` and applies every journal entry whose
- * `when` is greater than that row's `created_at`. Comparing counts instead
- * would agree with it almost always and disagree exactly when two agents
- * generated migrations in parallel — which is this repo's normal Tuesday.
- *
- * `lastAppliedMillis` is `null` for a database with no ledger at all, where
- * everything is pending.
+ * They moved because `npm run db:migrate` needed the same judgements and was
+ * about to grow a third copy of them. There were already two, and the weaker
+ * one was wrong: `migrationState` answers "what will drizzle apply", which is
+ * not "what is missing", and a migration that has sunk below drizzle's
+ * watermark is missing for ever while that function calls it "not pending".
+ * `reconcileLedger` is the function that answers the other question, and
+ * db-migrate refuses on it before any DDL runs. The whole rule, and why it is
+ * a watermark rather than a ledger, is in the header of that file.
  */
-export function migrationState(
-  journal: readonly JournalEntry[],
-  lastAppliedMillis: number | null,
-  appliedCount: number,
-): MigrationState {
-  const pending = journal
-    .filter((e) => lastAppliedMillis === null || e.when > lastAppliedMillis)
-    .slice()
-    .sort((a, b) => a.when - b.when);
-  return { pending, ahead: Math.max(0, appliedCount - (journal.length - pending.length)) };
-}
-
-/** One row of `spideryarn_migrations.__drizzle_migrations`. */
-export interface LedgerRow {
-  /** sha256 of the whole `.sql` file, which is how drizzle computes it. */
-  hash: string;
-  /** The journal entry's `when`, stored as `created_at`. */
-  created_at: number;
-}
-
-/**
- * Is what the database has applied the beginning of what this commit contains?
- *
- * **The count moving by the right amount is not enough**, and this is the check
- * that says why. `migrate()` looks at the **single most recent** `created_at`
- * and applies every journal entry newer than it — it never compares the hashes
- * it has stored against the files in front of it. So a database that applied a
- * *different* `0016` (a migration that was edited after being applied, or a
- * history from another branch) is indistinguishable from a healthy one by
- * counting, and drizzle will happily carry on appending to it.
- *
- * Since the hash is `sha256` of the file's whole contents, an edited migration
- * changes it. Comparing the applied rows against the committed files is
- * therefore cheap and catches the whole class.
- *
- * `hashes` maps a journal tag to the sha256 of its `.sql` file **at the commit
- * being deployed** — not at whatever is on disk, which several agents are
- * editing.
- */
-export function ledgerDivergence(
-  journal: readonly JournalEntry[],
-  hashes: ReadonlyMap<string, string>,
-  rows: readonly LedgerRow[],
-): string[] {
-  const applied = [...rows].sort((a, b) => Number(a.created_at) - Number(b.created_at));
-  const expected = [...journal].sort((a, b) => a.when - b.when);
-  const problems: string[] = [];
-
-  for (const [i, row] of applied.entries()) {
-    const entry = expected[i];
-    if (!entry) {
-      problems.push(
-        `the database has applied ${applied.length - i} migration(s) beyond the ${expected.length} this commit contains`,
-      );
-      break;
-    }
-    if (Number(row.created_at) !== entry.when) {
-      problems.push(
-        `applied migration #${i + 1} is stamped ${row.created_at}, but this commit's ${entry.tag} is stamped ${entry.when}`,
-      );
-      break;
-    }
-    const want = hashes.get(entry.tag);
-    if (want && row.hash !== want) {
-      problems.push(
-        `${entry.tag} was applied from different SQL than this commit contains — ` +
-          "a migration file was edited after it ran, and drizzle will never notice",
-      );
-      break;
-    }
-  }
-
-  return problems;
-}
+export {
+  ledgerDivergence,
+  migrationState,
+  type JournalEntry,
+  type LedgerRow,
+  type MigrationState,
+} from "./migration-ledger.js";
 
 /**
  * Statements worth naming before they run.

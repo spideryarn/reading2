@@ -882,7 +882,7 @@ ${parts.join("\n")}
  * Not an oversight: src/pipeline.ts logs one line per step, from the seam it
  * already owns, so that "what did this article cost?" has a single answer
  * rather than one per stage in one format per author. See
- * docs/project/logging.md, and the same shape in src/toc.ts and src/arc.ts.
+ * docs/project/logging.md, and the same shape in src/hierarchy.ts and src/arc.ts.
  */
 export interface PdfExtractResult {
   slug: string;
@@ -1010,7 +1010,7 @@ async function readCachedChunk(
 /**
  * Write JSON so that it is either wholly there or not there at all.
  *
- * The same four lines as `writeAtomic` in src/toc.ts and src/labels.ts, and
+ * The same four lines as `writeAtomic` in src/hierarchy.ts and src/labels.ts, and
  * duplicated for the reason given there: sharing them would mean a third module
  * for four lines, and two copies cannot drift in a way that matters — either a
  * write is atomic or it is not.

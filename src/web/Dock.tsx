@@ -90,12 +90,16 @@
  * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
  * at. The label was the only place the old word survived.
  */
-// `ReactKeyboardEvent`, aliased: React's KeyboardEvent and the DOM's are different
-// types, and this file uses both — the drawer's Escape listener is on `window`
-// and takes the DOM one.
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+/* `useRef` and React's aliased `KeyboardEvent` both went with the mode
+   segment's arrow keys on 2026-08-31 — the ref array was the roving tabindex's
+   focus-follow, and the aliased type was that handler's parameter. The only
+   keyboard listener left in this file is the drawer's Escape, which is on
+   `window` and takes the DOM's own type. See `DockModes`. */
+import { useEffect, type ReactNode } from "react";
 import {
+  AlignLeft,
   BookA,
+  ClipboardCheck,
   Lightbulb,
   ChevronUp,
   Clock,
@@ -278,10 +282,12 @@ interface Props {
  * list to be next in. Adding another is a row here — which is exactly what
  * Search and then Summary cost (docs/project/summaries.md).
  *
- * The order is deliberate and is not alphabetical: **contents first, because it
- * is the default** and the one you come back to. Left-to-right in the bar is
- * also the order the arrow keys travel, so the resting state being leftmost
- * means every other mode is reached by going right from the resting state.
+ * The order is deliberate and is not alphabetical: **Plain first, because it is
+ * the default** and the one you come back to — Hierarchy held that place until
+ * 2026-08-31 and now sits second, still first among the modes that show you
+ * something. Left-to-right in the bar is also the order the arrow keys travel,
+ * so the resting state being leftmost means every other mode is reached by
+ * going right from the resting state.
  *
  * The other four were reordered by hand on 2026-08-26 — Summary, Glossary,
  * Search, Chat — and the reasoning is in the file header under "The order".
@@ -289,7 +295,49 @@ interface Props {
  * to the conversation about it, and Chat is last because it is the one furthest
  * from the article's own words.
  */
-const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[] = [
+const MODES_UI: {
+  mode: Mode;
+  icon: typeof Info;
+  label: string;
+  blurb: string;
+  /**
+   * **Keep the word when every other button loses one.**
+   *
+   * The labels are dropped below 1100px and again at phone widths, because they
+   * are said twice — in the tooltip and in the `aria-label` — so dropping them
+   * costs a sighted reader a hover and a screen-reader user nothing (styles.css
+   * § the modes segment). Exactly one button is worth the width anyway: the one
+   * that gets you *out*, which a reader is reaching for precisely when they do
+   * not want to hover ten icons to find it. So on a phone the row is thirteen
+   * glyphs and one word, and the word is the exit.
+   */
+  keepLabel?: true;
+}[] = [
+  /* **First, because it is the way out.** Greg asked for it in those terms —
+     *"the first (and largest?) icon in the bottom-bar, to make it easy for the
+     user to use that to get out of a mode to the text"*, 2026-08-31 — and it is
+     also the default, which is the rule this list already followed when
+     Hierarchy was leftmost.
+
+     Not drawn larger, and that is a deliberate departure from the ask. A
+     radiogroup of ten peers with one of them enlarged reads as a mistake before
+     it reads as emphasis. What it gets instead is its label, kept at narrow
+     widths where every other button loses one (styles.css § the modes segment) —
+     so on a phone the bar is eight icons and one word, and the word is the exit.
+     Cheap to change to a size bump if it does not read.
+
+     It is also **not the fix for the problem Greg hit**, and that is worth
+     saying here so nobody thinks it was: on a phone the bar this button sits in
+     is exactly what an on-screen keyboard covers, and what slides away when you
+     scroll. The fix for that is in styles.css § a small device — the bars stay
+     while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
+  {
+    mode: "plain",
+    icon: AlignLeft,
+    label: "Plain",
+    blurb: "Just the article — no columns, no panel",
+    keepLabel: true,
+  },
   {
     mode: "hierarchy",
     icon: ListTree,
@@ -374,6 +422,28 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: Search,
     label: "Search",
     blurb: "Find a passage by the words it uses, or by what it says",
+  },
+  /* **Straight after Search, because it is Search's kind of thing** — a pass
+     over the piece looking for passages — pointed at somebody who has been
+     asked to peer-review it rather than at somebody reading it for themselves.
+     Its first sub-mode is very nearly a saved search, which is the argument for
+     the placement and also the thing the plan says to watch: if Criteria turns
+     out to be Search with extra steps, the honest move is to fold it back.
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+     `ClipboardCheck` rather than the three other candidates, and the reason is
+     the one rule this whole mode obeys: **no verdict, ever.** `Gavel` and
+     `Stamp` both draw a judgement being handed down, which is the single thing
+     this mode refuses to produce, and an icon that promises it would be the
+     mode's own anti-goal sitting in the bar. `ScanSearch` says "search" one
+     button along from Search. A clipboard with a tick is the referee *form* the
+     venue sends you — the criteria you were asked about — which is what the
+     mode is actually for. docs/project/icons.md. */
+  {
+    mode: "referee",
+    icon: ClipboardCheck,
+    label: "Referee",
+    blurb: "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
   },
   /* Diagram sits between the ways *into* the article and the conversation about
      it, next to Summary rather than next to Chat, because it is the same move
@@ -519,7 +589,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
         </div>
       )}
 
-      {/* Above the bar rather than in it: it is a sentence, and the bar is eleven
+      {/* Above the bar rather than in it: it is a sentence, and the bar is thirteen
           icons. Renders nothing at all except on an uninstalled iOS device that
           has not dismissed it — install-hint.ts. */}
       <InstallHint />
@@ -710,72 +780,67 @@ export function withMode(search: string, mode: Mode): string {
  * Greg asked for the group on 2026-08-25 and the button came with it, so the
  * condition was met by the same change that needed it.
  *
- * ## What a radiogroup costs, which is the part that is easy to skip
+ * ## What a radiogroup costs, and the promise this one deliberately breaks
  *
- * `role="radiogroup"` is a promise about the keyboard, not a label. A screen
- * reader tells its user "radio group, five items" and they will then press an
- * arrow key. Three things make that promise good, and all three are load-bearing:
+ * `role="radiogroup"` is a promise about the keyboard, not a label: a screen
+ * reader announces "radio group, thirteen items" and its user will then press an
+ * arrow key. The ARIA authoring practice makes that good with a roving tabindex
+ * — one tab stop for the group — plus arrows that move *and select* in one
+ * gesture, plus focus following the selection. This group had all three, and
+ * `nextModeIndex` was the wrapping arithmetic pulled out and unit-tested
+ * because an off-by-one in it could only otherwise be caught in a browser.
  *
- *  - **Roving tabindex.** The group is ONE tab stop, not three. The selected
- *    button is `tabIndex={0}` and the others are `-1`, so Tab moves past the
- *    whole control the way it moves past a single button.
- *  - **Arrows move and select in one gesture.** Radios activate on focus; there
- *    is no separate "now press Space". Left/Up go back, Right/Down go forward,
- *    Home/End jump to the ends, and all of them wrap.
- *  - **Focus follows the selection**, which is why `refs` exists. Changing the
- *    mode re-renders with a different button at `tabIndex={0}`, and without
- *    moving focus there deliberately, focus would be left on a button that is
- *    now unreachable by Tab — the reader's next arrow press would go nowhere.
+ * **All of it went on 2026-08-31**, and the reason is that on this page the
+ * arrows are already spoken for. ↑ / ↓ step through the article and ← / →
+ * choose the level they step by (keynav.ts, listening on `window`,
+ * docs/project/keyboard.md). That guard skips keys typed into an INPUT or a
+ * TEXTAREA, and a `<button>` is neither — so this group called
+ * `stopPropagation` to win the collision, and while focus sat anywhere in the
+ * bar all four keys stopped doing the job the reader expects of them. Greg,
+ * 2026-08-31:
  *
- * ## The one collision, and which way it was settled
+ * > I don't really like the way the keyboard changes modes or sub-modes, so if
+ * > it helps, we can remove that functionality. I'd rather up/down *always*
+ * > moves the text, and we can use left/right for mode-specific behaviours?
  *
- * All four arrows are the article's (keynav.ts, listening on `window`): ↑ / ↓
- * step through it and ← / → choose the level they step by. That guard ignores
- * keys typed into an INPUT or TEXTAREA, and a `<button>` is neither — so
- * without `stopPropagation` here, pressing Down inside this group would change
- * the mode *and* scroll the article. **While focus is genuinely inside the
- * group, focus wins**, which is the whole reason the pattern promises the keys.
+ * There is a second reason, and it is the one that made this urgent rather than
+ * tidy: **selecting a mode now spends money.** Since the auto-run rule
+ * (docs/plans/260831ai-…), landing on a mode whose artefact has never been
+ * built starts a model call, so holding → was four paid jobs from one keypress.
+ * A settle delay was drafted to race that; taking the arrows away removes the
+ * race instead, which is the smaller thing to have to be right about.
  *
- * **But a mouse click must not put focus here.** Greg, 2026-08-26, when the
- * button was still called Contents:
+ * **What replaces it: a tab stop per button.** Tab reaches every mode, Enter,
+ * Space or a click selects, and no arrow key is captured anywhere in the bar.
+ * The cost is that the segment is thirteen tab stops rather than one, so tabbing
+ * past the bar takes longer — accepted, because the alternative is worse in a
+ * way a mouse cannot see: a roving tabindex with no arrows leaves twelve of the
+ * thirteen modes unreachable by keyboard altogether.
+ *
+ * `role="radio"` and `aria-checked` stay. *Exactly one of these is on* is still
+ * true, it is what the hairline frame says to a sighted reader (styles.css
+ * § the modes segment), and it was never what the arrow keys were for.
+ *
+ * `.diag-kinds` in DiagramPanel.tsx and the matchers in SearchPanel.tsx copied
+ * this pattern and lost it in the same change.
+ * tests/arrows-belong-to-the-article.test.tsx holds all three.
+ *
+ * ## The blur on click, which outlived the arrows
+ *
+ * Greg, 2026-08-26, when the button was still called Contents:
  *
  * > if I'd just clicked the bottom-bar "Contents" button, say, then left/right
  * > changed within that radio group, rather than the Contents columns (which
  * > should be the priority for those keys)
  *
  * Clicking a bar button is how you *get to* the hierarchy, so the arrows you
- * press next are meant for it — and the reader has no reason to think
- * the button they let go of is still listening. So a pointer-driven click blurs
- * the button afterwards (`e.detail > 0`, which is 0 for a click synthesised by
- * Enter or Space) and the arrows go back to the article. Tab into the group and
- * everything the role promises is still there: this takes the keys away from
- * nobody who asked for them.
+ * press next are meant for it — and the reader has no reason to think the
+ * button they let go of is still listening. A pointer-driven click therefore
+ * blurs the button afterwards (`e.detail > 0`, which is 0 for a click
+ * synthesised by Enter or Space). That is still worth keeping: nothing in the
+ * bar eats the arrows now, but a focused button still takes Enter and Space,
+ * and leaving focus on it after a mouse click is not what the reader asked for.
  */
-/**
- * Which mode a key press moves to, or `null` if the key is not ours.
- *
- * Pulled out of the component and exported **because it cannot be tested where
- * it was.** The arrow keys are the promise `role="radiogroup"` makes, the
- * wrapping arithmetic is where an off-by-one hides, and the only way to check
- * it in place is to drive a real browser — which is exactly the check that is
- * skipped on the day it matters. Everything here is index arithmetic; none of
- * it needs a DOM. See tests/chat.test.ts.
- *
- * Both axes move the selection, and `Home`/`End` jump to the ends. Wrapping is
- * deliberate: with a handful of items, not wrapping means the reader has to know
- * which end they are at before they know which key to press.
- */
-export function nextModeIndex(key: string, index: number, count: number): number | null {
-  if (count === 0) return null;
-  const step = key === "ArrowRight" || key === "ArrowDown" ? 1 : key === "ArrowLeft" || key === "ArrowUp" ? -1 : 0;
-  // `+ count` before the modulo: JavaScript's `%` keeps the sign of the left
-  // operand, so going left from the first item lands on -1 rather than on the
-  // last one — and -1 is a valid-looking array index that reads as `undefined`.
-  if (step !== 0) return (index + step + count) % count;
-  if (key === "Home") return 0;
-  if (key === "End") return count - 1;
-  return null;
-}
 
 /**
  * How a marked control is drawn.
@@ -798,38 +863,48 @@ function DockModes({
   onMode(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const current = MODES_UI.findIndex((m) => m.mode === mode);
-  // Never -1: an unknown mode cannot reach here (params.ts parses one), but a
-  // -1 would put focus on `refs[-1]` and silently break every arrow key.
-  const index = current === -1 ? 0 : current;
-
-  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const next = nextModeIndex(e.key, index, MODES_UI.length);
-    if (next === null) return;
-    const target = MODES_UI[next];
-    if (!target) return;
-    // Both, and both matter: `preventDefault` stops the arrow scrolling the
-    // page, `stopPropagation` stops keynav.ts *also* stepping the article — see
-    // the header for why focus wins over the pointer here.
-    e.preventDefault();
-    e.stopPropagation();
-    onMode(target.mode);
-    // Focus follows the selection. Without this the reader is left on a button
-    // that is about to become `tabIndex={-1}`, so their next arrow press goes
-    // nowhere — see the header.
-    refs.current[next]?.focus();
-  };
-
+  /**
+   * **No keyboard handler, and every button its own tab stop — the arrows
+   * belong to the article.**
+   *
+   * This was a roving tabindex with the radiogroup pattern's arrow keys, which
+   * is what the ARIA authoring practice prescribes and what `SearchPanel` and
+   * `DiagramPanel` copied. It is gone from all three, and the departure is
+   * deliberate. Two reasons, and the second is why it could not wait:
+   *
+   * **The arrows already mean something on this page.** ↑ / ↓ step through the
+   * article and ← / → choose the granularity stride (keyboard.md), and this
+   * handler called `stopPropagation`, so while focus was anywhere in the bar
+   * all four keys stopped doing their job. Greg, 2026-08-31:
+   *
+   * > I don't really like the way the keyboard changes modes or sub-modes, so
+   * > if it helps, we can remove that functionality. I'd rather up/down
+   * > *always* moves the text, and we can use left/right for mode-specific
+   * > behaviours?
+   *
+   * **And selection here spends money.** Since the auto-run rule
+   * (docs/plans/260831ai-…), landing on a mode with no artefact starts a model
+   * call — so holding → was four paid jobs from one keypress, and the same
+   * pattern on `.diag-kinds` put a 121–194 second, ~$0.20 sketch one arrow away.
+   * A settle delay was drafted to race that; taking the arrows off removes it
+   * instead, which is the smaller thing to have to be right about.
+   *
+   * **The cost, which is real:** the segment goes from one tab stop to thirteen,
+   * so tabbing past the bar takes more presses. That is the price of every mode
+   * staying reachable without arrows, and it is the right way round — a roving
+   * tabindex with no arrows would leave twelve of the thirteen unreachable by
+   * keyboard, which is worse than what was fixed and invisible to a mouse.
+   *
+   * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
+   * still true, still what the hairline frame says (styles.css § the modes
+   * segment), and not what the arrow keys were for.
+   *
+   * tests/arrows-belong-to-the-article.test.tsx holds all of it.
+   */
   return (
-    <div
-      className="dock-modes"
-      role="radiogroup"
-      aria-label="What the middle column shows"
-      onKeyDown={onKey}
-    >
+    <div className="dock-modes" role="radiogroup" aria-label="What the middle column shows">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {MODES_UI.map((m, i) => (
+        {MODES_UI.map((m) => (
           <Tooltip
             key={m.mode}
             placement="top"
@@ -855,9 +930,6 @@ function DockModes({
             <button
               type="button"
               role="radio"
-              ref={(el) => {
-                refs.current[i] = el;
-              }}
               className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
               aria-checked={m.mode === mode}
               /* Explicit, because the visible label is `display: none` at
@@ -865,8 +937,11 @@ function DockModes({
                  would go with it — leaving a screen reader six radio buttons
                  called nothing at all. */
               aria-label={m.label}
-              // The roving tabindex: one tab stop for the whole group.
-              tabIndex={m.mode === mode ? 0 : -1}
+              /* Every button, not a roving one. See the note above the
+                 radiogroup: with no arrow keys to move within the group, a
+                 single tab stop would leave twelve of the thirteen modes
+                 unreachable by keyboard. */
+              tabIndex={0}
               onClick={(e) => {
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
@@ -882,7 +957,7 @@ function DockModes({
                   text costs the sighted reader a hover and costs a screen
                   reader nothing — which is why the label is the thing that
                   gives way rather than the button. See § the modes segment. */}
-              <span className="dock-btn-label">{m.label}</span>
+              <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{m.label}</span>
             </button>
           </Tooltip>
         ))}
@@ -933,7 +1008,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all eleven of the bar's labels with one rule rather than with
+          can drop all thirteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}
@@ -982,7 +1057,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all eleven of the bar's labels with one rule rather than with
+          can drop all thirteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}

@@ -31,6 +31,7 @@ import { fetchHtml } from "./fetch.js";
 import { escapeHtml } from "./html.js";
 import { slugFromUrl } from "./ingest.js";
 import { isMain } from "./is-main.js";
+import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
@@ -145,7 +146,7 @@ export function defaultOutFile(url: string): string {
  * long way round given `defaultOutFile` just derived the filename from the URL
  * — but it is the only spelling that cannot drift. Stage 3 names its blocks
  * file after the HTML file, and stage 4 names the data directory after *that*
- * (src/toc.ts). So the basename here is what the rest of the pipeline will call
+ * (src/hierarchy.ts). So the basename here is what the rest of the pipeline will call
  * this article, whether it was chosen by us or passed in on the command line.
  * Deriving it from the URL a second time would put meta.json in the
  * right-looking directory for `npm run extract <url>` and in the wrong one the
@@ -182,6 +183,8 @@ export interface ExtractResult {
   excerpt: string | null;
   /** What the footnote canonicalisation did — see src/notes.ts. */
   notes: NoteStats;
+  /** What the callout pass found — see src/callouts.ts. */
+  callouts: CalloutStats;
 }
 
 /**
@@ -282,7 +285,9 @@ export function unhideCollapsedSections(doc: Document): void {
  * running the two side by side. Found by GPT Sol's review.
  *
  * So the order below is the contract, not an implementation detail, and it has
- * exactly one home.
+ * exactly one home. `canonicaliseCallouts` joined it on 2026-08-31 for the same
+ * reason `canonicaliseNotes` is here: it has to run before Readability, which
+ * deletes the element a callout is named on (src/callouts.ts).
  *
  * `article` is `null` when Readability declines the page — the caller decides
  * whether that is an error (`runExtract`: yes) or a row in a table (an eval:
@@ -291,7 +296,7 @@ export function unhideCollapsedSections(doc: Document): void {
 export function readArticle(
   html: string,
   url: string,
-): { article: ReturnType<Readability["parse"]>; notes: NoteStats } {
+): { article: ReturnType<Readability["parse"]>; notes: NoteStats; callouts: CalloutStats } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
      them quotes the page: a malformed `@import` produces `Could not parse CSS
@@ -316,7 +321,12 @@ export function readArticle(
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
      3 there is nothing left to recognise a note by. See src/notes.ts. */
   const notes = canonicaliseNotes(dom.window.document);
-  return { article: new Readability(dom.window.document).parse(), notes };
+  /* After the notes, and for the same reason as the notes: Readability deletes
+     the element a callout is named on. Order between the two does not matter —
+     neither reads what the other writes — so it is simply the later arrival.
+     src/callouts.ts. */
+  const callouts = canonicaliseCallouts(dom.window.document);
+  return { article: new Readability(dom.window.document).parse(), notes, callouts };
 }
 
 /**
@@ -417,7 +427,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, notes } = readArticle(opts.html, opts.url);
+  const { article, notes, callouts } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new Error("Readability could not parse this page.");
   }
@@ -450,6 +460,7 @@ export async function runExtract(opts: {
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,
+    callouts,
   };
 }
 
@@ -503,6 +514,10 @@ async function main(): Promise<void> {
   console.log(
     `Notes: ${result.notes.notes} (${result.notes.markers} markers, ` +
       `${JSON.stringify(result.notes.shapes)})`,
+  );
+  console.log(
+    `Callouts: ${result.callouts.containers} (${result.callouts.stamped} elements stamped, ` +
+      `${result.callouts.skipped} skipped, ${JSON.stringify(result.callouts.shapes)})`,
   );
   console.log(`Excerpt: ${result.excerpt}`);
   console.log(`\nWritten to: ${path.resolve(outFile)}`);

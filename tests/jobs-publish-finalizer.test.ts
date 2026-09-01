@@ -311,8 +311,8 @@ function treeFor(slug: string, blocks: Block[]): Tree {
 /**
  * `labels.json`, and its `sourceHash` is the load-bearing field.
  *
- * `STAMP_SOURCE` maps the `toc` step's stamp to the `labels` artefact, and
- * `reasonsNotToPublish` refuses a revision whose `toc` run row was stamped
+ * `STAMP_SOURCE` maps the `hierarchy` step's stamp to the `labels` artefact, and
+ * `reasonsNotToPublish` refuses a revision whose `hierarchy` run row was stamped
  * against different blocks. So the hash here is what carries "this tree was
  * built from these blocks" all the way from a file on disk to the publication
  * gate — which is precisely the seam this test is about.
@@ -400,13 +400,13 @@ function articleSteps(
         bodies.extract,
       ),
       blocks: writingStep("blocks", { blocks: { blocks }, stampedHtml: html }, bodies.blocks),
-      toc: writingStep("toc", { tree, labels: labelsFor(slug, blocks), blocks: { blocks } }, bodies.toc),
+      hierarchy: writingStep("hierarchy", { tree, labels: labelsFor(slug, blocks), blocks: { blocks } }, bodies.hierarchy),
     },
   };
 }
 
 /** The steps a fixture job runs, in pipeline order. */
-const INGEST: StepName[] = ["extract", "blocks", "toc"];
+const INGEST: StepName[] = ["extract", "blocks", "hierarchy"];
 
 /* ----------------------------------------------------------------- the job -- */
 
@@ -603,7 +603,7 @@ when("a job that finishes", () => {
        this slug. That is the all-skipped door — the walk never calls `commit` —
        and on a serverless host it is what a scratch directory on the wrong
        instance looks like. The session is the real one, over an empty source. */
-    const second = await queueJob(slug, ["toc"]);
+    const second = await queueJob(slug, ["hierarchy"]);
     const attempt = await claimOrWait(second.id);
     const inner = recordingInner();
     const session = publishingSession(inner.session, {
@@ -675,7 +675,7 @@ when("a job that finishes", () => {
      * `importArticle` did — it would roll that one back too and the test would
      * stay green against the bug.
      */
-    const second = await queueJob(slug, ["toc"], true);
+    const second = await queueJob(slug, ["hierarchy"], true);
     const attempt = await claimOrWait(second.id);
     const inner = recordingInner();
     const session = publishingSession(inner.session, {
@@ -692,7 +692,7 @@ when("a job that finishes", () => {
           attempt,
           ending: {
             status: "done",
-            steps: [{ name: "toc", label: "Building the table of contents", status: "done" }],
+            steps: [{ name: "hierarchy", label: "Building the hierarchy", status: "done" }],
             /**
              * **The injection lives in `error`, and the position is deliberate.**
              *
@@ -808,7 +808,7 @@ when("a job that finishes", () => {
      * publishes after one step.
      */
     const { steps } = articleSteps(slug, "hbk");
-    const job = await queueJob(slug, ["extract", "blocks", "toc"]);
+    const job = await queueJob(slug, ["extract", "blocks", "hierarchy"]);
 
     const advanced = await runAsOwner(DEV_OWNER_ID, () =>
       advanceUntilNotBusy(job.id, {
@@ -862,7 +862,7 @@ when("a job that finishes", () => {
      * establish refusal and rollback but not the coordinator's behaviour around
      * them (docs/plans/260830ad-v1-publish-finalizer-review-sol.md, the High finding).
      *
-     * Two things make it happen. The job asks only for `toc`, which is already
+     * Two things make it happen. The job asks only for `hierarchy`, which is already
      * current on disk, so every step skips and the walk never calls `commit` —
      * `settleJob` is the only door the `done` ending comes through. And
      * `meta.json` is deleted first, which leaves `extract` with one of its two
@@ -884,7 +884,7 @@ when("a job that finishes", () => {
      */
     await rm(path.join(HOISTED.root, "data", slug, "meta.json"));
 
-    const second = await queueJob(slug, ["toc"]);
+    const second = await queueJob(slug, ["hierarchy"]);
     const advanced = await runAsOwner(DEV_OWNER_ID, () =>
       advanceUntilNotBusy(second.id, { session: claimSession, steps: STEPS }),
     ).catch((err: unknown) => err);
@@ -933,7 +933,7 @@ when("a job that finishes", () => {
     const before = await currentRevisionOf(slug);
     expect(before).not.toBeNull();
 
-    /* A second job over the same article whose `toc` throws — **forced**, or it
+    /* A second job over the same article whose `hierarchy` throws — **forced**, or it
        would skip. The first job left valid artefacts under this slug in the
        scratch root, so `stepIsDone` answers yes to all three and the walk ends
        `done` having run nothing, which is a different case with a different
@@ -943,11 +943,11 @@ when("a job that finishes", () => {
        complete, publishable article on disk that a finalizer without the
        `status === "done"` clause would happily publish under a failed job. */
     const failing = articleSteps(slug, "fad", {
-      toc: () => {
-        throw new Error("the fixture toc step refuses to run");
+      hierarchy: () => {
+        throw new Error("the fixture hierarchy step refuses to run");
       },
     });
-    const second = await queueJob(slug, ["toc"], true);
+    const second = await queueJob(slug, ["hierarchy"], true);
     const advanced = await runAsOwner(DEV_OWNER_ID, () =>
       advanceUntilNotBusy(second.id, {
         session: claimSession,

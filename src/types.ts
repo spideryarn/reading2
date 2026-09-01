@@ -25,7 +25,47 @@ import type { Assets } from "./assets.js";
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
 export type BlockKind =
-  | "heading" | "text" | "quote" | "code" | "media" | "caption" | "other";
+  /* **`callout` is legacy and is produced by nothing.** It was added on the
+     morning of 2026-08-31 and replaced the same afternoon by `Block.context`,
+     because a box drawn *around* blocks is a different axis from what a block
+     *is*: a heading inside a callout has to keep `kind: "heading"`, and so lost
+     the box entirely. It stays in the union and in the CHECK constraint because
+     every revision extracted in between has it on disk and in Postgres, and the
+     reading view reads both spellings.
+     docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+  | "heading" | "text" | "quote" | "callout" | "code" | "media" | "caption" | "other";
+
+/**
+ * **An authored grouping a run of blocks belongs to** — the box a piece drops
+ * into the middle of an argument. Recognised at stage 2, before Readability
+ * deletes the markup that says so (src/callouts.ts), and carried here by stage
+ * 3.
+ *
+ * Three rules, and the first two are what keep this from becoming a second
+ * `kind` or a second address space:
+ *
+ * 1. **A context groups blocks; it is never copied into `kind`.** Every block in
+ *    a callout keeps its own kind — heading, quote, media — and the reading view
+ *    sets it differently because of the context it is in.
+ * 2. **The id is not an address.** Comments, URLs, the tree and the spine
+ *    address block ids, which are the permanent identity
+ *    (docs/project/block-ids.md). This is revision-local, and it is stable
+ *    across re-runs only so that a diff of blocks.json shows real changes.
+ * 3. **Membership decides no policy on its own.** Whether a block is searched,
+ *    embedded, gisted or on the clock stays with the named predicates in
+ *    src/block-policy.ts.
+ *
+ * **One context per block, deliberately**, and today it cannot be otherwise:
+ * stage 2 collapses a callout inside a callout into one. The day a second type
+ * has to co-exist with the first — a verse inside a callout — this becomes a
+ * membership table, with a real case to design against.
+ * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+ */
+export interface BlockContext {
+  /** `c-` and ten hex digits — `CONTEXT_ID_PATTERN` in src/reserved.ts. */
+  id: string;
+  type: "callout";
+}
 
 /**
  * One block of the article. **Array order in blocks.json IS document order** —
@@ -80,6 +120,11 @@ export interface Block {
   role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
   /** How the argument machinery must treat it. Absent means "body". */
   treatment?: "supplement";
+  /**
+   * The authored box this block sits inside, if any — see {@link BlockContext}.
+   * Absent means ordinary flow, which is most blocks.
+   */
+  context?: BlockContext;
   /**
    * Which note this block belongs to. **A note is a RANGE of blocks, not one
    * block** — gwern has 34 notes across 41 supplement blocks, and conflating
@@ -1801,7 +1846,7 @@ export interface Comment {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary"
+  | "fetch" | "extract" | "blocks" | "hierarchy" | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
@@ -2537,3 +2582,227 @@ export interface TimelineResponse {
  * after all, the `Omit` goes in one place instead of being searched for.
  */
 export type TimelineFound = TimelineResponse;
+
+/* ------------------------------------------------------------------- quiz --
+   The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
+   second sub-mode of Review. See docs/plans/260831al-review-quiz-sub-mode.md.
+
+   ## Why these are here and not in src/quiz.ts, where the stage lives
+
+   The same reason `Timeline` is, one section up: `tests/client-imports.test.ts`
+   lets `src/web/` import only the pure leaves in its `SHARED` list, and
+   `src/quiz.ts` is a stage with a CLI and a model call in it. A panel that
+   cannot see `QuizQuestion` cannot be written, so the shape both sides speak
+   lives in this file, which imports nothing, and src/quiz.ts re-exports it so a
+   caller of the stage still only has to know about the stage.
+
+   `QuizDropped` is here for the same reason and one more: it is a field ON the
+   artefact rather than a return value beside it (unlike `ideas`' and
+   `timeline`'s, which are handed back to the CLI and thrown away). A dropped
+   question is invisible from outside — it looks exactly like a question the
+   model chose not to set — and the metadata page is where somebody would go to
+   find out, so the counts have to survive the write.  */
+
+/**
+ * **How the answer is reached** — a judgement about the question, not a guess
+ * at how a stranger will do.
+ *
+ * That distinction is the whole reason this is a three-valued band rather than
+ * the 1–5 `ease` score the first draft asked for. A spike on a real article
+ * (docs/plans/260831al-review-quiz-sub-mode.md § Quotas) measured what a model
+ * actually does with an open 1–5 scale: `ease` never left 2–4 across 24
+ * questions. A scale whose ends are never used is not a scale, and the sort it
+ * feeds is then arbitrary for most of the list.
+ *
+ * | band | the answer is… |
+ * |---|---|
+ * | `easy` | stated in one passage, and the reader is recalling it |
+ * | `medium` | a distinction or a connection the article draws between two statements |
+ * | `hard` | a move the argument makes across several passages, which the reader has to reconstruct |
+ */
+export type QuizBand = "easy" | "medium" | "hard";
+
+/**
+ * **Where the reference answer lives — checked, never trusted.**
+ *
+ * A block id on its own proves only that a paragraph exists; it says nothing
+ * about whether the answer is in it. So the model names a quote as well, every
+ * quote is relocated with `findQuote`, and what is stored is **the article's
+ * own characters** sliced at the offsets it found — never the model's typing.
+ * GPT Sol's finding 2 on the plan.
+ */
+export interface QuizEvidence {
+  blockId: BlockId;
+  /** The article's own characters, sliced at the offsets `findQuote` located. */
+  quote: string;
+  /** A disambiguator between repeats, never the anchor. As `IdeaOccurrence`. */
+  start: number;
+}
+
+/** A question id. Minted per batch; nothing outside the batch names one. */
+export type QuizQuestionId = string;
+
+export interface QuizQuestion {
+  /** `mintUniqueId`, so it is a block id by construction. Minted per batch. */
+  id: QuizQuestionId;
+  /** One question mark, one thing asked. */
+  question: string;
+  /**
+   * Two or three sentences of model prose, written **before** any reader's
+   * attempt was seen.
+   *
+   * **A fallible draft, not an answer key**, and the naming is deliberate all
+   * the way to the button that reveals it (*"Show a reference answer"*, not
+   * *"the"*). The marking prompt is told outright that the article outranks
+   * this, and `evals/quiz.ts` poisons one on purpose to check that it does.
+   */
+  referenceAnswer: string;
+  /** Non-empty, or the question is dropped. */
+  evidence: QuizEvidence[];
+  band: QuizBand;
+  /** 1 (peripheral) – 5 (central). The sort key within a band. */
+  value: number;
+}
+
+/**
+ * What was thrown away, and why. **Every one of these is invisible from
+ * outside** — a dropped question looks exactly like one the model chose not to
+ * set — which is the whole reason they are counted, stored and logged.
+ *
+ * Counts only. Never the question, never the reference answer, never the quote.
+ */
+export interface QuizDropped {
+  /** A `blockId` that is not in blocks.json. The model invented it. */
+  unknownIds: number;
+  /** A `quote` that `findQuote` could not locate in the block the model named. */
+  unquoted: number;
+  /** Evidence past `MAX_EVIDENCE` on one question. */
+  truncated: number;
+  /** Questions past `MAX_QUESTIONS`, discarded whole. */
+  overCap: number;
+  /** Questions missing a field, or with an unusable band or value. Dropped. */
+  malformed: number;
+  /** Questions asking the same thing as one already kept. Dropped. */
+  duplicate: number;
+  /** Questions that lost **every** piece of evidence and were dropped whole. */
+  unanchored: number;
+}
+
+/** The artefact. `data/<slug>/quiz.json`. */
+export interface Quiz {
+  version: string;
+  generator: string;
+  slug: string;
+  /**
+   * **Minted per generation, and every mark binds to it.**
+   *
+   * Between a reader seeing a question and pressing Answer, a forced
+   * regeneration can replace the reference answer and the evidence while the
+   * question id stays whatever it stays. Without this the server would mark one
+   * batch's answer against another's reference with nothing visibly wrong.
+   * Stage 2 turns a mismatch into a 409; the field exists from the start so
+   * there is nothing to migrate. GPT Sol's finding 5.
+   */
+  batchId: string;
+  /** Blocks, tree and metadata — `articleWithIdsFingerprint`. */
+  sourceHash: string;
+  /** **Already sorted** — bands, then value, then document order. Never re-sorted. */
+  questions: QuizQuestion[];
+  /** What validation threw away. See `QuizDropped`. */
+  dropped: QuizDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/* ------------------------------------------------------------- feedback -- */
+
+/**
+ * **Which page the reader was on when they pressed Feedback**, as a name from a
+ * list we wrote — never the address bar.
+ *
+ * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § Always — where
+ * they were: this app's URLs carry `?q=` and `?find=`, which are reader-typed
+ * search text, and `/add/<a whole third-party URL>`, which may carry a token.
+ * So the raw location may not leave the browser at all, and this closed
+ * vocabulary is the part of it that may.
+ *
+ * It mirrors `Route["kind"]` in src/web/router.ts and is written out here by
+ * hand rather than derived from it, because this file is imported by the server
+ * and by src/db/schema.ts while that one is a client module. `unknown` is in the
+ * list on purpose: a route added later must still be *reportable*, and a report
+ * that cannot be filed because the reader was on a new page is the worst way to
+ * lose the one report that mattered.
+ */
+export const FEEDBACK_ROUTE_KINDS = [
+  "library",
+  "read",
+  "add",
+  "add-upload",
+  "design",
+  "profile",
+  "admin",
+  "login",
+  "callback",
+  "unknown",
+] as const;
+
+export type FeedbackRouteKind = (typeof FEEDBACK_ROUTE_KINDS)[number];
+
+/**
+ * **Which deployment the report came from** — the union of what `VERCEL_ENV`
+ * and `NODE_ENV` can say (src/monitoring.ts builds Sentry's `environment` from
+ * exactly that pair).
+ *
+ * Closed, so that a report from a preview build cannot be read as one from
+ * production. The server maps its environment onto this rather than passing a
+ * string through: the type refuses the wrong value before the CHECK does.
+ */
+export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "test"] as const;
+
+export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
+
+/**
+ * The longest any one of the three answers may be.
+ *
+ * Here rather than beside the store for the reason `MAX_PROFILE_CHARS` is here:
+ * the dialog's `maxlength` and the number the server refuses at must be one
+ * value, and src/store/ reaches for `pg` and `node:fs`, which nothing under
+ * src/web/ may import (tests/client-imports.test.ts).
+ *
+ * Generous, because a bug report is a story and cutting one off mid-sentence
+ * costs us the detail that would have identified it — and small enough that a
+ * pasted article cannot become an attachment, which is the case the cap is
+ * really for.
+ */
+export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+
+/**
+ * The largest screenshot the database will take, in **decoded** bytes.
+ *
+ * The dialog downscales to around 300 KB; this is the ceiling that holds
+ * whatever the dialog does, because client-side downscaling is not validation.
+ * A CHECK on `octet_length` rather than a rule in TypeScript, so it holds for
+ * every writer including a script — docs/project/sql.md.
+ */
+export const MAX_FEEDBACK_SCREENSHOT_BYTES = 400_000;
+
+/**
+ * The opt-in diagnostics blob — **opaque to everything that stores it**.
+ *
+ * Deliberately `unknown`. The stage that builds it owns its shape (the plan's
+ * *client log buffer and the diagnostics*), it is an allowlist at both ends, and
+ * no part of it is ever queried — which is the sentence docs/project/sql.md
+ * demands before a value may be JSONB rather than a column.
+ *
+ * It is carried with a **version**, so an old report is still readable when the
+ * shape changes. The version lives in its own column (`diagnostics_version`)
+ * rather than inside the blob, so it can be filtered on without reading the blob
+ * and so there is only one copy of it.
+ */
+export type FeedbackDiagnosticsPayload = unknown;
+
+export interface FeedbackDiagnostics {
+  /** Which shape `payload` has. Stored in `feedback.diagnostics_version`. */
+  version: number;
+  payload: FeedbackDiagnosticsPayload;
+}

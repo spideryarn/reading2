@@ -70,7 +70,7 @@ Add `isByok: boolean | null` to `CallMeter` and `SpendRecord` before these recor
 
 6. The model test claims more than it checks.
 
-The test titled “keeps the unprefixed spelling out of every request” at [models.test.ts:94](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/models.test.ts:94) only calls `modelFor(task)`. Pipeline requests use `CAPABLE_MODEL_OPENROUTER` directly—for example [toc.ts:653](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:653). Switching one stage back to `CAPABLE_MODEL` would leave that test green.
+The test titled “keeps the unprefixed spelling out of every request” at [models.test.ts:94](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/models.test.ts:94) only calls `modelFor(task)`. Pipeline requests use `CAPABLE_MODEL_OPENROUTER` directly—for example [toc.ts:653](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:653). Switching one stage back to `CAPABLE_MODEL` would leave that test green.
 
 Prefer having `streamMessage(task, ...)` derive `modelFor(task)` itself. Otherwise test the captured outgoing bodies of all seven stages.
 

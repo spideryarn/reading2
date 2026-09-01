@@ -95,7 +95,7 @@ The middle step carries no bearer token and no API key. The grant is in the URL,
 path *we* chose, and it lasts two hours. `MAX_BODY_BYTES` in
 [`src/routes.ts`](../../src/routes.ts) is untouched — that is the point, no route grew a
 large-body path. Measured end to end on 2026-08-27 with the 145 KB fixture: verified, extracted,
-split, ToC'd and arc'd in 148 seconds, and `GET /api/source/:slug` handed back all 144,779 bytes.
+split, given its hierarchy and its arc in 148 seconds, and `GET /api/source/:slug` handed back all 144,779 bytes.
 
 **Where each piece lives.** [`src/web/upload.ts`](../../src/web/upload.ts) hashes and sends;
 [`src/store/blobs.ts`](../../src/store/blobs.ts) is the seam, with the Supabase and filesystem
@@ -409,7 +409,7 @@ Six steps, in [`src/pipeline.ts`](../../src/pipeline.ts):
   fetch     Fetching the page              → data/<slug>/raw.html
   extract   Extracting the article         → output/<slug>.html, data/<slug>/meta.json
   blocks    Splitting into blocks          → output/<slug>.blocks.json   (and the sanitiser)
-  toc       Building the table of contents → data/<slug>/tree.json, data/<slug>/blocks.json
+  hierarchy Building the table of contents → data/<slug>/tree.json, data/<slug>/blocks.json
   arc       Writing the arc                → data/<slug>/arc.json
   tweets    Writing the thread             → data/<slug>/tweets.json     (never on a plain add)
 ```
@@ -462,7 +462,7 @@ its position was the only signal it had.
 **It has one as of 2026-08-29** ([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`, over the
 blocks, the tree and the metadata the prompt carries), which by that rule makes it a candidate for
 the set. It is worth knowing *why* it needed one: position was never quite the signal it looked
-like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["toc"] }` never
+like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["hierarchy"] }` never
 reached `arc` at all — the tree was re-cut, `arc.json` stayed, and the reading view silently dropped
 every arc entry whose range no longer matched a node, because the join is by exact block range.
 docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
@@ -508,7 +508,7 @@ without anyone having to remember.
 This was wrong for an afternoon, and the way it was wrong is the reason it is now a rule rather
 than a convention. "Refresh from source" was written as `force: ["fetch", "extract"]` — force the
 two stages that read the outside world, leave the rest alone. But the rest are not independent of
-them: `blocks`, `toc` and `arc` all find their artefacts still on disk from last time, skip
+them: `blocks`, `hierarchy` and `arc` all find their artefacts still on disk from last time, skip
 themselves in milliseconds, and report three green ticks. What you get is **a freshly fetched
 article under last week's tree and last week's arc** — every gist describing paragraphs that have
 moved, and nothing anywhere saying so.
@@ -525,7 +525,7 @@ pipeline already knows.
 
 ### A step is done when *all* its files are there
 
-`extract` writes the HTML **and** `meta.json`. `toc` writes `tree.json` **and** its copy of
+`extract` writes the HTML **and** `meta.json`. `hierarchy` writes `tree.json` **and** its copy of
 `blocks.json`. Each step declares an `outputs` list rather than a single artefact, and counts as
 done only when every one of them is present — because a crash between the two writes would
 otherwise leave a step reporting itself finished with half its output, and the stage after it
@@ -534,10 +534,10 @@ consuming the missing half.
 **There are two copies of `blocks.json`, and it matters here.** Stage 3 writes
 `output/<slug>.blocks.json`; stage 4 copies it into `data/<slug>/blocks.json` as it writes the tree,
 so the pair in the data directory is guaranteed to be the one the tree was built from. Each step's
-`done()` checks *its own* artefact — the first one for `blocks`, the second for `toc`. Getting that
-backwards means a finished `blocks` step reports itself unfinished until `toc` has also run, so
+`done()` checks *its own* artefact — the first one for `blocks`, the second for `hierarchy`. Getting that
+backwards means a finished `blocks` step reports itself unfinished until `hierarchy` has also run, so
 every retry redoes stage 3 and a `{ steps: ["blocks"] }` job can never skip itself. Which also means:
-run `blocks` on its own and the two copies disagree until you run `toc` as well. That is the
+run `blocks` on its own and the two copies disagree until you run `hierarchy` as well. That is the
 pipeline's existing shape, not something the queue introduced, and it is why a re-run of a middle
 stage should generally include the ones after it.
 
@@ -704,8 +704,8 @@ built. What makes an expired lease mean something in the meantime is that the cl
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
 
-So in practice: the server dies during `toc`, you press Retry, and `fetch`, `extract` and `blocks`
-are skipped in milliseconds while `toc` starts again. That is "picks up from where it started" for
+So in practice: the server dies during `hierarchy`, you press Retry, and `fetch`, `extract` and `blocks`
+are skipped in milliseconds while `hierarchy` starts again. That is "picks up from where it started" for
 the case that matters — the two model calls, which are the expensive part.
 
 **The check used to be existence, and it is not any more.** A step now declares `produces` — the
@@ -735,10 +735,10 @@ ids over rather than minting new ones.
    specifies that `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. Three
    steps implement it — `tweets` and `summary` via the optional `isDone` above, `glossary` via the
    newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
-   `tree.json` and `arc.json` carry no hash at all, so `toc` and `arc` are still presence-only, and
+   `tree.json` and `arc.json` carry no hash at all, so `hierarchy` and `arc` are still presence-only, and
    `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
-   one, which is what `toc`'s stamp is read from today even though nothing yet compares it.
-2. **Atomic artefact writes across a step's whole set.** `toc` and `labels` write temp-then-rename,
+   one, which is what `hierarchy`'s stamp is read from today even though nothing yet compares it.
+2. **Atomic artefact writes across a step's whole set.** `hierarchy` and `labels` write temp-then-rename,
    and the store's `write` does too; the other stages still write in place, and none of it makes the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
 
@@ -807,10 +807,10 @@ marked, which really is worth another go. It is not because a wasted click is ch
 retry costs minutes of pipeline and another billed model call, which is a good deal worse than the
 same mistake on a chat message.
 
-**What makes a failure permanent is Retry's own shape.** `forceForRetry` forces from the first step
-that did not finish, so **a retry never re-runs a step that succeeded**. A stage that failed while
-reading an artefact an earlier step wrote will read that identical artefact again. That is what
-separates the two lists:
+**What makes a failure permanent is Retry's own shape.** For an ordinary job `forceForRetry` forces
+nothing, so **a retry never re-runs a step that succeeded**. A stage that failed while reading an
+artefact an earlier step wrote will read that identical artefact again. That is what separates the
+two lists:
 
 | Cannot come out differently | Might |
 |---|---|
@@ -825,6 +825,15 @@ Model-output validation failures are in the right-hand column on purpose. The ne
 draw, and the whole reason those checks are loud is that the model does occasionally get it right on
 the second attempt.
 
+**A *refresh* is the exception, and since 2026-08-31 it re-runs from the top.** A forced job's steps
+finish into a **draft**, and a failure throws that draft away — so "this step already succeeded" is a
+statement about a revision the retry cannot see, and honouring it published the old article under a
+row of green ticks. `forceForRetry` now re-forces everything the original request forced (Greg's
+decision 8; [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md)
+§ *The fourth fault*). The cost is deliberate: a refresh that dies late re-fetches, re-extracts and
+pays for a PDF transcription a second time. So the left-hand column above is about an ordinary
+retry — a refresh really does go back to the publisher.
+
 **Truncation is the one entry that is not certain, and it is worth being exact about why.**
 `TooLongForOnePass` is arithmetic: the same block count gives the same estimate for ever. Running
 past `max_tokens` mid-answer is not — adaptive output varies between calls, and what we have is two
@@ -835,7 +844,7 @@ have to agree; softening the sentence is the honest way to make them.
 
 It is `truncationFailure` that carries the tag, and it returns an `Error` rather than a string
 **so that `throw new Error(truncationFailure(…))` does not compile.** Five stages meet a truncation
-— toc, arc, summary, glossary, thread — and each used to build its own `new Error` around the
+— hierarchy, arc, summary, glossary, thread — and each used to build its own `new Error` around the
 message, which is precisely how a sixth stage added next month copies the line without the tag and
 nothing says so. The type is the guard.
 
@@ -1051,7 +1060,7 @@ The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`,
 
 ## They are the same functions the CLI runs
 
-`npm run extract`, `npm run blocks`, `npm run toc` and `npm run arc` still work, and still do exactly
+`npm run extract`, `npm run blocks`, `npm run hierarchy` and `npm run arc` still work, and still do exactly
 what they did. Each of those scripts is now a thin argv wrapper around an exported function, and the
 queue calls the same function — so there is one code path per stage and no way for the two to drift.
 That was the point of the refactor, and it is the thing to preserve if anyone changes a stage.

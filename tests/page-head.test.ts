@@ -506,8 +506,12 @@ describe("the one title rule, applied by both sides", () => {
    * `MODES` is read from src/modes.ts rather than listed here, so an eleventh
    * mode arrives in this loop without anybody remembering to add it.
    */
-  it("agrees with the client in every one of the eleven modes", () => {
-    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(11);
+  it("agrees with the client in every one of the thirteen modes", () => {
+    /* Ten on one side of the 2026-08-31 merge and eleven on the other, because
+       `plain` and `quotes`/`timeline` were added in parallel. Twelve was both;
+       thirteen is that plus `referee`, added the same night
+       (docs/plans/260831an-referee-mode-for-peer-reviewers.md). */
+    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(13);
     for (const mode of MODES) {
       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });
@@ -518,9 +522,18 @@ describe("the one title rule, applied by both sides", () => {
   it("and spells the two ends of that out, so the loop is not comparing two bugs", () => {
     /* The default mode is left out of the title entirely — the rule in
        `readTitle`, and the reason the loop above cannot be satisfied by a
-       function that simply appends every mode. */
-    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "hierarchy")).title).toBe(
+       function that simply appends every mode.
+
+       `DEFAULT_MODE` rather than the literal it used to be. This said
+       `"hierarchy"` until 2026-08-31, when the default moved to `plain` and the
+       assertion started failing for the right reason — the omitted mode is
+       whichever one is the default, not that particular one. Hierarchy is now
+       named like any other, which is what the second half asserts. */
+    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), DEFAULT_MODE)).title).toBe(
       "A shared piece · Spideryarn",
+    );
+    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "hierarchy")).title).toBe(
+      "A shared piece · Hierarchy · Spideryarn",
     );
     expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "glossary")).title).toBe(
       "A shared piece · Glossary · Spideryarn",

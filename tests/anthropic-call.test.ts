@@ -1,7 +1,7 @@
 /**
  * `anthropicCallFailed` — what happens when the Anthropic SDK's own request
  * fails, in the six pipeline stages that call it directly (arc, labels,
- * summarise, toc, glossary, tweets).
+ * summarise, hierarchy, glossary, tweets).
  *
  * The installed SDK builds `Error.message` straight from the upstream
  * response body (`node_modules/@anthropic-ai/sdk/core/error.js`,

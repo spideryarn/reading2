@@ -9,9 +9,22 @@
  * (vision.md § Anti-goals), and the whole difference between that and an oracle
  * is whether these six characters end up as something you can press. Rules that
  * load-bearing should be checkable without a browser.
+ *
+ * **This file used to be twice this size**, and the other half was a hand-rolled
+ * Markdown inline parser — bold runs paired across links, code spans, italics.
+ * All of it went on 2026-08-31 when `mdast-util-from-markdown` arrived
+ * (src/web/Cited.tsx, docs/plans/chat-markdown.md). What is left is the part no
+ * Markdown library can do, and the reason each piece stayed:
+ *
+ *  - `splitCitations` — a block id has **no syntax**. It is matched on shape
+ *    inside ordinary prose and checked against the article.
+ *  - `splitLinks` — bare addresses, matched by `webLinks` in src/urls.ts, which
+ *    the *server* also uses. Two matchers would give two answers.
+ *  - `unknownIds` and `snippet` — the counter and the hover card.
  */
 import { ID_PATTERN, ID_PREFIX } from "../ids.js";
-import { webLinks, withoutWebLinks } from "../urls.js";
+import { citableText } from "../citable.js";
+import { webLinks } from "../urls.js";
 
 /**
  * Whatever can answer "is this one of the article's blocks?".
@@ -27,12 +40,6 @@ export interface Known {
 
 /** A run of prose, or a run of ids the model cited together. */
 export type Segment = { kind: "text"; text: string } | { kind: "cite"; ids: string[] };
-
-/** A run of prose, and whether the model asked for it to be emphasised. */
-export interface Emphasis {
-  text: string;
-  bold: boolean;
-}
 
 /** A run of prose, or an address the model wants the reader to be able to press. */
 export type LinkRun =
@@ -62,8 +69,11 @@ export type LinkRun =
  * an answer that is still streaming. A bare URL touching the end of such a
  * string is very likely half of an address, and a link to a truncated URL is
  * one a reader can click in the second before the rest arrives. So it stays
- * text until anything follows it. A Markdown link needs no such rule: its
- * closing `)` is proof the address finished.
+ * text until anything follows it. A `[label](url)` needs no such rule — its
+ * closing `)` is proof the address finished — and since 2026-08-31 the parser
+ * has taken those out before this ever sees them, so in practice this function
+ * now sees bare addresses and nothing else. The bracketed branch stays in
+ * `webLinks` because the server still meets both kinds.
  */
 export function splitLinks(para: string, partial = false): LinkRun[] {
   const out: LinkRun[] = [];
@@ -79,88 +89,6 @@ export function splitLinks(para: string, partial = false): LinkRun[] {
     out.push({ kind: "link", text: link.label, url: link.url });
   }
   push(para.slice(last));
-  return out;
-}
-
-/** A run of prose or a link, and whether the model asked for it to be bold. */
-export interface EmphasisedRun {
-  kind: "text" | "link";
-  /** Prose, or the model's words for a destination. Markers removed. */
-  text: string;
-  /** Present on a link run. */
-  url?: string;
-  bold: boolean;
-}
-
-/** `**`, counted rather than parsed — see `emphasise`. */
-const MARKER = /\*\*/g;
-
-/**
- * Bold runs, paired **across** the links rather than inside each gap.
- *
- * `splitEmphasis` pairs `**` within one string, which was the whole of it until
- * links started cutting a paragraph into pieces. After that, the commonest
- * shape a model writes — `**[The paper](https://…)**` — arrives as three runs,
- * each holding one unpartnered marker, and the reader gets literal asterisks
- * around a link. Found by a GPT Sol review, 2026-08-27.
- *
- * So the markers are paired over the whole paragraph and a link inherits
- * whatever is open when it is reached. An **odd** count means the model left
- * one unclosed, and then nothing is emboldened and every marker stays literal —
- * the rule `splitEmphasis` already followed, for the reason written there:
- * guessing where the author meant to stop is how the rest of a paragraph ends
- * up bold.
- *
- * A link's own label is emphasised separately by the caller, so `[**Foo**](…)`
- * still works; its markers are not counted here, since they can never partner
- * one outside the label.
- *
- * **The toggle is used only where it is needed**, and the two guards below are
- * both about not losing characters:
- *
- *  - **There has to be a link.** A paragraph with none is handed to
- *    `splitEmphasis` exactly as it always was, so nothing this feature did can
- *    change how an ordinary answer — or a summary, which never has links at all
- *    — reads. The two rules differ on `**a*b**` and on a pair spanning a single
- *    newline, and there is no reason to change either where no link forced it.
- *  - **No two markers may be adjacent.** `****` encloses nothing, and a toggle
- *    would consume all four characters and emit none — silent text loss in the
- *    one parser this feature rests on, which is the accident `splitCitations`
- *    already has a paragraph about. `splitEmphasis` leaves it literal, so where
- *    it appears we fall back and it stays literal here too.
- */
-export function emphasise(runs: LinkRun[]): EmphasisedRun[] {
-  const texts = runs.filter((r) => r.kind === "text");
-  const markers = texts.reduce((n, r) => n + (r.text.match(MARKER)?.length ?? 0), 0);
-  const paired =
-    markers > 0 &&
-    markers % 2 === 0 &&
-    runs.some((r) => r.kind === "link") &&
-    // Empties at a run's edges are ordinary — `**` right before a link. An
-    // empty *between* two markers is `****`, and that is the case above.
-    texts.every((r) => r.text.split("**").slice(1, -1).every((piece) => piece !== ""));
-
-  const out: EmphasisedRun[] = [];
-  let bold = false;
-  for (const run of runs) {
-    if (run.kind === "link") {
-      out.push({ kind: "link", text: run.text, url: run.url, bold });
-      continue;
-    }
-    if (!paired) {
-      for (const piece of splitEmphasis(run.text)) {
-        out.push({ kind: "text", text: piece.text, bold: piece.bold });
-      }
-      continue;
-    }
-    for (const piece of run.text.split("**")) {
-      if (piece !== "") out.push({ kind: "text", text: piece, bold });
-      bold = !bold;
-    }
-    /* `split` yields one more piece than it saw markers, so the toggle above
-       ran once too often for this run. */
-    bold = !bold;
-  }
   return out;
 }
 
@@ -261,46 +189,13 @@ export function unknownIds(text: string, known: Known): string[] {
   const bad = new Set<string>();
   // Links out first, exactly as `unknownCitedIds` does server-side and for the
   // same reason: an id shape inside a URL is not a citation, because the
-  // renderer never turned it into one. `withoutWebLinks` is the shared matcher.
-  for (const raw of withoutWebLinks(text).match(new RegExp(`${ID_PREFIX}[a-z0-9]{6}`, "g")) ?? []) {
+  // renderer never turned it into one — nor is one in a code span, a link's
+  // label or an image's alt text. `citableText` is the one definition of where
+  // a citation can be, shared with the server's counters.
+  for (const raw of citableText(text).match(new RegExp(`${ID_PREFIX}[a-z0-9]{6}`, "g")) ?? []) {
     if (ID_PATTERN.test(raw) && !known.has(raw)) bad.add(raw);
   }
   return [...bad];
-}
-
-/**
- * `**like this**` → a run marked bold, and everything else left alone.
- *
- * **This is the whole of the Markdown we interpret**, and the shortlist is
- * deliberate rather than a first instalment. The prompt in src/converse.ts asks
- * for plain paragraphs and gets them — no headings, no links, rarely a list —
- * but models bold a term they are introducing whatever you tell them, and
- * printing the asterisks makes the app look like it cannot read its own model's
- * output. Found in a browser test on 2026-08-25.
- *
- * Everything else stays literal. That is not laziness: rendering model output
- * as HTML is precisely what docs/project/security.md exists to prevent, and the
- * reason this is safe is that it never produces HTML at all — it returns runs
- * of **text**, and React escapes text. A `dangerouslySetInnerHTML` here would
- * be a hole; there is no version of this function that needs one.
- *
- * Unbalanced asterisks are left as the model wrote them: `**` with no closing
- * pair is text, because guessing where the author meant to stop is how you end
- * up bolding the rest of a paragraph.
- */
-export function splitEmphasis(text: string): Emphasis[] {
-  const out: Emphasis[] = [];
-  let last = 0;
-  // Non-greedy, and no newline inside a run: a stray `**` at the start of a
-  // paragraph would otherwise reach across to one three sentences later and
-  // embolden everything in between.
-  for (const match of text.matchAll(/\*\*([^*\n]+)\*\*/g)) {
-    if (match.index > last) out.push({ text: text.slice(last, match.index), bold: false });
-    out.push({ text: match[1] ?? "", bold: true });
-    last = match.index + match[0].length;
-  }
-  if (last < text.length) out.push({ text: text.slice(last), bold: false });
-  return out;
 }
 
 /**

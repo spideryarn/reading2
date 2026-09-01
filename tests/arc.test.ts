@@ -75,7 +75,7 @@ describe("buildArcColumn", () => {
   });
 
   /**
-   * Node ids are positional (`n0007`) and a re-run of `npm run toc` renumbers
+   * Node ids are positional (`n0007`) and a re-run of `npm run hierarchy` renumbers
    * them, so matching on anything but the block range would hand every sentence
    * to a neighbouring part while still filling every cell.
    */

@@ -16,7 +16,7 @@
  * would be a bad trade at any price, and nothing else in the repo would notice:
  * the artefacts would still be valid, still be the right shape, still render.
  *
- * Like evals/toc-labels.ts, this **calls no model**. It measures artefacts that
+ * Like evals/hierarchy-labels.ts, this **calls no model**. It measures artefacts that
  * already exist, so it is cheap and can be pointed at an old copy as easily as a
  * new one. The workflow is therefore:
  *

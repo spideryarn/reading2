@@ -141,8 +141,10 @@ capped so that the hover card is enough to *judge* a hit and never enough to *re
 
 ## The mode band
 
-`?mode=search` is the fourth value in `MODES`, after `toc`, `chat` and `glossary`. Greg's original
-framing of that band, from [260826a-chat-mode.md](../plans/260826a-chat-mode.md#gregs-reframing-which-is-the-actual-design):
+`?mode=search` is one value in `MODES` — the fourth to arrive, after the table of contents (called
+`toc` then and `hierarchy` since 2026-08-29), chat and the glossary. Greg's original framing of that
+band, from
+[260826a-chat-mode.md](../plans/260826a-chat-mode.md#gregs-reframing-which-is-the-actual-design):
 
 > I'm thinking that this might be a common pattern, that when we switch into a mode (e.g. Chat,
 > Glossary, etc) we'll want to keep the spine and article, but reuse the middle sections.
@@ -925,15 +927,19 @@ ever bought was throwing the caret position away.
 
 **Which leaves the question of when focus should move at all, and the answer is: it depends how you
 switched.** A pointer click on a matcher means *I want to type now*, so focus goes to the box. A key
-press inside the matcher pair means *I am still using this pair*, so it does not — otherwise the
-first arrow press throws you out of the group you are arrowing through. That is the same distinction,
-and literally the same `e.detail > 0` test, as the bottom bar's mode switcher
-([`Dock.tsx`](../../src/web/Dock.tsx) § DockModes).
+press means *I am still using this pair*, so it does not. That is the same distinction, and literally
+the same `e.detail > 0` test, as the bottom bar's mode switcher
+([`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch).
 
-Which in turn forced the pair to become a **real** radio group. It claimed `role="radiogroup"` and
-delivered none of what that promises: two tab stops instead of one, and no arrow keys. It now has the
-roving tabindex and shares `nextModeIndex` with the bottom bar rather than growing a second copy of
-the wrapping arithmetic. Both of these came out of a GPT Sol review.
+**The pair has no arrow keys**, since 2026-08-31, and neither does the bottom bar or the diagram's
+three chips. It briefly had the full radiogroup pattern — a roving tabindex and the wrapping
+arithmetic shared with the bar — which a GPT Sol review had rightly asked for, on the grounds that
+`role="radiogroup"` is a promise about the keyboard. What that review could not weigh is that on this
+page the arrows are *already* spoken for: ← / → choose the granularity stride and ↑ / ↓ step the
+article ([keyboard.md](keyboard.md)), and the pattern's `stopPropagation` killed all four whenever a
+matcher held focus. Greg met it as a bug and asked for the behaviour removed. Each button is its own
+tab stop now, and Enter, Space or a click selects. The full reasoning, and what it costs, is in
+[`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch.
 
 ### And the fetch, which can still take the text away
 

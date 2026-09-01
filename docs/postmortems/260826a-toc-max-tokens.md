@@ -10,7 +10,7 @@ There was a Retry button next to it. Pressing it made the identical call and fai
 
 ## What actually happened
 
-[`src/toc.ts`](../../src/toc.ts) made one model call with `max_tokens: 32000`, a number somebody had
+[`src/toc.ts`](../../src/hierarchy.ts) made one model call with `max_tokens: 32000`, a number somebody had
 typed once. The job record says the run took six minutes and its last progress line was
 `20k characters of tree so far`.
 
@@ -84,7 +84,7 @@ better for being brooded over. The two sibling stages keep `"high"`, because the
 enough that the reasoning is nearly all of what they do.
 
 Each stage estimates its own answer, because only it knows the shape of its JSON.
-[`estimateTocTokens`](../../src/toc.ts) does stage 4's from `blocks.json`, on constants measured by
+[`estimateTocTokens`](../../src/hierarchy.ts) does stage 4's from `blocks.json`, on constants measured by
 rebuilding three finished trees into the JSON the model emits and counting them: about 40 tokens per
 nav label, 106–167 per internal node. The constitution now gets 77,100 instead of 32,000.
 
@@ -92,7 +92,7 @@ Two distinct failures, kept distinct:
 
 - **`budgetFor` throws before the call** when the estimate plus the reservation exceeds what one
   response can hold — around 876 blocks. Nothing is spent, and the message says the article needs
-  section-by-section processing, which is [not built](../project/table-of-contents.md#long-articles).
+  section-by-section processing, which is [not built](../project/hierarchy.md#long-articles).
 - **`stop_reason: "max_tokens"` still throws**, with a message that carries the budget and the
   estimate so the constants can be re-tuned from the failure, and that does not tell the reader to
   retry. Since 2026-08-26 it also carries `failureKind: "bug"`, so the card withholds the button —
@@ -119,7 +119,7 @@ the sidebar and nothing anywhere saying so. `validate-tree.ts` only *warns* abou
 gistable leaf, deliberately, and the queue never runs it.
 
 So the loud failure this bug had was one prompt-tweak away from becoming a silent one. `checkCoverage`
-in [`src/toc.ts`](../../src/toc.ts) now stands between them: it refuses a tree that labels less than
+in [`src/toc.ts`](../../src/hierarchy.ts) now stands between them: it refuses a tree that labels less than
 95% of the gistable blocks, and refuses any label naming a block that is not in the article. 95% and
 not 100% because the escape hatch is real and documented — the model may skip a trivial transition
 sentence — but every real tree we have came back at 100% (29 of 29, 117 of 117, 18 of 18), so it has
@@ -164,7 +164,7 @@ wrong, which is the only thing that check exists to catch — and this article w
 reach it with apostrophes in its headings. `sameHeading` in
 [`src/validate-tree.ts`](../../src/validate-tree.ts) now folds the punctuation that has two spellings
 before comparing, and still fails a heading that was rewritten rather than quoted. See
-[table-of-contents.md](../project/table-of-contents.md#the-apostrophe-that-failed-eleven-headings).
+[hierarchy.md](../project/hierarchy.md#the-apostrophe-that-failed-eleven-headings).
 
 It is worth noting *how* this was found: by running the stage on the real article rather than
 stopping when the tests went green. Nothing in the suite could have caught it, because every fixture
@@ -254,7 +254,7 @@ This one fired first because stage 4's output is the only one that grows without
 
 ## See also
 
-- [table-of-contents.md § The budget](../project/table-of-contents.md#the-budget) — the design, kept
+- [hierarchy.md § The budget](../project/hierarchy.md#the-budget) — the design, kept
   where stage 4's other decisions live
 - [silent-success.md](../reusable/silent-success.md) — why the fix does not salvage a partial answer
 - [ingest-queue.md](../project/ingest-queue.md) — the Retry button, and what it does and doesn't redo

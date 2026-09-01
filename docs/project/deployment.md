@@ -571,7 +571,7 @@ is read by nothing.
 | `OPENROUTER_API_KEY` | **every paid call in the app**, since 2026-08-27 — the pipeline as well as explain, chat, search, PDF reading and embeddings. Without it nothing can be ingested at all. [ai-gateway.md](ai-gateway.md) |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
-| `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI, the pipeline, `npm run db:import`. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
+| `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI and the pipeline. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
 **`ANTHROPIC_API_KEY` was a row in that table until 2026-08-31, described as "the pipeline stages".**
@@ -851,7 +851,7 @@ writes to a local filesystem, which a serverless host does not have:
 
 - **adding an article** — **fixed on 2026-08-30, and everything below it is the
   history of a wall that is no longer there.** An article pasted at the live site
-  is fetched, extracted, split, ToC'd, published and readable. Production
+  is fetched, extracted, split, given its hierarchy, published and readable. Production
   `a63a5592`; the plan is
   [260830d-v1-imports-on-vercel.md](../plans/260830d-v1-imports-on-vercel.md).
 

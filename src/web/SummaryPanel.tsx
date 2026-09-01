@@ -72,7 +72,7 @@
  * ## Nothing here is generated on demand
  *
  * Every line of prose in this panel is a **gist**, written by stage 4 as part
- * of building the tree (src/toc.ts). So this panel costs nothing, is never
+ * of building the tree (src/hierarchy.ts). So this panel costs nothing, is never
  * empty on an article that has a tree, and has no run button, no job, no
  * staleness and no reader-profile provenance — the three things a panel that
  * spends has to carry, and the reason `GlossaryPanel` and `IdeasPanel` are
@@ -108,7 +108,7 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
    *
    * In memory rather than in the URL, and params.ts § summary mode carries the
    * argument: the only way to write this down is a list of node ids, node ids
-   * are positional, and a re-run of `npm run toc` renumbers them — so a shared
+   * are positional, and a re-run of `npm run hierarchy` renumbers them — so a shared
    * link would open a set of sections that are no longer the ones you opened.
    * The depth is the stable half, and the depth is what the URL carries.
    */

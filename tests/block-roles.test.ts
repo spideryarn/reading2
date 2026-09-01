@@ -44,8 +44,9 @@
  *
  * v1 assigns only `"footnote"`. The other four exist in the union, in the CHECK
  * constraint and here — so the tests below drive all five through the
- * filesystem artefact store, the import validator and the public DTO by hand,
- * because the corpus cannot.
+ * filesystem artefact store, `checkNoteFields` (src/block-fields.ts) and the
+ * public DTO by hand, because the corpus cannot. That validator lived in
+ * `src/store/import.ts` until the importer was deleted on 2026-09-01.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -53,12 +54,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { checkNoteFields } from "../src/block-fields.js";
 import { blocksArtefact, splitIntoBlocks } from "../src/blocks.js";
 import { runExtract } from "../src/extract.js";
 import { NOTE_ID_PATTERN } from "../src/notes.js";
 import { publicArticle } from "../src/public/dto.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
-import { checkNoteFields } from "../src/store/import.js";
 import type { Block, Tree } from "../src/types.js";
 
 const FIXTURES = path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures");
@@ -369,9 +370,9 @@ describe("all five roles", () => {
 
       const store = createFsArtifactStore(() => at);
       const artefact = blocksArtefact(SYNTHETIC);
-      await store.write("roles", "toc", { blocks: artefact }, {});
+      await store.write("roles", "hierarchy", { blocks: artefact }, {});
 
-      const read = await store.read("roles", "toc", "blocks");
+      const read = await store.read("roles", "hierarchy", "blocks");
       expect(read).toEqual(artefact);
       // Named rather than left to `toEqual`, because a store that dropped all
       // three would still match an expectation built from the same objects if
@@ -403,6 +404,38 @@ describe("all five roles", () => {
 
     const wrongType = [{ ...SYNTHETIC[1]!, noteId: 7 as unknown as string }];
     expect(() => checkNoteFields("roles", wrongType)).toThrow(/noteId that is not a string/);
+  });
+
+  /**
+   * **The other axis, at the same seam.** A `context` says a block is inside a
+   * box the author drew (`Block.context`, src/types.ts). An import is somebody
+   * else's JSON, and the two CHECK constraints on the columns can see neither
+   * the id's *shape* nor which block a violation came from — so the validator
+   * checks both, the same way it checks `noteId`.
+   * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+   */
+  it("refuses a context stage 2 could not have minted", () => {
+    const ok = [{ ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "callout" as const } }];
+    expect(() => checkNoteFields("roles", ok)).not.toThrow();
+
+    const badType = [
+      { ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "sidebar" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", badType)).toThrow(/unrecognised context type "sidebar"/);
+
+    /* The shape that matters: an id the page wrote rather than one we minted.
+       `<div class="callout" data-spya-callout="…">` is scrubbed at stage 2, and
+       this is the belt — an export edited by hand, or a store that grew a
+       second writer. */
+    const forged = [
+      { ...SYNTHETIC[1]!, context: { id: "javascript:alert(1)", type: "callout" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", forged)).toThrow(/context id .* could not have minted/);
+
+    const notAString = [
+      { ...SYNTHETIC[1]!, context: { id: 7, type: "callout" } } as unknown as Block,
+    ];
+    expect(() => checkNoteFields("roles", notAString)).toThrow(/context id/);
   });
 
   /**

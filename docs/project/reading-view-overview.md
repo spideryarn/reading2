@@ -5,6 +5,12 @@ are in the article), the **prose** (what you are reading), and between them a **
 whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
 ideas, quotes, search, diagram and chat take turns in.
 
+**Two of the ten modes open no band at all**, and the default is one of them. `plain` is the article
+by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
+2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
+to be. So *a mode is open* and *a band is open* are separate questions
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
+
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
 of compression, down the page for position and across for detail. Read that first.
 
@@ -89,6 +95,9 @@ of compression, down the page for position and across for detail. Read that firs
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
+- **[experimental-features.md](experimental-features.md)** — the switch on the same page for
+  features that are not finished. Off by default, nothing behind it yet, and the rule that hiding a
+  feature never breaks a link to it.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
 - **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle

@@ -56,7 +56,7 @@ Several consumers are also missing:
 
 ### 4. The supplement ordering is possible, but not already guaranteed
 
-`buildTree` creates leaves for every block it receives and requires its root to span that exact block array ([src/toc.ts:413](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:413), [src/toc.ts:509](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:509)). The generation path currently sends all blocks to the model, builds that full tree, and then generates labels ([src/toc.ts:625](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:625), [src/toc.ts:703](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:703)).
+`buildTree` creates leaves for every block it receives and requires its root to span that exact block array ([src/toc.ts:413](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:413), [src/toc.ts:509](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:509)). The generation path currently sends all blocks to the model, builds that full tree, and then generates labels ([src/toc.ts:625](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:625), [src/toc.ts:703](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:703)).
 
 The proposed order therefore requires an explicit post-builder operation:
 

@@ -138,7 +138,7 @@ const aborts = new Map<string, AbortController>();
  * numbers, so the next person to raise one cannot forget the other.
  *
  * **Why 420s.** Measured per-article step totals from `data/_ai-calls.jsonl`:
- * `toc` 324.0s over three calls, `summarise` 240.3s over ten. Both exceed the
+ * `hierarchy` 324.0s over three calls, `summarise` 240.3s over ten. Both exceed the
  * 220s deadline these constants used to give, so a long step could not complete
  * through the job path **on any machine** — it only ever succeeded via the CLI,
  * which takes no lease. The deadline is bounded above too: the route loop must
@@ -169,12 +169,12 @@ const aborts = new Map<string, AbortController>();
  * The arithmetic it has to satisfy, measured rather than assumed —
  * `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ~10s + extract ~5s + blocks ~5s + toc 320.4s + assets ≤180s ≈ 520s
+ *     fetch ~10s + extract ~5s + blocks ~5s + hierarchy 320.4s + assets ≤180s ≈ 520s
  *     520s  <  740s self-abort  <  800s platform kill
  *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
- * per-step constraint in a per-claim world: `toc` alone at 320.4s would have
+ * per-step constraint in a per-claim world: `hierarchy` alone at 320.4s would have
  * eaten four fifths of it, and the ordinary article would have aborted four
  * fifths of the way through the one step nobody can afford to repeat.
  */
@@ -261,7 +261,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   /* MEASURED 2026-08-30, the worst in data/_ai-calls.jsonl: one call, so its
      sum and its wall clock agree and no grouping argument applies. This is the
      number the whole budget turns on, and `LEASE_MS` is sized around it. */
-  toc: 320_400,
+  hierarchy: 320_400,
   /* Its own wall-clock cap rather than a measurement — `ASSETS_BUDGET_MS` in
      src/collect-assets.ts, which the step enforces on itself. Measured cost on
      the corpus's worst article (10 images) is 7.1s; the cap is there for a
@@ -324,7 +324,7 @@ function markCancelled(job: Job, message?: string): void {
  * they arrived in.
  *
  * Sorting matters more than it looks. The steps are a chain — each consumes the
- * artefact the one before it wrote — so `["arc", "toc"]` run as asked would
+ * artefact the one before it wrote — so `["arc", "hierarchy"]` run as asked would
  * build the arc from the previous tree and then replace that tree. Both steps
  * would report success and the arc would describe an article nobody is reading.
  */
@@ -413,7 +413,7 @@ function newStep(name: StepName, force: boolean, upload: boolean): JobStep {
  * **This is the one thing advance has to remember rather than derive**, and it
  * is worth naming why, because the rule everywhere else is the opposite (see
  * `advanceJob`). "Has this step's output been rebuilt since the reader asked
- * for it to be" is not a question the artefacts can answer — a forced `toc`
+ * for it to be" is not a question the artefacts can answer — a forced `hierarchy`
  * writes a `tree.json` that looks exactly like the one it replaced. The job
  * record is the only account of it there is.
  */
@@ -1420,7 +1420,7 @@ async function walkClaim(
        * be billed for them.
        *
        * The cost is that Stop is only honoured at a step boundary — a reader
-       * stopping mid-`toc` waits for `toc`. Said out loud in
+       * stopping mid-`hierarchy` waits for `hierarchy`. Said out loud in
        * docs/plans/260830d-v1-imports-on-vercel.md § Risks rather than discovered.
        */
       const noted = await note();
@@ -2062,13 +2062,12 @@ export async function cancelJob(id: string): Promise<Job | null> {
  * keeping, and overwriting it would erase the only evidence at exactly the
  * moment somebody is trying to work out what happened.
  *
- * **Force is recomputed, not copied.** A refresh forces all five steps, so
- * copying the flags across would make Retry re-fetch, re-extract and re-split
- * an article whose first three stages had already succeeded — and pay for the
- * model call again — which is the opposite of what Retry says it does. What
- * carries over is the *reason* those steps were forced, which only still
- * applies to the ones that have not run yet: force from the first step that did
- * not finish, and let `cascadeForce` take it from there.
+ * **Force is recomputed, not copied**, and since 2026-08-31 the recomputation
+ * gives a forced job its whole force back. An ordinary failure forces nothing —
+ * the steps that succeeded are still good. A *refresh* forces again everything
+ * it forced the first time, because in Postgres those steps' work went into a
+ * draft that the failure threw away: see `forceForRetry` below, which is where
+ * the reasoning and its cost are written down.
  */
 export async function retryJob(id: string): Promise<Job | null> {
   /* Somebody else's is `null`, as a missing one is — and this one spends money,
@@ -2089,19 +2088,39 @@ export async function retryJob(id: string): Promise<Job | null> {
 }
 
 /**
- * What a retry should force, given how far the original got.
+ * What a retry should force, given what the original forced.
  *
- * Nothing, for an ordinary failure — the steps that succeeded are still good,
- * and skipping them is the whole point of Retry. Something only when the
- * original was forced, and then only from the first step that did not finish:
- * a refresh that died during `toc` has already re-fetched and re-extracted, and
- * making Retry do all of that again is the opposite of picking up where it
- * stopped. `cascadeForce` takes it from there.
+ * **Nothing, for an ordinary failure.** No step carried a force flag, so the
+ * steps that succeeded are still good and skipping them is the whole point of
+ * Retry. That half has never changed and is where the money is.
+ *
+ * **Everything the original forced, for a refresh** — from the earliest of them,
+ * whatever happened afterwards. This said *"only from the first step that did
+ * not finish"* until 2026-08-31, and that was the fourth fault of
+ * docs/plans/260831b-finish-the-database-move.md: once the pipeline commits
+ * through Postgres, the three steps that "finished" wrote into a **draft**, the
+ * failure discarded that draft, and the retry's new draft is copied from the
+ * revision the reader is still on. So the finished steps find last week's
+ * artefacts current, skip, and `hierarchy` runs over the old article — a refresh
+ * silently gone, under a row of green ticks (docs/reusable/silent-success.md).
+ * `tests/retry-after-a-failed-refresh.test.ts` has the sequence in full.
+ *
+ * **Greg's decision 8: a failed refresh starts over.** The alternative — keeping
+ * the failed draft so a retry can adopt its completed work — is written up in
+ * that plan's § *Appendix: someday maybe*. The cost of this answer is stated
+ * rather than hidden: a refresh that dies at `hierarchy` pays for a PDF transcription
+ * a second time, and the per-chunk checkpoints that would prevent it are written
+ * to a job-scoped `/tmp` no later job can see (landing D2).
+ *
+ * The whole forced set rather than only its first member, because `cascadeForce`
+ * cannot always reconstruct the rest: it refuses to sweep in a step in
+ * `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts) that nobody named, so a `tweets` the
+ * reader explicitly asked to redo would be dropped. Handing back exactly what
+ * was forced makes the retry ask for exactly what the original asked for; the
+ * cascade is idempotent over that set, so `enqueue` recomputes the same flags.
  */
 export function forceForRetry(steps: JobStep[]): StepName[] {
-  if (!steps.some((s) => s.force)) return [];
-  const unfinished = steps.find((s) => s.status !== "done" && s.status !== "skipped");
-  return unfinished ? [unfinished.name] : [];
+  return steps.filter((s) => s.force).map((s) => s.name);
 }
 
 /**

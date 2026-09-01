@@ -36,7 +36,7 @@
  * ## Why a dangling reference throws
  *
  * Same rule, and the same sentence, as `readRawDocument` in
- * [export.ts](export.ts): *"a dangling reference and an article with no source
+ * [raw-document.ts](raw-document.ts): *"a dangling reference and an article with no source
  * document are different facts, and the whole point of the reference is that
  * the row asserts the object exists."* Answering `null` would tell the one
  * reader who is looking at a scan that there is no scan
@@ -49,9 +49,9 @@ import { eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles } from "../db/schema.js";
-import { canonicalKey } from "../source.js";
+import { canonicalKey, MAX_UPLOAD_BYTES } from "../source.js";
 import { postgresBlobStore, type RawSourceStore } from "./blobs.js";
-import type { SourceStore } from "./contracts.js";
+import type { SourcePdf, SourceStore } from "./contracts.js";
 import { ownedSlug } from "./owned-slug.js";
 
 /**
@@ -78,6 +78,13 @@ export function sourceReferenceQuery(
       source: articleRevisions.source,
       rawSourceSha256: articleRevisions.rawSourceSha256,
       rawSourceKind: articleRevisions.rawSourceKind,
+      /* **The reader's own name for the file**, which the route hands back in
+         the `Content-Disposition` so the download is called what they called it
+         rather than `<slug>.pdf`. Reader-controlled text on its way into a
+         response header — `contentDisposition` in src/routes.ts escapes it, and
+         says what a name can legally contain. `null` for anything we fetched.
+         Narrow, like the rest of this projection: a `varchar`, not the bytes. */
+      rawFilename: articleRevisions.rawFilename,
     })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -130,7 +137,7 @@ function matchingBucket(): RawSourceStore {
  */
 export function createPgSourceStore(sources: () => RawSourceStore = matchingBucket): SourceStore {
   return {
-    async readPdf(slug: string): Promise<Uint8Array | null> {
+    async readPdf(slug: string): Promise<SourcePdf | null> {
       const [row] = await sourceReferenceQuery(getDb(), slug);
       /* Not yours, not there, or never published. All three are `null`: the
          route's sentence is the same for each, and telling them apart would
@@ -143,7 +150,19 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
            and a recorded answer beats re-deriving one. */
         if (row.rawSourceKind !== "pdf") return null;
         const key = canonicalKey(row.rawSourceSha256, "pdf");
-        const bytes = await sources().get(key);
+        /* **Bounded, not merely trusted.** `get` treats `maxBytes` as a refusal
+           rather than a truncation, and Supabase's adapter can decline on the
+           `Content-Length` before it buffers anything. Without it, an oversized
+           object under a referenced key — a service-key write, a backfill, a
+           bucket whose policy drifted — is read into memory in full by a
+           serverless process that then has to hash it, and a few concurrent
+           requests exhaust it. `MAX_UPLOAD_BYTES` is the right ceiling because
+           it is the largest object that can legitimately be under a canonical
+           key: uploads stop there, and anything we fetched stopped at
+           src/fetch.ts's own 32 MiB. GPT Sol asked for the bound twice,
+           2026-08-31; `readRawDocument` in raw-document.ts carries the same
+           one. */
+        const bytes = await sources().get(key, { maxBytes: MAX_UPLOAD_BYTES });
         if (!bytes) throw unusableObject(slug, key, "there is nothing there");
         /* **The key IS the digest, so this checks rather than assumes.**
            `storeRawSource` verifies on the way in, which proves what was
@@ -157,7 +176,7 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
         if (actual !== row.rawSourceSha256) {
           throw unusableObject(slug, key, `its bytes hash to ${actual}`);
         }
-        return bytes;
+        return { bytes, filename: row.rawFilename };
       }
 
       /* The era before the bucket. `source` is the only thing on this row that
@@ -171,7 +190,8 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
         .from(articleRevisions)
         .where(eq(articleRevisions.id, row.revisionId))
         .limit(1);
-      return legacy?.rawBytes ? new Uint8Array(legacy.rawBytes) : null;
+      if (!legacy?.rawBytes) return null;
+      return { bytes: new Uint8Array(legacy.rawBytes), filename: row.rawFilename };
     },
   };
 }

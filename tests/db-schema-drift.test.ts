@@ -214,11 +214,13 @@ describe("declaredTables", () => {
       "chat_threads",
       "checkpoints",
       "comments",
+      "feedback",
       "glossary_lookups",
       "jobs",
       "queue_state",
       "raw_sources",
       "reader_profiles",
+      "referee_criteria",
       "revision_blocks",
       "revision_step_runs",
       "search_runs",
@@ -294,7 +296,7 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(18);
+      expect(report.declaredTables).toBe(20);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

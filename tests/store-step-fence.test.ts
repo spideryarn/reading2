@@ -119,7 +119,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /* ------------------------------------------------------------ the fixture -- */
 
-const JOB_STEPS: JobStep[] = [{ name: "toc", label: "Building the table of contents", status: "pending" }];
+const JOB_STEPS: JobStep[] = [{ name: "hierarchy", label: "Building the hierarchy", status: "pending" }];
 
 let revisionId = "";
 
@@ -131,7 +131,7 @@ async function stepRow(
 ): Promise<void> {
   const values = {
     revisionId,
-    stepName: "toc" as const,
+    stepName: "hierarchy" as const,
     inputHash: NO_INPUT_HASH,
     implementationVersion: PIPELINE_RUN,
     status,
@@ -152,12 +152,12 @@ const theRow = async (tx: Tx) => {
   const rows = await tx
     .select()
     .from(revisionStepRuns)
-    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")));
+    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")));
   return rows[0];
 };
 
 const finish = (tx: Tx, job: { id: string; attemptId: string }, status: "done" | "error" = "done") =>
-  finishStepRun({ revisionId, stepName: "toc", job, status }, tx);
+  finishStepRun({ revisionId, stepName: "hierarchy", job, status }, tx);
 
 /** Nothing this file made survives it. */
 async function cleanUp(): Promise<void> {
@@ -354,13 +354,13 @@ when("who may begin a step", () => {
 
   it("installs the job's token, and starts unstamped", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
-      await beginStepRun({ revisionId, stepName: "toc", job }, tx);
+      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
 
       const [row] = await tx
         .select()
         .from(revisionStepRuns)
         .where(
-          and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")),
+          and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")),
         );
       expect(row?.status).toBe("running");
       expect(row?.attemptId).toBe(job.attemptId);
@@ -375,7 +375,7 @@ when("who may begin a step", () => {
   it("refuses a stale token", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
       await expect(
-        beginStepRun({ revisionId, stepName: "toc", job: { id: job.id, attemptId: mintAttempt() } }, tx),
+        beginStepRun({ revisionId, stepName: "hierarchy", job: { id: job.id, attemptId: mintAttempt() } }, tx),
       ).rejects.toThrow(NotTheLiveAttempt);
     });
   });
@@ -392,11 +392,11 @@ when("who may begin a step", () => {
        below is about the row surviving rather than about a throw — the upsert
        simply declines to write. GPT Sol, finding 4. */
     await withClaimedJob(revisionId, async (tx, job) => {
-      await beginStepRun({ revisionId, stepName: "toc", job }, tx);
+      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
       await finish(tx, job);
       expect((await theRow(tx))?.status).toBe("done");
 
-      await beginStepRun({ revisionId, stepName: "toc", job }, tx);
+      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
 
       const row = await theRow(tx);
       expect(row?.status, "the ended run must stay ended").toBe("done");
@@ -407,7 +407,7 @@ when("who may begin a step", () => {
   it("refuses a job that is no longer running", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
       await tx.update(jobs).set({ status: "error" }).where(eq(jobs.id, job.id));
-      await expect(beginStepRun({ revisionId, stepName: "toc", job }, tx)).rejects.toThrow(
+      await expect(beginStepRun({ revisionId, stepName: "hierarchy", job }, tx)).rejects.toThrow(
         NotTheLiveAttempt,
       );
     });
@@ -419,7 +419,7 @@ when("who may begin a step", () => {
        pointed somewhere else, and a step run written into somebody else's draft
        is a fault nothing downstream could untangle. */
     await withClaimedJob(null, async (tx, job) => {
-      await expect(beginStepRun({ revisionId, stepName: "toc", job }, tx)).rejects.toThrow(
+      await expect(beginStepRun({ revisionId, stepName: "hierarchy", job }, tx)).rejects.toThrow(
         NotTheLiveAttempt,
       );
     });

@@ -111,9 +111,7 @@ import {
   PRIORITY_CONF,
 } from "./search-hits.js";
 import type { HitOrder, Matcher } from "./params.js";
-import { MATCHERS } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
-import { nextModeIndex } from "./Dock.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
@@ -384,7 +382,6 @@ const Box = forwardRef<
      simply shared. */
   const box = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => box.current as HTMLInputElement, []);
-  const radios = useRef<(HTMLButtonElement | null)[]>([]);
 
   /* The box takes focus when the mode opens. A search panel you have to click
      into before typing is a search panel that costs two actions instead of one,
@@ -419,32 +416,6 @@ const Box = forwardRef<
       onMatcher(next);
     }
     if (toBox) box.current?.focus();
-  }
-
-  /**
-   * Arrow keys across the two matchers — the promise `role="radiogroup"` makes.
-   *
-   * Shared arithmetic with the bottom bar's mode switcher rather than a second
-   * copy: `nextModeIndex` is exported from Dock.tsx precisely because index
-   * wrapping is where an off-by-one hides and it is the one part of this that
-   * can be tested without a browser.
-   *
-   * `stopPropagation` as well as `preventDefault`, for the reason Dock.tsx gives:
-   * without it keynav.ts *also* steps the article, so one arrow press does two
-   * things.
-   */
-  function onModeKey(e: React.KeyboardEvent<HTMLDivElement>) {
-    const index = matcher === "words" ? 0 : 1;
-    const next = nextModeIndex(e.key, index, MATCHERS.length);
-    if (next === null) return;
-    const target = MATCHERS[next];
-    if (!target) return;
-    e.preventDefault();
-    e.stopPropagation();
-    switchTo(target, false);
-    /* Focus follows the selection, or the reader is left on a button that is
-       about to become `tabIndex={-1}` and their next arrow goes nowhere. */
-    radios.current[next]?.focus();
   }
 
   return (
@@ -502,18 +473,21 @@ const Box = forwardRef<
           className="srch-matchers"
           role="radiogroup"
           aria-label="How to match"
-          onKeyDown={onModeKey}
         >
           {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call Dock.tsx makes for the mode switcher — a real <input type="radio"> cannot carry an icon beside its label, and styling one to match means hiding the input and faking every state it already had */}
           <button
             type="button"
             role="radio"
-            ref={(el) => {
-              radios.current[0] = el;
-            }}
             aria-checked={matcher === "words"}
-            /* The roving tabindex: one tab stop for the pair, arrows inside it. */
-            tabIndex={matcher === "words" ? 0 : -1}
+            /* **A tab stop each, and no arrow keys.** The roving tabindex and
+               the `onModeKey` handler that made it navigable went on
+               2026-08-31: the arrows belong to the article (↑ / ↓ step it,
+               ← / → choose the stride — keyboard.md), and this handler
+               deliberately called `stopPropagation`, so all four died while a
+               matcher had focus. Dock.tsx § DockModes has the reasoning, the
+               cost, and why the ARIA authoring practice is being departed from;
+               tests/arrows-belong-to-the-article.test.tsx holds it. */
+            tabIndex={0}
             className={`srch-mode${matcher === "words" ? " on" : ""}`}
             onClick={(e) => switchTo("words", e.detail > 0)}
             title="Match the letters you type. Instant, and free."
@@ -524,11 +498,8 @@ const Box = forwardRef<
           <button
             type="button"
             role="radio"
-            ref={(el) => {
-              radios.current[1] = el;
-            }}
             aria-checked={matcher === "meaning"}
-            tabIndex={matcher === "meaning" ? 0 : -1}
+            tabIndex={0}
             className={`srch-mode${matcher === "meaning" ? " on" : ""}`}
             onClick={(e) => switchTo("meaning", e.detail > 0)}
             title="Describe what you are looking for and the model finds it. Costs a model call."

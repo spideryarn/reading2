@@ -103,7 +103,7 @@ some other read already selected, there would have been no red anywhere.
   have dropped the artefact silently — the same loss
   [260828c-export-never-wrote-the-readers-purpose.md](260828c-export-never-wrote-the-readers-purpose.md) is about.
   The manifest entry and [`src/store/export.ts`](../../src/store/export.ts) landed;
-  [`src/store/import.ts`](../../src/store/import.ts) is written and **held back**, because a peer
+  `src/store/import.ts` is written and **held back**, because a peer
   had a 1,400-line rewrite of that file in flight and a pathspec commit takes the whole file. So
   today an export writes `sketch.json` and an import ignores it, which is where it stood before —
   no worse, and finished when that rewrite lands.

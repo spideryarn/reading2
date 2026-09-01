@@ -71,22 +71,32 @@ describe("an article", () => {
     );
   });
 
+  /* **`DEFAULT_MODE`, not a literal.** This named `hierarchy` until 2026-08-31,
+     when the default moved to `plain` — and the rule being tested is *the
+     default is the mode that goes unwritten*, which is true of whichever mode
+     that is. Written as a literal it was a test of the same rule that would go
+     on passing after the default moved, against the wrong mode. */
   it("says nothing about the default mode — that is the point of it", () => {
-    expect(pageTitle({ kind: "read", title, view: "article", mode: "hierarchy" })).toBe(
+    expect(pageTitle({ kind: "read", title, view: "article", mode: DEFAULT_MODE })).toBe(
       `${title}${SEP}${APP_NAME}`,
     );
   });
 
-  /* Every mode, from `MODES` rather than a list retyped here — an eighth mode
-     arriving must fail this test rather than quietly get no name. */
+  /* Every mode, from `MODES` rather than a list retyped here — an eleventh mode
+     arriving must fail this test rather than quietly get no name. The map holds
+     every mode *except* the default, whose whole rule is that it has no word. */
   it("names every other mode, by the word the Dock uses", () => {
     const named: Record<string, string> = {
+      /* Named like any other since 2026-08-31 — it stopped being the default
+         that day, and the default is the one that goes unwritten. */
+      hierarchy: "Hierarchy",
       outline: "Outline",
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",
       quotes: "Quotes",
       search: "Search",
+      referee: "Referee",
       diagram: "Diagram",
       chat: "Chat",
       review: "Review",
@@ -94,7 +104,7 @@ describe("an article", () => {
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });
-      if (mode === "hierarchy") {
+      if (mode === DEFAULT_MODE) {
         expect(t).toBe(`${title}${SEP}${APP_NAME}`);
         continue;
       }

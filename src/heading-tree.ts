@@ -134,8 +134,8 @@ export function buildHeadingTree(
   /** Override for --sensitivity only; every arm uses the fitted default. */
   stubThreshold: number = MIN_SEGMENT_PROSE_WORDS,
 ): HeadingTreeResult {
-  /* Body only, apparatus appended after — the same order generateToc uses
-     (src/toc.ts), so a bibliography can never sit inside a section. */
+  /* Body only, apparatus appended after — the same order generateHierarchy uses
+     (src/hierarchy.ts), so a bibliography can never sit inside a section. */
   const { body, groups } = splitBlocks(blocks);
 
   const levels = new Map<number, number>();

@@ -173,8 +173,7 @@ export interface BarStep {
 /**
  * One scroll sample in, one bar state out.
  *
- * **Pulled out of the listener because it cannot be tested inside it**, which
- * is the same reason `nextModeIndex` sits outside `DockModes` in Dock.tsx. The
+ * **Pulled out of the listener because it cannot be tested inside it.** The
  * only way to exercise this in place is to drive a real browser, and it turns
  * out that is not merely awkward but impossible from the harness we have: the
  * measuring tab is not the frontmost window, `document.visibilityState` reads

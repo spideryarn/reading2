@@ -43,7 +43,7 @@ describe("itemStarts", () => {
     const counts = geometry.columnDepths.map((d) => startsAt(d).length);
     expect(counts[0]).toBe(1); // depth 0 is the whole article, one item
     expect(counts.every((n, i) => i === 0 || n >= counts[i - 1]!)).toBe(true);
-    // The leaf level is one node per block (src/toc.ts grows it that way), so
+    // The leaf level is one node per block (src/hierarchy.ts grows it that way), so
     // over the prose column the arrows step one paragraph at a time.
     expect(startsAt(geometry.leafDepth)).toEqual(blocks.map((_, i) => i));
   });

@@ -109,7 +109,9 @@ import type {
 } from "../types.js";
 import { metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
-import type { ArticleReader } from "./contracts.js";
+import type { ArticleReader, RawSource } from "./contracts.js";
+import { postgresBlobStore } from "./blobs.js";
+import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 
 /** A 404 shaped exactly like src/api.ts's, so routes.ts cannot tell them apart. */
@@ -295,7 +297,23 @@ type RevisionReader =
   | "ideas"
   | "timeline"
   | "sketch"
-  | "arc";
+  | "arc"
+  /**
+   * **The raw document, and it is the only read that wants bytes.**
+   *
+   * Its own projection rather than columns added to `article`, which every page
+   * load runs: `raw_bytes` is up to 32 MiB of source document, and putting it
+   * on the read that draws the reading view would spend that on every article
+   * anybody opens. This read runs once, when somebody presses *view the
+   * original*, and it is the request that is *for* those bytes.
+   *
+   * **`rawSource`, not `source`**, because `source` is already a *column* on
+   * this table (`Meta.source`, which says "pdf"). One word for two things in one
+   * file is the collision the `toc` rename was made to end (src/modes.ts).
+   *
+   * docs/plans/plain-mode-and-the-way-out.md § 5.
+   */
+  | "rawSource";
 
 const REVISION_READ_POLICY: Record<
   keyof typeof articleRevisions.$inferSelect,
@@ -310,7 +328,7 @@ const REVISION_READ_POLICY: Record<
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
-    sketch: "value", arc: "value", timeline: "value",
+    sketch: "value", arc: "value", timeline: "value", rawSource: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -461,15 +479,25 @@ const REVISION_READ_POLICY: Record<
      reached through src/store/artifacts.ts and src/store/export.ts, never
      through a revision read — traced by grep, and independently by GPT Sol,
      2026-08-27. `labels` likewise. */
-  rawBytes: {},
+  /* **`raw_bytes` has one reader now**, and it is the legacy half of it. The
+     column is the pre-reference era's payload (see `readRawDocument` in
+     src/store/export.ts); a row written since carries a reference instead and
+     this comes back null, costing nothing. Nothing else may take it — the note
+     below stands for the other three. */
+  rawBytes: { rawSource: "value" },
   extractedHtml: {},
   stampedHtml: {},
   labels: {},
   requestedUrl: {},
-  rawContentType: {},
+  /* Not on the `source` read, deliberately. It is the *origin's* Content-Type
+     header, and the response's is decided from the recorded kind instead — a
+     valid PDF fetched as `application/octet-stream` would otherwise be served
+     as one. It is here only because `readRawDocument` sniffs the legacy branch
+     with it, where there is no recorded kind to prefer. */
+  rawContentType: { rawSource: "value" },
   rawEncoding: {},
-  rawSourceKind: {},
-  rawSourceSha256: {},
+  rawSourceKind: { rawSource: "value" },
+  rawSourceSha256: { rawSource: "value" },
   /* Raw-source provenance, arriving 2026-08-28 with another agent's
      delete-the-importer work. Reached through src/store/export.ts and the
      artefact store, never through a revision read — `rawFilename` is
@@ -477,7 +505,11 @@ const REVISION_READ_POLICY: Record<
      want a grant here the day something serves it, which is exactly what this
      map is for. */
   rawByteCount: {},
-  rawFilename: {},
+  /* **The grant this map's own note predicted.** It said `rawFilename` is
+     reader-facing — *"it is what an uploaded PDF should download as"* — and
+     *"will want a grant here the day something serves it, which is exactly what
+     this map is for"*. `GET /api/source/:slug` is that day, 2026-08-31. */
+  rawFilename: { rawSource: "value" },
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
@@ -696,6 +728,29 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
+  /**
+   * **The four columns `readRawDocument` reads, and `rawFilename` for the name
+   * to download it under.** src/store/raw-document.ts owns what they mean and
+   * how the two storage eras are told apart; this only says which read may take
+   * them.
+   *
+   * `rawBytes` is up to 32 MiB, which is exactly why this is a projection of its
+   * own and not three columns bolted onto `article`.
+   *
+   * **Not the projection the source route uses.** That one is
+   * `sourceReferenceQuery` in src/store/pg-source.ts, which deliberately selects
+   * the *reference* and not the bytes, and reaches `raw_bytes` only in a second
+   * query for a legacy row. This is `pgArticleReader.loadSource`, which answers
+   * the whole-document question in one go.
+   */
+  rawSource: {
+    id: articleRevisions.id,
+    rawBytes: articleRevisions.rawBytes,
+    rawContentType: articleRevisions.rawContentType,
+    rawSourceSha256: articleRevisions.rawSourceSha256,
+    rawSourceKind: articleRevisions.rawSourceKind,
+    rawFilename: articleRevisions.rawFilename,
+  },
 } as const;
 
 /** Exported for the test that guards the policy. Not a read seam. */
@@ -798,6 +853,8 @@ export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisi
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,
+      contextId: revisionBlocks.contextId,
+      contextType: revisionBlocks.contextType,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -822,6 +879,9 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
     ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
     ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
     ...(row.noteId === null ? {} : { noteId: row.noteId }),
+    ...(row.contextId === null || row.contextType === null
+      ? {}
+      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
   }));
 
   /* The same guard src/api.ts puts on the filesystem reader, because there are
@@ -1004,7 +1064,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   fetch: ["article_revisions.raw_bytes"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
-  toc: ["article_revisions.tree", "article_revisions.labels"],
+  hierarchy: ["article_revisions.tree", "article_revisions.labels"],
   /* The manifest is the column; the bytes it names are objects in the `sources`
      bucket, which is not a table and so is not listed here. */
   assets: ["article_revisions.assets"],
@@ -1672,7 +1732,52 @@ export const pgArticleReader: Pick<
   | "loadTimeline"
   | "loadSketch"
   | "loadArc"
+  | "loadSource"
 > = {
+  /**
+   * **The raw document, out of the object store the revision names.**
+   *
+   * All the judgement is in `readRawDocument` (src/store/raw-document.ts) and it
+   * is imported rather than re-derived: the two storage eras, the refusal to fall
+   * through from a dangling reference to the legacy column, and the re-hash of
+   * what the bucket handed back. `db:export` and this route are the only two
+   * callers, they want identical answers, and a second reading of the same four
+   * columns is how two callers come to disagree about which era a row is in.
+   * GPT Sol made that a blocker on the plan, 2026-08-31.
+   *
+   * **`postgresBlobStore(…)`, not `blobStore()`, and that was a real bug for
+   * about an hour.** `blobStore()` picks the filesystem whenever the Supabase
+   * credentials are absent, which is right for the pipeline and wrong here.
+   * The running server never reaches that arm — src/store/index.ts constructs a
+   * `postgresBlobStore` at boot and refuses to start without the pair — but
+   * `pgArticleReader` is an exported adapter that scripts and tests import
+   * directly, and a direct caller bypasses the boot guard entirely. Configure
+   * Postgres without the credentials, call this, and it reads `data/_blobs/`:
+   * either serving a local object that coincidentally hashes the same, or
+   * reporting a dangling reference that is not dangling. GPT Sol, 2026-08-31.
+   *
+   * So this asks for the checked store by name and fails closed. **Not**
+   * `exportBlobStore()`, which would put this file back in `export.ts`'s import
+   * graph — the cycle the extraction into raw-document.ts was for.
+   *
+   * **Authorised by `currentRevision`**, which joins through `ownedSlug` — so
+   * an article that is not the caller's is not found rather than refused, the
+   * same 404 every other read here gives. There is no second ownership question
+   * to get wrong.
+   */
+  async loadSource(slug: string): Promise<RawSource | null> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "rawSource");
+    if (!found) throw notFound(slug);
+    const document = await readRawDocument(
+      slug,
+      found.revision,
+      postgresBlobStore("the Postgres store serves an article's source document"),
+    );
+    if (!document) return null;
+    return { bytes: document.bytes, kind: document.kind, filename: found.revision.rawFilename };
+  },
+
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
@@ -1798,7 +1903,7 @@ export const pgArticleReader: Pick<
    *
    * ## What "current" means per step, and the one half that is still missing
    *
-   * `toc` is checked the way `publishRevision` checks it, so the metadata page
+   * `hierarchy` is checked the way `publishRevision` checks it, so the metadata page
    * and the publication guard cannot disagree: the recorded `input_hash` must
    * equal `hashBlocks` of this revision's blocks.
    *
@@ -1870,11 +1975,11 @@ export const pgArticleReader: Pick<
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
-        case "toc": {
+        case "hierarchy": {
           if (!revision.tree || !blocksHash) return false;
-          return byStep.get("toc")?.inputHash === blocksHash;
+          return byStep.get("hierarchy")?.inputHash === blocksHash;
         }
-        /* The same two questions as `toc`, and the same answer — but asked of
+        /* The same two questions as `hierarchy`, and the same answer — but asked of
            the artefact rather than of the step row, because the manifest
            carries its own `sourceHash` and its own version. That second half
            matters: the step re-runs when what it *decides* changes (which URLs

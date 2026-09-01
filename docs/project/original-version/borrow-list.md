@@ -42,7 +42,7 @@ we do dozens. Finish by printing a total at the end of `npm run toc` and writing
 One call per parent, returning gists for all its children. About 89% cheaper than one call each in
 their measurement — and it has a second benefit they didn't need: siblings written together can be
 made to distinguish themselves from each other, which is
-[what a row is for](../table-of-contents.md#granularity). Siblings written in isolation cannot honour
+[what a row is for](../hierarchy.md#granularity). Siblings written in isolation cannot honour
 that rule at all.
 
 Cap the batch and salvage partials. Their version discarded eight good summaries because the ninth

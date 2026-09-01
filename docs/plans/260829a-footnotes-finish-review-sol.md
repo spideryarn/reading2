@@ -16,7 +16,7 @@ fisheye supplements: []
 ?at= sections: [Notes]
 ```
 
-This shape is reachable: [`buildTree`](</Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:489>) accepts arbitrary recursive depth, and the invariants impose no maximum. The prompt requests three levels, but model output is not a contract.
+This shape is reachable: [`buildTree`](</Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:489>) accepts arbitrary recursive depth, and the invariants impose no maximum. The prompt requests three levels, but model output is not a contract.
 
 The new property test does not catch this. It compares `navigableItems` directly with `buildSections`, which itself uses `navigableItems`; it never exercises the fisheye’s continuation filter. It also runs every case against the same depth-3, single-supplement topology. See [`supplement.test.ts`](</Users/greg/Dropbox/dev/experim/spideryarn2/tests/supplement.test.ts:545>).
 

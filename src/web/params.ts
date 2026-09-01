@@ -201,8 +201,9 @@ export const panelParam = createParser<Panel>({
 
 /**
  * Which **mode** the middle band is in — the columns between the spine and the
- * prose. Absent means the table of contents, which is the default and the only
- * one there was until 2026-08-25.
+ * prose. **Absent means `plain`**, the default since 2026-08-31: the article on
+ * its own, no band and no gist columns. It was the table of contents before
+ * that, which was also the only mode there was until 2026-08-25.
  *
  * Greg's framing, which is the reason this is a mode rather than a panel:
  *
@@ -216,23 +217,28 @@ export const panelParam = createParser<Panel>({
  * Naming it is what makes the next mode an addition to a list rather than a
  * second special case.
  *
- * **It does appear in URLs, and a first draft of this file's rename said it did
- * not.** `withMode` in src/web/Dock.tsx wrote the parameter unconditionally,
- * default included, so links carrying the old `?mode=toc` are real and shared.
- * They still work — see the unknown-value rule below — and `withMode` now omits
- * the parameter when the mode is the default, so URLs made from here on are
- * canonical. GPT Sol caught this, 2026-08-29.
+ * **The default does appear in URLs, and a first draft of this file's rename
+ * said it did not.** `withMode` in src/web/Dock.tsx wrote the parameter
+ * unconditionally, default included, so links carrying the old `?mode=toc` are
+ * real and shared. `withMode` omits the parameter when the mode is the default
+ * now, so URLs made from here on are canonical. GPT Sol caught this, 2026-08-29.
+ *
+ * Those old links **no longer land where they meant**, and that was decided
+ * rather than overlooked: `toc` survived only because the default happened to be
+ * the view it named, and the default is `plain` since 2026-08-31. Greg, asked
+ * directly: *"Can we tidy up/get rid of `toc` altogether. I'm not worried about
+ * breaking urls — we're in alpha and have no users yet."*
  *
  * **`push`, unlike `?panel=`.** A drawer is a glance; a mode is where you are.
- * Switching to chat and pressing Back should put the table of contents back,
+ * Switching to chat and pressing Back should put the article back,
  * the same way toggling a column does — and unlike opening and closing a panel,
  * you do not do it twice in ten seconds, so it will not fill the history.
  *
- * An unknown value parses to `hierarchy` rather than throwing, so a link from a
- * future version with a mode this one has not got degrades to the article
- * instead of to an error. **This is also what keeps every pre-2026-08-29
- * `?mode=toc` link working**: `toc` is now simply an unrecognised value, and an
- * unrecognised value lands on the default, which is the very view `toc` named. Same rule as `parseAsBlockId` and `panelParam`.
+ * An unknown value parses to the **default** rather than throwing, so a link
+ * from a future version with a mode this one has not got degrades to the article
+ * instead of to an error. Same rule as `parseAsBlockId` and `panelParam`. `toc`
+ * is one such unrecognised value among many now, with no story attached — see
+ * above.
  *
  * The Glossary that paragraph used to name as hypothetical arrived on
  * 2026-08-25 (docs/project/glossary.md), which is the first evidence that the
@@ -252,6 +258,19 @@ export { isMode };
    `modeParam` below uses all three. */
 import { DEFAULT_MODE, MODES, type Mode } from "../modes.js";
 export { DEFAULT_MODE, MODES, type Mode };
+
+/* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
+   for the same reason the three above are: this file is where a component looks
+   for the vocabulary a parameter is drawn from. Unlike `modes.js` above, that
+   module lives *inside* src/web/ — nothing on the server reads a sub-mode, and
+   the file header says what putting it outside cost. */
+import {
+  DEFAULT_REFEREE_VIEW,
+  isRefereeView,
+  REFEREE_VIEWS,
+  type RefereeView,
+} from "./referee-views.js";
+export { DEFAULT_REFEREE_VIEW, isRefereeView, REFEREE_VIEWS, type RefereeView };
 
 export const modeParam = createParser<Mode>({
   /* `isMode` and not a second `MODES.includes` here. The serverless function
@@ -793,7 +812,7 @@ export const confParam = createParser<number>({
    emphatic that their version regretted keeping that only in memory. It stays
    in memory here anyway, and the reason is the rule that governs everything
    else in this app: a per-node open/closed set can only be written down as a
-   list of node ids, node ids are **positional**, and a re-run of `npm run toc`
+   list of node ids, node ids are **positional**, and a re-run of `npm run hierarchy`
    renumbers them (docs/project/block-ids.md#why-random-and-not-sequential). A
    URL full of them would be long and, after any re-extraction, quietly wrong —
    it would open a set of sections that are no longer the ones you opened. What
@@ -920,6 +939,39 @@ export const deepParam = createParser<number>({
   serialize: (v) => String(v),
 })
   .withDefault(1)
+  .withOptions({ history: "push" });
+
+/* ------------------------------------------------------------ referee mode --
+   The mode for somebody who has been asked to peer-review the piece. One
+   parameter, and it names which of the four sub-modes is open.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
+
+/**
+ * Which of Referee's four sub-modes is open.
+ *
+ * `criteria` is the referee's own criteria run over the piece, `claims` is what
+ * it promises against where it delivers, `mirror` is the model reading the
+ * referee's own comments rather than the paper, and `candidates` is the
+ * editor's question of who should review it. Genuinely different things to be
+ * looking at rather than skins on one, so it belongs in the URL like every
+ * other bit of view state (docs/project/url-state.md).
+ *
+ * **Diagram's `?diagram=` is the precedent, deliberately and exactly** — same
+ * parser shape, same `push`, same degrade-to-the-default. Switching sub-mode is
+ * a deliberate act on the view and Back should undo it, and unlike stepping
+ * between glossary terms you do not do it twice in ten seconds.
+ *
+ * `isRefereeView` and not a second `REFEREE_VIEWS.includes` here, for the
+ * reason `modeParam` above gives: one place decides what a sub-mode is, so the
+ * answer cannot drift, and an unknown value opens the default rather than an
+ * error page. The vocabulary itself is in src/web/referee-views.ts, which
+ * imports nothing.
+ */
+export const refereeParam = createParser<RefereeView>({
+  parse: (v) => (isRefereeView(v) ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
 /* -------------------------------------------------------- the library --- */

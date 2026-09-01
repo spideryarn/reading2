@@ -177,7 +177,7 @@ async function recordOne(usage: Record<string, unknown> = {}) {
   const t = stubTransport(cannedStream(usage));
   try {
     const { report } = await collectSpend(async () => {
-      await streamMessage("toc", A_BODY).finalMessage();
+      await streamMessage("hierarchy", A_BODY).finalMessage();
     });
     expect(report.calls).toHaveLength(1);
     return report.calls[0]!;
@@ -198,12 +198,12 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        const call = streamMessage("toc", A_BODY);
+        const call = streamMessage("hierarchy", A_BODY);
         await call.finalMessage();
       });
 
       expect(report.calls).toHaveLength(1);
-      expect(report.calls[0]?.job).toBe("toc");
+      expect(report.calls[0]?.job).toBe("hierarchy");
       expect(report.calls[0]?.costNanos).toBe(21_523_500);
       expect(report.calls[0]?.outcome).toBe("ok");
       expect(report.calls[0]?.upstream).toBe("Claude Platform on AWS");
@@ -223,7 +223,7 @@ describe("streamMessage — the recording lifecycle", () => {
        article is fine, and the cache is never read again. */
     const t = stubTransport(cannedStream());
     try {
-      await streamMessage("toc", A_BODY).finalMessage();
+      await streamMessage("hierarchy", A_BODY).finalMessage();
       expect(t.seenRequests).toHaveLength(1);
       expect(t.seenRequests[0]?.body.provider).toEqual({
         order: ["anthropic"],
@@ -243,12 +243,12 @@ describe("streamMessage — the recording lifecycle", () => {
        `modelFor()` what it *would* return — never what was sent. */
     const t = stubTransport(cannedStream());
     try {
-      for (const task of ["toc", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
+      for (const task of ["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
         await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }).finalMessage();
       }
       const sent = t.seenRequests.map((r) => r.body.model);
       expect(sent).toEqual(sent.map((_, i) => modelFor(
-        (["toc", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!,
+        (["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!,
       )));
       /* And specifically: the prefixed spelling, never the artefact stamp. */
       for (const m of sent) {
@@ -273,14 +273,14 @@ describe("streamMessage — the recording lifecycle", () => {
        which is what the overwrite-after-spread is for. */
     const t = stubTransport(cannedStream());
     try {
-      await streamMessage("toc", {
+      await streamMessage("hierarchy", {
         ...A_BODY,
         provider: { order: ["something-else"] },
         model: "openai/gpt-4o",
       } as unknown as typeof A_BODY).finalMessage();
       const sent = t.seenRequests[0]?.body;
       expect((sent?.provider as { order?: string[] })?.order).toEqual(["anthropic"]);
-      expect(sent?.model).toBe(modelFor("toc"));
+      expect(sent?.model).toBe(modelFor("hierarchy"));
     } finally {
       t.restore();
     }
@@ -391,11 +391,11 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        await streamMessage("toc", A_BODY).finalMessage();
+        await streamMessage("hierarchy", A_BODY).finalMessage();
         await streamMessage("arc", A_BODY).finalMessage();
       });
       expect(t.seenRequests).toHaveLength(2);
-      expect(report.calls.map((c) => c.job)).toEqual(["toc", "arc"]);
+      expect(report.calls.map((c) => c.job)).toEqual(["hierarchy", "arc"]);
     } finally {
       t.restore();
     }

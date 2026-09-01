@@ -111,7 +111,7 @@ export interface TreeCheck {
  * (src/validate-tree.ts) and what a publish guard wants
  * (src/store/pg-revisions.ts, which turns them into reasons an article may not
  * be published). Neither of those runs when a tree is *written* to the
- * filesystem, so `generateToc` could produce a structurally invalid tree, write
+ * filesystem, so `generateHierarchy` could produce a structurally invalid tree, write
  * it, and report the step done — and every later stage would read it and agree
  * with it. That is the whole of GPT Sol's F5: the invariants existed and the
  * one path most of this repo's testing goes through never asked them.
@@ -240,7 +240,7 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
         warn(`${node.id}: labellable leaf ${blockId} has no navLabel — it will be unreachable in the ToC`);
 
       // Deep rows are long on purpose: a paragraph has no name of its own, and
-      // its siblings are numerous and similar. See table-of-contents.md. A
+      // its siblings are numerous and similar. See hierarchy.md. A
       // heading leaf is exempt — its label is the author's own title, and
       // "Soul Machine" is exactly right at two words.
       if (node.navLabel && blockId && blockKind.get(blockId) !== "heading") {
@@ -301,7 +301,7 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
         if (!inRange)
           /* **The heading itself is deliberately not in the message.** These
              strings were a CLI's output and a publish guard's reasons when this
-             was written; `generateToc` now throws them (src/toc.ts), and a
+             was written; `generateHierarchy` now throws them (src/hierarchy.ts), and a
              thrown step error is written to the log by src/jobs.ts with
              `errorFields`, which keeps `message` and `stack`. That would put a
              line of the article's own prose into the logs, which nothing here

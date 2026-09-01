@@ -2,7 +2,7 @@
  * Turn a failure from the Anthropic SDK's own request into a safe,
  * reader-facing `Error` — the request-failure analogue of `providerRefused`
  * in src/openrouter-stream.ts, for the six pipeline stages that talk to the
- * SDK directly (arc, labels, summarise, toc, glossary, tweets) rather than
+ * SDK directly (arc, labels, summarise, hierarchy, glossary, tweets) rather than
  * through OpenRouter.
  *
  * ## Why this exists

@@ -116,14 +116,35 @@ describe("the revision column policy", () => {
     expect(Object.keys(POLICY).sort()).toEqual(Object.keys(getTableColumns(articleRevisions)).sort());
   });
 
-  it("gives the source document and the whole-article HTML to nobody", () => {
-    /* `raw_bytes` is the original finding. The two HTML columns are the whole
-       article again and are pipeline artefacts, reached through
-       src/store/artifacts.ts and src/store/export.ts — never through a revision
-       read. `labels` likewise. */
-    for (const column of ["rawBytes", "extractedHtml", "stampedHtml", "labels"] as const) {
+  it("gives the whole-article HTML to nobody", () => {
+    /* The two HTML columns are the whole article again and are pipeline
+       artefacts, reached through src/store/artifacts.ts and
+       src/store/export.ts — never through a revision read. `labels` likewise. */
+    for (const column of ["extractedHtml", "stampedHtml", "labels"] as const) {
       expect({ column, reads: POLICY[column] }).toEqual({ column, reads: {} });
     }
+  });
+
+  /**
+   * **And the source document to exactly one read, which is the one that is
+   * *for* it.**
+   *
+   * `rawBytes` was in the list above until 2026-08-31 — it was the finding that
+   * started this map, because up to 32 MiB of PDF was arriving on every article
+   * load. It is granted now to `rawSource` and to nothing else: that read runs
+   * when somebody presses *view the original*, and it is the request the bytes
+   * are the answer to. Written as an equality rather than a `toBeDefined`, so
+   * granting it to a second read fails here.
+   *
+   * Note what `rawSource` may still not have: the tree, the blocks, the
+   * artefacts, or anything from `META_COLUMNS`. It is five columns.
+   * docs/plans/plain-mode-and-the-way-out.md § 5.
+   */
+  it("gives the source document to the one read that serves it, and no other", () => {
+    expect(POLICY.rawBytes).toEqual({ rawSource: "value" });
+    expect(policyGrants("rawSource")).toEqual(
+      ["id", "rawBytes", "rawContentType", "rawFilename", "rawSourceKind", "rawSourceSha256"].sort(),
+    );
   });
 
   it("still carries the hash, which is what actually gets read", () => {
@@ -183,6 +204,10 @@ const READS = [
      on `DATED_FINGERPRINT_COLUMNS` — the cited set plus `published_at` — because
      it is the only stage judged on the publication date. */
   "timeline",
+  /* Added 2026-08-31 with `pgArticleReader.loadSource`. The only read that
+     takes bytes, which is why it is a projection of its own rather than columns
+     bolted onto `article` — src/store/pg.ts § `rawSource`. */
+  "rawSource",
 ] as const;
 
 describe("the list of projections this file checks", () => {
@@ -260,13 +285,32 @@ describe("the query actually uses its projection", () => {
     /* **All of them**, from the one list above. It said six, then eight, and
        was missing `sketch` and `arc` both times — which is how a projection
        acquires a column nobody notices. It is a shared const now, and the test
-       above holds it against the real thing. */
-    for (const read of READS) {
+       above holds it against the real thing.
+
+       **Except `rawSource`, which is the one read that is for those bytes**, and
+       it is excluded by name rather than by a `try`: naming it is what makes
+       adding a *second* exception a decision somebody has to write down here.
+       Its own assertion is below, and it is the stronger one — that read may
+       take `raw_bytes` and still may not take the article. */
+    for (const read of READS.filter((r) => r !== "rawSource")) {
       const sql = sqlFor(read);
       expect({ read, raw: sql.includes('"raw_bytes"') }).toEqual({ read, raw: false });
       expect({ read, x: sql.includes('"extracted_html"') }).toEqual({ read, x: false });
       expect({ read, s: sql.includes('"stamped_html"') }).toEqual({ read, s: false });
       expect({ read, l: sql.includes('"labels"') }).toEqual({ read, l: false });
+    }
+  });
+
+  it("sends the source document only on the read that serves it, and nothing else with it", () => {
+    const sql = sqlFor("rawSource");
+    expect(sql).toContain('"raw_bytes"');
+    expect(sql).toContain('"raw_source_sha256"');
+    expect(sql).toContain('"raw_filename"');
+    /* The whole point of a projection of its own: pressing *view the original*
+       must not also drag the article, its tree or its artefacts across the
+       wire. */
+    for (const column of ['"tree"', '"extracted_html"', '"stamped_html"', '"labels"', '"glossary"', '"title"']) {
+      expect({ column, taken: sql.includes(column) }).toEqual({ column, taken: false });
     }
   });
 
@@ -525,8 +569,8 @@ describe("what a revision with no metadata hashes to", () => {
  * rule the codebase follows; the precedent is tests/blocks-baseline.test.ts and
  * tests/sanitize-stale-artefact.test.ts.
  *
- * `toc` is deliberately not required here: it has no `stamp`, on purpose
- * (src/pipeline.ts § `toc` says why at length), and its case exists for a
+ * `hierarchy` is deliberately not required here: it has no `stamp`, on purpose
+ * (src/pipeline.ts § `hierarchy` says why at length), and its case exists for a
  * different reason.
  */
 describe("the metadata page and the pipeline agree about which steps can be current", () => {

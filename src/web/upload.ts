@@ -26,6 +26,7 @@
  */
 
 import { apiFetch, readJson } from "./lib/api.js";
+import { recordLog } from "./log-buffer.js";
 
 /** How far along, in bytes. `total` is the file's size, not the request's. */
 export interface UploadProgress {
@@ -89,6 +90,22 @@ function put(
       reject(new DOMException("Upload cancelled", "AbortError"));
       return;
     }
+    /* **This request is invisible to `lib/api.ts`.** It is an `XMLHttpRequest`
+       to the object store, not an `apiFetch`, so nothing in the ring buffer
+       would ever mention a 50 MB upload that failed halfway — and "I tried to
+       add a PDF and nothing happened" is precisely the report this feature
+       exists to receive. The URL is deliberately not recorded: it is a signed
+       grant, and a grant in a bug report is a credential in a bug report.
+       See src/web/log-buffer.ts. */
+    const started = Date.now();
+    const note = (
+      phase: "start" | "done" | "failed" | "aborted" | "transport-failed",
+      status: number | null,
+    ): void => {
+      recordLog({ kind: "upload", phase, status, bytes: file.size, ms: Date.now() - started });
+    };
+    note("start", null);
+
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     /* The bucket's allowlist checks this, and it is the *claimed* type — which
@@ -104,9 +121,14 @@ function put(
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        note("done", xhr.status);
         resolve();
         return;
       }
+      /* `realStatus`, not `xhr.status` — a duplicate arrives as HTTP 400 with
+         `{"statusCode":"409"}` in the body, and a log that recorded the response
+         line would send whoever reads it looking at permissions. */
+      note("failed", realStatus(xhr));
       /* Storage's own words are deliberately not shown to the reader — the same
          rule src/messages.ts states, and the same reason: a provider's error
          text is not ours to publish and is usually meaningless to a person. The
@@ -114,8 +136,14 @@ function put(
       console.error("upload failed", xhr.status, xhr.responseText.slice(0, 400));
       reject(new Error(uploadFailure(realStatus(xhr))));
     };
-    xhr.onerror = () => reject(new Error(NETWORK_FAILED));
-    xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
+    xhr.onerror = () => {
+      note("transport-failed", null);
+      reject(new Error(NETWORK_FAILED));
+    };
+    xhr.onabort = () => {
+      note("aborted", null);
+      reject(new DOMException("Upload cancelled", "AbortError"));
+    };
     signal?.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(file);
   });
