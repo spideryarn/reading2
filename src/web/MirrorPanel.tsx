@@ -11,12 +11,19 @@
  * ## The one rule this panel exists to keep
  *
  * **Two of the five remark kinds say, on the row, that no trial has tested
- * them.** `coverage` and `placement` carry `trialTested: false`, stamped by
- * `validateRemarks` from the kind rather than by the model, because the ICLR
- * 2025 randomised trial tested three categories and neither of these is one of
- * them (`RemarkCommon.trialTested` in
+ * them.** `coverage` and `placement` carry `trialTested: false`, stamped by the
+ * server from the kind and never by the model, because the ICLR 2025 randomised
+ * trial tested three categories and neither of these is one of them
+ * (`RemarkCommon.trialTested` in
  * [`src/referee-mirror-types.ts`](../referee-mirror-types.ts) is careful about
  * what that flag does and does not claim).
+ *
+ * A `placement` row has no model in it at all: its sentence is minted from the
+ * referee's own comment by `mintPlacements` in
+ * [`src/referee-mirror.ts`](../referee-mirror.ts), and the comment it is about
+ * was never sent. Untested is still the right word on it — the question that
+ * flag asks is what evidence stands behind telling a referee this, not who
+ * wrote the sentence.
  *
  * The whole mode rests on that one measured result, so a panel that printed all
  * five alike would be borrowing the trial's authority for two things it never
@@ -130,8 +137,12 @@ function Answer({
   result: MirrorResult;
   onJump(blockId: string): void;
 }) {
-  const { remarks, input, coverage } = result;
-  const byId = new Map(input.comments.map((c) => [c.id, c]));
+  const { remarks, input, coverage, placementsOmitted } = result;
+  /* **Both lists.** A `placement` remark is about a comment that was never sent
+     to the model — that is the point of `MirrorInput.placements` — and looking
+     it up only in `comments` would leave the row printing a block id where the
+     referee's own marked words belong. */
+  const byId = new Map([...input.comments, ...input.placements].map((c) => [c.id, c]));
 
   return (
     <>
@@ -158,6 +169,22 @@ function Answer({
               />
             ))}
           </ol>
+          {/* **The placements that did not fit**, said rather than logged. Six
+              remarks is the whole list, and a referee who has eight bare
+              numbers and is shown six of them has been told the wrong count of
+              a fact about their own notes. */}
+          {placementsOmitted > 0 && (
+            /* `mir-coverage` rather than a class of its own, and deliberately
+               so rather than for want of time: this is the same quiet line
+               under the panel doing the same job, and a second selector with
+               identical rules would be a copy for something to keep in step. */
+            <p className="mir-coverage">
+              {count(placementsOmitted, "other placement")} of yours also{" "}
+              {placementsOmitted === 1 ? "has" : "have"} nothing written under{" "}
+              {placementsOmitted === 1 ? "it" : "them"}. The list above keeps the numbers furthest
+              from zero.
+            </p>
+          )}
           {/* Once, under the list, because two words on a row are not an
               explanation and a referee should not have to guess what "not
               tested" is measuring. */}
@@ -213,7 +240,29 @@ function Nothing({ input }: { input: MirrorResult["input"] }) {
  * them about it here would be Mirror advertising another sub-mode.
  */
 function Coverage({ coverage }: { coverage: MirrorResult["coverage"] }) {
-  if (coverage.asked) return null;
+  if (coverage.asked) {
+    /* Asked, but not about all of them. The criteria list is capped, and
+       `asked: true` on its own let a run that considered the first
+       twenty-four read as one that considered every one — wrong in the
+       direction that reassures. */
+    if (coverage.criteriaOmitted === 0) return null;
+    return (
+      <p className="mir-coverage">
+        You have more criteria than one run considers, so{" "}
+        {count(coverage.criteriaOmitted, "criterion")} of yours{" "}
+        {coverage.criteriaOmitted === 1 ? "was" : "were"} not put to the model at all. Nothing here
+        says whether your notes take {coverage.criteriaOmitted === 1 ? "it" : "those"} up.
+      </p>
+    );
+  }
+  if (coverage.reason === "text-clipped") {
+    return (
+      <p className="mir-coverage">
+        Some of what you wrote was too long to send whole, so the model saw part of it. Nothing here
+        says what your notes have and have not taken up.
+      </p>
+    );
+  }
   if (coverage.reason === "comments-dropped") {
     return (
       <p className="mir-coverage">
@@ -334,7 +383,14 @@ function Remark({
   );
 }
 
-/** "1 comment" / "4 comments", so no sentence here has a stray plural in it. */
+/**
+ * "1 comment" / "4 comments", so no sentence here has a stray plural in it.
+ *
+ * `criterion` is the one word here an `s` does not pluralise, so it gets its
+ * own line rather than a rule: a panel that printed "6 criterions" at a peer
+ * reviewer would lose more standing than the sentence buys.
+ */
 function count(n: number, noun: string): string {
+  if (n !== 1 && noun === "criterion") return `${n} criteria`;
   return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }

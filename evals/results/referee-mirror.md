@@ -13,14 +13,34 @@
 > finding 3); the two counters at the bottom, which look for a verdict and for
 > drafting, both read green over it.
 >
-> **This run is also stale.** The prompt has since been changed to forbid the
-> guess in the words the model actually used, quoted material is now inside a
-> per-call fence, each block is sent once rather than once per comment, and the
-> eval has a third counter for a placement remark that has borrowed a word from
-> the passage. None of that is in the run below, and the run below has not been
+> **This run is stale, and the part of it that failed is now impossible.** As
+> of 2026-09-01 a `placement` remark is **minted in code** — `mintPlacements` in
+> `src/referee-mirror.ts` — from the referee's own row: the number, the
+> criterion's own text, and the fact that the comment has no body. The comments
+> those remarks are about are no longer sent to a model at all, kind 5 is gone
+> from the prompt, and a `placement` that comes back from a model is thrown
+> away unread. So the two invented reasons below cannot recur: nothing in that
+> sentence is a model's any more. Two independent reviewers reached that
+> conclusion separately;
+> `docs/plans/260831an-referee-mode-stage3b5c-review-sol.md` § *Should placement
+> remarks be minted in code?*
+>
+> With them went this file's third counter, the one for a placement remark that
+> had borrowed a word from the passage. A counter over a sentence our own code
+> writes can never go red for the reason it exists, which is the shape
+> `docs/reusable/silent-success.md` warns about. The property is a unit test
+> now: *says nothing about the paper, the referee's reasons, or whether the
+> number is right*, in `tests/referee-mirror.test.ts`.
+>
+> **Everything else here is stale too.** The prompt has since been changed to
+> forbid the guess in the words the model actually used, quoted material is now
+> inside a per-call fence (including a criterion named beside a placement, which
+> used to sit outside it), and each block is sent once rather than once per
+> comment. None of that is in the run below, and the run below has not been
 > repeated, because a repeat costs money and nobody has asked for it. **Take the
-> remarks here as evidence about the old prompt only.** The next run overwrites
-> this file, including this note.
+> remarks here as evidence about the old prompt only**, and the `placement`
+> section as a record of why that kind stopped being a model's business. The
+> next run overwrites this file, including this note.
 
 Eight sets of a referee's own comments on a synthetic six-passage paper. **Read the remarks.** The two counters at the bottom are a prompt to look, not a verdict — see the header of `evals/referee-mirror.ts`.
 

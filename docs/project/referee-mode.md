@@ -161,6 +161,18 @@ criteria list, and placement (a valence recorded with nothing written under it) 
 whether a trial actually tested feedback of that shape. Two of the five say no; see § *What the
 evidence says* below for what that flag means and why it exists.
 
+**Only four of the five are the model's.** `placement` is **minted in code** and the comment behind
+it is never sent anywhere: the fact is computable — a valence with no body — and the sentence is
+fixed, built only from the number, the criterion's own text and the absence of writing. A model
+`placement` is dropped whatever it says. This was not the first design, and the reason for the
+change is worth keeping: asked to produce these, the model invented the rationale the prompt
+forbade it to guess — *"why lack of participant blinding warrants this weight"* — inside the very
+sentence saying the referee gave no reason. A cross-family review and the agent building the
+hardening reached the same conclusion separately. It deleted forty-two lines of prompt, removed an
+injection surface, and turned *placements always qualify* from a wish into something the code does.
+A comment carrying **both** a number and words still goes to the model, because there the writing is
+the subject and the number is only context.
+
 Built, as of 2026-09-01, and here is the whole of it:
 
 - **The call** — [`src/referee-mirror.ts`](../../src/referee-mirror.ts): the prompt, the input

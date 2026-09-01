@@ -75,8 +75,30 @@ export interface MirrorComment {
 
 /** The comments worth sending, and an account of what was left behind. */
 export interface MirrorInput {
-  /** In document order — see `mirrorInput`. */
+  /**
+   * The comments that go to the model, in document order — see `mirrorInput`.
+   *
+   * Every one of them has words in it. A placement with nothing written under
+   * it is in `placements` instead and is never sent.
+   */
   comments: MirrorComment[];
+  /**
+   * **The placements with nothing written under them** — a number the referee
+   * put on a passage, and no words.
+   *
+   * A list of its own, and that separation is most of the fix for the
+   * cross-family review's finding 2. Nothing a `placement` remark says is the
+   * model's: the number is the referee's, the criterion is the referee's, and
+   * "this comment contains no explanation" is read off the row. So these are
+   * minted in code (`mintPlacements` in
+   * [`src/referee-mirror.ts`](referee-mirror.ts)) and these comments are not
+   * sent at all.
+   *
+   * Being out of `comments` is what turns "a placement always qualifies" from a
+   * line in the prompt into an invariant: `MAX_COMMENTS` cuts the list that
+   * goes to the model, and this is not that list.
+   */
+  placements: MirrorComment[];
   /**
    * Bookmarks: a mark on a passage with nothing written on it **and no
    * placement either**.
@@ -121,6 +143,34 @@ export interface MirrorInput {
   skippedTagged: number;
   /** Comments beyond `MAX_COMMENTS`. Counted, because a cap must never be silent. */
   truncated: number;
+  /**
+   * Comments whose body was longer than `MAX_BODY_CHARS` and was cut to fit.
+   *
+   * Counted because of what it does to *coverage*, which is the one claim here
+   * made over the whole of what the referee wrote. A comment whose only
+   * criterion-bearing sentence sits after character 1,500 reaches the model
+   * with that sentence missing, and "nothing you have written bears on this"
+   * then covers text the model never received. `coverageStatus` withholds the
+   * question when this is non-zero.
+   */
+  clippedBodies: number;
+  /**
+   * Criteria whose text was longer than `MAX_CRITERION_CHARS` and was cut.
+   *
+   * The same fault from the other end: the model is asked whether anything
+   * bears on half a criterion, and the referee is shown their own words back
+   * with the second half gone.
+   */
+  clippedCriteria: number;
+  /**
+   * Criteria beyond `MAX_CRITERIA`, which were never put to the model at all.
+   *
+   * **Not a reason to withhold coverage** — a remark about one of the first
+   * twenty-four is as true as it ever was. But silence about the twenty-fifth
+   * is not evidence, and a bare `asked: true` said it was. Carried out to the
+   * caller on `CoverageStatus`.
+   */
+  criteriaOmitted: number;
 }
 
 /**
@@ -163,7 +213,12 @@ interface RemarkCommon {
    * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. Mirror.
    */
   trialTested: boolean;
-  /** One or two plain sentences about the referee's own comment. The model's words. */
+  /**
+   * One or two plain sentences about the referee's own comment.
+   *
+   * The model's words on four of the five kinds. On `placement` they are
+   * **ours**, minted from the row by `mintPlacements` — see that member below.
+   */
   note: string;
 }
 
@@ -209,6 +264,14 @@ export type MirrorRemark =
       passage: string;
     } & AboutAComment &
       RemarkCommon)
+  /* **Minted in code, never asked of a model** — the one remark kind that is,
+     and `mintPlacements` in [`src/referee-mirror.ts`](referee-mirror.ts) is
+     where. Every word of it derives from the row: the number, the criterion's
+     own text, and the absence of a body. A model asked for this had nothing to
+     contribute and one thing to get wrong, and the committed eval caught it
+     getting that wrong — inventing the reason the referee did not give, in the
+     very sentence saying they gave none. So `note` here is ours, not the
+     model's, which is the one exception to what `RemarkCommon.note` says. */
   | ({
       kind: "placement";
       /** **False, always.** Certain, and untested — see `RemarkCommon.trialTested`. */
@@ -262,7 +325,20 @@ export type MirrorRemark =
  * that counted it would switch coverage off for almost every real referee.
  */
 export type CoverageStatus =
-  | { asked: true }
+  | {
+      asked: true;
+      /**
+       * How many of the referee's criteria past `MAX_CRITERIA` were never put
+       * to the model at all.
+       *
+       * Usually 0. Non-zero means the answer covers the first twenty-four and
+       * says nothing whatever about the rest — which a bare `asked: true`
+       * concealed, and which a panel has to say out loud, because "no criterion
+       * of yours went unaddressed" over a list that was silently cut is the
+       * same false reassurance from a different direction.
+       */
+      criteriaOmitted: number;
+    }
   | {
       asked: false;
       reason:
@@ -272,6 +348,14 @@ export type CoverageStatus =
         | "comments-truncated"
         /** A comment the referee made never reached the model. */
         | "comments-dropped"
+        /**
+         * A body or a criterion was too long and went in cut.
+         *
+         * The model was shown part of what the referee wrote, so a claim over
+         * the whole of it is a claim over text it never received.
+         * `MirrorInput.clippedBodies` and `.clippedCriteria`.
+         */
+        | "text-clipped"
         /** There was nothing to send, so no question was put at all. */
         | "nothing-to-mirror";
     };
@@ -293,5 +377,15 @@ export interface MirrorResult {
    * `coverageStatus` holds the rule and the reasons.
    */
   coverage: CoverageStatus;
+  /**
+   * Unexplained placements that did not fit under `MAX_REMARKS`.
+   *
+   * **Surfaced rather than only logged.** A placement with nothing written
+   * under it is a fact about the referee's own data rather than a judgement, so
+   * a referee shown four of their seven — with nothing on screen saying there
+   * were seven — has been given a wrong count of their own notes. Zero on
+   * almost every run.
+   */
+  placementsOmitted: number;
   model: string;
 }

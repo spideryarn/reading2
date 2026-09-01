@@ -63,11 +63,15 @@ function comment(id: string, over: Partial<MirrorInput["comments"][number]> = {}
 function input(over: Partial<MirrorInput> = {}): MirrorInput {
   return {
     comments: [comment("spya-cmt2aa"), comment("spya-cmt2bb", { blockId: OTHER })],
+    placements: [],
     skippedBookmarks: 0,
     badValence: 0,
     skippedOrphans: 0,
     skippedTagged: 0,
     truncated: 0,
+    clippedBodies: 0,
+    clippedCriteria: 0,
+    criteriaOmitted: 0,
     ...over,
   };
 }
@@ -117,7 +121,8 @@ function done(over: Partial<MirrorResult> = {}): MirrorResult {
   return {
     remarks: ALL_FIVE,
     input: input(),
-    coverage: { asked: true },
+    coverage: { asked: true, criteriaOmitted: 0 },
+    placementsOmitted: 0,
     model: "a-model",
     ...over,
   };
@@ -244,6 +249,40 @@ describe("every remark is an index into the piece", () => {
   });
 });
 
+describe("a minted placement, whose comment the model never saw", () => {
+  /* The comment a `placement` remark is about is in `MirrorInput.placements`
+     and not in `comments`, because it is never sent. A panel that looked the id
+     up in one list only would print a block id where the referee's own marked
+     words belong — and `spya-p7w2dn` is not a thing a peer reviewer can read. */
+  it("shows the referee's own marked words, not the block id", () => {
+    paint(
+      api({
+        result: done({
+          input: input({
+            comments: [comment("spya-cmt2aa")],
+            placements: [comment("spya-cmt2bb", { blockId: OTHER })],
+          }),
+        }),
+      }),
+    );
+    const row = host.querySelector("[data-kind='placement']");
+    expect(row?.textContent ?? "").toContain("the controls were matched");
+    expect(row?.textContent ?? "").not.toContain(OTHER);
+  });
+
+  it("says how many placements did not fit, rather than showing six of eight in silence", () => {
+    paint(api({ result: done({ placementsOmitted: 2 }) }));
+    const said = text().toLowerCase();
+    expect(said).toContain("2 other placements");
+    expect(said).toContain("furthest from zero");
+  });
+
+  it("says nothing about omitted placements when none were", () => {
+    paint(api());
+    expect(text().toLowerCase()).not.toContain("other placement");
+  });
+});
+
 describe("the empty answer, which is the common one", () => {
   it("reads as an answer rather than as a breakage", () => {
     paint(api({ result: done({ remarks: [] }) }));
@@ -330,6 +369,31 @@ describe("coverage is only claimed when the question was actually put", () => {
       }),
     );
     expect(text().toLowerCase()).toContain("could not be read");
+  });
+
+  it("says when part of what the referee wrote went in cut", () => {
+    /* The cross-family review's finding 1. A comment clipped at 1,500
+       characters reaches the model with its last sentence gone, and a coverage
+       claim over it would range over text nobody sent. */
+    paint(
+      api({
+        result: done({ coverage: { asked: false, reason: "text-clipped" } }),
+      }),
+    );
+    const said = text().toLowerCase();
+    expect(said).toContain("too long to send whole");
+  });
+
+  it("says when the criteria list itself was cut, even though the question was put", () => {
+    /* `asked: true` on its own let a run that considered the first twenty-four
+       read as one that considered all thirty — the reassuring direction to be
+       wrong in. */
+    paint(
+      api({
+        result: done({ coverage: { asked: true, criteriaOmitted: 6 } }),
+      }),
+    );
+    expect(text().toLowerCase()).toContain("6 criteria of yours were not put to the model");
   });
 
   it("stays quiet about it when the referee simply has no criteria", () => {
