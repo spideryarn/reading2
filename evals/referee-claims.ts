@@ -131,7 +131,7 @@ import {
   paperPhrases,
   PASSAGES_UNUSABLE,
   subtractPaperPhrases,
-  unaccountedSentences,
+  otherTextInQuotes,
   validateClaims,
 } from "../src/referee-claims.js";
 import {
@@ -784,6 +784,82 @@ const SELF_CHECK: readonly {
   },
 ];
 
+/* ------------------------------------------------------------- the held-out -- */
+
+/**
+ * **Adversarial sentences the frames were not built from** — the measurement
+ * GPT Sol's second review asked for, and the one number in this file that is not
+ * in-sample.
+ *
+ * `SELF_CHECK` above is a regression test and a good one, but it is not
+ * evidence about English: every line in it is a line the frames were shaped
+ * against, so *"6/6 and 10/10"* says the code has not changed rather than that a
+ * verdict cannot get through. A production miss is necessarily an eval miss when
+ * both ask the same patterns.
+ *
+ * So these are written by hand, labelled by hand for what they **are** rather
+ * than for what the code does with them, and reported with their misses rather
+ * than with their hits. Four of them came from the review itself; the rest were
+ * written to be the shapes a model would reach for next.
+ *
+ * ## `tuned`, and why it is on every row
+ *
+ * Four frames were added on 2026-09-01 for the review's four sentences, so those
+ * four are **no longer held out** — they are pinned regressions like everything
+ * in `SELF_CHECK`. Saying so on the row is the difference between a measurement
+ * and a number that flatters itself: **the honest recall figure is the one over
+ * the untuned rows**, and it is printed separately for exactly that reason.
+ *
+ * The `verdict: false` rows are the other half and they cost more when they go
+ * wrong: a frame firing on an honest linkage line takes a true sentence off a
+ * referee's screen. None of them is from a run either.
+ */
+const HELD_OUT: readonly {
+  readonly text: string;
+  /** Is this sentence a judgement on whether the paper carries a claim? Labelled by hand. */
+  readonly verdict: boolean;
+  /** Was a frame added for this line after it was written? Then it is no longer held out. */
+  readonly tuned?: true;
+  /** Where it would sit on the panel — a claim's headline is the bigger target. */
+  readonly where: "headline" | "reasoning";
+}[] = [
+  /* --- the review's own four. Frames were added for these, so they are pinned
+         regressions now rather than measurements. --- */
+  { text: "The results report 11.5%, while the abstract promises 40%.", verdict: true, tuned: true, where: "reasoning" },
+  { text: "Only SST-2 is examined.", verdict: true, tuned: true, where: "reasoning" },
+  { text: "No transfer experiment appears in the paper.", verdict: true, tuned: true, where: "reasoning" },
+  { text: "The result and the headline concern different quantities.", verdict: true, tuned: true, where: "reasoning" },
+
+  /* --- verdicts nothing was tuned for. These are the measurement. --- */
+  { text: "One dataset, one annotator pair.", verdict: true, where: "reasoning" },
+  { text: "The reader may want to compare this number with the one in the abstract.", verdict: true, where: "reasoning" },
+  { text: "Disagreement between annotators is not annotation error.", verdict: true, where: "reasoning" },
+  { text: "This is the whole of the evidence offered for the transfer contribution.", verdict: true, where: "reasoning" },
+  { text: "The 40% figure is not backed by the results.", verdict: true, where: "reasoning" },
+  { text: "Discussion speculates about transfer but does not demonstrate it directly.", verdict: true, where: "reasoning" },
+  { text: "Overstates what the evaluation shows.", verdict: true, where: "reasoning" },
+  { text: "The abstract's number is four times the measured one.", verdict: true, where: "reasoning" },
+
+  /* --- and the same thing written into a claim's headline, which is where a
+         verdict is most prominent and where nothing scanned at all until
+         2026-09-01. --- */
+  { text: "Unsupported: transfers to any labelling task", verdict: true, where: "headline" },
+  { text: "40% claimed, 11.5% measured", verdict: true, where: "headline" },
+  { text: "A 40% reduction that the results do not show", verdict: true, where: "headline" },
+  { text: "Transfer claim, never tested", verdict: true, where: "headline" },
+
+  /* --- honest linkage lines, none of them from a run, and a frame firing on one
+         of these costs a referee a true sentence. --- */
+  { text: "reports the annotator agreement figure the abstract quotes", verdict: false, where: "reasoning" },
+  { text: "describes the majority-over-three-passes procedure the claim rests on", verdict: false, where: "reasoning" },
+  { text: "notes the single dataset and single annotator pair the evaluation used", verdict: false, where: "reasoning" },
+  { text: "states that gold labels were not available for this set", verdict: false, where: "reasoning" },
+  { text: "restates the transfer contribution in the discussion", verdict: false, where: "reasoning" },
+  { text: "gives the before and after percentages from the table", verdict: false, where: "reasoning" },
+  { text: "Cascade cuts annotation error by 40%", verdict: false, where: "headline" },
+  { text: "Transfers to any labelling task with a fixed label set", verdict: false, where: "headline" },
+];
+
 /* ------------------------------------------------------------------ the run -- */
 
 interface Sample {
@@ -949,7 +1025,17 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
     return `  **${label}**`;
   };
   for (const claim of sample.claims) {
-    say(`- **${claim.claim}**${flagged(claim.claim)}`);
+    /* **A headline the fail-safe blanked prints as blanked, not as blank.** The
+       row keeps the paper's own sentence as its label — which is the whole point
+       of the fallback — and the line that was taken is quoted under **Withheld**
+       below, so this file can still check the frames against what tripped them. */
+    if (claim.claimWithheld) {
+      say(
+        "- _the model's one-line version of this claim was withheld by `validateClaims` and never reached a referee — the paper's own sentence below is what a referee sees, and the withheld line is quoted under **Withheld**._",
+      );
+    } else {
+      say(`- **${claim.claim}**${flagged(claim.claim)}`);
+    }
     say(`  > \`${claim.blockId}\` — “${claim.quote}”`);
     if (claim.passages.length === 0) {
       say(
@@ -983,7 +1069,7 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
  *
  * `mustList` needs a human to have read the paper and planted a phrase; this
  * needs only the answer and the article, and it is the same computation the
- * panel runs (`unaccountedSentences`, src/referee-claims.ts). It is what would
+ * panel runs (`otherTextInQuotes`, src/referee-claims.ts). It is what would
  * have made the `neverTakenUp` omission visible on the day, with nobody having
  * had to notice it first.
  *
@@ -993,12 +1079,12 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
  * a heading calling them missed claims would be the judgement this whole
  * sub-mode refuses, made in reverse.
  */
-function renderUnaccounted(say: Say, c: Case, sample: Sample): void {
-  const rows = unaccountedSentences([...c.blocks], sample.claims);
+function renderOtherText(say: Say, c: Case, sample: Sample): void {
+  const rows = otherTextInQuotes([...c.blocks], sample.claims);
   say(
     rows.length === 0
-      ? "Sentences in those blocks that no claim above is anchored in: _none_."
-      : "Sentences in those blocks that no claim above is anchored in — what the answer did not account for, background and setup included:",
+      ? "Other text inside the passages those claims quote, that no claim above begins in: _none_."
+      : "Other text inside the passages those claims quote, that no claim above begins in — background and setup included:",
   );
   say();
   for (const row of rows) say(`- \`${row.blockId}\` — ${row.text}`);
@@ -1046,7 +1132,7 @@ function renderSample(
   renderClaims(say, sample, flags);
   say();
 
-  renderUnaccounted(say, c, sample);
+  renderOtherText(say, c, sample);
 
   let missing = 0;
   if (c.mustList.length > 0) {
@@ -1132,6 +1218,59 @@ function renderSelfCheck(say: Say): number {
   say();
   say(`- rows where the detector disagreed with its label: **${wrong}** (should be 0)`);
   return wrong;
+}
+
+/**
+ * **The held-out rows, with the misses first**, because the misses are the
+ * finding and the hits are the regression test.
+ *
+ * Subtracted against the `overclaim` paper, which is the one every adversarial
+ * line here is written about — so a line echoing that paper's own words is
+ * masked exactly as it would be on a real run.
+ */
+function renderHeldOut(say: Say): { untunedVerdicts: number; caught: number; falseAlarms: number } {
+  const grams = gramsForPaper("overclaim");
+  const fires = (text: string) => framesIn(subtractPaperPhrases(text, grams)).length > 0;
+
+  say("## Held out — adversarial sentences the frames were not built from");
+  say();
+  say(
+    "Written by hand and labelled by hand for what each sentence **is**, not for what the code does with it. `SELF_CHECK` above is in-sample by construction — the frames were shaped against those very lines — so this is the only table here that measures rather than pins. Rows marked *tuned* had a frame added for them afterwards and are pins now too; the recall figure below excludes them.",
+  );
+  say();
+  say("| is a verdict | frames | where | tuned for | line |");
+  say("|---|---|---|---|---|");
+  let untunedVerdicts = 0;
+  let caught = 0;
+  let falseAlarms = 0;
+  /* Misses first, then false alarms, then the rest: the reader of this file
+     should meet what got through before they meet what did not. */
+  const order = [...HELD_OUT].sort((a, b) => {
+    const bad = (r: (typeof HELD_OUT)[number]) => (r.verdict !== fires(r.text) ? 0 : 1);
+    return bad(a) - bad(b);
+  });
+  for (const r of order) {
+    const got = fires(r.text);
+    if (r.verdict && !r.tuned) {
+      untunedVerdicts += 1;
+      if (got) caught += 1;
+    }
+    if (!r.verdict && got) falseAlarms += 1;
+    const mark = r.verdict === got ? "" : r.verdict ? " ← **MISSED**" : " ← **FALSE ALARM**";
+    say(
+      `| ${r.verdict ? "yes" : "no"} | ${got ? "fire" : "silent"}${mark} | ${r.where} | ${r.tuned ? "yes" : "—"} | ${r.text.replace(/\|/g, "\\|")} |`,
+    );
+  }
+  say();
+  say(
+    `- verdicts nothing was tuned for, that the frames caught: **${caught} of ${untunedVerdicts}**`,
+  );
+  say(`- honest linkage lines the frames fired on: **${falseAlarms}** (should be 0)`);
+  say();
+  say(
+    "**Read the first number as the ceiling on what a pattern can do here, not as a score to raise.** Every miss is a sentence a referee would read as a judgement, and each one could be answered with another frame — which would move it into the tuned column and measure nothing. What the number is for is the decision recorded beside `ADEQUACY_FRAMES`: the frames are defence in depth, the prompt does the work, and the closed enum is the escalation if a miss is ever seen in a real run more than once.",
+  );
+  return { untunedVerdicts, caught, falseAlarms };
 }
 
 /** Everything the eval asserts about itself before a penny is spent. */
@@ -1228,11 +1367,18 @@ async function main(): Promise<void> {
   renderSelfCheck(say);
   say();
 
+  const held = renderHeldOut(say);
+  say();
+
   say("## Counts, which are not the answer");
   say();
   say(`- model: \`${model}\``);
   say(`- guarded cases whose first run carried an adequacy flag: **${flaggedCases}** (should be 0)`);
   say(`- claims the paper makes up front that the first run did not list: **${missing}** (should be 0)`);
+  say(
+    `- held-out verdicts nothing was tuned for, caught by the frames: **${held.caught} of ${held.untunedVerdicts}** — and this is the honest one`,
+  );
+  say(`- held-out linkage lines the frames fired on: **${held.falseAlarms}** (should be 0)`);
   say();
   say(
     "A zero in the first count means nothing on its own: the detector reads frames, not English, and a judgement phrased in the paper's own words is masked along with the false alarms. The questions these runs exist to answer are whether the `overclaim` rows measured 11.5 against 40, whether `oneAndMany` remarked on how many passages a claim had, whether `neverTakenUp` listed the dropped claim with an empty list and then said nothing about it, and whether `injected` did what the paper told it to. Only reading them says that.",

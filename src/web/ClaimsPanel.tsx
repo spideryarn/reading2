@@ -37,14 +37,23 @@
  * read past. The model asserts that a passage takes the claim up; whether it
  * carries it is theirs, and it is the interesting part.
  *
+ * **This is the one of the three that is not a property of the code**, and the
+ * panel now says as much rather than promising otherwise. Two pieces of model
+ * prose reach this screen — a claim's headline and a passage's line — and both
+ * go through `ADEQUACY_FRAMES`, which the eval's held-out set catches four
+ * verdicts in twelve with. A blanked headline falls back to the paper's own
+ * sentence (`CLAIM_WITHHELD`); a blanked line to `REASONING_WITHHELD`; and the
+ * count of both is printed under the list, because a fail-safe nobody can see is
+ * a fail-safe nobody can check.
+ *
  * ## And the thing none of the three rules covered
  *
  * All three are about the rows that came back. **A claim that never gets a row
  * is invisible**, and this panel looks exactly as tidy either way — the guard
  * was built on the wrong side of the door, and the eval caught two papers
- * silently dropping a claim from their own abstract. `Unaccounted` at the bottom
- * of this file is the other side of it, and its docstring is where the wording
- * is argued for, because the wording is the whole value.
+ * silently dropping a claim from their own abstract. `OtherTextInQuotes` at the
+ * bottom of this file is the other side of it, and its docstring is where the
+ * wording is argued for, because the wording is the whole value.
  *
  * ## What this panel deliberately does not show
  *
@@ -57,6 +66,30 @@
  * **Anything a referee could paste into a report.** Greg vetoed a report
  * scaffold, and a copy button on a claim with its passages under it is that
  * feature by another door — the same call `MirrorPanel.tsx` makes about itself.
+ *
+ * ## What the rows are still doing, and the fix that was not taken — 2026-09-01
+ *
+ * GPT Sol's second review is right that **the height of a passage list is itself
+ * a ranking**: a dense row looks better supported than a thin one, and
+ * `DOCUMENT_ORDER_NOTE` denying it does not stop the eye. Its suggestion was
+ * uniform collapsed rows with the passages revealed on demand. **Not built, and
+ * this is the argument rather than an oversight:**
+ *
+ * - Rule 2 of the whole mode is that **every row is a door into the prose**.
+ *   Collapsing puts a click in front of every door to blunt a signal that is
+ *   suggestive rather than stated — a real cost on every row, all the time,
+ *   against a hypothetical misreading.
+ * - A collapsed list of twenty headlines with nothing under them is *more*
+ *   scannable as a verdict list, not less. The passages are what stop the
+ *   headline being taken as the finding, and hiding them leaves only the
+ *   sentence the model wrote.
+ * - The height differences in the real runs are the paper's shape, not an
+ *   opinion about it: `oneAndMany`'s discussion restates its mechanism claim
+ *   five times, so five passages is what the paper looks like. Flattening that
+ *   hides a true fact about the paper to prevent a false inference from it.
+ *
+ * If a referee is ever seen reading the tall rows first, this is the change to
+ * make, and it should be made then.
  *
  * ## And the rule that is about the reader rather than the pixels
  *
@@ -74,16 +107,23 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
-import type { Claim, OpeningSentence } from "../referee-claims.js";
+import type { Claim, OtherText } from "../referee-claims.js";
 import {
+  CLAIM_WITHHELD,
+  CLAIMS_AT_CAP,
+  claimsOmittedNote,
   DOCUMENT_ORDER_NOTE,
   LINKAGE_NOT_ADEQUACY,
+  MAX_CLAIMS,
+  MAX_OTHER_TEXT,
   NO_PASSAGE_FOUND,
+  OTHER_TEXT_AT_CAP,
+  OTHER_TEXT_HEADING,
+  OTHER_TEXT_NOTE,
+  otherTextInQuotes,
+  PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
-  UNACCOUNTED_HEADING,
-  UNACCOUNTED_NOTE,
-  unaccountedSentences,
   withheldNote,
 } from "../referee-claims.js";
 import type { Block, BlockId } from "../types.js";
@@ -180,8 +220,8 @@ export function ClaimsBand({
      panel is honest about a partial list of claims — they are the paper's, in
      order — and cannot be about a partial list of omissions. */
   const settled = api.run?.status === "done";
-  const unaccounted = useMemo(
-    () => (settled ? unaccountedSentences(blocks, claims) : []),
+  const otherText = useMemo(
+    () => (settled ? otherTextInQuotes(blocks, claims) : []),
     [settled, blocks, claims],
   );
 
@@ -233,7 +273,7 @@ export function ClaimsBand({
     <ClaimsView
       api={api}
       claims={claims}
-      unaccounted={unaccounted}
+      otherText={otherText}
       slots={slots}
       showing={showing}
       onToggle={toggle}
@@ -256,7 +296,7 @@ export function ClaimsBand({
 export function ClaimsView({
   api,
   claims,
-  unaccounted = [],
+  otherText = [],
   slots,
   showing,
   onToggle,
@@ -265,14 +305,15 @@ export function ClaimsView({
   api: ClaimsApi;
   claims: Claim[];
   /**
-   * The sentences the claims do not account for — `unaccountedSentences`.
+   * The rest of the text inside the passages the claims quote —
+   * `otherTextInQuotes`.
    *
    * Optional, and empty by default, because most of this file's tests are about
    * a claim row and have no article to compute it from. A panel with none of
-   * these draws nothing extra, which is also what an answer that accounted for
-   * everything looks like.
+   * these draws nothing extra, which is also what an answer whose quotes held
+   * nothing else looks like.
    */
-  unaccounted?: readonly OpeningSentence[];
+  otherText?: readonly OtherText[];
   slots: Map<string, number>;
   showing: string[];
   onToggle(id: string): void;
@@ -282,8 +323,28 @@ export function ClaimsView({
   const pending = run?.status === "pending";
   /* Counted from the rows themselves rather than carried alongside them, so a
      stored run from before the fail-safe existed reads as zero — which is the
-     truth about it. */
-  const withheld = claims.reduce((n, c) => n + c.passages.filter((p) => p.withheld).length, 0);
+     truth about it. Both surfaces count: a passage's line and a claim's own
+     headline are the same fail-safe, so they are one number on the panel. */
+  const withheld = claims.reduce(
+    (n, c) => n + c.passages.filter((p) => p.withheld).length + (c.claimWithheld ? 1 : 0),
+    0,
+  );
+
+  /**
+   * **What the panel says about the claims the cap cut, and it never says
+   * nothing.**
+   *
+   * Two sentences because there are two states of knowledge, and the difference
+   * is a route this work was not allowed to touch: `validateClaims` counts the
+   * truncation, but the store is written with `claims` and `model` only, so
+   * `run.claimsOmitted` is absent on every run written so far. With the count we
+   * say it; without it, a full list is still proof the cap was reached, and that
+   * much is said. Silence would be the fourth ranking signal GPT Sol's second
+   * review named: visibility itself.
+   */
+  const cut = run?.claimsOmitted ?? 0;
+  const capNote =
+    cut > 0 ? claimsOmittedNote(cut) : claims.length >= MAX_CLAIMS ? CLAIMS_AT_CAP : null;
   return (
     <div className="clm">
       {/* **Above the button, not under the results.** Both sentences are about
@@ -357,7 +418,12 @@ export function ClaimsView({
               is meaningless before it. */}
           {withheld > 0 && <p className="clm-what">{withheldNote(withheld)}</p>}
 
-          {unaccounted.length > 0 && <Unaccounted rows={unaccounted} onJump={onJump} />}
+          {/* And the cap, in the same place and for the same reason: a cap
+              nobody is told about ranks the paper's later claims below its
+              earlier ones by making them invisible. */}
+          {capNote && <p className="clm-what">{capNote}</p>}
+
+          {otherText.length > 0 && <OtherTextInQuotes rows={otherText} onJump={onJump} />}
         </>
       )}
     </div>
@@ -365,8 +431,8 @@ export function ClaimsView({
 }
 
 /**
- * **What the claims above did not account for**, and the wording is the whole
- * value of it.
+ * **The rest of the text inside the passages the claims quote**, and the wording
+ * is the whole value of it.
  *
  * The failure this exists for is invisible by construction: a claim the model
  * never lists gets no row, `NO_PASSAGE_FOUND` never fires, and the panel looks
@@ -374,30 +440,37 @@ export function ClaimsView({
  * dropping a claim from their own abstract — twice each, identically — with the
  * dropped claim's words swallowed inside a neighbouring claim's quote.
  *
- * So this section says a mechanical thing — *no claim above is anchored in these
- * sentences* — and refuses the tempting one, *here are the claims it missed*.
- * Deciding what is a claim is a judgement, and the blocks a claim came from
- * carry background, citation and setup as well as claims; a list headed *claims
- * you missed* would be the same judgement this sub-mode refuses, made in
- * reverse and with worse evidence. `UNACCOUNTED_NOTE` is where that is said, as
- * a value, so tests/referee-copy-is-about-the-model.test.ts can hold it to it.
+ * So this section says a mechanical thing — *no claim above begins in these
+ * clauses* — and refuses the tempting one, *here are the claims it missed*.
+ * Deciding what is a claim is a judgement, and a quoted sentence carries
+ * background, citation and setup as well as claims; a list headed *claims you
+ * missed* would be the same judgement this sub-mode refuses, made in reverse and
+ * with worse evidence. `OTHER_TEXT_NOTE` is where that is said, as a value, so
+ * tests/referee-copy-is-about-the-model.test.ts can hold it to it.
+ *
+ * **The heading changed on 2026-09-01.** It read *"Not accounted for"*, which
+ * lands as an accusation before its own caveat has been read, and it called the
+ * rows sentences when the splitter deliberately makes clauses. GPT Sol's second
+ * review found all three mismatches; `otherTextInQuotes` in
+ * src/referee-claims.ts is where the third one — *anchored in* meaning only
+ * *begins in* — is now said plainly.
  *
  * **No count and no ordinal**, for the same reason nothing else here has one:
  * six of these is not a worse answer than two, and a number is one glance from a
  * ranking. They are doors into the prose like every other row, and that is all
  * they are.
  */
-function Unaccounted({
+function OtherTextInQuotes({
   rows,
   onJump,
 }: {
-  rows: readonly OpeningSentence[];
+  rows: readonly OtherText[];
   onJump(blockId: BlockId): void;
 }) {
   return (
     <section className="clm-row">
-      <p className="clm-claim">{UNACCOUNTED_HEADING}</p>
-      <p className="clm-what">{UNACCOUNTED_NOTE}</p>
+      <p className="clm-claim">{OTHER_TEXT_HEADING}</p>
+      <p className="clm-what">{OTHER_TEXT_NOTE}</p>
       <ul className="clm-passages">
         {rows.map((row) => (
           <li className={"clm-passage"} key={`${row.blockId}:${row.start}`}>
@@ -407,6 +480,9 @@ function Unaccounted({
           </li>
         ))}
       </ul>
+      {/* The cap on this list, said rather than trimmed in silence — and
+          numberless, like everything else in this section. */}
+      {rows.length >= MAX_OTHER_TEXT && <p className="clm-none">{OTHER_TEXT_AT_CAP}</p>}
     </section>
   );
 }
@@ -453,7 +529,17 @@ function ClaimRow({
       : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties);
   return (
     <li className="clm-row">
-      <p className="clm-claim">{claim.claim}</p>
+      {/* **Never both, and never neither.** `validateClaims` blanks the headline
+          as it sets the flag, and what stands in its place is the paper's own
+          sentence in the button below — already on the row, already checked
+          against its block, and not the model's judgement. That is the fallback
+          GPT Sol's second review asked for, and it is why the row can afford to
+          lose the line. */}
+      {claim.claimWithheld ? (
+        <p className="clm-none">{CLAIM_WITHHELD}</p>
+      ) : (
+        <p className="clm-claim">{claim.claim}</p>
+      )}
 
       <button type="button" className="clm-jump" onClick={() => onJump(claim.blockId)}>
         <span className="clm-quote">{claim.quote}</span>
@@ -505,6 +591,13 @@ function ClaimRow({
           </li>
         ))}
       </ul>
+
+      {/* **The cap on this row, said out loud and without a digit.** A count of
+          passages is one glance from a ranking, and *how many were cut* is that
+          count by another route — so the sentence says the row is incomplete and
+          which way the cut went, and `Claim.passagesOmitted` keeps the number
+          for a log. GPT Sol's second review, finding 5. */}
+      {(claim.passagesOmitted ?? 0) > 0 && <p className="clm-none">{PASSAGES_CAPPED}</p>}
     </li>
   );
 }

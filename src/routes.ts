@@ -646,33 +646,46 @@ function beganAnswering(key: string): () => void {
 }
 
 /**
+ * What this process is answering *in this article*, as bare comment ids.
+ *
+ * `answering` is keyed `slug/id` because the key has to stay unique across
+ * articles — ids are unique per article, not globally, so handing every live id
+ * in the process to one article's sweep would spare a row that merely shares an
+ * id with one being written elsewhere. `CommentStore.sweepPending` takes bare
+ * ids because that is what a row is called. Exactly `liveMessages` below, for
+ * exactly the same reason.
+ */
+function liveComments(slug: string): Set<string> {
+  const prefix = `${slug}/`;
+  const ids = new Set<string>();
+  for (const key of answering.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(prefix.length);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+/**
  * Turn abandoned `pending` comments into `error`, so they can be retried.
  *
  * Run on read rather than at startup: it is the same answer either way, and a
- * read is the only moment anyone cares. Anything `pending` that this process is
- * not working on has no answer coming — the server restarted, or the request
- * was cut off — and saying so out loud is the whole point. The retry path for
- * `error` already exists, so nothing in the client changes.
+ * read is the only moment anyone cares. The retry path for `error` already
+ * exists, so nothing in the client changes.
+ *
+ * **The rule itself lives in the store now**, and that is the fix rather than a
+ * tidy-up. This function used to filter `answering` here — a module-scope `Map`
+ * that knows only this process — so a `GET` landing on a second Vercel machine
+ * saw a `pending` row nobody *local* was working on and errored it while the
+ * reader watched the words arrive. What is left here is the half only a running
+ * server knows: which rows this process is writing. The half that every machine
+ * agrees on is a lease on the row, stamped by `beginAnswer` in
+ * src/store/pg-comments.ts. `SweepOptions` in src/store/contracts.ts sets out
+ * why neither half is sufficient alone; `CommentStore.sweepPending` says why
+ * comments carry their window on the row instead of taking it from here.
  */
-async function sweepOrphaned(slug: string, comments: Comment[]): Promise<Comment[]> {
-  const orphans = comments.filter(
-    (c) => c.status === "pending" && !answering.has(`${slug}/${c.id}`),
-  );
-  if (orphans.length === 0) return comments;
-  const patch = {
-    status: "error" as const,
-    error: "The server stopped before this was answered.",
-  };
-  let latest = comments;
-  // `quiet`, then one line for the batch. Every orphan gets the same patch for
-  // the same reason, so a line each would say one thing N times — and N is
-  // unbounded while Vercel allows 256 lines for the whole request.
-  for (const orphan of orphans) latest = await commentStore.patch(slug, orphan.id, patch, { quiet: true });
-  log("store").warn(
-    { slug, orphans: orphans.length },
-    `swept ${orphans.length} abandoned comment(s) for ${slug}`,
-  );
-  return latest;
+function sweepOrphaned(slug: string): Promise<Comment[]> {
+  return commentStore.sweepPending(slug, liveComments(slug));
 }
 
 /**
@@ -3359,6 +3372,14 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
   try {
     let claims: Claim[] = [];
     let model = "";
+    /* The one `dropped` count that **is** stored, and the exception is narrow on
+       purpose. The others describe answers we threw away, which is our business
+       and the log's. This one describes claims the paper made that the referee
+       will never see, cut from the end of the document because the cap is
+       positional — so without it the list looks complete and position has
+       quietly become the ranking this sub-mode is built to have none of.
+       GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
+    let claimsOmitted = 0;
     for await (const event of runClaimsStream({ meta: article.meta, blocks: article.blocks })) {
       if (event.type === "claim") {
         frame("claim", { claim: event.claim });
@@ -3366,8 +3387,9 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
       }
       claims = event.outcome.claims;
       model = event.outcome.model;
+      claimsOmitted = event.outcome.dropped.truncated;
     }
-    patch = { status: "done", claims, model };
+    patch = { status: "done", claims, model, claimsOmitted };
   } catch (err) {
     captureFailure(err, { route: "referee-claims", slug });
     patch = { status: "error", error: (err as Error).message, claims: [] };
@@ -5931,7 +5953,7 @@ export async function serveAuthenticatedApi(
     }
     if (comments && req.method === "GET") {
       const slug = slugPart(comments, 1);
-      send(res, 200, { comments: await sweepOrphaned(slug, await commentStore.load(slug)) });
+      send(res, 200, { comments: await sweepOrphaned(slug) });
       return;
     }
     if (comments && req.method === "POST") {

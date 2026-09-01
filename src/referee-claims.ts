@@ -44,11 +44,11 @@
  *
  * All three rules are about the rows that came back. **A claim that never gets a
  * row is invisible**, and the panel looks exactly as tidy either way — so the
- * guard was built on the wrong side of the door. `unaccountedSentences` is the
- * other side: the sentences of the blocks these claims came from that no claim
- * is anchored in, computed rather than asked for, and worded as *what the answer
- * did not account for* rather than as *claims the model missed*, because the
- * second of those is the same judgement in reverse.
+ * guard was built on the wrong side of the door. `otherTextInQuotes` is the
+ * other side: the rest of the text inside the passages these claims quote, that
+ * no claim begins in — computed rather than asked for, and worded as *other
+ * text* rather than as *claims the model missed*, because the second of those is
+ * the same judgement in reverse.
  *
  * ## And the third state, which is the trap this feature inherited
  *
@@ -157,6 +157,23 @@ export interface Claim extends Anchored {
    */
   claim: string;
   /**
+   * **This claim's own line was a verdict, so it was blanked** and `claim` is
+   * the empty string.
+   *
+   * Set by `validateClaims` and never by the model, exactly like
+   * `ClaimPassage.withheld`. Until 2026-09-01 the fail-safe read `reasoning`
+   * only, and a committed test pinned an adequacy verdict surviving untouched in
+   * the headline — *"The 40% claim is not supported by the results"* — which
+   * GPT Sol's second review called what it was: not an edge case but a direct
+   * bypass, in the most prominent sentence on the row.
+   *
+   * **The claim survives, and so does its label.** The paper's own `quote` is
+   * already on the row and is not the model's judgement, so it stands in as the
+   * label (`CLAIM_WITHHELD`). Dropping the claim instead would cost the referee
+   * a claim the paper actually makes, to be rid of one sentence.
+   */
+  claimWithheld?: true;
+  /**
    * Where the paper addresses it, **in document order**.
    *
    * May be empty, and an empty one is a real answer that the panel says in
@@ -174,6 +191,22 @@ export interface Claim extends Anchored {
    * See this file's header, and `PASSAGES_UNUSABLE`.
    */
   discarded: number;
+  /**
+   * **How many good passages `MAX_PASSAGES` cut off this claim.**
+   *
+   * Different from `discarded` in the way that matters: those were the model's
+   * failures and these were ours, so the row says a different sentence
+   * (`PASSAGES_CAPPED`) and it is not a reason to run anything again.
+   *
+   * **Never sorted on, never printed as a number.** It is here so the cap is not
+   * silent — GPT Sol's second review, finding 5: a cap nobody is told about is a
+   * fourth ranking signal, visibility itself, in a sub-mode built to have none.
+   * The panel says a numberless sentence; this field is for a log or an eval.
+   *
+   * Optional and absent when nothing was cut, so a run stored before this
+   * existed reads as zero — which is the truth about it.
+   */
+  passagesOmitted?: number;
 }
 
 /**
@@ -196,6 +229,24 @@ export interface ClaimsRun {
   model?: string;
   error?: string;
   /**
+   * **How many claims `MAX_CLAIMS` cut off the end of this run.**
+   *
+   * The run-level half of `Claim.passagesOmitted`, and it exists for the same
+   * reason: a referee reading an apparently complete list in which the claims
+   * the paper makes last were systematically dropped is being ranked by
+   * visibility (GPT Sol's second review, finding 5).
+   *
+   * **Optional, and the panel is honest either way.** `validateClaims` computes
+   * it as `DroppedClaims.truncated`, but the route that stores a run
+   * (src/routes.ts § `runRefereeClaims`) writes `claims` and `model` and nothing
+   * else, so until it also writes this the field is absent on every stored run.
+   * The panel therefore falls back to `CLAIMS_AT_CAP`, which says the one thing
+   * a full list proves on its own; with the field it says `claimsOmittedNote`
+   * instead. Wiring it up is one line in that route:
+   * `claimsOmitted: event.outcome.dropped.truncated`.
+   */
+  claimsOmitted?: number;
+  /**
    * Fingerprint of the blocks this run was answered against — `hashBlocks`,
    * src/source-hash.ts. Same field and same word as `SavedCriterion`, and absent
    * counts as stale for the same reason: not knowing is not the same as knowing
@@ -204,6 +255,27 @@ export interface ClaimsRun {
    */
   sourceHash?: string;
 }
+
+/* --------------------------------------------------------------- the caps -- */
+
+/**
+ * As many claims as a paper actually makes up front, plus room.
+ *
+ * An abstract and an introduction carry a handful; twenty is past anything real
+ * and short of anything a panel cannot be read down. Beyond it the extras are
+ * **counted, not dropped in silence** (`DroppedClaims.truncated`), because a cap
+ * that never says so is a cap nobody finds out about.
+ */
+export const MAX_CLAIMS = 20;
+
+/**
+ * How many passages one claim keeps.
+ *
+ * A cap and not a target — and this is the number most likely to be misread, so:
+ * a claim with eight passages under it is not better established than one with
+ * two. The prompt asks for the passages that take the claim up and no others.
+ */
+export const MAX_PASSAGES = 8;
 
 /* --------------------------------------------------------------- the copy -- */
 
@@ -246,10 +318,20 @@ export const PASSAGES_UNUSABLE =
  * Rule 3. The model asserts that a passage addresses a claim; whether the
  * results carry the abstract's sentence is the referee's own call, and it is the
  * part worth their time.
+ *
+ * **It says what the model was asked for, and no longer what a row "only"
+ * says.** The first version promised *each row says only that the model thinks
+ * this passage takes the claim up*, and that was a promise the code cannot keep:
+ * `ADEQUACY_FRAMES` below is a fail-safe with a stated miss rate, and a verdict
+ * phrased around every frame reaches the screen. GPT Sol's second review said so
+ * — *"arbitrary model-authored linkage prose cannot reach the screen"* if the
+ * rule is to be hard — and the honest half of the answer is to stop claiming a
+ * boundary that is not there. What *is* enforced is written down beside the
+ * frames.
  */
 export const LINKAGE_NOT_ADEQUACY =
-  "Each row says only that the model thinks this passage takes the claim up. Whether it carries " +
-  "the claim is yours to judge — press a row and read the paragraph.";
+  "The model was asked for one thing only: where the paper takes each claim up. Whether the " +
+  "passage carries the claim is yours to judge — press a row and read the paragraph.";
 
 /**
  * **And that the order is the paper's, not a ranking.**
@@ -286,55 +368,109 @@ export const REASONING_WITHHELD =
  * docs/reusable/silent-success.md.
  */
 export function withheldNote(n: number): string {
-  const what = n === 1 ? "One line the model wrote under a passage was" : `${n} lines the model wrote under passages were`;
-  return `${what} withheld below, for reading as a judgement on whether the passage carries the claim.`;
+  const what = n === 1 ? "One line the model wrote was" : `${n} lines the model wrote were`;
+  return `${what} withheld above, for reading as a judgement on whether the paper carries a claim.`;
 }
 
-/** The heading over the sentences the claims do not account for. */
-export const UNACCOUNTED_HEADING = "Not accounted for";
+/**
+ * **What stands where a withheld claim headline would have been.**
+ *
+ * The headline is the model's one-line paraphrase of a claim, and until
+ * 2026-09-01 it was the one piece of model prose on the panel that nothing
+ * scanned — *"the biggest text on screen"*, and a committed test pinned a
+ * verdict surviving in it untouched (GPT Sol's second review, finding 2). It is
+ * scanned now, and when it reads as a verdict the row loses it.
+ *
+ * **The row does not lose its label with it.** The paper's own sentence is
+ * already on the row, already validated against the block it came from, and it
+ * is not the model's judgement — so it stands in as the label, which is the
+ * fallback the review asked for. Nothing is invented and nothing is dropped.
+ */
+export const CLAIM_WITHHELD =
+  "The model's one-line version of this claim was withheld — it read as a judgement on whether " +
+  "the paper carries the claim, and that judgement is yours. The paper's own words stand below in " +
+  "its place.";
+
+/**
+ * **What a row says when the model named more passages than the cap keeps.**
+ *
+ * Numberless on purpose, and it is the same rule that keeps every other number
+ * off a claim row: a count of passages is one glance from a ranking, and *how
+ * many were cut* is that count again by another route. What a referee needs from
+ * this sentence is that the row is incomplete and which way the cut went, and
+ * both of those fit without a digit. The count itself is on
+ * `Claim.passagesOmitted` for a log or an eval to read.
+ */
+export const PASSAGES_CAPPED =
+  "The model named more passages for this claim than are shown. What was cut is what comes " +
+  "latest in the paper — the cut is by position, never by how much a passage seemed to matter.";
+
+/**
+ * **And the same thing for the list as a whole**, where the number is allowed.
+ *
+ * Outside the list, so the no-digit rule that governs a claim row does not
+ * apply, and a count here cannot be read as a ranking of anything: it is a fact
+ * about this app's cap. `n` is how many claims validation threw away for being
+ * past `MAX_CLAIMS`.
+ */
+export function claimsOmittedNote(n: number): string {
+  const what = n === 1 ? "One further claim the model returned was" : `${n} further claims the model returned were`;
+  return `${what} cut, because this run reached the panel's cap of ${MAX_CLAIMS}. The cut is from the end of the paper, so it is the claims the paper makes last that are missing.`;
+}
+
+/**
+ * **And what the panel says when it can see the cap was reached but not how far
+ * past it the answer went.**
+ *
+ * A run stored before `ClaimsRun.claimsOmitted` existed — and, until the route
+ * carries that field, every run — has the claims and not the count. Saying
+ * nothing would be the silent cap the review objected to; inventing a number
+ * would be worse. So this sentence says the one thing that is certainly true.
+ */
+export const CLAIMS_AT_CAP =
+  `This run reached the panel's cap of ${MAX_CLAIMS} claims. If the model returned more, they were ` +
+  "cut from the end of the paper, so the claims the paper makes last may be missing here.";
+
+/** The heading over the rest of the text inside the passages the claims quote. */
+export const OTHER_TEXT_HEADING = "Other text inside these quoted passages";
 
 /**
  * **What that list is, and — more important — what it is not.**
  *
- * The distinction is the whole value of the feature. These are sentences that
- * sit in the blocks the claims above were taken from and that no claim above is
- * anchored in. That is a mechanical fact about the list; it is **not** a list of
- * claims the model missed, because deciding what is a claim is a judgement and
- * this sub-mode does not make judgements about the paper. A block a claim came
- * from carries background, citation and setup as well as claims, and a claim
- * anchored in one part of a compound sentence leaves the rest of it here.
+ * The distinction is the whole value of the feature. These are units of the
+ * paper that sit **inside a passage a claim above quotes** and that no claim
+ * above begins in. That is a mechanical fact about the list; it is **not** a
+ * list of claims the model missed, because deciding what is a claim is a
+ * judgement and this sub-mode does not make judgements about the paper. A quoted
+ * sentence carries background and setup as well as claims, and a claim anchored
+ * in one clause of a compound sentence leaves the rest of it here.
  *
  * The last clause hands the judgement over explicitly, because a referee who
  * reads this as an accusation will either dismiss it or over-trust it, and both
  * are worse than reading three sentences of the paper.
+ *
+ * **The heading and the word "sentences" both changed on 2026-09-01.** GPT Sol's
+ * second review found three mismatches between what this said and what it did:
+ * *"Not accounted for"* landed before its own caveat; the rows were called
+ * sentences when the splitter deliberately makes clauses; and *no claim is
+ * anchored in it* reads as absence of coverage when it means only that no claim
+ * **begins** there. See `otherTextInQuotes`.
  */
-export const UNACCOUNTED_NOTE =
-  "Sentences from the blocks these claims were taken from, that no claim above is anchored in. " +
-  "That is a fact about the list above rather than about the paper: those blocks carry " +
-  "background, citation and setup as well as claims, and a claim anchored in one part of a " +
-  "sentence leaves the rest of it here. Read them, and decide for yourself whether any of them " +
-  "is a claim.";
-
-/* --------------------------------------------------------------- the caps -- */
+export const OTHER_TEXT_NOTE =
+  "The rest of the text inside the passages the claims above quote, split into sentences and " +
+  "clauses, with the parts a claim above begins in taken out. That is a fact about the list above " +
+  "rather than about the paper: a quoted sentence carries background, citation and setup as well " +
+  "as claims. Read them, and decide for yourself whether any of them is a claim.";
 
 /**
- * As many claims as a paper actually makes up front, plus room.
+ * **And that this list is capped too**, printed only when the cap fired.
  *
- * An abstract and an introduction carry a handful; twenty is past anything real
- * and short of anything a panel cannot be read down. Beyond it the extras are
- * **counted, not dropped in silence** (`DroppedClaims.truncated`), because a cap
- * that never says so is a cap nobody finds out about.
+ * No count, for the reason nothing else in this section has one: six of these is
+ * not a worse answer than two.
  */
-export const MAX_CLAIMS = 20;
-
-/**
- * How many passages one claim keeps.
- *
- * A cap and not a target — and this is the number most likely to be misread, so:
- * a claim with eight passages under it is not better established than one with
- * two. The prompt asks for the passages that take the claim up and no others.
- */
-export const MAX_PASSAGES = 8;
+export const OTHER_TEXT_AT_CAP =
+  "There was more text inside those quoted passages than is shown here. The list is capped, and " +
+  "what is missing is what comes latest in the paper.";
 
 /* ------------------------------------------ adequacy, and the fail-safe -- */
 
@@ -371,6 +507,15 @@ export const MAX_PASSAGES = 8;
  * the shapes a model actually produced when the refusals were removed, and the
  * prompt is still what does most of the work.
  *
+ * **This is defence in depth and it is not the enforcing boundary**, which is
+ * GPT Sol's second review put plainly, and the numbers behind the frames should
+ * be read the same way. The 6/6-and-10/10 in `evals/results/referee-claims.md`
+ * is **in-sample**: the frames were shaped by the very lines they are checked
+ * against, so a production miss is necessarily an eval miss too. The held-out
+ * set the review asked for is `HELD_OUT` in `evals/referee-claims.ts` — written
+ * before any of these frames was touched, labelled by hand, and reported with
+ * its misses rather than its hits.
+ *
  * ## The stronger move, weighed and not taken — 2026-09-01
  *
  * **Replace `reasoning` with a closed enum of linkage kinds** —
@@ -388,19 +533,27 @@ export const MAX_PASSAGES = 8;
  * meets the question, and again in
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
  *
- * It also reads **`reasoning` only**. A verdict written into a claim's own
- * one-line restatement is not blanked, because that line is the claim's identity
- * and there is nothing to put in its place — the eval still scans it, and that
- * gap is deliberate rather than overlooked.
+ * ## It reads the claim's own line too, since 2026-09-01
+ *
+ * It used to read `reasoning` only, on the argument that a claim's headline is
+ * its identity and there is nothing to put in its place. Both halves of that
+ * were wrong. The headline is the biggest text on the row, so it was the best
+ * place in the sub-mode to put a verdict; and there *is* something to put in its
+ * place — **the paper's own sentence**, which is already on the row, already
+ * checked against the block it came from, and is not the model's judgement.
+ * `Claim.claimWithheld` and `CLAIM_WITHHELD`.
  */
 const ADEQUACY_FRAMES: readonly { readonly name: string; readonly re: RegExp }[] = [
   {
     name: "degree or negation on a support verb",
-    re: /\b(?:fully|directly|clearly|convincingly|adequately|sufficiently|amply|strongly|weakly|partially|partly|barely|hardly|does not|doesn't|do not|don't|did not|didn't|fails? to|failed to|falls? short of|stops? short of|cannot|can't)\s+(?:\w+\s+){0,2}(?:establish|support|substantiat|justif|prove|proves|proven|warrant|carr(?:y|ies)|bears? out|corroborat|validat|deliver)/i,
+    re: /\b(?:fully|directly|clearly|convincingly|adequately|sufficiently|amply|strongly|weakly|partially|partly|barely|hardly|does not|doesn't|do not|don't|did not|didn't|fails? to|failed to|falls? short of|stops? short of|cannot|can't)\s+(?:\w+\s+){0,2}(?:establish|support|substantiat|justif|prove|proves|proven|warrant|carr(?:y|ies)|bears? out|corroborat|validat|deliver|demonstrat|backs?|backed)/i,
   },
   {
+    /* The subject list grew past `claim` on 2026-09-01: *"the 40% figure is not
+       backed by the results"* is the same verdict about the same sentence, and
+       a headline is where a model would write it. */
     name: "the claim is / is not established",
-    re: /\bclaims?\s+(?:is|are|was|were)\s+(?:not\s+)?(?:fully\s+|well\s+|poorly\s+|thinly\s+|only\s+|partly\s+)?(?:establish|support|substantiat|justif|prov|warrant|borne out)/i,
+    re: /\b(?:claims?|contributions?|figures?|numbers?|headline|abstract|assertions?|results?)\s+(?:is|are|was|were)\s+(?:not\s+)?(?:fully\s+|well\s+|poorly\s+|thinly\s+|only\s+|partly\s+)?(?:establish|support|substantiat|justif|prov|warrant|borne out|backed|demonstrat|corroborat)/i,
   },
   {
     name: "overstated / unsupported",
@@ -450,6 +603,52 @@ const ADEQUACY_FRAMES: readonly { readonly name: string; readonly re: RegExp }[]
   {
     name: "a verdict on the whole paper",
     re: /\b(?:publishable|should be accepted|should be rejected|accept this paper|reject this paper|merits publication|strong paper|weak paper|significant contribution|the evidence is strong|unusually strong)\b/i,
+  },
+
+  /* --- The four below are GPT Sol's, from its second review, and none of them
+         matched anything above when it wrote them. They are the shapes that say
+         a verdict without a single verdict word in them, which is why a word
+         list and the first nine frames both walk straight past:
+
+           "The results report 11.5%, while the abstract promises 40%."
+           "Only SST-2 is examined."
+           "No transfer experiment appears in the paper."
+           "The result and the headline concern different quantities."
+
+         Each was checked against all 48 model-authored lines of the five
+         guarded runs in `evals/results/referee-claims.md` — headlines and
+         reasoning lines both — and raises no alarm on any of them. That is a
+         false-alarm check on real committed output rather than on invented
+         sentences, which is the only kind worth having here: a frame that
+         blanks an honest linkage line costs the referee something real.
+
+         And they are still frames rather than a boundary. Adding them makes the
+         four sentences above in-sample, so their green proves the code has not
+         regressed and nothing else. --- */
+  {
+    /* Setting the paper's own number against what it promised. The contrast
+       word carries it — a linkage line names the abstract all the time and
+       never puts a *but* in front of it. */
+    name: "the paper's own number set against the claim",
+    re: /\b(?:while|whereas|but|yet|though|although|against|compared with|compared to)\b[^.]{0,64}\b(?:abstract|headline|introduction|contributions?|claims?|claimed|promise[sd]?)\b/i,
+  },
+  {
+    name: "two different quantities",
+    re: /\b(?:different|another|not the same)\s+(?:\w+\s+){0,2}(?:quantity|quantities|measure|measures|metric|metrics|number|numbers|thing|things|question)\b/i,
+  },
+  {
+    name: "the paper contains no such thing",
+    re: /\bno\s+(?:\S+\s+){0,3}(?:experiment|test|analysis|evaluation|measurement|comparison|study|ablation)s?\s+(?:appears?|is|are|was|were|exists?)\b|\b(?:appears?|is|are)\s+(?:nowhere|absent)\b|\bnowhere in the (?:paper|manuscript)\b/i,
+  },
+  {
+    /* **Anchored at the start of the line**, and that is the whole of the
+       narrowing. *"Only SST-2 is examined"* is a verdict standing on its own;
+       *"notes that only SST-2 was examined"* is a restatement of the paper's own
+       limitations sentence, and blanking that would cost a referee a true line.
+       The anchor is trivially stepped around by writing "Note that" first, which
+       is what defence in depth looks like rather than a hole. */
+    name: "a scope verdict standing on its own",
+    re: /^(?:only|just|merely)\s+(?:\S+\s+){0,4}(?:is|are|was|were)\s+(?:examined|tested|evaluated|measured|reported|studied|run|shown)\b/i,
   },
 ];
 
@@ -504,7 +703,7 @@ export function subtractPaperPhrases(text: string, grams: Set<string>): string {
   return words.map((w, i) => (keep[i] ? w : "·")).join(" ");
 }
 
-/* --------------------------------- what the claims did not account for -- */
+/* ------------------------- the rest of what the claims quoted -- */
 
 /**
  * How many words a fragment has to have before it counts as an assertion.
@@ -522,8 +721,20 @@ export function subtractPaperPhrases(text: string, grams: Set<string>): string {
  */
 const MIN_UNIT_WORDS = 6;
 
+/**
+ * As many of these as a referee will read before deciding the section is noise.
+ *
+ * The narrowing in `otherTextInQuotes` is what makes this cap rarely fire — the
+ * rows can only come from inside a quote the model actually returned — but a
+ * model that quotes whole paragraphs would still produce a wall, and a wall is
+ * the failure that matters most for a section whose entire value is being read.
+ * Past the cap the panel says so (`OTHER_TEXT_AT_CAP`) rather than trimming in
+ * silence.
+ */
+export const MAX_OTHER_TEXT = 12;
+
 /** One sentence — or one clause of a compound one — of the paper, where it sits. */
-export interface OpeningSentence {
+export interface OtherText {
   blockId: BlockId;
   /** The article's own characters. */
   text: string;
@@ -543,7 +754,7 @@ export interface OpeningSentence {
  *
  * This is a splitter, not a parser. It does not know what a clause is; it knows
  * where commas and full stops are and how long the pieces either side are. That
- * is enough for the job it has — see `unaccountedSentences` — and pretending
+ * is enough for the job it has — see `otherTextInQuotes` — and pretending
  * otherwise would be pretending to know which words are a claim.
  */
 function units(text: string): { text: string; start: number }[] {
@@ -572,9 +783,9 @@ function units(text: string): { text: string; start: number }[] {
 }
 
 /**
- * **The sentences the claims above do not account for** — the answer to *what
- * did the model not put in front of the referee*, computed rather than asked
- * for.
+ * **The rest of the text inside the passages the claims quote** — the answer to
+ * *what did the model swallow into a quote instead of putting in front of the
+ * referee*, computed rather than asked for.
  *
  * ## Why this exists
  *
@@ -590,12 +801,13 @@ function units(text: string): { text: string; start: number }[] {
  *
  * Completeness cannot be verified in general: deciding what a paper's claims are
  * is a judgement, which is exactly why this feature refuses to rank them. What
- * **can** be computed is what the answer did not account for.
+ * **can** be computed is what a returned quote covered and no returned claim
+ * began in.
  *
- * ## The rule, and it is one line
+ * ## The rule, and it is two lines
  *
- * A unit is accounted for when **some claim's quote begins inside it**. Nothing
- * else counts:
+ * A unit is listed when its start lies **inside some claim's quote** and **no
+ * claim begins in it**.
  *
  * - **Begins inside, not overlaps.** A quote covering a whole three-clause
  *   sentence would otherwise account for all three, which is precisely the
@@ -605,50 +817,62 @@ function units(text: string): { text: string; start: number }[] {
  *   make. A passage is not a claim, and letting one account for a unit would
  *   quietly hide a dropped claim that some other claim happened to cite.
  *
- * ## And the blocks it looks at are the model's own choice
+ * ## It used to read the whole block, and that was too much — 2026-09-01
  *
- * Only the blocks a claim in this run is anchored in. **Not "the opening"**, and
- * that is the deliberate part: deciding which blocks are the paper's opening is
- * itself a judgement, and one made wrong in either direction — a title page, a
- * long introduction, a contributions list six paragraphs down. Taking the blocks
- * the claims actually came from asserts nothing at all about the paper, and
- * makes every row say only *this sentence sits beside a claim you were given,
- * and no claim was anchored in it*.
+ * The first version listed every unit of every block a claim was taken from. It
+ * is mechanically true and GPT Sol's second review was right that it does not
+ * survive contact with a real paper: one long abstract block produces dozens of
+ * background and setup clauses under a heading reading *"Not accounted for"*,
+ * which is enough for a referee to stop reading the section — the failure that
+ * matters most for a feature whose whole value is being read.
  *
- * **The gap that leaves**, written down rather than discovered later: a whole
- * block the model ignored — a contributions list it never quoted from — is
- * invisible here, because nothing anchored to it. Closing that would mean
- * asserting where the paper's claims live, which is the judgement this refuses
- * to make. If it turns out to matter, the honest version is a fixed prefix of
- * the article, named as a prefix.
+ * So it is narrowed to the failure it was introduced for. The swallowed
+ * neighbour is still caught, because a swallowed claim is by definition **inside
+ * the quote that swallowed it**: the Ridge answer's memory and robustness
+ * clauses sit inside the abstract sentence quoted whole under the speed claim,
+ * and tests/referee-claims-accounting.test.ts pins that against the real
+ * committed answer.
+ *
+ * **What the narrowing gives up**, written down rather than discovered later: a
+ * claim the model never quoted anywhere near — the third sentence of an
+ * introduction whose first sentence it quoted — is no longer listed. That case
+ * has never been observed; the swallowed one has, twice, on a repeat run. If it
+ * turns out to matter, the honest escalation is the same one the old version
+ * reached for and could not justify either: a fixed prefix of the article, named
+ * as a prefix, rather than a judgement about where a paper's claims live.
  */
-export function unaccountedSentences(blocks: Block[], claims: readonly Claim[]): OpeningSentence[] {
-  const anchors = new Map<BlockId, number[]>();
+export function otherTextInQuotes(blocks: Block[], claims: readonly Claim[]): OtherText[] {
+  /** Per block: where each claim begins, and the span each claim's quote covers. */
+  const anchors = new Map<BlockId, { starts: number[]; spans: [number, number][] }>();
   for (const c of claims) {
-    const at = anchors.get(c.blockId);
-    if (at) at.push(c.start);
-    else anchors.set(c.blockId, [c.start]);
+    const at = anchors.get(c.blockId) ?? { starts: [], spans: [] };
+    at.starts.push(c.start);
+    at.spans.push([c.start, c.start + c.quote.length]);
+    anchors.set(c.blockId, at);
   }
 
-  const out: OpeningSentence[] = [];
+  const out: OtherText[] = [];
   /* Document order, like everything else here: the article's block order, then
      position within the block. Nothing is sorted by anything else, and there is
      nothing to rank. */
   for (const block of blocks) {
-    const starts = anchors.get(block.id);
-    if (!starts) continue;
+    const anchor = anchors.get(block.id);
+    if (!anchor) continue;
     const found = units(block.text);
     for (const [i, unit] of found.entries()) {
       /* The next unit's start, not this one's trimmed length: a claim anchored
          in the whitespace a trim removed would otherwise account for nothing at
          all, and the units have to tile the block for the rule to be total. */
       const end = found[i + 1]?.start ?? block.text.length;
-      if (starts.some((s) => s >= unit.start && s < end)) continue;
+      if (!anchor.spans.some(([from, to]) => unit.start >= from && unit.start < to)) continue;
+      if (anchor.starts.some((s) => s >= unit.start && s < end)) continue;
       if ((unit.text.match(/\S+/g) ?? []).length < MIN_UNIT_WORDS) continue;
       out.push({ blockId: block.id, text: unit.text, start: unit.start });
     }
   }
-  return out;
+  /* Cut from the end of the paper, the only defensible place when the order is
+     positional — and said out loud on the panel rather than trimmed in silence. */
+  return out.slice(0, MAX_OTHER_TEXT);
 }
 
 /* ---------------------------------------------------------- what was lost -- */
@@ -841,7 +1065,7 @@ export function validateClaims(
     }
     seen.add(id);
 
-    const { passages, discarded } = readPassages(
+    const { passages, discarded, omitted } = readPassages(
       row.passages,
       byId,
       at,
@@ -849,6 +1073,13 @@ export function validateClaims(
       readsAsAVerdict,
       withheld,
     );
+    /* **The headline goes through the same fail-safe as a passage's line.** It
+       is the biggest text on the row and it used to be the one piece of model
+       prose nothing scanned. What stands in its place is the paper's own
+       sentence, which is on the row already — see `Claim.claimWithheld`. */
+    const line = claim.trim();
+    const headlineIsAVerdict = readsAsAVerdict(line);
+    if (headlineIsAVerdict) withheld.push(line);
     claims.push({
       id,
       blockId,
@@ -856,9 +1087,11 @@ export function validateClaims(
       // validation exists to give.
       quote: block.text.slice(span.start, span.end),
       start: span.start,
-      claim: claim.trim(),
+      claim: headlineIsAVerdict ? "" : line,
+      ...(headlineIsAVerdict ? { claimWithheld: true as const } : {}),
       passages,
       discarded,
+      ...(omitted > 0 ? { passagesOmitted: omitted } : {}),
     });
   }
 
@@ -892,8 +1125,8 @@ function readPassages(
   dropped: DroppedClaims,
   readsAsAVerdict: (line: string) => boolean,
   withheld: string[],
-): { passages: ClaimPassage[]; discarded: number } {
-  if (!Array.isArray(raw)) return { passages: [], discarded: 0 };
+): { passages: ClaimPassage[]; discarded: number; omitted: number } {
+  if (!Array.isArray(raw)) return { passages: [], discarded: 0, omitted: 0 };
 
   const passages: ClaimPassage[] = [];
   const seen = new Set<string>();
@@ -945,9 +1178,14 @@ function readPassages(
   }
 
   passages.sort(byDocument(at));
+  /* Counted on the claim as well as in the run's tally, so the cap can say so on
+     the row that lost something rather than only in a log line nobody reads —
+     `Claim.passagesOmitted`, and GPT Sol's second review, finding 5. */
+  let omitted = 0;
   if (passages.length > MAX_PASSAGES) {
-    dropped.passageTruncated += passages.length - MAX_PASSAGES;
+    omitted = passages.length - MAX_PASSAGES;
+    dropped.passageTruncated += omitted;
     passages.length = MAX_PASSAGES;
   }
-  return { passages, discarded };
+  return { passages, discarded, omitted };
 }

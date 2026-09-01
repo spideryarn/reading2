@@ -12,7 +12,7 @@
  *    it. Two of the eval's papers silently dropped a claim from their own
  *    abstract, twice each, identically; the dropped claim's words reached the
  *    answer inside a **neighbouring claim's quote**, and the panel looked
- *    exactly as tidy as one that had missed nothing. `unaccountedSentences` is
+ *    exactly as tidy as one that had missed nothing. `otherTextInQuotes` is
  *    the other side of that door.
  * 2. **Linkage, never adequacy, was held by nothing but the prompt.** The
  *    ablated control — the same paper with the prompt's refusals cut out — came
@@ -33,9 +33,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   adequacyFrames,
+  MAX_PASSAGES,
+  otherTextInQuotes,
   paperPhrases,
   subtractPaperPhrases,
-  unaccountedSentences,
   validateClaims,
 } from "../src/referee-claims.js";
 import type { Block } from "../src/types.js";
@@ -159,7 +160,7 @@ const CASCADE = paper([
 /** `validateClaims` first, so the fixture is the shape a panel is actually handed. */
 const claimsOf = (raw: unknown, blocks: Block[]) => validateClaims(raw, blocks).claims;
 
-describe("the sentences a run did not account for", () => {
+describe("the rest of the text inside the passages a run quoted", () => {
   it("surfaces the two claims the Ridge run swallowed into a neighbour's quote", () => {
     /* The whole finding, in one assertion. The model quoted the WHOLE abstract
        sentence under the speed claim, so every check that reads a quote reports
@@ -167,7 +168,7 @@ describe("the sentences a run did not account for", () => {
        had that bug and it took a fix to turn three rows red. Here the anchor is
        what is read: a claim accounts for the clause its quote BEGINS in, so a
        quote spanning three assertions accounts for one of them. */
-    const rows = unaccountedSentences(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
+    const rows = otherTextInQuotes(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
     const text = rows.map((r) => r.text);
     expect(text).toContain("uses less peak memory than the current allocator,");
     expect(text).toContain("and is robust to adversarially constructed inputs.");
@@ -176,7 +177,7 @@ describe("the sentences a run did not account for", () => {
   it("does not repeat the claim the run did list", () => {
     /* The clause the speed claim is anchored in must not come back, or the list
        is noise with the answer in it. */
-    const rows = unaccountedSentences(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
+    const rows = otherTextInQuotes(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
     expect(rows.map((r) => r.text).join(" ")).not.toContain("compiles large programs faster");
   });
 
@@ -186,8 +187,45 @@ describe("the sentences a run did not account for", () => {
        the results paragraph, the table and the related-work paragraph — none of
        which any claim is anchored in — are not on the list, however much of
        them nothing accounts for. */
-    const rows = unaccountedSentences(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
+    const rows = otherTextInQuotes(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
     expect(new Set(rows.map((r) => r.blockId))).toEqual(new Set(["spya-ntab01", "spya-ntme01"]));
+  });
+
+  it("stays inside the quotes the claims returned, and leaves the rest of the block alone", () => {
+    /* **The narrowing of 2026-09-01, and the reason for it.** The first version
+       listed every clause of every block a claim was taken from. GPT Sol's
+       second review: one long abstract block then produces dozens of background
+       and setup clauses under a heading reading "Not accounted for", which is
+       enough for a referee to stop reading the section — the worst failure
+       available to a feature whose whole value is being read.
+
+       Here the model quoted the FIRST sentence of a two-sentence introduction.
+       The second sentence is background about somebody else's allocator, it is
+       outside every quote the model returned, and it has no business on this
+       list. Before the narrowing it was on it. */
+    const blocks = paper([
+      [
+        "spya-ntin01",
+        "Register allocation dominates compile time on the largest translation units, and the allocator in use today was designed when peak memory was not a constraint.",
+      ],
+    ]);
+    const rows = otherTextInQuotes(
+      blocks,
+      claimsOf(
+        {
+          claims: [
+            {
+              blockId: "spya-ntin01",
+              quote: "Register allocation dominates compile time on the largest translation units,",
+              claim: "Register allocation dominates compile time",
+              passages: [],
+            },
+          ],
+        },
+        blocks,
+      ),
+    );
+    expect(rows).toEqual([]);
   });
 
   it("says nothing at all about a paper whose claims each quote their own sentence", () => {
@@ -209,11 +247,11 @@ describe("the sentences a run did not account for", () => {
         },
       ],
     };
-    expect(unaccountedSentences(APPRAISAL, claimsOf(answer, APPRAISAL))).toEqual([]);
+    expect(otherTextInQuotes(APPRAISAL, claimsOf(answer, APPRAISAL))).toEqual([]);
   });
 
   it("gives every row an anchor, so it is a door into the prose like the others", () => {
-    for (const row of unaccountedSentences(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE))) {
+    for (const row of otherTextInQuotes(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE))) {
       const block = RIDGE.find((b) => b.id === row.blockId);
       expect(block?.text.slice(row.start, row.start + row.text.length)).toBe(row.text);
     }
@@ -222,12 +260,12 @@ describe("the sentences a run did not account for", () => {
   it("keeps a fragment too short to be an assertion off the list", () => {
     /* "We present Ridge," is three words. It is not a claim, it is the run-up to
        one, and a list of fragments is a list nobody reads. */
-    const rows = unaccountedSentences(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
+    const rows = otherTextInQuotes(RIDGE, claimsOf(RIDGE_ANSWER, RIDGE));
     expect(rows.map((r) => r.text)).not.toContain("We present Ridge,");
   });
 
   it("has nothing to say when the run returned no claims", () => {
-    expect(unaccountedSentences(RIDGE, [])).toEqual([]);
+    expect(otherTextInQuotes(RIDGE, [])).toEqual([]);
   });
 });
 
@@ -342,25 +380,160 @@ describe("a reasoning line that reads as a verdict", () => {
     expect(withheld).toEqual([]);
   });
 
-  it("does not touch the claim's own line, which is a known gap rather than an oversight", () => {
-    /* A claim's one-line restatement is its identity — there is nothing to put
-       in its place, and dropping the claim would lose the referee a claim the
-       paper makes. The eval still scans it. Asserted so that the gap is a
-       decision somebody can find rather than a surprise. */
+  it("is blanked in the claim's own line too, and the paper's words stand in its place", () => {
+    /* **The bypass this test used to pin.** Until 2026-09-01 it read
+       `expect(claims[0]?.claim).toBe("The 40% claim is not supported by the
+       results")` and passed: the fail-safe scanned `reasoning` only, so a
+       verdict written into the headline — the biggest text on the row — reached
+       the referee untouched. GPT Sol's second review called that what it was,
+       not an edge case but a direct bypass.
+
+       What replaces the line is the fallback the review asked for: the paper's
+       own sentence, already on the row, already re-found in the block it came
+       from, and not the model's judgement. So the claim survives with a true
+       label rather than being dropped. */
+    const verdict = "The 40% claim is not supported by the results";
     const { claims, withheld } = validateClaims(
       {
         claims: [
           {
             blockId: "spya-ovab01",
             quote: "Cascade cuts annotation error by 40% and needs no task-specific tuning.",
-            claim: "The 40% claim is not supported by the results",
+            claim: verdict,
             passages: [],
           },
         ],
       },
       CASCADE,
     );
-    expect(claims[0]?.claim).toBe("The 40% claim is not supported by the results");
-    expect(withheld).toEqual([]);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]?.claim).toBe("");
+    expect(claims[0]?.claimWithheld).toBe(true);
+    expect(claims[0]?.quote).toBe(
+      "Cascade cuts annotation error by 40% and needs no task-specific tuning.",
+    );
+    expect(withheld).toEqual([verdict]);
+  });
+
+  it("leaves an honest one-line restatement alone", () => {
+    /* The other direction, and it is the one that costs a referee something if
+       it goes wrong: every headline of the five guarded runs is a restatement,
+       and blanking one would take a true label off a real claim. */
+    for (const line of [
+      "Cascade cuts annotation error by 40%",
+      "Method transfers to any fixed-label-set labelling task",
+      "Ridge compiles large programs faster than the current allocator",
+      "GRADE-using reviews more often called their evidence insufficient than non-GRADE reviews",
+    ]) {
+      const { claims, withheld } = validateClaims(
+        {
+          claims: [
+            {
+              blockId: "spya-ovab01",
+              quote: "Cascade cuts annotation error by 40% and needs no task-specific tuning.",
+              claim: line,
+              passages: [],
+            },
+          ],
+        },
+        CASCADE,
+      );
+      expect(claims[0]?.claim, line).toBe(line);
+      expect(claims[0]?.claimWithheld, line).toBeUndefined();
+      expect(withheld, line).toEqual([]);
+    }
+  });
+
+  it("fires on the four shapes that said a verdict without a verdict word in them", () => {
+    /* GPT Sol's second review wrote these four, and none of them matched any
+       frame when it did — which is the point: a paraphrase around a pattern is
+       free, and the 6/6 in the transcript was in-sample. They are pinned here so
+       the frames added for them cannot quietly come undone, and the honest
+       reading of a green here is *this code has not regressed*, never *a verdict
+       cannot get through*. `HELD_OUT` in evals/referee-claims.ts is where the
+       misses are counted. */
+    for (const line of [
+      "The results report 11.5%, while the abstract promises 40%.",
+      "Only SST-2 is examined.",
+      "No transfer experiment appears in the paper.",
+      "The result and the headline concern different quantities.",
+    ]) {
+      expect(adequacyFrames(line), line).not.toEqual([]);
+    }
+  });
+});
+
+/* --------------------------------------------------------------- the caps -- */
+
+/**
+ * **A cap that never says so is a cap nobody finds out about**, and on this
+ * panel it is worse than that: a referee reading an apparently complete list in
+ * which the passages and claims latest in the paper were dropped is being ranked
+ * by visibility, in a sub-mode built to have no ranking at all. GPT Sol's second
+ * review, finding 5.
+ */
+describe("what the caps leave behind", () => {
+  it("counts the passages it cut on the claim itself", () => {
+    const many = Array.from({ length: MAX_PASSAGES + 3 }, (_, i) => ({
+      blockId: "spya-ovre01",
+      /* Distinct quotes, in the block's own order, so none is dropped as a
+         duplicate and the cut is the cap rather than the de-duplication. */
+      quote: [
+        "On the SST-2 development set",
+        "Cascade reduced disagreement",
+        "between annotators",
+        "from 18.2% to 16.1%",
+        "a relative reduction of 11.5%",
+        "We did not measure error",
+        "against gold labels",
+        "because none were available",
+        "for this set",
+        "development set, Cascade",
+        "reduction of 11.5%. We",
+      ][i],
+      reasoning: "",
+    }));
+    const { claims, dropped } = validateClaims(
+      {
+        claims: [
+          {
+            blockId: "spya-ovab01",
+            quote: "Cascade cuts annotation error by 40% and needs no task-specific tuning.",
+            claim: "Cascade cuts annotation error by 40%",
+            passages: many,
+          },
+        ],
+      },
+      CASCADE,
+    );
+    expect(claims[0]?.passages).toHaveLength(MAX_PASSAGES);
+    expect(claims[0]?.passagesOmitted).toBe(3);
+    // And the run's own tally still has it, because both readers need it.
+    expect(dropped.passageTruncated).toBe(3);
+  });
+
+  it("says nothing on a claim the cap did not touch", () => {
+    /* Absent rather than zero, so a run stored before this existed reads the
+       same as one where nothing was cut — which is the truth about both. */
+    const { claims } = validateClaims(
+      {
+        claims: [
+          {
+            blockId: "spya-ovab01",
+            quote: "Cascade cuts annotation error by 40% and needs no task-specific tuning.",
+            claim: "Cascade cuts annotation error by 40%",
+            passages: [
+              {
+                blockId: "spya-ovre01",
+                quote: "a relative reduction of 11.5%",
+                reasoning: "reports the reduction figure",
+              },
+            ],
+          },
+        ],
+      },
+      CASCADE,
+    );
+    expect(claims[0]?.passagesOmitted).toBeUndefined();
   });
 });

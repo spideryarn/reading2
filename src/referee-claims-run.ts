@@ -43,18 +43,21 @@
  *    gets `NO_PASSAGE_FOUND`, written by us.
  * 3. **Linkage, never adequacy.** This was the one held by nothing but the
  *    prompt, and the eval below is what measured it. It now also has a
- *    **fail-safe in code**: `validateClaims` blanks a `reasoning` line that
- *    matches one of `ADEQUACY_FRAMES` (src/referee-claims.ts) with the paper's
- *    own phrases subtracted first, keeps the passage, and reports what it
- *    blanked. Read that docstring before trusting it — a verdict in ordinary
- *    English that avoids every frame still reaches the referee, so the prompt
- *    below is still doing most of the work.
+ *    **fail-safe in code**: `validateClaims` blanks a line that matches one of
+ *    `ADEQUACY_FRAMES` (src/referee-claims.ts) with the paper's own phrases
+ *    subtracted first, keeps what it was attached to, and reports what it
+ *    blanked. **Both surfaces**, since 2026-09-01: a passage's `reasoning` and a
+ *    claim's own one-line headline, which is the bigger target and was the
+ *    unscanned one. Read that docstring before trusting it — the held-out set in
+ *    the eval catches four verdicts in twelve, so the prompt below is still
+ *    doing nearly all of the work.
  *
  * And a fourth thing, which the three rules above have nothing to say about:
  * **a claim the model never lists is invisible**, and a tidy panel is exactly
  * what that looks like. The eval caught two papers dropping a claim from their
- * own abstract, twice each. `unaccountedSentences` is the answer, and it lives
- * on the panel rather than here.
+ * own abstract, twice each. `otherTextInQuotes` is the answer — the rest of the
+ * text inside the passages the claims quote, which is where a swallowed claim
+ * necessarily sits — and it lives on the panel rather than here.
  *
  * And one more, which is a rule about how it is *described*: the prompt says the
  * manuscript is data and never instruction, and **that is not called a defence**.
@@ -75,8 +78,9 @@
  * ## What may be logged from this file
  *
  * Ids, counts, statuses, model names, token counts. **Never a claim, never a
- * quote, never a passage's reasoning** — a paper under review is somebody else's
- * unpublished work.
+ * quote, never a passage's reasoning, and never a line the fail-safe withheld**
+ * — a paper under review is somebody else's unpublished work, and a sentence we
+ * disapprove of is still about it.
  *
  * ## The eval
  *
@@ -588,11 +592,12 @@ export async function* runClaimsStream({
            finding: it is as much a fact about this run's extraction as about the
            paper, which is the whole reason the panel refuses to rank on it. */
         claimsWithNoPassage: claims.filter((c) => c.passages.length === 0).length,
-        /* **The count, never the sentences.** A withheld line is still a
-           passage's reasoning about somebody's unpublished paper, and this
-           file's rule about what may be logged has no exception for a line we
-           happen to disapprove of. The referee is told the number on the panel
-           (`withheldNote`), which is where it can actually be checked. */
+        /* **The count, never the sentences.** A withheld line is still
+           somebody's unpublished paper being written about — a passage's
+           reasoning or a claim's headline — and this file's rule about what may
+           be logged has no exception for a line we happen to disapprove of. The
+           referee is told the number on the panel (`withheldNote`), which is
+           where it can actually be checked. */
         adequacyWithheld: withheld.length,
         blocks: blocks.length,
         ...dropped,

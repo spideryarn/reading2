@@ -32,12 +32,17 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { Claim, ClaimsRun, OpeningSentence } from "../src/referee-claims.js";
+import type { Claim, ClaimsRun, OtherText } from "../src/referee-claims.js";
 import {
+  CLAIM_WITHHELD,
+  CLAIMS_AT_CAP,
+  claimsOmittedNote,
+  MAX_CLAIMS,
   NO_PASSAGE_FOUND,
+  OTHER_TEXT_NOTE,
+  PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
-  UNACCOUNTED_NOTE,
   withheldNote,
 } from "../src/referee-claims.js";
 import { ClaimsView, inDocumentOrder } from "../src/web/ClaimsPanel.js";
@@ -109,7 +114,7 @@ function render(
   claims: Claim[],
   run?: ClaimsRun | null,
   over: Partial<ClaimsApi> = {},
-  unaccounted: OpeningSentence[] = [],
+  otherText: OtherText[] = [],
 ) {
   const r = run === undefined ? done(claims) : run;
   act(() => {
@@ -117,7 +122,7 @@ function render(
       createElement(ClaimsView, {
         api: api(r, over),
         claims,
-        unaccounted,
+        otherText,
         slots: new Map(claims.map((c, i) => [c.id, i])),
         showing: [],
         onToggle: () => {},
@@ -130,10 +135,10 @@ function render(
 
 /**
  * Two sentences of the paper's own that no claim above is anchored in — the
- * shape `unaccountedSentences` produces, and deliberately carrying words that
+ * shape `otherTextInQuotes` produces, and deliberately carrying words that
  * would read as claims, because that is the case where the wording has to work.
  */
-const UNACCOUNTED: OpeningSentence[] = [
+const OTHER_TEXT: OtherText[] = [
   { blockId: FIRST, text: "uses less peak memory than the current allocator,", start: 74 },
   { blockId: FIRST, text: "and is robust to adversarially constructed inputs.", start: 123 },
 ];
@@ -305,32 +310,32 @@ describe("the run's own states", () => {
  * The second is a judgement about the paper made with worse evidence than the
  * one this sub-mode already refuses to make.
  */
-describe("the sentences the claims do not account for", () => {
+describe("the rest of the text inside the passages the claims quote", () => {
   it("prints them, with the note that says what they are and are not", () => {
-    const panel = render([THICK], undefined, {}, UNACCOUNTED);
-    expect(panel.textContent).toContain(UNACCOUNTED_NOTE);
-    for (const row of UNACCOUNTED) expect(panel.textContent).toContain(row.text);
+    const panel = render([THICK], undefined, {}, OTHER_TEXT);
+    expect(panel.textContent).toContain(OTHER_TEXT_NOTE);
+    for (const row of OTHER_TEXT) expect(panel.textContent).toContain(row.text);
   });
 
   it("draws nothing at all when the claims account for everything", () => {
     const panel = render([THICK]);
-    expect(panel.textContent).not.toContain(UNACCOUNTED_NOTE);
+    expect(panel.textContent).not.toContain(OTHER_TEXT_NOTE);
   });
 
   it("keeps them out of the claims list, so no count of them can become a rank", () => {
     /* The list is where the no-digit rule holds, and these sentences are the
        paper's own words — full of numbers. Outside the list they are prose;
        inside it they would be a second column the eye reads as thinness. */
-    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const panel = render([THICK], undefined, {}, OTHER_TEXT);
     const list = panel.querySelector(".clm-list");
-    expect(list?.textContent ?? "").not.toContain(UNACCOUNTED[0]?.text ?? "");
+    expect(list?.textContent ?? "").not.toContain(OTHER_TEXT[0]?.text ?? "");
     expect(list?.textContent ?? "").not.toMatch(/\d/);
   });
 
   it("puts no number on them anywhere", () => {
     /* Six of these is not a worse answer than two. A count is one glance from a
        ranking, which is the whole reason this sub-mode survived its review. */
-    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const panel = render([THICK], undefined, {}, OTHER_TEXT);
     const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
     expect(section).not.toBeNull();
     expect(section?.textContent ?? "").not.toMatch(/\b(two|2|6|six)\b/i);
@@ -343,13 +348,13 @@ describe("the sentences the claims do not account for", () => {
        half of the same thought: it never draws a section it was handed nothing
        for. */
     const panel = render([THICK], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [THICK] }, {}, []);
-    expect(panel.textContent).not.toContain(UNACCOUNTED_NOTE);
+    expect(panel.textContent).not.toContain(OTHER_TEXT_NOTE);
   });
 
   it("makes each one a door into the prose, like every other row", () => {
-    const panel = render([THICK], undefined, {}, UNACCOUNTED);
+    const panel = render([THICK], undefined, {}, OTHER_TEXT);
     const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
-    expect(section?.querySelectorAll(".clm-jump")).toHaveLength(UNACCOUNTED.length);
+    expect(section?.querySelectorAll(".clm-jump")).toHaveLength(OTHER_TEXT.length);
   });
 });
 
@@ -386,5 +391,93 @@ describe("what the panel says when a line was withheld", () => {
     const panel = render([THICK]);
     expect(panel.textContent).not.toContain(REASONING_WITHHELD);
     expect(panel.textContent).not.toContain(withheldNote(1));
+  });
+});
+
+/* ------------------------------------------- the fail-safe, one row up -- */
+
+/**
+ * **The claim's own headline is model prose too, and it was the one piece of it
+ * nothing scanned.**
+ *
+ * GPT Sol's second review, finding 2: the adequacy fail-safe read `reasoning`
+ * only, so a verdict written into the biggest text on the row reached the
+ * referee untouched — and a committed test pinned exactly that. The fallback is
+ * the paper's own sentence, which is on the row already and is not the model's
+ * judgement, so the row keeps a true label instead of losing the claim.
+ */
+describe("what the panel draws when a claim's own line was withheld", () => {
+  const headlineWithheld: Claim = { ...THIN, claim: "", claimWithheld: true };
+
+  it("says so, and lets the paper's own words be the label", () => {
+    const panel = render([headlineWithheld]);
+    expect(panel.textContent).toContain(CLAIM_WITHHELD);
+    // The paper's sentence is still there, and still a door into the prose.
+    expect(panel.textContent).toContain(THIN.quote);
+    expect(panel.querySelectorAll(".clm-jump").length).toBeGreaterThan(0);
+  });
+
+  it("counts it in the same sentence as a withheld passage line", () => {
+    /* One fail-safe, one number. A referee who is told two lines were withheld
+       and can find only one has been told something false. */
+    const panel = render([headlineWithheld]);
+    expect(panel.textContent).toContain(withheldNote(1));
+  });
+
+  it("prints no empty headline where the line used to be", () => {
+    const panel = render([headlineWithheld]);
+    expect(panel.querySelectorAll(".clm-claim")).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------ the caps, said -- */
+
+/**
+ * **A cap nobody is told about is a ranking.**
+ *
+ * GPT Sol's second review, finding 5: Claims sorts into document order and then
+ * deletes everything past claim twenty and passage eight. The counts reached the
+ * outcome and the server log and nothing reached the referee — so the panel
+ * showed an apparently complete list in which the claims the paper makes last
+ * had been dropped. That is a fourth ranking signal, visibility itself, in a
+ * sub-mode built to have none, and the document-order comparators cannot save it
+ * because they never see it.
+ */
+describe("what the panel says when a cap cut something", () => {
+  it("says a claim's passage list is incomplete, without a number", () => {
+    /* Numberless on the row, because a count of passages is one glance from a
+       ranking and *how many were cut* is that count by another route. The
+       number is on `Claim.passagesOmitted` for a log to read. */
+    const panel = render([{ ...THIN, passagesOmitted: 4 }]);
+    expect(panel.textContent).toContain(PASSAGES_CAPPED);
+    expect(panel.querySelector(".clm-list")?.textContent ?? "").not.toMatch(/\d/);
+  });
+
+  it("says nothing on a row the cap did not touch", () => {
+    expect(render([THICK]).textContent).not.toContain(PASSAGES_CAPPED);
+  });
+
+  it("says how many claims were cut, when the run carries the count", () => {
+    const run: ClaimsRun = { ...done([THICK, THIN]), claimsOmitted: 3 };
+    expect(render([THICK, THIN], run).textContent).toContain(claimsOmittedNote(3));
+  });
+
+  it("still says the cap was reached when the count did not survive the store", () => {
+    /* Every run stored so far is this case: `validateClaims` counts the
+       truncation and the route writes `claims` and `model` only. A full list is
+       still proof the cap fired, and saying that beats saying nothing. */
+    const full = Array.from({ length: MAX_CLAIMS }, (_, i) => ({
+      ...THIN,
+      id: `${SECOND}:${i}`,
+      start: i,
+    }));
+    const panel = render(full);
+    expect(panel.textContent).toContain(CLAIMS_AT_CAP);
+    expect(panel.textContent).not.toContain(claimsOmittedNote(1));
+  });
+
+  it("says neither when the list is short of the cap", () => {
+    const panel = render([THICK, THIN]);
+    expect(panel.textContent).not.toContain(CLAIMS_AT_CAP);
   });
 });

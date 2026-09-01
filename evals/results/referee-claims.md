@@ -79,7 +79,8 @@
 > the six paid runs of the morning. Nothing here has been re-run — the fix is
 > deterministic and its evidence is a unit test over *this file's* committed
 > output (`tests/referee-claims-accounting.test.ts`, which feeds the Ridge
-> answer above through the real `unaccountedSentences` and asserts it surfaces
+> answer above through the real `otherTextInQuotes` — `unaccountedSentences`
+> when this was written — and asserts it surfaces
 > the memory and the robustness clause), so a paid re-run would have bought a
 > second sample of the model rather than evidence about the code.
 >
@@ -87,7 +88,8 @@
 >
 > - **The panel now prints what the answer did not account for.** For each block
 >   a claim was taken from, the sentences and clauses no claim is anchored in —
->   `unaccountedSentences`, src/referee-claims.ts. On the Ridge answer above that
+>   `otherTextInQuotes` (then `unaccountedSentences`), src/referee-claims.ts. On
+>   the Ridge answer above that
 >   is *"uses less peak memory than the current allocator,"* and *"and is robust
 >   to adversarially constructed inputs."*, which is the whole finding, visible
 >   without anybody having planted a phrase first. Every case below will grow a
@@ -120,6 +122,56 @@
 >   reading this file, which is the trade; a real 12,000-word manuscript with
 >   tables, figures and a supplement is a different problem and is not tested
 >   here.
+>
+> ## A second cross-family review, later the same day — and it moved the numbers
+>
+> **Added 2026-09-01 by hand, after `docs/plans/260831an-referee-mode-submodes-review-sol.md`.
+> Nothing below was re-run: no call was spent, because every change here is
+> deterministic and its evidence is a unit test over this file's own committed
+> output.** The next run of the eval will show all of it.
+>
+> - **The fail-safe read `reasoning` only, and the claim's own headline — the
+>   biggest text on a row — went unscanned.** A committed test pinned the verdict
+>   *"The 40% claim is not supported by the results"* surviving there untouched.
+>   That test now asserts the opposite, and the headline is blanked with **the
+>   paper's own sentence standing in as the row's label**, since the paper's words
+>   are on the row already and are not the model's judgement.
+> - **The 6/6 and 10/10 in the self-check table below are in-sample**, which the
+>   review said plainly and which this note should have said first: the frames
+>   were shaped against those very lines, so a production miss is necessarily an
+>   eval miss too. There is now a **held-out table**, written by hand, labelled by
+>   hand, and reported with its misses first. Its number, on the twenty
+>   sentences no frame was tuned for:
+>
+>   > **verdicts the frames caught: 4 of 12. False alarms on honest linkage
+>   > lines: 0 of 8.**
+>
+>   Two thirds of a hand-written verdict set walks straight past. *"One dataset,
+>   one annotator pair."*, *"Disagreement between annotators is not annotation
+>   error."*, *"40% claimed, 11.5% measured"* — none of them contains a verdict
+>   word, and none of them fires. Four more frames were added for the review's own
+>   four paraphrases, checked against all 48 model-authored lines of the five
+>   guarded runs below for false alarms (none), and those four are pins now rather
+>   than measurements.
+> - **The caps were silent.** Claims kept twenty claims and eight passages and
+>   said nothing about what it cut, which makes visibility itself a ranking in a
+>   sub-mode built to have none. The panel now says so on the row and under the
+>   list.
+> - **"Not accounted for" was too wide and read as an accusation.** It listed
+>   every clause of every block a claim came from; it is now the rest of the text
+>   **inside the passages the claims quote**, headed *"Other text inside these
+>   quoted passages"*. The Ridge finding above is unchanged by that — a swallowed
+>   claim is by definition inside the quote that swallowed it — and the unit test
+>   over this file's committed Ridge answer still asserts the memory and
+>   robustness clauses come out.
+>
+> **What did not change: the closed enum was weighed again and not built.** The
+> held-out number above is an argument for it, and the argument against it is the
+> same one and is still stronger — *"reports the measured reduction figure on the
+> single dataset tested"* is in this file, and the qualifier is the part a referee
+> uses. The trigger for the escalation is unchanged: a verdict in ordinary English
+> reaching a referee in a **real run**, more than once. None of the twelve misses
+> above is that; they are sentences somebody wrote to see what the code would do.
 
 
 Five short synthetic papers, one model call each, and a sixth run that is a control on this file rather than on the feature. **Read the reasoning lines.** The detector at the bottom is a prompt to look, not a verdict — the header of `evals/referee-claims.ts` says what it can and cannot see.

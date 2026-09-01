@@ -34,12 +34,17 @@ import { describe, expect, it } from "vitest";
 
 import { CLAIMS_UNUSABLE } from "../src/referee-claims-run.js";
 import {
+  CLAIM_WITHHELD,
+  CLAIMS_AT_CAP,
+  claimsOmittedNote,
   DOCUMENT_ORDER_NOTE,
   NO_PASSAGE_FOUND,
+  OTHER_TEXT_AT_CAP,
+  OTHER_TEXT_HEADING,
+  OTHER_TEXT_NOTE,
+  PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
-  UNACCOUNTED_HEADING,
-  UNACCOUNTED_NOTE,
 } from "../src/referee-claims.js";
 import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
 import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
@@ -305,9 +310,15 @@ describe("what Referee says when it found nothing", () => {
  * that about the *model's line*, and must not become *this passage does not
  * carry the claim*, which is the verdict itself wearing our clothes.
  */
-describe("what Claims says about the sentences it did not account for", () => {
+describe("what Claims says about the rest of the text its quotes covered", () => {
   it("never puts the paper in the subject position", () => {
-    for (const sentence of [UNACCOUNTED_HEADING, UNACCOUNTED_NOTE, REASONING_WITHHELD]) {
+    for (const sentence of [
+      OTHER_TEXT_HEADING,
+      OTHER_TEXT_NOTE,
+      OTHER_TEXT_AT_CAP,
+      REASONING_WITHHELD,
+      CLAIM_WITHHELD,
+    ]) {
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
       }
@@ -315,7 +326,7 @@ describe("what Claims says about the sentences it did not account for", () => {
   });
 
   it("never calls them claims the model missed, which is the same judgement in reverse", () => {
-    const note = `${UNACCOUNTED_HEADING} ${UNACCOUNTED_NOTE}`.toLowerCase();
+    const note = `${OTHER_TEXT_HEADING} ${OTHER_TEXT_NOTE}`.toLowerCase();
     for (const phrase of [
       "missed",
       "missing",
@@ -334,13 +345,67 @@ describe("what Claims says about the sentences it did not account for", () => {
     /* Without this the list reads as an accusation, and a referee who reads it
        that way will either dismiss it or over-trust it. Both are worse than
        reading three sentences of the paper, which is what it is for. */
-    expect(UNACCOUNTED_NOTE.toLowerCase()).toContain("background");
-    expect(UNACCOUNTED_NOTE.toLowerCase()).toMatch(/decide for yourself/);
+    expect(OTHER_TEXT_NOTE.toLowerCase()).toContain("background");
+    expect(OTHER_TEXT_NOTE.toLowerCase()).toMatch(/decide for yourself/);
   });
 
   it("makes the model's line the thing that was withheld, not the passage", () => {
     expect(REASONING_WITHHELD.toLowerCase()).toMatch(/^the model's line/);
     // And says the passage is still there, or a referee wonders what else went.
     expect(REASONING_WITHHELD.toLowerCase()).toContain("untouched");
+  });
+
+  it("makes the model's line the thing that was withheld on a claim, too", () => {
+    /* **The headline joined the fail-safe on 2026-09-01**, and it is the more
+       dangerous of the two sentences: the thing that vanishes is the row's own
+       label, so a referee who is not told what happened will read the paper's
+       sentence as the model having had nothing to say. The subject has to be the
+       model's line, and it has to say what stands in its place. */
+    expect(CLAIM_WITHHELD.toLowerCase()).toMatch(/^the model's one-line/);
+    expect(CLAIM_WITHHELD.toLowerCase()).toContain("the paper's own words");
+    // Never the verdict itself wearing our clothes.
+    expect(CLAIM_WITHHELD.toLowerCase()).not.toMatch(/does not carry|is unsupported|was wrong/);
+  });
+});
+
+/**
+ * **What Claims says when one of its own caps cut something.**
+ *
+ * GPT Sol's second review, finding 5: the caps were silent, and silence is a
+ * ranking — a referee reads an apparently complete list in which the claims the
+ * paper makes last were dropped for being last. These three sentences are the
+ * fix, and each has a rule of its own.
+ *
+ * The trap they share is the opposite of the null-result one. A cap is a fact
+ * about **this app**, so the wrong sentence here does not put the paper in the
+ * subject position, it puts the *model* there — "the model returned too many
+ * claims" is an accusation about an answer that did nothing wrong.
+ */
+describe("what Claims says when one of its own caps cut something", () => {
+  it("never blames the paper or the model for a cap that is ours", () => {
+    for (const sentence of [PASSAGES_CAPPED, CLAIMS_AT_CAP, claimsOmittedNote(3), OTHER_TEXT_AT_CAP]) {
+      for (const phrase of ABOUT_THE_PAPER) {
+        expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
+      }
+      expect(sentence.toLowerCase(), sentence).not.toMatch(/too many|should have|failed to/);
+    }
+  });
+
+  it("says which way the cut went, so the missing rows are findable", () => {
+    /* The cut is positional. A referee who is told only that something is
+       missing learns nothing they can act on; one who is told it is the end of
+       the paper can go and look at the end of the paper. */
+    expect(PASSAGES_CAPPED.toLowerCase()).toContain("latest in the paper");
+    expect(CLAIMS_AT_CAP.toLowerCase()).toContain("end of the paper");
+    expect(claimsOmittedNote(3).toLowerCase()).toContain("end of the paper");
+    expect(OTHER_TEXT_AT_CAP.toLowerCase()).toContain("latest in the paper");
+  });
+
+  it("keeps the number off a claim row and allows it under the list", () => {
+    /* The no-digit rule is about a claim row, where a count of passages is one
+       glance from a ranking. Under the list there is nothing to rank, so the
+       count of cut claims is allowed and is worth more than a hedge. */
+    expect(PASSAGES_CAPPED).not.toMatch(/\d/);
+    expect(claimsOmittedNote(3)).toMatch(/3 further claims/);
   });
 });
