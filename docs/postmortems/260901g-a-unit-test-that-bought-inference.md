@@ -59,8 +59,10 @@ accounting. Nothing was about the suite.
 
 ## The fix that is right for the long term
 
-Not another stub, and not a stern sentence in `testing.md`. **Make the outbound request impossible
-by default**, so that the safety of a test stops depending on a paragraph somebody wrote about it.
+Not another stub, and not a stern sentence in `testing.md`. **Make the default path refuse, and
+record the refusal**, so that the safety of a test stops depending on a paragraph somebody wrote
+about it. Not *impossible* — that word was in the first draft of this section and it is wrong, in
+the same direction as the header sentence that started all this. See the fourth point below.
 
 [`tests/setup/no-provider-calls.ts`](../../tests/setup/no-provider-calls.ts) is loaded by
 `vitest.config.ts` into every test file. It wraps `globalThis.fetch` and refuses — before the request
@@ -69,7 +71,7 @@ is sent — anything addressed to a host in `PROVIDER_HOSTS`, which now lives in
 and the capability scan. Everything else goes through untouched; a guard that took the whole network
 away would be switched off within the week.
 
-Four decisions in it are worth more than the wrapper:
+Five decisions in it are worth more than the wrapper:
 
 1. **Refusing is not enough.** A refusal is an exception and an exception can be swallowed — most
    obviously by the code under test, which quite reasonably catches a network failure and reports
@@ -86,8 +88,26 @@ Four decisions in it are worth more than the wrapper:
    what installed the thing being asked about. That is the bug class reappearing inside its own fix,
    twenty minutes later, and it is the reason the machinery sits in
    [`provider-guard.ts`](../../tests/setup/provider-guard.ts) and the switch sits next door.
-4. **It is a tripwire, not a boundary**, and says so — `node:http`, a subprocess, or a provider
-   nobody has heard of all walk past. The same admission `no-undeclared-spend` makes about itself.
+4. **The wrapper is held by identity, not by a flag.** The first version answered *"am I
+   installed?"* from a boolean, and a boolean cannot be removed by `globalThis.fetch = …`. So a test
+   that assigned over the global left the guard reporting itself installed while it was gone, and
+   re-installing was a no-op because it checked the same boolean. Found by GPT Sol on 2026-09-01,
+   reproduced by a throwaway test that replaced the global and then watched `providerGuardInstalled()`
+   answer `true` while a paid URL sailed through to the replacement. The guard now compares
+   identity, and an `afterEach` puts back whatever `globalThis.fetch` was when the test began — so
+   one test swapping it out no longer costs the rest of the file its guard. It **restores and does
+   not fail**: by then the request, if there was one, has gone, so failing would be a guess dressed
+   up as a measurement, and it would redden the dozens of files that legitimately stub `fetch` for
+   their whole length. This is the second time the bug class has reappeared inside its own fix.
+5. **It is a tripwire, not a boundary**, and says so — `node:http`, `undici` used directly, a
+   subprocess, whatever a stub does while it is installed, or a provider nobody has heard of all walk
+   past. The same admission `no-undeclared-spend` makes about itself. The last of those is narrowed
+   but not closed: the guard's own test scans the source for absolute URLs whose path is one a
+   provider charges for and insists the host is refused, which catches a new provider written down as
+   a literal and cannot see one that arrives as a dependency's default base URL — which is how
+   `api.anthropic.com` and `api.voyageai.com` would arrive, neither appearing in any source file. A
+   real boundary would mean denying non-local sockets below `fetch` plus an allow-list for the local
+   Supabase and every fixture server, and a separate audit of subprocesses. Nobody has costed it.
 
 ## What would have caught the whole class
 
@@ -110,8 +130,8 @@ What would have caught it, in order of what each buys:
 
 Measured on 2026-09-01, after the one known offender had already been repaired: **no test file in
 the suite reaches a provider.** The full run is clean through the guard. That number is the point —
-the guard is not cleaning up a mess, it is holding a property that was true by luck and is now true
-by construction.
+the guard is not cleaning up a mess, it is holding a property that was true by luck and is now held
+by a tripwire in the default path. Not *by construction*: the list above says what still walks past.
 
 Related: [testing.md § Nothing under `tests/` may call a paid
 provider](../project/testing.md#nothing-under-tests-may-call-a-paid-provider),

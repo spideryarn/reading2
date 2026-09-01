@@ -404,7 +404,7 @@ The file that did it carried a header saying the key was absent under vitest. It
 was: see [§ `.env.local` is loaded into tests](#envlocal-is-loaded-into-tests). **Any test that
 reaches a model call reaches a real one.**
 
-Three things follow:
+Four things follow:
 
 - **Stubbing `fetch` yourself still works, and is still the better answer.** `vi.stubGlobal("fetch",
   spy)` replaces the guard for the length of the stub, and asserting on the spy makes *"no model was
@@ -419,15 +419,33 @@ Three things follow:
   run that spends money says so in its own output. There is no environment variable, because one
   exported in a shell profile exempts every run on that machine and says nothing.
   `grep -rn allowRealProviderCalls tests/` is the audit; as of 2026-09-01 no test takes it.
+- **A test that replaces `globalThis.fetch` gets it put back at the end of its own test.** The guard
+  keeps the wrapper it installed and answers *"am I installed?"* by comparing identity, because the
+  first version asked a boolean — and a boolean says *yes* for a wrapper somebody has assigned over.
+  It **restores and does not fail**: by the time the check runs, whatever the test was going to send
+  has been sent, so failing would be a guess rather than a measurement, and it would redden the many
+  files that legitimately stub `fetch` for their whole length. What restoring buys is the tests that
+  come *after* — before this, one test swapping the global left the rest of its file unguarded.
 
-It is **a tripwire, not a boundary** — the same thing `no-undeclared-spend` says about itself.
-`node:http`, a subprocess and a host nobody has heard of all walk past.
+It is **a tripwire, not a boundary** — the same thing `no-undeclared-spend` says about itself. Four
+things walk past it: `node:http` or `node:net` used directly; a subprocess; a stub that delegates to
+`undici.fetch` or to a transport it captured itself; and a provider host that is not in
+`PROVIDER_HOSTS`. Only the last is narrowed, and only partly — the guard's own test scans `src/`,
+`evals/` and `scripts/` for absolute URLs whose *path* is one a provider charges for and insists the
+host is refused. That catches a new provider written down as a literal. It cannot see one that
+arrives as a dependency's default base URL: `api.anthropic.com` and `api.voyageai.com` are in the
+register and appear in no source file at all.
+
+A real boundary is a different job and nobody has costed it: denying non-local sockets *below*
+`fetch` (an `undici` global dispatcher, or Node's network permission model), an allow-list for the
+local Supabase and every fixture server so the suite still runs, and a separate audit of what
+subprocesses do. The tripwire caught the case we actually had.
 [`evals/`](#evals-are-not-tests-and-live-in-their-own-folder) is untouched: vitest's `include` is
 `tests/**` only, and evals are supposed to spend money.
 
 [`tests/no-provider-calls-guard.test.ts`](../../tests/no-provider-calls-guard.test.ts) is the
-positive control — it watches the refusal happen, watches the backstop throw, and goes red if
-`setupFiles` ever loses the line.
+positive control — it watches the refusal happen, watches the backstop throw, watches the guard come
+back after a test replaces the global, and goes red if `setupFiles` ever loses the line.
 
 ## Mocks and fixtures that manufacture green
 
