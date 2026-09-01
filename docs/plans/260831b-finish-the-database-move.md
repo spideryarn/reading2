@@ -1289,6 +1289,17 @@ checks for you. Plan for that rather than discovering it.
   nothing checks is worse than a slow test.
 - **D — the hinge.** `guarded()` stops branching, `storeFromEnv` loses `"files"`, and `pgReady`'s
   skip policy changes (see below). After this the adapters are unreachable.
+
+  **D must also move `guardDbStore` onto each Postgres store's own export, and this is not
+  housekeeping — it is the durable fix from
+  [260901d-a-409-and-a-404-arrived-as-500.md](../postmortems/260901d-a-409-and-a-404-arrived-as-500.md).**
+  Today **only 2 of 15** `pg-*.ts` modules guard at their export (`pg-jobs.ts`, `pg-uploads.ts`); the
+  other thirteen are wrapped over in `src/store/index.ts`. So a test that imports
+  `pgCommentStore` from `src/store/pg-comments.js` gets the **raw** store and cannot see the guard —
+  which is exactly why `tests/store-uploads-parity.test.ts` caught this class of fault and
+  `tests/store-comments.test.ts` did not, for four days, in production. `guarded()` is going anyway,
+  so the guard has to land somewhere: the export is the right somewhere, and doing it at D moves each
+  file once instead of twice. Watch for double-wrapping on the way.
 - **E–H — deletion, innermost outward**, each a compile-checked no-op: uploads → blobs → ai-calls →
   checkpoints → jobs → the eight reader-state modules and `src/store/fs.ts` → `artifacts-fs.ts` →
   `data-root.ts`.
