@@ -423,8 +423,17 @@ is a fair description of what shipped.
   reach a referee, and its `coverage` cannot stop a panel saying "nothing found". It also has
   one-line evasions — inherited colour, specificity, `opacity: 0` — and no notion of *visible*
   injection at all. Splits in two: the pure-module fixes, and wiring it to a surface.
-- **Stage 5b — Mirror becomes reachable.** The route, the hook and the panel. Its prompt, call,
-  validator and eval have been committed since `bd2f38e` and nothing in the running app calls them.
+- ~~**Stage 5b — Mirror becomes reachable.**~~ **Done, 2026-09-01.** `POST /api/referee/mirror/:slug`,
+  [`src/web/useMirror.ts`](../../src/web/useMirror.ts) and
+  [`src/web/MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx). Two things about it were decided in
+  the building and are worth carrying forward. **The shapes had to move**: nothing under `src/web/`
+  may import `src/referee-mirror.ts`, which reaches `node:crypto` and the gateway, so the
+  declarations are now in [`src/referee-mirror-types.ts`](../../src/referee-mirror-types.ts), a leaf
+  that imports nothing, and the module re-exports them — the fix `tests/client-imports.test.ts` names
+  for itself, rather than a second copy of the union in the browser. And **a `delta` frame carries a
+  character count rather than characters**, because what streams is a raw JSON object whose pointers
+  `validateRemarks` has not checked yet; showing it would be showing exactly the unverified claim
+  about somebody's sentence that the validator exists to stop.
 - **Stage 5c — Mirror's invariants.** Sol's findings 3, 4 and 9: truncation can drop a placement it
   promised to rank first; coverage can be asserted when the one comment bearing on a criterion was
   dropped as an orphan; the delimiter is forgeable; and the input caps do not cap criterion length,

@@ -6349,6 +6349,111 @@ td.text.has-hit[data-hues="8"] {
 .crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
 .crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.72rem; }
 
+/* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
+
+   **The evidence label is text, and these rules must not be the thing that
+   carries it.** Two of the five remark kinds say on the row that no trial has
+   tested them, and that distinction is the honest core of the whole mode — so
+   it is a word, always rendered, and what is below only makes the word easier
+   to find. `[data-trial-tested="false"]` takes a dotted border where the tested
+   one takes a solid rule: a second channel for somebody scanning, never the
+   channel. docs/project/colour-scales.md, and the panel's own header. */
+
+.mir { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What the mode is, above the button, because it is the thing a referee is
+   likeliest to misread: this call is not given the paper. */
+.mir-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+
+.mir-run {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.mir-run:hover:not(:disabled) { border-color: var(--ink-faint); }
+.mir-run:disabled { opacity: 0.6; cursor: default; }
+.mir-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.mir-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+/* **Not an error colour, and not an error shape.** An empty answer is the
+   commonest correct outcome this feature has; the sentence beside it is an
+   answer, so it reads like every other quiet line in a panel. */
+.mir-nothing, .mir-coverage {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+.mir-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.mir-remark { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+
+.mir-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+}
+.mir-kind { font-size: 0.74rem; font-weight: 600; color: var(--ink); }
+.mir-evidence {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+/* The one visual difference, and it is the second carrier rather than the
+   first — the words inside it already say which this is. */
+.mir-evidence[data-trial-tested="false"] { border-style: dashed; }
+
+.mir-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mir-jump:hover .mir-quote { text-decoration: underline; }
+.mir-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.mir-quote, .mir-criterion { font-size: 0.78rem; color: var(--ink); }
+
+/* The referee's own sentence, and the passage under it — set apart from the
+   model's remark below, because on this panel who wrote which is the whole
+   point. */
+.mir-yours, .mir-passage {
+  margin: 0.15rem 0 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--rule);
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+}
+
+.mir-placement { margin: 0.15rem 0 0; font-size: 0.74rem; color: var(--ink-faint); }
+.mir-placement-number { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.mir-note { margin: 0.25rem 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--ink); }
+
+.mir-evidence-note {
+  margin: 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
 /* -------------------------------------------------------- § summary mode ----
    The article at more than one length, in the mode band. The shell is
    `.mode-band` above; everything here is what goes inside it. See

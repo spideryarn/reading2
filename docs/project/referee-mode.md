@@ -1,16 +1,22 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
-**Status, 2026-09-01: one sub-mode of four is built.**
+**Status, 2026-09-01: two sub-modes of four are built.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
 ranked in the panel, and on a `diverging` criterion each passage carries a signed valence. Verified
 in a browser, not only by tests: one real criterion run, 11 ranked passages, marks in the prose, and
 a colour-vision simulation over the result (see the scale note below).
 
-**Claims, Mirror and Candidates are placeholders** that say "Not built yet". Mirror is the furthest
-along of the three but is still unreachable: its prompt, its call, its validator and its eval are
-committed ([`src/referee-mirror.ts`](../../src/referee-mirror.ts)) and nothing in the running app
-calls them, because it has no route and no panel.
+**Mirror is reachable** as of 2026-09-01. `POST /api/referee/mirror/:slug` streams a run over the
+referee's own comments, [`src/web/useMirror.ts`](../../src/web/useMirror.ts) holds the terminal
+contract, and [`src/web/MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx) draws it. Nothing is
+stored: a run is a prompt to look at your own sentence again, not an artefact. The panel's one
+non-cosmetic rule is that **every row prints, in words, whether a trial tested feedback of that
+shape** — see § *What the evidence says* below, and
+[`tests/referee-mirror-panel.test.tsx`](../../tests/referee-mirror-panel.test.tsx), which counts
+both halves so "the two are distinguishable" is a claim rather than a hope.
+
+**Claims and Candidates are placeholders** that say "Not built yet".
 
 **Two things are built and not connected**, and both are the kind of thing that looks finished from
 a test file:
@@ -153,10 +159,30 @@ true of the input rather than merely asked of the prompt
 misunderstanding (quoting the passage back against the comment), tone, coverage against the
 criteria list, and placement (a valence recorded with nothing written under it) — and each carries
 whether a trial actually tested feedback of that shape. Two of the five say no; see § *What the
-evidence says* below for what that flag means and why it exists. This is the sub-mode with the most
-built underneath it: the prompt, the call and an eval with a committed transcript
-([`src/referee-mirror.ts`](../../src/referee-mirror.ts)) all exist. What does not exist yet is a
-route or a panel — nothing in the running app can reach it.
+evidence says* below for what that flag means and why it exists.
+
+Built, as of 2026-09-01, and here is the whole of it:
+
+- **The call** — [`src/referee-mirror.ts`](../../src/referee-mirror.ts): the prompt, the input
+  builder, the validator, the stream, and an eval with a committed transcript. Its shapes live in
+  [`src/referee-mirror-types.ts`](../../src/referee-mirror-types.ts), a leaf that imports nothing,
+  because the browser draws them and nothing under `src/web/` may import a module that reaches
+  `node:crypto` (`tests/client-imports.test.ts`).
+- **The route** — `POST /api/referee/mirror/:slug`, no body, SSE out. It reads the article, the
+  comments and the criteria before a header goes out, and nothing is stored. A `delta` frame carries
+  **a character count, not characters**: what streams is one raw JSON object whose pointers the
+  validator has not checked yet, so there is nothing in it a panel could honestly show — the count
+  buys the one thing streaming buys here, which is the referee being able to tell *waiting* from
+  *being answered*.
+- **The hook** — [`src/web/useMirror.ts`](../../src/web/useMirror.ts). Zero or more `delta`, then
+  exactly one `done` or `error`; a body that ends with neither is a failure. That contract matters
+  more here than almost anywhere, because Mirror's correct answer is usually an empty list, and a
+  stream that stopped after two bytes looks exactly like a run that found nothing to raise.
+- **The panel** — [`src/web/MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx). Every row prints
+  whether a trial tested feedback of that shape, as a word rather than a colour; *nothing to raise*
+  and *nothing to read back* are two different sentences; and there is no way to copy anything out
+  of it, because Greg vetoed a report scaffold and a suggested rewrite is that feature by another
+  door.
 
 ### 4. Candidates — who could review this, for an editor
 

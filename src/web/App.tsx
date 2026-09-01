@@ -65,6 +65,7 @@ import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.j
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
+import { MirrorBand } from "./MirrorPanel.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
@@ -2642,10 +2643,10 @@ function Reader({
           onOpenHit={setOpenHit}
         />
       )}
-      {/* **`owner &&`, like every other mode that will spend money**, and it is
-          the gate rather than a decoration: nothing in stage 1 calls a model,
-          but Criteria, Claims and Mirror all will, and a band a visitor could
-          open now would have to be taken away from them later. `visitorGap`
+      {/* **`owner &&`, like every other mode that spends money**, and it is
+          the gate rather than a decoration: Criteria and Mirror both call a
+          model now and Claims will, so a band a visitor could open would be
+          spend on somebody else's paper with nobody's press behind it. `visitorGap`
           fails closed and already answers `owners-only` for this mode, so a
           visitor pressing the button gets the boundary sentence and not a blank
           band. src/web/visitor.ts. */}
@@ -4326,10 +4327,11 @@ function DiagramBand({
 /**
  * **Referee mode — for somebody who has been asked to peer-review this piece.**
  *
- * Stage 1 of docs/plans/260831an-referee-mode-for-peer-reviewers.md: the mode
- * exists, every sub-mode is reachable, and **nothing here calls a model.** What
- * is on screen is the confidentiality notice, the buttons and a line per panel
- * saying what that panel will do. The panels themselves arrive in later stages.
+ * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
+ * stage 1 — the confidentiality notice, the four buttons, and a line per panel
+ * saying what that panel will do — and it still calls no model. **Two of the
+ * four panels underneath it now do**: Criteria (stage 3) and Mirror (stage 5b).
+ * Claims and Candidates are still their stage 1 placeholders.
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -4512,16 +4514,19 @@ function RefereeSubMode({
 }) {
   switch (view) {
     case "criteria":
-      /* **Stage 3, and the only sub-mode that is built.** Its band owns
-         `?crits=` and pushes the marked passages up; src/web/CriteriaPanel.tsx
-         is the whole of it, including the three visual rules it is under.
-         The other three panels below are still their Stage 1 placeholders, and
-         they take none of these props because they draw nothing. */
+      /* **Stage 3.** Its band owns `?crits=` and pushes the marked passages up;
+         src/web/CriteriaPanel.tsx is the whole of it, including the three
+         visual rules it is under. */
       return <CriteriaBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
     case "claims":
       return <ClaimsPanel />;
     case "mirror":
-      return <MirrorPanel />;
+      /* **Stage 5b**, and the second sub-mode to become reachable. It takes no
+         `blocks` and pushes nothing up: a Mirror remark is about a sentence the
+         referee wrote, so it belongs beside that sentence in the panel with a
+         jump into the piece, and nothing is painted on the prose.
+         src/web/MirrorPanel.tsx. */
+      return <MirrorBand slug={slug} onJump={onJump} />;
     case "candidates":
       return <CandidatesPanel />;
     default: {
@@ -4542,21 +4547,6 @@ function ClaimsPanel() {
     <p className="gloss-quiet">
       What the piece claims up front, and where in it each claim is actually delivered. Not built
       yet.
-    </p>
-  );
-}
-
-/**
- * **Stage 4.** The model reads the referee's own comments rather than the paper
- * — the one design in the literature with a controlled result behind it. It
- * says nothing about whether the paper is any good, and it writes no review
- * prose.
- */
-function MirrorPanel() {
-  return (
-    <p className="gloss-quiet">
-      Your own comments, read back to you: what is unanchored, what the passage does not say, and
-      what you have not written about. Not built yet.
     </p>
   );
 }

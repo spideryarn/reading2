@@ -59,6 +59,8 @@
  *                                           see `runRefereeCriterion`
  *   PATCH  /api/referee/criteria/:slug/:id  { colour } — the palette slot, or null for auto
  *   DELETE /api/referee/criteria/:slug/:id
+ *   POST   /api/referee/mirror/:slug        no body → **a stream**, see `runMirror`. Reads the
+ *                                           referee's own comments back to them; never the paper
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
  *   GET    /api/uploads/:id      what became of one upload
  *   GET    /api/jobs             every ingest job this server knows about
@@ -143,6 +145,10 @@ import {
   type RefereeResult,
 } from "./referee-criteria.js";
 import type { SavedCriterion } from "./saved-criteria.js";
+/* Referee mode's Mirror sub-mode. The generator, and only the generator: the
+   waiting version beside it (`mirror`) exists for the eval, and a route that
+   used it would trade the reader's first sentence for a spinner. */
+import { mirrorStream } from "./referee-mirror.js";
 /* A pure predicate, so importing it here does not drag the filesystem store
    into a file that must work with either one — the same rule the `withEdit` /
    `withRetry` import above states. The palette's *size* is deliberately not in
@@ -3088,6 +3094,104 @@ async function runRefereeCriterion(
   }
 }
 
+/* ----------------------------------------------- referee mirror (stage 5b) --
+   The model reads the referee's own comments and remarks on them. It is never
+   given the article, so "it says nothing about the paper" is true of the input
+   rather than merely asked of the prompt.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3, and
+   src/referee-mirror.ts, which is the whole of the thinking. */
+
+/**
+ * Read the referee's own comments back to them, a run at a time.
+ *
+ * `POST /api/referee/mirror/:slug`, **no body**, SSE out.
+ *
+ * ## Why there is nothing to send and nothing to store
+ *
+ * The request carries no fields at all, and that is the design rather than an
+ * omission. Everything this run is about is already ours: the comments are in
+ * the comment store, the criteria are in the criteria store, and the passages
+ * come off the article. A body that named any of them would let a stale tab —
+ * or a tampered client — ask the model to remark on a comment the referee never
+ * made, which is the same rule `markOneAnswer` above states about the quiz's
+ * reference answers.
+ *
+ * And nothing is written. There is no `pending` row, no attempt and no result:
+ * a remark is a prompt to look at your own sentence again, not an artefact, and
+ * a reload asking for one again is a referee asking again. `markOneAnswer` made
+ * the same call for the same reason.
+ *
+ * ## The frames, and what a `delta` deliberately does not carry
+ *
+ * Zero or more `delta`, then **exactly one terminal frame** — `done` on
+ * success, `error` on anything else. A body that ends with neither is a failure
+ * and the client says so (src/web/useMirror.ts), because a stream can end by
+ * simply stopping and that looks exactly like finishing.
+ *
+ * **A `delta` carries a character count and not the characters.** What
+ * `mirrorStream` yields is the raw JSON object as it arrives — unparsed and
+ * unvalidated, which is to say a `misunderstanding` whose quoted passage has
+ * not yet been checked against the block it claims to come from. Every promise
+ * Mirror makes about a remark is made by `validateRemarks` *after* the stream
+ * closes, so there is nothing here a panel could honestly show. The count is
+ * enough for the one thing streaming buys a run with no incremental extractor
+ * behind it: the referee can tell the model is answering from the moment it
+ * starts, rather than watching a spinner for eight seconds and hoping.
+ *
+ * ## An empty answer is the ordinary answer
+ *
+ * Most comments should produce no remark, and `mirrorStream` returns a `done`
+ * with an empty list without paying for a call at all when nothing was worth
+ * sending. Nothing here may treat either as a failure — see `MirrorResult`.
+ */
+async function runMirror(slug: string, res: ServerResponse): Promise<void> {
+  /* All three reads before a header goes out, so a slug that is not an article
+     is a clean 404 rather than an `error` frame on a stream whose status the
+     client has already had to accept as 200. The rule `runRefereeCriterion`
+     above and `markOneAnswer` before it both keep. */
+  const article = await loadArticle(slug);
+  /* The store's own list, **not** `sweepOrphaned`: that repairs rows and this
+     is a read. A comment whose block has gone is counted by `mirrorInput` as an
+     orphan and withheld from the model, which is the honest handling of it
+     here — the check is the comment against its passage, and there is no
+     passage. */
+  const comments = await commentStore.load(slug);
+  /* The criteria as words, because that is all a coverage remark can be matched
+     against. The id travels too, so a placement the referee made against a
+     criterion can be named in the panel. */
+  const criteria = (await refereeCriteriaStore.load(slug)).map((c) => ({
+    id: c.id,
+    text: c.criterion,
+  }));
+
+  const { frame } = sse(res);
+  let chars = 0;
+  try {
+    for await (const event of mirrorStream({ blocks: article.blocks, comments, criteria, slug })) {
+      if (event.type === "delta") {
+        chars += event.text.length;
+        frame("delta", { chars });
+        continue;
+      }
+      const { type: _type, ...result } = event;
+      frame("done", result);
+    }
+  } catch (err) {
+    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+       function owns the response and the outer catch never sees the error —
+       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. */
+    captureFailure(err, { route: "referee-mirror", slug });
+    /* No partial text travels with it, unlike the quiz's. Half of a JSON
+       object is not half of an answer: nothing in it has been checked, and a
+       remark whose pointers have not been verified is exactly the
+       confident-looking claim about a sentence nobody wrote that this whole
+       module is arranged against. */
+    frame("error", { error: (err as Error).message });
+  } finally {
+    res.end();
+  }
+}
+
 /* ------------------------------------------------ reading the path apart --
    TWO functions, and picking the wrong one is a path traversal.
 
@@ -5074,6 +5178,11 @@ export async function serveAuthenticatedApi(
      namespace decided now is cheaper than a rename later. */
   const criteria = /^\/api\/referee\/criteria\/([\w.%-]+)$/.exec(url);
   const oneCriterion = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  /* Mirror, the second sub-mode to get a route, and the namespace above is why
+     it needed no rename to arrive. POST only: a run is a model call the referee
+     asks for and nothing is stored, so there is nothing to GET, nothing to
+     PATCH and nothing to DELETE. */
+  const refereeMirror = /^\/api\/referee\/mirror\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
   const uploads = url === "/api/uploads";
   const upload = /^\/api\/uploads\/([\w-]+)$/.exec(url);
@@ -5687,6 +5796,20 @@ export async function serveAuthenticatedApi(
     if (oneCriterion && req.method === "DELETE") {
       const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
       send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
+      return;
+    }
+    if (refereeMirror && req.method === "POST") {
+      /* The fifth endpoint in this file that does not answer with JSON. It
+         still reaches `send` for its failures: `loadArticle` throws its 404
+         before a header is written, and `runMirror` reads everything it needs
+         above `sse(res)` for exactly that reason.
+
+         `withSpendAttribution`, because the call inside it pays — the rows have
+         to carry the article or the cost report cannot say which paper a
+         referee's session was about. src/ai-spend.ts. */
+      await withSpendAttribution({ articleSlug: slugPart(refereeMirror, 1) }, () =>
+        runMirror(slugPart(refereeMirror, 1), res),
+      );
       return;
     }
     if (allJobs && req.method === "GET") {

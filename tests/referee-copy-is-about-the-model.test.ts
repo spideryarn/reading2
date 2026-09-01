@@ -36,10 +36,18 @@ const ROOT = join(import.meta.dirname, "..");
 
 /**
  * Every surface that can render a Referee null result. Add the panel here when
- * you build it — Claims and Mirror are the two still to come, and both have a
- * "found nothing" state by construction.
+ * you build it — Claims is the one still to come, and it has a "found nothing"
+ * state by construction.
+ *
+ * **Mirror joined on 2026-09-01**, and it is the harder case rather than a
+ * second easy one. Its null result is not about the paper at all: an empty
+ * remark list means *the model had nothing to say about your comments*, and its
+ * `coverage` remark means *your notes have not taken this criterion up*. Both
+ * are one careless rewrite away from being about the paper instead — "nothing
+ * in this paper bears on that criterion" is the shorter sentence and a claim
+ * Mirror has no standing whatever to make, since it was never given the paper.
  */
-const REFEREE_SURFACES = ["src/web/CriteriaPanel.tsx"];
+const REFEREE_SURFACES = ["src/web/CriteriaPanel.tsx", "src/web/MirrorPanel.tsx"];
 
 /**
  * Comments are stripped before the scan, because the rule is about what a
