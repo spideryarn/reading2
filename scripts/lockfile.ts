@@ -144,8 +144,17 @@ export class LockHeldError extends Error {
  * Put `body` at `file` atomically, or return null if something is already
  * there. On success returns the inode, so `release` can tell our file from a
  * later one at the same path.
+ *
+ * **Exported for `scripts/worktree-port.ts`, which needs this primitive without
+ * the lock around it.** A port reservation has to outlive the process that made
+ * it — `worktree:setup` claims a port and exits, and the worktree keeps that
+ * port for its whole life — so it cannot use `takeLockFile`, whose exit hook is
+ * the entire point of a lock and exactly wrong for a reservation. What it does
+ * need is this: a file that appears only once, with its contents already in it.
+ * Reimplementing that would duplicate the `linkSync`-a-written-temp subtlety
+ * described above, and getting it wrong looks like working.
  */
-function publishExclusive(file: string, body: string): { ino: number } | null {
+export function publishExclusive(file: string, body: string): { ino: number } | null {
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   const fd = openSync(tmp, "wx");
   try {

@@ -1086,20 +1086,43 @@ checks inode and token before unlinking, because the exit hook outlives the lock
 
 Everything the native feature does not do, and nothing it does.
 
-1. **`.gitignore` gets `.claude/worktrees/`, and Dropbox gets told to ignore it** — both xattrs, as
-   for `node_modules`. Before the first worktree exists, because ignoring removes the cloud copy.
-2. **`.worktreeinclude`** listing `.env.local`. Only gitignored files that match are copied, so it
-   cannot duplicate a tracked file.
-3. **`worktree.baseRef`**, decided together with the GitHub default branch — see
-   [the base-branch catch](#the-base-branch-catch).
-4. **Exclusions for every scanner that walks the repo** — `SKIP` in
-   [`scripts/typecheck.ts`](../../scripts/typecheck.ts) and `watch.ignored` in
-   [`vite.config.ts`](../../vite.config.ts) at minimum, then an audit of `check.ts`, knip, biome and
-   jscpd. Without this the primary typechecks ten peers' half-finished trees.
-5. **`npm run worktree:setup`**, run inside a fresh worktree: `npm ci --prefer-offline --no-audit
-   --no-fund`, write the leased port, record a creation timestamp, and print what it did. It has to
-   be run by hand or by the agent, because `WorktreeCreate` replaces creation rather than following
-   it.
+**Items 1, 2 and 4 are done (2026-09-01), because none of them changes anything in this checkout
+today** — they are all inert until the first worktree exists, which is what made them the right slice
+to take while a dozen agents were mid-task.
+
+1. ~~**`.gitignore` gets `.claude/worktrees/`**~~ — **done.** Claude Code's own docs recommend it. The
+   Dropbox xattrs are Mac-only and belong with
+   [Runbook B](../project/worktrees.md#runbook-b-the-mac-later); this box is outside Dropbox.
+2. ~~**`.worktreeinclude`**~~ — **done**, listing `.env.local` and `.env`, with `.env.prod`
+   deliberately absent. Checked against the Claude Code docs rather than taken from this plan: the
+   file is real, sits at the project root, uses `.gitignore` syntax, and copies only files that match
+   *and* are gitignored. One trap recorded in the file itself: a `**/`-prefixed pattern does not reach
+   into a wholly-gitignored directory unless the first name after `**/` is one of the names in that
+   directory's path.
+3. **`worktree.baseRef`** — still open, and still tied to the GitHub default branch; see
+   [the base-branch catch](#the-base-branch-catch). Nothing to do while the trunk is `main`, because
+   `"fresh"` and `"head"` both resolve there today. One correction to that section from reading the
+   docs: Claude Code does *not* simply trust a stale cached `origin/HEAD` — for a `"fresh"` base it
+   fetches the default branch when the repository has not been fetched in 24 hours, capped at five
+   seconds, and falls back to the cached ref only if that fetch fails. So the risk is narrower than
+   this plan first said, and `git remote set-head origin -a` is what makes it deterministic rather
+   than what makes it work at all.
+4. ~~**Exclusions for every scanner that walks the repo**~~ — **done, and only one scanner needed it.**
+   `SKIP` in [`scripts/typecheck.ts`](../../scripts/typecheck.ts) gains `.claude`: it recurses from the
+   repository root and matches by basename, so a worktree's `tsconfig.json` became a project of the
+   primary's. **Verified by breaking it** — a probe `tsconfig.json` under `.claude/worktrees/probe/`
+   produced `✗ .claude/worktrees/probe/tsconfig.json: resolved 0 files.` with `.claude` removed from
+   `SKIP`, and nothing with it restored. `watch.ignored` in
+   [`vite.config.ts`](../../vite.config.ts) gains `**/.claude/worktrees/**`, which is safe because Vite
+   *appends* it to its own defaults in `resolveChokidarOptions` — read in `node_modules`, not assumed,
+   because clobbering the `node_modules` exclusion there would have been a slow disaster for everyone.
+   **biome, knip and jscpd need nothing**: biome's `includes` is an anchored allowlist, knip's
+   `project` globs likewise, and `dupes` names `src api scripts evals` explicitly.
+5. **`npm run worktree:setup`** — still to do. Run inside a fresh worktree: `npm ci --prefer-offline
+   --no-audit --no-fund`, claim a port with
+   [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), record a creation timestamp, and print
+   what it did. It has to be run by hand or by the agent, because `WorktreeCreate` replaces creation
+   rather than following it.
 6. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
 **`data/` has its own plan now: [260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md).**
@@ -1154,9 +1177,37 @@ worth doing regardless of worktrees and regardless of the database move: stage 4
 [260831b-finish-the-database-move.md](260831b-finish-the-database-move.md) deletes the filesystem
 store, and the tests will still need a corpus from somewhere when it does.
 
-### 3. Ports, as one unit
+### 3. Ports — **the allocator and `strictPort` are done; the allow-list and the identity endpoint are not**
 
-Half of this is worse than none, because each half hides the other's failure.
+Half of this is worse than none, because each half hides the other's failure — so the split taken on
+2026-09-01 needs justifying rather than assuming. **Nothing sets `SPIDERYARN_DEV_PORT` yet**, so every
+server is on 5273 exactly as before and no port outside the auth allow-list can be reached. The two
+remaining items are the ones that would interrupt people: the allow-list needs a Supabase restart, and
+the identity endpoint touches `src/routes.ts`, which peers are editing.
+
+[`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) is the allocator, with 27 tests. Two
+design points worth carrying forward, one of them a correction:
+
+- **The reservations live in the shared git directory**, via `git rev-parse --git-common-dir`.
+  Worktrees have separate working directories and exactly one repository, so that is the only place
+  every worktree can see — and it cannot be committed by accident. Sol confirmed the edge cases: a
+  worktree of a worktree still shares it, and a submodule correctly gets its own.
+- **It is a persistent reservation, not a lock**, and the first version got this wrong.
+  `takeLockFile` registers `process.on("exit", release)`, which is the point of a lock and fatal here:
+  `worktree:setup` claims a port and exits, so the reservation evaporated on the way out and the next
+  setup handed out the same port. Sol caught it and also caught why the tests could not have — every
+  reservation in that file lived inside one vitest process, the one case where a lock behaves. There
+  are now two tests that spawn a real `npx tsx`, claim, exit, and assert the file survives.
+
+**`strictPort: true` was written and then removed**, which is worth recording because the reasoning
+for it was sound and still lost. It makes an occupied 5273 an error instead of a silent drift to a
+port the auth allow-list does not name. Sol's objection was about this tree specifically: a fallback
+server is genuinely useful for everything but sign-in, especially for server work, since the API
+middleware is imported at server boot and a peer's 5273 process does not carry your changes. And the
+evidence settled it — **5273 through 5277 were all listening at the time**, so it would have broken
+the next `npm run dev` for everyone. The fallback stays; a startup warning replaces the silence.
+
+The original list, for the two items left:
 
 1. `SPIDERYARN_DEV_PORT` in [`vite.config.ts`](../../vite.config.ts) (currently hardcodes `5273`),
    with **`strictPort: true`**.

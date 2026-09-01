@@ -1,0 +1,17 @@
+# Gitignored files that Claude Code copies into each new worktree it creates.
+# `.gitignore` syntax; only files that match AND are gitignored are copied, so a
+# tracked file can never be duplicated by a pattern here.
+#
+# A worktree is a fresh checkout, so without this a new one has no environment at
+# all and every stage fails on a missing key. See docs/project/worktrees.md.
+#
+# Deliberately NOT here: `.env.prod`. An agent in a worktree must not be able to
+# deploy, and `npm run deploy` refuses a `worktree-*` branch by name as well —
+# scripts/deploy-checks.ts, `deployBranchProblem`.
+#
+# One trap if you add a pattern later: a `**/`-prefixed pattern does not reach
+# into a wholly-gitignored directory unless the first name after `**/` is one of
+# the names in that directory's path. Name the directory instead —
+# `vendor/**/config.json`, not `**/config.json`.
+.env.local
+.env

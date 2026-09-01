@@ -39,3 +39,12 @@ scratch-bakeoff
 # checkout, not on any laptop, so it would only ever be committed by accident
 # from over there.
 .playwright-mcp/
+
+# Where `claude --worktree <name>` puts a worktree: .claude/worktrees/<name>/,
+# on a branch `worktree-<name>`. Claude Code's own docs recommend ignoring it, and
+# it has to be ignored rather than merely untracked: the primary would otherwise
+# see every peer's whole checkout as untracked files, and the commit recipe in
+# AGENTS.md leans on `git status` being readable. Note that `.claude/` itself IS
+# tracked (settings, hooks), so this names only the subdirectory.
+# docs/project/worktrees.md
+.claude/worktrees/

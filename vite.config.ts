@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { loadEnvLocal } from "./src/env.js";
 import { errorFields, log } from "./src/log.js";
 import { missingClientEnv, resolveBuildStamp } from "./scripts/build-stamp.js";
+import { parseDevPortEnv, portInRange, PRIMARY_PORT } from "./scripts/worktree-port.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
 
 /**
@@ -77,6 +78,39 @@ export default defineConfig(() => {
   return {
     plugins: [
       react(),
+      /* **Say so when the dev server is not on an allow-listed port.**
+       *
+       * This is the other half of dropping `strictPort` (see `server.port`
+       * below). Vite falls back to 5274, 5275… when 5273 is taken, which is
+       * useful for everything except sign-in — and sign-in's failure is silent
+       * and looks like a bug in your own code: Google returns you to the bare
+       * site URL instead of `/auth/callback`, so the callback never runs.
+       *
+       * Hooked on `listening` rather than read from the config, because the
+       * config says what was *asked for* and the fallback is precisely the case
+       * where those differ. Vite's own logger, so it lands next to the
+       * `Local: http://localhost:...` line a person is already looking at.
+       *
+       * setup-dev.md § And the port has to be 5273, and
+       * docs/project/worktrees.md § Ports and the ceiling. */
+      {
+        name: "spideryarn-port-warning",
+        apply: "serve" as const,
+        configureServer(server) {
+          server.httpServer?.once("listening", () => {
+            const address = server.httpServer?.address();
+            const actual = typeof address === "object" && address ? address.port : undefined;
+            if (actual === undefined || portInRange(actual)) return;
+            server.config.logger.warn(
+              `\n  Running on ${actual}, which is NOT on Supabase's redirect allow-list.\n` +
+                "  Google sign-in will appear to work and then drop you at the site root —\n" +
+                "  the callback never runs. Everything that does not need sign-in is fine.\n" +
+                `  Free up ${PRIMARY_PORT}, or see docs/project/setup-dev.md.\n`,
+              { timestamp: true },
+            );
+          });
+        },
+      },
       // Tailwind is just another plugin; the API middleware below is untouched.
       // The entry stylesheet is src/web/tailwind.css — read its header before
       // changing how the CSS is wired, the layering there is load-bearing.
@@ -206,7 +240,32 @@ export default defineConfig(() => {
       alias: { "@": fileURLToPath(new URL("./src/web", import.meta.url)) },
     },
     server: {
-      port: 5273,
+      /* **The port, and deliberately NOT `strictPort`.**
+       *
+       * `supabase/config.toml`'s redirect allow-list names 5273 by number and
+       * GoTrue bakes it in at start, so a server on any other port has a Google
+       * sign-in that *succeeds* and then drops the reader at the bare site URL
+       * with nothing saying why (setup-dev.md § And the port has to be 5273).
+       * The obvious fix is `strictPort: true`, and this file had it for an hour.
+       *
+       * GPT Sol talked me out of it, correctly, and the reason is specific to
+       * this tree: a dozen agents share one checkout, so 5273 is often taken —
+       * and a fallback server on 5274 is *genuinely useful* for everything that
+       * is not sign-in. Especially for server work, because the API middleware
+       * is imported at server boot, so an agent cannot rely on a peer's existing
+       * 5273 process reflecting their own changes. `strictPort` would take that
+       * away and leave them stuck. It belongs here once the port system is whole
+       * — see docs/project/worktrees.md § Ports and the ceiling.
+       *
+       * So: keep the fallback, and kill the *silence* instead. The warning is
+       * below, after `listening`, where the port is known rather than guessed.
+       *
+       * `SPIDERYARN_DEV_PORT` is how a worktree will get its own port. Unset, as
+       * it is in the primary, this is `PRIMARY_PORT` — exactly 5273 as before.
+       * Set but malformed, it **throws** rather than falling back, because
+       * `Number(x) || 5273` on a typo silently turned a worktree into a second
+       * server on the primary's port. scripts/worktree-port.ts. */
+      port: parseDevPortEnv(process.env.SPIDERYARN_DEV_PORT) ?? PRIMARY_PORT,
       open: true,
       /* **Do not watch the article store.**
        *
@@ -227,7 +286,13 @@ export default defineConfig(() => {
        *
        * `docs/` and `evals/` are here for the same reason: agents write to them
        * while somebody is reading, and neither is imported by the client. */
-      watch: { ignored: ["**/data/**", "**/docs/**", "**/evals/**"] },
+      /* `.claude/worktrees/**` is a peer's entire checkout. Watching it would
+         reload the primary's page on their every keystroke, and Vite *appends*
+         this list to its own defaults (`resolveChokidarOptions`), so naming it
+         here cannot cost us the node_modules and .git exclusions. */
+      watch: {
+        ignored: ["**/data/**", "**/docs/**", "**/evals/**", "**/.claude/worktrees/**"],
+      },
     },
   };
 });

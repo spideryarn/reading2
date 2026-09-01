@@ -44,12 +44,35 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * so without this the typecheck passes or fails depending on whether somebody
  * happens to have a database running.
  */
+/** Directory names never walked into, matched by basename at any depth. */
 const SKIP = new Set(["node_modules", ".git", "dist", ".temp"]);
+
+/**
+ * Directories skipped by their **exact path**, not by name.
+ *
+ * `claude --worktree <name>` checks out a whole second copy of this repository
+ * at `.claude/worktrees/<name>/`, tsconfigs and all. This walk starts at the
+ * repository root and recurses, so without this the primary typechecks every
+ * peer's half-finished tree and reports their errors as its own — slower and
+ * noisier with every worktree, and no hint as to why. Verified by breaking it:
+ * a probe tsconfig there produced `✗ .claude/worktrees/probe/tsconfig.json:
+ * resolved 0 files.` Inert until the first worktree exists.
+ *
+ * **By path rather than by basename**, which was the first version and was a
+ * hole: `.claude/` also holds tracked hooks and settings, so skipping every
+ * directory called `.claude` would mean a TypeScript hook added there later was
+ * checked by nothing, silently — and this script's own last line claims every
+ * source file is covered by some project. GPT Sol, finding 7 in
+ * docs/plans/260828r-worktrees-step2-review-sol.md.
+ * docs/project/worktrees.md.
+ */
+const SKIP_PATHS = new Set([path.join(ROOT, ".claude", "worktrees")]);
 
 function walk(dir: string, hit: (file: string) => void): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (SKIP.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
+    if (SKIP_PATHS.has(full)) continue;
     if (entry.isDirectory()) walk(full, hit);
     else hit(full);
   }

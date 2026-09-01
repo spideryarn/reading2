@@ -25,7 +25,13 @@ true today, what was decided, and the two runbooks nobody has run yet.
 | the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, fails closed if the trunk cannot be read, and does nothing when you are on `main`. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
 
-Still to build: the setup layer, ports, the database lease, and `worktree:sweep` —
+| [`.gitignore`](../../.gitignore) | `.claude/worktrees/` — where `claude --worktree <name>` puts a worktree. Ignored rather than merely untracked, because the primary would otherwise see every peer's whole checkout as untracked files and the commit recipe leans on `git status` being readable. |
+| [`.worktreeinclude`](../../.worktreeinclude) | `.env.local` and `.env`, copied into each new worktree. `.env.prod` deliberately absent, so an agent in a worktree cannot deploy. |
+| [`scripts/typecheck.ts`](../../scripts/typecheck.ts) | `.claude` added to `SKIP`. **The one scanner that actually walks in** — it recurses from the repository root and matches by basename, so a worktree's `tsconfig.json` became a project of the primary's. biome, knip and jscpd need nothing: their globs are anchored allowlists. |
+| [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
+| [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The port allocator: a **persistent reservation**, not a hash and not a lock. **Nothing reads it yet** — deliberately, see below. |
+
+Still to build: `npm run worktree:setup`, the rest of ports, the database lease, and `worktree:sweep` —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do).
 
 ## What Greg decided, 2026-09-01
@@ -157,12 +163,51 @@ stack and watching it under load rather than reasoning from the idle numbers abo
 
 Half of this is worse than none, because each half hides the other's failure:
 
-1. `SPIDERYARN_DEV_PORT` in `vite.config.ts` (which hardcodes `5273` today), with **`strictPort: true`**.
-2. An **atomic port lease** on `scripts/lockfile.ts` — not a scan-then-pick, and not a hash. A hash was
-   proposed and withdrawn: at ten worktrees it collides ~99.96% of the time.
+1. ~~`SPIDERYARN_DEV_PORT` in `vite.config.ts`, with `strictPort: true`~~ — **half done, and the half
+   that was dropped is the interesting one.** The port is
+   `parseDevPortEnv(process.env.SPIDERYARN_DEV_PORT) ?? PRIMARY_PORT`, so the primary is on 5273
+   exactly as before, and a value that is *set but malformed* now **throws** rather than falling back —
+   `Number(x) || 5273` on a typo turned a worktree into a second server on the primary's port.
+
+   **`strictPort` was written, then deliberately removed.** The reasoning for it was good: an occupied
+   5273 makes Vite drift to 5274, which is not on the auth allow-list, so a Google sign-in *succeeds*
+   and drops the reader at the bare site URL with nothing saying why ([setup-dev.md](setup-dev.md)).
+   GPT Sol pointed out what that trade actually costs in this tree, and it was right: a dozen agents
+   share one checkout, so **a fallback server is genuinely useful** for everything except sign-in —
+   especially for server work, because the API middleware is imported at server boot, so you cannot
+   rely on a peer's existing 5273 process reflecting your own changes. `strictPort` would leave that
+   agent stuck. And the evidence was immediate: at the time of writing, ports **5273 to 5277 were all
+   listening**, so shipping it would have broken the next `npm run dev` for everybody.
+
+   So the fallback stays and the *silence* goes: a `spideryarn-port-warning` plugin says so after
+   `listening`, where the port is known rather than asked for. Verified both ways — loud on 5310,
+   silent on 5290. `strictPort` belongs here once the whole port system is wired, not before.
+2. ~~An **atomic port lease**~~ — **done as a persistent reservation, and nothing reads it yet.**
+   [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), 27 tests. Not a hash: at ten worktrees
+   in a 30-wide range that collides ~99.96% of the time. Not a scan-then-pick, whose failure is subtler
+   (two setups starting together both see 5274 free and both take it) — the claim *is* the test, via
+   `publishExclusive` from [`scripts/lockfile.ts`](../../scripts/lockfile.ts).
+
+   **And not a lock, which was a real bug caught in review.** The first version used `takeLockFile`,
+   which registers `process.on("exit", release)` — right for a lock, fatal here, because
+   `worktree:setup` claims a port and *exits*, so the reservation would evaporate on the way out and
+   the next setup would hand out the same port. No test in the file could have caught it: they all hold
+   their reservations inside one vitest process, which is exactly the case where a lock looks fine.
+   There are now two tests that spawn a real `npx tsx`, claim, exit, and assert the file is still
+   there — and they go red if you put the lock back.
+
+   **The reservations live in the shared git directory** — `git rev-parse --git-common-dir`, so
+   `spideryarn-worktree-ports/<port>.reserved` beside the repository rather than inside any one
+   checkout. Two properties fall out of that rather than needing arranging: every worktree sees the
+   same set, and they cannot be committed by accident. Each file names its holder, so a full range can
+   tell you who to ask. `DEV_PORT_RANGE` is the only place the range is written down; 5273 is the
+   primary's and is **never** handed to a worktree; and an out-of-range port is refused, not clamped —
+   for every candidate, not just an explicitly requested one.
 3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml), **then
    restart Supabase and check the running container** — the file is not re-read automatically
-   ([supabase-local.md](supabase-local.md)).
+   ([supabase-local.md](supabase-local.md)). **Deliberately not done yet**: it needs a Supabase
+   restart, which would interrupt every agent, and nothing can reach a port outside the current
+   allow-list until something sets `SPIDERYARN_DEV_PORT`.
 4. An identity endpoint reporting worktree and commit, which browser checks assert against.
 
 Why (4) is not optional: `strictPort` only makes the *second* server refuse to start. A browser
