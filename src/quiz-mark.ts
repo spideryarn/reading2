@@ -6,11 +6,14 @@
  * input is the reader's answer, which does not exist until they write it, so
  * there is nothing to precompute. docs/plans/260831al-review-quiz-sub-mode.md.
  *
- * **Stage 1 makes this callable and nothing more.** `POST /api/quiz/:slug/mark`,
- * the `batchId` binding, the 409s and the SSE frames are stage 2; what is here
- * is the prompt and a generator, so that `evals/quiz.ts` can put real answers
- * through it before any of that is built. That ordering is the whole recut of
- * the plan: in this feature the prompt *is* the product.
+ * **Stage 1 made this callable; stage 2 put a route in front of it.**
+ * `markOneAnswer` in src/routes.ts is the only caller that matters —
+ * `POST /api/quiz/:slug/mark`, which looks the question, the reference answer
+ * and the evidence up out of the artefact server-side, refuses a `batchId` that
+ * is not the current one with a 409, and turns what this generator yields into
+ * SSE frames. Stage 1 deliberately built none of that, so that `evals/quiz.ts`
+ * could put real answers through the prompt before any of it existed: in this
+ * feature the prompt *is* the product.
  *
  * ## One question, one answer, one reply — not a conversation
  *
@@ -325,10 +328,10 @@ export interface QuizMarkRequest {
   /**
    * Content-free identifiers for the one log line per mark.
    *
-   * Optional because stage 1 has no route and the eval has no batch, and
-   * carried at all because the plan asks for the line now rather than after the
-   * first bad mark: without `batchId` and `questionId` a complaint about a mark
-   * cannot be tied to the questions it was made against.
+   * Optional because the eval has no batch and no request, and carried at all
+   * because the plan asks for the line now rather than after the first bad
+   * mark: without `batchId` and `questionId` a complaint about a mark cannot be
+   * tied to the questions it was made against. The route fills all five in.
    */
   telemetry?: {
     attemptId?: string;
@@ -350,9 +353,11 @@ export interface QuizMarkResult {
  *
  * A throw means no `done`, and the deltas so far are all there is — the same
  * contract `explainStream` and `converse` keep, deliberately, so the routes
- * that consume them can be read side by side. **Stage 2's client must tick a
- * question answered only on `done`**, because a stream that stops cleanly
- * without finishing looks exactly like one that finished.
+ * that consume them can be read side by side. **The client ticks a question
+ * answered only on `done`** — `readMark` in src/web/useQuiz.ts is the one place
+ * that decides, and tests/quiz-mark-stream.test.tsx is a stream that emits two
+ * deltas and then closes with no terminal frame at all, because a stream that
+ * stops cleanly without finishing looks exactly like one that finished.
  */
 export type QuizMarkEvent = { type: "delta"; text: string } | ({ type: "done" } & QuizMarkResult);
 
