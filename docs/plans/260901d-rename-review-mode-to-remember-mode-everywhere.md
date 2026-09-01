@@ -335,6 +335,44 @@ The Stage C agent also proved the typecheck could fail, by reverting one compari
 none. It passes *without* the warning only because his migrated thread is there. Had finding 4 not
 been caught, that test would have stayed green while covering nothing.
 
+### The production runbook, for whoever has the credentials
+
+Greg pre-approved this; it could not be run from the machine the work was done on. **Use the session
+pooler, not the transaction pooler** — DDL and the migrator's bookkeeping need a real session, and
+port 6543 will misbehave. The username on a pooler connection is `postgres.<project-ref>`, not
+`postgres`.
+
+```
+DATABASE_URL=<session-pooler URL> DB_MIGRATE_ALLOW_REMOTE=yes npm run db:migrate
+```
+
+**Read the `Target:` line, not the success line.** `database.md` records that this exact command once
+migrated the laptop and printed `✓ migrations applied` while production stayed untouched, because
+`.env.local` beat the shell. The line must name `…pooler.supabase.com`, not `127.0.0.1`:
+
+```
+Target: postgresql://postgres.<ref>@aws-0-eu-west-2.pooler.supabase.com:5432/postgres
+```
+
+Before, and again after:
+
+```sql
+select kind, count(*) from spideryarn.chat_threads group by 1 order by 1;
+```
+
+Expect `review` → 0, `remember` → the previous `review` count, `chat` unchanged, total unchanged. If
+any other table turns out to hold `'review'` — `ai_calls.step_name` is the one this plan reasoned
+about structurally but could not check against production, because that table is empty locally —
+0048 needs a second `UPDATE` before it runs.
+
+**Verify as the app role, not as `postgres`.** They are different roles over different poolers, and a
+migration that succeeds for `postgres` while the app cannot see the result looks identical from the
+migrator's side.
+
+**Then deploy**, promptly. Between the migration and the deploy, the old code writes `'review'` and
+the new CHECK refuses it. That window is the maintenance window this plan chose, and it should be
+minutes rather than hours.
+
 ### Still open
 
 - **Production is not migrated.** This machine has no production credentials: `SUPABASE_URL` and the
