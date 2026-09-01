@@ -285,6 +285,25 @@ const chatEffects: ChatEffects = {
   cancelThread,
 };
 
+
+/**
+ * What a thread is called before the reader has said anything in it.
+ *
+ * A `Record<ThreadKind, string>` rather than a ternary, so a fourth kind is a
+ * compile error here instead of a thread quietly called "New chat". The
+ * placeholder matters because the list is shared: "New chat" sitting in a list
+ * the reader reached by pressing Remember is a small lie, and it is the row they
+ * are about to type into. The real title arrives with the first thing they say.
+ *
+ * `kind` at the call site is the **persisted** thread kind — src/types.ts §
+ * ThreadKind.
+ */
+const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
+  chat: "New chat",
+  remember: "Remembering",
+  candidates: "Finding reviewers",
+};
+
 export function useChat(slug: string): ChatApi {
   /**
    * The state, the operations in flight and the tombstones — all of it, and one
@@ -507,14 +526,8 @@ export function useChat(slug: string): ChatApi {
         type: "thread.begun",
         thread: {
           id,
-          /* A Remember thread's placeholder title says what it is, because the
-             list is shared: "New chat" sitting in a list the reader reached by
-             pressing Remember is a small lie, and it is the row they are about
-             to type into. The real title arrives with the first thing they say.
-
-             `kind` here is the **persisted** thread kind — src/types.ts §
-             ThreadKind. */
-          title: kind === "remember" ? "Remembering" : "New chat",
+          /* `NEW_THREAD_TITLE` above, which is where the reasoning is. */
+          title: NEW_THREAD_TITLE[kind ?? "chat"],
           createdAt: at,
           updatedAt: at,
           /* An empty thread exists only in this tab, so this kind is a promise
@@ -642,10 +655,20 @@ export function useChat(slug: string): ChatApi {
             at,
             ...(useProfile ? {} : { useProfile: false }),
             ...(anchor ? { anchor } : {}),
-            /* Sent only when it is a Remember turn. A body with no `kind` means chat,
-               which is what every caller written before this feature meant, and
-               what keeps an old tab working. */
-            ...(kind === "remember" ? { kind } : {}),
+            /* Sent for every kind but the default. A body with no `kind` means
+               chat, which is what every caller written before this feature meant,
+               and what keeps an old tab working.
+
+               **This was `kind === "remember"` until 2026-09-01**, written when
+               Remember was the only second kind. Candidates arrived as the third
+               and this line did not widen, so a Candidates turn posted no kind,
+               the server stored it as chat and answered it with chat's prompt,
+               and the panel's whole shortlist — including every honesty line it
+               owes an editor — sat behind an early return nothing could reach.
+               Comparing against the default is the shape that survives a fourth
+               kind; naming one member is the shape that does not.
+               tests/chat-kind-reaches-the-server.test.tsx. */
+            ...(kind && kind !== "chat" ? { kind } : {}),
             ...(stance ? { stance } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
           },
