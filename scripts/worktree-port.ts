@@ -185,3 +185,11 @@ export function gitDir(cwd: string = process.cwd()): string {
   if (!out) throw new Error("git rev-parse --git-dir printed nothing");
   return out;
 }
+
+/** `"5273–5303"` for a contiguous run, else `"5273, 5290, 5299"`. */
+export function describePorts(ports: readonly number[]): string {
+  if (ports.length === 0) return "none";
+  const contiguous = ports.every((port, i) => i === 0 || port === (ports[i - 1] ?? 0) + 1);
+  const last = ports[ports.length - 1];
+  return contiguous && ports.length > 2 ? `${ports[0]}–${last}` : ports.join(", ");
+}

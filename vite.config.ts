@@ -6,7 +6,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { loadEnvLocal } from "./src/env.js";
 import { errorFields, log } from "./src/log.js";
 import { missingClientEnv, resolveBuildStamp } from "./scripts/build-stamp.js";
-import { allowListedPorts, parseDevPortEnv, portInRange, PRIMARY_PORT } from "./scripts/worktree-port.js";
+import {
+  allowListedPorts,
+  describePorts,
+  parseDevPortEnv,
+  portInRange,
+  PRIMARY_PORT,
+} from "./scripts/worktree-port.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
 
 /**
@@ -117,8 +123,8 @@ export default defineConfig(() => {
             if (allowed.length === 0 || allowed.includes(actual)) return;
             const plan = portInRange(actual)
               ? `  ${actual} is in the range we intend to allow-list but the list has not caught up:\n` +
-                `  supabase/config.toml names only ${allowed.join(", ")}, and GoTrue bakes it in at start.\n`
-              : `  supabase/config.toml names only ${allowed.join(", ")}.\n`;
+                `  supabase/config.toml names ${describePorts(allowed)}, and GoTrue bakes it in at start.\n`
+              : `  supabase/config.toml names only ${describePorts(allowed)}.\n`;
             server.config.logger.warn(
               `\n  Running on ${actual}, which is NOT on Supabase's redirect allow-list.\n` +
                 "  Google sign-in will appear to work and then drop you at the site root —\n" +

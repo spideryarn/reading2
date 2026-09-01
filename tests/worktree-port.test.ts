@@ -31,6 +31,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   allowListedPorts,
+  describePorts,
   DEV_PORT_RANGE,
   devPorts,
   inLinkedWorktree,
@@ -195,5 +196,21 @@ additional_redirect_urls = [
     expect(live.length).toBeGreaterThan(0);
     expect(live).toContain(PRIMARY_PORT);
     for (const port of live) expect(portInRange(port)).toBe(true);
+  });
+});
+
+describe("describePorts", () => {
+  it("collapses a contiguous run, because 31 ports listed out is unreadable", () => {
+    // The warning printed all 31 as a comma list before this existed.
+    expect(describePorts(devPorts())).toBe("5273–5303");
+  });
+
+  it("lists them when they are not contiguous, because then the gap is the point", () => {
+    expect(describePorts([5273, 5290, 5299])).toBe("5273, 5290, 5299");
+    expect(describePorts([5273, 5274])).toBe("5273, 5274");
+  });
+
+  it("says none rather than printing an empty string", () => {
+    expect(describePorts([])).toBe("none");
   });
 });

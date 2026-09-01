@@ -1161,7 +1161,7 @@ to take while a dozen agents were mid-task.
 
 1. ~~**`.gitignore` gets `.claude/worktrees/`**~~ — **done.** Claude Code's own docs recommend it. The
    Dropbox xattrs are Mac-only and belong with
-   [Runbook B](../project/worktrees.md#runbook-b-the-mac-later); this box is outside Dropbox.
+   [Runbook B](../project/worktrees.md#runbook-b-the-mac-done-2026-09-01); this box is outside Dropbox.
 2. ~~**`.worktreeinclude`**~~ — **done**, listing `.env.local` and `.env`, with `.env.prod`
    deliberately absent. Checked against the Claude Code docs rather than taken from this plan: the
    file is real, sits at the project root, uses `.gitignore` syntax, and copies only files that match
@@ -1289,19 +1289,20 @@ kept because items 3 and 4 stand unchanged:
    with **`strictPort: true`**.
 2. An **atomic port lease** on [`scripts/lockfile.ts`](../../scripts/lockfile.ts), not a
    scan-then-pick and not a hash — see [Ports](#ports) for why the hash was proposed and withdrawn.
-3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml),
-   **then restart Supabase and check the running container**: the file is not re-read automatically
-   ([setup-dev.md](../project/setup-dev.md)). **Still open — it needs the restart, which interrupts
-   everyone.** But this is now the *only* thing stopping a worktree doing sign-in work, and the failure
-   was found rather than predicted: a worktree's dev server walks to 5274 the moment the primary holds
-   5273, and 5274 is not allow-listed. The startup warning says so now, having been fixed to read the
-   config file instead of our own range constant — it had been silent on exactly that case, which is
-   the failure it exists to prevent rebuilt one level up.
+3. ~~The `additional_redirect_urls` range~~ — **done, 2026-09-01.** 5273–5303 in
+   [`supabase/config.toml`](../../supabase/config.toml), matching `DEV_PORT_RANGE`, verified in the
+   running container rather than in the file. The restart cost **48 seconds**, taken after checking
+   that all 17 database connections belonged to Supabase's own services; data survived
+   (`backup: true`, 17 articles and 4 users after).
 
-   **Worth testing when the restart happens**: whether one wildcard (`http://localhost:52*/**`) covers
-   the range instead of the 124 entries that 31 ports × 2 hosts × 2 forms would need. GoTrue
-   glob-matches the list, but whether a glob works in the *port* position is untested and cannot be
-   tested without restarting.
+   **Two things worth keeping from it.** First, a wildcard would have replaced 66 entries with two,
+   and was rejected because it could not be tested: `/auth/v1/authorize` returns an identical 302 to
+   Google for an allow-listed port, an unlisted one, and `http://evil.example/steal` — validation is
+   at the callback, so it needs a real OAuth round trip to observe. The probe built to test the
+   wildcard proved only that the probe was useless, which is the reason the verbose list shipped.
+   Second, this closes the loop on the warning: it is silent on 5295 and fires on 5400, both checked
+   after the restart.
+
 4. An identity endpoint reporting worktree and commit, which browser checks assert against.
 
 Why (4) is not optional: `strictPort` only makes the *second server* refuse to start. A browser
@@ -1476,10 +1477,16 @@ always-merge decision removed a rule change, a doc contradiction, and one of GPT
 once. Rule changes go one approved set at a time
 ([edit-important-docs.md](../reusable/edit-important-docs.md)).
 
-### 7. Later: move the repo out of Dropbox
+### 7. ~~Later: move the repo out of Dropbox~~ — **done, 2026-09-01, by another agent**
 
-Greg intends to; deferred while agents are working. Not by deleting worktrees — git supports moving
-the main worktree and repairing the links:
+The Mac's checkout is now `~/dev/spideryarn/reading2` (`276aabe`, `6cb277e`), and this box was never in
+Dropbox. **So every Dropbox premise in this plan is retired**: decision 0c, decision 1, the xattrs, and
+the one risk the plan admitted it had no mechanism for — Dropbox restoring an older-but-valid ref into
+the shared `.git`, invisible to `git fsck` because every object in it is valid. That row of the failure
+table has no remaining cause.
+
+The recipe below is kept because the next move will want it, and because the one step people skip is
+named in it: repair against the **recorded** paths, not a shell glob.
 
 1. Quiesce: stop agents, servers and editors holding the old path.
 2. Record `git worktree list --porcelain`.
@@ -1543,7 +1550,7 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    Greg's answer was "this Linux box only, for now", and this box is at `/home/greg/code/spideryarn2`,
    outside Dropbox — so there is nothing to decide here. The Mac keeps sharing one tree; getting it out
    of Dropbox first, which deletes this question rather than answering it, is
-   [worktrees.md § Runbook B](../project/worktrees.md#runbook-b-the-mac-later), along with the
+   [worktrees.md § Runbook B](../project/worktrees.md#runbook-b-the-mac-done-2026-09-01), along with the
    Dropbox-tolerant fallback if the move is not on yet. Original text: The plan is to leave worktrees where Claude Code puts
    them and set both Dropbox xattrs plus a `.gitignore` line. The alternative is a `WorktreeCreate`
    hook that relocates them off the Dropbox volume and runs `npm ci` at the same time, at the cost of

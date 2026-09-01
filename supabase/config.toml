@@ -236,11 +236,95 @@ site_url = "http://localhost:5273"
 # were. The bare roots stay because they are `site_url` and its 127.0.0.1 twin.
 # The same three globs are needed on the remote project; see
 # docs/plans/auth-ui-and-production.md § The two hostnames.
+# Every port a dev server may end up on, listed explicitly.
+#
+# **Why it is this long.** GoTrue matches this list to decide where a sign-in may
+# return to, and a port that is missing does not error — the callback falls back
+# to `site_url` and the reader lands on the shelf instead of where they were. So
+# a worktree on an unlisted port has a Google sign-in that *appears to work*.
+#
+# **Why not one wildcard.** `http://localhost:52*/**` would replace all of this,
+# and GoTrue does glob-match the list — but whether a glob works in the *port*
+# position is untested, and it cannot be tested cheaply: `/auth/v1/authorize`
+# redirects to Google identically for an allow-listed port, an unlisted one and
+# `http://evil.example`, so validation happens at the callback and needs a real
+# OAuth round trip to observe. An untested entry guarding a silent failure is
+# worse than a verbose one. Probed 2026-09-01; see docs/project/worktrees.md.
+#
+# The range is 5273–5303, matching DEV_PORT_RANGE in
+# scripts/worktree-port.ts, which is what `npm run dev` warns against at startup.
+# Those two must agree: while they did not, the warning sat silent on 5274.
+#
+# Remember GoTrue bakes this in at start and never re-reads it, so an edit here
+# means `npm run db:stop && npm run db:start` and then checking the running
+# container — docs/project/setup-dev.md.
 additional_redirect_urls = [
+  # 5273 is the primary's, and keeps the bare forms because site_url is that exact URL.
   "http://localhost:5273",
   "http://localhost:5273/**",
   "http://127.0.0.1:5273",
   "http://127.0.0.1:5273/**",
+  # 5274–5303 are worktrees. Only the path form: the callback is /auth/callback.
+  "http://localhost:5274/**",
+  "http://127.0.0.1:5274/**",
+  "http://localhost:5275/**",
+  "http://127.0.0.1:5275/**",
+  "http://localhost:5276/**",
+  "http://127.0.0.1:5276/**",
+  "http://localhost:5277/**",
+  "http://127.0.0.1:5277/**",
+  "http://localhost:5278/**",
+  "http://127.0.0.1:5278/**",
+  "http://localhost:5279/**",
+  "http://127.0.0.1:5279/**",
+  "http://localhost:5280/**",
+  "http://127.0.0.1:5280/**",
+  "http://localhost:5281/**",
+  "http://127.0.0.1:5281/**",
+  "http://localhost:5282/**",
+  "http://127.0.0.1:5282/**",
+  "http://localhost:5283/**",
+  "http://127.0.0.1:5283/**",
+  "http://localhost:5284/**",
+  "http://127.0.0.1:5284/**",
+  "http://localhost:5285/**",
+  "http://127.0.0.1:5285/**",
+  "http://localhost:5286/**",
+  "http://127.0.0.1:5286/**",
+  "http://localhost:5287/**",
+  "http://127.0.0.1:5287/**",
+  "http://localhost:5288/**",
+  "http://127.0.0.1:5288/**",
+  "http://localhost:5289/**",
+  "http://127.0.0.1:5289/**",
+  "http://localhost:5290/**",
+  "http://127.0.0.1:5290/**",
+  "http://localhost:5291/**",
+  "http://127.0.0.1:5291/**",
+  "http://localhost:5292/**",
+  "http://127.0.0.1:5292/**",
+  "http://localhost:5293/**",
+  "http://127.0.0.1:5293/**",
+  "http://localhost:5294/**",
+  "http://127.0.0.1:5294/**",
+  "http://localhost:5295/**",
+  "http://127.0.0.1:5295/**",
+  "http://localhost:5296/**",
+  "http://127.0.0.1:5296/**",
+  "http://localhost:5297/**",
+  "http://127.0.0.1:5297/**",
+  "http://localhost:5298/**",
+  "http://127.0.0.1:5298/**",
+  "http://localhost:5299/**",
+  "http://127.0.0.1:5299/**",
+  "http://localhost:5300/**",
+  "http://127.0.0.1:5300/**",
+  "http://localhost:5301/**",
+  "http://127.0.0.1:5301/**",
+  "http://localhost:5302/**",
+  "http://127.0.0.1:5302/**",
+  "http://localhost:5303/**",
+  "http://127.0.0.1:5303/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

@@ -91,7 +91,7 @@ showing it.
 1. **This Linux box first.** The plan was written on the Mac, where the repo lives inside Dropbox and
    that drives a lot of its cost. This box is at `/home/greg/code/spideryarn2`, outside Dropbox, so
    the Dropbox questions do not apply here at all. The Mac keeps sharing one tree for now —
-   see [Runbook B](#runbook-b-the-mac-later).
+   see [Runbook B](#runbook-b-the-mac-done-2026-09-01).
 2. **A worktree pushes straight to `dev`.** Not a `worktree-*` branch on the remote; the local branch
    is a scratch label you delete afterwards. See [The workflow](#the-workflow).
 3. **One shared local Supabase, with a lease**, for v1 — and a stack per worktree later if it earns
@@ -287,11 +287,26 @@ Half of this is worse than none, because each half hides the other's failure:
    tell you who to ask. `DEV_PORT_RANGE` is the only place the range is written down; 5273 is the
    primary's and is **never** handed to a worktree; and an out-of-range port is refused, not clamped —
    for every candidate, not just an explicitly requested one.
-3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml), **then
-   restart Supabase and check the running container** — the file is not re-read automatically
-   ([supabase-local.md](supabase-local.md)). **Deliberately not done yet**: it needs a Supabase
-   restart, which would interrupt every agent, and nothing can reach a port outside the current
-   allow-list until something sets `SPIDERYARN_DEV_PORT`.
+3. ~~The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml)~~ —
+   **done, 2026-09-01.** The list now covers 5273–5303, exactly `DEV_PORT_RANGE`, and the two agreeing
+   is the point: while they disagreed, the startup warning sat silent on a port where sign-in was
+   broken. Verified in the running container, not just the file — GoTrue bakes the list in at start
+   and never re-reads it, so the file is never the answer
+   ([setup-dev.md](setup-dev.md)).
+
+   **The restart cost 48 seconds**, taken deliberately after checking that no agent was touching the
+   database: all 17 connections were Supabase's own services. `supabase stop` keeps the data — it is
+   not a reset — and it reported `backup: true`, "Starting database from backup", with 17 articles and
+   4 users still there afterwards.
+
+   **The wildcard was not used, and the reason is a warning about testing.**
+   `http://localhost:52*/**` would have replaced 66 entries with two, and GoTrue does glob-match the
+   list. But the glob-in-a-port question cannot be answered cheaply: `/auth/v1/authorize` returns an
+   identical 302 to Google for an allow-listed port, an unlisted port **and**
+   `http://evil.example/steal`. Validation happens at the callback, so observing it needs a real OAuth
+   round trip. The probe was built to test the wildcard and instead proved it could not — which is why
+   the verbose, known-good list is what shipped. An untested entry guarding a silent failure is worse
+   than a long one.
 4. An identity endpoint reporting worktree and commit, which browser checks assert against.
 
 Why (4) is not optional: `strictPort` only makes the *second* server refuse to start. A browser
@@ -385,38 +400,29 @@ committed sat on an unmerged branch with no remote ref for 31 hours while the bu
 live. It is what makes a sweep's "merged" guard mean anything, and it is the only way work reaches the
 remote box, which can see nothing unpushed.
 
-## Runbook B: the Mac, later
+## Runbook B: the Mac (done, 2026-09-01)
 
-The Mac's checkout is inside Dropbox, which is where most of the original plan's cost came from: a
-worktree there means `node_modules` syncing to the cloud, and — the risk `git fsck` cannot see —
-Dropbox restoring an older-but-valid ref into the shared `.git`, because every object in it is valid.
+**Nothing to do here.** While this work was going on, another agent moved the Mac's checkout out of
+Dropbox to `~/dev/spideryarn/reading2` (`276aabe` and `6cb277e`, and its own plan under
+`docs/plans/`). Verified from that commit: inode 574720701 before and after, which is the check that
+separates a move from a copy, with artefact counts and Supabase row counts identical.
 
-**Do this first, and most of the rest disappears:** move the checkout out of Dropbox, as this box
-already is. Git supports moving a main worktree; do not delete worktrees to do it.
+So **the whole Dropbox dimension of the worktrees plan is gone**, on both machines:
 
-```bash
-# Take an off-Dropbox backup before any of this.
-# 1. Quiesce: stop every agent, dev server and editor holding the old path.
-# 2. Record the registered paths — you will need them literally in step 4.
-git worktree list --porcelain > ~/worktree-paths-before-move.txt
-# 3. Move the primary out of Dropbox, e.g. to ~/code/spideryarn2.
-# 4. Repair the links against the RECORDED paths, not a shell glob.
-git worktree repair <each path from step 2>
-# 5. From every worktree, verify: status, branch, common git dir, registered path.
-```
+- No `.claude/worktrees/` inside a synced folder, so no xattrs to set and no question about whether
+  ignoring a path deletes its cloud copy.
+- The risk `git fsck` could never see — Dropbox restoring an older-but-valid ref into the shared
+  `.git`, because every object in it is valid — no longer exists anywhere.
+- `node_modules` at 681 MB per worktree costs disk and nothing else.
 
-Then run [Runbook A step 5](#runbook-a-flip-the-trunk-to-dev-not-yet-run) on the Mac — `git fetch
-origin dev && git remote set-head origin -a` — or its first worktree silently branches from `main`.
+What still applies on any machine after a move like that, and is worth keeping because the next one
+will need it: `git worktree repair` against the **recorded** paths from `git worktree list --porcelain`
+rather than a shell glob, and then verifying status, branch, common git dir and registered path from
+every worktree.
 
-If the move is not on yet, the Dropbox-tolerant version is: leave worktrees where Claude Code puts
-them under `.claude/worktrees/`, add that path to `.gitignore`, and set the Dropbox ignore xattrs as
-`node_modules` and `dist` already have. Note that ignoring a path **deletes Dropbox's copy of it**,
-which is why `data/` was never ignored there.
-
-Two Mac-only extras when a worktree is created: `tmutil addexclusion` on the new `node_modules`, and
-nothing else — `npm ci --prefer-offline` is the same command on both machines, which is what makes it
-the cross-platform answer rather than the copy-on-write cache the plan originally designed and
-[deleted](../plans/260828r-worktrees.md#what-changed-on-2026-08-31-and-what-it-deletes).
+The one step from [Runbook A](#runbook-a-flip-the-trunk-to-dev-not-yet-run) that the Mac will still
+need, whenever the trunk actually moves, is `git remote set-head origin -a` — but that is part of the
+flip, not of the move.
 
 ## Traps
 
