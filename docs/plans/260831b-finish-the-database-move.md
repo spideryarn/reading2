@@ -1,37 +1,52 @@
 # Finish the move from files to the database
 
-**Status, 2026-09-01 15:30. Stages 1, 2, 2.4, 2.5 and 3 are done. Stage 4 is about a third
-through.** The pipeline publishes through Postgres and the decorator is gone; `raw_bytes` is dropped;
-three dead seams are deleted; the committed fixture corpus is actually being read for the first time.
-What remains is the bulk of the test conversion, the hinge, and the deletions behind it.
+**Status, 2026-09-01 16:30. Production-ready, pending deployment. Stages 1, 2, 2.4, 2.5 and 3 are
+done; stage 4 is done as far as production correctness requires, and the rest is deliberately
+deferred to § *Appendix: the cleanup that remains*.**
 
-**Nothing has been deployed.** The flip and the `raw_bytes` drop are in code only. Deploying needs
-credentials that are not in this tree, and **the `raw_bytes` drop is destructive on the remote and
-needs Greg's explicit go-ahead** — it also cannot ride in a single `npm run deploy`, because
-`scripts/deploy.ts` migrates before it pushes, so one run would drop the column while the old code
-still selects it.
+The pipeline publishes through Postgres; `raw_bytes` is dropped; checkpoints are durable; the eight
+stage CLIs are gone. **An audit traced every filesystem read and write reachable from a request or a
+job under `postgres` and found none** — and `src/store/index.ts` throws at boot if the store is
+`files` under Vercel, so the filesystem half cannot serve a production request even by accident.
 
-**Two decisions are waiting on Greg**, neither blocking: sub-stage I (deleting `readArticleFromDir`
-removes the *"every stage stays runnable on its own against a slug"* capability and four eval entry
-points), and the four suites that test modules this stage deletes rather than converts.
+**The bar Greg set on 2026-09-01 — *"works in production once deployed with migrations, across
+webservers that don't share a filesystem"* — is met**, with the deployment itself still to do.
+
+**DEPLOYING THIS TAKES TWO RUNS, IN THIS ORDER.** `scripts/deploy.ts` applies migrations **before**
+it pushes code, so a single `npm run deploy` carrying both would drop `raw_bytes` while the old code
+still selects it. **Push the code first; deploy again to run the migrations.** Greg has said
+temporary breakage between the two is acceptable. Nothing here has been deployed — there is no
+`.env.prod` in the tree and `vercel whoami` says logged out.
 
 | item | state |
 |---|---|
-| 2.4 migration ledger | **done** — repaired, guarded, deep catalogue probes, postmortem |
-| 2.5 refetch | **done** — measured on a quiet machine, `✓ ready` |
-| 3 item 0 — short-id slugs | **done** (`74e2915`, `1010a60`) |
-| 3 item 1 — prove the coordinator | **done** (`132be8d`) |
-| 3 item 3 — `forceForRetry` | **done**; the retry money hole it opened is closed (`605877c`) |
-| 3 item 4 — exact base | **done**, and the guard now lives in `publishRevisionIn` rather than in the one caller that remembered to ask (`5618365`) |
-| 3 item 5 — delete the importer | **done** (`b73ad74`) |
-| **3 item 6 — the flip** | **DONE** (`c42c940`) |
-| 4a — `raw_bytes` | **done** — column dropped locally (`0049`), every reference gone, the `readPdf` legacy query with it |
-| 4b — the dead seams | **done** — `revisionLifecycle`, the checkpoint fs adapter, `checkNoteFields`; 510 lines |
-| 4A — fixtures read the corpus | **done** — proved on a simulated fresh clone with no `data/` at all |
-| 4B — the route suites | pilot done and measured (5 converted); ~11 genuine ones remain, 4 need a decision |
-| 4B–4J | **not started** — see § *How stage 4 actually goes* |
+| 1, 2, 2.4, 2.5 | **done** |
+| 3 — the flip | **done** — `claimSession` opens a Postgres draft; `publish-session.ts` deleted |
+| 4a — `raw_bytes` | **done** — column dropped, `readPdf`'s legacy query with it |
+| 4b — dead seams | **done** — `revisionLifecycle`, the checkpoint fs adapter, `checkNoteFields` (510 lines) |
+| 4A — fixtures read the corpus | **done** — proved on a simulated fresh clone with no `data/` |
+| 4B — route suites | **5 of ~16 converted**, pattern proved and measured → appendix |
+| 4I — the eight stage CLIs | **done** — 572 lines; `readArticleFromDir` moved to `tests/helpers/` |
+| **D2 — durable checkpoints** | **done** — and it was the one real ship blocker |
+| 4C, 4D, 4E–H, 4J | **deferred** — § *Appendix: the cleanup that remains* |
 
-### What the three Sol reviews found, and where each finding ended up
+### Four production bugs found and fixed along the way, none of them in this plan's scope
+
+Each was found while doing something else, and each was live.
+
+| bug | how it showed |
+|---|---|
+| **`retryJob` re-paid for a successful job**, indefinitely, once `forceForRetry` began re-forcing | found by GPT Sol reviewing item 3 |
+| **A 409 and a 404 arrived as 500** since 2026-08-28 — `CommentIdTaken` was not on `guardDbStore`'s allowlist, so the reader got a server error for an ordinary conflict, and **the mapping never worked in production for a single request** | found by a *measurement* pilot |
+| **A `SELECT … FOR UPDATE` that locks nothing** — two ingests of the same document collided and the loser rolled back its whole revision write | found by an agent sent to *confirm* a different result, which it instead overturned |
+| **A comment answered on one machine, swept by another** — the sweep consulted a process-local `Set`, so a second machine marked a live answer errored under the reader | found by the production filesystem audit |
+
+**The pattern worth keeping:** three of the four were found by work aimed somewhere else, and two were
+found by agents that contradicted the brief they were given. The measurement pilot in particular
+earned its keep twice over — it produced the number that killed a second seeder *and* found a bug
+four days old.
+
+### What the GPT Sol reviews found, and where each finding ended up
 
 | finding | outcome |
 |---|---|
@@ -1494,6 +1509,104 @@ NO-SHIPs, every finding accepted and three of them corrections to me rather than
 the diff to your own files, append the new files in full — `git diff` does not show untracked ones,
 which is how a whole seam once reached a reviewer as nothing at all — and say plainly which failures
 in the suite are other people's.
+
+## Appendix: the cleanup that remains
+
+**None of this is needed for production.** The audit of 2026-09-01 traced every filesystem read and
+write reachable from a request or a job under `postgres` and found none; `src/store/index.ts` throws
+at boot if the store is `files` under Vercel. So the filesystem store is **dead weight, not a data
+dependency**. What keeps it alive is the test suite.
+
+**The goal this serves is Greg's, stated 2026-09-01:** *"cleaning up use of filesystem to use
+database, so that eventually we can completely remove `SPIDERYARN_STORE` (because it's always
+postgres everywhere)"*. One store, no branching.
+
+### The order, and the one thing that makes it an order
+
+`guarded(what, pg, files)` returns the **filesystem** half whenever `STORE !== "postgres"`, and
+`STORE` is unset in almost every test. **So deleting any single `fs*` half flips the default store
+for about a hundred test files at once.** There is no honest adapter-by-adapter path; the switchover
+is one commit in the middle, everything before it additive, everything after it dead-code removal the
+compiler checks for you.
+
+**The burden is smaller than it looks: about 25 files, not 120.** ~11 route suites, ~12 tmpdir
+doubles, and the teardown fixes. The rest either die with their modules or already pass under
+Postgres.
+
+1. **B — the ~11 remaining route suites.** Mechanical; the pattern is proved and measured
+   (`tests/helpers/scratch-article.ts`, ~280 ms a seed). Land `serialise: false` for unique-slug
+   seeds as you go.
+2. **B′ — four suites that do not convert: delete them, do not rewrite.** `shelf` and
+   `library-search` test `src/shelf.ts` and `src/library-search.ts`, which this stage deletes; four
+   of `parse-json`'s six scenarios likewise; and `library.test.ts`'s `listArticles` half tests a
+   half-built directory falling back to mtime — **there is no Postgres equivalent because Postgres
+   cannot have a half-built directory.** That is the migration working, not a gap. Before deleting,
+   check `pgShelfStore`/`pgLibrarySearch` cover the surviving *properties* (listing order, ownership
+   filtering); port individual assertions if not, never the suites.
+3. **C — the ~12 tmpdir `createFsArtifactStore()` doubles: point them at Postgres.**
+   **Do not build an in-memory `ArtifactStore`** — GPT Sol and Fable agreed independently. A
+   nine-method double whose fidelity nothing checks is a third implementation, built at the exact
+   moment the goal is getting down to one.
+4. **D — the hinge, as ONE commit, with two riders that must not be split out.**
+   `guarded()` stops branching and `storeFromEnv` loses `"files"`. Plus:
+   - **`pgReady` flips to required.** It currently makes 53 files *skip* without a database; after D
+     that would be 100+, so a machine with no Docker would get a green run over a quarter of the
+     suite — the exact silent-success class this repo keeps writing postmortems about.
+   - **`guardDbStore` moves onto each Postgres store's own export.** Only 2 of 15 do this today, and
+     the wrapper the other 13 rely on is what D deletes, so the guard must land somewhere in the same
+     commit. This is the durable fix from
+     [260901d-a-409-and-a-404-arrived-as-500.md](../postmortems/260901d-a-409-and-a-404-arrived-as-500.md).
+5. **E–H — delete the adapters**, innermost outward: uploads → blobs → ai-calls → jobs → the eight
+   reader-state modules and `src/store/fs.ts` (533 lines) → `artifacts-fs.ts` → `data-root.ts`.
+   Compiler-checked no-ops after D.
+6. **J — `scripts/deploy.ts:~664`'s corpus copy loop, and the docs.** Smaller than feared: the 13
+   gate sentinels already live under `tests/fixtures/data-root/`, so **if the sentinel list does not
+   move there is no collision** with [260901b](260901b-committed-fixture-corpus.md).
+
+### What Sol says to delete once the adapter is gone
+
+Keep `ArtifactKind`/`ArtifactMap`/`ArtifactParts`/`StepProduct`, `ArtifactReads` (stages should get
+only the six reads they are allowed), and `StoreSession` — it represents a real atomic boundary and
+its value never depended on there being two engines. Delete the full mutable `ArtifactStore`
+interface (make the writer private inside the PG session), `readsOf`, `fsStoreSession` and the parity
+suites, the whole selection machinery, and `PipelineStep.outputs` / `StepContext.dir` / `htmlFile` /
+`contextPaths` / `dataRoot`. **Do not convert filesystem parity suites into Postgres tests of
+filesystem behaviour.**
+
+`copy-artefacts.ts` goes with the filesystem adapter — do not let it become permanent test
+infrastructure. Sol's longer-term suggestion is one central `seedPublishedArticle` helper that
+inserts the minimum coherent state directly, consolidating the **20 test files that already
+hand-roll `db.insert(articles)`**; tests of publication must keep using the real path.
+
+`example/` **dissolves** rather than being a project: `fsAssertWritableGlossary` dies at D,
+`src/searches.ts` and `src/library-search.ts` at E–H. Keep the directory as a committed fixture.
+
+### Traps, each verified rather than inherited
+
+- **`tests/slug.test.ts:81` asserts the *source text* of `jobs-fs.ts`** — the only test that goes red
+  purely because a file was deleted, and it will look unrelated.
+- **The eight `data/_jobs` teardowns become permanent no-ops** (`readdir(...).catch(() => [])` over a
+  directory that will never exist). **Convert them to check the `jobs` table; do not delete them.**
+- **`store-artefact-manifest`'s job is to notice a new artefact filename arriving.** Confirm
+  `store-artefacts-pg` covers "a new kind arrives and nobody homed it" before deleting it — its two
+  known failures vanish with it, **which will look like a fix**.
+- **`tests/helpers/seed-reader-state.ts` is built on condemned code** and cannot be pointed at the
+  corpus: `src/shelf.ts`, `comments.ts`, `chat.ts`, `searches.ts` pin their own `ROOT` at module
+  scope and `glossary-lookups.ts` uses `process.cwd()`. Sub-stage B removes the need; do not "fix"
+  them into code that is about to go.
+- **Four lists in this document have been wrong.** Re-derive rather than inherit — including from
+  this appendix.
+
+### Also outstanding, unrelated to the flag
+
+- **`docs/project/architecture.md` and `dev-and-deployment-overview.md` each need one line changed**
+  (the stage-CLI promise, and the per-stage scripts). Both are entry-point docs, so they need Greg's
+  approval one change at a time — the before/after are in the session's chat, not yet applied.
+- **The production `raw_bytes` drop needs two deploy runs**, code first. See the status block.
+- **`pdf-read.ts`'s admission check is still not built**: a pathologically dense 100-page PDF can
+  still exhaust the deadline. Durable checkpoints mean a retry now *accumulates* rather than starting
+  over, so it converges instead of failing for ever — but refusing up front, the way
+  `TooLongForOnePass` does, is the real answer.
 
 ## Appendix: someday maybe
 
