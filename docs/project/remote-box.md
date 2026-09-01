@@ -114,6 +114,101 @@ The `~/.ssh/config` block is **appended behind a marker, never written whole**. 
 persistent volume, so a config Greg adds by hand outlives the server that provisioning rebuilds, and
 a `cat >` would eat it on a re-run — at the one moment nobody is looking.
 
+## What `gjd-remote ls` is telling you
+
+```
+NAME                                     AGE   ATT  STATE          TITLE
+gjd-remote-ls-status-indicators          17m   yes  ? needs you    gjd-remote ls status indicators
+worktrees-migration-history              3h    yes  - idle         Worktrees migration history
+database-move-completion                 18h   yes  * working      Database move completion
+run-git-commit-changes-md-then-pull      20m    no  z waits 3h39m  (no title yet)
+— 1 needs you · 2 idle · 5 working · 1 waiting to start
+```
+
+**The rows are sorted by who is being waited on**, not alphabetically. `needs you` is a session
+parked on a permission prompt or a question, going nowhere until somebody answers it, and it costs
+you the whole time it sits there — so it goes at the top. Then `idle`, which has finished and nobody
+has looked. Everything getting on with itself sorts below both.
+
+| | |
+|---|---|
+| `needs you` | a permission prompt or a question is on screen, and nothing happens until you answer |
+| `idle` | Claude is up and has finished its turn — it is waiting for you to type |
+| `working` | Claude is busy |
+| `waits 3h39m` | [`--wait`](#starting-it-later---wait) is still counting down; Claude has not started |
+| `no claude` | the box looked at the pane and found no Claude — it exited, or never got that far |
+| `shell` | a `new-shell` session, which never had one — see the limitation below |
+| `unknown` | something could not be determined, and a line under the table says which row and why |
+
+**Two sources, and neither is trusted alone.**
+
+`claude agents --json` prints one record per live session — `sessionId`, `pid`, `cwd`, `status` —
+and `status` is `busy`, `idle` or `waiting`. It joins to us on `sessionId`, which is the uuid
+`new-claude` already pins into the tmux environment. It is the only thing that can tell busy from
+idle from parked-on-a-question.
+
+**But being absent from that list does not mean not running**, and that was measured here before this
+column existed: a session started with `--dir ~` had a live `claude --session-id <uuid>` for at least
+35 seconds and `agents --json` matched it zero times, twice
+([260901a](../plans/260901a-gjd-remote-wait-duration-and-ssh-command.md#claude-agents---json-and-the-trap-in-it)).
+So the JSON says *listed*, not *running*. The second source is the process table: **one** checked
+snapshot (`ps -eo pid=,ppid=,etimes=,args=`) joined against **every** pane of every session
+(`tmux list-panes -a`), looking for a `claude --session-id <this uuid>`. A session that is running
+but unlisted comes out `unknown` — never `no claude`, which would be a confident lie about a session
+that is working.
+
+Three details in that sentence are each a bug the first version had, all found in review or while
+testing the fix for the one before it: it is **every pane**, because `#{pane_pid}` is only the active
+pane of the current window; the snapshot's **exit status is checked**, because `ps --ppid` exits 1
+for "no children" and a per-session call could not tell that from a failure; and the **pane process
+counts as well as its children**, because `tmux new-window 'claude …'` makes Claude the pane itself.
+
+**It is deliberately not screen-scraping**, and that was a decision rather than the first idea. The
+panes really do say `✽ Herding… (2m 32s · ↓ 7.0k tokens)` while working and
+`✻ Sautéed for 1h 13m · done 10:29 AM` when finished, and matching those off `capture-pane` was
+version one. `cmux`, which orchestrates terminal agents for a living, records terminal-UI matching as
+its single largest source of bugs — dozens of detection issues, each arriving the day Claude changed
+how it draws a spinner. Hooks (`PermissionRequest`, `Stop`) are more precise still and are what the
+tmux-dashboard projects use, but they have to be configured before a session starts, so they cannot
+answer for the eleven sessions already running — which is the whole job of `ls`.
+
+**The countdown comes off the `sleep` itself**: the same snapshot finds the `sleep N` the job script
+is sitting in, and `N` minus its elapsed seconds is what is left. The laptop's own log already
+records a `waitUntilMs` and would have been easier, but the sleep is the clock the wait is actually
+kept by, and it answers for a session launched from another machine, which the log cannot.
+
+**A sleep only counts if one of our own job scripts is the thing sleeping** — its path is under
+`~/gjd-remote/jobs/`. Once Claude exits, the job `exec`s a login shell, and somebody typing
+`sleep 900` into it would otherwise be reported as a scheduled job that had never started. And
+`--wait` is read *before* the agents list, so the countdown still works on a box where
+`claude agents` is missing or broken.
+
+**It fails closed, and that is the part worth knowing.** Every emptiness in this reply is also what
+something broken looks like, so none of them is allowed to be an answer:
+
+- **`claude agents --json` missing, too old or broken** would make every session look like one with
+  no Claude in it. The script says which of the two happened rather than leaving it to be inferred
+  from an empty reply.
+- **One unreadable record in that JSON fails the whole reply.** Skipping bad records looks careful
+  and is the opposite: rename `sessionId` in some later Claude Code and every record is skipped,
+  leaving a healthy-looking empty map — which means "nothing is running anywhere", wrong on every
+  row at once.
+- **A listing shorter than the one tmux sent is a failure**, not a shorter list. `ls` had been
+  silently dropping the last session since it was written; see
+  [260901b](../postmortems/260901b-the-session-that-was-never-listed.md).
+- **`ps` failing, or tmux naming no pane for a session**, says so rather than reading as "nothing is
+  running in there".
+
+See [silent-success.md](../reusable/silent-success.md), and the tests in
+[`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts) — every one of these was
+watched going red.
+
+**One thing it gets wrong on purpose.** A `new-shell` where you then type `claude` yourself still
+says `shell`. There is no `CLAUDE_SESSION_ID` in that session, so there is no uuid to join on and no
+way to tell that Claude from anyone else's. The row is dim and sorts last, so the cost is small, and
+the alternative is a state that means "there might be a Claude in here somewhere". Start it with
+`new-claude` and it is tracked properly.
+
 ## Which tabs are on the box
 
 A dozen tabs in one window look identical, and the difference that matters is invisible until you
@@ -265,7 +360,7 @@ value.
 
 | | |
 |---|---|
-| `gjd-remote ls` | ~2s — one connection |
+| `gjd-remote ls` | ~3s — one connection, and see below |
 | `gjd-remote new-claude --no-attach` | ~7s — one handshake, then five cheap commands |
 | attaching | **~13s on top**, and see below |
 
@@ -277,6 +372,13 @@ local mux handshake, and the client then waits forever for a session that will n
 unbounded hang is indistinguishable from a slow link. See `sshMasterOpts()` in
 [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) for the rest, including why the cleanup is
 `ControlPersist=30` on the master rather than a signal handler.
+
+**`ls` got about 0.65s slower on 2026-09-01**, and it is worth knowing where it went: that is
+`claude agents --json` starting up, which is what fills the [STATE column](#what-gjd-remote-ls-is-telling-you).
+It is a fixed cost, not one per session — median of five on the box, the remote script goes from
+1.20s to 1.85s. **Only `ls` pays it.** `new-claude` checking a name is free, `resume` and `kill` want
+the list and nothing else, so they send the script without that block — which also means they cannot
+hang on it.
 
 **Attaching costs two mosh bootstraps, ~6s each**, because the probe answers "does mosh work on this
 network?" by doing the whole thing and throwing it away. It is not an oversight — mosh retries

@@ -16,37 +16,82 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  AGENTS_FAIL,
+  AGENTS_OK,
+  ROW_COUNT,
   SESSION_FIELDS,
   SESSION_SENTINEL,
+  type Session,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
+  formatWait,
+  parseAgents,
   parseSessionLine,
   parseSessions,
+  sessionState,
 } from "../scripts/gjd-remote-tmux.js";
 
 /** Encode a name or title the way the remote script does. */
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
 
+/** A reply the way the script builds one: the control lines, the rows, the sign-off. */
+const reply = (rows: string[], control: string[] = []) =>
+  [...control, `${ROW_COUNT} ${rows.length}`, ...rows, SESSION_SENTINEL].join("\n");
+
+/** A uuid of the shape `claude --session-id` mints. */
+const UUID = "3c67234f-2da6-4208-8473-9b5ee58be82a";
+
 /** One well-formed record. */
-const row = (o: Partial<{ sid: string; created: string; att: string; win: string; prov: string; name: string; title: string }> = {}) =>
+const row = (
+  o: Partial<{
+    sid: string;
+    created: string;
+    att: string;
+    win: string;
+    prov: string;
+    id: string;
+    proc: string;
+    name: string;
+    title: string;
+  }> = {},
+) =>
   [
     o.sid ?? "$4",
     o.created ?? "1788190336",
     o.att ?? "0",
     o.win ?? "1",
     o.prov ?? "0",
+    o.id ?? UUID,
+    o.proc ?? "claude",
     b64(o.name ?? "fix-the-toc"),
     b64(o.title ?? "Fix the ToC ordering"),
   ].join("|");
 
-/** What the box really printed on 2026-08-31, tmux 3.4, verbatim. */
-const REAL = [
-  "$11|1788191420|1|1|0|YmFjay10by10ZXh0LW5hdmlnYXRpb24=|QmFjayB0byB0ZXh0IG5hdmlnYXRpb24=",
-  "$4|1788190336|1|1|0|Y2hhdC1tYXJrZG93bi1mb3JtYXR0aW5nLWFuZC10b29scw==|Q2hhdCBtYXJrZG93biBmb3JtYXR0aW5nIGFuZCB0b29scw==",
-  "$36|1788194293|0|2|1|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|",
-  "GJDOK",
-].join("\n");
+/**
+ * What the box really printed on 2026-09-01, tmux 3.4, claude 2.1.251, verbatim
+ * but for the agents blob, which is trimmed to the three sessions below.
+ *
+ * Three states in one reply, and they are the three worth having: a session
+ * Claude Code calls `waiting` — parked on a permission prompt nobody has
+ * answered — one it calls `busy`, and one that is not in the agents list at all
+ * because `--wait` has it asleep with 13,335 seconds still to run.
+ */
+const AGENTS_JSON = JSON.stringify([
+  { pid: 3645673, cwd: "/home/greg/code/spideryarn2", kind: "interactive", startedAt: 1788259262000, sessionId: "49348111-df07-44ac-a204-f2e168f46de5", name: "spideryarn2-d0", status: "waiting" },
+  { pid: 400660, cwd: "/home/greg/code/spideryarn2", kind: "interactive", startedAt: 1788194296011, sessionId: "3c67234f-2da6-4208-8473-9b5ee58be82a", name: "spideryarn2-60", status: "busy" },
+  { pid: 2732791, cwd: "/home/greg/code/spideryarn2", kind: "interactive", startedAt: 1788246895000, sessionId: "70852e00-cc1b-4218-9106-4f7b17eb6e34", name: "spideryarn2-76", status: "idle" },
+]);
+
+const REAL = reply(
+  [
+    "$36|1788194293|1|1|0|3c67234f-2da6-4208-8473-9b5ee58be82a|claude|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|RGF0YWJhc2UgbW92ZSBjb21wbGV0aW9u",
+    "$81|1788259262|1|1|0|49348111-df07-44ac-a204-f2e168f46de5|claude|Z2pkLXJlbW90ZS1scy1zdGF0dXMtaW5kaWNhdG9ycw==|Z2pkLXJlbW90ZSBscyBzdGF0dXMgaW5kaWNhdG9ycw==",
+    "$78|1788259066|0|1|1|7d9a25bf-ef51-425f-9ec5-65ada264eb4c|wait:13335|cnVuLWdpdC1jb21taXQtY2hhbmdlcy1tZC10aGVuLXB1bGw=|",
+    "$77|1788246895|1|1|0|70852e00-cc1b-4218-9106-4f7b17eb6e34|claude|d29ya3RyZWVzLW1pZ3JhdGlvbi1oaXN0b3J5|V29ya3RyZWVzIG1pZ3JhdGlvbiBoaXN0b3J5",
+  ],
+  [`${AGENTS_OK} ${Buffer.from(AGENTS_JSON, "utf8").toString("base64")}`],
+);
 
 describe("parseSessionLine", () => {
   it("reads a well-formed record", () => {
@@ -71,7 +116,7 @@ describe("parseSessionLine", () => {
    * `"" !== "0"` is true, so every session read as attached.
    */
   it("refuses a record tmux left empty, rather than dating it to 1970", () => {
-    expect(parseSessionLine("$4|||||" + "|")).toBeNull();
+    expect(parseSessionLine("$4||||||||")).toBeNull();
     expect(parseSessionLine(row({ created: "" }))).toBeNull();
     expect(parseSessionLine(row({ att: "" }))).toBeNull();
     expect(parseSessionLine(row({ win: "" }))).toBeNull();
@@ -109,8 +154,8 @@ describe("parseSessionLine", () => {
   });
 
   it("refuses a name or title that is not valid base64", () => {
-    expect(parseSessionLine(`$4|1788190336|0|1|0|not base64!|${b64("t")}`)).toBeNull();
-    expect(parseSessionLine(`$4|1788190336|0|1|0|${b64("n")}|not base64!`)).toBeNull();
+    expect(parseSessionLine(`$4|1788190336|0|1|0|${UUID}|claude|not base64!|${b64("t")}`)).toBeNull();
+    expect(parseSessionLine(`$4|1788190336|0|1|0|${UUID}|claude|${b64("n")}|not base64!`)).toBeNull();
   });
 
   /**
@@ -133,25 +178,361 @@ describe("parseSessionLine", () => {
   it("refuses a record with no name", () => {
     expect(parseSessionLine(row({ name: "" }))).toBeNull();
   });
+
+  /**
+   * Empty means what it says: `new-shell` makes sessions with no Claude in them.
+   *
+   * A mangled id is KEPT, and that is the point of the test. Everything else in
+   * the record comes from tmux; this comes from a tmux environment variable
+   * anybody can set by hand, and rejecting the line would put it in
+   * `unreadable` — which `sessions()` treats as fatal, so one mistyped variable
+   * on one session would take `ls`, `new-claude` and `resume` down for the whole
+   * box. `sessionState` reports that row as unknown instead.
+   */
+  it("takes an empty claude id as no Claude, and keeps a mangled one rather than losing the row", () => {
+    expect(parseSessionLine(row({ id: "" }))?.claudeId).toBeNull();
+    expect(parseSessionLine(row({ id: UUID }))?.claudeId).toBe(UUID);
+    for (const id of [UUID.slice(0, 20), UUID.toUpperCase(), `${UUID}x`, "not-a-uuid"]) {
+      expect(parseSessionLine(row({ id })), id).not.toBeNull();
+    }
+  });
+
+  /** A `|` in it is a different matter: it shifts the record, and the field
+   *  count catches it — the same guard every other field relies on. */
+  it("still refuses an id carrying the field separator", () => {
+    expect(parseSessionLine(row({ id: "a|b" }))).toBeNull();
+  });
+
+  /**
+   * The process probe has four shapes and no fifth. A token this reader was not
+   * written against decides whether a row is reported as scheduled, running or
+   * gone, so rounding an unrecognised one to `none` would be a row claiming "no
+   * claude" about a session with a Claude in it.
+   */
+  it("reads the process probe, and refuses a token it was not written for", () => {
+    expect(parseSessionLine(row({ proc: "claude" }))?.proc).toEqual({ kind: "claude" });
+    expect(parseSessionLine(row({ proc: "none" }))?.proc).toEqual({ kind: "none" });
+    expect(parseSessionLine(row({ proc: "?" }))?.proc).toEqual({ kind: "unknown" });
+    expect(parseSessionLine(row({ proc: "wait:13335" }))?.proc).toEqual({ kind: "wait", secondsLeft: 13335 });
+    // 0 and negatives never leave the box — the script drops them — so seeing
+    // one means the record did not come from the script this was written for.
+    for (const proc of ["", "wait", "wait:", "wait:0", "wait:-1", "wait:1.5", "wait:2h", "sleeping", "CLAUDE"]) {
+      expect(parseSessionLine(row({ proc })), proc).toBeNull();
+    }
+  });
+
+  /**
+   * `/^[1-9]\d*$/` accepts four hundred digits, `Number` makes that `Infinity`,
+   * and `new Date(Infinity)` is an Invalid Date that the AGE column renders as
+   * `NaNm`. Sol's point, and the same shape as every other bug in this file: a
+   * plausible-looking column that is not a number.
+   */
+  it("refuses a number too big to be a number", () => {
+    expect(parseSessionLine(row({ created: "9".repeat(400) }))).toBeNull();
+    expect(parseSessionLine(row({ win: "9".repeat(400) }))).toBeNull();
+    expect(parseSessionLine(row({ proc: `wait:${"9".repeat(400)}` }))).toBeNull();
+  });
+});
+
+/**
+ * What Claude Code says about its own sessions.
+ *
+ * `claude agents --json` is first-party and documented as being for scripting,
+ * but the array is still somebody else's, so every field is checked. The rule
+ * these tests hold: a record we cannot read is skipped, and a status we do not
+ * recognise is kept as-is so it can be reported as unknown rather than rounded
+ * to the nearest state we do know.
+ */
+describe("parseAgents", () => {
+  const agent = (o: Record<string, unknown>) => ({
+    pid: 400660,
+    cwd: "/home/greg/code/spideryarn2",
+    kind: "interactive",
+    startedAt: 1788194296011,
+    sessionId: UUID,
+    name: "spideryarn2-60",
+    status: "busy",
+    ...o,
+  });
+
+  it("reads what the box actually printed", () => {
+    const m = parseAgents(AGENTS_JSON);
+    expect(m?.size).toBe(3);
+    expect(m?.get("49348111-df07-44ac-a204-f2e168f46de5")).toBe("waiting");
+    expect(m?.get("3c67234f-2da6-4208-8473-9b5ee58be82a")).toBe("busy");
+    expect(m?.get("70852e00-cc1b-4218-9106-4f7b17eb6e34")).toBe("idle");
+  });
+
+  it("is a failure, not an empty list, when the reply is not JSON", () => {
+    expect(parseAgents("")).toBeNull();
+    expect(parseAgents("not json at all")).toBeNull();
+  });
+
+  /** `claude agents` without `--json` prints a table. A table is not an array. */
+  it("is a failure when the JSON is not the array we asked for", () => {
+    expect(parseAgents('{"sessions":[]}')).toBeNull();
+    expect(parseAgents('"a string"')).toBeNull();
+    expect(parseAgents("null")).toBeNull();
+  });
+
+  it("is an empty map, and not a failure, when nothing is running", () => {
+    expect(parseAgents("[]")).toEqual(new Map());
+  });
+
+  /**
+   * ONE BAD RECORD FAILS THE WHOLE REPLY, and this is the test Sol's review
+   * turned around. The first version skipped them, which looks careful and is
+   * the opposite: rename `sessionId` to `session_id` in some later Claude Code
+   * and every record is skipped, leaving a perfectly healthy EMPTY MAP — which
+   * means "no Claude is running anywhere", a confident wrong answer on every row
+   * at once. A short list of statuses is indistinguishable from a correct one.
+   */
+  it("fails the whole reply on a record it cannot read, rather than dropping it", () => {
+    expect(parseAgents(JSON.stringify([agent({ sessionId: "spideryarn2-60" })]))).toBeNull();
+    expect(parseAgents(JSON.stringify([agent({ sessionId: undefined })]))).toBeNull();
+    expect(parseAgents(JSON.stringify([agent({}), agent({ sessionId: undefined })]))).toBeNull();
+    expect(parseAgents(JSON.stringify(["not an object"]))).toBeNull();
+  });
+
+  /** The whole-reply rule again: schema drift renaming `status` must not read
+   *  as a box where nothing is running. */
+  it("fails the whole reply on a record with no status, rather than inventing one", () => {
+    expect(parseAgents(JSON.stringify([agent({ status: undefined })]))).toBeNull();
+    expect(parseAgents(JSON.stringify([agent({ status: "" })]))).toBeNull();
+    expect(parseAgents(JSON.stringify([agent({ status: 3 })]))).toBeNull();
+  });
+
+  /** Claude Code contradicting itself about one session. Picking the last is
+   *  picking at random, on a row that decides whether somebody is being waited on. */
+  it("fails on a duplicate session id rather than letting the last one win", () => {
+    expect(parseAgents(JSON.stringify([agent({ status: "busy" }), agent({ status: "idle" })]))).toBeNull();
+  });
+
+  /**
+   * A status this version has never seen is carried through unchanged, because
+   * `sessionState` has to be able to tell "Claude Code said something new" from
+   * "Claude Code said nothing". Rounding it to `idle` would report a session as
+   * finished while it waits for somebody.
+   */
+  it("keeps a status it does not recognise, so it can be reported as unknown", () => {
+    expect(parseAgents(JSON.stringify([agent({ status: "compacting" })]))?.get(UUID)).toBe("compacting");
+  });
+});
+
+/**
+ * The states `gjd-remote ls` puts on screen.
+ *
+ * The order of the clauses is the design, and each of these tests is a pair of
+ * states that would otherwise be told apart wrongly. See the doc comment on
+ * `sessionState`.
+ */
+describe("sessionState", () => {
+  const session = (o: Partial<Session> = {}): Session => ({
+    name: "fix-the-toc",
+    created: new Date(1788190336000),
+    attached: false,
+    windows: 1,
+    title: "Fix the ToC ordering",
+    provisional: false,
+    claudeId: UUID,
+    proc: { kind: "claude" },
+    ...o,
+  });
+  const agents = (status: string) => new Map([[UUID, status]]);
+
+  it("calls a session with no Claude in it a shell", () => {
+    // Before anything else: a `new-shell` was never going to be in the agents
+    // list, and running it through the rest would report it as a dead Claude.
+    expect(sessionState(session({ claudeId: null }), null).kind).toBe("shell");
+    expect(sessionState(session({ claudeId: null }), new Map()).kind).toBe("shell");
+  });
+
+  it("says unknown for a hand-set CLAUDE_SESSION_ID, rather than calling it a shell", () => {
+    const st = sessionState(session({ claudeId: "not-a-uuid" }), new Map());
+    expect(st.kind).toBe("unknown");
+    expect(st.kind === "unknown" && st.why).toMatch(/not a Claude session id/);
+  });
+
+  it("says unknown rather than guessing when the box could not be asked", () => {
+    const s = sessionState(session(), null);
+    expect(s.kind).toBe("unknown");
+    expect(s.kind === "unknown" && s.why).toMatch(/could not say/);
+  });
+
+  it("reads Claude Code's three statuses", () => {
+    expect(sessionState(session(), agents("waiting")).kind).toBe("needs-you");
+    expect(sessionState(session(), agents("busy")).kind).toBe("working");
+    expect(sessionState(session(), agents("idle")).kind).toBe("idle");
+  });
+
+  /**
+   * The wrong half of this coin flip is a session reported as finished while it
+   * sits waiting for a person — which is the exact failure the column was added
+   * to prevent.
+   */
+  it("says unknown for a status a later Claude Code invented", () => {
+    const s = sessionState(session(), agents("compacting"));
+    expect(s.kind).toBe("unknown");
+    expect(s.kind === "unknown" && s.why).toContain("compacting");
+  });
+
+  /**
+   * `--wait`. The live sleep is the evidence, and it is the only evidence
+   * accepted: a session with no Claude and no sleep is not "about to start".
+   */
+  it("counts down a --wait that has not finished yet", () => {
+    const s = sessionState(session({ proc: { kind: "wait", secondsLeft: 13335 } }), new Map());
+    expect(s).toEqual({ kind: "waiting", secondsLeft: 13335 });
+  });
+
+  /**
+   * `--wait` is read BEFORE the agents list, so a countdown still shows on a box
+   * where `claude agents` is missing or broken. It is safe to put it first
+   * because the evidence is our own job script still running with a live sleep
+   * under it, and a Claude cannot be in the same pane at the same time.
+   */
+  it("counts down a --wait even when the box could not say what Claude is doing", () => {
+    const s = sessionState(session({ proc: { kind: "wait", secondsLeft: 900 } }), null);
+    expect(s).toEqual({ kind: "waiting", secondsLeft: 900 });
+  });
+
+  /**
+   * THE MEASURED CASE, and the reason this function takes a process probe at
+   * all. On 2026-09-01, twice, a session started with `--dir ~` had a live
+   * `claude --session-id <uuid>` for 35 seconds and `claude agents --json`
+   * matched it zero times. So absent-from-the-list is not the same as
+   * not-running, and calling it `no claude` would be a confident lie about a
+   * session that is working.
+   */
+  it("does not report a running-but-unlisted Claude as gone", () => {
+    const st = sessionState(session({ proc: { kind: "claude" } }), new Map());
+    expect(st.kind).toBe("unknown");
+    expect(st.kind === "unknown" && st.why).toMatch(/did not list it/);
+  });
+
+  it("does not report a probe it could not run as an empty session either", () => {
+    const st = sessionState(session({ proc: { kind: "unknown" } }), new Map());
+    expect(st.kind).toBe("unknown");
+    expect(st.kind === "unknown" && st.why).toMatch(/could not look/);
+  });
+
+  it("says no-claude only when the box looked and found nothing", () => {
+    expect(sessionState(session({ proc: { kind: "none" } }), new Map()).kind).toBe("no-claude");
+  });
+});
+
+describe("formatWait", () => {
+  it("reads at a glance", () => {
+    expect(formatWait(0)).toBe("0s");
+    expect(formatWait(45)).toBe("45s");
+    expect(formatWait(59)).toBe("59s");
+    expect(formatWait(60)).toBe("1m");
+    expect(formatWait(3599)).toBe("59m");
+    expect(formatWait(3600)).toBe("1h");
+    expect(formatWait(13335)).toBe("3h42m");
+    expect(formatWait(86399)).toBe("23h59m");
+    expect(formatWait(86400)).toBe("1d");
+    expect(formatWait(100000)).toBe("1d3h");
+  });
+
+  /** A wait whose deadline has just passed must not print a minus sign. */
+  it("does not go backwards", () => {
+    expect(formatWait(-5)).toBe("0s");
+  });
 });
 
 describe("parseSessions", () => {
   it("reads what the box actually printed", () => {
-    const { sessions, unreadable, failure } = parseSessions(REAL);
+    const { sessions, unreadable, failure, agents, agentsWhy } = parseSessions(REAL);
     expect(failure).toBeNull();
     expect(unreadable).toEqual([]);
+    expect(agentsWhy).toBeNull();
     expect(sessions.map((s) => s.name)).toEqual([
-      "back-to-text-navigation",
-      "chat-markdown-formatting-and-tools",
       "database-move-completion",
+      "gjd-remote-ls-status-indicators",
+      "run-git-commit-changes-md-then-pull",
+      "worktrees-migration-history",
     ]);
-    expect(sessions.map((s) => s.attached)).toEqual([true, true, false]);
-    expect(sessions.map((s) => s.provisional)).toEqual([false, false, true]);
+    expect(sessions.map((s) => s.attached)).toEqual([true, true, false, true]);
+    expect(sessions.map((s) => s.provisional)).toEqual([false, false, true, false]);
     expect(sessions[2]?.title).toBe("");
+    expect(sessions[2]?.proc).toEqual({ kind: "wait", secondsLeft: 13335 });
+    expect(agents?.get("49348111-df07-44ac-a204-f2e168f46de5")).toBe("waiting");
+  });
+
+  /**
+   * The end-to-end claim, against one real reply: these four rows really were
+   * in those four states on the box, checked against the panes by hand before
+   * this fixture was taken. `gjd-remote-ls-status-indicators` was sitting on a
+   * question with six options and going nowhere until somebody answered it,
+   * which is the row this whole column exists to surface.
+   */
+  it("turns that reply into the four states a person cares about", () => {
+    const { sessions, agents } = parseSessions(REAL);
+    expect(sessions.map((s) => sessionState(s, agents))).toEqual([
+      { kind: "working" },
+      { kind: "needs-you" },
+      { kind: "waiting", secondsLeft: 13335 },
+      { kind: "idle" },
+    ]);
+  });
+
+  /**
+   * The `GJDAGENTS` line is not a session record, and counting it as an
+   * unreadable one would be fatal: `sessions()` refuses to hand back a list it
+   * knows is short, so every `ls`, `new-claude` and `resume` would die on a
+   * perfectly healthy box.
+   */
+  it("does not mistake its own agents line for a broken session record", () => {
+    const { unreadable, sessions } = parseSessions(REAL);
+    expect(unreadable).toEqual([]);
+    expect(sessions).toHaveLength(4);
+  });
+
+  /**
+   * FAILS CLOSED, and this is the one that matters most here. An agents reply
+   * that never arrived leaves every session looking like one with no Claude in
+   * it — a full screen of confident, plausible, wrong rows. Verified against
+   * the box on 2026-09-01 by putting a `claude` on the PATH that prints
+   * nothing: nine live sessions, all nine reported `unknown`.
+   */
+  it("will not guess at a state when the box could not say what Claude is doing", () => {
+    const out = reply([row()], [`${AGENTS_FAIL} claude agents --json printed nothing`]);
+    const { sessions, agents, agentsWhy, unreadable, failure } = parseSessions(out);
+    expect(failure).toBeNull();
+    expect(unreadable).toEqual([]);
+    expect(agents).toBeNull();
+    expect(agentsWhy).toContain("printed nothing");
+    expect(sessions[0] && sessionState(sessions[0], agents).kind).toBe("unknown");
+  });
+
+  it("treats an agents blob it cannot read as a failure, not as an empty list", () => {
+    const { agents, agentsWhy } = parseSessions(reply([row()], [`${AGENTS_OK} not-base64!`]));
+    expect(agents).toBeNull();
+    expect(agentsWhy).toContain("could not read");
+  });
+
+  it("treats valid base64 that is not the JSON we asked for as a failure too", () => {
+    const out = reply([row()], [`${AGENTS_OK} ${Buffer.from('{"not":"an array"}', "utf8").toString("base64")}`]);
+    expect(parseSessions(out).agents).toBeNull();
+  });
+
+  /**
+   * An empty agents list is a real answer — a box with tmux sessions and no
+   * Claude in any of them — and it must not read as a failure, or `ls` would
+   * warn on every perfectly healthy quiet box.
+   */
+  it("keeps an empty agents list distinct from a missing one", () => {
+    const out = reply([row({ proc: "none" })], [`${AGENTS_OK} ${Buffer.from("[]", "utf8").toString("base64")}`]);
+    const { agents, agentsWhy, sessions } = parseSessions(out);
+    expect(agents).toEqual(new Map());
+    expect(agentsWhy).toBeNull();
+    expect(sessions[0] && sessionState(sessions[0], agents).kind).toBe("no-claude");
   });
 
   it("is empty, and not a failure, for a box with no sessions", () => {
-    expect(parseSessions(SESSION_SENTINEL)).toEqual({ sessions: [], unreadable: [], failure: null });
+    const r = parseSessions(reply([], [`${AGENTS_OK} ${Buffer.from("[]", "utf8").toString("base64")}`]));
+    expect(r).toEqual({ sessions: [], unreadable: [], failure: null, agents: new Map(), agentsWhy: null });
   });
 
   /**
@@ -165,6 +546,57 @@ describe("parseSessions", () => {
   it("refuses a reply with no completion marker", () => {
     const { failure } = parseSessions(row());
     expect(failure).toMatch(/completion marker/);
+  });
+
+  /**
+   * A reply that signs off and then keeps talking is a reply something else got
+   * into. Taking the lines before the signature and ignoring the rest is
+   * reading half of a message that has already gone wrong. Sol's point.
+   */
+  /**
+   * THE BUG THIS COUNT EXISTS FOR, and it had been in `ls` since it was written.
+   * `rows=$(tmux ls …)` strips the trailing newline; the loop was fed
+   * `printf '%s' "$rows"`; `read` returns false on an unterminated final line,
+   * so its body never ran for the LAST session. Ten sessions on the box, nine on
+   * screen, every time, in alphabetical order. Nothing looked wrong — a list of
+   * nine sessions is exactly what a box with nine sessions prints. Found by GPT
+   * Sol on 2026-09-01 and reproduced on the box the same minute.
+   *
+   * The printf is fixed. This holds the whole CLASS shut: tmux says how many
+   * rows it had, and a listing that does not match it is a failure rather than a
+   * shorter list.
+   */
+  it("refuses a listing shorter than the one tmux says it sent", () => {
+    const short = [`${ROW_COUNT} 2`, row(), SESSION_SENTINEL].join("\n");
+    const { failure, sessions } = parseSessions(short);
+    expect(failure).toMatch(/tmux listed 2 session\(s\) and 1 reached this laptop/);
+    expect(sessions).toEqual([]);
+  });
+
+  /** Counts the unreadable ones too — they arrived, they just could not be read,
+   *  and conflating the two failures would make each one hide the other. */
+  it("counts a row it could not read towards the total", () => {
+    const { failure } = parseSessions([`${ROW_COUNT} 2`, row(), "$9||||||||", SESSION_SENTINEL].join("\n"));
+    expect(failure).toBeNull();
+  });
+
+  it("refuses a reply with no row count, or with two of them", () => {
+    expect(parseSessions([row(), SESSION_SENTINEL].join("\n")).failure).toMatch(/0 row counts/);
+    expect(parseSessions([`${ROW_COUNT} 1`, `${ROW_COUNT} 1`, row(), SESSION_SENTINEL].join("\n")).failure).toMatch(
+      /2 row counts/,
+    );
+  });
+
+  /** Two answers to one question is a reply something has been interleaved
+   *  with, and picking one is picking at random. */
+  it("refuses a box that answered twice about what Claude is doing", () => {
+    const out = reply([row()], [`${AGENTS_OK} W10=`, `${AGENTS_FAIL} nope`]);
+    expect(parseSessions(out).failure).toMatch(/answered twice/);
+  });
+
+  it("refuses a reply that carries on after signing off", () => {
+    const { failure } = parseSessions(`${reply([row()])}\nand then some`);
+    expect(failure).toMatch(/after it had finished/);
   });
 
   it("refuses an empty reply, which is what a broken tmux looks like", () => {
@@ -182,15 +614,16 @@ describe("parseSessions", () => {
    * `resume` would attach to the wrong "most recent".
    */
   it("reports an unreadable record rather than quietly shortening the list", () => {
-    const { sessions, unreadable, failure } = parseSessions([row(), "$9|||||" + "|", SESSION_SENTINEL].join("\n"));
+    const { sessions, unreadable, failure } = parseSessions(reply([row(), "$9||||||||"]));
     expect(failure).toBeNull();
     expect(sessions.map((s) => s.name)).toEqual(["fix-the-toc"]);
-    expect(unreadable).toEqual(["$9||||||"]);
+    expect(unreadable).toEqual(["$9||||||||"]);
   });
 });
 
 describe("buildSessionScript", () => {
-  const script = buildSessionScript();
+  // `ls`'s version, which is the only one with the agents block in it.
+  const script = buildSessionScript({ agents: true });
 
   /**
    * The original bug was asking for the stats per session with `tmux display -p
@@ -215,6 +648,145 @@ describe("buildSessionScript", () => {
   it("puts the session id first and the free-text name last", () => {
     expect(SESSION_FIELDS.split("|")[0]).toBe("#{session_id}");
     expect(SESSION_FIELDS.split("|").at(-1)).toBe("#{session_name}");
+  });
+
+  /**
+   * NOT `#{pane_pid}`, and this test is the memory of why. That field is the
+   * active pane of the session's CURRENT window, so a Claude in a second window
+   * or a split was invisible — and an invisible Claude that is also absent from
+   * `claude agents --json` reads as a session with no Claude in it. GPT Sol
+   * found it; `tests/gjd-remote-tmux-script.test.ts` runs the case.
+   */
+  it("asks for every pane, not the one that happens to be on screen", () => {
+    expect(SESSION_FIELDS).not.toContain("#{pane_pid}");
+    expect(script).toContain("tmux list-panes -a -F '#{session_id} #{pane_pid}'");
+    expect(script.match(/tmux ls -F/g)?.length).toBe(1);
+  });
+
+  /**
+   * ONE snapshot, and its exit status checked. `ps --ppid <pid>` exits 1 for
+   * "no children" — the ordinary case — so a per-session call had to throw its
+   * status away, and a `ps` that failed for any other reason then looked exactly
+   * like a pane with nothing under it.
+   */
+  it("takes one process snapshot and checks that it worked", () => {
+    expect(script.match(/ps -eo/g)?.length).toBe(1);
+    expect(script).toContain('snap=$(ps -eo pid=,ppid=,etimes=,args= 2>/dev/null) && [ -n "$snap" ] || snap=');
+    expect(script).not.toContain("--ppid");
+  });
+
+  it("reads the remaining wait off the sleep itself", () => {
+    // Elapsed subtracted from the sleep's own argument, and a non-positive
+    // remainder dropped — a wait that is over is not a wait.
+    expect(script).toContain('r = w[2] - E[q]; if (r > 0)');
+  });
+
+  /** A token awk did not mean to print must not become a state. */
+  it("refuses to pass on a probe result it does not recognise", () => {
+    expect(script).toContain("case \"$proc\" in claude|none|wait:[1-9]*) ;; *) proc='?' ;; esac");
+  });
+
+  /**
+   * A sleep is only a `--wait` if one of OUR job scripts is the thing sleeping.
+   * Once Claude exits the job `exec`s a login shell, and somebody typing
+   * `sleep 900` into it would otherwise be reported as a scheduled job that had
+   * never started.
+   */
+  it("only calls a sleep a wait when our own job script is the one running", () => {
+    expect(script).toContain('index(A[P[q]], "/gjd-remote/jobs/")');
+  });
+
+  /**
+   * Matched on THIS session's uuid, so a neighbouring session's Claude cannot
+   * answer for this one, and `-F` so an id somebody hand-set cannot be a regex.
+   */
+  it("looks for this session's own Claude, by uuid and as a fixed string", () => {
+    // awk's index() is a fixed-string search, so an id somebody hand-set into
+    // the tmux environment cannot be a pattern.
+    expect(script).toContain('index(A[q], "--session-id " id)');
+  });
+
+  /** A snapshot it could not take, or a session tmux named no pane for, must
+   *  not read as "nothing is running in there". */
+  it("says it could not look, rather than that there was nothing to see", () => {
+    expect(script).toContain('if [ -z "$snap" ] || [ -z "$mine" ]; then');
+    expect(script).toContain("proc='?'");
+  });
+
+  /**
+   * `printf '%s'` on a command substitution — which has already had its trailing
+   * newline stripped — leaves the last line unterminated, and `read` returns
+   * false on it without running the loop body. That dropped the last session for
+   * the whole life of this script.
+   */
+  it("terminates the last row, so the loop actually sees it", () => {
+    expect(script).toContain(`printf '%s\\n' "$rows" | while IFS= read -r row; do`);
+    expect(script).not.toContain(`printf '%s' "$rows" |`);
+  });
+
+  it("says how many rows tmux gave it, so a short listing cannot pass for a correct one", () => {
+    expect(script).toContain(`printf '${ROW_COUNT} %s\\n' "$n"`);
+  });
+
+  /**
+   * `claude agents --json` costs ~1.6s of process startup, and only `ls` shows
+   * states. `new-claude` checking a name is free, `resume` and `kill` want the
+   * list and nothing else, and must neither pay for it nor be able to hang on it.
+   */
+  it("only asks Claude Code when the caller wants states", () => {
+    expect(buildSessionScript({ agents: false })).not.toContain("claude agents");
+    expect(buildSessionScript({ agents: true })).toContain("claude agents");
+  });
+
+  /**
+   * FAILS CLOSED. `claude agents --json` is how every row gets its state, and
+   * an empty answer is what a box with no Claude sessions gives AND what a
+   * missing or too-old `claude` gives. The two must not share a byte, or a
+   * broken box shows a screen of confident "no claude".
+   */
+  it("says whether it could ask Claude Code, rather than leaving it to be inferred", () => {
+    expect(script).toContain("command -v claude");
+    expect(script).toContain(AGENTS_OK);
+    expect(script).toContain(AGENTS_FAIL);
+  });
+
+  it("asks Claude Code once for the whole box", () => {
+    // The command substitution, not the phrase — the failure message names the
+    // command too, and counting that would be counting the apology.
+    expect(script.match(/\$\(claude agents --json/g)?.length).toBe(1);
+  });
+
+  /**
+   * It is the only free text in the reply and it is full of separators, so it
+   * travels the same way the name and the title do.
+   */
+  it("encodes the agents reply too", () => {
+    expect(script).toContain(`printf '${AGENTS_OK} %s\\n' "$(printf '%s' "$agents" | base64 -w0)"`);
+  });
+
+  /**
+   * A non-interactive ssh sources neither .bashrc nor .bash_profile, so the
+   * script gets a stock PATH — the same trap the job script in cmdNewClaude
+   * already works around. APPEND, never replace: `claude` under nvm or
+   * ~/.local/bin is only findable through the inherited PATH, and losing it
+   * would turn every row on a working box into `unknown`.
+   */
+  it("widens the PATH before anything at all, without discarding the one it was given", () => {
+    // Added, not replaced, and on the END so the inherited PATH still wins —
+    // a `claude` under nvm is the one this box's sessions are actually running.
+    // FIRST LINE, so tmux and ps get the widened PATH too, not only claude.
+    expect(script.trim().split("\n")[0]).toBe('PATH="$PATH:/usr/local/bin:/usr/bin:/bin"');
+  });
+
+  /**
+   * NOT screen-scraping, and this test is here to keep it that way. Matching
+   * Claude's spinner glyphs off `capture-pane` works today and is the first
+   * thing anybody reaches for; cmux, which does this for a living, records it
+   * as its single largest source of bugs, arriving every time Claude changes
+   * how it draws.
+   */
+  it("never reads the state off the screen", () => {
+    expect(script).not.toContain("capture-pane");
   });
 
   it("signs off, so an empty reply cannot pass for an empty box", () => {

@@ -24,10 +24,13 @@ import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
 import {
   type Session,
+  type SessionState,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
+  formatWait,
   parseSessions,
+  sessionState,
 } from "./gjd-remote-tmux.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
@@ -105,6 +108,8 @@ const dim = (s: string) => styleText("dim", s);
 const bold = (s: string) => styleText("bold", s);
 const red = (s: string) => styleText("red", s);
 const green = (s: string) => styleText("green", s);
+const yellow = (s: string) => styleText("yellow", s);
+const cyan = (s: string) => styleText("cyan", s);
 
 function die(msg: string): never {
   console.error(red(`✗ ${msg}`));
@@ -547,7 +552,27 @@ function provisionalName(prompt?: string): string {
   return prompt ? slugify(prompt.split(/\s+/).slice(0, 5).join(" "), stamp) : stamp;
 }
 
-function sessions(): Session[] {
+type Fleet = {
+  list: Session[];
+  /** Status by Claude session id, or null when the box could not be asked. */
+  agents: Map<string, string> | null;
+  /** Why not, when it is null. */
+  agentsWhy: string | null;
+};
+
+/**
+ * The box's sessions, and — only when asked — what Claude Code says it is doing
+ * in each.
+ *
+ * THE ASKING IS OPTIONAL, and that is not a tidiness thing. `claude agents
+ * --json` costs about 0.65s of process startup on the box, and only `ls` shows
+ * states: `new-claude` checking a name is free, `resume` and `kill` want the
+ * list and nothing else, and must neither pay for it nor be able to hang on it.
+ * An earlier version ran it on every command while its own comment claimed
+ * otherwise, which GPT Sol found. One round trip either way — the agents
+ * question rides along with the tmux one rather than costing a second ssh.
+ */
+function fleet(opts: { agents: boolean } = { agents: false }): Fleet {
   // One round trip. For each tmux session: its stats, the Claude session id we
   // pinned into the tmux environment at launch, and the LAST ai-title line from
   // that conversation's transcript — Claude rewrites it as the work becomes
@@ -570,7 +595,7 @@ function sessions(): Session[] {
   // script prints last, and `failure` below. Verified on the box: tmux off the
   // PATH gives "GJDERR tmux is not on this box", while tmux present with no
   // server still gives a clean empty list, which is the one genuine empty case.
-  const { sessions: list, unreadable, failure } = parseSessions(ssh(buildSessionScript()));
+  const { sessions: list, unreadable, failure, agents, agentsWhy } = parseSessions(ssh(buildSessionScript(opts)));
   if (failure) die(`could not read the box's tmux sessions: ${failure}`);
   // Fail closed. A short list is indistinguishable from a correct one, and
   // every caller draws a conclusion from absence: `new-claude` decides a name is free,
@@ -583,7 +608,12 @@ function sessions(): Session[] {
         `\n  'gjd-remote ssh' and 'tmux ls' will show what the box actually has.`,
     );
   }
-  return list;
+  return { list, agents, agentsWhy };
+}
+
+/** Just the sessions, for the callers that only want to know what exists. */
+function sessions(): Session[] {
+  return fleet().list;
 }
 
 /**
@@ -857,20 +887,123 @@ function stamp(ms: number): string {
   return `${pad(d.getDate())} ${month} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * How a state reads on screen: the word, its colour, and where it sorts.
+ *
+ * SORTED BY WHO IS BEING WAITED ON. A session stuck on a permission prompt is
+ * costing you time right now and goes at the top; one that has finished and is
+ * sitting at an empty box is next, because it is finished and nobody has looked;
+ * everything that is getting on with itself sorts below both. Alphabetical was
+ * the old order and it buried the one row that needed a person, which is the
+ * whole reason this column exists.
+ *
+ * The words are what somebody would say out loud. `needs you` rather than
+ * `waiting`, because `waiting` is already what `--wait` does and the two states
+ * could not be less alike — one wants you, the other wants nothing.
+ */
+function stateLabel(state: SessionState): { rank: number; text: string } {
+  switch (state.kind) {
+    case "needs-you":
+      return { rank: 0, text: yellow("? needs you") };
+    case "unknown":
+      return { rank: 1, text: red("! unknown") };
+    case "idle":
+      return { rank: 2, text: cyan("- idle") };
+    case "working":
+      return { rank: 3, text: green("* working") };
+    case "waiting":
+      // The countdown is the point of the row: "waits" alone tells you the job
+      // has not started, which you could have guessed, and not the one thing you
+      // cannot see from here.
+      return { rank: 4, text: dim(`z waits ${formatWait(state.secondsLeft)}`) };
+    case "no-claude":
+      return { rank: 5, text: dim("  no claude") };
+    case "shell":
+      return { rank: 6, text: dim("  shell") };
+  }
+}
+
+/** The tally under the table, in the same order as the rows above it. */
+function stateSummary(states: SessionState[]): string {
+  const counts = new Map<string, number>();
+  for (const s of states) counts.set(s.kind, (counts.get(s.kind) ?? 0) + 1);
+  const say: [SessionState["kind"], (n: number) => string][] = [
+    ["needs-you", (n) => yellow(`${n} need${n === 1 ? "s" : ""} you`)],
+    ["unknown", (n) => red(`${n} unknown`)],
+    ["idle", (n) => cyan(`${n} idle`)],
+    ["working", (n) => green(`${n} working`)],
+    ["waiting", (n) => dim(`${n} waiting to start`)],
+    ["no-claude", (n) => dim(`${n} with no claude`)],
+    ["shell", (n) => dim(`${n} shell${n === 1 ? "" : "s"}`)],
+  ];
+  return say
+    .map(([kind, render]) => (counts.get(kind) ? render(counts.get(kind) as number) : null))
+    .filter((s): s is string => s !== null)
+    .join(dim(" · "));
+}
+
+/**
+ * How wide a coloured string looks, as opposed to how many bytes it is.
+ *
+ * `padEnd` counts the escape bytes, so a coloured cell pads to the wrong width
+ * and every column after it staggers by however many bytes the colour took —
+ * about ten, which is enough to make the table look broken while every value in
+ * it is right.
+ */
+// Matching the escape byte is the point here: this regex exists to measure SGR
+// sequences, not to avoid them.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above
+const SGR = /\u001b\[[0-9;]*m/g;
+
+const visibleWidth = (s: string) => s.replace(SGR, "").length;
+
+const padVisible = (s: string, width: number) => s + " ".repeat(Math.max(0, width - visibleWidth(s)));
+
 function cmdLs(): void {
-  const list = adoptTitles(sessions());
+  const { list: raw, agents, agentsWhy } = fleet({ agents: true });
+  const list = adoptTitles(raw);
   if (list.length === 0) {
     console.log(dim("no sessions. `gjd-remote new-claude` to start one."));
     return;
   }
+
+  // Said before the table, and on stderr, because it is not a row — it is the
+  // reason the whole column is untrustworthy, and it should survive a pipe into
+  // grep that the table does not.
+  if (agentsWhy !== null) {
+    console.error(red("✗ could not ask the box what Claude is doing: ") + agentsWhy);
+    console.error(dim("  the STATE column below cannot tell running from finished."));
+  }
+
+  const rows = list
+    .map((s) => {
+      const state = sessionState(s, agents);
+      return { s, state, label: stateLabel(state) };
+    })
+    .sort((a, b) => a.label.rank - b.label.rank || a.s.name.localeCompare(b.s.name));
+
   const w = Math.max(4, ...list.map((s) => s.name.length));
-  console.log(bold("NAME".padEnd(w) + "  AGE   ATT  TITLE"));
-  for (const s of list) {
+  const sw = Math.max(5, ...rows.map((r) => visibleWidth(r.label.text)));
+  console.log(bold(`${"NAME".padEnd(w)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
+  for (const { s, label } of rows) {
     console.log(
-      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ${
-        s.title ? s.title : dim("(no title yet)")
-      }`,
+      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
+        `${padVisible(label.text, sw)}  ${s.title ? s.title : dim("(no title yet)")}`,
     );
+  }
+  if (rows.length > 1) console.log(dim("— ") + stateSummary(rows.map((r) => r.state)));
+
+  // Every `unknown` carries a reason, and the first version threw them away —
+  // so a row said `! unknown` and there was nowhere to find out why. Printed
+  // once per distinct reason rather than once per row, because on a box where
+  // the agents call failed that is one sentence instead of twelve.
+  const why = new Map<string, string[]>();
+  for (const { s, state } of rows) {
+    if (state.kind !== "unknown") continue;
+    why.set(state.why, [...(why.get(state.why) ?? []), s.name]);
+  }
+  for (const [reason, names] of why) {
+    console.log(dim(`  ${names.length === 1 ? names[0] : `${names.length} sessions`}: ${reason}`));
   }
 }
 
