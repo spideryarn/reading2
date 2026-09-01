@@ -409,6 +409,17 @@ tunnel and Google Cloud Console blocks agents twice over.
 [supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach)
 is the detail, [260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md) the reasoning.
 
+**And a browser can sign itself in with the same credential**, which is what makes UI checks possible
+here at all — `npx tsx scripts/browser-sign-in.ts`, and
+[browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in).
+
+`npm run setup` ends by saying whether `SPIDERYARN_OWNER_ID` is set to the account you sign in as. It
+should be, and it arrives with `push-env` rather than being typed here — unset, everything the CLI
+ingests lands on a shelf nobody signs in as and the library reads empty with nothing looking wrong
+([supabase-local.md § One shelf](supabase-local.md#one-shelf-and-how-to-get-there)). A box that has
+just been built needs only the variable; one that has already ingested things needs
+`npm run db:reown -- --apply` first.
+
 Two things this does **not** do, and both are known:
 
 - **Article fixtures are not in git.** `data/` and `output/` are gitignored, and about nineteen test

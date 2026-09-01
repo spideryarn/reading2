@@ -63,6 +63,12 @@ Then, in this order, from the repo root on the laptop:
    the migrations and the owner seed in the one order that works. The first run pulls ~2GB of Docker
    images. `npm ci` stays outside it on purpose — you cannot run the script before installing.
    It is the same command on the laptop, which is why it is the one that gets exercised.
+   Its last line says whether `SPIDERYARN_OWNER_ID` names the account you sign in as. It should:
+   without it, everything the CLI ingests here belongs to a row-owner nobody signs in as and the
+   library reads empty with nothing looking wrong. The value travels with step 4 rather than being
+   typed on the box — see
+   [supabase-local.md § One shelf](../../docs/project/supabase-local.md#one-shelf-and-how-to-get-there).
+   A browser can then sign itself in with no human: `npx tsx scripts/browser-sign-in.ts`.
 6. **Copy the article fixtures**, which git does not carry — same section.
 7. ⚑ **Authenticate the MCP servers** that need it — [MCP servers](#mcp-servers).
 8. ⚑ **Log Codex in**, so cross-family review works without a 12-second tax per run:

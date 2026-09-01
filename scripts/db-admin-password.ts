@@ -17,34 +17,21 @@
  * Nothing about the database is touched or even reachable from here: this reads
  * one file. That is deliberate — it means the command still works when Docker is
  * off, which is exactly when somebody is likely to be hunting for it.
+ *
+ * **The reading lives in `readAdminCredentials`**, not here, because
+ * scripts/browser-sign-in.ts needs the same file and the same refusals — and a
+ * refusal that lives in one caller is one the other gets wrong.
  */
 import { homedir } from "node:os";
-import { existsSync, readFileSync } from "node:fs";
 
-import { ADMIN_EMAIL } from "../src/admin.js";
-import { adminPasswordPath, passwordFileIsUsable } from "./seed-accounts.js";
+import { readAdminCredentials } from "./seed-accounts.js";
 
-const file = adminPasswordPath(homedir());
-
-if (!existsSync(file)) {
-  console.error(
-    `no password file at ${file}.\n` +
-      "  This machine has not been seeded yet. Run: npm run db:seed-owner\n" +
-      "  (it makes one, prints it once, and creates the account it belongs to).",
-  );
+const found = readAdminCredentials(homedir());
+if (!found.ok) {
+  console.error(found.why);
   process.exit(1);
 }
 
-const contents = readFileSync(file, "utf8");
-if (!passwordFileIsUsable(contents)) {
-  console.error(
-    `the password file at ${file} is empty or too short to be a password.\n` +
-      "  Delete it and run: npm run db:seed-owner — which will make a new one and\n" +
-      "  set it on the account. Every open session for that account is signed out.",
-  );
-  process.exit(1);
-}
-
-console.log(`  email:    ${ADMIN_EMAIL}`);
-console.log(`  password: ${contents.trim()}`);
-console.log(`  file:     ${file}`);
+console.log(`  email:    ${found.email}`);
+console.log(`  password: ${found.password}`);
+console.log(`  file:     ${found.path}`);

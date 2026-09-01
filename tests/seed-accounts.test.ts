@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
-import { mkdtempSync, chmodSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -23,6 +23,7 @@ import {
   adminPasswordPath,
   newAdminPassword,
   passwordFileIsUsable,
+  readAdminCredentials,
   readOrCreateAdminPassword,
   parseStatusEnv,
   readPasswordVerdict,
@@ -108,6 +109,55 @@ describe("the administrator's password file", () => {
          only when it creates the file, so an existing 0644 one would keep it. */
       expect(statSync(file).mode & 0o777).toBe(0o600);
     }
+  });
+});
+
+/**
+ * The half of the password file that must NEVER write.
+ *
+ * `readAdminCredentials` is what `npm run db:admin-password` prints and what
+ * `scripts/browser-sign-in.ts` types into the form, and both of them run on
+ * machines that may never have been seeded. If it created a password the way its
+ * sibling does, the caller would be handed a perfectly good-looking credential
+ * for an account that does not exist — which reads as "the password is wrong"
+ * rather than "run the seed", and then becomes the password the next seed sets.
+ */
+describe("readAdminCredentials", () => {
+  /** Its own temp home each time, so no test can read another's file. */
+  const home = () => mkdtempSync(path.join(tmpdir(), "read-admin-credentials-"));
+
+  it("reads the seeded sign-in, and does not invent one", () => {
+    const dir = home();
+    const made = readOrCreateAdminPassword(dir);
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.password).toBe(made.password);
+    expect(found.email).toBe(ADMIN_EMAIL);
+    expect(found.path).toBe(adminPasswordPath(dir));
+  });
+
+  it("refuses an unseeded machine rather than creating a file", () => {
+    const dir = home();
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(false);
+    if (found.ok) return;
+    expect(found.why).toContain("npm run db:seed-owner");
+    /* The claim, not the message: nothing was written. A refusal that left a
+       password file behind would make the SECOND run succeed, against an account
+       that still does not exist. */
+    expect(existsSync(adminPasswordPath(dir))).toBe(false);
+  });
+
+  it("refuses a truncated file, and still writes nothing", () => {
+    const dir = home();
+    const { path: file } = readOrCreateAdminPassword(dir);
+    writeFileSync(file, "short");
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(false);
+    if (found.ok) return;
+    expect(found.why).toContain("npm run db:seed-owner");
+    expect(readFileSync(file, "utf8")).toBe("short");
   });
 });
 

@@ -117,6 +117,50 @@ export function readOrCreateAdminPassword(home: string): AdminPassword {
   return { password, path: file, created: true };
 }
 
+/**
+ * This machine's sign-in, for anything that has to sign in **without a human** —
+ * `npm run db:admin-password` prints it, `scripts/browser-sign-in.ts` types it
+ * into the form.
+ *
+ * **It never creates one**, unlike `readOrCreateAdminPassword` above, and the
+ * difference is the whole reason this is a second function rather than a flag.
+ * A generated password for an account that does not exist reads as *"the
+ * password is wrong"* rather than *"run the seed"* — and it would then be the
+ * password the next seed sets, so the confusion outlives the run that caused it.
+ *
+ * A refusal rather than a throw, because the two callers want different things
+ * done with it: one prints it and exits 1, the other raises it into a Playwright
+ * failure. Both need the same sentences, and a sentence that lives in one caller
+ * is one the other gets wrong.
+ */
+export type AdminCredentials =
+  | { ok: true; email: string; password: string; path: string }
+  | { ok: false; why: string };
+
+export function readAdminCredentials(home: string): AdminCredentials {
+  const file = adminPasswordPath(home);
+  if (!existsSync(file)) {
+    return {
+      ok: false,
+      why:
+        `no password file at ${file}.\n` +
+        "  This machine has not been seeded yet. Run: npm run db:seed-owner\n" +
+        "  (it makes one, prints it once, and creates the account it belongs to).",
+    };
+  }
+  const contents = readFileSync(file, "utf8");
+  if (!passwordFileIsUsable(contents)) {
+    return {
+      ok: false,
+      why:
+        `the password file at ${file} is empty or too short to be a password.\n` +
+        "  Delete it and run: npm run db:seed-owner — which will make a new one and\n" +
+        "  set it on the account. Every open session for that account ends.",
+    };
+  }
+  return { ok: true, email: ADMIN_EMAIL, password: contents.trim(), path: file };
+}
+
 /** One row `db:seed-owner` guarantees, and what it is for. */
 export interface SeededAccount {
   /** Fixed, never generated. See `SEEDED_ACCOUNTS`. */

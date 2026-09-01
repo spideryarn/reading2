@@ -37,6 +37,60 @@ is not the check here**: the dev server is an SPA fallback, so a path that does 
 answers 200 with a perfectly good shell — verified on `/definitely-not-a-real-path-zzz`. Wait for
 something only the real page has, as the skeleton does.
 
+## Signing in
+
+Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the
+landing page and very little else. This is the rest of it, and it needs no human:
+
+```js
+import { signedInBrowser } from "./scripts/browser-sign-in.ts";   // tsx, from the repo root
+
+const { browser, page, who } = await signedInBrowser();
+//   → signed in as greg@gregdetre.com in 1728ms, GET /api/library → 200
+await page.goto("http://localhost:5273/read/fowler-phrenology", { waitUntil: "domcontentloaded" });
+```
+
+Or as a check on its own, which is the quickest way to find out whether this machine is ready:
+
+```
+npx tsx scripts/browser-sign-in.ts --at /read/fowler-phrenology --shot /tmp/x.png
+```
+
+**The credential is already on the machine.** `npm run db:seed-owner` writes
+`greg@gregdetre.com` with a password generated per machine into
+`~/.config/spideryarn/local-admin-password`, and `npm run db:admin-password` prints it — no Google,
+no dashboard —
+[supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach).
+
+Three things about it are worth knowing before you write your own:
+
+- **It types into the real form** rather than writing a session into `localStorage`. The SDK's
+  storage shape is a private detail that has changed between versions, so guessing it gives you a
+  browser that looks signed in to us and is signed out to the app — the
+  [silent-success](../reusable/silent-success.md) pattern with a login on it.
+  [`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) wrote that down first, and
+  its magic-link route is still the right shape for a browser you did not launch.
+- **It waits for the server, not for a rendered shelf**, and asks it three things: that `GET
+  /api/library` answered 200, that the body is really the shelf (a 200 alone is satisfied by the dev
+  server's SPA fallback), and that the password grant's own token carries the `sub` in
+  `src/admin.ts`. That last one is the difference between *"a session got in"* and *"this session is
+  Greg's"* — the first version printed the second sentence having checked only the first.
+- **`--at` asks the same question of the page you opened.** It fails on any failing `/api/` call,
+  because `--at /read/a-slug-that-does-not-exist` renders `NotSharedPage`, which has a `<main>`, a
+  title, and a perfectly successful `/api/jobs` next to a 404 on the article. Waiting for a landmark
+  said `ok` to that.
+- **A wrong password is reported in a second, not in thirty.** The form's own `role="alert"` is
+  raced against the success, so `Invalid login credentials` comes back as itself rather than as a
+  timeout on a response that was never coming. If you see it, the account and the password file have
+  drifted: `npm run db:seed-owner` sets it and says what it did.
+
+**Signing in shows you an empty shelf unless `SPIDERYARN_OWNER_ID` is set** to the id in
+`src/admin.ts`. Everything the CLI and the pipeline ingest belongs to a row-owner nobody signs in
+as, and nothing about that looks wrong — the ingest succeeds and the library is simply empty.
+`npm run setup` says which state the machine is in; the fix, and the row move an existing database
+needs first, are
+[supabase-local.md § One shelf](supabase-local.md#one-shelf-and-how-to-get-there).
+
 ## The translation
 
 | browser-testing.md says | On Playwright |
@@ -118,12 +172,13 @@ these is a section of `browser-testing.md` that does not apply here.
 ## What this page has not checked
 
 The measurements above are browser mechanics, taken against synthetic pages and the app's landing
-page. **The reading view itself was not driven**, because the box's dev server was signed out and
-the API answered `auth-none`; signing in there, with no Google and no browser you can reach, is
-[supabase-local.md § signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach).
-So treat the translation table as sound and the `?at=` and spine recipes as untested on this
-mechanism until someone runs them. Also untested: headed Chrome over noVNC, where the visibility
-findings above may well go back to behaving like the laptop, since then there is a real window again.
+page. **The reading view was driven on 2026-09-01** — signed in, `/read/fowler-phrenology`, spine
+and dock and prose all on screen — so the sentence that used to be here, saying it had not been, is
+gone. What was checked is that it renders; the `?at=` recipes and the scroll and spine measurements
+in [browser-testing.md](browser-testing.md) have still not been run on this mechanism.
+
+Also untested: headed Chrome over noVNC, where the visibility findings above may well go back to
+behaving like the laptop, since then there is a real window again.
 
 ---
 

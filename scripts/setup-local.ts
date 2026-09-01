@@ -43,6 +43,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { styleText } from "node:util";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { loadEnvLocal } from "../src/env.js";
+
 /** Resolved from this file, not `process.cwd()`, so it works from a subdirectory. */
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -104,5 +107,53 @@ for (const [i, step] of STEPS.entries()) {
   console.log("");
 }
 
-console.log(styleText("green", "✓ setup complete"));
+/**
+ * **The one thing setup cannot do for you**, and the reason it is said here
+ * rather than left in a doc.
+ *
+ * `SPIDERYARN_OWNER_ID` decides who owns rows written outside a request — the
+ * CLI, the pipeline. Unset, that is the seeded row-owner nobody signs in as, so
+ * everything you ingest lands on a shelf you will never see, and *nothing looks
+ * wrong*: the ingest succeeds, the article is in the database, and the library
+ * is empty. That absence is exactly the kind of failure that needs a check
+ * rather than a reader (docs/reusable/silent-success.md).
+ *
+ * It cannot be fixed from in here. The value belongs in `.env.local`, which
+ * `gjd-remote push-env` **rebuilds** from the laptop's copy — so a line written
+ * on the box by this script would be destroyed by the next push, and would have
+ * looked fine in between. Saying so is the honest thing this can do.
+ *
+ * A warning and not a failure: a machine that has never ingested anything is not
+ * broken, and stopping setup over a variable somebody may deliberately leave
+ * blank is how a command becomes something people work around.
+ */
+loadEnvLocal();
+const owner = process.env.SPIDERYARN_OWNER_ID;
+if (owner === ADMIN_USER_ID_LOCAL) {
+  console.log(styleText("green", "✓ setup complete"));
+  /* **Says what it checked, and not a word more.** It said "one shelf" until
+     2026-09-01, which was a claim about the DATABASE made on the strength of an
+     environment variable: set the variable on a database that still holds rows
+     under the old owner — the exact dangerous intermediate state — and it printed
+     a green "one shelf" over a library that was still empty. GPT Sol's fifth
+     finding. Reading the database from here would mean connecting to it, which
+     this script deliberately does not do; `npm run db:reown` counts, and its dry
+     run is free. */
+  console.log(dim("  SPIDERYARN_OWNER_ID matches the account you sign in as."));
+  console.log(dim("  That is the environment, not the database — `npm run db:reown` says whether"));
+  console.log(dim("  any rows are still under the old owner, and moves nothing without --apply."));
+} else {
+  console.log(styleText("green", "✓ setup complete"), dim("— with one thing left to do"));
+  console.log(
+    styleText("yellow", `  SPIDERYARN_OWNER_ID is ${owner ? `${owner}, not` : "unset. Set it to"}`),
+  );
+  console.log(
+    styleText("yellow", `  ${ADMIN_USER_ID_LOCAL} — the account you sign in as (src/admin.ts).`),
+  );
+  console.log(dim("  Without it the CLI and the pipeline write to a shelf nobody signs in as, and the"));
+  console.log(dim("  library reads empty however much has been ingested. Put it in .env.local on the"));
+  console.log(dim("  LAPTOP: push-env rebuilds the box's copy from that one."));
+  console.log(dim("  If this database already has rows: npx tsx scripts/db-reown.ts --apply"));
+  console.log(dim("  docs/project/supabase-local.md § One shelf, and how to get there"));
+}
 console.log(dim("  npm run dev    then sign in — `npm run db:admin-password` has the credentials"));

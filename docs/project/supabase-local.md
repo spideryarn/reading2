@@ -22,6 +22,7 @@ npm run db:migrate     # apply drizzle/ — this is what creates the `spideryarn
 npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
 npm run db:seed-owner  # the two auth.users rows: the row-owner, and the account you sign in as
 npm run db:admin-password   # the email and password to sign in with, on this machine
+npm run db:reown       # move every row from one owner to another — dry run without --apply
 ```
 
 **`npm run setup` is the one to reach for on a fresh checkout** — a box, a rebuild, a new clone. It
@@ -94,36 +95,94 @@ Four things worth knowing before you rely on it:
   `supabase status` rather than against `SUPABASE_URL` — everything else in the run reads that
   variable, so a forwarded port would have every step agreeing with every other one.
 
-### One shelf, not two — and why it is not switched on
+**And a browser can sign itself in with it**, which is what makes UI checks possible on a machine
+with no human at the keyboard:
 
-By default the two accounts above mean the library you see when you sign in is **empty**, however
-much the CLI has ingested: those rows belong to `DEV_OWNER_ID`. The setting that changes it is
+```
+npx tsx scripts/browser-sign-in.ts
+```
+
+[`scripts/browser-sign-in.ts`](../../scripts/browser-sign-in.ts) reads this password, launches
+Playwright, types it into the real form, and does not return until `GET /api/library` has answered
+200 — the server accepting the token, rather than anything the client drew. `signIn(page)` and
+`signedInBrowser()` are exported for a script of your own.
+[browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in) is where to
+read about it.
+
+### One shelf, and how to get there
+
+Rows written **outside** a request — the CLI, the pipeline, `db:import` — belong to whoever
+`SPIDERYARN_OWNER_ID` names, and unset that is `DEV_OWNER_ID`, which nobody signs in as. So the
+library you see after signing in is empty however much has been ingested, and nothing looks wrong:
+the ingest succeeds and the article really is in the database.
+
+**Set it to the administrator's id from [`src/admin.ts`](../../src/admin.ts).** It is on
+`gjd-remote push-env`'s allowlist ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)),
+so a new box gets it from the laptop and is correct from its first ingest — which is the case that
+needs nothing else, because a database that has never been used without it has no rows to move.
 
 ```
 SPIDERYARN_OWNER_ID=<the admin id from src/admin.ts>
 ```
 
-which puts CLI and pipeline work on the shelf you actually look at. It is on
-`gjd-remote push-env`'s allowlist ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)),
-so a box gets it from the laptop rather than needing a line typed on the box — which that file would
-destroy at the next push, since it rebuilds `.env.local` rather than merging into it.
+**On a database that already has rows, move them — and in this order**, because the move takes no
+table lock and anything still writing as the old owner while it runs is neither moved nor noticed
+(GPT Sol, 2026-09-01):
 
-**It is left blank on the laptop, and here is what happens if you set it without moving the rows
-first.** Measured 2026-08-31, not predicted: **eight test files go red.** Two shapes, and both are
-the same cause:
+1. **Stop the writers** — the dev server, any pipeline run.
+2. **Set `SPIDERYARN_OWNER_ID`**, so whatever starts up next is already writing to the destination.
+   Between this step and the next, the suite is in the state that turns files red; it is a minute.
+3. **Move the rows.**
+4. **Start the writers again.**
 
-- `store-shelf-reads` fails on `expected 0 to be greater than 0` — the shelf query runs as the new
-  owner and every fixture belongs to the old one, so the corpus it means to check is simply not
-  there.
-- `store-roundtrip` fails with `PublishRefused: the slug "fowler-phrenology" already belongs to
-  another reader`. `articles.slug` is unique across the whole install
-  ([src/owner.ts](../../src/owner.ts) says why), so your own articles, under the other id, block
-  re-ingesting their own URLs.
+```
+npm run db:reown             # dry run: does every update, then rolls it back
+npm run db:reown -- --apply
+```
 
-Nothing is corrupted by trying it — unset the variable and the suite is green again — but it makes
-the point that this is **one setting and a data move, not one setting.** A database that has never
-been used without it, which is what a new box is, has neither problem: it is correct from its first
-ingest. An existing one needs its rows re-owned first, and that has deliberately not been done here.
+[`scripts/db-reown.ts`](../../scripts/db-reown.ts) moves every row from one owner to another, on a
+local database only. Five things about it are deliberate:
+
+- **It says which database it is about to rewrite**, as a password-stripped `Target:` line, before
+  it connects — because `.env.local` beats a `DATABASE_URL` exported in the shell, so
+  `DATABASE_URL=… npm run db:reown` does not do what it looks like. Same trap, same answer, as
+  [database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
+- **A loopback address is not the check.** An `ssh -L` forwarding a remote Postgres onto 127.0.0.1
+  satisfies `isLocalDatabaseUrl` exactly as the real container does — Sol ran the case. So the
+  identity is settled against `supabase status`, which describes this repo's own containers and
+  which no port forwarding can change. The rule is pure and lives in
+  [`scripts/db-reown-rules.ts`](../../scripts/db-reown-rules.ts) with
+  [its test](../../tests/db-reown-rules.test.ts), because the script does its work at import time.
+- **It reads the owned tables out of `information_schema`**, base tables only, not from a list in
+  the file. A list would be right the day it was written and quietly short after the next migration,
+  and a re-own that misses a table strands rows under an owner nobody signs in as — which looks like
+  nothing being wrong until somebody opens the feature that reads them.
+- **The dry run is the real write, rolled back.** Not a `select count(*)`: it runs every `update`
+  inside a transaction and then rolls back, so the counts are the counts and a unique violation is
+  found by Postgres rather than predicted by us. `jobs_active_slug` is a partial index, and any
+  prediction we wrote here would have to re-implement its predicate to avoid crying wolf.
+- **It counts again after committing** and names anything that arrived under the old owner while it
+  ran. "Nothing was left behind" and "nothing was left behind that we looked for" are different
+  sentences, and this is the one that earns the first.
+
+**`article_visibility_changes.actor_owner_id` is left alone.** It records who pressed publish, not
+who owns something, and it is not an `owner_id`, so the discovery query never sees it.
+**Supabase Storage needs nothing moved**: every row in `storage.objects` has a null `owner`, the
+canonical objects are content-addressed and shared between owners by design, and a `staging/<upload
+id>` object is reached through the `uploads` row that names it, which does move.
+
+**Skipping the move is what turned eight test files red** when this was measured on 2026-08-31 —
+`store-shelf-reads` on `expected 0 to be greater than 0`, because the shelf query runs as the new
+owner and every fixture belongs to the old one; `store-roundtrip` on `PublishRefused: the slug
+"fowler-phrenology" already belongs to another reader`, because `articles.slug` is unique across
+the whole install ([src/owner.ts](../../src/owner.ts) says why). Both are the same cause and both go
+away once the rows have moved: done on the box on 2026-09-01, 111 rows across six tables, and the
+seven owner-sensitive suites read 363 passed before and 363 passed after.
+
+`npm run setup` says which of the two states this machine is in, on its last line, because the
+failure is an absence and an absence needs a check rather than a reader. It cannot fix it: the value
+belongs in `.env.local`, and `push-env` **rebuilds** that file from the laptop's copy, so a line
+written on the box would be destroyed by the next push and would have looked fine in between.
 
 Docker has to be running first. On Greg's laptop the `docker` context points at **OrbStack**, so
 `open -a OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the
