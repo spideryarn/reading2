@@ -350,6 +350,15 @@ when("the filesystem and Postgres stores agree", () => {
          `published_at` would report every dated timeline stale for ever while
          the filesystem store called the same one current, with nothing red. */
       ["timeline", (r: typeof fsArticleReader) => r.loadTimeline(slug)],
+      /* Added the day the stage landed rather than the day somebody noticed —
+         `loadIdeas`' own note above is about exactly that gap. No article in
+         the corpus has a quiz yet, so today this row only diffs the **404**,
+         which is the half that is easiest to get wrong and cheapest to check:
+         `routes.ts` turns `status: 404` into a 404 and an untagged throw into a
+         500, so a Postgres reader that threw the right sentence with no status
+         would turn "nobody has written questions yet" — the ordinary case the
+         panel's button is for — into a server error. */
+      ["quiz", (r: typeof fsArticleReader) => r.loadQuiz(slug)],
     ] as const) {
       it(`agrees about ${name}, present or absent`, async () => {
         const fromFiles = await read(fsArticleReader).catch((err: unknown) => err);

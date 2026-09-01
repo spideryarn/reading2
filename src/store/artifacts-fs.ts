@@ -163,6 +163,9 @@ export const PATHS: {
   timeline: {
     timeline: (at) => path.join(at.dir, "timeline.json"),
   },
+  quiz: {
+    quiz: (at) => path.join(at.dir, "quiz.json"),
+  },
   sketch: {
     sketch: (at) => path.join(at.dir, "sketch.json"),
   },
@@ -272,6 +275,12 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      the cap is a guard against a corrupt or hostile file rather than a size
      estimate. */
   timeline: { maxBytes: 32 * MiB, decode: json("timeline") },
+  /* Twelve questions at most (`MAX_QUESTIONS` in src/quiz.ts), each a sentence,
+     a two-or-three-sentence reference answer and up to three quoted passages —
+     a real one is a few tens of KB. The same ceiling as its neighbours all the
+     same, because the cap is a guard against a corrupt or hostile file rather
+     than a size estimate. */
+  quiz: { maxBytes: 32 * MiB, decode: json("quiz") },
 };
 
 /** The path for one `(step, kind)`, or a clear error rather than `undefined`. */

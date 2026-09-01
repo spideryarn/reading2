@@ -48,6 +48,7 @@ import type {
   Meta,
   Quotes,
   StepName,
+  Quiz,
   Timeline,
   Tree,
   TweetThread,
@@ -86,6 +87,7 @@ export type ArtifactKind =
   | "ideas"
   | "quotes"
   | "timeline"
+  | "quiz"
   | "sketch";
 
 /**
@@ -143,6 +145,11 @@ export interface ArtifactMap {
    * src/types.ts, written by the `timeline` step. docs/project/timeline.md.
    */
   timeline: Timeline;
+  /**
+   * The questions the piece can ask you back — `Quiz`, src/types.ts, written by
+   * the `quiz` step. docs/plans/260831al-review-quiz-sub-mode.md.
+   */
+  quiz: Quiz;
   sketch: Sketch;
 }
 
@@ -261,6 +268,16 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      the commonest correct outcome unstorable, so the step would re-run and pay
      for the same empty answer on every open. */
   timeline: { field: "events", ok: isArray },
+  /* A `questions` array, and **an EMPTY one is NOT usable** — the opposite call
+     from `timeline` directly above, and worth saying why they differ. An
+     article with no chronology is an ordinary article; an article with no
+     questions is not a thing, so `buildQuiz` throws rather than write one. An
+     empty quiz is indistinguishable from a working one until a reader opens the
+     panel and finds nothing to answer, which is
+     docs/reusable/silent-success.md exactly. This is the shallow half of that
+     rule, at the store boundary, so a hand-written or imported file cannot get
+     round it either. */
+  quiz: { field: "questions", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
      picture with no scenes is not a picture, and `accept` in
@@ -657,6 +674,17 @@ export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   ideas: "ideas",
   quotes: "quotes",
   timeline: "timeline",
+  /* **Missing here means `stampFor` answers `null` silently**, so the step is
+     never current and re-runs on every job for ever — writing a perfectly good
+     artefact each time, with nothing going red, because the artefact parses and
+     every id resolves. That is the same failure as spelling the artefact's
+     stamp fields `inputHash`/`promptVersion`/`model`, one door along, and
+     tests/quiz.test.ts asks for this row by name.
+
+     **And deliberately NO `BASELINE` row.** There is no id inheritance across
+     runs (src/pipeline.ts § the `quiz` step), and `readBaseline` throws for a
+     kind with no row precisely so that nothing can half-inherit. */
+  quiz: "quiz",
   sketch: "sketch",
 };
 
