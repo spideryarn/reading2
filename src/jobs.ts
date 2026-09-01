@@ -89,6 +89,7 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
+import { ARTICLE_IS_BUSY } from "./job-state.js";
 import { INTERRUPTED, type FailureKind } from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
@@ -1911,6 +1912,39 @@ export interface EnqueueRequest {
 }
 
 /**
+ * **The refusal that knows which job it is about.**
+ *
+ * `enqueue` has the blocking job in its hand at the moment it decides to refuse
+ * — it is what `enqueueOrGet` handed back — and until 2026-09-01 it threw that
+ * away and answered with a sentence. So the reader was told to stop something
+ * the interface never showed them.
+ *
+ * **The identity comes from here and from nowhere else.** The obvious
+ * alternative is for the client to look up "the active job on this slug" in the
+ * list it already polls, and that is a guess: `listJobs` mutates, logs and
+ * sometimes re-reads since stage 3, its answer can be a poll behind, and the
+ * slug the request named is not always the slug the conflict fired on. This
+ * object is the atomic conflict result. GPT Sol, 2026-09-01.
+ *
+ * `status` is a field rather than a `throw Object.assign(...)` so that
+ * `instanceof` is available in src/routes.ts — the generic handler adds the
+ * structured body for this class and for nothing else, which is what stops the
+ * widened error shape becoming a hole every other route can leak through.
+ *
+ * The job carried here is the **server-side** record, complete with `ownerId`
+ * and `profile`. It is narrowed by `publicJob` on the way out, the same call
+ * `GET /api/jobs` makes, so the 409 can carry nothing the same reader's next
+ * poll would not have handed them anyway.
+ */
+export class JobConflict extends Error {
+  readonly status = 409;
+  constructor(readonly blocking: Job) {
+    super(ARTICLE_IS_BUSY);
+    this.name = "JobConflict";
+  }
+}
+
+/**
  * Queue a job and return it immediately, before any of it has run.
  *
  * Returning early is the point — the caller is an HTTP handler and the work
@@ -2044,10 +2078,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * not. So: 409, in the reader's words.
        */
       if (!request.url && !request.upload) {
-        throw Object.assign(
-          new Error(`That article already has a job running. Wait for it, or stop it first.`),
-          { status: 409 },
-        );
+        throw new JobConflict(job);
       }
       const next = request.url
         ? await freeSlug(request.slug, request.url)
@@ -2058,10 +2089,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          a restart without its work key. Spinning to the retry budget and then
          409ing hides that behind a generic message; saying it once does not. */
       if (next === slug) {
-        throw Object.assign(
-          new Error(`That article already has a job running. Wait for it, or stop it first.`),
-          { status: 409 },
-        );
+        throw new JobConflict(job);
       }
       slug = next;
       continue;

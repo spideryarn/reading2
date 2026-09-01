@@ -13,12 +13,21 @@
  * A minute is the right interval because it is the smallest unit anything here
  * prints. Anything faster re-renders the shelf for no visible change; anything
  * slower shows a stale number for longer than the number's own precision.
+ *
+ * **`null` turns the clock off**, for a surface whose value nothing currently
+ * reads — a finished job card, a band behind an idle button. Two callers wanted
+ * that and both wrote `useNow(86_400_000)` with a comment calling it "one timer
+ * that never fires". It fires: once a day, for the life of the tab, per card.
+ * Harmless, and not what the comment said, which is the part worth fixing — a
+ * comment nothing measures is a perfectly good reason to believe something
+ * false. GPT Sol, 2026-09-01: *"supporting a disabled interval would be
+ * cleaner."*
  */
 import { useEffect, useState } from "react";
 
 const A_MINUTE = 60_000;
 
-export function useNow(everyMs: number = A_MINUTE): number {
+export function useNow(everyMs: number | null = A_MINUTE): number {
   // The initialiser is a function, so the clock is read once at mount rather
   // than on every render and thrown away.
   const [now, setNow] = useState(() => Date.now());
@@ -38,6 +47,7 @@ export function useNow(everyMs: number = A_MINUTE): number {
     let timer: ReturnType<typeof setInterval> | undefined;
 
     const start = () => {
+      if (everyMs === null) return;
       if (timer === undefined) timer = setInterval(tick, everyMs);
     };
     const stop = () => {
@@ -50,6 +60,11 @@ export function useNow(everyMs: number = A_MINUTE): number {
         stop();
         return;
       }
+      /* **Nothing to catch up on when the clock is off**, and reading it here
+         would be worse than a no-op: it would re-render every idle card in the
+         app each time the reader came back to the tab, which is the cost this
+         whole branch exists to avoid. */
+      if (everyMs === null) return;
       tick();
       start();
     };

@@ -146,6 +146,18 @@ export interface UseQuiz {
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: string | null;
+  /**
+   * The job that **refused** this run — an ingest already holding the article.
+   * `StepJob.blocking` in src/web/useStepJob.ts carries the reasoning.
+   */
+  blocking: Job | null;
+  /**
+   * This tab can see the job on screen and cannot move it. Pass-through, like
+   * `blocking` above — `StepJob.stalled` in src/web/useStepJob.ts carries the
+   * reasoning, and src/job-state.ts § Transport health is not a job state
+   * carries why it is not on the record.
+   */
+  stalled: boolean;
   /** The attempt in front of the reader, or null before they have answered anything. */
   attempt: Attempt | null;
   /** Which questions have been marked to a `done` this session. Never persisted. */
@@ -335,6 +347,8 @@ export function useQuiz(slug: string): UseQuiz {
     error,
     job: queue.job,
     failed: queue.failed,
+    blocking: queue.blocking,
+    stalled: queue.stalled,
     attempt,
     answered,
     write,

@@ -518,6 +518,8 @@ export function QuotesPanel({
       <Progress
         job={owner?.job ?? null}
         failed={owner?.failed ?? null}
+        blocking={owner?.blocking ?? null}
+        stalled={owner?.stalled ?? false}
         onRun={() => owner?.find(withProfile) ?? Promise.resolve()}
         onCancel={(id) => owner?.cancel(id)}
         label={label}
@@ -951,6 +953,8 @@ function Foot({
 function Progress(props: {
   job: Job | null;
   failed: string | null;
+  blocking: Job | null;
+  stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;
   label: string;

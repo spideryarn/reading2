@@ -211,7 +211,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
      props long before the hook existed, and threading `queue` through them
      would be a rename of this file's whole render for no gain. `cancel` stays
      on `queue`, where the two call sites read it. */
-  const { job, failed } = queue;
+  const { job, failed, blocking, stalled } = queue;
 
   /**
    * Ask for a thread.
@@ -276,7 +276,14 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
         )}
 
         {loaded.status === "none" && (
-          <Empty job={job} failed={failed} onWrite={write} onCancel={queue.cancel} />
+          <Empty
+            job={job}
+            failed={failed}
+            blocking={blocking}
+            stalled={stalled}
+            onWrite={write}
+            onCancel={queue.cancel}
+          />
         )}
 
         {loaded.status === "ready" && (
@@ -287,6 +294,8 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
             article={article}
             job={job}
             failed={failed}
+            blocking={blocking}
+            stalled={stalled}
             onWrite={write}
             onCancel={queue.cancel}
           />
@@ -313,11 +322,15 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 function Empty({
   job,
   failed,
+  blocking,
+  stalled,
   onWrite,
   onCancel,
 }: {
   job: Job | null;
   failed: string | null;
+  blocking: Job | null;
+  stalled: boolean;
   onWrite(): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -333,6 +346,8 @@ function Empty({
       <Progress
         job={job}
         failed={failed}
+        blocking={blocking}
+        stalled={stalled}
         onWrite={onWrite}
         onCancel={onCancel}
         label="Write the thread"
@@ -352,6 +367,8 @@ function Progress({
 }: {
   job: Job | null;
   failed: string | null;
+  blocking: Job | null;
+  stalled: boolean;
   onWrite(): Promise<void>;
   onCancel(id: string): void;
   label: string;
@@ -375,6 +392,8 @@ function Thread({
   article,
   job,
   failed,
+  blocking,
+  stalled,
   onWrite,
   onCancel,
 }: {
@@ -384,6 +403,8 @@ function Thread({
   article: Article;
   job: Job | null;
   failed: string | null;
+  blocking: Job | null;
+  stalled: boolean;
   onWrite(force?: boolean, useProfile?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -430,6 +451,8 @@ function Thread({
             <Progress
               job={job}
               failed={failed}
+              blocking={blocking}
+              stalled={stalled}
               onWrite={() => onWrite(false, withProfile)}
               onCancel={onCancel}
               label="Write it again"
@@ -611,6 +634,15 @@ export function ThreadPosts({ thread }: { thread: PublicTweets }) {
  * confirm row vanishes and the plain button comes back — a press that appears
  * to have been ignored, which is the failure this whole page keeps guarding
  * against (docs/reusable/silent-success.md).
+ *
+ * **It does not show the job that refused it**, unlike every other run button
+ * in the app (`blocking` in src/web/useStepJob.ts). This is a confirm-then-spend
+ * strip in a footer, not a band, and a running job's rows would not fit beside
+ * the confirmation without a layout of their own — so it says the sentence and
+ * stops. Reachable only for a thread that is perfectly current on an article
+ * that is *also* being worked on, which is the rarest corner of a rare case;
+ * the stale path a line above goes through `Progress` and does show it. Worth
+ * revisiting the day somebody hits it.
  */
 function Rewrite({
   job,
@@ -632,6 +664,11 @@ function Rewrite({
         <Progress
           job={job}
           failed={null}
+          /* Unreachable here: this branch only renders with a job of our own,
+             and one article cannot have two active ones. See the header for why
+             this strip does not show a blocker at all. */
+          blocking={null}
+          stalled={false}
           onWrite={() => onWrite(true)}
           onCancel={onCancel}
           label="Write it again"

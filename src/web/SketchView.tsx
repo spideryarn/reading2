@@ -639,6 +639,8 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           <JobProgress
             job={view.job}
             failed={view.failed}
+            blocking={view.blocking}
+            stalled={view.stalled}
             onRun={() => view.draw(useProfile)}
             onCancel={view.cancel}
             label="Draw the argument"

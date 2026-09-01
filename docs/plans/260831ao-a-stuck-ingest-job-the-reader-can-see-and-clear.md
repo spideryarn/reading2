@@ -635,9 +635,9 @@ and the five reader-facing sentences. `UseJobs` exposes `driverFailures` off the
 **Transport health kept separate**, and the reasoning is the useful part: it is not a fact about the
 job (the job is working, the *connection* is unwell, and the reader needs both facts rather than one
 overriding the other); it is not on `Job` at all, and `job-state.ts` is shared with the server; and
-it is a communication failure, not an ownership one. Rendered on `JobCard` and deliberately **not**
-in `JobProgress` — that would thread a prop through eight panels for a surface watching one artefact
-rather than an import. A gap on purpose.
+it is a communication failure, not an ownership one. Rendered on `JobCard` and, for one day, deliberately **not**
+in `JobProgress`. That was wrong and Stage 5b fixed it: a reader drawing a sketch may never look at
+the shelf, so the one surface they are watching was the one that could spin without the warning.
 
 **The threshold is per step**, because six minutes into `hierarchy` is ordinary and six minutes into
 `fetch` is a fetch that is never coming back. Two steps had enough evidence to say anything;
@@ -646,9 +646,9 @@ everything else is marked **GUESS** and says nothing.
 **The trap, sprung and caught.** The first `sketch` figure came from grouping by `runId`, which pulls
 in eval batches of several articles under one id — a median of 287s where the truth is ~144s. It
 would have promised readers three minutes more than the step has ever taken. Written into the table's
-comment because the next person will reach for the same aggregate. Independently re-derived by the
-coordinator from `data/_ai-calls.jsonl`: `hierarchy` n=6, median 409s, and the ten-minute slow
-threshold sits below the 740s self-abort, so the warning has a real window before the step is killed.
+comment because the next person will reach for the same aggregate. **Both of those numbers were wrong, and so was the coordinator's re-derivation of them** — see
+Stage 5b below. The `hierarchy` figure was five parts time-to-failure, on a clock the card never
+shows, and the check that "confirmed" it reproduced it by the same method.
 
 **One reversion in twenty-two did not go red, and that is the interesting one.** *"Does not mention
 tabs when nothing is importing"* passed even with `importing` forced true — because the fixture's
@@ -672,6 +672,59 @@ That is Sol's `finishedAt` warning answered: the untrustworthy number is
 
 
 
+### Stage 5b — a number that survived two reviews
+
+**Sol's review of Stages 4–5**
+([here](260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear-stage45-review-sol.md)): *"I would
+not ship Stages 4–5 unchanged."* One HIGH, three MEDIUM, one LOW, and six test gaps. All fixed
+2026-09-01.
+
+- [x] **HIGH — the timing evidence measured failures, on the wrong clock.** Of the six `hierarchy`
+      jobs behind *"median 409s"*, **one succeeded**. The five failures ran 0s, 67s, 270s, 492s and
+      498s of step time, so the median was a **time to failure printed on a card as a time to
+      finish** — and model-call spans are not the clock `displayJob` shows, so the number could not
+      be checked against the screen at all. Re-measured from `data/_jobs/*.json`, successful steps
+      only, `finishedAt − startedAt`: `hierarchy` **n=1, 187s**.
+- [x] **`STEP_USUALLY_A_FEW_MINUTES` deleted, not reworded** — a constant nothing can say truthfully
+      is worse than none, because the next step to be measured reaches for it.
+- [x] **The threshold stays at ten minutes, on grounds Sol did not have.** Removing it drops
+      `hierarchy` to the 180s default, which is **below the only successful run there has ever
+      been** — so every normal run would carry a warning. Two more: hierarchy steps have done
+      genuine work for 498s (fifteen and seventeen successful model calls before the token budget),
+      and the self-abort at 740s leaves ~140s for the sentence to be read.
+- [x] **`sketch` keeps its sentence, with the corroboration that licenses it.** Thirteen calls, all
+      `ok`, 121–199s. A `sketch` step is one model call, and on the one occasion the two clocks can
+      be compared they agree exactly — the real ingest step ran 159s and its call ran 159s. That is
+      what makes substituting a call duration legitimate, and Sol did not have it either.
+- [x] **MEDIUM — unmeasured steps stopped claiming a "usual".** New `RUNNING_A_WHILE`. The rule is
+      tied to one field: `TAKING_LONGER` only where `StepTiming.usually` exists. `SENTENCES` is now
+      `Record<Exclude<JobDisplayState, "slow">, …>`, so a hand reaching in to fill the gap gets a
+      compiler error rather than a second silent answer.
+- [x] **MEDIUM — the transport warning reaches `JobProgress`.** `useStepJob` exposes `stalled`, and
+      it speaks for the blocker too, which is what a refused reader is watching. **The brief was
+      wrong that this avoided prop threading** — it is a required prop across fifteen files.
+      Required rather than optional on purpose: one compiler error per surface beats a warning
+      quietly wired into two panels out of eight.
+- [x] **MEDIUM — interruption by the stable `[jb-gone]` code, not the prose.** `codeOfMessage` added
+      beside `kindOfMessage`, with `INTERRUPTED_CODE` interpolated into the sentence so the two
+      cannot drift; the message is **byte-identical**, verified. An `endingKind` field is the better
+      long-term answer and was rejected for now because it could only classify jobs settled after it
+      landed, while every interrupted job a reader can see today carries the sentence and no field.
+- [x] **LOW — ~24s was ~16s.** `noteAdvanceFailure` runs *before* the wait, so three failures land at
+      ~0s, 8s, 16s: two gaps, not three. `useNow` now takes `null` to mean off, rather than a
+      one-day interval described as a timer that never fires. It fired, once a day, per card.
+- [x] **The four hollow negative assertions**, proved hollow by making `JobCard` return `null`: all
+      four were green under that, and twelve assertions now go red. Plus: `jobWorthRetrying` wrapped
+      with `vi.fn(real)` so delegation is *observed* rather than assumed; the card-order test is one
+      regex over one `<li>`; both component files freeze the clock and advance it after mounting.
+
+**The tell, and why this is the most instructive failure in the whole plan.** One of the six "runs"
+was 772 seconds. No step can run that long — the claimant aborts itself at 740s. The coordinator
+noticed the impossibility, wrote *"must be a CLI run"*, and moved on; the number then passed a second
+review. **A measurement impossible under the code's own deadline is not a measurement**, and the
+check that confirmed it reproduced it by the same method, so it agreed for the same reason it was
+wrong. [silent-success.md](../reusable/silent-success.md), committed by the people quoting it.
+
 ### Stage 6 — the 409 points at the job it is talking about
 
 Split out of stage 5, because **Sol showed it is not the small change it looked like**. Returning an
@@ -680,12 +733,47 @@ id alone will not make the blocking job appear: the generic route handler emits 
 writing the *requested* step — so a blocker whose steps do not include it cannot render in
 `JobProgress` at all.
 
-- [ ] Specify, before building: the structured 409 body, the typed client result, what `StepJob`
+- [x] Specify, before building: the structured 409 body, the typed client result, what `StepJob`
       exposes, and how `JobProgress` renders a blocker whose step list does not contain the step
       that was asked for.
-- [ ] `enqueue` already has the blocking job in hand at the throw site, so the server half is cheap;
+- [x] `enqueue` already has the blocking job in hand at the throw site, so the server half is cheap;
       the client half is the work.
-- [ ] The message must also stop saying *running* when the job may be idle in `queued`.
+- [x] The message must also stop saying *running* when the job may be idle in `queued`.
+
+**Landed 2026-09-01, and the plan was right that it was not a one-line change.** Four parts, all
+load-bearing: `JobConflict` carries the blocking `Job` that `enqueueOrGet` already returned — so the
+**identity comes from the atomic conflict result, never from `listJobs`**, which since Stage 3 is not
+a lookup; `structuredDetail` in `routes.ts` matches that class and nothing else, reads one declared
+field and passes it through `publicJob`; `HttpError.details` gives `readJson` one parsing path
+instead of a second; and `JobProgress` renders the blocker in the same band vocabulary, which it had
+to, because `useStepJob` filters the list to jobs writing the *requested* step and a blocker whose
+steps exclude it is exactly what produces the 409.
+
+**Identity from the refusal, state from the list.** The 409's copy seeds the band so it draws at
+once, `queue.jobs` supersedes it, a positive terminal reading clears it, and `failed` derives from
+the same value — so the refusal lasts exactly as long as the job it was about, with no window in
+which the sentence and the band disagree.
+
+**What stops the widened shape leaking.** The handler does not spread an error's properties. One
+class, one field, through the same `publicJob` that `GET /api/jobs` uses — so the 409 carries nothing
+the reader's next poll would not have handed them a second later, and the row is always theirs.
+`JobConflict.message` is a constant, so `logRequest`'s reason invariant holds.
+
+**And a thing nobody asked for, which is the most useful part of the report.** The throw site every
+band button reaches is **scheduled for deletion**:
+[260830ar-several-articles-at-once.md](260830ar-several-articles-at-once.md) § Stage 2 is *"Replace
+the 409"* with a per-article queue, blocked on a prerequisite another session owns, with an `it.skip`
+in `tests/jobs.test.ts` already holding its place. The second throw site — a URL or upload whose slug
+cannot move — is not on that list, so the structured body keeps earning its place; but the
+`JobProgress` blocker branch loses its only producer the day that lands. Neither this plan nor any of
+the six reviews had noticed.
+
+**Two surfaces deliberately do not show the blocker** and say so in code rather than skipping
+silently: `Rewrite` in `Tweets.tsx` and `Foot` in `GlossaryPanel.tsx` are confirm-then-spend footer
+strips rather than run bands, so a second job's rows want a layout of their own. Both still print the
+sentence.
+
+
 
 ## The simpler options passed over
 

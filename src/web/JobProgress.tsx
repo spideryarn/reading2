@@ -39,6 +39,21 @@
  * (see `stopped` and `postFailed` in useGlossary.ts, useSummaries.ts, and the
  * hook inside Tweets.tsx).
  *
+ * ## The job in the way
+ *
+ * A third thing on screen, since 2026-09-01. `POST /api/jobs` answers 409 when
+ * the article already has an active job doing different work, and that job's
+ * steps are — by definition — not this panel's, so `job` above can never be it
+ * and `useStepJob`'s filter throws it away. The reader was told to *"stop it
+ * first"* with nothing on screen to stop.
+ *
+ * So `blocking` is drawn by the **same** `Band` as `job`, in `displayJob`'s
+ * words, with the same Stop. What differs is one string: the label to use when
+ * the job is between two steps, where this panel's `runningLabel` would say
+ * "Finding…" about an ingest.
+ *
+ * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
+ *
  * ## Styling
  *
  * shadcn's `Button`, which is a **visible change** made deliberately on
@@ -74,13 +89,21 @@
 import { LoaderCircle, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { displayJob, elapsedLabel, WAITING_TO_CONTINUE } from "../job-state.js";
-import type { Job, StepName } from "../types.js";
+import {
+  displayJob,
+  DRIVER_STALLED,
+  elapsedLabel,
+  WAITING_TO_CONTINUE,
+  WORKING_ON_THIS_ARTICLE,
+} from "../job-state.js";
+import type { Job, JobStep, StepName } from "../types.js";
 import { useNow } from "./useNow.js";
 
 export function JobProgress({
   job,
   failed,
+  blocking,
+  stalled,
   onRun,
   onCancel,
   label,
@@ -92,6 +115,33 @@ export function JobProgress({
   job: Job | null;
   /** A message to show under the button, or null. Never a boolean — see above. */
   failed: string | null;
+  /**
+   * The job that **refused** this run, or null — see § The job in the way.
+   *
+   * Required rather than optional, so that adding it was one compiler error per
+   * surface rather than a feature quietly wired into two panels out of seven. A
+   * `null` here is a decision; a missing prop would have been an oversight
+   * nothing could see.
+   */
+  blocking: Job | null;
+  /**
+   * Whether this tab can see the job on screen and cannot move it.
+   *
+   * **Stage 5 shipped this on the shelf card and not here, and that was wrong.**
+   * The reasoning was that threading it would touch eight panels — which it
+   * does — and the answer is GPT Sol's, 2026-09-01: *"a reader drawing a sketch
+   * or generating a glossary may never look at the shelf card; their only
+   * surface can therefore spin indefinitely without the warning Stage 5 exists
+   * to give."* A gap that only shows up for the readers who never open the
+   * shelf is not a gap you get to leave on purpose.
+   *
+   * It comes from `useStepJob`, which already holds the queue subscription
+   * (src/web/useStepJob.ts § `stalled`), so nothing about transport health had
+   * to be put on `Job` or on `displayJob`. Required rather than optional for
+   * the same reason `blocking` is: one compiler error per surface beats a
+   * warning quietly wired into two panels out of eight.
+   */
+  stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;
   /** What the button says when there is no job: "Find the terms". */
@@ -114,71 +164,34 @@ export function JobProgress({
    * step began. `useNow` stops while the tab is hidden and catches up on
    * return.
    *
-   * **A day when there is no job**, rather than the hook's own minute: with
+   * **Off when there is no job**, rather than the hook's own minute: with
    * nothing running the value is not read by anything, and a minute would be
    * this panel re-rendering once a minute for ever behind an idle button —
-   * the exact cost `useNow`'s own header describes paying by accident. A day
-   * is comfortably inside the 32-bit timer range, so it is one timer that
-   * never fires rather than a clever nothing.
+   * the exact cost `useNow`'s own header describes paying by accident. This
+   * passed `86_400_000` and called it "one timer that never fires" until
+   * 2026-09-01; it fired, once a day, per band. `useNow` takes `null` now.
+   *
+   * **A blocker counts as a job on screen.** It is somebody else's work and it
+   * is the thing the reader is waiting on, so its clock has to tick for exactly
+   * the same reason. Parenthesised because `??` binding tighter than `?:` is
+   * something a reader should not have to look up to check this line.
    */
-  const now = useNow(job ? 1000 : 86_400_000);
+  const now = useNow((job ?? blocking) ? 1000 : null);
 
   if (job) {
-    const shown = displayJob(job, now);
-    /* The step that is actually running, and the panel's own step as the
-       fallback for the moment between two of them. Naming the step the reader
-       is really waiting on is the same rule the add card follows — "each step
-       is named, not counted". */
-    const current = shown.step ?? job.steps.find((s) => s.name === step);
-    const waiting = shown.state === "waiting";
-    /* Not repeated underneath when it is already the heading. */
-    const note = waiting ? null : shown.sentence;
     return (
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
-        <LoaderCircle size={13} className="cmt-spinner" />
-        <span>
-          {waiting ? WAITING_TO_CONTINUE : (current?.label ?? runningLabel)}
-          {shown.elapsedMs !== null && (
-            <span className="tw:tabular-nums tw:text-ink-faint"> · {elapsedLabel(shown.elapsedMs)}</span>
-          )}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="tw:ml-auto"
-          title="Stop this job"
-          disabled={job.cancelling === true}
-          onClick={() => onCancel(job.id)}
-        >
-          <X size={12} />
-          {job.cancelling ? "Stopping…" : "Stop"}
-        </Button>
-        {/* Last in the DOM, and that is the fix rather than an accident. `w-full`
-            is what makes the wrap happen rather than merely allowing it: a flex
-            item at full width cannot share a line. With the detail written
-            *before* Stop — which is the reading order, and how the first version
-            had it — that pushed Stop onto a third row. Two rows beats three in a
-            band this narrow, and the detail is progress text rather than
-            something the reader acts on, so it is the one that gives way. */}
-        {current?.detail && (
-          <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
-            {current.detail}
-          </span>
-        )}
-        {/* Full width for the same reason the detail is: this is a whole
-            sentence in a band about twenty characters wide, and inline it
-            would push Stop onto a third row. Two of the eight states have one
-            — *taking longer than usual* and *stopping after the current step*
-            — and both are the reader's cue that the wait is not a mistake they
-            are making. */}
-        {note && <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{note}</span>}
-        {/* Only where `data/_ai-calls.jsonl` gave us a number, and only while
-            it is still true — see `STEP_TIMING` in src/job-state.ts. */}
-        {shown.usually !== null && (
-          <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{shown.usually}</span>
-        )}
-      </div>
+      <Band
+        job={job}
+        now={now}
+        stalled={stalled}
+        /* The step that is actually running, and the panel's own step as the
+           fallback for the moment between two of them. Naming the step the
+           reader is really waiting on is the same rule the add card follows —
+           "each step is named, not counted". */
+        fallbackStep={job.steps.find((s) => s.name === step)}
+        fallbackLabel={runningLabel}
+        onCancel={onCancel}
+      />
     );
   }
 
@@ -195,6 +208,124 @@ export function JobProgress({
         {label}
       </Button>
       {failed && <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed}</p>}
+      {/* **The job in the way.**
+       *
+       * `POST /api/jobs` answers 409 when the article already has an active job
+       * doing different work, and that job is by definition one whose steps do
+       * **not** include this panel's — so `useStepJob`'s own filter can never
+       * surface it and the refusal above used to be the whole of what the
+       * reader got: told to stop something with nothing on screen to stop.
+       *
+       * The button stays. Pressing it again while the blocker runs is refused
+       * again, which costs nothing, and the moment the blocker ends it is the
+       * thing the reader wants. Hiding it would make the band look broken.
+       *
+       * Ruled off rather than styled differently, because it is the same
+       * information in the same words as any other running job — what it needs
+       * to say is *this is not yours*, and one line does that. */}
+      {blocking && (
+        <div className="tw:mt-2 tw:border-l-2 tw:border-rule tw:pl-2">
+          <Band
+            job={blocking}
+            now={now}
+            stalled={stalled}
+            fallbackLabel={WORKING_ON_THIS_ARTICLE}
+            onCancel={onCancel}
+          />
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * One running job, drawn.
+ *
+ * Extracted 2026-09-01 so that the job this panel started and the job that
+ * **refused** it are the same three rows in the same words — the states are
+ * `displayJob`'s either way, and a second copy here is how a band and a card
+ * came to disagree once already (tests/interrupted-job-card.test.tsx).
+ *
+ * The two differ in one thing only: what to call the step when the job is
+ * between two of them. This panel's own `runningLabel` is right for its own job
+ * and a confident lie about somebody else's.
+ */
+function Band({
+  job,
+  now,
+  stalled,
+  fallbackStep,
+  fallbackLabel,
+  onCancel,
+}: {
+  job: Job;
+  now: number;
+  /** See `stalled` on `JobProgress`. The one thing here the job does not know. */
+  stalled: boolean;
+  /** Whose `detail` to show when no step is running. None, for a blocker. */
+  fallbackStep?: JobStep | undefined;
+  fallbackLabel: string;
+  onCancel(id: string): void;
+}) {
+  const shown = displayJob(job, now);
+  const current = shown.step ?? fallbackStep;
+  const waiting = shown.state === "waiting";
+  /* Not repeated underneath when it is already the heading. */
+  const note = waiting ? null : shown.sentence;
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
+      <LoaderCircle size={13} className="cmt-spinner" />
+      <span>
+        {waiting ? WAITING_TO_CONTINUE : (current?.label ?? fallbackLabel)}
+        {shown.elapsedMs !== null && (
+          <span className="tw:tabular-nums tw:text-ink-faint"> · {elapsedLabel(shown.elapsedMs)}</span>
+        )}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="tw:ml-auto"
+        title="Stop this job"
+        disabled={job.cancelling === true}
+        onClick={() => onCancel(job.id)}
+      >
+        <X size={12} />
+        {job.cancelling ? "Stopping…" : "Stop"}
+      </Button>
+      {/* Last in the DOM, and that is the fix rather than an accident. `w-full`
+          is what makes the wrap happen rather than merely allowing it: a flex
+          item at full width cannot share a line. With the detail written
+          *before* Stop — which is the reading order, and how the first version
+          had it — that pushed Stop onto a third row. Two rows beats three in a
+          band this narrow, and the detail is progress text rather than
+          something the reader acts on, so it is the one that gives way. */}
+      {current?.detail && (
+        <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
+          {current.detail}
+        </span>
+      )}
+      {/* Full width for the same reason the detail is: this is a whole
+          sentence in a band about twenty characters wide, and inline it
+          would push Stop onto a third row. Two of the eight states have one
+          — *taking longer than usual* and *stopping after the current step*
+          — and both are the reader's cue that the wait is not a mistake they
+          are making. */}
+      {note && <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{note}</span>}
+      {/* Only where `data/_ai-calls.jsonl` gave us a number, and only while
+          it is still true — see `STEP_TIMING` in src/job-state.ts. */}
+      {shown.usually !== null && (
+        <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{shown.usually}</span>
+      )}
+      {/* **The one line here that does not come off the server.** Everything
+          above is the record; this is the tab admitting it can see the job and
+          cannot move it. Full width like the other two sentences, and the same
+          muted colour rather than `text-destructive`: nothing has failed, it is
+          still trying, and colouring a thing that resolves itself as an error
+          teaches the reader to distrust the colour. */}
+      {stalled && (
+        <span className="tw:w-full tw:leading-snug tw:text-ink-faint">{DRIVER_STALLED}</span>
+      )}
+    </div>
   );
 }

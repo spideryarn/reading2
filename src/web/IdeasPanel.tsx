@@ -145,6 +145,8 @@ export function IdeasPanel({
         <JobProgress
           job={owner.job}
           failed={owner.failed}
+          blocking={owner.blocking}
+          stalled={owner.stalled}
           onRun={() => owner.find(withProfile)}
           onCancel={owner.cancel}
           label={label}

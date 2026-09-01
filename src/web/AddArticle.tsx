@@ -419,14 +419,17 @@ export function JobCard({
    * began and sit there for six minutes, which is a worse lie than showing
    * nothing.
    *
-   * A second while something is running, and **a day** otherwise: a finished
-   * card has no running step, so nothing on it changes with time and a minute
-   * would be a re-render an hour to paint the same pixels. A day is inside the
-   * 32-bit timer range, so it is one timer that never fires. `useNow` stops
-   * dead while the tab is hidden and catches up on return, which is exactly
-   * right here — nobody is watching a timer they cannot see.
+   * A second while something is running, and **off** otherwise: a finished card
+   * has no running step, so nothing on it changes with time and a minute would
+   * be a re-render an hour to paint the same pixels. `useNow` stops dead while
+   * the tab is hidden and catches up on return, which is exactly right here —
+   * nobody is watching a timer they cannot see.
+   *
+   * This said `86_400_000` and called it "one timer that never fires" until
+   * 2026-09-01. It fired — once a day, per card, for the life of the tab.
+   * Harmless and untrue, which is the worse half; `useNow` takes `null` now.
    */
-  const now = useNow(busy ? 1000 : 86_400_000);
+  const now = useNow(busy ? 1000 : null);
   const shown = displayJob(job, now);
   /* Only while it is going. A count that outlived its job would be a warning
      about something that has already stopped — and the engine drops the count

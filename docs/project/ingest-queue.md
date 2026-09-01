@@ -746,35 +746,118 @@ expired lease* is invisible to the browser until [the sweep](#the-browser-is-the
 and that is the design working: taking a lease here would re-derive ownership in the reader's
 browser. Elapsed time is a **display** clock and decides nothing.
 
-**`interrupted` is `job.error === INTERRUPTED.message`, not `failureKind === "retry"`.** Many
-failures are retryable; only one of them is *nobody was there any more*.
+**`interrupted` is the `[jb-gone]` code at the end of `job.error`**, not `failureKind === "retry"`
+and not the sentence itself. Many failures are retryable; only one of them is *nobody was there any
+more*. And it must be the code rather than the prose, because a reworded sentence would otherwise
+**reclassify every job already stored** — which is exactly what a stable code exists to prevent. A
+structured `endingKind` field would be the better long-term answer and was considered; it was
+rejected for now because it could only classify jobs settled after it landed, and every interrupted
+job a reader can see today carries the sentence and no field.
 
 **The "taking longer than usual" threshold is per step, not global.** Six minutes into `hierarchy` is
-an ordinary run; six minutes into `fetch` is a fetch that is never coming back. Only two steps have
-enough runs in `data/_ai-calls.jsonl` to say anything: `hierarchy` (six runs, median ~409s → *"a few
-minutes"*, flagged slow at ten) and `sketch` (thirteen, median ~144s → *"two or three minutes"*).
-Every other step gets a default marked **GUESS** in the table, and **says nothing to the reader** —
-`STEP_BUDGET_MS` sets that discipline and this follows it.
+an ordinary run; six minutes into `fetch` is a fetch that is never coming back. But a **threshold**
+and a **promise** are different claims, and only the weaker one is affordable on this much data.
 
-> **The trap that discipline exists for, sprung again while this was written.** The first `sketch`
-> figure was a median of 287s, from grouping by `runId` and taking the wall clock. The long ones are
-> **eval batches of several articles under one `runId`** with a null `articleSlug`. That number would
-> have promised readers three minutes more than the step has ever taken. Group by `jobId`.
+- A threshold says *past here, stop assuming this is normal*. Every step has one.
+- *"This step usually takes N"* is a promise about finishing, and **one step has earned one**:
+  `sketch`. `hierarchy` gets a threshold and no sentence.
+
+`sketch`'s evidence is thirteen calls, all `ok`, 121–199s, median 144 — and the reason a *call*
+duration may stand in for a *step* duration here is that a `sketch` step is one model call, and on
+the single occasion the two clocks can be compared they agree exactly: the one real ingest step ran
+159s and its one model call ran 159s. Twelve of the thirteen are eval or CLI traffic rather than a
+reader's, which is a caveat about *what was drawn* and not about the clock — and is why the sentence
+is a range.
+
+**`hierarchy` keeps its ten-minute threshold rather than falling back to the default**, and the
+reason is the sort that only shows up if you check: the default is 180s, which is **below the only
+successful hierarchy run there has ever been** (187s). Letting it default would put a warning under
+the one shape of run we have evidence for, every time. Two more grounds: hierarchy steps have been
+seen doing genuine work for 498s — the two longest failures ran fifteen and seventeen successful
+model calls before hitting the token budget — and the claimant self-aborts at 740s, so ten minutes
+leaves ~140s in which the sentence is on screen before the lease settles the job.
+
+**How to measure it, since three attempts got this wrong.** Read `data/_jobs/*.json`, take each step
+whose **own** status is `done`, and compute `finishedAt − startedAt`. That is the same subtraction
+the card shows, over the same two fields, so the number can be held to the screen. Successful steps
+only, because a promise about finishing cannot be measured from something that did not finish.
+
+> **The trap, sprung three times in one day, and the third time it survived two reviews.** The first
+> figure came from grouping `_ai-calls.jsonl` by `runId`, which pulls in **eval batches of several
+> articles under one id**. Corrected to group by `jobId` — and that version, *"hierarchy: six runs,
+> median 409s"*, was wrong in both halves: **five of the six jobs failed at `hierarchy`**, so the
+> median was a time to *failure* printed on a card as a time to finish; and model-call spans are not
+> the clock `displayJob` shows, so the number could not be checked against the screen at all.
+>
+> **The tell was there and was argued away.** One "run" was 772 seconds, and no step can run that
+> long — the claimant aborts itself at 740s. A measurement impossible under the code's own deadline
+> is not a measurement. Noticing that and explaining it away is how a wrong number survives two
+> reviews. GPT Sol found it on the third pass;
+> [silent-success.md](../reusable/silent-success.md) is the whole of it.
+
+**An unmeasured step still warns, and must not say "usual" while it does.** The default threshold is
+a guess, so past it the reader is told the step *has been running for a while* — not that it is
+longer than usual, which would be a statistical claim from no statistics.
 
 **The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
 so a job six minutes into `hierarchy` returns a byte-identical record on every poll and `sameJobs`
 correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
-began. Both surfaces use `useNow(1000)` while busy, and a day otherwise, so an idle band is not
-re-rendering once a minute for ever.
+began. Both surfaces use `useNow(1000)` while busy and `null` — off — otherwise. It
+said *a day* and called it a timer that never fires; it fired, once a day, per card.
 
 **Transport health is deliberately not part of it.** Consecutive failed advances are not a fact about
 the job — the job is fine; the *connection* is unwell — and are not on `Job` at all. `driverStalled`
-is a separate question with its own threshold of three, which is about twenty-four seconds of getting
-nowhere given the eight-second backoff. It answers a real silent success: `drive()` swallows an
-advance rejection and retries for ever, so a card could sit confidently at `queued` while every
-status poll looked healthy. It is rendered on `JobCard` and **not** in `JobProgress`, which would
-mean threading a prop through eight panels for a surface watching one artefact rather than an import.
-A gap on purpose.
+is a separate question with its own threshold of three, which is about **sixteen** seconds of getting
+nowhere — the first advance is immediate and the backoff follows a failure, so three land at ~0s, 8s
+and 16s: two gaps, not three. It answers a real silent success: `drive()` swallows an advance
+rejection and retries for ever, so a card could sit confidently at `queued` while every status poll
+looked healthy.
+
+It is rendered on **both** surfaces, through `StepJob.stalled`. It was on `JobCard` only for a day,
+on the argument that reaching `JobProgress` meant threading a prop through eight panels — but a
+reader drawing a sketch may never look at the shelf, so their one surface was the one that could
+spin without the warning Stage 5 exists to give. `useStepJob` already owns the queue subscription, so
+it computes `stalled` there; nothing about transport health went onto `Job` or through `displayJob`.
+The prop is **required** rather than optional, so the compiler did the fifteen-file sweep instead of
+a warning being quietly wired into two panels out of eight.
+
+### The 409 points at the job in the way
+
+Ask for work on an article that already has a job in flight and the answer is a 409 — which until
+2026-09-01 said *"That article already has a job running. Wait for it, or stop it first."* It named
+no job, offered no way to reach one, and said **running** of a job that might be idle in `queued`.
+The reader was told to stop something they could not see.
+
+It carries the job now, and the four parts are all load-bearing, because returning an id alone would
+have changed nothing:
+
+1. **`JobConflict`** ([`src/jobs.ts`](../../src/jobs.ts)) holds the blocking `Job` that `enqueueOrGet`
+   already handed back. **The identity comes from the atomic conflict result, never from
+   `listJobs`** — which since Stage 3 mutates, logs and sometimes re-reads, and is not a lookup.
+2. **`structuredDetail`** in [`routes.ts`](../../src/routes.ts) matches **that class and nothing
+   else**, reads one declared field, and passes it through `publicJob` — the same call `GET
+   /api/jobs` makes. It does not spread an error's own properties, so nothing else has a route out:
+   not a database error's bound parameters, not a provider's words, not article prose. The 409 can
+   carry nothing the reader's next poll would not have handed them anyway.
+3. **`HttpError.details`** ([`lib/api.ts`](../../src/web/lib/api.ts)) — `readJson` used to drop every
+   structured field. One parsing path, not a second one for this case.
+4. **`JobProgress` renders the blocker in the same band vocabulary**, so it says *Building the
+   hierarchy · 2m 14s* rather than a static sentence. Without this it could not have shown at all:
+   `useStepJob` filters the job list to jobs writing the *requested* step, and a blocker whose steps
+   do not include it is exactly the case that produces the 409.
+
+**Identity from the refusal, state from the list.** The 409's copy of the job seeds the band so it
+draws at once; `queue.jobs` supersedes it; a positive terminal reading clears it. `failed` derives
+from the same value, so the refusal lasts exactly as long as the job it was about, and there is no
+window in which the sentence and the band disagree.
+
+> **Know before you extend this.** The throw site every band button reaches is on a list to be
+> replaced by a per-article queue —
+> [260830ar-several-articles-at-once.md](../plans/260830ar-several-articles-at-once.md) § Stage 2,
+> *"Replace the 409"*, blocked on a prerequisite another session owns, with an `it.skip` in
+> `tests/jobs.test.ts` already holding its place. The **second** throw site (a URL or upload whose
+> slug cannot move) is not on that list, so the structured body keeps earning its place — but the
+> `JobProgress` blocker branch loses its only producer the day that lands.
 
 ### The app says out loud that it needs a tab open
 

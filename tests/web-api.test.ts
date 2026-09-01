@@ -20,7 +20,7 @@
  * Deterministic — no network. docs/project/testing.md.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { failure, readJson, statusOf } from "../src/web/lib/api.js";
+import { detailsOf, failure, readJson, statusOf } from "../src/web/lib/api.js";
 
 /** Vercel's body when a serverless function throws. Verbatim, 2026-08-26. */
 const VERCEL_500 = "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n";
@@ -181,5 +181,49 @@ describe("the status on a thrown error", () => {
     // Duck-typed on purpose, so a test's own stand-in counts — see `statusOf`.
     expect(statusOf({ status: 401 })).toBe(401);
     expect(statusOf({ status: "401" })).toBeNull();
+  });
+});
+
+/**
+ * **The structured half of a refusal.**
+ *
+ * `readJson` used to keep the server's sentence and throw the rest of the body
+ * away, which made a structured refusal impossible to act on: `POST /api/jobs`
+ * answers 409 with the job that is in the way beside the message, and until
+ * 2026-09-01 nothing downstream could see it. GPT Sol named this in the stage 1
+ * review as the thing stage 6 would need.
+ *
+ * `detailsOf` rather than reading `.details`, for the same reason `statusOf` is
+ * duck-typed: a test that mocks `lib/api.js` supplies its own `readJson`, and a
+ * second copy of the class in the graph would make `instanceof` false for an
+ * object that is one in every way that matters.
+ *
+ * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
+ */
+describe("the structured fields beside the message", () => {
+  it("keeps them, and keeps the sentence too", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const refused = await readJson(
+      json({ error: "Spideryarn is already busy with this article.", blocking: { id: "spya-k3m9qt" } }, 409),
+    ).catch((e: unknown) => e);
+
+    expect((refused as Error).message).toBe("Spideryarn is already busy with this article.");
+    expect(statusOf(refused)).toBe(409);
+    /* `error` is the message and is not repeated here: `details` means *what
+       the server sent beside the sentence*, so a caller reading it never has to
+       know which key the prose lives under. */
+    expect(detailsOf(refused)).toEqual({ blocking: { id: "spya-k3m9qt" } });
+  });
+
+  it("is an empty object rather than a guess when the body carried none", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    /* Three shapes that all have to answer the same way, because a caller that
+       has to test for null before looking is a caller that will forget once. */
+    expect(detailsOf(await readJson(json({ error: "No." }, 404)).catch((e: unknown) => e))).toEqual({});
+    expect(detailsOf(await readJson(new Response(VERCEL_500, { status: 500 })).catch((e: unknown) => e))).toEqual({});
+    expect(detailsOf(new TypeError("Failed to fetch"))).toEqual({});
+    expect(detailsOf(null)).toEqual({});
+    // A JSON body that is not an object at all — an array, a bare string.
+    expect(detailsOf(await readJson(json(["nope"], 500)).catch((e: unknown) => e))).toEqual({});
   });
 });

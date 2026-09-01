@@ -122,8 +122,25 @@ export function canRetry(kind: FailureKind): boolean {
  * mistakes: an offered retry that fails costs a click, a withheld one costs the
  * reader the feature.
  */
+/**
+ * The bracketed code at the end of a stored message, or null.
+ *
+ * Split out of `kindOfMessage` on 2026-09-01 for one caller that wants the
+ * **code itself** rather than the kind it maps to: `isInterrupted` in
+ * src/job-state.ts asks *is this the specific ending `[jb-gone]` names*, and
+ * `retry` — which is what `jb-gone` maps to — is shared with a dozen ordinary
+ * failures that are nothing of the sort.
+ *
+ * One regex in one place. The alternative was `job.error === INTERRUPTED.message`
+ * at the call site, which made a classifier out of prose that is free to be
+ * reworded and would have silently reclassified every job already stored.
+ */
+export function codeOfMessage(message: string): string | null {
+  return message.match(/\[([a-z0-9-]+)\]\s*$/)?.[1] ?? null;
+}
+
 export function kindOfMessage(message: string): FailureKind | null {
-  const code = message.match(/\[([a-z0-9-]+)\]\s*$/)?.[1];
+  const code = codeOfMessage(message);
   if (!code) return null;
   const known = CODE_KINDS[code];
   if (known) return known;
@@ -213,12 +230,25 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * — only that it stopped saying so — and two runners writing one article is
  * worse than one click. docs/plans/260827h-durable-queue-and-uploads.md § 2.
  */
+/**
+ * **The stable half of `INTERRUPTED`**, and the only half anything may classify
+ * on.
+ *
+ * `isInterrupted` in src/job-state.ts turns a stored job into the reader-facing
+ * state *interrupted*, and it asks this rather than comparing the sentence:
+ * every job already in the database carries the wording of the day it was
+ * settled, so a reworded sentence must not be able to reclassify history. Named
+ * and interpolated below so the two cannot drift apart — a code the message
+ * does not actually end with is a classifier that quietly matches nothing.
+ */
+export const INTERRUPTED_CODE = "jb-gone";
+
 export const INTERRUPTED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "This stopped part-way through, and whatever was running it did not come back. " +
     "The steps that finished are kept, so trying again picks up where it left off rather than " +
-    "starting over. [jb-gone]",
+    `starting over. [${INTERRUPTED_CODE}]`,
 };
 
 export const CODE_KINDS: Record<string, FailureKind> = {

@@ -40,7 +40,7 @@
  * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 4.
  */
 import { jobWorthRetrying } from "./job-failure.js";
-import { INTERRUPTED } from "./messages.js";
+import { codeOfMessage, INTERRUPTED_CODE } from "./messages.js";
 import type { Job, JobStep, StepName } from "./types.js";
 
 /**
@@ -118,9 +118,16 @@ export interface JobDisplay {
 /* ------------------------------------------------------------- the words --
    Reader-facing copy, and it follows docs/project/copy.md even though none of
    it is a model failure: say what happened in words that assume nothing, and
-   say what to do next when there is anything. No bracketed codes, because a
-   code is for quoting when something went wrong and none of these is a thing
+   say what to do next when there is anything. No bracketed codes: a code is for
+   quoting when something went wrong, and a status or a duration is not a thing
    going wrong.
+
+   **`DRIVER_STALLED` is the edge of that rule and not an instance of it.**
+   Repeated transport failure *is* a problem and is exactly the kind of thing a
+   reader would report — GPT Sol, 2026-09-01. It has no code today because it
+   resolves itself far more often than not and a code invites a bug report about
+   a dev-server restart; if it starts arriving in real reports, give that one
+   sentence a code rather than widening the rule.
 
    Constants rather than inline strings so the tests can assert identity and
    the wording stays free to change — the same discipline copy.md asks for with
@@ -132,8 +139,28 @@ export const WAITING_TO_CONTINUE = "Waiting to continue.";
 /**
  * Past what this step has ever taken. **It names the way out**, because the
  * one thing worse than a long wait is a long wait you cannot end.
+ *
+ * **Only for a step whose "usual" we have actually written down**, which is the
+ * rule `RUNNING_A_WHILE` exists to keep. See `slowSentence`.
  */
 export const TAKING_LONGER = "This is taking longer than usual — you can stop it.";
+
+/**
+ * The same way out, with the statistical claim taken off it.
+ *
+ * Every step that nobody has timed still gets a threshold (`SLOW_AFTER_MS`) and
+ * still needs the way out named — a reader whose fetch has been going four
+ * minutes is right to be told, and a guess in the safe direction is worth
+ * having. What it must not do is say *longer than usual*, because for those
+ * steps **we have never said what usual is**, and this module's own rule is
+ * that an unmeasured step says nothing about its duration. Saying it anyway is
+ * the reassurance-shaped invention `STEP_TIMING` is written to prevent, wearing
+ * a warning's clothes.
+ *
+ * GPT Sol, 2026-09-01, reviewing stage 5: *"Keep the safety warning, but use
+ * different copy… Reserve 'usual' for measured steps."*
+ */
+export const RUNNING_A_WHILE = "This step has been running for a while — you can stop it.";
 
 /**
  * Stop pressed. Says **what it is waiting for**, which a disabled button
@@ -156,23 +183,59 @@ export const KEEP_A_TAB_OPEN =
   "Keep a Spideryarn tab open while this imports. If you close them all, it will continue when you return.";
 
 /**
- * What a measured slow step usually takes. One sentence per shape of answer.
+ * **One job per article, said without claiming it is running.**
  *
- * **Whole sentences, in one place, glued to nothing.** The first version stored
+ * The refusal `enqueue` answers with when the article the reader named already
+ * has an active job doing different work (src/jobs.ts § `JobConflict`). It
+ * replaced *"That article already has a job running. Wait for it, or stop it
+ * first."*, which was wrong twice over: a blocker sitting in `queued` with
+ * nothing driving it is not running, and a sentence that names no job tells the
+ * reader to stop something they cannot see.
+ *
+ * **It deliberately says nothing about which state the blocker is in**, and
+ * that is not vagueness. The state is a live fact that changes while the reader
+ * looks at it, and the client already has the job — the 409 carries it — so
+ * `displayJob` says *Building the hierarchy · 2m 14s* or *Waiting to continue.*
+ * beside a Stop button, from the same record and the same vocabulary as every
+ * other surface. A state word baked into this sentence would be a second
+ * account of the same thing, arriving stale and free to disagree.
+ */
+export const ARTICLE_IS_BUSY =
+  "Spideryarn is already busy with this article. Wait for that to finish, or stop it and ask again.";
+
+/**
+ * The blocking job's label when it has no running step to borrow one from.
+ *
+ * A job between two steps has no `JobDisplay.step` — a fraction of a second in
+ * practice, and the one gap where the band that shows a *blocker* has nothing
+ * to name. The panel's own `runningLabel` is the wrong answer there and a
+ * confidently wrong one: "Finding…" over an ingest says the glossary is running
+ * when it is precisely what the reader was refused.
+ *
+ * No full stop, because it stands where a step label stands.
+ */
+export const WORKING_ON_THIS_ARTICLE = "Working on this article";
+
+/**
+ * What a measured step usually takes. **One step has earned one of these.**
+ *
+ * **A whole sentence, in one place, glued to nothing.** The first version stored
  * the fragment "usually a few minutes" and let each surface write "This step "
  * in front of it, which put "This step usually a few minutes." on the card and
  * would have needed fixing in two places.
  *
- * **Vague on purpose, and vague to the width of the actual spread.** The two
- * steps have genuinely different shapes — see `STEP_TIMING` — so they get
- * different sentences rather than one that is loose enough to cover both: a
- * reader told "a few minutes" who waits two is being talked down to, and one
- * told "two or three" who waits twelve has been misled by the reassurance
- * rather than reassured. What neither says is a single number, because the
- * spread is three-to-one and a number the data cannot support is
- * docs/reusable/silent-success.md with a decimal point on it.
+ * **Vague on purpose, and vague to the width of the actual spread** — thirteen
+ * `sketch` runs between 121 and 199 seconds, so "two or three minutes" is the
+ * honest width. What it does not say is a single number, because a number the
+ * data cannot support is docs/reusable/silent-success.md with a decimal point
+ * on it.
+ *
+ * There was a second sentence here, `STEP_USUALLY_A_FEW_MINUTES`, and
+ * `hierarchy` had it. It was deleted on 2026-09-01 rather than reworded,
+ * because the measurement under it turned out to be a median of five failures
+ * — see `STEP_TIMING`. A constant nothing can say truthfully is worse than no
+ * constant, because the next step to be measured will reach for it.
  */
-export const STEP_USUALLY_A_FEW_MINUTES = "This step usually takes a few minutes.";
 export const STEP_USUALLY_A_COUPLE_OF_MINUTES = "This step usually takes two or three minutes.";
 
 /**
@@ -212,62 +275,141 @@ export const DRIVER_STALLED =
  *
  * ## Why per step and not one number for the whole job
  *
- * Six minutes into `hierarchy` is an ordinary run and six minutes into `fetch`
- * is a fetch that is never coming back. One threshold is wrong for one of them
- * whichever number you pick.
+ * Six minutes into `hierarchy` is well inside what that step has been seen
+ * doing — the longest recorded attempt was still making successful model calls
+ * at eight — and six minutes into `fetch` is a fetch that is never coming back.
+ * One threshold is wrong for one of them whichever number you pick.
  */
 interface StepTiming {
   slowAfterMs: number;
+  /**
+   * The measured sentence, where there is one. **Absent is the default and the
+   * common case.**
+   *
+   * It decides two things, and tying them to one field is deliberate: what to
+   * say while the step runs, and — through `slowSentence` — whether the warning
+   * past `slowAfterMs` is allowed to use the word *usual*. A step cannot end up
+   * measured enough for one and not the other.
+   */
   usually?: string;
 }
 
 /**
- * **MEASURED** 2026-09-01 from `data/_ai-calls.jsonl`.
+ * **RE-MEASURED 2026-09-01, on the clock the reader is actually watching.**
  *
- * - **`hierarchy`: 6 real ingest runs over 3 articles — 163s, 182s, 270s,
- *   549s, 604s, 772s; median 409s.** Grouped by `jobId` and read as
- *   `max(finishedAt) − min(startedAt)`, because the step fans out into up to
- *   eleven calls on one article and summing them double-counts everything that
- *   overlapped.
- * - **`sketch`: 13 drawings — 121s to 199s, median 144s.** One model call per
- *   article, so the call's own `durationMs` *is* the step.
+ * ## The method, written down so the next person can repeat it rather than invent one
  *
- * **The methodology is not pedantry, and the first draft of this table got it
- * wrong.** Grouping `sketch` by `runId` and taking the wall clock gave
- * "129–411s, median 287s", which went into this comment before anybody looked
- * at the rows: the long ones are **eval batches of several articles under one
- * `runId`** with a null `articleSlug`, so the span covered work on three
- * different pieces. That is the exact trap `STEP_BUDGET_MS`'s header in
- * src/jobs.ts warns about, met from the other direction — and the wrong number
- * would have promised a reader three minutes more than the step has ever
- * taken. Read the rows, not just the aggregate.
+ * Read every `data/_jobs/*.json`. Take each step whose **own** `status` is
+ * `"done"`, and compute
+ * `Date.parse(step.finishedAt) − Date.parse(step.startedAt)`.
  *
- * Nothing else gets a `usually`. `timeline` has 4 runs and `quiz` has 12 but
- * all on one article, and everything else is under a minute anyway — a
- * reassurance about a step nobody has timed is an invention, and a
- * reassurance about a step that finishes in twelve seconds is noise.
+ * That is the same subtraction `displayJob` shows on the card, over the same
+ * two fields, so a number derived this way is one the card can be held to.
+ * Successful steps only, because *"this step usually takes N"* is a promise
+ * about finishing.
  *
- * **The thresholds are not the measurements plus a bit.** `hierarchy` is ten
- * minutes: past its median but *inside* `LEASE_MS` (12.67 min), so a genuinely
- * abandoned job says "taking longer than usual" for a couple of minutes and
- * then the server's own sweep settles it and the card says what really
- * happened. That order is the right one — the display clock speaks first and
- * tentatively, the lease speaks last and decides. `sketch` is seven minutes:
- * twice its worst recorded run, because the cost of being early here is one
- * unnecessary sentence and the cost of being late is a reader watching a
- * spinner with nothing to go on.
+ * Over the 21 records on this machine (12 done jobs, 7 error, 2 queued):
+ *
+ * ```
+ * hierarchy   n=1   187s
+ * sketch      n=1   159s
+ * ideas       n=2   114s, 129s
+ * summary     n=2    51s, 103s
+ * glossary    n=3    20s,  29s, 36s
+ * arc         n=2    10s,  31s
+ * quotes      n=1    12s
+ * fetch, extract, blocks, assets — seconds
+ * ```
+ *
+ * ## What the previous version of this comment measured instead
+ *
+ * It grouped `data/_ai-calls.jsonl` by `jobId` and took
+ * `max(finishedAt) − min(startedAt)`, and reported *"`hierarchy`: 6 real ingest
+ * runs — 163s, 182s, 270s, 549s, 604s, 772s; median 409s"*. Both halves of that
+ * are wrong, and neither is a rounding error:
+ *
+ * - **Five of those six jobs failed at `hierarchy`.** Their step durations were
+ *   0s, 67s, 270s, 492s and 498s. So the median was a **time to failure**
+ *   printed on a card as a time to finish.
+ * - **It is the wrong clock.** A step's model calls do not begin when the step
+ *   begins or end when it ends, and `displayJob` shows neither end of that
+ *   span. A number that cannot be reproduced from the two fields on screen
+ *   cannot be checked against the screen.
+ *
+ * **The tell was there and was argued away.** One of the six "runs" was 772
+ * seconds, and no step can run that long: the claimant aborts itself at
+ * `LEASE_MS − DEADLINE_MARGIN_MS` = 740s (src/jobs.ts). A measurement that is
+ * impossible under the code's own deadline is not a measurement, and noticing
+ * that and explaining it is how a wrong number survives two reviews.
+ * docs/reusable/silent-success.md. Found by GPT Sol reviewing stage 5.
+ *
+ * ## `hierarchy` therefore says nothing about how long it usually takes
+ *
+ * **One successful attempt is not "usually".** `usually` is absent, and the
+ * reader gets the elapsed time and no promise about it.
+ *
+ * It keeps a **threshold**, which is a different and weaker claim — not *this
+ * is what the step takes* but *past here, stop assuming this is normal* — and
+ * three facts fix it at ten minutes:
+ *
+ * 1. `SLOW_AFTER_MS`, the default it would otherwise fall back to, is **below
+ *    the only successful run there has ever been** (180s against 187s). Letting
+ *    it default would put a warning under the one shape of run we have evidence
+ *    for, every time.
+ * 2. Hierarchy steps have been seen doing genuine work for **498 seconds**: the
+ *    two longest failures ran 15 and 17 model calls each, every one of them
+ *    successful, before the answer overran its token budget. A step still
+ *    fanning out at eight minutes is not evidently stuck.
+ * 3. The claimant kills itself at 740s. Ten minutes leaves about 140 seconds in
+ *    which the sentence is on screen before the server's own sweep settles the
+ *    job and the card says what really happened. That order is the right one:
+ *    the display clock speaks first and tentatively, the lease speaks last and
+ *    decides.
+ *
+ * ## `sketch` keeps its sentence, and this is exactly what is under it
+ *
+ * One `job_step` too — but a `sketch` step is **one model call**, and there are
+ * **thirteen** of those in `data/_ai-calls.jsonl` under `job: "sketch"`, every
+ * one of them `ok`: 121, 124, 125, 129, 135, 143, 144, 145, 159, 166, 181, 194,
+ * 199 seconds. Median 144s.
+ *
+ * Substituting a call duration for a step duration is only allowed because the
+ * one occasion we can compare them says they are the same: the single real
+ * ingest step ran **159s** and its single model call ran **159s**. So "two or
+ * three minutes" is thirteen successful observations wide, not one.
+ *
+ * (Twelve of the thirteen are `eval` and `cli` rather than reader traffic. That
+ * is a real caveat about *what was drawn*, not about the clock, and it is why
+ * the sentence gives a range rather than a number.)
+ *
+ * Threshold seven minutes: past twice the worst of the thirteen. The cost of
+ * being early is one unnecessary sentence; the cost of being late is a reader
+ * watching a spinner with nothing to go on.
+ *
+ * ## Nothing else gets a `usually`
+ *
+ * `ideas` at n=2 and `summary` at n=2 are the closest, and two is not "usually"
+ * either. Everything else finishes inside a minute, where a reassurance is
+ * noise. When one of them reaches enough runs, add it here — with the method
+ * above, not with an aggregate over the call log.
  */
 const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
-  hierarchy: { slowAfterMs: 600_000, usually: STEP_USUALLY_A_FEW_MINUTES },
+  hierarchy: { slowAfterMs: 600_000 },
   sketch: { slowAfterMs: 420_000, usually: STEP_USUALLY_A_COUPLE_OF_MINUTES },
 };
 
 /**
  * **GUESS**, for every step that has not been measured — and the direction of
- * the guess is the point. Three minutes is comfortably past everything in the
- * log that is not `hierarchy` or `sketch` (the slowest is `timeline` at 125s),
- * so a false "taking longer than usual" is unlikely; and a reader whose fetch
- * has been going for three minutes is right to be told.
+ * the guess is the point. Three minutes is past every successful step in
+ * `data/_jobs` that is not `hierarchy` or `sketch` (the slowest is `ideas` at
+ * 129s), so a false alarm is unlikely; and a reader whose fetch has been going
+ * for three minutes is right to be told.
+ *
+ * **A guessed threshold does not buy a "usual".** The step it fires on gets
+ * `RUNNING_A_WHILE` and not `TAKING_LONGER` — see `slowSentence`. Three minutes
+ * being past everything recorded is a reason to raise a hand; it is not a
+ * measurement of how long the step takes, and the two must not be allowed to
+ * sound alike on a card.
  */
 const SLOW_AFTER_MS = 180_000;
 
@@ -310,24 +452,47 @@ function elapsedOf(step: JobStep, now: number): number | null {
 }
 
 /**
- * **The classifier, named exactly.** An interruption is the canonical
- * `INTERRUPTED` sentence and nothing looser.
+ * **The classifier, named exactly.** An interruption is the ending that
+ * `[jb-gone]` names, and nothing looser.
  *
  * It is *not* derivable from `failureKind: "retry"`, which was the obvious
  * shortcut and is wrong: a busy AI service, a 502, a timeout and a dozen other
  * ordinary failures are all retryable, and none of them is an import whose
- * engine walked away. The three places that end a job this way all write this
- * exact string — `settleExpired` in src/store/pg-jobs.ts, `settleAbandoned` in
- * src/store/jobs-fs.ts, and `sweepStopped` in src/jobs.ts — so the identity is
- * the whole of the test.
+ * engine walked away. The three places that end a job this way all write
+ * `INTERRUPTED.message` — `settleExpired` in src/store/pg-jobs.ts,
+ * `settleAbandoned` in src/store/jobs-fs.ts, and `sweepStopped` in src/jobs.ts
+ * — and that sentence carries `[jb-gone]`, which is the part of it that is a
+ * contract.
  *
- * The alternative was reading the `[jb-gone]` code back out with
- * `kindOfMessage`. Rejected: that mechanism exists for the surfaces that store
- * `err.message` and have nowhere else to put a kind (src/messages.ts § Why
- * this exists rather than a `kind` field), and a job is not one of them.
+ * ## It was `job.error === INTERRUPTED.message`, and that was wrong
+ *
+ * The argument for full-message equality was *a job is a struct, so it does not
+ * need a code parsed out of prose*. GPT Sol, 2026-09-01: **"the 'a job is a
+ * struct' argument supports adding an explicit cause such as
+ * `endingKind: 'interrupted'`; it does not support comparing a struct's prose
+ * field."** Right on both counts. Comparing the whole sentence makes the copy
+ * load-bearing: reword it — for tone, for `docs/project/copy.md`, for a typo —
+ * and every job **already stored** stops being an interruption and starts
+ * reading as an ordinary failure, with no test anywhere failing. That is the
+ * exact accident the stable four-character code exists to prevent.
+ *
+ * ## And a structured field would not have been enough on its own
+ *
+ * An `endingKind` column is the better long-term answer and should be added the
+ * next time this area is opened, alongside the code rather than instead of it.
+ * It is not the answer today for two reasons. It is a migration plus a write in
+ * three settle paths plus `publicJob` plus the parity suite — in a file
+ * (src/jobs.ts) another stage is mid-way through. And, decisively, **it would
+ * only classify jobs settled after it landed.** Every interrupted job the
+ * reader can see right now carries the sentence and no field, so the code is
+ * what classifies the records that exist, not a stopgap for the ones that do
+ * not.
+ *
+ * `codeOfMessage` and not `kindOfMessage`: the kind of `jb-gone` is `retry`,
+ * which is precisely the too-broad answer this function exists to refuse.
  */
 function isInterrupted(job: Job): boolean {
-  return job.error === INTERRUPTED.message;
+  return job.error !== undefined && codeOfMessage(job.error) === INTERRUPTED_CODE;
 }
 
 const activeStep = (job: Job): JobStep | null =>
@@ -353,8 +518,27 @@ export function displayJob(job: Job, now: number): JobDisplay {
     usually: state === "slow" ? null : (timing?.usually ?? null),
     retryable: jobWorthRetrying(job),
     state,
-    sentence: SENTENCES[state],
+    sentence: state === "slow" ? slowSentence(timing) : SENTENCES[state],
   };
+}
+
+/**
+ * **Which warning a slow step gets, and it turns on one thing.**
+ *
+ * *"Longer than usual"* is a claim about a distribution, and this module only
+ * has one for the steps that carry a `usually` sentence. Everything else is on
+ * `SLOW_AFTER_MS`, a guess — a good guess, in the safe direction, and still not
+ * grounds to tell somebody their step is unusual. So the two questions are tied
+ * to one field: **we say "usual" exactly where we have said what usual is.**
+ * One field rather than two means no step can ever be measured for one sentence
+ * and not the other.
+ *
+ * Both name the way out, which is the half that matters either way: a reader
+ * looking at a spinner needs to know they may end it more than they need to
+ * know how it compares.
+ */
+function slowSentence(timing: StepTiming | null): string {
+  return timing?.usually !== undefined ? TAKING_LONGER : RUNNING_A_WHILE;
 }
 
 /**
@@ -396,11 +580,17 @@ function stateOf(job: Job, elapsedMs: number | null, slowAfterMs?: number): JobD
  * be added without deciding this. `RETRYABLE` in src/messages.ts is the same
  * shape for the same reason, and it is there because the comparison version
  * silently stopped charging the cost it claimed to.
+ *
+ * **`slow` is the one state not in here**, and its absence is deliberate rather
+ * than an oversight: it is the only state whose sentence is not a function of
+ * the state alone — it depends on whether the *step* was measured. `Exclude`
+ * rather than a `slow: null` entry nobody reads, so that a hand reaching in to
+ * "fill the gap" gets a compiler error instead of a second, silent answer.
+ * `slowSentence` is where it is decided.
  */
-const SENTENCES: Record<JobDisplayState, string | null> = {
+const SENTENCES: Record<Exclude<JobDisplayState, "slow">, string | null> = {
   waiting: WAITING_TO_CONTINUE,
   working: null,
-  slow: TAKING_LONGER,
   stopping: STOPPING_AFTER_STEP,
   interrupted: null,
   failed: null,
@@ -413,11 +603,17 @@ const SENTENCES: Record<JobDisplayState, string | null> = {
 /**
  * **How many failed `/advance` calls in a row before we say so.**
  *
- * Each failure is followed by an eight-second wait (`IDLE_MS` in
- * src/web/jobEngine.ts § `step`), so three is about twenty-four seconds of a
- * driver getting nowhere: long enough that one blip and one dev-server restart
- * say nothing, short enough that the reader hears it before they have decided
- * the app is broken.
+ * **About sixteen seconds**, and the arithmetic is worth doing out loud because
+ * this comment said twenty-four until 2026-09-01. `drive` calls `/advance`
+ * *immediately*, and the eight-second wait (`IDLE_MS` in src/web/jobEngine.ts §
+ * `step`) comes **after** a failure, not before it — so the three failures land
+ * at roughly 0s, 8s and 16s, and the count reaches three at the third failure,
+ * before its own wait. Two gaps, not three. GPT Sol, 2026-09-01.
+ *
+ * Sixteen seconds is long enough that one blip and one dev-server restart say
+ * nothing, and short enough that the reader hears it before they have decided
+ * the app is broken. The number stays at three; only the description of it was
+ * wrong.
  */
 export const DRIVER_STALLED_AFTER = 3;
 

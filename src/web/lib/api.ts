@@ -194,10 +194,33 @@ function header(res: Response, name: string): string | null {
  */
 export class HttpError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /**
+   * **What the server sent beside `error`**, or `{}` when it sent nothing.
+   *
+   * Added 2026-09-01 for the 409 that `POST /api/jobs` answers when the article
+   * already has a job in flight: the message alone told the reader to stop
+   * something the interface never showed them, so the refusal now carries the
+   * blocking job. Before this, `readJson` kept the sentence and dropped every
+   * other field, which made a structured refusal unusable however carefully the
+   * server wrote one. GPT Sol named it in the stage 1 review as the thing stage
+   * 6 would need.
+   *
+   * **A second parsing path was the alternative and is worse.** A caller could
+   * read `Response.status`, decide it is the interesting one, and parse the body
+   * itself — which puts the same four lines back at every call site and gets
+   * forgotten at exactly one of them, the same argument that produced this
+   * class in the first place.
+   *
+   * `error` is deliberately **not** repeated in here. This means *what came
+   * beside the sentence*, so nothing reading it needs to know which key the
+   * prose lives under.
+   */
+  readonly details: Readonly<Record<string, unknown>>;
+  constructor(message: string, status: number, details: Record<string, unknown> = {}) {
     super(message);
     this.name = "HttpError";
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -214,14 +237,36 @@ export function statusOf(err: unknown): number | null {
   return typeof status === "number" ? status : null;
 }
 
+/**
+ * The structured fields a thrown error carries, or `{}` if it carries none.
+ *
+ * Duck-typed for the same reason `statusOf` is — see above. `{}` rather than
+ * `null` so that a caller reads one key and gets `undefined`, instead of having
+ * to test for absence first and forgetting once.
+ */
+export function detailsOf(err: unknown): Readonly<Record<string, unknown>> {
+  const details = (err as { details?: unknown } | null)?.details;
+  return typeof details === "object" && details !== null && !Array.isArray(details)
+    ? (details as Record<string, unknown>)
+    : {};
+}
+
 /** Log it, then say it in one sentence a reader can act on. */
 function errorFor(res: Response, text: string): Error {
   let said: unknown;
   let parsed = false;
+  /* Everything the server sent except the sentence. An array or a bare string
+     is not a record of fields, so it contributes nothing rather than being
+     coerced into one. See `details` on `HttpError`. */
+  let details: Record<string, unknown> = {};
   try {
     const body: unknown = JSON.parse(text);
     parsed = true;
-    if (typeof body === "object" && body !== null) said = (body as { error?: unknown }).error;
+    if (typeof body === "object" && body !== null && !Array.isArray(body)) {
+      const { error: _said, ...rest } = body as Record<string, unknown>;
+      said = _said;
+      details = rest;
+    }
   } catch {
     /* Deliberately swallowed. Whether it parsed is the interesting fact, and it
        is captured in `parsed`; the parser's own message describes the first
@@ -232,11 +277,14 @@ function errorFor(res: Response, text: string): Error {
 
   /* The server's own words when it gave them, and only then. See the header:
      an unparsed body is not ours to quote. */
-  if (typeof said === "string" && said.trim() !== "") return new HttpError(said, res.status);
+  if (typeof said === "string" && said.trim() !== "") {
+    return new HttpError(said, res.status, details);
+  }
 
   return new HttpError(
     `${statusLabel(res)} — the server's reply wasn't JSON, so the browser console has more.`,
     res.status,
+    details,
   );
 }
 

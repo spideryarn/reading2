@@ -40,6 +40,7 @@
 import { useEffect, useState } from "react";
 import { Circle, LoaderCircle, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ARTICLE_IS_BUSY } from "../job-state.js";
 import { providerHttpFailure } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import type { Job } from "../types.js";
@@ -111,7 +112,49 @@ const DESIGN_JOB = {
       },
     ],
   },
-} as unknown as { queued: Job; running: Job; slow: Job; stopping: Job };
+  /* **The other half of slow**, and the pair is the point. `glossary` above has
+     never been timed, so past its guessed threshold it says only *this has been
+     running for a while*. `sketch` has been — thirteen runs, 121–199s — so it
+     both promises a duration while it runs and is allowed to call this one
+     unusual. src/job-state.ts § `STEP_TIMING`. */
+  slowMeasured: {
+    id: "design-6",
+    slug: "example",
+    status: "running",
+    steps: [
+      {
+        name: "sketch",
+        status: "running",
+        label: "Drawing the argument",
+        startedAt: new Date(Date.now() - 12 * 60_000).toISOString(),
+      },
+    ],
+  },
+  /* **Somebody else's job**, holding the article this band is on. Nothing in
+     it writes `glossary`, which is the whole point: this is the shape the run
+     button's own filter can never surface, so the reader used to be told to
+     stop something with nothing on screen to stop. */
+  blocking: {
+    id: "design-5",
+    slug: "example",
+    status: "running",
+    steps: [
+      {
+        name: "hierarchy",
+        status: "running",
+        label: "Building the hierarchy",
+        startedAt: new Date(Date.now() - 134_000).toISOString(),
+      },
+    ],
+  },
+} as unknown as {
+  queued: Job;
+  running: Job;
+  slow: Job;
+  slowMeasured: Job;
+  stopping: Job;
+  blocking: Job;
+};
 
 import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
@@ -533,6 +576,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={null}
             failed={null}
+            blocking={null}
+            stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -543,6 +588,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.queued}
             failed={null}
+            blocking={null}
+            stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -553,6 +600,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.running}
             failed={null}
+            blocking={null}
+            stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -563,6 +612,32 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.slow}
             failed={null}
+            blocking={null}
+            stalled={false}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.slowMeasured}
+            failed={null}
+            blocking={null}
+            stalled={false}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Draw the argument"
+            step="sketch"
+            icon={<Search size={13} />}
+            runningLabel="Drawing…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.running}
+            failed={null}
+            blocking={null}
+            stalled
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -573,6 +648,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.stopping}
             failed={null}
+            blocking={null}
+            stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -583,6 +660,20 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={null}
             failed={providerHttpFailure(402).message}
+            blocking={null}
+            stalled={false}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={null}
+            failed={ARTICLE_IS_BUSY}
+            blocking={DESIGN_JOB.blocking}
+            stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
             label="Find the terms"
@@ -592,10 +683,24 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           />
         </div>
         <p className="design-note">
-          The last one is a real message out of{" "}
+          <strong>The two slow ones are not the same sentence</strong>, and the difference is a rule
+          rather than a wording preference. Only a step that has actually been timed may be called
+          <em> longer than usual</em>; everything else gets a threshold, the same offer to stop, and
+          no claim about what usual is. Both name the way out, which is the half that matters
+          either way.
+        </p>
+        <p className="design-note">
+          The one after them is the tab admitting it can{" "}
+          <em>see</em> the job and cannot move it — the only line in this band that does not come off
+          the server, and the reason it is muted rather than red: nothing has failed, it is still
+          trying. Then a real failure message out of{" "}
           <code className="design-token">src/messages.ts</code>, not a placeholder — the failure copy
           has to be read at the width it will actually wrap at. Its rules are in
-          docs/project/copy.md, and the bracketed code at the end is deliberate.
+          docs/project/copy.md, and the bracketed code at the end is deliberate. The last is the
+          refusal that arrives when the article already has an import running: the button stays, and
+          under it is the job that is in the way, in the same words and with the same Stop as any
+          other running job — because the reader was previously told to stop something no surface
+          showed them.
         </p>
       </section>
 

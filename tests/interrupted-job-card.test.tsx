@@ -59,6 +59,9 @@ const queue: UseJobs = {
      driver that has stopped getting through — src/job-state.ts § driverStalled. */
   driverFailures: {},
   lastFailure: () => null,
+  /* Stage 6's blocking job. Null, because nothing here presses a button on an
+     article somebody else's job is holding — src/web/useStepJob.ts. */
+  lastBlocker: () => null,
   add: async () => null,
   addUpload: async () => null,
   run: async () => null,
