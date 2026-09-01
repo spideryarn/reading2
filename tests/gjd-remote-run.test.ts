@@ -9,7 +9,7 @@
  * session that starts three orders of magnitude too early or too late, and
  * nothing about the output says which.
  *
- * See docs/reusable/silent-success.md and docs/project/remote-box.md.
+ * See docs/reusable/silent-success.md and docs/project/hetzner-remote-server-box.md.
  */
 import { describe, expect, it } from "vitest";
 import { MAX_WAIT_SECONDS, parseDuration, sshInvocation, waitPreamble } from "../scripts/gjd-remote-run.js";

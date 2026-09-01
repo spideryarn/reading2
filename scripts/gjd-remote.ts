@@ -1054,7 +1054,7 @@ function cmdNewClaude(
     // nobody is watching. Both guards are one round trip and both fail loudly,
     // so they run while the person who typed the command is still reading the
     // output. Proved by reading the generated job back off the box, not by
-    // trusting this comment: see docs/project/remote-box.md.
+    // trusting this comment: see docs/project/hetzner-remote-server-box.md.
     opts.wait ? waitPreamble(opts.wait.seconds, opts.wait.label) : "",
     // One line on the box, one instant before Claude starts, and it is the ONLY
     // trustworthy answer to "did this job ever run?". The laptop cannot know:
@@ -1760,7 +1760,7 @@ function cmdDoctor(): void {
 
   // tmux on this box binds NOTHING -- no prefix, no keys -- so every keystroke
   // reaches Claude Code. That is a rule rather than a preference:
-  // docs/project/remote-box.md, "tmux keeps sessions alive and does nothing else".
+  // docs/project/hetzner-remote-server-box.md, "tmux keeps sessions alive and does nothing else".
   //
   // Checked here, live, rather than left to the provisioning report, because the
   // two facts come apart. provision.sh rewrites ~/.tmux.conf, but a tmux server

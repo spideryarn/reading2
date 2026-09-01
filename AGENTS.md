@@ -68,7 +68,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `debugging.md` (start here when something is broken) · `setup-dev.md` (including which model
   each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
   `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
-  `remote-box.md` (the always-on box, and `gjd-remote`)
+  `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`)
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and

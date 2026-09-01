@@ -11,7 +11,7 @@
  *    every job as LOST, and a report that cries wolf is a report nobody reads
  *  - a job Greg killed on purpose is not a loss
  *
- * See docs/reusable/silent-success.md and docs/project/remote-box.md.
+ * See docs/reusable/silent-success.md and docs/project/hetzner-remote-server-box.md.
  */
 import path from "node:path";
 import { describe, expect, it } from "vitest";

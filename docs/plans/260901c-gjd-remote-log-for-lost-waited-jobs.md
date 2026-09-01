@@ -18,7 +18,7 @@ changed the code, and one of them was a bug I had already written.
 One append-only NDJSON file, one line per `gjd-remote` command, plus a richer line whenever a
 session is actually created. On the box, the job script appends one line the instant before it
 execs Claude. `gjd-remote log --lost` puts the two together.
-[remote-box.md § The log](../project/remote-box.md#the-log) is the reference;
+[hetzner-remote-server-box.md § The log](../project/hetzner-remote-server-box.md#the-log) is the reference;
 [`scripts/gjd-remote-log.ts`](../../scripts/gjd-remote-log.ts) is the whole of the logic and
 [`tests/gjd-remote-log.test.ts`](../../tests/gjd-remote-log.test.ts) the whole of the proof.
 
