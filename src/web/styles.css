@@ -6540,6 +6540,137 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
 }
 
+/* --- Candidates, the fourth sub-mode. src/web/CandidatesPanel.tsx.
+
+   **The shortlist sits above the transcript, and that is the layout decision
+   rather than a preference.** The research behind this sub-mode found that
+   people like chat and do worse with it on comparison tasks — and choosing
+   between reviewers is a comparison task. So the conversation is how the editor
+   steers and the list is what they read, which means the list must not be
+   something you scroll up a transcript to find.
+
+   **No ordinal, no score, no swatch on a candidate row.** Referee mode's first
+   rule is *no verdict, ever*, and a number beside a person's name is one glance
+   from a ranking of people. There is deliberately nothing here that could carry
+   one, and no sort control.
+
+   The tool strip reuses `.chat-tool*` above rather than restyling it: two
+   strips that looked different would say the two panels mean different things
+   by "searched the web". */
+
+.cnd { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What the sub-mode is, and whose question it answers — the thing an editor is
+   likeliest to misread, since every other sub-mode is the referee's. */
+.cnd-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-quiet { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+
+.cnd-list-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.cnd-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* How many names, not how good they are. A count of a list is not a score of a
+   person, and it is the number an editor actually needs: the shortlist has to
+   be deep enough to survive a 60–70% attrition rate. */
+.cnd-count { font-size: 0.7rem; font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.cnd-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.cnd-row { border-top: 1px solid var(--rule); padding: 0.4rem 0 0; }
+.cnd-name { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+/* The affiliation is the model's claim and reads as one. */
+.cnd-affil { font-weight: 400; font-size: 0.74rem; color: var(--ink-faint); }
+.cnd-requirement { margin: 0.15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--ink); }
+.cnd-why { margin: 0.1rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-sources { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
+.cnd-sources li { font-size: 0.72rem; }
+.cnd-sources a { color: var(--ink); }
+/* The real host beside the model's label, exactly as chat's citation chips do
+   it — the label is a search result's words, and this is where they lead. */
+.cnd-host { color: var(--ink-faint); }
+
+/* What the rules threw away. Quiet, but never absent when there is something to
+   say: a shortlist that silently shrank is the failure this whole panel is
+   built against. */
+.cnd-dropped { margin: 0; font-size: 0.7rem; line-height: 1.45; color: var(--ink-faint); }
+
+/* The three sentences that are printed whatever the model said — what was not
+   checked, and what the list is skewed towards. Separated by a rule so they
+   read as the panel's own voice rather than as more of the answer. */
+.cnd-caveat {
+  margin: 0;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+.cnd-turns { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.cnd-turn { font-size: 0.78rem; line-height: 1.5; color: var(--ink); }
+.cnd-turn.user { padding-left: 0.5rem; border-left: 2px solid var(--rule-strong); }
+.cnd-asked { margin: 0; font-size: 0.76rem; color: var(--ink-faint); white-space: pre-wrap; }
+.cnd-stop {
+  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.cnd-stop:hover { color: var(--ink); }
+.cnd-stop:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
+.cnd-box {
+  width: 100%;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  resize: vertical;
+}
+.cnd-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-send {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
+.cnd-send:disabled { opacity: 0.6; cursor: default; }
+.cnd-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
 /* -------------------------------------------------------- § summary mode ----
    The article at more than one length, in the mode band. The shell is
    `.mode-band` above; everything here is what goes inside it. See

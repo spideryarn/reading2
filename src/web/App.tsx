@@ -12,6 +12,7 @@ import type {
   Article,
   Block,
   BlockId,
+  ChatThread,
   GlossaryEntry,
   Idea,
   Quote,
@@ -67,6 +68,7 @@ import { DiagramPanel } from "./DiagramPanel.js";
 import { ClaimsBand } from "./ClaimsPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
 import { MirrorBand } from "./MirrorPanel.js";
+import { CandidatesBand } from "./CandidatesPanel.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
@@ -2652,7 +2654,17 @@ function Reader({
           visitor pressing the button gets the boundary sentence and not a blank
           band. src/web/visitor.ts. */}
       {owner && mode === "referee" && (
-        <RefereeBand slug={slug} blocks={article.blocks} onJump={jumpTo} onFound={setRefereeFound} />
+        <RefereeBand
+          slug={slug}
+          blocks={article.blocks}
+          /* **The byline, for Candidates and for nothing else** — the one call
+             in Referee mode that legitimately sees who wrote the paper, and only
+             so that they can be left out of its own suggestions.
+             docs/project/referee-mode.md, rule 4. */
+          byline={article.meta.byline}
+          onJump={jumpTo}
+          onFound={setRefereeFound}
+        />
       )}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
@@ -3275,6 +3287,22 @@ function QuizSubBand({
  * chat mode, and reading it in `Reader` would put a parameter subscription on
  * every render of the reading view for a value only this component uses.
  */
+/**
+ * **The two kinds this band is for**, which is not every `ThreadKind`.
+ *
+ * `candidates` is a thread of Referee mode's making and belongs to
+ * `CandidatesPanel`; it has no mode of its own to be followed into from here.
+ * Written as an `Exclude` rather than as `"chat" | "remember"` so that a fifth
+ * kind arrives here as a compile error and somebody has to decide which side of
+ * the line it is on.
+ */
+type ConversationKind = Exclude<ThreadKind, "candidates">;
+
+/** Is this a thread the reader's own conversation panel may show and open? */
+function isConversationThread(t: ChatThread): t is ChatThread & { kind: ConversationKind } {
+  return t.kind !== "candidates";
+}
+
 export function ConversationBand({
   slug,
   blocks,
@@ -3296,8 +3324,11 @@ export function ConversationBand({
    * docs/plans/260827ah-review-mode.md (finding 7) said not to build — and the
    * unmount/remount path around this one already has a race worth not having
    * twice.
+   *
+   * **Not `ThreadKind`.** The union grew a third member on 2026-09-01 and this
+   * band is for two of them — see `ConversationKind` above.
    */
-  kind: ThreadKind;
+  kind: ConversationKind;
   /**
    * **The Recall | Quiz control**, when this band is the Recall half of
    * Remember. Absent in chat mode. Built by `RememberBand` above and passed straight
@@ -3316,7 +3347,7 @@ export function ConversationBand({
 }) {
   useRenderCount("ConversationBand");
   const {
-    threads,
+    threads: everyThread,
     loaded,
     loadFailed,
     recovering,
@@ -3331,6 +3362,25 @@ export function ConversationBand({
     speak,
     error,
   } = useChat(slug);
+  /**
+   * **The reader's conversations — which is not every thread in the article.**
+   *
+   * The list is shared between chat and Remember on purpose (Greg's call,
+   * 2026-08-27), so a Remember row is pressable from chat mode and the band
+   * follows it into its own mode. Candidates is **not** in that arrangement and
+   * must not be: it is Referee mode's machinery rather than a reader's
+   * conversation, it lives at `?mode=referee&referee=candidates` where this band
+   * cannot navigate, and a Candidates row opened here would be answered with
+   * chat's prompt with nothing on screen saying so — the exact bug the shared
+   * list already produced once for Remember (GPT Sol's review of
+   * docs/plans/260827ah-review-mode.md, finding 7).
+   *
+   * The filter is a **type guard**, so `onThread` below can hand `target.kind`
+   * straight to `onMode`. `ThreadKind` and `Mode` used to agree on every member
+   * and stopped agreeing the day `candidates` arrived; narrowing here is what
+   * keeps that assignment honest instead of casting it.
+   */
+  const threads = useMemo(() => everyThread.filter(isConversationThread), [everyThread]);
   const [thread, setThread] = useQueryState("thread", threadParam);
   /* Write-only, for rule 3 in `onThread` below — the value itself is
      `RememberBand`'s to read. A setter with no reader still subscribes, which is
@@ -3543,10 +3593,13 @@ export function ConversationBand({
       onThread={(id) => {
         const target = id ? threads.find((t) => t.id === id) : null;
         /* `ThreadKind` and `Mode` are separate vocabularies (src/types.ts,
-           src/modes.ts) that agree on both of the kind's values — since
+           src/modes.ts) that agree on the two *conversation* kinds — since
            2026-09-01, when `review` became `remember` in the column as well as
-           the URL. `Mode` is the wider of the two, so this assigns rather than
-           maps, and the compiler is what keeps that true. */
+           the URL. So this assigns rather than maps, and the compiler is what
+           keeps that true: `threads` above is narrowed to those two, and the day
+           `candidates` was added to `ThreadKind` this line went red until it
+           was. A third vocabulary sharing two of three names is exactly the
+           overlap that reads as identity until it isn't. */
         if (target && target.kind !== kind) onMode(target.kind);
         /* **Rule 3**: opening a Remember conversation lands on the Recall half,
            because a conversation is what Recall is and Quiz has nowhere to put
@@ -4377,11 +4430,22 @@ function DiagramBand({
 function RefereeBand({
   slug,
   blocks,
+  byline,
   onJump,
   onFound,
 }: {
   slug: string;
   blocks: Block[];
+  /**
+   * Who wrote the paper — **passed through to Candidates and read nowhere
+   * else**.
+   *
+   * Rule 4 is that referee calls are identity-stripped, and Candidates is its
+   * one stated exception: it sees the byline in order to exclude the paper's own
+   * authors from the names it puts forward, and for nothing else. The exception
+   * is written here, in the prop, rather than left to be discovered in a diff.
+   */
+  byline?: string | undefined;
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
@@ -4410,6 +4474,7 @@ function RefereeBand({
           view={view}
           slug={slug}
           blocks={blocks}
+          byline={byline}
           onJump={onJump}
           onFound={onFound}
         />
@@ -4504,12 +4569,14 @@ function RefereeSubMode({
   view,
   slug,
   blocks,
+  byline,
   onJump,
   onFound,
 }: {
   view: RefereeView;
   slug: string;
   blocks: Block[];
+  byline?: string | undefined;
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
 }) {
@@ -4533,7 +4600,18 @@ function RefereeSubMode({
          src/web/MirrorPanel.tsx. */
       return <MirrorBand slug={slug} onJump={onJump} />;
     case "candidates":
-      return <CandidatesPanel />;
+      /* **Stage 6 and 7, and somebody else's stage.** The one sub-mode that is
+         not the referee's question: it answers an *editor's* — who could review
+         this paper, and what expertise it would take. Greg overruled the plan's
+         own cut of it and then said it should be a reuse of Chat, so underneath
+         it is a chat thread of a third `ThreadKind` and a shortlist parsed out of
+         the transcript under four rules that are code rather than prompt.
+         src/web/CandidatesPanel.tsx and src/referee-candidates.ts.
+
+         It pushes nothing up: a candidate's anchor is a *fit requirement's*
+         block, drawn as a citation chip in the panel, and washing the paper with
+         it would say the paragraph is about a person. */
+      return <CandidatesBand slug={slug} blocks={blocks} byline={byline} onJump={onJump} />;
     default: {
       const unknown: never = view;
       throw new Error(`unknown referee view: ${String(unknown)}`);
@@ -4541,22 +4619,3 @@ function RefereeSubMode({
   }
 }
 
-/**
- * **Somebody else's stage.** The one sub-mode that is not for the referee: it
- * answers an **editor's** question — who could review this paper, and what
- * expertise it would take.
- *
- * The plan's appendix had cut it, for two reasons that are still true and that
- * whoever builds it has to answer: it serves a user who is not in the app, and
- * it is the one output nothing in the article can check, since a plausible name
- * beside a real URL is exactly what a model hallucinates well. Greg overruled
- * the cut on 2026-08-31.
- */
-function CandidatesPanel() {
-  return (
-    <p className="gloss-quiet">
-      Who could review this paper, and what expertise it would take — the editor's question rather
-      than the referee's. Not built yet.
-    </p>
-  );
-}

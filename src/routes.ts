@@ -309,6 +309,9 @@ import type {
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
 import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
+/* Values again, and the same argument one field over: the three thread kinds
+   and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
+import { isThreadKind, THREAD_KINDS } from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -1689,14 +1692,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
     throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
   }
-  /* The message names the wire value, because that is what a client has to send.
+  /* The message names the wire values, because that is what a client has to
+     send, and the list is `THREAD_KINDS` rather than a chain of `!==` written
+     out here — src/types.ts. It was that chain until 2026-09-01, and the chain
+     is what a third kind has to be remembered in: Candidates would have been
+     refused by a route that had no opinion about it, with a sentence naming two
+     kinds and offering no clue that a third existed.
+
      `remember` was spelled `review` until 2026-09-01 and there is no alias: the
      rename moved the wire value, the CHECK constraint and the rows in one step
      (drizzle/0048_rename_review_thread_kind.sql), so an old client sending
      `review` gets this 400 rather than a thread of the wrong kind.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
-  if (kind !== undefined && kind !== "chat" && kind !== "remember") {
-    throw httpError(400, "kind must be 'chat' or 'remember'");
+  if (kind !== undefined && !isThreadKind(kind)) {
+    throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -1787,15 +1796,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (anchor !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An anchor can only be sent with a new question");
   }
-  /* **A Remember turn is about the whole piece, so it has nothing to anchor to.**
-     There is no gesture that starts one from a selection — the paragraph and
-     selection buttons both open a chat — so an anchor arriving with
-     `kind: "remember"` is a client that has confused the two. Refused rather than
-     dropped, and worth more than tidiness: an unanchored Remember turn draws no mark
-     in the prose, which is what lets the reading view go on treating every mark
-     it draws as a chat. */
-  if (wantedKind === "remember" && anchor !== undefined) {
-    throw httpError(400, "Remembering is about the whole article and cannot be anchored");
+  /* **Only a chat may be anchored**, and the rule is stated that way round on
+     purpose. A Remember turn is about the whole piece and a Candidates turn is
+     about the whole paper; neither has a gesture that starts one from a
+     selection, because the paragraph and selection buttons both open a chat. So
+     an anchor arriving with either kind is a client that has confused them.
+
+     Refused rather than dropped, and worth more than tidiness: an unanchored
+     thread of another kind draws no mark in the prose, which is what lets the
+     reading view go on treating every mark it draws as a chat. Written as
+     `!== "chat"` rather than as a list of the other kinds, so that a fourth kind
+     is anchor-less by default and has to argue its way in. */
+  if (wantedKind !== undefined && wantedKind !== "chat" && anchor !== undefined) {
+    throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
@@ -5159,7 +5172,16 @@ async function serveApi(
          started a different conversation. 409 for the same reason as above:
          nothing is broken, the client asked for something the stored state will
          not allow, and reloading is the answer. `CommentIdTaken` in
-         src/comments.ts. */
+         src/comments.ts.
+
+         **Both of these classes now carry their own `status`**, so the first
+         line of this chain answers them and these two branches never run. They
+         are kept as the belt to that brace, and the numbers live on the classes
+         so the two cannot disagree. Why the classes and not a sixth name in
+         `mayPassThrough`: the note on `CommentIdTaken`, and
+         docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md — behind
+         Postgres, which is what production runs, the `instanceof` below could
+         not match, because `guardDbStore` had already replaced the error. */
       (err instanceof CommentIdTaken ? 409 : null) ??
       /* Two different failures under one class, and they must not share a code:
          `missing` is a comment that is not there (404), `free` is a bookmark

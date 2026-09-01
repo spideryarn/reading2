@@ -223,6 +223,24 @@ const SHARED = new Set([
      docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
   "referee-criteria.js",
   "saved-criteria.js",
+  /* What a claim is, where the paper takes it up, and the three sentences a row
+     may print when it has no passages under it. On the list because it qualifies
+     rather than because it was convenient: it imports `quote-match.js` and
+     `types.js`, both already here, and nothing else.
+
+     The client needs it for the same reason it needs `referee-criteria.js`, and
+     one reason of its own. The shared reason: the marks in the prose are
+     resolved from the same `Claim` the server checked with `findQuote`, so a
+     second declaration in `src/web/` is how the panel and the paragraph come to
+     disagree about what a claim found. The reason of its own is the **copy** —
+     `NO_PASSAGE_FOUND`, `PASSAGES_UNUSABLE`, `LINKAGE_NOT_ADEQUACY` and
+     `DOCUMENT_ORDER_NOTE` are values here rather than strings inside the panel
+     precisely so that tests/referee-copy-is-about-the-model.test.ts can check
+     the sentences themselves; a browser copy would be a second set of words for
+     that test to be right about and wrong in front of.
+     See src/referee-claims.ts and
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2. */
+  "referee-claims.js",
   /* What a Mirror run is made of — the five remark kinds, the input counts and
      the coverage status. On the list because it imports **nothing at all**: it
      is a `.ts` of type declarations only, on the model of `public-types.js`
@@ -240,6 +258,22 @@ const SHARED = new Set([
      print an untested remark as though a randomised trial were behind it.
      See src/referee-mirror-types.ts and docs/project/referee-mode.md § Mirror. */
   "referee-mirror-types.js",
+  /* What a candidate reviewer is, and the four rules a name has to survive
+     before an editor sees it. On the list because it qualifies — it imports
+     `types.js` and `urls.js`, both already here — and because being on it is the
+     whole point rather than a convenience.
+
+     Candidates is Chat with a third `ThreadKind`, so its shortlist is **parsed
+     out of the transcript in the browser** (src/web/CandidatesPanel.tsx). There
+     is no server-side validation of it to be the second copy of: this module IS
+     the enforcement, and a second declaration under `src/web/` would be a second
+     answer to "may this name be shown", with the looser one on screen. The rules
+     it holds — a source link the web search actually returned, the paper's own
+     authors excluded, a fit-requirement and a real block id on every row — are
+     the ones nothing in the article can check.
+     See src/referee-candidates.ts and
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4. */
+  "referee-candidates.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

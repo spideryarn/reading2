@@ -32,6 +32,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
+import { isThreadKind } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -86,9 +87,13 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
  * assume, and JSON on disk is not bound by it.
  */
 function normaliseKind(thread: ChatThread): ChatThread {
-  return thread.kind === "remember" || thread.kind === "chat"
-    ? thread
-    : { ...thread, kind: "chat" };
+  /* `isThreadKind` rather than a list written out here — src/types.ts
+     § THREAD_KINDS. The union has grown once already (`candidates`, 2026-09-01),
+     and a member missed in either normaliser is a thread that silently becomes a
+     chat on its next read, answered with chat's prompt, with nothing on screen
+     disagreeing. That is the failure this field exists to prevent, so the list
+     is not written down twice. */
+  return isThreadKind(thread.kind) ? thread : { ...thread, kind: "chat" };
 }
 
 export async function loadThreads(slug: string): Promise<ChatThread[]> {

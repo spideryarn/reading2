@@ -75,6 +75,7 @@ import type {
   RememberStance,
   ToolRun,
 } from "../types.js";
+import { isThreadKind } from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { notFound, ownedSlug, requireSlug } from "./pg.js";
@@ -225,8 +226,15 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
        is `not null default 'chat'` so in practice this only widens the string
        to the union — but the default lives in exactly two places on purpose,
        and this is the second. `ChatThread.kind` is required so that nothing
-       downstream has to remember a fallback. */
-    kind: t.kind === "remember" ? "remember" : "chat",
+       downstream has to remember a fallback.
+
+       **The list of kinds is `isThreadKind`'s, not this line's**, and it used to
+       be a ternary naming `"remember"` here. The union grew a third member on
+       2026-09-01 and a ternary would have quietly turned every Candidates thread
+       into a chat on its next read from Postgres — the same conversation
+       answered with a different prompt, and nothing anywhere saying so.
+       src/types.ts § THREAD_KINDS. */
+    kind: isThreadKind(t.kind) ? t.kind : "chat",
     messages: byThread.get(t.id) ?? [],
   }));
 }

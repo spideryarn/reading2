@@ -351,6 +351,13 @@
       "when": 1788259177335,
       "tag": "0049_drop_raw_bytes",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788263313445,
+      "tag": "0050_candidates_thread_kind",
+      "breakpoints": true
     }
   ]
 }

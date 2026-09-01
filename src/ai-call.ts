@@ -206,6 +206,27 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Candidates — who could review this paper, for an editor**
+     (src/converse.ts, on `ThreadKind` `"candidates"`). Chat's policy exactly,
+     because it *is* chat's call with a third system prompt — but the second half
+     of that policy is load-bearing here in a way it is not for chat.
+
+     `order` is pinned for chat's reason: the paper sits behind a `cache_control`
+     breakpoint and a conversation is many turns over one paper, so a different
+     upstream mid-conversation pays for the paper again and the answer looks
+     identical.
+
+     `require_parameters` is the one that matters. This turn sends
+     `openrouter:web_search`, and a fallback that silently dropped it leaves a
+     model answering from memory — which is not an empty panel but a *full* one,
+     of plausible names with no citations behind them. `readShortlist` then drops
+     every row for being uncited (src/referee-candidates.ts, rule 1), so the
+     editor sees "the model named people and none of them could be shown" and
+     nothing anywhere says the search tool was never offered. */
+  "referee-candidates": {
+    path: "/v1/chat/completions",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and

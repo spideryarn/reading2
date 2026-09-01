@@ -80,7 +80,7 @@ import {
   searchCount,
   stoppedByReader,
 } from "./openrouter-stream.js";
-import { ProviderRefused, openRouterStream } from "./ai-call.js";
+import { type ChatJob, ProviderRefused, openRouterStream } from "./ai-call.js";
 import {
   ENDED_UNFINISHED,
   KEPT_ASKING_FOR_TOOLS,
@@ -89,6 +89,12 @@ import {
   saidNothing,
 } from "./messages.js";
 import { modelFor } from "./models.js";
+/* **Candidates' system prompt, and only that.** It is a hundred lines of
+   instructions with no logic in it, and it lives in its own module for the
+   reason that file's header gives: the *enforced* half of Candidates is
+   src/referee-candidates.ts, and a prompt sitting beside these two would read as
+   though asking were the same as checking. src/referee-candidates-prompt.ts. */
+import { CANDIDATES_SYSTEM } from "./referee-candidates-prompt.js";
 import {
   CHAT_TOOLS,
   type ToolContext,
@@ -108,11 +114,36 @@ import {
 } from "./article-prompt.js";
 
 /**
- * What this call sends: the tier src/models.ts puts `chat` on, or
- * `SPIDERYARN_CHAT_MODEL` if that is set — see `resolveModel` there for why the
- * override is read in that file rather than here.
+ * **Which paying job a turn bills under**, and it is decided by the thread's
+ * kind rather than by this file being called `converse`.
+ *
+ * Chat and Remember are one job: same prompt shape, same tools, same order of
+ * magnitude per turn. Candidates is its own, `referee-candidates`, because it is
+ * the only conversation in the app that runs several web searches on nearly
+ * every turn — so its cost per turn does not look like chat's, and folding the
+ * two together would move the chat line in `npm run cost` whenever somebody
+ * spent an evening hunting reviewers, with nothing saying why. src/models.ts
+ * § `referee-candidates`, and the mistake `quiz-mark` exists to have stopped
+ * making: a call billed under another job's name is spend nobody can find later.
  */
-export const defaultModel = (): string => modelFor("chat");
+export type ConverseJob = Extract<ChatJob, "chat" | "referee-candidates">;
+
+export const jobFor = (kind: ThreadKind): ConverseJob =>
+  kind === "candidates" ? "referee-candidates" : "chat";
+
+/**
+ * What this call sends: the tier src/models.ts puts this turn's job on, or that
+ * job's `SPIDERYARN_*_MODEL` if one is set — see `resolveModel` there for why
+ * the override is read in that file rather than here.
+ *
+ * **It takes the kind**, and the default of `"chat"` is for the callers written
+ * before there was more than one job here. `referee-mirror` shipped with a
+ * `defaultModel()` that still read `modelFor("search")`, so its new environment
+ * variable was an override that silently did nothing
+ * (src/referee-claims-run.ts says so beside its own); passing the kind is what
+ * stops `SPIDERYARN_REFEREE_CANDIDATES_MODEL` being the same non-event.
+ */
+export const defaultModel = (kind: ThreadKind = "chat"): string => modelFor(jobFor(kind));
 
 /**
  * How long the whole exchange may take.
@@ -125,6 +156,23 @@ export const defaultModel = (): string => modelFor("chat");
  * tab is open.
  */
 export const CHAT_TIMEOUT_MS = 120_000;
+
+/**
+ * How long a **Candidates** turn may take, which is twice a chat turn's.
+ *
+ * Measured rather than padded. A chat turn answers a question from an article
+ * already in the prompt; a Candidates turn reads the paper, runs up to four web
+ * searches inside the provider, weighs what came back against a fit brief and
+ * then writes a long list with a JSON block under it. The first live run of it
+ * spent **sixty seconds on one round with no searches at all** and still ran out
+ * of output budget, so two minutes is not a ceiling this call would rarely
+ * approach — it is one it would hit on an ordinary good answer.
+ *
+ * Nothing on the reader's side changes: the answer streams, so the prose is
+ * arriving long before this matters, and `CHAT_STALL_MS` is still what catches
+ * a connection that has actually died.
+ */
+export const CANDIDATES_TIMEOUT_MS = 240_000;
 
 /**
  * How long a *silent* stream may go on.
@@ -163,11 +211,22 @@ export const MAX_TOOL_ROUNDS = 3;
  * src/chat-tools.ts because that file is about tools *this process* runs, and
  * a server tool in it would be the one entry `runTool` could never dispatch.
  */
-const WEB_SEARCH_TOOL = {
-  type: "openrouter:web_search",
-  // A cap, not a quota — the model still decides whether to search.
-  parameters: { max_uses: 4, max_results: 5 },
-} as const;
+const webSearchTool = (kind: ThreadKind) =>
+  ({
+    type: "openrouter:web_search",
+    // A cap, not a quota — the model still decides whether to search.
+    parameters: {
+      /* **Eight for Candidates, four for everyone else.** A chat turn checks a
+         name or a date; a Candidates turn is a search across a whole field, and
+         the first live run of one spent its four and said so in the answer —
+         *"I've run through my search budget for this turn, so this list is
+         partial"*. A shortlist that stops early because of a constant is a
+         shortlist the editor has to ask for twice, and the research says depth
+         is the thing they actually need. */
+      max_uses: kind === "candidates" ? 8 : 4,
+      max_results: 5,
+    },
+  }) as const;
 
 /* ----------------------------------------------------- the tool wire format --
    Chat's request is no longer a list of `OpenRouterMessage`. Two more shapes go
@@ -672,8 +731,33 @@ ${PROFILE_RULES}`;
  * right.
  *
  */
-const systemFor = (kind: ThreadKind): string =>
-  kind === "remember" ? REMEMBER_SYSTEM : SYSTEM;
+const systemFor = (kind: ThreadKind): string => {
+  switch (kind) {
+    case "remember":
+      return REMEMBER_SYSTEM;
+    /* Referee mode's fourth sub-mode. Not the referee's question but an
+       editor's, and the one call in the mode that legitimately sees the byline —
+       to exclude the paper's own authors and for nothing else
+       (docs/project/referee-mode.md, rule 4). Nothing extra is done here to let
+       it: `buildConverseMessages` renders `articleWithIds` in its default
+       `"named"` identity, exactly as chat does, so the exception is *this
+       comment* rather than a flag. If Referee mode ever anonymises chat's
+       article block, this is the branch that has to opt back out. */
+    case "candidates":
+      return CANDIDATES_SYSTEM;
+    case "chat":
+      return SYSTEM;
+    default: {
+      /* A `switch` rather than a ternary chain, so a fourth `ThreadKind` is a
+         red compile here instead of a conversation quietly answered with chat's
+         prompt — which is the exact failure the field was introduced to prevent
+         and which a ternary's `else` branch reintroduces every time the union
+         grows. docs/project/typechecking.md. */
+      const unknown: never = kind;
+      throw new Error(`unknown thread kind: ${String(unknown)}`);
+    }
+  }
+};
 
 /**
  * The assistant's canned line between the article and the conversation.
@@ -683,10 +767,16 @@ const systemFor = (kind: ThreadKind): string =>
  * Worth having, because "What would you like to know?" is the wrong sentence to
  * put in the mouth of a conversation where the reader is the one about to talk.
  */
-const readItFor = (kind: ThreadKind): string =>
-  kind === "remember"
-    ? "I've read it. Tell me what you took from it."
-    : "Read it. What would you like to know?";
+const readItFor = (kind: ThreadKind): string => {
+  switch (kind) {
+    case "remember":
+      return "I've read it. Tell me what you took from it.";
+    case "candidates":
+      return "Read it. Shall I start with what reviewing this would take?";
+    default:
+      return "Read it. What would you like to know?";
+  }
+};
 
 /**
  * The stance, as a line for the **final user message**.
@@ -1128,9 +1218,18 @@ export async function* converse({
   useTools = true,
   kind = "chat",
   stance,
-  model = defaultModel(),
+  /* **`kind` above is what this reads**, and the order of these two lines is
+     therefore load-bearing: a destructuring default may use a binding declared
+     earlier in the same pattern, and `model` is below `kind` for exactly that.
+     Moving it above would give every Candidates turn chat's model and chat's
+     override, silently. */
+  model = defaultModel(kind),
   signal,
-  timeoutMs = CHAT_TIMEOUT_MS,
+  /* **`kind` above decides this**, the same way it decides `model` — a
+     destructuring default may read a binding declared earlier in the same
+     pattern, and both of these are below `kind` for that reason. The route does
+     not pass either, so a per-kind default here is the whole of it. */
+  timeoutMs = kind === "candidates" ? CANDIDATES_TIMEOUT_MS : CHAT_TIMEOUT_MS,
   stallMs = CHAT_STALL_MS,
 }: ConverseRequest): AsyncGenerator<ConverseEvent> {
   // No thread id and no message id in this logger: this module is handed a
@@ -1478,15 +1577,24 @@ export async function* converse({
          sentence that sends you looking in entirely the wrong place. Seen on the
          first live run of the tool loop, 2026-08-26.
 
-         It costs nothing when unused: output tokens are billed as produced. */
-      max_tokens: 4000,
+         It costs nothing when unused: output tokens are billed as produced.
+
+         **Candidates gets three times as much, and it is the same lesson again
+         rather than a preference.** Its first live run returned
+         `finish_reason: "length"` with **not one character of text** after 4,550
+         output tokens — the whole budget spent thinking, on a question whose
+         honest answer is ten to twenty people with a source apiece and a JSON
+         block underneath. Four thousand is right for "two or three short
+         paragraphs", which is what chat's FORMAT section asks for and is not
+         what this prompt asks for at all. */
+      max_tokens: kind === "candidates" ? 12_000 : 4000,
       /* **Web search is on in every round; our own tools are not.**
 
          OpenRouter's is a *server* tool — it runs inside the provider and comes
          back in the same response — so it costs no round trip and there is never
          a reason to take it away. Ours cost a whole extra request each time,
          which is why the last round drops them: see `MAX_TOOL_ROUNDS`. */
-      tools: withTools ? [WEB_SEARCH_TOOL, ...CHAT_TOOLS] : [WEB_SEARCH_TOOL],
+      tools: withTools ? [webSearchTool(kind), ...CHAT_TOOLS] : [webSearchTool(kind)],
       messages,
     };
 
@@ -1495,7 +1603,7 @@ export async function* converse({
        now — they describe the answer, not the round — and `stopped` in
        particular has to survive a round for the catch below to mean anything. */
     try {
-      for await (const chunk of openRouterStream("chat", request, {
+      for await (const chunk of openRouterStream(jobFor(kind), request, {
         signal: composite,
         onActivity: touch,
         end,

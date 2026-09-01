@@ -2099,6 +2099,14 @@ export const chatThreads = spideryarn.table(
      * point — the other order passes on an empty container and fails wherever
      * there is history.
      * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md.
+     *
+     * **The third value, `'candidates'`, arrived on 2026-09-01** with Referee
+     * mode's fourth sub-mode — drizzle/0050_candidates_thread_kind.sql. That one
+     * is the *safe* direction of the same move: every row already in the table
+     * satisfies a wider CHECK, so the drop and the re-add need nothing between
+     * them and the migration cannot fail on history. The order still matters for
+     * the reason above, which is why it is spelled out there and not repeated
+     * here.
      */
     kind: text("kind").notNull().default("chat"),
   },
@@ -2132,7 +2140,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','remember')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates')`),
   ],
 );
 

@@ -2244,8 +2244,39 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * Anything else that speaks this wire value — `src/routes.ts`'s validation, the
  * export/import shapes, the committed fixture corpus — moved with it.
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
+ *
+ * **`candidates` is the third**, added 2026-09-01 — Referee mode's fourth
+ * sub-mode, which Greg asked to be *"a special reuse of Chat mode, to get
+ * access to tools and make it interactive"*. It is a third personality on this
+ * one machinery rather than a panel of its own: a system prompt branch in
+ * src/converse.ts and a shortlist parsed out of the transcript
+ * (src/referee-candidates.ts). **Widening** the CHECK is the safe direction that
+ * the rename above was the dangerous one — Postgres validates a re-added CHECK
+ * against the rows already there, and every existing row satisfies a wider one —
+ * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
+ * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember";
+export type ThreadKind = "chat" | "remember" | "candidates";
+
+/**
+ * The three, as a value, and the predicate both ends validate with.
+ *
+ * **One list**, for the reason `REMEMBER_STANCES` below gives about itself and
+ * for one more that is specific to this field: the default lives in *two*
+ * normalisers, one per store (`normaliseKind` in src/chat.ts and its twin in
+ * src/store/pg-chat.ts), and both coerce anything unrecognised to `"chat"`. A
+ * fourth kind added to the union and missed in either of them is a thread that
+ * silently becomes a chat on its next read — answered with chat's prompt, with
+ * nothing on screen disagreeing, which is the failure the `kind` field was
+ * introduced to prevent. Since both call `isThreadKind`, adding a member is one
+ * edit rather than four.
+ */
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
+
+/** Is this one of the three? Used by both stores' normalisers and by the route. */
+export function isThreadKind(value: unknown): value is ThreadKind {
+  return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
+}
 
 /**
  * One conversation, and there may be several per article.

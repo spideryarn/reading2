@@ -284,14 +284,20 @@ from a bespoke panel into a conversation.
 > potentially multiple messages back and forth.
 
 That is the right call and it makes this sub-mode much smaller than the version above it replaced.
-`ThreadKind` is already `"chat" | "review"` ([`types.ts`](../../src/types.ts)), and `review` mode is
-already a second personality on the same machinery — a system prompt branch in
+`ThreadKind` was already `"chat" | "remember"` ([`types.ts`](../../src/types.ts)) — spelled
+`"chat" | "review"` when this paragraph was written, before the rename of 2026-09-01 — and Remember
+mode is already a second personality on the same machinery: a system prompt branch in
 [`converse.ts`](../../src/converse.ts) and nothing else. `candidates` becomes the **third kind**, and
 it inherits streaming, the seven tools, OpenRouter's server-side web search, citation chips, thread
 persistence and retry for free. What has to change is small and known: the
-`chat_threads_kind` check constraint in [`schema.ts`](../../src/db/schema.ts) currently reads
-`in ('chat','review')` and needs widening, and [`routes.ts`](../../src/routes.ts) refuses any kind
-that is not one of those two.
+`chat_threads_kind` check constraint in [`schema.ts`](../../src/db/schema.ts) needs widening, and
+[`routes.ts`](../../src/routes.ts) refuses any kind that is not one of the two.
+
+**Built on 2026-09-01** — `drizzle/0050_candidates_thread_kind.sql`, and the widening turned out to
+be the *safe* direction of the move 0048 made the dangerous way: every existing row satisfies a wider
+CHECK, so there is nothing to move between the drop and the re-add. What the list of kinds cost
+instead was four copies of it — the union, two stores' normalisers and the route — so it is one
+exported `THREAD_KINDS` with an `isThreadKind` guard now, and adding a member is one edit.
 
 Finding reviewers is genuinely a conversation — *not that lab, prefer early-career, must know
 Bayesian methods, exclude anyone at the authors' institutions* — and a form cannot take those.
@@ -471,13 +477,53 @@ is a fair description of what shipped.
   whitespace and would accept a word the model split in two, which is fine for deciding which
   characters to wash and wrong for deciding whether the model copied the text. `validateHits` and
   `validateResults` still pass the default; this does not copy them.
-- **Stage 6 — Candidates as a third thread kind.** The migration widening `chat_threads_kind`, the
-  route's kind check, the `converse` branch and its system prompt, the scoping box, and the fit
-  brief as the thread's opening message. Web search on for this kind.
-- **Stage 7 — Candidates, the hard rules.** Citation-or-it-does-not-show, author exclusion, the
-  fit-requirement link on every candidate, and the panel's own statement of what it cannot check.
-  Greg's framing is *"see how far we can get in a stage or two"*, so this is where to stop if it
-  becomes the rabbit hole he expects.
+- ~~**Stage 6 — Candidates as a third thread kind.**~~ ~~**Stage 7 — Candidates, the hard rules.**~~
+  **Both done, 2026-09-01.** `drizzle/0050_candidates_thread_kind.sql` (applied locally only),
+  `ThreadKind`'s third member with `THREAD_KINDS`/`isThreadKind` beside it,
+  [`src/referee-candidates.ts`](../../src/referee-candidates.ts) (the shapes, the parser and the four
+  rules), [`src/referee-candidates-prompt.ts`](../../src/referee-candidates-prompt.ts),
+  `converse`'s third branch and its own paying job `referee-candidates`, and
+  [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx).
+
+  **Five things were decided in the building and are worth carrying forward.**
+
+  **The shortlist is parsed out of the transcript, not stored beside it.** The model closes an answer
+  with a fenced JSON block and the panel reads the newest answer that carries one. A second store
+  would be a second thing to keep in step with a conversation that can be retried, edited and
+  truncated — and "each turn revises the shortlist" then becomes a property of *reading* rather than
+  something a writer has to maintain. It also means there is no server-side copy of the validation to
+  drift from the browser's: the module is on the client-import allowlist and is the only enforcement
+  there is.
+
+  **The panel had to be new; the machinery did not.** `ChatPanel` is the reader's own surface — a
+  thread list, a live voice session, a stance picker, dictation — and two of those would actively
+  mislead here. So `CandidatesPanel` uses `useChat`, `CitedMarkdown` and the `chat-tool*` styles and
+  nothing else. The tool strip is **not decoration**: chat's "never claim a tool you did not run"
+  rule rests on the sentence *the reader is shown a list of exactly which tools ran*, and a panel
+  that hid the strip would make that sentence false.
+
+  **`ThreadKind` and `Mode` stopped agreeing, and the compiler said so.** `ConversationBand`'s
+  `onThread` handed a thread's kind straight to `onMode` on the strength of the two vocabularies
+  sharing every member. Adding `candidates` turned that line red, which is exactly what it was for.
+  The fix is a narrowing filter — a Candidates thread is Referee mode's machinery and is not offered
+  in the reader's shared conversation list, because opening one there would answer it with chat's
+  prompt.
+
+  **Rule 2 is half a check.** The byline is what the code has, so an author named only in the paper's
+  own prose is not caught, and a PDF with no byline gives nothing to check at all. Rather than
+  quietly under-enforce it, the panel prints *which* byline the exclusion ran against, or that there
+  was none. Presenting an algorithmic pass as though it caught everything is precisely the move the
+  research says editors distrust, so under-claiming is the only honest option.
+
+  **Two bugs were found by tests going red rather than by review.** `nameKey("A. Kessler")` returned
+  `null` — a first draft required two parts of more than one letter — so an author the model wrote
+  with an initial walked straight past rule 2. And the cap test measured the deduplicator instead of
+  the cap, because digits are not letters and `Surname1`/`Surname2` reduce to one key. Both are
+  written up beside the code.
+
+  What is **not** built, deliberately: any scholarly identity graph. OpenAlex, ORCID and Crossref
+  could back real co-authorship COI checks and that is the obvious next step. Greg's framing was
+  *"see how far we can get in a stage or two"*, and this is the end of the second stage.
 - **Stage 8 — finish.** A browser pass over all four sub-modes including a colour-vision simulation,
   a narrow screen and a screen reader; GPT Sol on the code again; and the status paragraph at the
   top of [referee-mode.md](../project/referee-mode.md) rewritten to match what is then true.

@@ -1,6 +1,6 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
-**Status, 2026-09-01: three sub-modes of four are built.**
+**Status, 2026-09-01: all four sub-modes are built.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
 ranked in the panel, and on a `diverging` criterion each passage carries a signed valence. Verified
@@ -27,10 +27,15 @@ prose. `GET`/`POST /api/referee/claims/:slug`,
 read will return ([`src/store/index.ts`](../../src/store/index.ts) § `refereeClaimsStore`). That is a
 decision rather than a gap: a claims run is an article-derived reusable artefact whose right home is
 a **pipeline artefact**, which the plan says out loud, and a bespoke table for something already
-scheduled to be replaced is two migrations to reach one place. It is also why the journal is still at
-0048 — Claims added no migration.
+scheduled to be replaced is two migrations to reach one place. Claims added no migration.
 
-**Candidates is a placeholder** that says "Not built yet".
+**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the fit brief arrives
+unprompted, then scope the search in the composer and names arrive with the shortlist above the
+transcript. It is a third `ThreadKind` on chat's own machinery
+(`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
+[`src/referee-candidates.ts`](../../src/referee-candidates.ts),
+[`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
+its four rules is enforced, and for the two that are only half-enforceable.
 
 **Two things are built and not connected**, and both are the kind of thing that looks finished from
 a test file:
@@ -260,12 +265,90 @@ cut —
 >
 > — Greg, 2026-09-01
 
-Designed as `candidates` becoming a third `ThreadKind` beside `chat` and `remember`, opening with a
-fit brief (what expertise a competent reviewer would need, each requirement anchored to the passage
-that motivates it) and refined by conversation, with a persistent shortlist rather than names that
-scroll away up a transcript. Every candidate would need a source link the web search actually
-returned, or it does not show; the paper's own authors would be excluded, which is the one call in
-Referee mode that legitimately sees the byline, and only for that. None of it is built.
+**It is Chat with a third personality, not a panel of its own.** `candidates` is a third
+`ThreadKind` beside `chat` and `remember` ([`src/types.ts`](../../src/types.ts)), so it inherits
+streaming, the tools, OpenRouter's server-side web search, citation collection, thread persistence
+and retry for nothing. What had to change was small and known: the `chat_threads_kind` CHECK
+(`drizzle/0050_candidates_thread_kind.sql` — the *widening* direction, which needs no data movement
+between the drop and the re-add, unlike 0048), both stores' normalisers, the route's validation, and
+one branch in [`src/converse.ts`](../../src/converse.ts). It bills under its own job,
+`referee-candidates`, because it is the only conversation here that runs several web searches a turn.
+
+**The thread opens with the fit brief, before the editor types anything.** What a competent reviewer
+of this paper would need to know — methods, subfield, statistics, the domain knowledge the claims
+assume — each requirement anchored to the passage that motivates it. That half has no
+hallucinated-person failure mode, is useful on its own, and is the query the conversation then
+refines. The plan says explicitly that this is where to stop if the names layer disappoints.
+
+**Chat steers; a list is what you look at.** The panel keeps a browsable shortlist *above* the
+transcript, revised by whichever answer most recently carried one. This is the editor research's
+finding rather than a preference: people *like* chat and *perform worse* with it on comparison tasks,
+and choosing between candidates is a comparison task
+([editors-and-finding-reviewers.md § 7](../research/260831e-helping-peer-reviewers/editors-and-finding-reviewers.md)).
+The same research is why the prompt asks for a **long** list rather than a good one — invitation
+acceptance has fallen from 56% to 36–39% over a decade and roughly one accepted review in four is
+never delivered — and why nothing anywhere ranks by prominence.
+
+#### Where each of the four rules actually lives
+
+Two are properties of the code, one is half of each, and one is a sentence the model cannot talk the
+panel out of printing. The difference is the point:
+
+- **No name without a source link the web search actually returned.** Code.
+  `readShortlist` ([`src/referee-candidates.ts`](../../src/referee-candidates.ts)) is given the URLs
+  OpenRouter's own annotations reported *across the whole conversation*, and a candidate whose
+  sources meet none of them is dropped. Not "a URL that parses": `isWebUrl` is necessary and nowhere
+  near sufficient, since a plausible name beside a real-looking address is exactly what a model
+  produces well. The **title** shown beside a source is the search result's, never the model's.
+- **Every candidate answers a fit-requirement and links the passage behind it.** Code. A row with no
+  requirement, or with a block id this paper does not have, is dropped.
+- **The paper's own authors are excluded.** Half and half, and the panel says which half ran.
+  `authorKeys` reduces the byline to surname-plus-initial keys and `readShortlist` drops any
+  candidate matching one — so "Jane Doe", "Jane Q. Doe", "J. Doe" and "Doe, Jane" are one person and
+  an unrelated namesake is not thrown away. What it cannot see is an author named only inside the
+  paper's own prose, or a PDF with no byline at all; the prompt is told separately to exclude those,
+  and that is a wish. So the panel prints **which byline the check ran against**, or that there was
+  none. This is the one call in Referee mode that legitimately sees the byline (rule 4 below), and
+  only to exclude.
+- **Conflict of interest is two different things and the panel must not blur them.** Copy, printed
+  whatever the answer said. Half of what publishers name — co-authorship inside a 3–5 year window, no
+  two of them agreeing on the number; shared current institution; joint grants — is mechanically
+  checkable from OpenAlex or ORCID, and **this app checks none of it, because it has no identity
+  graph**. The other half — advisor and advisee, which several publishers treat as lifelong;
+  rivalry; informal collaboration — is not automatable by anybody, and is what the conversation is
+  *for*: *"exclude anyone who trained under X"* is the editor's own knowledge, which no database has.
+  Presenting an algorithmic pass as though it caught everything is the specific move the research
+  says editors already distrust.
+
+**The weak half of rule 1, measured rather than guessed.** With
+`tools: [{ type: "openrouter:web_search" }]` the search runs inside Anthropic and OpenRouter emits a
+`url_citation` annotation only where the model attributes a result *in its prose*. The first live run
+of Candidates ran four searches, produced six well-sourced people, emitted **zero** annotations, and
+every one of the six was dropped as uncited — the rule doing the exact opposite of its job. The fix
+that is in is a prompt one: the model is required to link the page in the sentence that introduces
+the person, not only in the JSON, and the next run of the same paper returned five annotations and
+one drop, with every URL resolving. That works, and it means the *supply* of the thing the code
+checks rests on an instruction the model can ignore. The real fix is on the wire —
+`plugins: [{ id: "web" }]` annotates everything it returns unconditionally, but runs exactly one
+search per request whatever the model wanted, a trade [`src/explain.ts`](../../src/explain.ts)
+already writes down from the other side. It is the first follow-up job here.
+
+**What was dropped is counted on screen.** *The model named nobody* and *the model named eleven
+people and none of them could be shown* are different sentences and the panel prints different ones —
+Claims' lesson rather than Criteria's, built in from the start. **And the bias is labelled rather
+than denied**: the panel says the list leans towards people the web indexes well, which is the honest
+version and the useful one, because it tells the editor what they are looking at.
+
+**No number beside a name, and no sort control.** Rule 1 is *no verdict, ever*, and an ordinal on a
+person's row is one glance from a ranking of people — which is also what the matching research warns
+against, since every sort key an editor would reach for is prominence-shaped. 20% of researchers
+already do 69–94% of all reviewing, and editor gender-homophily in selection is measured at 33%
+against 27%. [`tests/referee-candidates-panel.test.tsx`](../../tests/referee-candidates-panel.test.tsx)
+asserts there is no digit on a candidate row that is not a block id.
+
+**Not in v1: any scholarly identity graph.** OpenAlex, ORCID and Crossref could back real
+co-authorship COI checks and that is the obvious next step. It is also a different project, and
+Greg's own framing was *"see how far we can get in a stage or two"*.
 
 ## The rules the whole mode obeys
 
@@ -397,8 +480,8 @@ feedback of this shape*, which is a different question from how confident anyone
   offloading evidence, and the editor's side of the desk.
 - [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the four sub-modes, named once.
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
-  [`src/referee-claims.ts`](../../src/referee-claims.ts) — the three model-facing modules built so
-  far.
+  [`src/referee-claims.ts`](../../src/referee-claims.ts),
+  [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.
 - [`src/injection-scan.ts`](../../src/injection-scan.ts) — the deterministic scan.
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.

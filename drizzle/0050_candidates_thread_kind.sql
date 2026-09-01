@@ -1,0 +1,22 @@
+-- Referee mode's fourth sub-mode becomes a third `chat_threads.kind`.
+-- docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
+--
+-- **This is the safe direction of the move 0048 made the dangerous way, and the
+-- difference is worth reading before editing either.** Postgres validates a
+-- re-added CHECK against the rows already in the table. 0048 NARROWED one — it
+-- renamed the value `review` to `remember` — so it had to move the data between
+-- the DROP and the ADD, and getting that order wrong fails with a 23514 only
+-- where there is history and passes cleanly on an empty container. This one
+-- WIDENS: every row already in the table satisfies the new constraint, so there
+-- is nothing to move and no ordering trap. drizzle-kit generated both statements
+-- and, this time, they are the whole migration.
+--
+-- No default changes. A thread created before this still defaults to 'chat', and
+-- nothing writes 'candidates' except a turn that names the kind on the request
+-- that creates the thread — `withTurn` in src/chat.ts refuses a kind that
+-- contradicts a thread that already exists, so a kind cannot arrive later.
+--
+-- Applied locally on 2026-09-01 with `npm run db:migrate` against
+-- 127.0.0.1:54362 (the `Target:` line said so). Not applied to the remote.
+ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_kind";--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_kind" CHECK ("spideryarn"."chat_threads"."kind" in ('chat','remember','candidates'));

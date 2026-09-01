@@ -341,6 +341,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
+| `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
