@@ -383,29 +383,66 @@ Each is a test, not an intention.
 Each ends with the tests green and the tree safe to commit. **Docs are updated in the stage that
 changes the thing**, not deferred — Sol's finding, and CLAUDE.md already says so.
 
-- **Stage 1 — the mode exists.** `referee` in `MODES`, the dock button, `?referee=`, three empty
-  panels, the past-tense confidentiality notice, and the one-line disclosure at the add-an-article
-  surface. No model calls.
-- **Stage 2 — the data model and the safeguards.** The criteria table and its typed `config`, the
-  migration, the anonymous renderer option, the deterministic injection scan and its test corpus.
-  Named as its own stage because Sol was right that burying a migration inside a feature stage makes
-  it unreviewable.
-- **Stage 3 — Criteria.** Routes, the streamed call, `resolveCriterion`, marks in the prose, valence
-  in the panel and gutter, presets. `literature` last, so if it slips it slips alone.
-- **Stage 4 — Claims.** Route-shaped, sharing Stage 2's table conventions and Stage 3's resolver,
-  for the reason in § 2 above. The pipeline version is follow-up work, not v1.
-- **Stage 5 — Mirror.** The `converse` branch, the four remark kinds, abstention, the eval and its
-  committed transcript.
+### What has landed
+
+Stages 1–3 are built and committed. The eight commits, oldest first:
+
+| | |
+|---|---|
+| `248cca5` | the research, Fable's 32 ideas, this plan, Sol's review of it |
+| `3d71c4e` | Stage 1 — the mode, the four sub-mode buttons, both confidentiality notices |
+| `bd2f38e` | Stage 5 part one — Mirror's prompt, call, validator and eval |
+| `17e4ac0` | Stage 2 — the anonymous renderer and the injection scan |
+| `4aa1d1d` | the spend declaration, and the model-override table drift it exposed |
+| `eb7277b` | [referee-mode.md](../project/referee-mode.md), honest about which quarter was built |
+| `c77a976` | Stage 3 — Criteria's routes, store seam, panel, params and colour ramp |
+| `9dd54a8`, `9220e92` | Sol's code-review findings 1 and 6, and the anonymity test that was theatre |
+
+The last three were committed by another session sweeping a quiet tree, not by this one — Criteria
+had been finished and blocked for hours behind another workstream's uncommitted work in the eleven
+files the two shared. Recorded because the commit authorship does not match the work, and the next
+reader will otherwise be confused about who built what.
+
+**A second Sol review, of the code rather than the plan**
+([260831an-referee-mode-code-review-sol.md](260831an-referee-mode-code-review-sol.md)), returned
+*"do not ship this as a completed safeguard layer"*. Findings 1, 6 and the theatrical test are
+fixed. Findings 2, 3, 4, 5, 7 and 9 are the substance of stages 3b–5c below: **the review's central
+charge is that several protections exist only as unused helpers and untested intentions**, and that
+is a fair description of what shipped.
+
+### What remains
+
+- **Stage 3b — the referee's own judgement crosses the boundary.** Sol's finding 5. The
+  `comments.criterionId` and `comments.valence` columns exist and are migrated, but the `Comment`
+  type, `NewComment`, the route and the Postgres reader and writer all ignore them, so the half of
+  Greg's ask that matters most — *the referee records what **they** think, quantitatively, beside
+  what the model thought* — is unreachable through the real API. Also `src/store/export.ts` has
+  never heard of `referee_criteria`, so the rollback exporter drops every criterion in silence.
+- **Stage 2b — the injection scan actually runs.** Sol's finding 2, and the sharpest one: the
+  scanner is **dead code**. Nothing calls it, so it does not run before a model, its findings cannot
+  reach a referee, and its `coverage` cannot stop a panel saying "nothing found". It also has
+  one-line evasions — inherited colour, specificity, `opacity: 0` — and no notion of *visible*
+  injection at all. Splits in two: the pure-module fixes, and wiring it to a surface.
+- **Stage 5b — Mirror becomes reachable.** The route, the hook and the panel. Its prompt, call,
+  validator and eval have been committed since `bd2f38e` and nothing in the running app calls them.
+- **Stage 5c — Mirror's invariants.** Sol's findings 3, 4 and 9: truncation can drop a placement it
+  promised to rank first; coverage can be asserted when the one comment bearing on a criterion was
+  dropped as an orphan; the delimiter is forgeable; and the input caps do not cap criterion length,
+  passage length, or the same block copied once per comment.
+- **Stage 4 — Claims.** Route-shaped, sharing Stage 2's table conventions and Stage 3's resolver.
+  Sol's finding 8 is that the placeholder's own copy still promises the framing the plan rejected —
+  it says where a claim is "actually delivered" and ranks "by how thin the delivery is". The
+  placeholder has to stop making a promise the built thing will refuse to keep.
 - **Stage 6 — Candidates as a third thread kind.** The migration widening `chat_threads_kind`, the
-  route's kind check, the `converse` branch and its system prompt, the scoping box, and the fit brief
-  as the thread's opening message. Web search on for this kind.
+  route's kind check, the `converse` branch and its system prompt, the scoping box, and the fit
+  brief as the thread's opening message. Web search on for this kind.
 - **Stage 7 — Candidates, the hard rules.** Citation-or-it-does-not-show, author exclusion, the
   fit-requirement link on every candidate, and the panel's own statement of what it cannot check.
   Greg's framing is *"see how far we can get in a stage or two"*, so this is where to stop if it
   becomes the rabbit hole he expects.
-- **Stage 8 — finish.** `docs/project/referee-mode.md`, its line in
-  [reading-view-overview.md](../project/reading-view-overview.md), a browser pass over all three
-  including a colour-vision simulation and a narrow screen, GPT Sol on the code.
+- **Stage 8 — finish.** A browser pass over all four sub-modes including a colour-vision simulation,
+  a narrow screen and a screen reader; GPT Sol on the code again; and the status paragraph at the
+  top of [referee-mode.md](../project/referee-mode.md) rewritten to match what is then true.
 
 Sol reviews the diff at the end of every stage. Evals measure the things unit tests cannot: false
 "did not find" rates, abstention, grounding, and valence-unit failures.

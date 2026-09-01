@@ -1,15 +1,28 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
-**Status, 2026-09-01: partly built.** The mode, its four sub-modes' navigation, and both
-confidentiality notices are committed and on screen. Underneath three of the four buttons is a
-placeholder that says "Not built yet" — Criteria, Claims and Candidates have no route, no model
-call and no panel. Mirror is further along than the other three but not reachable: its prompt, its
-call and its eval are committed ([`src/referee-mirror.ts`](../../src/referee-mirror.ts)), but there
-is no route and no panel wired to it yet, so nothing in the running app calls it. The data model
-for Criteria — the `referee_criteria` table and the two new columns on `comments` — is migrated and
-tested, ahead of the UI that will use it. The deterministic injection scan
-([`src/injection-scan.ts`](../../src/injection-scan.ts)) is written and tested on its own fixture
-corpus, but nothing in the mode calls it yet either.
+**Status, 2026-09-01: one sub-mode of four is built.**
+
+**Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
+ranked in the panel, and on a `diverging` criterion each passage carries a signed valence. Verified
+in a browser, not only by tests: one real criterion run, 11 ranked passages, marks in the prose, and
+a colour-vision simulation over the result (see the scale note below).
+
+**Claims, Mirror and Candidates are placeholders** that say "Not built yet". Mirror is the furthest
+along of the three but is still unreachable: its prompt, its call, its validator and its eval are
+committed ([`src/referee-mirror.ts`](../../src/referee-mirror.ts)) and nothing in the running app
+calls them, because it has no route and no panel.
+
+**Two things are built and not connected**, and both are the kind of thing that looks finished from
+a test file:
+
+- The deterministic injection scan ([`src/injection-scan.ts`](../../src/injection-scan.ts)) has a
+  fixture corpus and passing tests, and **no production caller**. It does not run before a model,
+  its findings cannot reach a referee, and its `coverage` cannot stop a panel saying "nothing
+  found". Rule 5 below describes a defence that is not yet in the path.
+- The `comments.criterionId` and `comments.valence` columns are migrated and tested, and the
+  `Comment` type, the route and the Postgres reader and writer all ignore them — so the referee's
+  *own* judgement, which is the anchoring antidote in the design, cannot yet be recorded through the
+  real API.
 
 **Plan**: [260831an-referee-mode-for-peer-reviewers.md](../plans/260831an-referee-mode-for-peer-reviewers.md).
 **Cross-family review**: [260831an-referee-mode-review-sol.md](../plans/260831an-referee-mode-review-sol.md)
@@ -73,14 +86,23 @@ valence are two separate numbers that are never the same field —
 tested, and `referee_criteria` is its own table
 ([`src/db/schema.ts`](../../src/db/schema.ts) § *referee criteria*).
 
-Valence lives in the panel and the gutter, never in the prose stripe: the renderer has exactly two
+Valence lives in the panel row, never in the prose stripe: the renderer has exactly two
 channels — the wash carries confidence, the categorical stripe carries which criterion — and
 repainting the stripe by valence would throw away *which* criterion made a judgement, leaving two
-negative criteria on one phrase indistinguishable. The scale is
-[`--div-*`, blue ↔ red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) by
-default; red↔green ([`--div-rg-*`](colour-scales.md#--div-rg--is-red-green-and-it-is-here-because-it-was-asked-for))
-is offered too, because every row prints its direction in words and the signed number as well as
-the colour, which is the condition colour-scales.md sets for using it at all.
+negative criteria on one phrase indistinguishable. (The plan also asked for it in the prose gutter,
+beside the marked block. That is **not built**; the gutter holds the permalink and the chat button.)
+
+**The scale defaults to red ↔ green**
+([`--div-rg-*`](colour-scales.md#--div-rg--is-red-green-and-it-is-here-because-it-was-asked-for)),
+which Greg asked for three times, with
+[`--div-*`, blue ↔ red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) offered
+per-criterion. That is allowed only because **colour is never the carrier**: every row prints the
+ordinal rank, the direction in words, the referee's own pole label and the signed number beside the
+swatch. A browser pass on 2026-09-01 simulated deuteranopia and protanopia and confirmed both halves
+of that — every swatch collapses to the same khaki (a +70 green and a −60 red land within a few
+points of each other), and the four text carriers stay fully legible. `DEFAULT_DIVERGING_SCALE` in
+[`src/referee-criteria.ts`](../../src/referee-criteria.ts) writes down the condition under which
+this default has to move to `br`: if the panel ever stops printing the direction in words.
 
 The referee can place a passage on the same scale themselves — a comment's own `valence` — and the
 two are never averaged, because the interesting thing is the *gap* between the model's judgement and

@@ -17,8 +17,13 @@
  * valence destroys provenance: two negative criteria over one phrase would both
  * go red and the reader, mid-sentence, could not tell which said what. So
  * `resolveCriterion` drops the valence on the way to the marks (it says so at
- * length), and the valence appears **here** — in the row and in the gutter —
- * and nowhere else.
+ * length), and the valence appears **here, in the row**, and nowhere else.
+ *
+ * The plan also asked for it in the prose gutter, beside the marked block, and
+ * that is **not built** — the gutter holds the permalink and the chat button
+ * and nothing else. Recorded rather than quietly dropped: the row is the
+ * simplest thing that satisfies rule 3 below, and the gutter is an addition to
+ * make once somebody has read with this and found the panel too far away.
  *
  * **2. The pivot is anchored at zero.** `valenceStep` in src/web/valence.ts,
  * and the note there about what scaling to the data would silently do.
@@ -557,7 +562,15 @@ function CriterionRow({
         </p>
       )}
       {row.status === "done" && row.results.length === 0 && (
-        <p className="gloss-quiet">Nothing in this paper bears on that.</p>
+        /* Not "nothing in this paper bears on that", which is the shorter and
+           more natural sentence and is a claim we have no standing to make. A
+           zero-result row can mean the extractor dropped a table, a figure or a
+           supplement; that the paper words the thing differently; or that the
+           model missed it. tests/referee-copy-is-about-the-model.test.ts. */
+        <p className="gloss-quiet">
+          The model did not find a passage for this — which is a fact about the search, not
+          about the paper.
+        </p>
       )}
 
       <ol className="crit-results">
