@@ -574,18 +574,18 @@ Six findings. Five are mechanical and are being fixed; the sixth is Greg's call.
 [260831al-review-quiz-sub-mode-stage5-review-sol.md](260831al-review-quiz-sub-mode-stage5-review-sol.md).
 Still NO-SHIP, and right again on all four. Three are small; one needs thought.
 
-- [ ] **`finish_reason: "error"` is not handled.** The clearest of the four, and it is the original
+- [x] **`finish_reason: "error"` is not handled.** The clearest of the four, and it is the original
       bug with a different word in it: `didNotFinish`'s own docstring lists `error` among the five
       reasons OpenRouter normalises to, and then does not return a failure for it. Partial text plus
       `error` plus `[DONE]` is still filed as a finished mark. `tool_calls` stays accepted — the
       docstring's reason holds, this call sends no tools so a model asking for one is a provider bug
       and the prose it did write is still prose — but `error` was an oversight, not a decision.
-- [ ] **A disconnect before `sse(res)` is missed entirely.** `gone` is created by `sse`, which is
+- [x] **A disconnect before `sse(res)` is missed entirely.** `gone` is created by `sse`, which is
       called *after* `loadQuiz`, `loadArticle` and the second `loadQuiz`. A reader who closes the tab
       during those reads is never noticed: the `close` event has already fired, the signal that gets
       created afterwards is live, and the paid call starts anyway on a response that is already
       destroyed. Fix is a line — the signal starts aborted when the response is already gone.
-- [ ] **An empty box is superseded after all, and the copy was the wrong lever.** Stage 5 excluded
+- [x] **An empty box is superseded after all, and the copy was the wrong lever.** Stage 5 excluded
       the empty case because the note told a reader to press an Answer button that is disabled while
       the box is empty. The reviewer is right that this restores the original hole in miniature: an
       empty box beside feedback for the answer that was just deleted, still reading "answered". The
@@ -603,6 +603,30 @@ Still NO-SHIP, and right again on all four. Three are small; one needs thought.
       409 on every mark. So the work is to find a fingerprint input both sides can agree on — or to
       accept the ABA window and say so, which is a smaller lie than a mark that silently 409s for a
       class of articles.
+
+      **Accepted, for now, and said out loud** — the comment on the second `refuseAMovedQuiz` call in
+      [`src/routes.ts`](../../src/routes.ts) carries the window, the remedy, and why the remedy does
+      not compute. Closing it properly is a fingerprint both sides can agree on, and that is work
+      rather than a patch. A third review checked that reasoning against the store and confirmed it,
+      with one correction now in the comment: *every* untitled article is too strong, since one whose
+      synthesised title happens to match what was stored would compare equal by coincidence.
+
+**Stopped here, on a third review that says to.** *"Nothing here is unsafe to leave over the
+weekend."* It found one leftover worth a sentence and no code: a route whose reader has already gone
+still starts its `heartbeat` interval, which then runs unreferenced until the process exits. It
+spends nothing and cannot write, because `alive()` is already false. Recorded in `sse` so that
+nobody has to find it twice.
+
+Two of the reviewer's test criticisms are dealt with and one is not, knowingly. `clearAttempt` now
+has a test that the request is **actually aborted** rather than that the function was called
+(`tests/quiz-mark-stream.test.tsx`, against a stream that never ends). The other half — that the
+released slot lets the next answer through — defeated every shape tried: an `act` around a promise
+that never resolves leaves the hook somewhere the real panel never goes, and the failures were the
+harness rather than the code. The browser pass marks answers repeatedly and they arrive, so what is
+missing is a regression guard, not the behaviour. And **nothing yet asserts `gradeWords` is wired to
+a real mark's log line**, so deleting that field would leave every counter test green; it needs the
+`logLinesWhile` helper and its `vi.hoisted` LOG_LEVEL, which is a file-level change to a suite that
+is currently green.
 
 Two more the reviewer raised that are about the tests rather than the code, and it is right about
 both: **removing the `gradeWords` field from the log line would leave every counter test green**

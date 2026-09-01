@@ -228,14 +228,17 @@ export function QuizPanel({
    * mark is in flight — so no status is excluded and there is no second
    * condition to keep in step.
    *
-   * **An empty box is not a different answer.** Without the first clause a
-   * reader who selects all and deletes, on the way to retyping, is told to
-   * "press Answer" by a note sitting above an Answer button that is disabled
-   * for exactly as long as the box stays empty — an instruction pointing at a
-   * control that cannot be used. There is nothing waiting to be marked until
-   * they type, so until then the mark they have is simply the mark they have.
+   * **An emptied box counts, and the first version of this got that wrong.** It
+   * excluded the empty case, because the note then told a reader who had
+   * selected all and deleted to "press Answer" while the Answer button is
+   * disabled for exactly as long as the box stays empty — an instruction
+   * pointing at a control that cannot be used. But excluding it restored the
+   * original hole in miniature: an empty box, feedback about the answer that
+   * was just deleted, and a line still reading "answered". **The note was the
+   * thing to change, not the rule** — see `Mark`, which says the answer is gone
+   * rather than telling anybody to press anything. GPT Sol's second review.
    */
-  const superseded = mine !== null && typed.trim() !== "" && typed.trim() !== mine.answer;
+  const superseded = mine !== null && typed.trim() !== mine.answer;
 
   const move = (to: number) => {
     /* The attempt on screen belongs to the question that is leaving, and
@@ -377,6 +380,7 @@ export function QuizPanel({
                   <Mark
                     attempt={mine}
                     superseded={superseded}
+                    emptied={typed.trim() === ""}
                     blocks={blocks}
                     onJump={onJump}
                   />
@@ -452,12 +456,15 @@ export function QuizPanel({
 function Mark({
   attempt,
   superseded,
+  emptied,
   blocks,
   onJump,
 }: {
   attempt: Attempt;
   /** The box has been edited since this mark was computed. */
   superseded: boolean;
+  /** …and edited down to nothing, which changes only what the note may say. */
+  emptied: boolean;
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
@@ -465,7 +472,15 @@ function Mark({
     <>
       {superseded && attempt.reply && (
         <p className="gloss-count">
-          This mark is about your previous answer. Press Answer to have the new one marked.
+          {/* Two sentences for one rule, and the split is about what the reader
+              can act on. With words in the box there is something to mark and
+              the button is live, so the note says how. With the box empty there
+              is not, and the Answer button is disabled — so it says what the
+              mark is about and stops, rather than naming a control that cannot
+              be pressed. */}
+          {emptied
+            ? "This mark is about an answer you have since deleted."
+            : "This mark is about your previous answer. Press Answer to have the new one marked."}
         </p>
       )}
       {attempt.reply && (

@@ -67,6 +67,7 @@ import {
   FILTER_STOPPED_IT,
   MARK_CUT_OFF,
   NOT_CONFIGURED,
+  PROVIDER_FAILED_MID_ANSWER,
   type ReaderFacingFailure,
   saidNothing,
 } from "./messages.js";
@@ -504,7 +505,7 @@ export function gradeWords(reply: string): number {
  *
  * OpenRouter normalises the field to the OpenAI set — `stop`, `length`,
  * `content_filter`, `tool_calls`, `error` — and the provider's own word for it
- * arrives separately as `native_finish_reason`. Two of those five mean the
+ * arrives separately as `native_finish_reason`. Three of those five mean the
  * model was interrupted rather than finished, and both used to be read as
  * evidence that it *had* finished: the check after the loop accepted any
  * non-null reason as a second witness to completion. For `stop` that is right.
@@ -530,6 +531,18 @@ export function gradeWords(reply: string): number {
 function didNotFinish(finishReason: string | null): ReaderFacingFailure | null {
   if (finishReason === "length") return MARK_CUT_OFF;
   if (finishReason === "content_filter") return FILTER_STOPPED_IT;
+  /* **`error` was an oversight and not a decision**, and it is worth naming as
+     such: the paragraph above lists it among the five reasons OpenRouter
+     normalises to, and the first version of this function then walked past it —
+     the same bug this whole function exists to fix, with a different word in
+     it. GPT Sol's second review caught it. Partial text plus `error` plus a
+     terminator was still being filed as a whole mark.
+
+     The same sentence as the `chunk.error` throw in the loop, deliberately:
+     that is a provider failure arriving as data mid-answer and this is the same
+     failure arriving in a field, so telling a reader two different things about
+     one event would be a second copy of a fact rather than a second fact. */
+  if (finishReason === "error") return PROVIDER_FAILED_MID_ANSWER;
   return null;
 }
 

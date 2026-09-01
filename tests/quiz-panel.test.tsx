@@ -422,14 +422,21 @@ describe("a mark stays bound to the answer it was computed from", () => {
     expect(host.textContent).toContain("answered");
   });
 
-  /* An emptied box is on the way to a new answer, not a new answer. Without the
-     empty check the note appears the moment the reader selects all and deletes,
-     and tells them to press an Answer button that is disabled for exactly as
-     long as the box stays empty. */
-  it("does not tell a reader with an empty box to press a button they cannot press", () => {
+  /* **An emptied box is the original hole in miniature**, and the first version
+     of this test asserted the opposite. Excluding the empty case left a reader
+     looking at an empty box, feedback about the answer they had just deleted,
+     and a line still saying "answered" — which is exactly the thing this
+     describe block exists to stop. What was actually wrong was the note telling
+     them to press an Answer button that is disabled while the box is empty, so
+     the note is what changed. GPT Sol's second review; the plan's stage 6. */
+  it("owns up to an answer that has been deleted, without naming a button that is disabled", () => {
     answerAndGetMarked();
     type("");
-    expect(host.textContent).not.toContain("This mark is about your previous answer");
+    expect(host.textContent).toContain("This mark is about an answer you have since deleted");
+    expect(host.textContent).not.toContain("Press Answer");
+    expect(host.textContent).not.toContain("answered");
+    /* The mark itself is still there to read, as it is on any other edit. */
+    expect(host.textContent).toContain("You have the cost claim");
     expect(host.querySelector<HTMLButtonElement>("button.gloss-run")?.disabled).toBe(true);
   });
 

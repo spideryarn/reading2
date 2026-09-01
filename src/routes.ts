@@ -778,6 +778,24 @@ function sse(res: ServerResponse): {
     open = false;
     left.abort();
   });
+  /* **And if they left before we got here, the event has already fired.**
+     `sse` is called after a handler's reads — three of them in
+     `markOneAnswer` — so a reader who closes the tab during those is gone
+     before there is any listener to notice, and a signal created afterwards
+     would be live and stay live: the paid call starts anyway, on a response
+     that is already destroyed, and nothing ever cancels it. Asking the socket
+     what it is rather than waiting to be told. GPT Sol's second review of the
+     quiz code found this; it applies to every streaming route here. */
+  if (res.destroyed || res.writableEnded) {
+    open = false;
+    left.abort();
+  }
+  /* **The leftover, recorded rather than fixed.** A caller that has already lost
+     its reader still starts its `heartbeat` interval, whose own `close` event
+     was missed for the same reason this block exists, so it runs unreferenced
+     until the process exits. It spends nothing and cannot write — `alive()` is
+     already false — so it is not worth a second mechanism today; it is worth
+     not being rediscovered. */
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -1296,7 +1314,21 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
      itself. Adding one would be a second way to read an article, for a window
      of microseconds, so it was not worth it now: what is left is a revision
      that lands *and* is superseded by one with an identical fingerprint, both
-     inside one handler. Written down rather than left to be rediscovered. */
+     inside one handler.
+
+     **That ABA window is accepted, on a second review that named it.** The
+     remedy offered was to compare `found.quiz.sourceHash` against the
+     fingerprint of the article actually loaded, which is the right shape — it
+     binds the question to the exact prose being sent — and does not compute:
+     `Article.meta` has been through `titleFor`/`metaFrom`, which synthesise a
+     title from the h1, the slug or a shelf rename, while the store's
+     fingerprint uses `metaFingerprintOf`, which returns `null` when
+     `revision.title` is null. Renamed articles would 409 on every mark, and so
+     would untitled ones — bar the coincidence of one whose synthesised title
+     lands exactly on what was stored. **A mark that silently refuses for a whole class of articles is
+     a worse lie than a window this narrow**, and the honest fix is a
+     fingerprint input both sides can agree on — the plan's stage 6, not a patch
+     here. */
   refuseAMovedQuiz(await loadQuiz(slug), batchId);
 
   const { frame, gone } = sse(res);

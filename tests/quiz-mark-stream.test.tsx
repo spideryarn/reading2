@@ -145,6 +145,18 @@ function failsMidway(): ReadableStream<Uint8Array> {
 /** What the next `POST /api/quiz/:slug/mark` answers with. */
 let markBody: () => ReadableStream<Uint8Array>;
 
+/** The `signal` the last mark POST was given, so a test can ask if it fired. */
+let markSignals: (AbortSignal | undefined)[] = [];
+
+/** A stream that never ends, so a mark is still in flight to be cancelled. */
+function neverFinishes(): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(c) {
+      c.enqueue(frame("delta", { text: "You have " }));
+    },
+  });
+}
+
 /**
  * Let every microtask hop settle.
  *
@@ -162,6 +174,7 @@ async function settle(): Promise<void> {
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   markBody = stopsWithoutFinishing;
+  markSignals = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
@@ -179,6 +192,7 @@ beforeEach(async () => {
         } as unknown as Response);
       }
       if (init.method === "POST" && url.endsWith("/mark")) {
+        markSignals.push(init.signal ?? undefined);
         return Promise.resolve({ ok: true, status: 200, body: markBody() } as unknown as Response);
       }
       throw new Error(`unexpected fetch: ${init.method} ${url}`);
@@ -421,4 +435,43 @@ describe("a mark the reader walked away from", () => {
     // And what did arrive is still what arrived — this is not a throw.
     expect(seen).toEqual([{ type: "delta", text: "You have the first half of it. " }]);
   });
+});
+
+/**
+ * **What `clearAttempt` has to actually do**, as opposed to be called.
+ *
+ * The panel's own test for this uses a fake owner, so it can only prove the
+ * `batchId` effect *calls* `clearAttempt` — it would pass just as well if
+ * `clearAttempt` were a no-op. GPT Sol's second review said so, and it is the
+ * more expensive half of the rule: `mark` opens with `if (live.current) return`,
+ * so a mark left running holds the one live slot and the next batch's Answer
+ * button is enabled and does nothing at all, with nothing logged and nothing
+ * red. This is the half that needs a real hook mounted.
+ */
+describe("giving up on a mark that is still running", () => {
+  it("aborts the request rather than leaving it to finish unwatched", async () => {
+    markBody = neverFinishes;
+    /* Not awaited: this one never resolves, which is the point. */
+    void act(async () => {
+      void latest?.mark(Q1, "a first answer");
+    });
+    await settle();
+    expect(markSignals.length, "the mark never reached fetch").toBe(1);
+    expect(markSignals[0]?.aborted, "nothing had aborted it yet").toBe(false);
+
+    await act(async () => latest?.clearAttempt());
+    await settle();
+
+    expect(markSignals[0]?.aborted).toBe(true);
+  });
+
+  /* **The other half of this rule is not tested here, knowingly.** That the
+     released slot lets the *next* answer through wants a second mark after the
+     abort, and every shape of that test tried here failed on the harness rather
+     than on the code — an `act` around a promise that never resolves leaves the
+     hook in a state the real panel never reaches. The browser pass marks
+     answers repeatedly and they arrive, so the behaviour is not in doubt; what
+     is missing is a regression guard, and the panel's own test still proves
+     only that `clearAttempt` is called. Written down rather than left as a gap
+     somebody has to rediscover. */
 });
