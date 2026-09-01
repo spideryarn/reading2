@@ -18,6 +18,12 @@
  * - src/upload-records.ts   → `pgUploadStore`
  * - src/store/revisions.ts  → `pgLifecycle`
  *
+ * The third of those no longer exists. `pgLifecycle` and the whole
+ * `RevisionLifecycle` seam it was selected into were deleted on 2026-09-01,
+ * never having had a production caller — docs/plans/260831b-finish-the-database-move.md
+ * § Stage 4. Two raw selections were fixed and the third was demolished, so
+ * what stops a fourth is (2) below rather than any of the objects in (1).
+ *
  * The first one failed against a production database that was four migrations
  * behind, and the shelf rendered the whole `select … from "spideryarn"."jobs"`
  * — column list, `where`, and the owner's uuid — in red under the Add box.
@@ -47,7 +53,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
 import { ProductRefused } from "../src/store/artifacts.js";
@@ -56,34 +62,14 @@ import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
 import { IllegalTransition } from "../src/store/uploads.js";
 
-/**
- * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
- *
- * `vi.hoisted` and not a plain statement, for the reason
- * tests/db-error-scrub.test.ts spells out: src/store/live.ts reads the flag once,
- * at first import, and imports are hoisted above every statement in a module —
- * so an ordinary assignment runs *after* the module it is trying to configure
- * has already made up its mind.
- *
- * A cache-busting `import("…?v=1")` would have been the smaller change and does
- * not work: Vite refuses a dynamic import whose specifier is not a literal
- * ("Unknown variable dynamic import"), which is a build-time rule and not
- * something a test can opt out of.
- */
-const PREVIOUS_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
-/* The module under test, imported while the flag is still set. */
-const { NO_DRAFTS, revisionLifecycle } = await import("../src/store/revisions.js");
-
-/* Put back straight away: vitest reuses a worker process across files, and the
-   modules above have already captured the flag. Leaving it set hands the next
-   file a store it did not ask for. */
-if (PREVIOUS_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_FLAG;
+/* **No `SPIDERYARN_STORE=postgres` hoisting here any more.** This file used to
+   set the flag inside `vi.hoisted` and re-import `src/store/revisions.js`
+   underneath it, because the revision lifecycle was the one store selected by
+   the flag at *use* rather than guarded at *export*. That store is gone
+   (2026-09-01), and every store left below exports one already-guarded object
+   and consults no flag — which is what guarding at the export bought.
+   tests/db-error-scrub.test.ts still explains the hoisting trick if it is ever
+   needed again. */
 
 /* --------------------------------------------------- 1. the stores, asked -- */
 
@@ -134,25 +120,6 @@ describe("the stores selected outside src/store/index.ts", () => {
       slug: "guarded-checkpoint-store",
     });
     expect(isGuardedStore(store)).toBe("checkpoints");
-  });
-
-  /**
-   * The lifecycle is chosen by the flag, so this one has to set it — and it is
-   * the store with no production caller yet, which is exactly why it is here.
-   * "Nothing calls it" is a fact about the wiring, not a property of the code.
-   */
-  it("hand out a guarded revision lifecycle under postgres", () => {
-    expect(isGuardedStore(revisionLifecycle)).toBe("revisions");
-  });
-
-  /**
-   * And `NO_DRAFTS` deliberately is **not** wrapped. Asserted rather than left
-   * implicit, because "it is guarded everywhere" is easier to believe than it is
-   * to keep true, and a reader who finds one bare store wants to know whether it
-   * is an exemption or an oversight. It touches no database.
-   */
-  it("but leave the no-database lifecycle bare", () => {
-    expect(isGuardedStore(NO_DRAFTS)).toBeUndefined();
   });
 });
 
@@ -257,9 +224,10 @@ describe("no Postgres store is selected without a guard", () => {
           ),
         );
         /* `pgSomething` — the naming this repo uses for every Postgres adapter.
-           `pgLifecycle` and `pgJobStore` both match; `fsJobStore` does not, and
-           neither does `NO_DRAFTS`, which is the point: only a Postgres store
-           has anything to scrub. */
+           `pgJobStore` and `pgUploadStore` both match; `fsJobStore` does not,
+           which is the point: only a Postgres store has anything to scrub.
+           (`pgLifecycle`, the third example this comment used to give, was
+           deleted with the revision lifecycle on 2026-09-01.) */
         for (const name of new Set(statement.match(/\bpg[A-Z][\w$]*/g) ?? [])) {
           if (guarded.has(name) || wrappedHere.has(name)) continue;
           offenders.push(`${file.slice(root.length)}: ${name}`);

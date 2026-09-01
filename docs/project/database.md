@@ -871,11 +871,18 @@ labels to `labels-progress.json` as each one comes back, and the PDF reader writ
 chunk to `pdf-chunks/<key>.json`. A 429 eight batches into a book then costs one batch rather than
 eight, and these are the expensive calls.
 
-They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) since 2026-08-29 —
-`checkpoints-fs.ts` for the layout above, `checkpoints-pg.ts` for the `checkpoints` table — because
-landing D of [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) takes `data/<slug>/` away.
-**Nothing calls the store yet**; the two stages still write their own files. The plan's § B3 has the
-three decisions and the reasoning. What to know before touching any of it:
+They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) since 2026-08-29,
+with [`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table,
+because landing D of [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)
+takes `data/<slug>/` away. The plan's § B3 has the three decisions and the reasoning.
+
+**Nothing calls the store, and that is now a fact with a cost rather than a stage not yet reached.**
+The two stages still write their own files. The filesystem adapter — a second, genuine
+implementation rather than a fallback — was deleted unused on 2026-09-01
+([260831b § Stage 4](../plans/260831b-finish-the-database-move.md)): no `data/<slug>/checkpoints/`
+directory has ever existed, so its sweep walked an empty shape while ~300 KB of real checkpoints sat
+one directory up, invisible to it. **That is the argument for landing D2**, which is still unbuilt.
+What to know before touching any of it:
 
 - **The key is the article and the question, never the revision.** A retry is a new job and a new job
   begins a new draft revision, so a checkpoint keyed on the revision is written on every run and read
@@ -888,11 +895,13 @@ three decisions and the reasoning. What to know before touching any of it:
   tidiness: a checkpoint holds a transcription of the reader's own document.
 - **`on delete cascade` is the retention policy; the sweep is the leftovers.** The only deletion with
   a deadline is an article going away, and that is automatic — the transcription goes with it. There
-  are no orphans in either store. What the sweep is for is the narrow case of a *live* article whose
+  are no orphans. What the sweep is for is the narrow case of a *live* article whose
   checkpoints are dead because the question changed (prompt version, model, or re-extracted text):
   ninety days on `last_used_at`, `npx tsx scripts/checkpoints-sweep.ts` to report, `--delete` to do
-  it. Nothing schedules it, and what makes that safe is that every row costs a paid model call to
-  create, so the table cannot grow faster than the bill.
+  it. **It sweeps Postgres only**, since 2026-09-01. Nothing schedules it, and what makes that safe
+  is that every row costs a paid model call to create, so the table cannot grow faster than the bill
+  — but note that until D2 lands it reports zero because the table is empty, which is the number a
+  broken sweep would report too ([silent-success.md](../reusable/silent-success.md)).
 - **The key is 16 lower-case hex characters**, and the `checkpoints_key_format` CHECK says so. Both
   producers are checked against it by the tests that own them — `tests/labels-batching.test.ts` on
   the real `batchFingerprint`, `tests/pdf-read.test.ts` on the file names a real run writes. Add a

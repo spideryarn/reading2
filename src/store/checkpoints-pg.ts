@@ -1,10 +1,14 @@
 /**
  * The checkpoint store in Postgres — one row per finished piece of work.
  *
- * [checkpoints.ts](checkpoints.ts) has the contract and every decision;
- * [checkpoints-fs.ts](checkpoints-fs.ts) is a genuine second implementation
- * rather than a fallback. The `checkpoints` table is in
- * [../db/schema.ts](../db/schema.ts).
+ * [checkpoints.ts](checkpoints.ts) has the contract and every decision. The
+ * `checkpoints` table is in [../db/schema.ts](../db/schema.ts).
+ *
+ * **This is the only implementation now.** `checkpoints-fs.ts` was a genuine
+ * second one rather than a fallback, and it was deleted unused on 2026-09-01
+ * with the rest of the filesystem store — docs/plans/260831b-finish-the-database-move.md
+ * § Stage 4. Nothing has ever called either; putting the two real checkpoints on
+ * this seam is landing D2.
  *
  * ## Four things this file must not be edited into
  *

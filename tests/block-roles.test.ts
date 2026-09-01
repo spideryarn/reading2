@@ -44,9 +44,33 @@
  *
  * v1 assigns only `"footnote"`. The other four exist in the union, in the CHECK
  * constraint and here — so the tests below drive all five through the
- * filesystem artefact store, `checkNoteFields` (src/block-fields.ts) and the
- * public DTO by hand, because the corpus cannot. That validator lived in
- * `src/store/import.ts` until the importer was deleted on 2026-09-01.
+ * filesystem artefact store and the public DTO by hand, because the corpus
+ * cannot.
+ *
+ * ## The import validator's cases were here, and went on 2026-09-01
+ *
+ * `checkNoteFields` (`src/block-fields.ts`) lived in `src/store/import.ts` until
+ * the importer was deleted, was rescued into a file of its own, and never found
+ * a caller. It was deleted with the rest of the dead seams in
+ * docs/plans/260831b-finish-the-database-move.md § Stage 4, and its nine cases here
+ * went with it. **What they refused that nothing now refuses**, recorded because
+ * the whole point of the file was that the database cannot see it:
+ *
+ * - the *shape* of a `noteId` (`NOTE_ID_PATTERN`) and of a `context.id`
+ *   (`CONTEXT_ID_PATTERN`) — the CHECKs constrain the value, not the shape;
+ * - `role: "footnote"` ⇒ `treatment: "supplement"`, without which `isBody` reads
+ *   the block as argument and it is summarised, embedded and labelled as one;
+ * - `role: "footnote"` ⇒ a `noteId`, without which stage 5's marker opens
+ *   nothing.
+ *
+ * `revision_blocks_role`, `revision_blocks_treatment`, `revision_blocks_context`
+ * and `revision_blocks_context_type` (src/db/schema.ts) still refuse everything
+ * they refused before. The argument for deleting the rest is that nothing
+ * untrusted reaches the store any more: blocks are minted by `src/blocks.ts` in
+ * the same process that writes them, and the one surviving path that reads a
+ * `blocks.json` off a disk — `copyArtefacts` → `writeBlocks` — is test-only and
+ * reads `tests/fixtures/data-root/`, a corpus committed to this repository. A
+ * fixture we wrote is not somebody else's JSON.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -54,7 +78,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { checkNoteFields } from "../src/block-fields.js";
 import { blocksArtefact, splitIntoBlocks } from "../src/blocks.js";
 import { runExtract } from "../src/extract.js";
 import { NOTE_ID_PATTERN } from "../src/notes.js";
@@ -390,125 +413,6 @@ describe("all five roles", () => {
       expect(back.filter((b) => b.noteId !== undefined).length).toBe(ROLES.length);
     } finally {
       await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it("passes the import validator, and a sixth role does not", () => {
-    expect(() => checkNoteFields("roles", SYNTHETIC)).not.toThrow();
-
-    const bad = [{ ...SYNTHETIC[1]!, role: "bibliography" as NonNullable<Block["role"]> }];
-    expect(() => checkNoteFields("roles", bad)).toThrow(/unrecognised role "bibliography"/);
-
-    const worse = [{ ...SYNTHETIC[1]!, treatment: "hidden" as NonNullable<Block["treatment"]> }];
-    expect(() => checkNoteFields("roles", worse)).toThrow(/unrecognised treatment "hidden"/);
-
-    const wrongType = [{ ...SYNTHETIC[1]!, noteId: 7 as unknown as string }];
-    expect(() => checkNoteFields("roles", wrongType)).toThrow(/noteId that is not a string/);
-  });
-
-  /**
-   * **The other axis, at the same seam.** A `context` says a block is inside a
-   * box the author drew (`Block.context`, src/types.ts). An import is somebody
-   * else's JSON, and the two CHECK constraints on the columns can see neither
-   * the id's *shape* nor which block a violation came from — so the validator
-   * checks both, the same way it checks `noteId`.
-   * docs/plans/260831af-carrying-markup-facts-past-readability.md.
-   */
-  it("refuses a context stage 2 could not have minted", () => {
-    const ok = [{ ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "callout" as const } }];
-    expect(() => checkNoteFields("roles", ok)).not.toThrow();
-
-    const badType = [
-      { ...SYNTHETIC[1]!, context: { id: "c-0123456789", type: "sidebar" } } as unknown as Block,
-    ];
-    expect(() => checkNoteFields("roles", badType)).toThrow(/unrecognised context type "sidebar"/);
-
-    /* The shape that matters: an id the page wrote rather than one we minted.
-       `<div class="callout" data-spya-callout="…">` is scrubbed at stage 2, and
-       this is the belt — an export edited by hand, or a store that grew a
-       second writer. */
-    const forged = [
-      { ...SYNTHETIC[1]!, context: { id: "javascript:alert(1)", type: "callout" } } as unknown as Block,
-    ];
-    expect(() => checkNoteFields("roles", forged)).toThrow(/context id .* could not have minted/);
-
-    const notAString = [
-      { ...SYNTHETIC[1]!, context: { id: 7, type: "callout" } } as unknown as Block,
-    ];
-    expect(() => checkNoteFields("roles", notAString)).toThrow(/context id/);
-  });
-
-  /**
-   * **Each field being legal is not the same as the block being coherent.**
-   *
-   * GPT Sol's review of stage 3: the validator checked the three fields in
-   * isolation, so the failure it exists to prevent walked in through the door
-   * that left open. Both shapes below pass every single-field check.
-   */
-  it("refuses a footnote that is not marked as apparatus", () => {
-    /* `role: "footnote"` with no treatment. `isBody` reads an absent treatment
-       as body, so this block declares itself apparatus in the one column
-       nothing reads, and is summarised, embedded, labelled and put on the clock
-       as argument — silent reclassification arriving as a well-formed import. */
-    const { treatment: _dropped, ...orphan } = SYNTHETIC[1]!;
-    expect(orphan.role).toBe("footnote");
-    expect(() => checkNoteFields("roles", [orphan])).toThrow(/is a footnote with treatment/);
-  });
-
-  it("still allows an appendix without one, which is why there are two axes", () => {
-    /* The control for the rule above, and the reason it is stated for
-       `"footnote"` alone rather than for every role: an appendix may be real
-       prose worth gisting. A rule that read "any role implies supplement" would
-       pass the test above and delete the distinction the two axes exist for. */
-    const appendix = SYNTHETIC.find((b) => b.role === "appendix")!;
-    expect(appendix.treatment).toBeUndefined();
-    expect(() => checkNoteFields("roles", [appendix])).not.toThrow();
-  });
-
-  it("refuses a noteId stage 2 could not have minted", () => {
-    /* Stage 2 mints ten hex digits and stage 3 refuses anything else
-       (`noteFieldsFor` gates on `NOTE_ID_PATTERN`), so a value in any other
-       shape did not come from this pipeline. Stage 5 resolves a marker to its
-       note by this id: an arbitrary string is a hover card resolving to
-       nothing, or to the wrong note. */
-    for (const bad of ["note-1", "spya-note-zzzzzzzzzz", "spya-note-00ab12cd3", ""]) {
-      const forged = [{ ...SYNTHETIC[1]!, noteId: bad }];
-      /* The exact message, not an alternation loose enough to also match "not
-         a string" — a test that accepts either error is not testing which one
-         fired. */
-      expect(() => checkNoteFields("roles", forged)).toThrow(/could not have minted/);
-    }
-  });
-
-  it("refuses a footnote with no noteId, which stage 5 could never open", () => {
-    /* Stored but unreachable: removed from the argument by `treatment`, and
-       absent from `noteIndex` (src/web/notes-view.ts) because that keys on a
-       non-empty `noteId`. The marker would open nothing at all. Stage 3
-       deferred a `noteId` rule in the *other* direction; this is the one stage
-       5a made load-bearing. GPT Sol's review of stage 4. */
-    const { noteId: _dropped, ...mute } = SYNTHETIC[1]!;
-    expect(mute.role).toBe("footnote");
-    expect(mute.treatment).toBe("supplement");
-    expect(() => checkNoteFields("roles", [mute])).toThrow(/footnote with no noteId/);
-  });
-
-  it("still allows an appendix with no noteId, which is why the rule names one role", () => {
-    /* The control. A rule written as "any supplement needs a noteId" would pass
-       the test above and refuse an appendix, which is prose rather than a note
-       and has nothing to be a member of. */
-    const appendix = SYNTHETIC.find((b) => b.role === "appendix")!;
-    const { noteId: _also, ...bare } = appendix;
-    expect(() => checkNoteFields("roles", [bare])).not.toThrow();
-  });
-
-  it("accepts the two shapes stage 2 really mints", () => {
-    /* The control: `NOTE_ID_PATTERN` allows an optional `-<n>` suffix, and a
-       validator that rejected it would refuse an ordinary Wikipedia article
-       whose one note is cited thirteen times. */
-    for (const good of ["spya-note-00ab12cd34", "spya-note-00ab12cd34-2"]) {
-      expect(NOTE_ID_PATTERN.test(good)).toBe(true);
-      const block = [{ ...SYNTHETIC[1]!, noteId: good }];
-      expect(() => checkNoteFields("roles", block)).not.toThrow();
     }
   });
 

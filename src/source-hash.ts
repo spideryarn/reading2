@@ -61,8 +61,10 @@ import type { Block, Meta, Tree } from "./types.js";
  *
  * And `string`, not the two unions off `Block`. What is being fingerprinted is
  * the *text* of the classification, and the narrow Postgres reads select a
- * `text` column whose domain is enforced by a CHECK constraint and by
- * `checkNoteFields` on import, not by this type. Narrowing here would buy a
+ * `text` column whose domain is enforced by a CHECK constraint, not by this
+ * type. (`checkNoteFields` used to be named here as a second enforcer; it was
+ * deleted unused on 2026-09-01 — docs/plans/260831b-finish-the-database-move.md
+ * § Stage 4.) Narrowing here would buy a
  * cast at each of those three call sites and nothing else — every `Block[]`
  * still satisfies it, which is the property this whole type exists for.
  */

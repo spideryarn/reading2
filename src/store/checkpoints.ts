@@ -5,11 +5,29 @@
  * dies eight batches into a book costs one batch rather than eight. Landing D
  * of docs/plans/260827aa-delete-the-importer.md takes the `data/<slug>/` directory they
  * live in away, so they need a home that is not a path. This is the interface,
- * and there are two implementations of it — [checkpoints-fs.ts](checkpoints-fs.ts)
- * and [checkpoints-pg.ts](checkpoints-pg.ts).
+ * and there is one implementation of it — [checkpoints-pg.ts](checkpoints-pg.ts).
  *
- * Nothing calls it yet. Porting the two existing checkpoints onto it is landing
- * D; this is the seam D writes through.
+ * ## Still nothing calls it, and that has now cost something
+ *
+ * Written 2026-08-29 with two adapters. **Neither ever got a caller**, while the
+ * two stages that really do checkpoint went on hand-rolling theirs to disk:
+ * `src/labels.ts` writes `labels-progress.json` and `src/pdf-read.ts` writes
+ * `pdf-chunks/`, both straight into `data/<slug>/`. Putting them on this seam is
+ * **landing D2** (docs/plans/260827aa-delete-the-importer.md), and it is still unbuilt.
+ *
+ * On 2026-09-01 the filesystem adapter was deleted with the rest of the
+ * filesystem store (docs/plans/260831b-finish-the-database-move.md § Stage 4). It had
+ * written nothing, ever — no `data/<slug>/checkpoints/` directory has existed
+ * on any machine — and `scripts/checkpoints-sweep.ts` had been sweeping that
+ * empty directory shape while 300 KB of real checkpoints sat one level up,
+ * invisible to it. **That is the argument for D2**, stated as a fact rather than
+ * a plan: a seam nobody writes through does not merely sit unused, it takes the
+ * retention, the healing and the whole-or-absent guarantee out of reach of the
+ * two callers that need them, and the two callers keep their own copies of each.
+ *
+ * Everything below still holds. Comments naming "the filesystem adapter" are
+ * kept where the *reasoning* is what matters — a rule's origin is worth knowing
+ * even when the thing that caused it has gone — and are marked as history.
  *
  * ## The one thing that would have made it useless
  *
@@ -140,8 +158,12 @@ export type CheckpointNamespace = "hierarchy-labels" | "pdf-chunk";
 export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = ["hierarchy-labels", "pdf-chunk"];
 
 /**
- * What a key may be, and it is narrower than "any string" for one reason: the
- * filesystem adapter uses it as a **file name**.
+ * What a key may be, and it is narrower than "any string" for one reason,
+ * **which is now historical**: the filesystem adapter used it as a **file
+ * name**. That adapter is gone (see the header), and the rule stays — it is a
+ * CHECK on a live table (`checkpoints_key_format`), so relaxing it costs a
+ * migration and buys nothing; and a key narrow enough to be a file name is a
+ * key nothing can be surprised by later.
  *
  * - No dot at all, so `..` and `.` cannot be spelt. A traversal is impossible by
  *   construction rather than by a second check that could be edited away.
@@ -189,7 +211,7 @@ export const CHECKPOINT_KEY_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/;
  */
 export interface CheckpointArticleRef {
   slug: string;
-  /** `articles.id`. The filesystem adapter ignores it; the Postgres one keys on it. */
+  /** `articles.id`, which is what the store keys on. */
   articleId: string;
 }
 
@@ -214,8 +236,7 @@ export interface CheckpointStore {
    * The entries that exist, by key. **A missing key is simply absent from the
    * map** — a miss and an unreadable entry are the same answer here, because
    * both mean *buy it again*, which is the only thing a caller can do about
-   * either. The filesystem adapter says so in the log when it discards one,
-   * since that is the only surviving trace that a run was killed mid-write.
+   * either.
    *
    * Reading also stamps `last_used_at`, so this is not a pure read. That is
    * what makes the sweep able to tell a hot entry from a dead one.
@@ -391,9 +412,14 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * the same reason [ai-calls.ts](ai-calls.ts) and [live.ts](live.ts) are their
  * own files.
  *
- * So the two constructors are exported from their own modules and the caller
- * picks: `scripts/checkpoints-sweep.ts` does it for the sweep, and D's
- * coordinator does it for the stages — which is the right place anyway, since a
- * stage should be handed a bound store rather than build one, exactly as it will
- * be handed an `ArtifactStore`.
+ * So the constructor is exported from its own module and the caller imports it:
+ * `scripts/checkpoints-sweep.ts` does it for the sweep, and D2's coordinator
+ * will do it for the stages — which is the right place anyway, since a stage
+ * should be handed a bound store rather than build one, exactly as it is handed
+ * an `ArtifactStore`.
+ *
+ * **With one adapter left there is nothing to select**, so this section is now
+ * about the *shape* rather than the switch: the leaf property is what keeps the
+ * cycle closed, and it would come back the moment anything here imported the
+ * adapter.
  */

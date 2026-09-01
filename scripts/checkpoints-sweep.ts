@@ -20,19 +20,24 @@
  * is not old, however long ago its checkpoint was written.
  * src/store/checkpoints.ts § Retention.
  *
+ * **Postgres only, since 2026-09-01.** This used to branch on `SPIDERYARN_STORE`
+ * and sweep `data/<slug>/checkpoints/` when the flag said files. That adapter is
+ * gone (docs/plans/260831b-finish-the-database-move.md § Stage 4), and it went
+ * without ever having swept anything: nothing in this repository has ever
+ * written a `checkpoints/` directory, while the two real checkpoints —
+ * `labels-progress.json` and `pdf-chunks/` — sit one directory up from where the
+ * sweep looked, and were invisible to it. There is one store now, so there is
+ * nothing left to branch on.
+ *
  * `console.log`, not `log()` — this is a CLI and the destination is a terminal.
  * CLAUDE.md § Writing code.
  */
-
-import path from "node:path";
 
 import { loadEnvLocal } from "../src/env.js";
 import {
   CHECKPOINT_RETENTION_DAYS,
   checkpointCutoff,
 } from "../src/store/checkpoints.js";
-import { sweepFsCheckpoints } from "../src/store/checkpoints-fs.js";
-import { STORE } from "../src/store/live.js";
 
 loadEnvLocal();
 
@@ -49,30 +54,27 @@ if (!Number.isFinite(days) || days <= 0) {
 const before = checkpointCutoff(days);
 
 /**
- * The store flag, not a flag of its own. Sweeping the store nobody is reading
- * would report a number that is true about a directory nothing writes to any
- * more — a check agreeing with itself, which is the failure this repo keeps
- * finding. docs/reusable/silent-success.md.
+ * **The `checkpoints` table is empty today, and a zero here means that rather
+ * than a broken sweep.** Nothing writes a checkpoint through the store yet —
+ * `src/labels.ts` and `src/pdf-read.ts` still hand-roll theirs to disk, and
+ * putting them on this seam is landing D2. Until then this reports zero
+ * correctly, which is the one number a sweep can report for two very different
+ * reasons: read `docs/reusable/silent-success.md` before believing it means the
+ * table is clean.
  */
 async function main(): Promise<void> {
   console.log(
-    `Checkpoints last used before ${before.toISOString()} (${days} days), ` +
-      `store: ${STORE}${dryRun ? "" : " — DELETING"}`,
+    `Checkpoints last used before ${before.toISOString()} (${days} days)` +
+      `${dryRun ? "" : " — DELETING"}`,
   );
-  if (STORE === "postgres") {
-    const { sweepPgCheckpoints } = await import("../src/store/checkpoints-pg.js");
-    const { closeDb } = await import("../src/db/client.js");
-    try {
-      const { swept, bytes } = await sweepPgCheckpoints(before, { dryRun });
-      report(swept, bytes);
-    } finally {
-      await closeDb();
-    }
-    return;
+  const { sweepPgCheckpoints } = await import("../src/store/checkpoints-pg.js");
+  const { closeDb } = await import("../src/db/client.js");
+  try {
+    const { swept, bytes } = await sweepPgCheckpoints(before, { dryRun });
+    report(swept, bytes);
+  } finally {
+    await closeDb();
   }
-  const root = path.resolve(import.meta.dirname, "..", "data");
-  const { swept, bytes } = await sweepFsCheckpoints(root, before, { dryRun });
-  report(swept, bytes);
 }
 
 function report(swept: number, bytes: number): void {

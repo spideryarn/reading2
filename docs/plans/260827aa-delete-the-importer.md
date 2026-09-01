@@ -798,7 +798,7 @@ seam D writes through.
 | | |
 |---|---|
 | [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) | the contract, the key rule, the retention constant. A **leaf** |
-| [`src/store/checkpoints-fs.ts`](../../src/store/checkpoints-fs.ts) | `<dir>/checkpoints/<namespace>/<key>.json`, and the sweep |
+| `src/store/checkpoints-fs.ts` — **deleted unused 2026-09-01**, [260831b § Stage 4](260831b-finish-the-database-move.md) | `<dir>/checkpoints/<namespace>/<key>.json`, and the sweep |
 | [`src/store/checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) | the `checkpoints` table, and the sweep |
 | [`scripts/checkpoints-sweep.ts`](../../scripts/checkpoints-sweep.ts) | the sweep's one caller. Reports by default |
 | `drizzle/0028_foamy_cassandra_nova.sql` | one table, one FK, one index, two CHECKs |
@@ -2629,7 +2629,7 @@ fingerprint mismatch, which is the same mechanism this now relies on.
 
 **`articleId` is not a problem, and the store said so in advance.** Neither call site has one; only a
 slug and a directory. `createFsCheckpointStore`'s docstring
-([`src/store/checkpoints-fs.ts:122`](../../src/store/checkpoints-fs.ts)) already answers it: *"`ref.articleId`
+(`src/store/checkpoints-fs.ts:122`, deleted 2026-09-01) already answers it: *"`ref.articleId`
 is unused here and is still required, so that a call site cannot build a filesystem store today and
 discover it has nothing to give the Postgres one tomorrow."* `assertCheckpointRequest` validates slug,
 namespace and keys and never the id. So an empty `articleId` on the filesystem is the contract working,

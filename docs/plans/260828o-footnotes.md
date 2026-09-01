@@ -962,7 +962,7 @@ evidence instead of a vacuous pass. So the rule stage 3 rests on is that its inp
 `canonicaliseNotes`; `runExtract` is the only production caller, and that is now the thing to keep
 true.
 
-**An import is rejected, not repaired.** `checkNoteFields` ([`src/block-fields.ts`](../../src/block-fields.ts) — it lived in `src/store/import.ts` until the importer was deleted on 2026-09-01)
+**An import is rejected, not repaired.** `checkNoteFields` (`src/block-fields.ts` — it lived in `src/store/import.ts` until the importer was deleted on 2026-09-01, and was itself deleted, still without a caller, later the same day: [260831b § Stage 4](260831b-finish-the-database-move.md))
 throws on an unrecognised `role` or `treatment` rather than dropping it, because a block that
 arrives claiming to be apparatus and is stored as body is silently reclassified as *argument* —
 the exact failure the feature exists to prevent. The CHECK constraint is the backstop, not the guard.
