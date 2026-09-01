@@ -94,7 +94,7 @@ import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { generateQuiz } from "../src/quiz.js";
-import { markAnswer } from "../src/quiz-mark.js";
+import { GRADE_WORDS, markAnswer } from "../src/quiz-mark.js";
 import { readArticleFromDir } from "../src/article-input.js";
 import { fallbackHeadTitle } from "../src/source-hash.js";
 import { findQuote } from "../src/quote-match.js";
@@ -270,24 +270,17 @@ const CASES: readonly MarkCase[] = [
  * about what the article says, and a flag that fires on those is a flag nobody
  * reads.
  */
-const BANNED = [
-  "correct answer",
-  "incorrect",
-  "mostly correct",
-  "partially correct",
-  "partly right",
-  "mostly right",
-  "you got the gist",
-  "full credit",
-  "well done",
-  "good job",
-  "good answer",
-  "great answer",
-  "strong answer",
-  "well spotted",
-  "exactly right",
-  "not quite",
-  "close, but",
+/**
+ * **The eval's own additions to `GRADE_WORDS`.**
+ *
+ * The shared list lives in `src/quiz-mark.ts` and is counted on every real mark
+ * as well as here, because two copies of one rule drift and this is the copy
+ * that would quietly stop matching the prompt. What is left below is the
+ * handful this file cares about and production does not: openers and correction
+ * frames, which are about the *shape* of a reply rather than a grade, and which
+ * are worth reading a run over without being worth a number in a log line.
+ */
+const ALSO_BANNED = [
   "you missed",
   "you may have missed",
   "you might have missed",
@@ -296,17 +289,9 @@ const BANNED = [
   "it's important to note",
   "actually,",
   "in fact,",
-  /* Added after run 1, which opened three of eight replies with "This tracks
-     the article closely" and confirmed two more with "correctly". Both are a
-     verdict on the answer as a whole wearing agreement's clothes, which is the
-     failure Remember mode's prompt names by hand and this one now does too. */
-  "correctly",
-  "rightly",
-  "tracks the article",
-  "as far as it goes",
-  "holds up",
-  "spot on",
 ];
+
+const BANNED = [...GRADE_WORDS, ...ALSO_BANNED];
 
 /**
  * Words a reply uses when it is arguing with the draft rather than the reader.
@@ -546,6 +531,18 @@ async function main(): Promise<void> {
   let misplaced = 0;
   let checkedQuotes = 0;
   let model = "";
+  /* `marked` and `failed` exist because of a bug this eval shipped with: a
+     marking call that threw was printed as **FAILED** and `continue`d past,
+     and the summary below still printed `marks: ${CASES.length}` — a
+     constant — while every quality counter only ever incremented on success.
+     Eight failed calls therefore produced a results file reading `marks: 8`
+     and every quality count a clean 0, indistinguishable from a run that
+     measured eight good replies. docs/reusable/silent-success.md, in this
+     eval's own report. `marked` is how many replies were actually obtained;
+     the summary reports that, not CASES.length, and `failed` makes a
+     non-zero failure count impossible to miss. */
+  let marked = 0;
+  let failed = 0;
 
   for (const c of CASES) {
     say(`### ${c.name}`);
@@ -578,6 +575,7 @@ async function main(): Promise<void> {
         telemetry: { slug: article.slug, questionId: c.name },
       });
     } catch (err) {
+      failed += 1;
       say("**FAILED**");
       say();
       say("```");
@@ -586,6 +584,7 @@ async function main(): Promise<void> {
       say();
       continue;
     }
+    marked += 1;
     model = out.model || model;
     const hit = flags(out.reply);
     const cited = citations(out.reply, article.blocks);
@@ -617,19 +616,44 @@ async function main(): Promise<void> {
 
   say("## Counts, which are not the answer");
   say();
+  if (failed > 0) {
+    say(
+      `**${failed} of ${CASES.length} marking calls FAILED** — see FAILED above, one per case. ` +
+        `Every count below covers only the ${marked} that came back; it says nothing about the ` +
+        `${failed} that did not, and a 0 among them is not a pass.`,
+    );
+    say();
+  }
   say(`- model: \`${model}\``);
-  say(`- marks: ${CASES.length}`);
-  say(`- containing a banned phrase: **${flagged}** (should be 0)`);
-  say(`- citing an id this article does not have: **${invented}** (should be 0)`);
+  say(`- marks: ${marked} obtained / ${CASES.length} attempted`);
+  say(`- containing a banned phrase: **${flagged}** of ${marked} (should be 0)`);
+  say(`- citing an id this article does not have: **${invented}** of ${marked} (should be 0)`);
   say(
     `- quotations attributed to a block that does not contain them: **${misplaced}** of ` +
       `${checkedQuotes} checked (should be 0 — see \`misattributed\` in \`evals/quiz.ts\`)`,
   );
-  say(`- citing no block at all: ${uncited} (worth a look, not a failure)`);
+  say(`- citing no block at all: ${uncited} of ${marked} (worth a look, not a failure)`);
   say();
-  say(
-    "A zero in the first two means nothing on its own. The question these runs exist to answer is whether `poisonedReference` sided with the article — and whether `differentWords`, `elsewhere` and `moreComplete` were left alone. Only reading them says that.",
-  );
+  if (marked === 0) {
+    say(
+      "Nothing was measured. Every count above is 0 of 0, which is not the same thing as clean — see the failures above.",
+    );
+  } else {
+    say(
+      "A zero in the first two means nothing on its own. The question these runs exist to answer is whether `poisonedReference` sided with the article — and whether `differentWords`, `elsewhere` and `moreComplete` were left alone. Only reading them says that.",
+    );
+  }
+
+  /* Every marking call failing means the run produced no signal at all, so
+     exiting 0 would say "clean" about a file that measured nothing — the same
+     shape as the bug above, at the process boundary instead of in the text.
+     A single failed call is different: the eval's own header records
+     generation failing intermittently for a known, real reason (roughly one
+     call in five), and a run with seven good replies out of eight still has
+     something to read. Only complete failure trips the exit code. */
+  if (doMark && CASES.length > 0 && marked === 0) {
+    process.exitCode = 1;
+  }
 
   await write(lines);
 }

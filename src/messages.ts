@@ -270,6 +270,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-slow": "retry",
   "ai-stalled": "retry",
   "ai-cut-off": "retry",
+  /* Beside `ai-overflowed` rather than merged with it — see `MARK_CUT_OFF` for
+     why a mark cannot take that one's advice. */
+  "ai-mark-cut-off": "retry",
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
@@ -998,23 +1001,55 @@ export const KEPT_ASKING_FOR_TOOLS: ReaderFacingFailure = {
     "Trying again may work; asking about one thing at a time works better. [ai-tool-loop]",
 };
 
+/**
+ * **A safety filter stopped the model**, whether it had written anything first
+ * or not.
+ *
+ * `blocked`, not `retry`, and the sentence says less than it used to on
+ * purpose. It used to explain the refusal — "quoted material it reads as
+ * harmful out of context" — which we do not know and cannot check. Telling a
+ * reader a confident story about why a safety filter fired is worse than
+ * telling them it fired, because it is the kind of claim they have no way to
+ * test and might repeat.
+ *
+ * A const rather than a branch inside `saidNothing`, because `finish_reason:
+ * "content_filter"` also arrives *after* some text — a mark two sentences in
+ * when the filter caught something — and that is the same fact told to the
+ * reader the same way. One copy, so the two cannot drift into two accounts of
+ * one event. src/quiz-mark.ts is the second caller.
+ */
+export const FILTER_STOPPED_IT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The AI service stopped itself answering this one — its safety filter caught something, and " +
+    "it does not tell us what. Asking the same thing again will get the same result; asking about " +
+    "a smaller piece of the article sometimes works. [ai-filtered]",
+};
+
+/**
+ * **A mark that ran into the ceiling and stopped mid-sentence.**
+ *
+ * Its own sentence rather than `ANSWER_OVERFLOWED`, and the difference is the
+ * advice rather than the diagnosis. That one ends *"asking for something
+ * narrower usually fits"*, which is a lever the person who asked the question
+ * can pull. Here the reader asked nothing — they answered a question the
+ * article put to them — so there is nothing of theirs to narrow, and telling
+ * them to narrow it would send them to a control that does not exist.
+ *
+ * `retry` because the ceiling is ours (`MARK_MAX_TOKENS`, src/quiz-mark.ts) and
+ * generous: a reply that hit it is a model that went long this once, not a
+ * request that cannot fit. The next sample is usually shorter.
+ */
+export const MARK_CUT_OFF: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The reply about your answer ran past the room it had and stopped part-way, so it is not a " +
+    "whole mark. Trying again usually gets one that fits. [ai-mark-cut-off]",
+};
+
 /** The call succeeded and the model said nothing. */
 export function saidNothing(finishReason: string | null): ReaderFacingFailure {
-  /* The filter case is `blocked`, not `retry`, and the sentence says less than
-     it used to on purpose. It used to explain the refusal — "quoted material it
-     reads as harmful out of context" — which we do not know and cannot check.
-     Telling a reader a confident story about why a safety filter fired is worse
-     than telling them it fired, because it is the kind of claim they have no way
-     to test and might repeat. */
-  if (finishReason === "content_filter") {
-    return {
-      kind: "blocked",
-      message:
-        "The AI service stopped itself answering this one — its safety filter caught something, and " +
-        "it does not tell us what. Asking the same thing again will get the same result; asking about " +
-        "a smaller piece of the article sometimes works. [ai-filtered]",
-    };
-  }
+  if (finishReason === "content_filter") return FILTER_STOPPED_IT;
   /* `blocked`, not `retry`, and the reasoning has to match 413's or one of them
      is wrong. 413 is `blocked` because resending an unchanged request sends the
      same too-large thing. This is the same situation arriving by another door:

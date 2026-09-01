@@ -33,7 +33,7 @@
  * given up wants it, and a reader who has not must not have it in the corner of
  * their eye while they type.
  *
- * ## The one rule that is not cosmetic
+ * ## The two rules that are not cosmetic
  *
  * **A question is ticked answered only when the mark reaches `done`.** That
  * lives in `useQuiz`, not here; what this file must not do is draw a completed
@@ -42,12 +42,20 @@
  * screen *and* keeps the Answer button live. A stream that stops cleanly
  * without finishing looks exactly like one that finished, which is the failure
  * this whole shape is arranged against.
+ *
+ * **A mark stays bound to the exact answer and batch it was computed for.** The
+ * box goes editable again as soon as a mark lands, so without this the reader
+ * sits in front of feedback about a sentence they have deleted, under a line
+ * that still says the question is answered. `superseded` below is the answer
+ * half; the `batchId` effect is the batch half, and that one also releases the
+ * old request, which is otherwise still holding `useQuiz`'s single live slot
+ * and leaves the new batch's Answer button enabled and inert.
  */
 import { useEffect, useRef, useState } from "react";
 import { MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
 import type { BlockId, QuizQuestion } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
-import type { UseQuiz } from "./useQuiz.js";
+import type { Attempt, UseQuiz } from "./useQuiz.js";
 import type { RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
@@ -140,9 +148,18 @@ export function QuizPanel({
   /* A new batch is a new set of questions with new ids, so an index and a
      half-typed answer from the old one mean nothing. Keyed on `batchId` rather
      than on the question count, because twelve questions replaced by twelve
-     different ones is the case that matters and a count would not see it. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch invalidates the index and the draft, and neither is read here
+     different ones is the case that matters and a count would not see it.
+
+     **`clearAttempt` is on this list and it is not cosmetic.** The mark belongs
+     to the batch it was computed against, so it goes with the rest — but the
+     line that matters is the abort inside it. A mark still streaming holds
+     `live.current` in useQuiz.ts, and `mark` opens with `if (live.current)
+     return`, so leaving it there gives the new batch an Answer button that is
+     enabled and does nothing at all. Nothing goes red and nothing is logged;
+     the reader just presses it. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch invalidates the index, the draft and the mark, and none is read here; `clearAttempt` is stable
   useEffect(() => {
+    owner.clearAttempt();
     setAt(0);
     setTyped("");
     setListing(false);
@@ -188,6 +205,37 @@ export function QuizPanel({
   const marking = attempt?.questionId === question?.id && attempt?.status === "marking";
   const mine = question && attempt?.questionId === question.id ? attempt : null;
   const tooLong = typed.length > MAX_QUIZ_ANSWER_CHARS;
+
+  /**
+   * **The mark on screen and the words in the box have parted company.**
+   *
+   * The box goes editable again the moment a mark lands, and a mark is about
+   * one exact answer. So the reader can be reading feedback on a sentence they
+   * have already deleted, under a line that still says the question is
+   * answered, on a screen with nothing wrong with it — which is what makes this
+   * worth a rule rather than a shrug. `attempt.answer` in useQuiz.ts is the
+   * text the marker was actually given.
+   *
+   * **The option passed over was clearing the attempt on any edit**, which is
+   * one line and needs no new field. It is wrong for this feature: the mark is
+   * the thing the reader is editing *against*, nothing stores it, and a
+   * keystroke aimed at a typo would take it away for good. Quiz is not a test
+   * and losing your feedback for touching the box is a punishment. Comparing
+   * instead keeps the mark readable, says plainly whose answer it is about, and
+   * comes back by itself if the reader puts the old words back.
+   *
+   * A `"marking"` attempt cannot reach this — the box is `disabled` while a
+   * mark is in flight — so no status is excluded and there is no second
+   * condition to keep in step.
+   *
+   * **An empty box is not a different answer.** Without the first clause a
+   * reader who selects all and deletes, on the way to retyping, is told to
+   * "press Answer" by a note sitting above an Answer button that is disabled
+   * for exactly as long as the box stays empty — an instruction pointing at a
+   * control that cannot be used. There is nothing waiting to be marked until
+   * they type, so until then the mark they have is simply the mark they have.
+   */
+  const superseded = mine !== null && typed.trim() !== "" && typed.trim() !== mine.answer;
 
   const move = (to: number) => {
     /* The attempt on screen belongs to the question that is leaving, and
@@ -257,7 +305,13 @@ export function QuizPanel({
               <div className="quiz-one">
                 <p className="gloss-count">
                   Question {at + 1} of {questions.length}
-                  {answered.has(question.id) && " — answered"}
+                  {/* Dropped while the box holds something that has not been
+                      marked, because this line sits directly above that box and
+                      reads as a claim about what is in it. The tick in the list
+                      below keeps its own meaning — *you got a finished mark for
+                      this question at some point this session* — which stays
+                      true whatever the reader is typing now. */}
+                  {answered.has(question.id) && !superseded && " — answered"}
                 </p>
                 <p className="quiz-question">{question.question}</p>
 
@@ -299,7 +353,16 @@ export function QuizPanel({
                     disabled={!typed.trim() || tooLong || marking || owner.stale}
                     onClick={submit}
                   >
-                    {marking ? "Marking…" : mine?.status === "failed" ? "Try again" : "Answer"}
+                    {/* *Try again* only where trying the same thing again is
+                        what the press means. Once the box has been edited the
+                        button is sending a different answer, not retrying a
+                        dropped connection — and the note above it says "Press
+                        Answer". */}
+                    {marking
+                      ? "Marking…"
+                      : mine?.status === "failed" && !superseded
+                        ? "Try again"
+                        : "Answer"}
                   </button>
                   <Mic dictate={dictate} disabled={marking || owner.stale} />
                   {tooLong && (
@@ -310,36 +373,13 @@ export function QuizPanel({
                 </div>
                 <DictationStrip dictation={dictate.dictation} />
 
-                {/* The reply, and **the failure is drawn beside it rather than
-                    instead of it**: a half-arrived mark is worth reading and the
-                    reader has already read it. What the failure changes is the
-                    button, which says "Try again", and the tick, which is not
-                    given. */}
-                {mine?.reply && (
-                  <p className="quiz-reply">
-                    {/* `CitedText`, not `CitedMarkdown`: the marking prompt asks
-                        for plain prose paragraphs and forbids lists and
-                        headings, so a stray `#` in a sentence about a heading
-                        must stay a `#`. The summary panel makes the same call.
-                        Links are off — nothing in this prompt governs what a
-                        model may link, and an `href` built from model output is
-                        somewhere a hostile page can steer a reader
-                        (docs/project/security.md).
-
-                        `live` while the mark is arriving suppresses a Floating
-                        UI instance per chip on every token; `partial` says only
-                        the tail is half-written. */}
-                    <CitedText
-                      text={mine.reply}
-                      blocks={blocks}
-                      onJump={onJump}
-                      live={mine.status === "marking"}
-                      partial={mine.status === "marking"}
-                    />
-                  </p>
-                )}
-                {mine?.status === "failed" && mine.error && (
-                  <p className="gloss-error">{mine.error}</p>
+                {mine && (
+                  <Mark
+                    attempt={mine}
+                    superseded={superseded}
+                    blocks={blocks}
+                    onJump={onJump}
+                  />
                 )}
 
                 <ReferenceAnswer
@@ -389,6 +429,71 @@ export function QuizPanel({
         </>
       )}
     </aside>
+  );
+}
+
+/**
+ * **The mark, and whose answer it is about.**
+ *
+ * Two rules live here, and both are about the reader believing something the
+ * screen has not earned.
+ *
+ * **The failure is drawn beside the reply rather than instead of it.** A
+ * half-arrived mark is worth reading and the reader has already read it. What a
+ * failure changes is the button, which says "Try again", and the tick, which is
+ * not given.
+ *
+ * **`superseded` says the words in the box are no longer the words this was
+ * computed from.** Said rather than enforced by deletion: see the long note in
+ * `QuizPanel` for the option passed over. The sentence is deliberately about
+ * the mark and not about the reader — it states which answer this describes and
+ * how to get one for the new answer, and it does not scold.
+ */
+function Mark({
+  attempt,
+  superseded,
+  blocks,
+  onJump,
+}: {
+  attempt: Attempt;
+  /** The box has been edited since this mark was computed. */
+  superseded: boolean;
+  blocks: Map<string, string>;
+  onJump(id: BlockId): void;
+}) {
+  return (
+    <>
+      {superseded && attempt.reply && (
+        <p className="gloss-count">
+          This mark is about your previous answer. Press Answer to have the new one marked.
+        </p>
+      )}
+      {attempt.reply && (
+        <p className="quiz-reply">
+          {/* `CitedText`, not `CitedMarkdown`: the marking prompt asks for plain
+              prose paragraphs and forbids lists and headings, so a stray `#` in
+              a sentence about a heading must stay a `#`. The summary panel makes
+              the same call. Links are off — nothing in this prompt governs what
+              a model may link, and an `href` built from model output is
+              somewhere a hostile page can steer a reader
+              (docs/project/security.md).
+
+              `live` while the mark is arriving suppresses a Floating UI instance
+              per chip on every token; `partial` says only the tail is
+              half-written. */}
+          <CitedText
+            text={attempt.reply}
+            blocks={blocks}
+            onJump={onJump}
+            live={attempt.status === "marking"}
+            partial={attempt.status === "marking"}
+          />
+        </p>
+      )}
+      {attempt.status === "failed" && attempt.error && (
+        <p className="gloss-error">{attempt.error}</p>
+      )}
+    </>
   );
 }
 

@@ -446,8 +446,128 @@ Two things the build turned up, both fixed here:
 
 ### Stage 4 — hardening
 
-- [ ] Claude-in-Chrome, in a Sonnet subagent, against a real article.
-- [ ] Final cross-family review of the whole diff; postmortems for anything that bit.
+- [x] A browser pass against a real article, in a Sonnet subagent. **Playwright, not
+      Claude-in-Chrome** — this work is happening on the Hetzner box, where the extension cannot
+      follow ([browser-control.md](../project/browser-control.md)). A quiz was generated for
+      `fowler-phrenology` first, because no `quiz.json` existed anywhere on disk: 12 questions,
+      nothing dropped, 50.8s, $0.0892. Its bands came out 4 easy / 4 medium / 4 hard, so
+      `bandQuota`'s three-of-each-end requirement was met by a real article on the first try.
+
+      **It passes.** The check the pass existed for was measured rather than asserted: the cited
+      row `spya-gu7qy9` sat at `top: 7535.66` before the chip was clicked and `top: 43.66` after,
+      with a forced frame in between — the paragraph moved into view, which a chip in the DOM does
+      not prove. The disclosure shut again on the next question, the list of twelve matched the
+      artefact's array order exactly, only the answered question carried a tick, and the mark that
+      came back said what the article confirms, what the reader got wrong and where to look, with no
+      verdict language anywhere in it. The microphone in a browser with no microphone is inert with
+      a message, which is the wanted behaviour rather than a crash.
+
+      Two things could **not** be observed and are recorded as such rather than as passes: the box
+      disabled while marking, and the reply arriving progressively. Both marks finished inside a
+      single Playwright round trip, so five polls from 0ms to 800ms all found the reply already
+      whole. That is browser-testing.md's "an animation shorter than your round trip is invisible",
+      not evidence of anything.
+- [x] Final cross-family review of the whole feature —
+      [260831al-review-quiz-sub-mode-stage4-review-sol.md](260831al-review-quiz-sub-mode-stage4-review-sol.md).
+      Six findings, **all six checked against the code by hand and all six real**. The verdict is
+      NO-SHIP, and it is right. They become Stage 5.
+
+The review was handed the whole feature rather than a diff: every file quiz owns in full, plus every
+quiz-naming line in the twenty files it does not, plus the tests, the eval and `evals/results/quiz.md`.
+That is what made finding 1 possible — it is a judgement about the prompt read against its own
+committed output, which no diff would have shown.
+
+One thing it looked for and did not find, which is worth recording because it was a real worry:
+**the ordering survives the round trip.** `src/quiz.ts` stores the sorted array, the store preserves
+array order, and the panel does not re-sort.
+
+### Stage 5 — what the final review found
+
+Six findings. Five are mechanical and are being fixed; the sixth is Greg's call.
+
+- [ ] **The batch check and the article read are not from the same revision.**
+      `markOneAnswer` validates staleness and `batchId` against whatever revision `loadQuiz`
+      resolved, then calls `loadArticle` separately, which resolves again. An article revision
+      published between those two awaits gets revision A's question marked against revision B's
+      prose — with a 200, and with the staleness guard whose whole job is that case having already
+      passed. The plan-stage review asked for all four inputs from one revision and it was not done.
+- [ ] **A reply truncated at `MARK_MAX_TOKENS` is reported as complete.** The end-of-stream check
+      treats *any* non-null `finish_reason` as a second witness that the reply is whole. That is
+      true of `"stop"` and the exact opposite of `"length"`, which says the model was cut off
+      mid-sentence. The reader gets a visibly half-finished mark, ticked as answered and not
+      retryable.
+- [ ] **Leaving the question aborts the browser's read, not the paid call.** No `AbortController`
+      reaches `markAnswerStream`, so navigating away leaves OpenRouter generating and being paid
+      for. And the abandoned path sets `stopped = true`, logs, then falls through to
+      `yield { type: "done" }` with whatever text had arrived — a success frame for a mark nobody
+      asked to finish.
+- [x] **The displayed mark is not bound to the displayed answer.** After a mark lands the box is
+      editable again, and editing it clears neither the reply nor the tick. Answer B sits beside a
+      mark computed for answer A and looks entirely normal. The same missing invalidation on a batch
+      change leaves `live.current` held by the old request, so the new batch's Answer button is
+      enabled and does nothing. **This is the fifth quiet panel rule** — the one Stage 3 went
+      looking for and did not find.
+
+      **Fixed, and not by clearing the attempt on an edit.** That is the one-line version and it was
+      passed over: the mark is what the reader is *editing against*, nothing stores it, and a
+      keystroke aimed at a typo would destroy it. Instead every `Attempt` carries the answer it was
+      computed from (`Attempt.answer`, src/web/useQuiz.ts), the panel compares it with the box, and
+      when they differ it says *"This mark is about your previous answer"* and drops the answered
+      line above the box. The mark stays readable, and putting the old words back makes it current
+      again. The list's tick is left alone — it means *a mark finished for this question this
+      session*, which stays true. The batch half is `owner.clearAttempt()` in the `batchId` effect,
+      which aborts and releases `live.current`. Two tests in `tests/quiz-panel.test.tsx`, each
+      watched red first and red again under a mutation of the fix, plus a mutation the other way
+      (`superseded` always true) to prove the positive controls bite.
+
+      Two things were added on top of that fix. **An emptied box is not a different answer** — the
+      first version raised the note the moment a reader selected all and deleted on the way to
+      retyping, telling them to press an Answer button that is disabled for exactly as long as the
+      box stays empty. An instruction pointing at a control that cannot be used is its own small
+      dishonesty; `superseded` now requires the box to hold something. Watched red under the
+      mutation like the rest. And **`tests/store-artefact-manifest.test.ts` went red on `quiz.json`**,
+      which is that file working rather than failing: the exemption said "no job has run the step
+      against a real article yet", Stage 4's browser pass generated one, and the line had to go. It
+      is the third name to clear itself out of `NOT_YET_WRITTEN` this way.
+- [ ] **The eval's summary is the fourth silent success.** A failed marking call is printed and
+      `continue`d, and the summary prints `marks: 8` regardless while every quality counter counts
+      only successful replies. Eight failures out of eight exits 0 and reports eight marks with zero
+      banned phrases. The header of `evals/quiz.ts` already records that this wire returns
+      unparseable JSON about twice in nine calls, so this is not hypothetical.
+- [x] **The no-grade rule is not holding, and the reviewer says the prompt cannot make it hold.**
+      Three of eight marks in the committed run carry a banned phrase — *"both present and correctly
+      tied together"*, *"correctly described"*, *"tracks the article"* — and two more read as
+      verdicts without tripping the counter at all: *"fair too"*, *"backs this fully"*. Stage 1 filed
+      this as variance. The reviewer's reading is that the prompt's own frame invites it: it forbids
+      an overall assessment and then asks for what is supported, what is missing, and "how their
+      answer sits". **This one is not being fixed without Greg**, because every remedy is a product
+      decision — a gate that fails a mark the reader has already watched arrive, a second pass that
+      doubles the cost of every answer, or accepting that the rule is a strong preference rather
+      than an invariant.
+
+      **What was done instead of any of the three.** The reviewer read the committed 3-of-8 run as
+      showing the prompt's frame invites the leak, and recommended enforcement before `done`. Two
+      facts it did not have change the answer. The prompt **already bans every one of those words by
+      name**, in its own paragraph, with worked BAD examples of exactly the three that got
+      through — so "tighten the prompt" is not an untried option, it is the option that produced
+      this run. And Stage 1 recorded that **two runs of an identical prompt scored 0 and 3**. At
+      eight cases the leak and the noise are the same size, which is why tuning against it was
+      already ruled out once.
+
+      So the missing thing is not a rule, it is a **number**. `GRADE_WORDS` and `gradeWords` in
+      [`src/quiz-mark.ts`](../../src/quiz-mark.ts) count the banned phrases on **every real mark**
+      and put the count on the log line beside the citation counts. It blocks nothing: a gate would
+      fail a mark the reader has already watched arrive, over a sentence they may not mind, trading
+      a rule they cannot see for a failure they can. `evals/quiz.ts` now imports that list rather
+      than keeping a second copy — the eval's copy is the one that would silently stop matching the
+      prompt. What is left for Greg is the decision the instrument exists to inform: whether the ban
+      needs teeth, answered from production marks rather than from eight.
+
+      The counter's tests are anchored to sentences the marker **actually wrote** in
+      `evals/results/quiz.md`, not to invented examples, because a counter tested against phrases
+      somebody made up agrees with whoever wrote it. One of them turned up a small thing worth
+      knowing: the prompt is hard-wrapped, so `"nicely put"` is split across a line break inside it
+      and a plain substring check cannot find the prompt's own banned phrase.
 
 ### The tests that would actually catch something
 

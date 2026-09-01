@@ -39,7 +39,7 @@ import {
   quotaShortfall,
   validateEvidence,
 } from "../src/quiz.js";
-import { QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
+import { GRADE_WORDS, gradeWords, QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import type { Block, QuizBand, QuizQuestion } from "../src/types.js";
 
@@ -560,5 +560,50 @@ describe("the marking prompt", () => {
 
   it("says an unsettled question is unsettled rather than picking a side", () => {
     expect(QUIZ_MARK_SYSTEM).toContain("more than the article establishes");
+  });
+});
+
+/**
+ * **The instrument, not the rule.** `gradeWords` counts what the prompt already
+ * forbids, on every real mark, because eight eval cases cannot tell a leak from
+ * noise — Stage 1 ran one prompt twice and scored 0 and 3.
+ *
+ * The assertions below are anchored to **sentences the marker actually wrote**
+ * in `evals/results/quiz.md`, not to invented examples. A counter tested only
+ * against phrases somebody made up is a counter that agrees with whoever wrote
+ * it; these three got past a prompt that names them by hand.
+ */
+describe("counting the marks that graded the reader", () => {
+  it("sees the three that got past the prompt in the committed run", () => {
+    expect(
+      gradeWords("the general principle and its application are both present and correctly tied together"),
+    ).toBe(1);
+    expect(gradeWords("— anthropocentrism and anthropomorphism — correctly described.")).toBe(1);
+    expect(gradeWords("The reader's answer tracks the article's actual point.")).toBe(1);
+  });
+
+  it("leaves a reply that is about the article alone", () => {
+    expect(
+      gradeWords("Yes — the piece does tie it to the cost of retraining [spya-k3m9qt]."),
+    ).toBe(0);
+  });
+
+  it("counts phrases rather than places, so one word twice is one", () => {
+    expect(gradeWords("correctly, and again correctly")).toBe(1);
+  });
+
+  /* The drift this pairing exists to stop: the prompt naming a word by hand and
+     the counter being unable to see it. Every word the prompt lists in its
+     "words that are a mark whatever sentence they sit in" paragraph is here. */
+  it("counts every word the prompt names in that paragraph", () => {
+    /* Whitespace-normalised, because the prompt is hard-wrapped and `"nicely
+       put"` is split across a line break in it. A model reads that as one
+       phrase; a substring check does not, and the first version of this test
+       failed on the prompt rather than on anything wrong. */
+    const prompt = QUIZ_MARK_SYSTEM.toLowerCase().replace(/\s+/g, " ");
+    for (const word of ["correctly", "rightly", "tracks the article", "holds up", "spot on", "nicely put"]) {
+      expect(prompt, `the prompt no longer names "${word}"`).toContain(word);
+      expect(GRADE_WORDS as readonly string[], `nothing counts "${word}"`).toContain(word);
+    }
   });
 });

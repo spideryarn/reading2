@@ -96,6 +96,21 @@ contradicts the reader *by itself*, disagreeing with the author is not getting i
 shorter answer is not a worse one. What Quiz adds is the case Recall does not have: the question has
 a right answer and the reader missed it. Even then the reply states what the article says and stops.
 
+### The rule is counted, not enforced
+
+The prompt names the grading words by hand — *"correctly"*, *"tracks the article"*, *"holds up"* —
+and they still get through, in about 0 to 3 replies out of eight. That range is the difficulty: two
+runs of an **identical** prompt scored 0 and 3, so at eight cases a leak and the noise are the same
+size and no amount of re-reading eval runs says whether a change helped.
+
+So `gradeWords` in [`src/quiz-mark.ts`](../../src/quiz-mark.ts) counts them on **every real mark**
+and puts the number on the log line. It blocks nothing, and that is the decision rather than an
+omission: a gate would fail a mark the reader has already watched arrive, over a sentence they may
+not mind — trading a rule they cannot see for a failure they can. Whether the ban ever gets teeth is
+a question to answer from that number, not from eight cases. `evals/quiz.ts` imports the same list
+instead of keeping its own, because the eval's copy is the one that would quietly stop matching the
+prompt.
+
 ## The artefact, and the batch every mark binds to
 
 `quiz` is a pipeline step like `ideas` or `timeline` — off the default list, run on demand by a
@@ -111,10 +126,22 @@ shown is not the batch that is there. Never a silent fall-forward to the questio
 the new batch. It is also what keeps the door open for stored attempts: an attempt row can point at
 an immutable batch instead of copying the question into itself.
 
+**Every one of those refusals is asked twice.** Reading the quiz and reading the article are two
+separate resolutions of "the current revision", so a publication landing between them would hand the
+model one revision's question beside another revision's prose — with the staleness guard, whose
+whole job is to stop that, already passed. `markOneAnswer` re-checks after the article read. It is a
+re-check rather than a snapshot: closing the window entirely needs a revision-scoped read the
+[`ArticleReader`](../../src/store/contracts.ts) contract does not have.
+
 Marking is a model call in a request handler, which is the **second** deliberate exception to
 "model calls happen in the pipeline" — the first is explaining a selection
 ([`src/explain.ts`](../../src/explain.ts)), and this is shaped on it. It streams, because a person is
 waiting.
+
+Two ways a mark can look finished when it is not, and both are refusals rather than ticks:
+`finish_reason: "length"` is the reply hitting `MARK_MAX_TOKENS` mid-sentence, which arrives with a
+perfectly ordinary `[DONE]` after it; and a reader who navigates away aborts the **provider** call,
+not merely the writing of frames, and gets no `done` at all.
 
 ## On screen
 
@@ -133,6 +160,17 @@ waiting.
 - **A question is ticked answered only when its mark reaches `done`.** A stream that stops cleanly
   without finishing looks exactly like one that finished, which is the whole reason `attempt.status`
   and not a non-empty reply is what the tick reads. [silent-success.md](../reusable/silent-success.md).
+- **A mark stays bound to the exact answer it was computed for.** The box goes editable again as
+  soon as a mark lands, so the reader can end up reading feedback about a sentence they have
+  deleted. Every attempt carries the answer it was marked on, and when the box no longer matches it
+  the band says *"This mark is about your previous answer"* and stops calling the question answered.
+  The mark itself stays on screen — it is the thing the reader is editing against, nothing stores
+  it, and taking it away for a keystroke aimed at a typo would be its own kind of wrong. Put the old
+  words back and it is a current mark again.
+- **A new batch takes the mark with it.** *Write them again* mints a new `batchId`, and the panel
+  clears the attempt along with the index and the draft. Not tidiness: a mark still streaming holds
+  `useQuiz`'s one live request, and without the clear the new batch's Answer button is enabled and
+  does nothing.
 
 ## What is deliberately not here
 

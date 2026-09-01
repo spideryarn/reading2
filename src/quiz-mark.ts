@@ -62,7 +62,14 @@
 import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { modelFor } from "./models.js";
-import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
+import {
+  ENDED_UNFINISHED,
+  FILTER_STOPPED_IT,
+  MARK_CUT_OFF,
+  NOT_CONFIGURED,
+  type ReaderFacingFailure,
+  saidNothing,
+} from "./messages.js";
 import { ProviderRefused, openRouterStream } from "./ai-call.js";
 import {
   type StreamEnd,
@@ -353,7 +360,12 @@ export interface QuizMarkResult {
  *
  * A throw means no `done`, and the deltas so far are all there is — the same
  * contract `explainStream` and `converse` keep, deliberately, so the routes
- * that consume them can be read side by side. **The client ticks a question
+ * that consume them can be read side by side. **One deliberate difference:** an
+ * abandoned mark — the caller's `signal` fired — ends with neither, because
+ * nobody is waiting for the answer and `done` is the frame that ticks a
+ * question off. See the early return in `markAnswerStream`.
+ *
+ * **The client ticks a question
  * answered only on `done`** — `readMark` in src/web/useQuiz.ts is the one place
  * that decides, and tests/quiz-mark-stream.test.tsx is a stream that emits two
  * deltas and then closes with no terminal frame at all, because a stream that
@@ -429,6 +441,96 @@ function citations(reply: string, blocks: readonly Block[]): { known: number; un
   let known = 0;
   for (const id of ids) if (real.has(id)) known++;
   return { known, unknown: ids.length - known };
+}
+
+/**
+ * **Words that are a mark with the number filed off**, counted on every reply.
+ *
+ * The prompt bans all of these by name and gives worked examples of the three
+ * that slip through anyway, so this is not a second attempt at telling the
+ * model. It is an instrument. Stage 1 ran the same prompt twice and scored 0
+ * and 3 out of eight, which is the whole difficulty: at eight cases the leak
+ * rate and the noise are the same size, so no amount of reading eval runs
+ * settles whether a prompt change helped. Counting it on real marks does.
+ *
+ * **It logs and it does not block**, and that is the decision worth defending.
+ * A gate here would fail a mark the reader has already watched arrive, over a
+ * sentence they may not even mind — trading a rule they cannot see for a
+ * failure they can. `finishReason` in src/explain.ts is logged for the same
+ * reason and in the same words: so that "the marks keep grading people" is a
+ * thing somebody can check rather than a thing somebody feels.
+ *
+ * Substrings, lower-cased, and deliberately blunt. A false positive costs a
+ * number being one too high in a log line nobody acts on directly; a false
+ * negative is the thing we are trying to see. `evals/quiz.ts` imports this
+ * list rather than keeping its own, because two copies of a rule drift and the
+ * eval's copy is the one that would silently stop matching the prompt.
+ */
+export const GRADE_WORDS = [
+  "correctly",
+  "rightly",
+  "tracks the article",
+  "holds up",
+  "spot on",
+  "nicely put",
+  "as far as it goes",
+  "mostly right",
+  "partially correct",
+  "partly right",
+  "you got the gist",
+  "full credit",
+  "correct answer",
+  "incorrect",
+  "good answer",
+  "great answer",
+  "strong answer",
+  "exactly right",
+  "well spotted",
+  "well done",
+  "good job",
+  "not quite",
+  "close, but",
+] as const;
+
+/** How many of `GRADE_WORDS` this reply contains. Counts phrases, not places. */
+export function gradeWords(reply: string): number {
+  const lower = reply.toLowerCase();
+  return GRADE_WORDS.filter((w) => lower.includes(w)).length;
+}
+
+/**
+ * **Does this `finish_reason` mean the reply is NOT whole?** `null` if it is
+ * fine; the sentence to fail with if it is not.
+ *
+ * OpenRouter normalises the field to the OpenAI set — `stop`, `length`,
+ * `content_filter`, `tool_calls`, `error` — and the provider's own word for it
+ * arrives separately as `native_finish_reason`. Two of those five mean the
+ * model was interrupted rather than finished, and both used to be read as
+ * evidence that it *had* finished: the check after the loop accepted any
+ * non-null reason as a second witness to completion. For `stop` that is right.
+ * For `length` it is the exact opposite — the reply hit `MARK_MAX_TOKENS` and
+ * stops mid-sentence — and the reader got a truncated mark with the question
+ * ticked off and no way to ask again.
+ *
+ * **A deny-list, not an allow-list**, and that is the one decision here worth
+ * defending. Refusing everything but `stop` is the tidier rule and is what
+ * "fail closed" would suggest; the cost of being wrong is what settles it.
+ * Wrong on a deny-list, some future reason slips through and we are back to
+ * today's behaviour for that one case. Wrong on an allow-list, a provider or a
+ * gateway that spells its clean stop differently — `end_turn`, `eos`, a capital
+ * — fails *every* mark for that model, and it fails them by throwing away a
+ * complete reply the reader has already watched arrive. The reason is on the
+ * success log line either way, which is where a new spelling would show up.
+ *
+ * `tool_calls` is not here on purpose: this call sends no tools, so a model
+ * asking for one is a provider bug rather than a truncation, and the reply it
+ * did write is still a reply. Chat, which does send tools, treats that reason
+ * as its own case (`converse.ts`).
+ */
+function didNotFinish(finishReason: string | null): ReaderFacingFailure | null {
+  if (finishReason === "length") return MARK_CUT_OFF;
+  if (finishReason === "content_filter") return FILTER_STOPPED_IT;
+  return null;
 }
 
 /**
@@ -522,6 +624,14 @@ export async function* markAnswerStream({
 
   const end: StreamEnd = { terminated: false };
   let stopped = false;
+  /* One sentence for the two paths an abandonment can arrive by — a throw from
+     the loop, and a clean end after it — so they cannot come to say different
+     things about the same event. `used` and `text` are read at call time. */
+  const sayAbandoned = () =>
+    line.info(
+      { model: used, ms: since(started), replyChars: text.length },
+      `a quiz mark from ${used} was abandoned`,
+    );
   try {
     for await (const chunk of openRouterStream(
       "quiz-mark",
@@ -551,10 +661,7 @@ export async function* markAnswerStream({
          question. Not an error, and not logged as one. */
       stopped = true;
       clearTimeout(stallTimer);
-      line.info(
-        { model: used, ms: since(started), replyChars: text.length },
-        `a quiz mark from ${used} was abandoned`,
-      );
+      sayAbandoned();
     } else if (err instanceof ProviderRefused) {
       /* The status, not the body. OpenRouter's error text is the one place a
          provider might echo part of what we sent back at us, and what we sent
@@ -586,7 +693,23 @@ export async function* markAnswerStream({
      reader on abort and a cancelled read resolves `{ done: true }` rather than
      throwing. Without this a disconnect gets filed as "the answer stopped
      arriving before it was finished". src/explain.ts has the longer account. */
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+  if (!stopped && readerAborted(signal, deadline, stall.signal)) {
+    stopped = true;
+    sayAbandoned();
+  }
+
+  /* **And an abandoned mark ends here, yielding nothing.**
+     This is where quiz stops mirroring `explainStream`, which sets `stopped`
+     and then runs on to `yield { type: "done" }` with whatever text arrived.
+     That is defensible there — an explanation has a comment row to be written
+     to and no stop button, so a half answer is better than none. A mark has
+     neither: `done` is the single frame that ticks the question answered, and
+     `markAnswer` turns it into an eval's result. A reader who walked away has
+     not been marked, so there is nothing to tick and nothing to return.
+     The route's own frames go nowhere either way — the socket that aborted us
+     is the socket they would be written to — so this is invisible from the
+     client and visible only here. GPT Sol's finding 6 on the built code. */
+  if (stopped) return;
 
   /* **And our own clocks can end it cleanly too.** When the stall timer fires,
      `sseChunks` cancels the reader; if that cancel wins the race against the
@@ -594,8 +717,12 @@ export async function* markAnswerStream({
      check below would then file a twenty-second silence as "ended without
      finishing". Both sentences end in "try again", so the reader never notices;
      what is lost is the log line somebody reads when marks start failing and
-     they want to know whether to blame the network or the provider. */
-  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
+     they want to know whether to blame the network or the provider.
+
+     No `!stopped` on this or the checks below it: the early return above has
+     already dealt with that case, and a guard that can never be false reads as
+     though it could be. */
+  if (deadline.aborted || stall.signal.aborted) {
     line.error(
       {
         model: used,
@@ -609,13 +736,30 @@ export async function* markAnswerStream({
     throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
   }
 
+  /* **The provider said why it stopped, and it was not "finished".**
+     Checked before the terminator, because the two are independent and this is
+     the one that arrives looking like success: OpenRouter writes `[DONE]` after
+     a `length` stop exactly as it does after a `stop` one, so `end.terminated`
+     is true, the text is well-formed, and a mark cut off mid-sentence is filed
+     as a whole one and the question ticked off. `didNotFinish` is the whole
+     rule; the comment beside this check used to say the opposite of it. */
+  const cutShort = didNotFinish(finishReason);
+  if (cutShort) {
+    line.error(
+      { model: used, ms: since(started), replyChars: text.length, finishReason },
+      `${used} stopped before the mark was finished`,
+    );
+    throw new Error(cutShort.message);
+  }
+
   /* **The stream stopped; did it finish?** `[DONE]` is the only clean end an
      SSE response has, and without this an ordinary EOF looks exactly like one:
      a connection cut two sentences in would be delivered as a complete mark,
-     with no error anywhere and the question ticked off. `finish_reason` counts
-     as a second witness — a provider that omits the terminator but says why it
-     stopped has still told us the reply is whole. */
-  if (!stopped && !end.terminated && finishReason === null) {
+     with no error anywhere and the question ticked off. A finish reason counts
+     as a second witness only now that the check above has thrown out the
+     reasons that mean the opposite — before that, `finish_reason: "length"`
+     was itself accepted as evidence the reply was whole. */
+  if (!end.terminated && finishReason === null) {
     line.error(
       { model: used, ms: since(started), replyChars: text.length },
       `stream from ${used} ended without finishing`,
@@ -647,6 +791,11 @@ export async function* markAnswerStream({
         finishReason,
         knownCitations: cited.known,
         unknownCitations: cited.unknown,
+        /* **Marks that graded the reader**, which the prompt forbids by name and
+           which nothing else can see once the eval stops running. Non-zero here
+           is not a failure of this call — it is the number somebody looks at
+           before deciding whether the ban needs teeth. See `GRADE_WORDS`. */
+        gradeWords: gradeWords(reply),
         inputTokens: usage?.prompt_tokens ?? null,
         outputTokens: usage?.completion_tokens ?? null,
         /* A zero on a reader's second question in one article means the article
@@ -682,8 +831,10 @@ export async function markAnswer(req: QuizMarkRequest): Promise<QuizMarkResult> 
       return result;
     }
   }
-  /* Unreachable by the generator's own contract — it yields `done` or throws —
-     and here so that a future edit which breaks that contract fails loudly
-     instead of returning `undefined` as a mark. */
+  /* Reached when the caller's own `signal` aborted, which ends the generator
+     with no `done` and no throw. A caller that gave up still has
+     nowhere to put a half reply, so the honest answer is a failure rather than
+     a partial mark — and any *other* way of arriving here is a broken contract
+     failing loudly instead of returning `undefined` as a mark. */
   throw new Error("The mark ended without a reply.");
 }

@@ -29,14 +29,28 @@
  * there: nothing under test is on a clock, and `readEvents`' stall timer is
  * sixty seconds away from anything this file does.
  *
+ * ## Both halves of the same stream live here
+ *
+ * The describes above are the **client** half — what `useQuiz` does with the
+ * frames it is handed. The two at the bottom are the **server** half:
+ * `markAnswerStream` itself, driven by a stubbed provider, because the two
+ * remaining ways a mark can be quietly wrong are invisible from the client.
+ * A reply truncated at `MARK_MAX_TOKENS` arrives as a perfectly well-formed
+ * stream with `[DONE]` on the end, and an abandoned one is written to a socket
+ * nobody is reading — so in both cases every frame the client can see says the
+ * mark succeeded. Only the generator knows otherwise, so only the generator can
+ * be asked.
+ *
  * docs/plans/260831al-review-quiz-sub-mode.md § The stream has to be able to say
- * it failed.
+ * it failed; docs/plans/260831al-review-quiz-sub-mode-stage4-review-sol.md
+ * findings 3 and 6.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useQuiz, type UseQuiz } from "../src/web/useQuiz.js";
-import type { Quiz } from "../src/types.js";
+import { markAnswerStream, type QuizMarkEvent } from "../src/quiz-mark.js";
+import type { Block, Meta, Quiz } from "../src/types.js";
 
 const SLUG = "an-article";
 const BATCH = "spya-batch1";
@@ -250,5 +264,153 @@ describe("and the cases that keep that from being vacuous", () => {
     expect(latest?.attempt?.error).toBe("The model stopped talking.");
     // And the deltas before the failure are still on screen.
     expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+  });
+});
+
+/* ── the server half: `markAnswerStream` itself ──────────────────────────── */
+
+/**
+ * The smallest article a mark can be made against.
+ *
+ * Nothing here is asserted on — the prompt's contents are `tests/quiz.test.ts`'s
+ * business. It exists so the generator has something to send.
+ */
+const META = { slug: SLUG, title: "A piece" } as Meta;
+const BLOCKS = [
+  { id: "spya-aaaaaa", tag: "p", kind: "text", text: "alpha", html: "<p>alpha</p>" },
+  { id: "spya-bbbbbb", tag: "p", kind: "text", text: "beta", html: "<p>beta</p>" },
+] as Block[];
+
+const MARK = {
+  meta: META,
+  blocks: BLOCKS,
+  question: "What does the piece claim?",
+  referenceAnswer: "It claims a thing. Then it argues for it.",
+  evidence: [],
+  answer: "I think it claims a thing.",
+};
+
+/** One OpenRouter frame — `data: {…}`, which is not the shape `sse` writes. */
+const wire = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
+
+/**
+ * A provider reply whose body streams the given raw SSE text.
+ *
+ * `closes` is the whole reason this takes an option. A stream that ends is the
+ * ordinary case; one that stays open is how a reader is given something to
+ * abandon, and the abort has to arrive while the socket is still live or there
+ * is nothing to cancel.
+ */
+function provider(raw: string, closes = true): Response {
+  return {
+    ok: true,
+    headers: new Headers(),
+    body: new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(raw));
+        if (closes) c.close();
+      },
+    }),
+  } as unknown as Response;
+}
+
+/** Point `fetch` at one provider reply, leaving the app's own GETs alone. */
+function providerSays(reply: () => Response): void {
+  process.env.OPENROUTER_API_KEY = "test-key";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      /* `useJobs` is still polling behind these tests — the harness above
+         mounted the hook — and handing it a half-written model stream would be
+         an unhandled rejection loud enough to hide an assertion. */
+      if (typeof url === "string" && url.startsWith("/api/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify({ jobs: [] })),
+        } as unknown as Response);
+      }
+      return Promise.resolve(reply());
+    }),
+  );
+}
+
+async function drain(gen: AsyncGenerator<QuizMarkEvent>): Promise<QuizMarkEvent[]> {
+  const out: QuizMarkEvent[] = [];
+  for await (const event of gen) out.push(event);
+  return out;
+}
+
+describe("a reply the provider did not finish writing", () => {
+  it("refuses one cut off at the token ceiling rather than calling it a mark", async () => {
+    /* **`[DONE]` arrives**, and that is the point of the case. A truncated
+       reply is not a broken connection: OpenRouter finishes the stream
+       properly and says `finish_reason: "length"` on the way out, so every
+       other witness this generator has says the reply is whole. Only the
+       reason says otherwise, and it used to be read as a *second witness for*
+       completion. */
+    providerSays(() =>
+      provider(
+        wire({ choices: [{ delta: { content: "You have the first half of it, and then" } }] }) +
+          wire({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    await expect(drain(markAnswerStream(MARK))).rejects.toThrow(/\[ai-mark-cut-off\]/);
+  });
+
+  it("refuses one the safety filter stopped part-way", async () => {
+    /* The same shape and a different sentence. `saidNothing` already tells a
+       reader that a filter fired when *nothing* arrived; a filter that fires
+       two sentences in is the same fact and must not become a tick. */
+    providerSays(() =>
+      provider(
+        wire({ choices: [{ delta: { content: "You have the first half" } }] }) +
+          wire({ choices: [{ finish_reason: "content_filter", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    await expect(drain(markAnswerStream(MARK))).rejects.toThrow(/\[ai-filtered\]/);
+  });
+
+  it("still accepts a reply the provider says it finished", async () => {
+    /* The negative control. Without it the two above pass on a generator that
+       refuses everything, which is a broken feature with a green suite. */
+    providerSays(() =>
+      provider(
+        wire({ choices: [{ delta: { content: "You have it." } }] }) +
+          wire({ choices: [{ finish_reason: "stop", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    const events = await drain(markAnswerStream(MARK));
+    expect(events.at(-1)).toMatchObject({ type: "done", reply: "You have it." });
+  });
+});
+
+describe("a mark the reader walked away from", () => {
+  it("ends with no `done`, so half a reply is never filed as a whole one", async () => {
+    /* The reader navigated away. `sseChunks` cancels its reader on abort and a
+       cancelled read resolves `{ done: true }`, so the loop ends **cleanly** —
+       which is exactly what made this hard to see: there is no error anywhere,
+       the text that arrived is real, and the generator used to run straight on
+       to `yield { type: "done" }` with it. */
+    providerSays(() =>
+      provider(wire({ choices: [{ delta: { content: "You have the first half of it. " } }] }), false),
+    );
+
+    const gone = new AbortController();
+    const seen: QuizMarkEvent[] = [];
+    for await (const event of markAnswerStream({ ...MARK, signal: gone.signal })) {
+      seen.push(event);
+      if (event.type === "delta") gone.abort();
+    }
+
+    expect(seen.some((e) => e.type === "done")).toBe(false);
+    // And what did arrive is still what arrived — this is not a throw.
+    expect(seen).toEqual([{ type: "delta", text: "You have the first half of it. " }]);
   });
 });

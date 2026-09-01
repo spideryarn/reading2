@@ -126,6 +126,17 @@ export type MarkStatus = "idle" | "marking" | "done" | "failed";
 
 export interface Attempt {
   questionId: QuizQuestionId;
+  /**
+   * **The exact answer this mark was computed from**, trimmed as it went to the
+   * server.
+   *
+   * Carried on the attempt rather than left for the panel to remember, because
+   * the panel's copy would be a second record of the same fact and the two
+   * would drift the first time anything else set an attempt. A mark that is not
+   * bound to its answer is the whole of the fifth quiet rule —
+   * src/web/QuizPanel.tsx, and `questionId` above binds the other half of it.
+   */
+  answer: string;
   status: MarkStatus;
   /** What has arrived so far. Kept on failure — the reader has already read it. */
   reply: string;
@@ -280,6 +291,7 @@ export function useQuiz(slug: string): UseQuiz {
         live.current = null;
         setAttempt({
           questionId,
+          answer,
           status: "failed",
           reply: "",
           error: "There are no questions loaded to mark this against.",
@@ -287,7 +299,7 @@ export function useQuiz(slug: string): UseQuiz {
         return;
       }
 
-      setAttempt({ questionId, status: "marking", reply: "", error: null });
+      setAttempt({ questionId, answer, status: "marking", reply: "", error: null });
 
       try {
         const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}/mark`, {
@@ -307,9 +319,9 @@ export function useQuiz(slug: string): UseQuiz {
            `done` frame. There is no other road to the two lines below, which is
            the whole of the terminal contract as the client keeps it. */
         const reply = await readMark(res.body, (text) =>
-          setAttempt({ questionId, status: "marking", reply: text, error: null }),
+          setAttempt({ questionId, answer, status: "marking", reply: text, error: null }),
         );
-        setAttempt({ questionId, status: "done", reply, error: null });
+        setAttempt({ questionId, answer, status: "done", reply, error: null });
         setAnswered((was) => {
           const next = new Set(was);
           next.add(questionId);
@@ -327,6 +339,7 @@ export function useQuiz(slug: string): UseQuiz {
            question un-ticked and the button live. */
         setAttempt({
           questionId,
+          answer,
           status: "failed",
           reply: err instanceof MarkStopped ? err.partial : "",
           error: (err as Error).message,

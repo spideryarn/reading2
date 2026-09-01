@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Quiz band, and the four things about it that can be got wrong quietly.**
+ * **The Quiz band, and the five things about it that can be got wrong quietly.**
  *
  * Most of what this panel does is visible the moment you look at it — a
  * question is drawn or it is not. These are the rules where the wrong behaviour
@@ -20,6 +20,12 @@
  *     the two seconds between the reader stopping and the good words landing —
  *     and marking the recogniser's rough guess is the one outcome the two-pass
  *     design must not produce.
+ *  5. **A mark stays bound to the answer and the batch it was computed for.**
+ *     The box is editable again once a mark lands, so the reader can be sitting
+ *     in front of feedback about a sentence they have deleted — and the screen
+ *     looks entirely ordinary. A new batch has the same shape and a nastier
+ *     end: the attempt outlives it, the old request is still holding
+ *     `live.current`, and the Answer button is enabled and inert.
  *
  * Each has a positive control beside it, because a test that has never been
  * able to fail is not evidence — docs/reusable/silent-success.md.
@@ -85,12 +91,12 @@ function question(n: number, over: Partial<QuizQuestion> = {}): QuizQuestion {
   };
 }
 
-function batch(questions: QuizQuestion[]): Quiz {
+function batch(questions: QuizQuestion[], batchId = "spya-batch1"): Quiz {
   return {
     version: "quiz/1",
     generator: "a-model",
     slug: "a-piece",
-    batchId: "spya-batch1",
+    batchId,
     sourceHash: "hash",
     questions,
     dropped: {
@@ -270,23 +276,40 @@ describe("the list is the artefact's order and nothing else", () => {
   it("throws away the attempt on screen when the reader moves", () => {
     paint(owner({ quiz: batch(scrambled) }));
     type("something I typed");
+    /* Counted from here rather than from zero: mounting is itself a change of
+       batch, so the reset effect has already fired once by now. What this test
+       is about is the move. */
+    const before = cleared.length;
     press("Next");
-    expect(cleared).toHaveLength(1);
+    expect(cleared).toHaveLength(before + 1);
     expect(host.querySelector("textarea")?.value).toBe("");
   });
 });
 
 describe("a tick means a mark that finished", () => {
   const q = question(1);
-  const half: Attempt = { questionId: q.id, status: "marking", reply: "You got the ", error: null };
+  /* Every attempt carries the answer it was computed from, and these fixtures
+     match what the tests type into the box — otherwise rule 5 fires and the
+     panel is quite right to say the mark is about something else. */
+  const MINE = "what I remember";
+  const half: Attempt = {
+    questionId: q.id,
+    answer: MINE,
+    status: "marking",
+    reply: "You got the ",
+    error: null,
+  };
   const stopped: Attempt = {
     questionId: q.id,
+    answer: MINE,
     status: "failed",
     reply: "You got the ",
     error: "The connection dropped.",
   };
 
   it("does not tick a mark that is still arriving", () => {
+    paint(owner({ quiz: batch([q]), attempt: null, answered: new Set() }));
+    type(MINE);
     paint(owner({ quiz: batch([q]), attempt: half, answered: new Set() }));
     expect(host.textContent).toContain("You got the");
     expect(host.textContent).not.toContain("answered");
@@ -297,7 +320,7 @@ describe("a tick means a mark that finished", () => {
        meaningful with their answer still in it, and the button is disabled on an
        empty box whatever the attempt says. */
     paint(owner({ quiz: batch([q]), attempt: null, answered: new Set() }));
-    type("what I remember");
+    type(MINE);
     paint(owner({ quiz: batch([q]), attempt: stopped, answered: new Set() }));
 
     expect(host.textContent).toContain("You got the");
@@ -307,7 +330,7 @@ describe("a tick means a mark that finished", () => {
     const [again] = buttons("Try again");
     expect(again?.disabled).toBe(false);
     press("Try again");
-    expect(marked).toEqual([{ id: q.id, answer: "what I remember" }]);
+    expect(marked).toEqual([{ id: q.id, answer: MINE }]);
   });
 
   /* The positive control. Without it the two above pass on a panel that can
@@ -320,10 +343,13 @@ describe("a tick means a mark that finished", () => {
   it("draws the mark's citations as chips that jump, and leaves an invented id as text", () => {
     const done: Attempt = {
       questionId: q.id,
+      answer: MINE,
       status: "done",
       reply: `He does tie it to cost [${KNOWN}], and not to [${INVENTED}].`,
       error: null,
     };
+    paint(owner({ quiz: batch([q]), attempt: null, answered: new Set() }));
+    type(MINE);
     paint(owner({ quiz: batch([q]), attempt: done, answered: new Set([q.id]) }));
     const chips = [...host.querySelectorAll(".quiz-reply .block-ref")] as HTMLAnchorElement[];
     expect(chips).toHaveLength(1);
@@ -334,6 +360,117 @@ describe("a tick means a mark that finished", () => {
     /* The id the article does not have stays as the characters the model wrote,
        rather than becoming a chip that goes nowhere. */
     expect(host.querySelector(".quiz-reply")?.textContent).toContain(INVENTED);
+  });
+});
+
+/**
+ * **Rule 5, and the reason it is here rather than anywhere louder.**
+ *
+ * Nothing about either half of this shows up as an error. In the first, the
+ * reader edits the box and reads a mark computed for the sentence they have
+ * just deleted, under a line that still says the question is answered — an
+ * ordinary-looking screen that is telling them something untrue. In the second
+ * the panel is *more* than ordinary-looking: the questions are new, the Answer
+ * button is enabled, and pressing it does nothing at all, because the old
+ * attempt is still holding `useQuiz`'s single live request.
+ */
+describe("a mark stays bound to the answer it was computed from", () => {
+  const q = question(1);
+  const FIRST = "because he ties it to cost";
+  const mark = (answer: string): Attempt => ({
+    questionId: q.id,
+    answer,
+    status: "done",
+    reply: "You have the cost claim, and not the timing one.",
+    error: null,
+  });
+
+  /** Answer, get marked, and leave the box exactly as the marker saw it. */
+  function answerAndGetMarked() {
+    paint(owner({ quiz: batch([q]), attempt: null, answered: new Set() }));
+    type(FIRST);
+    paint(owner({ quiz: batch([q]), attempt: mark(FIRST), answered: new Set([q.id]) }));
+  }
+
+  /* The positive control. Without it the test below passes on a panel that
+     disowns every mark the moment it is drawn. */
+  it("stands as it is while the box still holds the answer it marked", () => {
+    answerAndGetMarked();
+    expect(host.textContent).toContain("You have the cost claim");
+    expect(host.textContent).toContain("answered");
+    expect(host.textContent).not.toContain("This mark is about your previous answer");
+  });
+
+  it("says whose answer it is once the reader edits the box under it", () => {
+    answerAndGetMarked();
+    type(`${FIRST}, and to how long it takes`);
+    expect(host.textContent).toContain("This mark is about your previous answer");
+    /* And the question stops claiming to be answered, because what is in the
+       box has not been. */
+    expect(host.textContent).not.toContain("answered");
+    /* The mark itself stays on screen. Throwing it away on a keystroke is the
+       other way of being wrong here — it is the thing the reader is editing
+       against, and nothing stores it. */
+    expect(host.textContent).toContain("You have the cost claim");
+  });
+
+  it("comes back when the reader puts the old words back", () => {
+    answerAndGetMarked();
+    type("something else entirely");
+    type(FIRST);
+    expect(host.textContent).not.toContain("This mark is about your previous answer");
+    expect(host.textContent).toContain("answered");
+  });
+
+  /* An emptied box is on the way to a new answer, not a new answer. Without the
+     empty check the note appears the moment the reader selects all and deletes,
+     and tells them to press an Answer button that is disabled for exactly as
+     long as the box stays empty. */
+  it("does not tell a reader with an empty box to press a button they cannot press", () => {
+    answerAndGetMarked();
+    type("");
+    expect(host.textContent).not.toContain("This mark is about your previous answer");
+    expect(host.querySelector<HTMLButtonElement>("button.gloss-run")?.disabled).toBe(true);
+  });
+
+  it("stops calling the press a retry once the answer has changed", () => {
+    /* A failed mark offers *Try again*, which means the same words one more
+       time. Editing them makes the press a new answer, and the note above the
+       button says "Press Answer" — so the button had better say Answer. */
+    const failed: Attempt = {
+      questionId: q.id,
+      answer: FIRST,
+      status: "failed",
+      reply: "You have the ",
+      error: "The connection dropped.",
+    };
+    paint(owner({ quiz: batch([q]), attempt: null, answered: new Set() }));
+    type(FIRST);
+    paint(owner({ quiz: batch([q]), attempt: failed, answered: new Set() }));
+    expect(buttons("Try again")).toHaveLength(1);
+
+    type(`${FIRST}, and to how long it takes`);
+    expect(buttons("Try again")).toHaveLength(0);
+    expect(buttons("Answer")).toHaveLength(1);
+  });
+
+  it("does not carry the attempt into a batch that replaced it", () => {
+    paint(owner({ quiz: batch([question(1), question(2)]) }));
+    press("Next");
+    expect(host.textContent).toContain("Question 2 of 2");
+    const before = cleared.length;
+
+    /* *Write them again* — same article, new questions, new `batchId`. */
+    paint(owner({ quiz: batch([question(3), question(4)], "spya-batch2") }));
+
+    /* The reset ran at all: the index is back to the first question. Asserted
+       so that a failure below cannot be a dead effect wearing rule 5's name. */
+    expect(host.textContent).toContain("Question 1 of 2");
+    /* And it threw the attempt away with everything else. Not cosmetic: the
+       old request still holds `live.current` in `useQuiz`, and `mark` opens
+       with `if (live.current) return`, so without this the new batch's Answer
+       button is enabled and silently does nothing. */
+    expect(cleared).toHaveLength(before + 1);
   });
 });
 
