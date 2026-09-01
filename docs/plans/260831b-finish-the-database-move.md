@@ -1237,6 +1237,93 @@ layout in its diagram and its stage table, and § *Storage* still describes it a
 That file is one of the seven entry points, so editing it goes one approved change at a time with
 the before and after shown — [edit-important-docs.md](../reusable/edit-important-docs.md).
 
+#### How stage 4 actually goes, measured 2026-09-01
+
+**The blast radius is 111 test files, not 75.** The 75 came from grepping for the strings `data/`,
+`example/` and `output/`, and that method cannot see a file that reaches the filesystem store
+**through an import rather than a path** — 26 do, including `api`, `profile`, `glossary-lookups`,
+`store-comments` and `uploads-api`. They break at stage 4 without containing the word `data/`
+anywhere. 1,456 of the suite's 7,223 cases are in scope.
+
+**The hinge, which this document did not name.** `guarded(what, pg, files)` returns `files` whenever
+`STORE !== "postgres"`, and `STORE` is unset for almost every test. So **deleting any single `fs*`
+half silently flips the default store for about a hundred test files at once.** Stage 4 cannot be
+done incrementally adapter by adapter: the switchover is one commit in the *middle* of the stage,
+everything before it is additive and green, and everything after it is dead-code removal the compiler
+checks for you. Plan for that rather than discovering it.
+
+**The order, each sub-stage ending green and committable:**
+
+- **A — point the fixtures at the corpus. No deletions.** *This is a live defect and it comes first.*
+  `tests/helpers/load-article.ts` resolves `ROOT` to the **repository root**, so `loadArticleIntoPg`
+  reads Greg's `data/`, not `tests/fixtures/data-root/`. `requireFixture` is called from one file and
+  no consuming suite. The committed corpus is reached only by the deploy gate. **Until this lands,
+  "the suite is green against the corpus" is a statement about one laptop** — the same split-brain
+  Sol invalidated an experiment over.
+- **B — the ~48 suites that need only *an* article to exist.** 23 of them share one pattern:
+  `cp(example/ → data/<scratch-slug>)` then exercise a route. They are already hermetic; they break
+  only because no store will accept `data/<scratch>` any more. One helper converts all 23,
+  mechanically, one file per commit.
+- **C — the ~12 tmpdir filesystem doubles**, which use `createFsArtifactStore()` over a `mkdtemp` as
+  a cheap `ArtifactStore`. **A real decision, to be named here rather than settled in a diff:**
+  Postgres, or a ninth-method in-memory double. Lean Postgres — a third implementation whose fidelity
+  nothing checks is worse than a slow test.
+- **D — the hinge.** `guarded()` stops branching, `storeFromEnv` loses `"files"`, and `pgReady`'s
+  skip policy changes (see below). After this the adapters are unreachable.
+- **E–H — deletion, innermost outward**, each a compile-checked no-op: uploads → blobs → ai-calls →
+  checkpoints → jobs → the eight reader-state modules and `src/store/fs.ts` → `artifacts-fs.ts` →
+  `data-root.ts`.
+- **I — `readArticleFromDir`, the stage CLIs and `example/`. A PRODUCT DECISION, not a cleanup —
+  see below.**
+- **J — `scripts/deploy.ts` and the docs.** Smaller than feared: the 13 gate sentinels already live
+  under `tests/fixtures/data-root/`, so **if the sentinel list does not move there is no collision
+  with [260901b](260901b-committed-fixture-corpus.md)**. What goes is the copy loop at `deploy.ts:664`.
+
+**`pgReady` stops being honest at D, and the policy has to change with the code.** 53 test files
+currently *skip* when there is no local database, by design. After stage 4 that would be 100+, and a
+machine with no Docker would get a green run over a quarter of the suite. `REQUIRE_POSTGRES=1`
+becomes the default, or `pgReady` starts throwing the way `requireFixture` does. And **`npm run dev`
+starts requiring Postgres**: there is no longer a configuration without it.
+
+**Traps, each verified rather than inherited:**
+
+1. **`tests/seed-reader-state.ts` is itself built on condemned code** — it reads through
+   `loadComments`, `loadThreads`, `loadRuns` and `loadShelf`, all of which die in stage 4. Exactly the
+   mistake Sol flagged for `readArticleFromDir`, in a file nobody had flagged.
+2. **`tests/slug.test.ts:81` asserts the *source text* of `jobs-fs.ts`.** It is the only test in the
+   repo that goes red purely because a file was deleted, and it will look unrelated.
+3. **The eight `data/_jobs` teardowns become permanent no-ops** — `readdir(JOBS_DIR).catch(() => [])`
+   over a directory that will never exist returns `[]` for ever, and a leaked Postgres `jobs` row goes
+   unnoticed. **Convert them to check the `jobs` table; do not delete them.**
+4. **`example/` is four decisions wearing one coat**: `fsAssertWritableGlossary` (which 403s writes to
+   it), `src/api.ts:187` `candidateDirs`, `src/searches.ts:105`, `src/library-search.ts:218`. Delete
+   three and forget the fourth and you have a slug that lists and cannot be opened.
+5. **`store-artefact-manifest`'s job is to notice a new artefact filename arriving**, and its
+   mechanism is the fs store's filename map. Before deleting it, confirm `store-artefacts-pg` really
+   covers "a new artefact kind arrives and nobody homed it" — otherwise the guard goes and the
+   property stays. Its two known failures vanish with it, **which will look like a fix**.
+6. **A direct-SQL seeder would have no zero-copy refusal.** `copyArtefacts` refuses a load that copies
+   nothing, which is what stops a silently-empty fixture passing. Anything built beside it needs the
+   same refusal, watched failing.
+7. **Only six test files genuinely enumerate the corpus** — `store-parity`, `store-roundtrip`,
+   `store-artefact-manifest`, `store-export-raw`, `fixture-corpus`, `chat-anchor`. Several previously
+   named do not; **this is the third time a list in this document has been wrong, so re-derive rather
+   than inherit, including from this paragraph.**
+
+#### Sub-stage I is a product decision and needs Greg
+
+`readArticleFromDir` has eight production call sites — `tweets`, `timeline`, `quotes`, `arc`,
+`ideas`, `quiz`, `glossary`, `sketch` — and **every one of them is inside an `argv`-driven CLI
+block**, explicitly not reachable from a request or a queued job. So deleting it does not touch the
+serving path at all. What it deletes is `npx tsx src/tweets.ts <dir>` and its seven siblings, plus
+the `data/<slug>` and `output/` writers in `fetch`, `hierarchy`, `extract` and `pdf-read`.
+
+**That is the architecture rule *"every stage stays runnable on its own against a slug"***
+([architecture.md](../project/architecture.md#conventions)), and four eval entry points go with it
+(`evals/quiz.ts`, `evals/sketch/run.ts`, `evals/embedding-retrieval.ts`,
+`evals/hierarchy-structure/floor.ts`). Removing a documented capability is Greg's call, not a
+cleanup, and it is **wholly independent of A–H** — so it waits without blocking anything.
+
 ### ~~Stage 5~~ — folded into stage 4
 
 **Greg's decision 9, 2026-08-31.** The heading is kept because code comments and earlier commits
