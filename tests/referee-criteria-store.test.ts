@@ -25,7 +25,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -248,6 +248,73 @@ const { reachable } = await pgReady({
   tables: ["spideryarn.referee_criteria"],
 });
 const when = reachable ? describe : describe.skip;
+
+/**
+ * **Whose criteria they are, against a database with two owners in it.**
+ *
+ * Ownership is not something the filesystem store has any notion of — it reads
+ * `data/<slug>/`, and a slug is a slug. It lives in `ownedSlug` (src/store/pg.ts),
+ * which the Postgres store puts in front of every read, and until this landed
+ * nothing tested it: the route case in tests/comment-referee-mark.test.ts is
+ * about another *article*, on the filesystem, with one owner in the world. GPT
+ * Sol's finding 6 named that gap — "the implementation is owner-scoped, but
+ * that particular test is not evidence for it".
+ *
+ * The order of the two assertions is the point. First that the criterion really
+ * is in the table, because a test that only checks the refusal passes just as
+ * well when nothing was ever written — which is the shape
+ * docs/reusable/silent-success.md is about, and it is easy to write here by
+ * accident. Then that the store will not hand it over.
+ */
+when("a criterion under somebody else's article", () => {
+  const OTHER_SLUG = "test-referee-criteria-other-owner";
+  const OTHER_OWNER = "3f0a17c6-9d54-4b8e-9a2f-5c1b7e0d4a63";
+  const OTHER_ARTICLE = "dddddddd-0000-4000-8000-00000000d001";
+  const OTHER_CRITERION = "spya-nx7wqz";
+
+  beforeEach(async () => {
+    const db = getDb();
+    await db.delete(articles).where(eq(articles.slug, OTHER_SLUG));
+    /* `auth.users` first — `articles.owner_id` and `referee_criteria.owner_id`
+       both reference it (`referee_criteria_owner_fk`), so a made-up uuid is a
+       foreign-key error rather than a second owner. */
+    await db.execute(sql`
+      insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
+      values (${OTHER_OWNER}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+              'referee-criteria-other-owner@example.invalid', 'x', now(), now())
+      on conflict (id) do nothing
+    `);
+    await db.insert(articles).values({ id: OTHER_ARTICLE, ownerId: OTHER_OWNER, slug: OTHER_SLUG });
+    await db.execute(sql`
+      insert into spideryarn.referee_criteria (article_id, id, owner_id, kind, criterion, status)
+      values (${OTHER_ARTICLE}, ${OTHER_CRITERION}, ${OTHER_OWNER}, 'single', 'their question', 'done')
+    `);
+  });
+
+  afterAll(async () => {
+    // No `closeDb()` here: the parity block below owns the pool's lifetime.
+    await getDb().delete(articles).where(eq(articles.slug, OTHER_SLUG));
+    await getDb().execute(sql`delete from auth.users where id = ${OTHER_OWNER}`);
+  });
+
+  it("is in the table, so the refusal below is about ownership and not an empty fixture", async () => {
+    const rows = await getDb().execute(sql`
+      select id from spideryarn.referee_criteria where article_id = ${OTHER_ARTICLE}
+    `);
+    expect(rows.rows.map((r) => r.id)).toEqual([OTHER_CRITERION]);
+    // And the owner really is somebody else, or every assertion here is empty.
+    expect(OTHER_OWNER).not.toBe(currentOwnerId());
+  });
+
+  it("is not theirs to read, so it is not theirs to place a passage on either", async () => {
+    /* A 404 rather than an empty list, and that is `ownedSlug` doing it: the
+       slug does not resolve to an article this owner has, so there is nothing
+       to read criteria from. `tidyMark` in src/routes.ts refuses the placement
+       on the back of exactly this — it takes the criteria this owner can see
+       and refuses an id that is not among them. */
+    await expect(pgRefereeCriteriaStore.load(OTHER_SLUG)).rejects.toMatchObject({ status: 404 });
+  });
+});
 
 when("the two stores answer identically", () => {
   const PSLUG = "test-referee-criteria-parity";

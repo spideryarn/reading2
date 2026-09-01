@@ -275,6 +275,18 @@ export function clampValence(value: number): number {
 
 /** What validation threw away, so a log line and a panel can say it out loud. */
 export interface DroppedResults {
+  /**
+   * Rows that never named a passage at all — no `blockId`, no `quote`, or
+   * neither — so there was nothing to look up and nothing to check.
+   *
+   * Counted rather than skipped in silence, for the reason every other field
+   * here is counted: five shapeless rows and an answer of `{"results": []}`
+   * leave a panel in exactly the same state, and only one of them means the
+   * model looked and found nothing. `discardedRows` is where that difference
+   * stops being invisible. `Dropped.malformed` in src/timeline.ts is the same
+   * field under the same name.
+   */
+  malformed: number;
   /** Results naming a block this article does not have. */
   unknownIds: number;
   /** Results whose quote is not in the block they named. */
@@ -309,12 +321,18 @@ export interface DroppedResults {
    * the results, into a count, where "the model answered and did not judge" is
    * a visible fact rather than a row of quiet zeros. GPT Sol's finding 6,
    * docs/plans/260831an-referee-mode-code-review-sol.md.
+   *
+   * **Counted is not the same as visible**, and for a day it was not: the count
+   * went to the log and the panel still said the model had found nothing. What
+   * makes it visible is `discardedRows` — read it before assuming any field
+   * here reaches a referee.
    */
   missingValence: number;
   /**
    * Literature results with no usable citation. Dropped, because the plan
    * forbids showing one, and counted, because "answered but unverifiable" and
-   * "found nothing" are different facts that must not render the same.
+   * "found nothing" are different facts that must not render the same — which
+   * they did until `discardedRows` gave the count somewhere to go.
    */
   uncited: number;
   /** Results beyond `MAX_RESULTS`. Counted so a cap is never silent. */
@@ -323,6 +341,7 @@ export interface DroppedResults {
 
 function noneDropped(): DroppedResults {
   return {
+    malformed: 0,
     unknownIds: 0,
     unquoted: 0,
     clampedConfidence: 0,
@@ -333,6 +352,39 @@ function noneDropped(): DroppedResults {
     uncited: 0,
     truncated: 0,
   };
+}
+
+/**
+ * **How many rows the model returned that could not be kept** — the number that
+ * tells "the model found nothing" apart from "the model found something and
+ * could not produce a usable answer about it".
+ *
+ * Those two states used to render as one sentence, and the sentence was false
+ * for the second of them: a `diverging` answer that anchored a passage and left
+ * its valence out had the row dropped (correctly), the criterion stored as
+ * `done` with no results, and the panel said *"the model did not find a passage
+ * for this"*. It found one. GPT Sol's finding 4,
+ * docs/plans/260831an-referee-mode-stage3b5c-review-sol.md, and it is the same
+ * bug as the fabricated zero it replaced: a partial answer coerced into a
+ * clean-looking state. docs/reusable/silent-success.md.
+ *
+ * **Every drop that removes a whole row, and only those.** `clampedConfidence`,
+ * `clampedValence`, `subOneConfidence` and `subOneValence` are not here: those
+ * rows survived, and counting them would call a usable answer unusable.
+ * `truncated` is not here either, and that one is a judgement rather than an
+ * omission — those rows were good and *we* capped them at `MAX_RESULTS`, which
+ * is a fact about this app rather than about the model's answer. It also cannot
+ * matter to the caller: a truncated answer has `MAX_RESULTS` results in it, so
+ * it is never the empty case this exists for.
+ */
+export function discardedRows(dropped: DroppedResults): number {
+  return (
+    dropped.malformed +
+    dropped.unknownIds +
+    dropped.unquoted +
+    dropped.missingValence +
+    dropped.uncited
+  );
 }
 
 /** As many passages as a panel can be read down. `MAX_HITS` in src/search.ts is the same number. */
@@ -391,7 +443,10 @@ export function validateResults(
   for (const item of list) {
     const row = (item ?? {}) as Record<string, unknown>;
     const { blockId, quote, confidence, reasoning } = row;
-    if (typeof blockId !== "string" || typeof quote !== "string") continue;
+    if (typeof blockId !== "string" || typeof quote !== "string") {
+      dropped.malformed++;
+      continue;
+    }
 
     const block = byId.get(blockId);
     if (!block) {
@@ -603,14 +658,45 @@ export function valenceGap(referee: number, model: number): number {
  * drizzle/0043 — a placement with nothing to place it on is meaningless, and a
  * comment answering a criterion without a number is fine (they wrote prose and
  * did not score it).
+ *
+ * ## And the criterion has to have a scale to be placed on
+ *
+ * `config` is the criterion the placement names, **as the store handed it
+ * back** — `null` when the id names no criterion of theirs. Only a `diverging`
+ * criterion has two ends, so only a `diverging` criterion can hold a signed
+ * number: `−80` against a `single` or a `literature` criterion is signed
+ * against nothing, and the panel has no poles to print it between, so it can
+ * neither draw the swatch nor say the direction in words
+ * (docs/project/colour-scales.md, which forbids colour being the only carrier —
+ * here there would be no carrier at all).
+ *
+ * **This half is the route's alone to enforce.** `comments_valence_range` and
+ * `comments_valence_needs_criterion` are `CHECK` constraints, and a `CHECK`
+ * cannot reach `referee_criteria` to read a kind. So the database refuses a
+ * placement with no criterion and a placement off the scale, and cannot refuse
+ * a placement on a criterion that has no scale — which is exactly why the rule
+ * is written here, in the module both the route and the tests share, rather
+ * than inline in src/routes.ts where it would be a fourth definition of what a
+ * placement is. GPT Sol's finding 6,
+ * docs/plans/260831an-referee-mode-stage3b5c-review-sol.md.
+ *
+ * `config` is required rather than optional on purpose: a caller that has not
+ * resolved the criterion cannot silently skip the check, because it cannot
+ * compile without saying so.
  */
 export function markProblem(mark: {
   criterionId: string | null;
   valence: number | null;
+  /** The criterion `criterionId` names, or `null` if it names none of theirs. */
+  config: RefereeCriterionConfig | null;
 }): string | null {
   if (mark.valence === null) return null;
   if (mark.criterionId === null) return "A placement has to say which criterion it is placing.";
   if (mark.valence < -100 || mark.valence > 100) return "A placement runs from −100 to +100.";
   if (!Number.isInteger(mark.valence)) return "A placement is a whole number.";
+  if (mark.config === null) return "A placement has to name a criterion of yours on this article.";
+  if (mark.config.kind !== "diverging") {
+    return "A placement only goes on a criterion with two ends.";
+  }
   return null;
 }

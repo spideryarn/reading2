@@ -342,12 +342,78 @@ describe("reading the answer back", () => {
   });
 
   it("drops a result naming a block this paper does not have, and counts it", async () => {
+    /* A real result beside the invented one, so this stays a test about the
+       *count*: an answer with nothing usable left in it is a failed run now,
+       not an empty one — see "every row was unusable" below. */
     fetchMock.mockResolvedValue(
-      reply([{ blockId: "spya-zzzzzz", quote: "invented", confidence: 90, reasoning: "x" }]),
+      reply([
+        { blockId: "spya-zzzzzz", quote: "invented", confidence: 90, reasoning: "x" },
+        { blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "y" },
+      ]),
     );
     const { done } = await drain(runCriterionStream(req(SINGLE)));
-    expect(done?.results).toEqual([]);
+    expect(done?.results).toHaveLength(1);
     expect(done?.dropped.unknownIds).toBe(1);
+  });
+
+  /**
+   * **The state that used to render as "the model did not find a passage".**
+   *
+   * A `diverging` answer that anchors a passage and leaves its valence out has
+   * that row dropped — correctly, since a missing valence is not a valence of
+   * zero — and until this landed the criterion was then stored as `done` with
+   * no results, so the panel printed a sentence that was false: the model *had*
+   * found a passage, it had failed to score it. GPT Sol's finding 4, and the
+   * same shape as the fabricated zero it replaced.
+   *
+   * The assertions match the bracketed code rather than the sentence, which is
+   * docs/project/copy.md's rule: copy stays rewritable.
+   */
+  describe("an answer with nothing usable in it", () => {
+    it("fails rather than reading as an answer that found nothing", async () => {
+      fetchMock.mockResolvedValue(
+        reply([
+          // Anchored, quoted, confident — and no `valence` on a diverging
+          // criterion, which is the one thing a diverging row is for.
+          { blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "x" },
+        ]),
+      );
+      await expect(drain(runCriterionStream(req(DIVERGING)))).rejects.toThrow(/\[ai-unusable\]/);
+    });
+
+    it("fails when every row named a block this paper does not have", async () => {
+      fetchMock.mockResolvedValue(
+        reply([{ blockId: "spya-zzzzzz", quote: "invented", confidence: 90, reasoning: "x" }]),
+      );
+      await expect(drain(runCriterionStream(req(SINGLE)))).rejects.toThrow(/\[ai-unusable\]/);
+    });
+
+    it("fails when every row was shapeless, which looks identical from a panel", async () => {
+      fetchMock.mockResolvedValue(reply([{ confidence: 90 }, { quote: "no blockId" }]));
+      await expect(drain(runCriterionStream(req(SINGLE)))).rejects.toThrow(/\[ai-unusable\]/);
+    });
+
+    it("still finishes when the model found nothing at all, which is a real answer", async () => {
+      /* The distinction the whole change is for: an empty list is the model
+         saying it looked and found nothing, and that is a legitimate answer a
+         referee is entitled to see as one. */
+      fetchMock.mockResolvedValue(reply([]));
+      const { done } = await drain(runCriterionStream(req(DIVERGING)));
+      expect(done?.results).toEqual([]);
+      expect(done?.dropped.missingValence).toBe(0);
+    });
+
+    it("still finishes when one row survived, however many did not", async () => {
+      fetchMock.mockResolvedValue(
+        reply([
+          { blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "x" },
+          { blockId: "spya-p7w2dn", quote: "pre-registered", confidence: 80, valence: 60, reasoning: "y" },
+        ]),
+      );
+      const { done } = await drain(runCriterionStream(req(DIVERGING)));
+      expect(done?.results).toHaveLength(1);
+      expect(done?.dropped.missingValence).toBe(1);
+    });
   });
 
   it("stores the article's own characters rather than the model's retyping", async () => {

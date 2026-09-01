@@ -566,7 +566,14 @@ function CriterionRow({
            more natural sentence and is a claim we have no standing to make. A
            zero-result row can mean the extractor dropped a table, a figure or a
            supplement; that the paper words the thing differently; or that the
-           model missed it. tests/referee-copy-is-about-the-model.test.ts. */
+           model missed it. tests/referee-copy-is-about-the-model.test.ts.
+
+           **And this branch no longer covers a fourth thing it used to.** An
+           answer where the model *did* point at passages and none of them could
+           be kept — a diverging row with no valence, an invented block id — is
+           a failed run now (`ANSWER_UNUSABLE`, src/referee-criteria-run.ts) and
+           lands in the `error` branch above with a Try again. It used to land
+           here, where this sentence was false about it. GPT Sol's finding 4. */
         <p className="gloss-quiet">
           The model did not find a passage for this — which is a fact about the search, not
           about the paper.

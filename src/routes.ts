@@ -215,7 +215,16 @@ import {
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
-import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
+import {
+  advanceJob,
+  cancelJob,
+  enqueue,
+  forgetJob,
+  getJob,
+  JobConflict,
+  listJobs,
+  retryJob,
+} from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
@@ -823,6 +832,18 @@ const MAX_BODY_CHARS = 4000;
  * filesystem store has no constraint at all: the two stores agree only because
  * this check is above both of them.
  *
+ * ## And it has to be a criterion with two ends
+ *
+ * The criterion is loaded before `markProblem` rather than after, because the
+ * last of that function's rules is about its `kind`: only a `diverging`
+ * criterion has poles, so only a `diverging` criterion can hold a signed
+ * number. `−80` on a `single` or a `literature` criterion is signed against
+ * nothing and the panel has no ends to draw it between. **The database cannot
+ * refuse this one** — a `CHECK` cannot read another table — so unlike the range
+ * and the needs-a-criterion rules, this route is the only place it can be
+ * caught. GPT Sol's finding 6,
+ * docs/plans/260831an-referee-mode-stage3b5c-review-sol.md.
+ *
  * No message built here may contain the reader's prose — same rule as
  * `createFree` below, whose header says why.
  */
@@ -852,18 +873,28 @@ async function tidyMark(
     throw httpError(400, "criterionId must be a criterion id [cmt-criterion-type]");
   }
 
-  /* The pure rules — a placement needs a criterion, and it is a whole number
-     from −100 to +100 — from the module that owns them, so the route and the
-     database cannot drift into two different definitions of a placement. */
-  const problem = markProblem({ criterionId: id, valence: placed });
-  if (problem) throw httpError(400, `${problem} [cmt-valence-range]`);
-
+  /* The criterion is resolved **before** the rules, because one of the rules is
+     about which kind it is and there is no way to know that from the request.
+     A read only happens when an id was sent at all, so an ordinary reading note
+     still costs nothing. */
+  let named: SavedCriterion | undefined;
   if (id !== null) {
     const criteria = await refereeCriteriaStore.load(slug);
-    if (!criteria.some((c) => c.id === id)) {
+    named = criteria.find((c) => c.id === id);
+    if (!named) {
       throw httpError(400, "criterionId is not one of your criteria on this article");
     }
   }
+
+  /* The rules — a placement needs a criterion, it is a whole number from −100
+     to +100, and it goes only on a criterion that has two ends — from the
+     module that owns them, so the route and the database cannot drift into two
+     different definitions of a placement. The kind rule is the route's alone to
+     keep: a CHECK constraint cannot reach `referee_criteria` to read a kind, so
+     `comments_valence_range` and `comments_valence_needs_criterion` hold the
+     other two and nothing in the database holds this one. GPT Sol's finding 6. */
+  const problem = markProblem({ criterionId: id, valence: placed, config: named?.config ?? null });
+  if (problem) throw httpError(400, `${problem} [cmt-valence-range]`);
 
   return {
     ...(id === null ? {} : { criterionId: id }),
@@ -3032,6 +3063,17 @@ function requireScale(value: unknown): DivergingScale {
  *   client. They are a log line and an alarm; a panel that showed "4 results
  *   were unusable" would be reporting the model's manners rather than anything
  *   a referee can act on. src/referee-criteria-run.ts logs them.
+ *
+ *   **With one exception, and it is an exception because the panel was lying
+ *   without it.** An answer in which *every* row was thrown away is raised as a
+ *   failure by `runCriterionStream` (`ANSWER_UNUSABLE`), so it arrives here as
+ *   an ordinary error and is stored as one. Without that, a `diverging` answer
+ *   that anchored a passage and forgot its valence was stored `done` with no
+ *   results, and the panel printed "the model did not find a passage for this"
+ *   — which is the sentence for a model that found nothing, and false about a
+ *   model that found something and could not score it. GPT Sol's finding 4. A
+ *   *partial* loss is still a success and still only a log line: one usable row
+ *   means the criterion ran.
  */
 async function runRefereeCriterion(
   slug: string,
@@ -4650,6 +4692,37 @@ function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: number }).status === "number";
 }
 
+/**
+ * The structured fields an error is allowed to put beside `error`.
+ *
+ * **One class, one field, and no generic spread** — which is the whole of what
+ * stops this becoming a hole. The handler above answers every throw in the API,
+ * including a Drizzle failure whose `Error.message` carries bound parameters
+ * (src/store/db-errors.ts) and a provider's own words (docs/project/copy.md
+ * rule 4). Copying an error's own enumerable properties onto the wire would
+ * have made every one of those a candidate; matching `JobConflict` and reading
+ * its declared `Job` cannot.
+ *
+ * And the payload is narrowed by `publicJob`, the same call `GET /api/jobs`
+ * makes, so this 409 carries nothing the same reader's next poll would not have
+ * handed them a second later. The blocking row is always theirs:
+ * `jobs_active_slug` is `(owner_id, slug)` in src/db/schema.ts and the
+ * filesystem adapter filters on `ownerId` before it compares anything.
+ *
+ * **`instanceof` here, where `statusOf` in src/web/lib/api.ts deliberately
+ * duck-types.** That one is defensive because a test can mock `lib/api.js` and
+ * put a second copy of `HttpError` in the graph; nothing mocks `src/jobs.js` at
+ * this seam, both files are server modules in one bundle, and being strict is
+ * the point — a duck-typed check would let any object with a `blocking`
+ * property onto the wire. `tests/blocking-job-409.test.ts` drives the real
+ * import graph, so the identity is a fact rather than an assumption.
+ *
+ * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
+ */
+function structuredDetail(err: unknown): Record<string, unknown> {
+  return err instanceof JobConflict ? { blocking: publicJob(err.blocking) } : {};
+}
+
 function logRequest(
   method: string,
   path: string,
@@ -4897,7 +4970,7 @@ async function serveApi(
        src/monitoring.ts decides what may be *said* about the error. This line
        only decides whether to say anything. */
     if (status >= 500) captureFailure(err, { method, path, status });
-    send(res, status, { error: (err as Error).message });
+    send(res, status, { error: (err as Error).message, ...structuredDetail(err) });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);

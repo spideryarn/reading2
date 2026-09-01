@@ -32,6 +32,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
+
 const ROOT = join(import.meta.dirname, "..");
 
 /**
@@ -72,6 +74,40 @@ const ABOUT_THE_PAPER = [
   "no passage supports",
   "nothing bears on",
 ];
+
+/**
+ * **The third state, added 2026-09-01.** There are three, not two: the model
+ * found passages, the model found nothing, and the model found something and
+ * could not produce a usable answer about it. The third used to render as the
+ * second — a criterion stored `done` with no results, and the panel printing
+ * "the model did not find a passage for this", which was false. GPT Sol's
+ * finding 4.
+ *
+ * Its sentence does not live in a panel file, so the scan below cannot see it:
+ * it is the stored `error` on the criterion, raised in
+ * src/referee-criteria-run.ts, and it has to keep the same rule. Checked as a
+ * value rather than as source text, which is the stronger check of the two.
+ */
+describe("what Referee says when the answer it got was unusable", () => {
+  it("makes the model the subject, not the paper", () => {
+    expect(ANSWER_UNUSABLE.toLowerCase()).toMatch(/^the model /);
+    for (const phrase of ABOUT_THE_PAPER) {
+      expect(ANSWER_UNUSABLE.toLowerCase(), phrase).not.toContain(phrase);
+    }
+  });
+
+  it("says the model gave an answer, so it cannot be read as having found nothing", () => {
+    /* The whole point of the sentence: "found nothing" and "found something
+       and could not say anything usable about it" call for different actions,
+       so they must not be one sentence. */
+    expect(ANSWER_UNUSABLE).not.toMatch(/did not find/i);
+  });
+
+  it("carries a bracketed code, so a referee can quote four characters", () => {
+    // docs/project/copy.md § The bracketed code.
+    expect(ANSWER_UNUSABLE).toMatch(/\[[a-z0-9-]+\]$/);
+  });
+});
 
 describe("what Referee says when it found nothing", () => {
   it("never puts the paper in the subject position", () => {

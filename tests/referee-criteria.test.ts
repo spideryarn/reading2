@@ -27,6 +27,7 @@ import {
   configFromRow,
   configToRow,
   criterionProblem,
+  discardedRows,
   isRefereeCriterionKind,
   markProblem,
   readCitations,
@@ -34,6 +35,7 @@ import {
   validateResults,
   type DivergingResult,
   type LiteratureResult,
+  type RefereeCriterionConfig,
 } from "../src/referee-criteria.js";
 import type { Block } from "../src/types.js";
 
@@ -450,20 +452,107 @@ describe("the referee's own mark", () => {
   });
 
   it("refuses a placement with nothing to place it on", () => {
-    expect(markProblem({ criterionId: null, valence: -70 })).toContain("which criterion");
+    expect(markProblem({ criterionId: null, valence: -70, config: null })).toContain(
+      "which criterion",
+    );
   });
 
   it("allows prose about a criterion with no number", () => {
-    expect(markProblem({ criterionId: "spya-aaaaaa", valence: null })).toBeNull();
+    expect(markProblem({ criterionId: "spya-aaaaaa", valence: null, config: SINGLE })).toBeNull();
   });
 
   it("allows an ordinary reading note, which has neither", () => {
-    expect(markProblem({ criterionId: null, valence: null })).toBeNull();
+    expect(markProblem({ criterionId: null, valence: null, config: null })).toBeNull();
   });
 
   it("refuses a placement outside the scale, at both ends", () => {
-    expect(markProblem({ criterionId: "spya-aaaaaa", valence: -101 })).not.toBeNull();
-    expect(markProblem({ criterionId: "spya-aaaaaa", valence: 101 })).not.toBeNull();
-    expect(markProblem({ criterionId: "spya-aaaaaa", valence: -100 })).toBeNull();
+    const on = (valence: number) =>
+      markProblem({ criterionId: "spya-aaaaaa", valence, config: TWO_ENDED });
+    expect(on(-101)).not.toBeNull();
+    expect(on(101)).not.toBeNull();
+    expect(on(-100)).toBeNull();
+  });
+
+  it("refuses a placement on a criterion that has no scale to place it on", () => {
+    /* A `single` and a `literature` criterion have no poles, so −80 against
+       either is signed against nothing: the panel has no ends to print it
+       between and cannot say the direction in words. The database cannot catch
+       this one — a CHECK constraint cannot reach `referee_criteria` to read a
+       kind — so this rule lives here or nowhere. GPT Sol's finding 6. */
+    for (const config of [SINGLE, { kind: "literature" } as const]) {
+      expect(
+        markProblem({ criterionId: "spya-aaaaaa", valence: -80, config }),
+        `${config.kind} has no scale, so a placement on it is a number against nothing`,
+      ).toContain("two ends");
+    }
+  });
+
+  it("refuses a placement whose criterion could not be found at all", () => {
+    // `null` is what the store hands back for an id that names none of theirs,
+    // and a placement on nothing is not a placement.
+    expect(markProblem({ criterionId: "spya-aaaaaa", valence: -80, config: null })).not.toBeNull();
+  });
+});
+
+const SINGLE: RefereeCriterionConfig = { kind: "single" };
+const TWO_ENDED: RefereeCriterionConfig = {
+  kind: "diverging",
+  poles: { against: "the controls are weak", favour: "the controls settle it" },
+  scale: "rg",
+};
+
+/**
+ * **The count that tells "found nothing" from "found something unusable".**
+ *
+ * Both used to reach the panel as one sentence — *"the model did not find a
+ * passage for this"* — and for the second of them that sentence is false. GPT
+ * Sol's finding 4.
+ */
+describe("what the model returned and could not keep", () => {
+  it("counts a row that never named a passage, rather than skipping it in silence", () => {
+    const { results, dropped } = validateResults({ results: [{ confidence: 90 }, null] }, "single", BLOCKS);
+    expect(results).toEqual([]);
+    expect(dropped.malformed).toBe(2);
+    expect(discardedRows(dropped)).toBe(2);
+  });
+
+  it("counts every drop that removes a whole row", () => {
+    const { results, dropped } = validateResults(
+      {
+        results: [
+          hit({ blockId: "spya-zzzzzz" }),
+          hit({ quote: "words that are not in that block" }),
+          { confidence: 12 },
+        ],
+      },
+      "single",
+      BLOCKS,
+    );
+    expect(results).toEqual([]);
+    expect(dropped.unknownIds).toBe(1);
+    expect(dropped.unquoted).toBe(1);
+    expect(dropped.malformed).toBe(1);
+    expect(discardedRows(dropped)).toBe(3);
+  });
+
+  it("counts a diverging row that did not say which way the passage cuts", () => {
+    const { results, dropped } = validateResults({ results: [hit()] }, "diverging", BLOCKS);
+    expect(results).toEqual([]);
+    expect(dropped.missingValence).toBe(1);
+    expect(discardedRows(dropped)).toBe(1);
+  });
+
+  it("does not count a row that survived, however much it had to be corrected", () => {
+    /* A clamped or sub-one confidence is an alarm about a unit, not a lost
+       row — counting it here would call a usable answer unusable. */
+    const { results, dropped } = validateResults(
+      { results: [hit({ confidence: 400 }), hit({ blockId: "spya-bbbbbb", quote: "Every condition", confidence: 0.4 })] },
+      "single",
+      BLOCKS,
+    );
+    expect(results).toHaveLength(2);
+    expect(dropped.clampedConfidence).toBe(1);
+    expect(dropped.subOneConfidence).toBe(1);
+    expect(discardedRows(dropped)).toBe(0);
   });
 });

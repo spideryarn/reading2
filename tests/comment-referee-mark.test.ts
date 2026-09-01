@@ -96,6 +96,14 @@ async function call(method: string, url: string, body?: unknown): Promise<Reply>
   return { status, body: text ? JSON.parse(text) : {} };
 }
 
+/** A criterion of another kind, which has no scale for a placement to sit on. */
+async function aScalelessCriterion(): Promise<string> {
+  const row = await beginCriterion(SLUG, "Does this cite the relevant prior work?", {
+    kind: "literature",
+  });
+  return row.id;
+}
+
 /** A `diverging` criterion on this article, so a placement has something to be on. */
 async function aCriterion(): Promise<string> {
   const row = await beginCriterion(SLUG, "Are the controls adequate?", {
@@ -208,9 +216,18 @@ describe("what the route refuses, and it refuses rather than rounds", () => {
 
   it("refuses a placement on a criterion belonging to another article", async () => {
     /* `criterionId` comes off a request, so on its own it names any string.
-       The criteria are read for THIS slug, which in Postgres is scoped to the
-       requesting owner as well (`ownedSlug`), so somebody else's criterion is
-       the same refusal as a made-up one. */
+       The criteria are read for THIS slug, so a criterion saved under another
+       one is the same refusal as a made-up id.
+
+       **That is all this case proves, and the name says so.** It runs against
+       the filesystem store, which has no notion of an owner at all, so it is
+       not evidence about *another referee's* criterion. Owner scoping lives in
+       `ownedSlug` (src/store/pg.ts), which the Postgres store puts in front of
+       every read, and the test that actually holds it there is "a criterion
+       under somebody else's article is not theirs to place on" in
+       tests/referee-criteria-store.test.ts — against a real database, with two
+       owners in it. GPT Sol's finding 6 named this comment as claiming more
+       than the case beneath it checked. */
     const elsewhere = "test-comment-referee-mark-other";
     const other = await beginCriterion(elsewhere, "someone else's question", { kind: "single" });
     try {
@@ -251,6 +268,32 @@ describe("what the route refuses, and it refuses rather than rounds", () => {
 
   it("refuses a criterionId that is not an id", async () => {
     await refused({ criterionId: "../../etc/passwd", valence: 0 }, /criterionId/);
+  });
+
+  it("refuses a placement on a criterion that has no scale to place it on", async () => {
+    /* A `single` or `literature` criterion has no poles, so a signed number
+       against one is signed against nothing: the panel has no ends to print it
+       between and cannot draw it. The database cannot refuse this — a CHECK
+       constraint cannot reach `referee_criteria` to read a kind — so the route
+       is the only place it can be refused, and it refuses with `markProblem`
+       rather than a rule of its own. GPT Sol's finding 6. */
+    const criterionId = await aScalelessCriterion();
+    await refused({ criterionId, valence: -80 }, /two ends/);
+  });
+
+  it("still takes prose tagged to a criterion with no scale", async () => {
+    // The kind rule is about the *number*. A referee writing a sentence about
+    // a literature criterion has placed nothing, and nothing is wrong with it.
+    const criterionId = await aScalelessCriterion();
+    const r = await call("POST", POST, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+      body: "no sign of the 2019 replication",
+      criterionId,
+    });
+    expect(r.status).toBe(201);
+    expect((await loadComments(SLUG))[0]?.criterionId).toBe(criterionId);
   });
 });
 

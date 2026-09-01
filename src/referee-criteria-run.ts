@@ -104,6 +104,7 @@ import {
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
 import {
+  discardedRows,
   type DroppedResults,
   MAX_RESULTS,
   type RefereeCriterionConfig,
@@ -410,6 +411,50 @@ export type CriterionEvent =
  * exist for somebody still there to read one. src/search.ts § `READER_LEFT`.
  */
 const READER_LEFT = "The referee disconnected before this criterion finished.";
+
+/**
+ * **What a referee is told when the model answered and not one row of it could
+ * be kept.**
+ *
+ * There are three outcomes a criterion can have, not two, and the third had no
+ * sentence: the model found passages, the model found nothing, and *the model
+ * found something and produced an answer nothing could be made of* — a passage
+ * anchored and quoted with no valence on a `diverging` criterion, a block id
+ * this paper does not have, a row with no anchor in it at all. Each of those is
+ * dropped and counted by `validateResults`, correctly; what was wrong is what
+ * happened next. The counts stayed in the log, the criterion was stored `done`
+ * with no results, and the panel printed *"the model did not find a passage for
+ * this"*, which is the sentence for the **second** outcome and is false for the
+ * third. GPT Sol's finding 4,
+ * docs/plans/260831an-referee-mode-stage3b5c-review-sol.md, and it is the same
+ * mistake as the fabricated neutral valence it replaced: an incomplete answer
+ * coerced into a clean-looking state. docs/reusable/silent-success.md.
+ *
+ * So this is a **failed run** rather than an empty one, which is both honest
+ * and useful: the row goes to `status: "error"`, the panel prints this sentence
+ * and offers Try again, and `withCriterion` will reset the row on a retry —
+ * none of which is true of a `done` row with no results. A partial answer is
+ * still a success: one usable row means the criterion ran, and the rows that
+ * were dropped stay a log line.
+ *
+ * **It is not in src/messages.ts, and docs/project/copy.md says it should be.**
+ * That is a known debt rather than a decision: it is a failure a model call can
+ * return, which is exactly what that file is for. It lives here for now on the
+ * `mic-` family's arrangement — beside the code that raises it, with a code on
+ * the end so a referee can quote four characters. Moving it is two mechanical
+ * steps and both matter: export it there, **and register `ai-unusable` in
+ * `CODE_KINDS`**. Skipping the second has no symptom here — `kindOfMessage`
+ * returns null, `worthRetrying` says yes, and Retry is the right answer anyway
+ * — which is precisely why it would be skipped.
+ *
+ * The rule it must keep, whichever file it lives in: **a null result is
+ * evidence about the model, never a claim about the paper.**
+ * tests/referee-copy-is-about-the-model.test.ts holds it to that.
+ */
+export const ANSWER_UNUSABLE =
+  "The model pointed at passages but did not give a usable answer about any of them, so " +
+  "there is nothing to show. That is about the answer rather than about the paper, and " +
+  "asking again usually works. [ai-unusable]";
 
 /**
  * The observed search count, stamped onto every literature result **in place of
@@ -738,6 +783,16 @@ export async function* runCriterionStream({
     );
   } catch {
     // Nothing worth failing a referee's criterion over.
+  }
+
+  /* **Nothing kept, and rows thrown away: a failed run, not an empty one.**
+     After the log, so the counts that say *which* way it failed are recorded
+     either way. `discardedRows` (src/referee-criteria.ts) is what "thrown away"
+     means, and an empty `results` list with nothing discarded is left alone —
+     that is the model saying it looked and found nothing, which is a real
+     answer and the one this must not be confused with. See `ANSWER_UNUSABLE`. */
+  if (results.length === 0 && discardedRows(dropped) > 0) {
+    throw new Error(ANSWER_UNUSABLE, { cause: "every-row-discarded" });
   }
 
   yield {
