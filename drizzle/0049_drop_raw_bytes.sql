@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."article_revisions" DROP COLUMN "raw_bytes";

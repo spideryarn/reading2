@@ -328,6 +328,18 @@ when("a round trip through Postgres", () => {
       const mtime = (await stat(path.join(ROOT, "data", slug, "blocks.json"))).mtime;
       const loaded = await loadArticleIntoPg(slug, {
         createdAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : mtime,
+        /* **`root: ROOT` pins this suite to the working `data/`, deliberately.**
+           `loadArticleIntoPg` now defaults to the committed corpus
+           (tests/helpers/load-article.ts). This file cannot follow yet: it
+           calls `seedReaderStateFromFiles`, which reads through src/chat.ts,
+           src/comments.ts, src/shelf.ts, src/searches.ts and
+           src/glossary-lookups.ts — every one of which pins its own root to the
+           repository and consults no `SPIDERYARN_DATA_ROOT`. Artefacts from the
+           corpus and reader state from `data/` would be two different articles,
+           and the round trip would compare one against the other. Both halves
+           stay on `data/` until those modules take a root.
+           docs/plans/260901b-committed-fixture-corpus.md, stage 4 sub-stage A. */
+        root: ROOT,
       });
       /* Asserted here rather than in a test of its own, because everything
          below depends on it and a `beforeAll` that carried an article forward
@@ -541,11 +553,12 @@ when("a round trip through Postgres", () => {
      * passes this file today**, because nothing here ever looks at one. Found
      * by GPT Sol reviewing docs/plans/260827o-raw-bytes-in-storage.md, 2026-08-27.
      *
-     * It is not the loss that is happening, though. It is worse and quieter:
-     * `src/store/export.ts` writes `revision.rawBytes` to **`raw.html`
-     * unconditionally**, so a PDF article round-trips to a file named
+     * It was not the loss that was happening, though. It was worse and quieter:
+     * `src/store/export.ts` wrote the raw bytes to **`raw.html`
+     * unconditionally**, so a PDF article round-tripped to a file named
      * `raw.html` holding PDF bytes. The name is the only thing that says which
-     * decoder to use, and it now says the wrong one.
+     * decoder to use, and it said the wrong one. It takes the name from
+     * `readRawDocument`'s `kind` now, which comes from `raw_source_kind`.
      *
      * Bytes, not JSON, so this cannot join `it.each(ARTEFACTS)`.
      */
@@ -584,11 +597,13 @@ when("a round trip through Postgres", () => {
          manifests — therefore copies no `fetch` step at all, and the export has
          no object to write.
 
-         `db:import` read the bare file into `article_revisions.raw_bytes`, and
-         C6 dropped that column, so this is a loss the migration makes rather
-         than one it found. It is confined to legacy filesystem data: no path
-         today writes a raw document without a manifest, and the two acquisition
-         paths in src/pipeline.ts both call `storeRawSource` before writing one.
+         `db:import` read the bare file into `article_revisions.raw_bytes`; C6
+         stopped writing that column and 2026-09-01 dropped it
+         (docs/plans/260831b-finish-the-database-move.md § *Stage 4*), so this
+         is a loss the migration makes rather than one it found. It is confined
+         to legacy filesystem data: no path today writes a raw document without
+         a manifest, and the two acquisition paths in src/pipeline.ts both call
+         `storeRawSource` before writing one.
 
          Asserted rather than skipped, so the day something starts exporting it
          this goes red and somebody has to decide what happened. */

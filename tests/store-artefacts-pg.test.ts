@@ -636,21 +636,27 @@ when("reassembling meta and raw from their columns", () => {
     expect(raw?.storedBytes, "the object in the bucket").toBe(29);
   });
 
-  it("falls back to the stored bytes column for a revision written before raw_byte_count", async () => {
-    /* `raw_bytes` is dropped at the end of this landing, so it is the fallback
-       rather than the answer — but a revision that predates the column still
-       has to read back with a size. */
+  it("reads zero, not the object's size, for a revision written before raw_byte_count", async () => {
+    /* **The two numbers stay apart even when one of them is missing.** This
+       used to fall back to `length(raw_bytes)`; that column was dropped on
+       2026-09-01 (docs/plans/260831b-finish-the-database-move.md § *Stage 4*)
+       and nothing records the network count for such a row, so `bytes` is 0.
+       The temptation is `storedBytes` — but that is the size of the *decoded*
+       object and answering with it would be the same lie the two hashes exist
+       to prevent, quietly, on the rows least able to contradict it. */
     const db = getDb();
     await db
       .update(articleRevisions)
-      .set({ rawByteCount: null, rawBytes: Buffer.from("<p>eleven</p>") })
+      .set({ rawByteCount: null })
       .where(eq(articleRevisions.id, ref.revisionId));
     try {
-      expect((await readArtefact(ref, getDb(), SLUG, "fetch", "raw"))?.bytes).toBe(13);
+      const raw = await readArtefact(ref, getDb(), SLUG, "fetch", "raw");
+      expect(raw?.bytes, "the network count, which nothing recorded").toBe(0);
+      expect(raw?.storedBytes, "the object's size, which is still known").toBe(29);
     } finally {
       await db
         .update(articleRevisions)
-        .set({ rawByteCount: 31, rawBytes: null })
+        .set({ rawByteCount: 31 })
         .where(eq(articleRevisions.id, ref.revisionId));
     }
   });
@@ -663,73 +669,27 @@ when("reassembling meta and raw from their columns", () => {
     expect(raw?.sha256).not.toBe(raw?.storedSha256);
   });
 
-  it("refuses a row whose reference and bytes are two different documents", async () => {
-    /* PDF magic in `raw_bytes`, `html` in the source reference. The two describe
-       the same document — for a PDF the stored object *is* the fetched bytes,
-       for HTML it is those bytes decoded — so they cannot legitimately be
-       different kinds, and this row needs a person rather than a winner.
-
-       My first version of this test asserted that the reference wins. GPT Sol
-       said no on 2026-08-28, and it is right: silently preferring either one
-       hides the corruption, and the cost of refusing is one article reading as
-       unfetched until somebody looks. */
-    const db = getDb();
-    await db
-      .update(articleRevisions)
-      .set({ rawBytes: Buffer.from("%PDF-1.7\nnot really") })
-      .where(eq(articleRevisions.id, ref.revisionId));
-    try {
-      expect(await readArtefact(ref, getDb(), SLUG, "fetch", "raw")).toBeNull();
-    } finally {
-      await db
-        .update(articleRevisions)
-        .set({ rawBytes: null })
-        .where(eq(articleRevisions.id, ref.revisionId));
-    }
-  });
-
-  it("falls back to sniffing the bytes for a row with no source reference", async () => {
-    /* The legacy branch, and it dies with `raw_bytes` at the end of this
-       landing. `%PDF-` is what `sniffKind` looks for, and the content type says
-       HTML — deliberately, because the stored content type is the *server's
-       claim* and the bytes are the authority. */
-    const db = getDb();
-    await db
-      .update(articleRevisions)
-      .set({
-        rawSourceSha256: null,
-        rawSourceKind: null,
-        rawBytes: Buffer.from("%PDF-1.7\nnot really"),
-      })
-      .where(eq(articleRevisions.id, ref.revisionId));
-    try {
-      const raw = await readArtefact(ref, getDb(), SLUG, "fetch", "raw");
-      expect(raw?.kind).toBe("pdf");
-      expect(raw?.file).toBe("raw.pdf");
-      expect(raw?.storedSha256).toBeUndefined();
-      /* No reference means no `raw_sources` row to join, so the object's size is
-         absent rather than guessed from the network count. */
-      expect(raw?.storedBytes).toBeUndefined();
-    } finally {
-      await db
-        .update(articleRevisions)
-        .set({
-          rawSourceSha256: STORED_SHA,
-          rawSourceKind: "html",
-          rawBytes: null,
-        })
-        .where(eq(articleRevisions.id, ref.revisionId));
-    }
-  });
-
+  /**
+   * **`raw_source_kind` is the only thing that answers, and `null` is a legal
+   * answer.**
+   *
+   * There were two more tests here until 2026-09-01, and both were about
+   * `raw_bytes`: one that a PDF magic number in the column beside an `html`
+   * reference was *refused* rather than resolved in either direction (GPT Sol,
+   * 2026-08-28 — silently preferring one hides the corruption), and one that a
+   * row with no reference fell back to sniffing those bytes. The column is
+   * dropped (docs/plans/260831b-finish-the-database-move.md § *Stage 4*), so
+   * there is nothing left to disagree with the reference and nothing left to
+   * sniff. What survives is this: no reference, no manifest.
+   */
   it("says nothing rather than guessing a filename it cannot know", async () => {
-    /* No source reference and no bytes. `file` is the only thing that tells a
-       later reader which decoder to use, so a guess here is the bug `db:export`
-       shipped until 2026-08-27: every exported PDF named `raw.html`. */
+    /* No source reference. `file` is the only thing that tells a later reader
+       which decoder to use, so a guess here is the bug `db:export` shipped
+       until 2026-08-27: every exported PDF named `raw.html`. */
     const db = getDb();
     await db
       .update(articleRevisions)
-      .set({ rawSourceSha256: null, rawSourceKind: null, rawBytes: null })
+      .set({ rawSourceSha256: null, rawSourceKind: null })
       .where(eq(articleRevisions.id, ref.revisionId));
     try {
       expect(await readArtefact(ref, getDb(), SLUG, "fetch", "raw")).toBeNull();

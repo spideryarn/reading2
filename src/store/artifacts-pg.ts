@@ -65,7 +65,6 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
-import { sniffKind } from "../fetch.js";
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
@@ -322,44 +321,23 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
  * which is `RawManifest.filename` and gets the `raw_filename` column in C6. An
  * earlier version of this comment had those two confused; GPT Sol, 2026-08-28.
  *
- * So the only question is the kind, and there are two places that can answer:
+ * So the only question is the kind, and **`raw_source_kind` is the one place
+ * that answers it** — the media kind stored beside the digest of the object in
+ * the `sources` bucket, a fact recorded by the fetch that stored the bytes.
  *
- * 1. **`raw_source_kind`** — the media kind stored beside the digest of the
- *    object in the `sources` bucket. A recorded fact, and the one with a
- *    future.
- * 2. **Sniffing `raw_bytes`** — what `db:export` does, and only for rows that
- *    predate the source reference. `raw_bytes` is dropped at the end of this
- *    landing, so this branch dies with it; it is here so that the articles
- *    already in the database do not read as unfetched in the meantime.
- *
- * **When both answer and they disagree, that is corruption and it is refused.**
- * The two describe the same document — for a PDF the stored object *is* the
- * fetched bytes, and for HTML it is those bytes decoded — so they cannot
- * legitimately be different kinds. Silently preferring either one would hide a
- * row that needs a person. GPT Sol, 2026-08-28.
+ * There used to be a second answer: sniffing `raw_bytes`, for rows that predated
+ * the source reference, with a refusal when the two disagreed because that
+ * combination is corruption rather than a preference to be had. `raw_bytes` was
+ * dropped on 2026-09-01 (docs/plans/260831b-finish-the-database-move.md § *Stage
+ * 4*) and the sniffing branch went with it, disagreement and all.
  *
  * `null` when nothing can answer. **A guessed kind would be worse than an
  * absent manifest**: the name it produces is the only thing that tells a later
  * reader which decoder to use, and an `.html` name on a PDF is exactly the bug
  * `db:export` shipped until 2026-08-27.
  */
-function rawKindOf(row: RevisionRow, slug: string): DocumentKind | null {
-  const referenced =
-    row.rawSourceKind === "pdf" || row.rawSourceKind === "html" ? row.rawSourceKind : null;
-  const sniffed = row.rawBytes ? sniffKind(row.rawContentType, row.rawBytes) : null;
-
-  if (referenced && sniffed && referenced !== sniffed) {
-    /* `warn`, not `debug`: this one does not resolve itself. Every later read
-       answers "no raw document" for an article that plainly has one, and the
-       only symptom is a `fetch` step that will not stay done. */
-    alog.warn(
-      { slug, referenced, sniffed },
-      `raw document is two kinds at once for ${slug}: the source reference says ` +
-        `${referenced} and the stored bytes look like ${sniffed}`,
-    );
-    return null;
-  }
-  return referenced ?? sniffed;
+function rawKindOf(row: RevisionRow): DocumentKind | null {
+  return row.rawSourceKind === "pdf" || row.rawSourceKind === "html" ? row.rawSourceKind : null;
 }
 
 /**
@@ -382,12 +360,8 @@ function rawKindOf(row: RevisionRow, slug: string): DocumentKind | null {
  * this takes a second row. `raw_sources.bytes` describes the object at
  * `storedSha256`, and it is the only place that number lives.
  */
-function readRaw(
-  row: RevisionRow,
-  slug: string,
-  source: { bytes: number } | null,
-): RawManifest | null {
-  const kind = rawKindOf(row, slug);
+function readRaw(row: RevisionRow, source: { bytes: number } | null): RawManifest | null {
+  const kind = rawKindOf(row);
   if (!kind) return null;
   const fetchedAt = row.fetchedAt ?? row.createdAt;
   return {
@@ -398,13 +372,14 @@ function readRaw(
     ...(row.rawFilename === null ? {} : { filename: row.rawFilename }),
     contentType: row.rawContentType,
     encoding: row.rawEncoding,
-    /* **`raw_byte_count`, not `raw_bytes.byteLength`.** This read `0` until
+    /* **`raw_byte_count`, and now nothing else.** This read `0` until
        2026-08-28 — the column had just been added for exactly this number and
        the reader was not changed to use it, so a manifest that went in saying
-       4096 came back saying 0. And a test asserted the 0. `raw_bytes` is
-       dropped at the end of this landing, so it is the fallback rather than the
-       answer: a revision written before the column exists still has it. */
-    bytes: row.rawByteCount ?? row.rawBytes?.byteLength ?? 0,
+       4096 came back saying 0. And a test asserted the 0. It fell back to
+       `raw_bytes.byteLength` for revisions older than the column; `raw_bytes`
+       was dropped on 2026-09-01 and `0` is what such a revision reads as now —
+       which is the honest answer, since nothing records the number. */
+    bytes: row.rawByteCount ?? 0,
     sha256: row.rawSha256,
     ...(row.rawSourceSha256 === null ? {} : { storedSha256: row.rawSourceSha256 }),
     ...(source === null ? {} : { storedBytes: source.bytes }),
@@ -590,7 +565,7 @@ export async function readArtefactOutcome<K extends ArtifactKind>(
     if (!row) return null;
     if (site.at === "column") return row[site.column];
     if (site.of === "meta") return readMeta(ref, row);
-    return readRaw(row, slug, await sourceRowFor(exec, row));
+    return readRaw(row, await sourceRowFor(exec, row));
   })();
 
   if (value === null || value === undefined) return { state: "absent" };

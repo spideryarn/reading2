@@ -318,6 +318,19 @@ when("the filesystem and Postgres stores agree", () => {
       const mtime = (await stat(path.join(ROOT, "data", slug, "blocks.json"))).mtime;
       const result = await loadArticleIntoPg(slug, {
         createdAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : mtime,
+        /* **`root: ROOT` pins this suite to the working `data/`, deliberately.**
+           `loadArticleIntoPg` now defaults to the committed corpus
+           (tests/helpers/load-article.ts), which is where it should have been
+           reading all along. This file cannot follow yet: it also seeds reader
+           state, and `seedShelfFromFiles`/`seedCommentsFromFiles` go through
+           src/shelf.ts and src/comments.ts, whose `ROOT` is
+           `path.resolve(import.meta.dirname, "..")` — the repository root, with
+           no `SPIDERYARN_DATA_ROOT` in it. Point the artefacts at the corpus
+           and the reader state would still come from `data/`, and the suite
+           would compare one article's blocks against another's comments. So
+           both halves stay on `data/` until those modules take a root.
+           docs/plans/260901b-committed-fixture-corpus.md, stage 4 sub-stage A. */
+        root: ROOT,
       });
       loaded.set(slug, result);
       /* Reader state does not come through the artefact seam and must not be
@@ -533,7 +546,7 @@ when("the filesystem and Postgres stores agree", () => {
 
     it("copies its steps and is then refused publication, saying why", async () => {
       await forgetRevisions([LEGACY_SLUG]);
-      const result = await loadArticleIntoPg(LEGACY_SLUG, { publish: "try" });
+      const result = await loadArticleIntoPg(LEGACY_SLUG, { publish: "try", root: ROOT });
 
       // The copy worked: this is not "nothing happened".
       expect(result.basedOn).toBeNull();

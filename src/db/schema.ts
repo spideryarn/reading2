@@ -385,8 +385,8 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * What the property is *for* is the sentence below it: a failed re-extraction
  * must not overwrite a good article in place. That is about the **text**. A
- * revision per glossary regeneration would copy every `revision_blocks` row and
- * every `raw_bytes` blob to add one JSONB value, and no reader could tell the
+ * revision per glossary regeneration would copy every `revision_blocks` row of
+ * the article to add one JSONB value, and no reader could tell the
  * difference — a single-column `UPDATE` is already atomic.
  *
  * **The limit of that licence, which a review found and which the code
@@ -486,13 +486,17 @@ export const articleRevisions = spideryarn.table(
     fetchedAt: timestamp("fetched_at", { withTimezone: true }),
 
     /**
-     * The fetched bytes, undecoded — NOT a `raw_html` text column.
-     * `data/<slug>/raw.html` is misnamed: src/pipeline.ts writes a decoded
-     * string there and throws away the bytes, the content type and the sniffed
-     * encoding. Naming a column `raw_html` would bless that permanently. See
-     * docs/project/fetching.md for why the encoding cannot be re-derived later.
+     * The origin's own `Content-Type` header, kept beside the encoding for the
+     * reason docs/project/fetching.md gives: the encoding cannot be re-derived
+     * later.
+     *
+     * **`raw_bytes` used to sit above this**, a `bytea` holding the entire
+     * fetched document. It was dropped on 2026-09-01
+     * (docs/plans/260831b-finish-the-database-move.md § *Stage 4*): the document
+     * is a content-addressed object in the `sources` bucket now, named by
+     * `raw_source_sha256`/`raw_source_kind` below, and every article in the
+     * corpus had been refetched through that reference first.
      */
-    rawBytes: bytea("raw_bytes"),
     rawContentType: text("raw_content_type"),
     rawEncoding: text("raw_encoding"),
     /**
@@ -506,9 +510,9 @@ export const articleRevisions = spideryarn.table(
      * **How many bytes the origin sent** — `RawManifest.bytes`, and not the size
      * of anything we kept.
      *
-     * A column rather than `length(raw_bytes)`, because `raw_bytes` is dropped
-     * at the end of docs/plans/260827aa-delete-the-importer.md and this number has to
-     * outlive it. `raw_sources.bytes` is not a substitute: that describes the
+     * A column rather than `length(raw_bytes)`, because `raw_bytes` was dropped
+     * on 2026-09-01 and this number had to outlive it — which it now has.
+     * `raw_sources.bytes` is not a substitute: that describes the
      * object at `raw_source_sha256`, which for any page that was not already
      * UTF-8 is a *different byte string* — `writeRaw` stores the decoded text,
      * so the stored size and the network size differ for exactly the reason the

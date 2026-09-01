@@ -3,17 +3,20 @@
  *
  * ## The hole this exists to catch
  *
- * `writeRawDocument` reads `article_revisions.raw_bytes` and returns `[]` when
- * it is null — no `raw.html`, no `raw.json`, no error. That was right while the
- * payload was a `bytea` column. After docs/plans/260827aa-delete-the-importer.md § C6 it
- * is a **reference**: `raw_source_sha256` plus `raw_source_kind`, with the bytes
- * in the `sources` bucket, and `raw_bytes` is null for everything the pipeline
- * writes. So the export silently stops exporting source documents, and the
- * signal is indistinguishable from an article that never had one — which is the
+ * `writeRawDocument` used to read `article_revisions.raw_bytes` and return `[]`
+ * when it was null — no `raw.html`, no `raw.json`, no error. That was right
+ * while the payload was a `bytea` column. After docs/plans/260827aa-delete-the-importer.md
+ * § C6 it is a **reference**: `raw_source_sha256` plus `raw_source_kind`, with
+ * the bytes in the `sources` bucket, and the column was null for everything the
+ * pipeline wrote. So the export silently stopped exporting source documents,
+ * with a signal indistinguishable from an article that never had one — the
  * shape docs/reusable/silent-success.md is about, arriving in the one tool whose
  * whole job is "you can always get your data back out".
  *
- * The demolition drops the column outright, so this is not optional for long.
+ * The column was dropped on 2026-09-01
+ * (docs/plans/260831b-finish-the-database-move.md § *Stage 4*), so there is no
+ * longer a second place the export could be reading from. This file is what
+ * says the remaining one works end to end.
  *
  * ## Why it is built on the fixture loader rather than hand-built rows
  *
@@ -36,7 +39,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -50,6 +53,7 @@ import type { RawSourceStore } from "../src/store/blobs.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { RawManifest } from "../src/fetch.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -59,6 +63,29 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** The source fixture: the smallest article with a real `raw.json` behind it. */
 const FROM = "writes";
+/**
+ * The clone's **source** is the committed corpus; its **destination** is the
+ * working `data/`.
+ *
+ * `FROM` used to be read out of `path.join(ROOT, "data", FROM)`, which is a
+ * developer's own gitignored working copy — absent on a fresh clone, different
+ * on every machine. docs/plans/260901b-committed-fixture-corpus.md.
+ *
+ * The destination stays on `ROOT` and is passed to `loadArticleIntoPg` as
+ * `root`, because that now defaults to the corpus and the scratch article must
+ * not be written into a tracked fixture directory.
+ */
+requireFixture(FROM, [
+  "raw.json",
+  "raw.html",
+  "meta.json",
+  "blocks.json",
+  "tree.json",
+  "labels.json",
+  "output.html",
+  "output.blocks.json",
+]);
+
 /** Ours, and `test-`-prefixed so the other suites' `data/` scans skip it. */
 const SLUG = "test-export-raw";
 
@@ -93,12 +120,14 @@ when("exporting an article whose bytes are in the bucket", () => {
 
   beforeAll(async () => {
     original = JSON.parse(
-      await readFile(path.join(ROOT, "data", FROM, "raw.json"), "utf8"),
+      await readFile(path.join(FIXTURE_ROOT, "data", FROM, "raw.json"), "utf8"),
     ) as RawManifest;
-    originalBytes = await readFile(path.join(ROOT, "data", FROM, original.file));
+    originalBytes = await readFile(path.join(FIXTURE_ROOT, "data", FROM, original.file));
 
     await forget();
-    await cp(path.join(ROOT, "data", FROM), path.join(ROOT, "data", SLUG), { recursive: true });
+    await cp(path.join(FIXTURE_ROOT, "data", FROM), path.join(ROOT, "data", SLUG), {
+      recursive: true,
+    });
     /* The artefacts name their own slug and the readers check it, so a copy
        that kept the old name would fail for a reason unrelated to the subject. */
     for (const name of await readdir(path.join(ROOT, "data", SLUG))) {
@@ -115,13 +144,18 @@ when("exporting an article whose bytes are in the bucket", () => {
        from `data/<slug>/blocks.json`, which belongs to `hierarchy`. Copy only the
        first and `copyArtefacts` refuses the whole article, correctly, for
        having some but not all of the `blocks` step's products. */
-    await cp(path.join(ROOT, "output", `${FROM}.html`), path.join(ROOT, "output", `${SLUG}.html`));
+    /* `output/` is gitignored, so a fresh clone has no such directory yet. */
+    await mkdir(path.join(ROOT, "output"), { recursive: true });
     await cp(
-      path.join(ROOT, "output", `${FROM}.blocks.json`),
+      path.join(FIXTURE_ROOT, "output", `${FROM}.html`),
+      path.join(ROOT, "output", `${SLUG}.html`),
+    );
+    await cp(
+      path.join(FIXTURE_ROOT, "output", `${FROM}.blocks.json`),
       path.join(ROOT, "output", `${SLUG}.blocks.json`),
     );
 
-    await loadArticleIntoPg(SLUG);
+    await loadArticleIntoPg(SLUG, { root: ROOT });
 
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-raw-"));
     const { exportArticle } = await import("../src/store/export.js");
@@ -159,11 +193,13 @@ when("exporting an article whose bytes are in the bucket", () => {
     await closeDb();
   });
 
-  it("proves the fixture really has no raw_bytes to fall back on", async () => {
-    /* The subject is "the reference path works", and it would be untested if the
-       row happened to carry the column as well. Asserted rather than assumed,
-       because a fixture that quietly kept `raw_bytes` would make every other
-       assertion in this file pass against the old code path. */
+  it("proves the fixture really is a reference, not something else that works", async () => {
+    /* The subject is "the reference path works", and every other assertion in
+       this file would pass on a fixture that got its bytes some other way.
+       Until 2026-09-01 the other way was `raw_bytes` and this test asserted the
+       column was null; the column is dropped, so what is left to assert — and
+       it is the half that always mattered — is that the row the export reads
+       carries the reference the bucket was written under. */
     const { getDb } = await import("../src/db/client.js");
     const { articleRevisions, articles } = await import("../src/db/schema.js");
     const { eq } = await import("drizzle-orm");
@@ -174,7 +210,6 @@ when("exporting an article whose bytes are in the bucket", () => {
        a query over all revisions asserts about a row nothing will ever export. */
     const rows = await getDb()
       .select({
-        rawBytes: articleRevisions.rawBytes,
         reference: articleRevisions.rawSourceSha256,
         kind: articleRevisions.rawSourceKind,
       })
@@ -183,7 +218,6 @@ when("exporting an article whose bytes are in the bucket", () => {
       .where(eq(articles.slug, SLUG));
     expect(rows).toHaveLength(1);
     const row = rows[0];
-    expect(row?.rawBytes).toBeNull();
     expect(row?.reference).toBe(original.storedSha256);
     expect(row?.kind).toBe(original.kind);
   });

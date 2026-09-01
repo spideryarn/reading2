@@ -47,13 +47,19 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { STEPS, STEP_ORDER } from "../src/pipeline.js";
-import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
+import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { StepName } from "../src/types.js";
 import { copyArtefacts, readParts } from "../src/store/copy-artefacts.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "writes";
+
+/** `data/` and `output/` under one root — the filesystem store's `locate`. */
+const locate = (root: string) => () => ({
+  dir: path.join(root, "data", SLUG),
+  htmlFile: path.join(root, "output", `${SLUG}.html`),
+});
 
 /**
  * Every file the artefact store owns for `data/writes`, written out rather than
@@ -94,6 +100,33 @@ const OWNED = [
   "output/writes.blocks.json",
 ] as const;
 
+/**
+ * The source is the **committed corpus**, not `data/`.
+ *
+ * Until 2026-09-01 this file read `fsArtifacts` — the default store, rooted at
+ * the repository — and compared against `path.join(ROOT, relative)`, also the
+ * repository. So on a laptop it copied a developer's own working `data/writes`,
+ * and on a fresh clone `data/` is gitignored and there was nothing to copy at
+ * all. `OWNED` guarded the second case ("`${relative}` is missing from the
+ * fixture"), which is why it failed loudly rather than passing empty — but it
+ * never made the first case visible.
+ *
+ * The parts are derived from `OWNED` rather than listed twice: a row added
+ * there is a file this asks the corpus for, in the same edit.
+ * docs/plans/260901b-committed-fixture-corpus.md.
+ */
+requireFixture(
+  SLUG,
+  OWNED.map((relative) =>
+    /* `data/writes/tree.json` → `tree.json`; `output/writes.blocks.json` →
+       `output.blocks.json`, which is `fixturePath`'s name for the two files the
+       store keeps outside the article's directory. */
+    relative.startsWith("data/")
+      ? path.basename(relative)
+      : `output${path.basename(relative).slice(SLUG.length)}`,
+  ),
+);
+
 let out = "";
 let destination: ArtifactStore;
 let copied: StepName[] = [];
@@ -103,11 +136,12 @@ const readIfThere = (file: string) => readFile(file, "utf-8").catch(() => null);
 describe("copying an article between two artefact stores", () => {
   beforeAll(async () => {
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-copy-"));
-    destination = createFsArtifactStore(() => ({
-      dir: path.join(out, "data", SLUG),
-      htmlFile: path.join(out, "output", `${SLUG}.html`),
-    }));
-    copied = await copyArtefacts(fsArtifacts, destination, SLUG);
+    destination = createFsArtifactStore(locate(out));
+    copied = await copyArtefacts(
+      createFsArtifactStore(locate(FIXTURE_ROOT)),
+      destination,
+      SLUG,
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -122,7 +156,7 @@ describe("copying an article between two artefact stores", () => {
   });
 
   it.each(OWNED)("writes every file the store owns: %s", async (relative) => {
-    const before = await readIfThere(path.join(ROOT, relative));
+    const before = await readIfThere(path.join(FIXTURE_ROOT, relative));
     // Guards the list itself: a fixture that lost a file would otherwise turn
     // this row into "absent equals absent".
     expect(before, `${relative} is missing from the fixture`).not.toBeNull();
@@ -187,14 +221,10 @@ describe("copying an article that has only been fetched", () => {
     // The manifest alone: `fetch` produces `raw`, and `raw` *is* the manifest.
     await writeFile(
       path.join(from, "data", SLUG, "raw.json"),
-      await readFile(path.join(ROOT, "data", SLUG, "raw.json"), "utf-8"),
+      await readFile(path.join(FIXTURE_ROOT, "data", SLUG, "raw.json"), "utf-8"),
       "utf-8",
     );
 
-    const locate = (root: string) => () => ({
-      dir: path.join(root, "data", SLUG),
-      htmlFile: path.join(root, "output", `${SLUG}.html`),
-    });
     sparse = await copyArtefacts(
       createFsArtifactStore(locate(from)),
       createFsArtifactStore(locate(to)),
@@ -220,10 +250,6 @@ describe("copying an article that has only been fetched", () => {
       // `extract` produces extractedHtml *and* meta; give it only the HTML.
       await writeFile(path.join(half, "output", `${SLUG}.html`), "<p>half a step</p>", "utf8");
 
-      const locate = (root: string) => () => ({
-        dir: path.join(root, "data", SLUG),
-        htmlFile: path.join(root, "output", `${SLUG}.html`),
-      });
       await expect(
         copyArtefacts(
           createFsArtifactStore(locate(half)),
@@ -244,10 +270,7 @@ describe("copying an article that has only been fetched", () => {
   it("does not invent a step the source never had", async () => {
     /* Writing an empty part set would record a step as having run — worse than
        missing, because `stepIsDone` would then skip it. */
-    const destination = createFsArtifactStore(() => ({
-      dir: path.join(to, "data", SLUG),
-      htmlFile: path.join(to, "output", `${SLUG}.html`),
-    }));
+    const destination = createFsArtifactStore(locate(to));
     for (const step of STEP_ORDER) {
       if (step === "fetch") continue;
       expect(await destination.has(SLUG, step, STEPS[step].produces)).toBe(false);

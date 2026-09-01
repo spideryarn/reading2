@@ -3,7 +3,7 @@
  *
  * `currentRevision` and `listArticles` both selected `articleRevisions` whole —
  * `select({ article: articles, revision: articleRevisions })` — and one of that
- * table's columns is `raw_bytes`, a `bytea` holding the entire source document,
+ * table's columns was `raw_bytes`, a `bytea` holding the entire source document,
  * up to 32 MiB at stage 1's own ceiling. `listArticles` runs it **once per
  * article**. Measured on this laptop's database, 8 articles:
  *
@@ -16,7 +16,10 @@
  *
  * The first version took `raw_bytes` out and then asserted the selection was
  * **exactly** "every other column", so that a column added to the schema could
- * not be silently dropped from every read. That is a real property and it is
+ * not be silently dropped from every read. (That column no longer exists — it
+ * was dropped on 2026-09-01, docs/plans/260831b-finish-the-database-move.md
+ * § *Stage 4* — but the map it provoked outlived it, which is the point of the
+ * paragraph below.) That is a real property and it is
  * kept below. What it also did was freeze everything else in place: a glossary
  * read went on pulling `extracted_html` and `stamped_html` — the whole article,
  * twice — plus the tree, the labels, the ideas and the summaries, roughly
@@ -126,25 +129,46 @@ describe("the revision column policy", () => {
   });
 
   /**
-   * **And the source document to exactly one read, which is the one that is
-   * *for* it.**
+   * **And the pointer to the source document to exactly one read, which is the
+   * one that is *for* it.**
    *
-   * `rawBytes` was in the list above until 2026-08-31 — it was the finding that
-   * started this map, because up to 32 MiB of PDF was arriving on every article
-   * load. It is granted now to `rawSource` and to nothing else: that read runs
-   * when somebody presses *view the original*, and it is the request the bytes
-   * are the answer to. Written as an equality rather than a `toBeDefined`, so
-   * granting it to a second read fails here.
+   * `rawBytes` was the finding that started this map — up to 32 MiB of PDF
+   * arriving on every article load. It was moved out of every read on
+   * 2026-08-31, granted to `rawSource` alone, and the column itself was dropped
+   * on 2026-09-01 (docs/plans/260831b-finish-the-database-move.md § *Stage 4*):
+   * the document is an object in the `sources` bucket and the row holds a
+   * reference to it. So this now pins the **reference**, which is what
+   * `readRawDocument` follows, to the one read that runs when somebody presses
+   * *view the original*.
    *
-   * Note what `rawSource` may still not have: the tree, the blocks, the
-   * artefacts, or anything from `META_COLUMNS`. It is five columns.
+   * Written as an equality rather than a `toBeDefined`, so granting the
+   * reference to a second read fails here — and so does letting `rawSource`
+   * quietly widen. Note what it may still not have: the tree, the blocks, the
+   * artefacts, or anything from `META_COLUMNS`. It is four columns.
    * docs/plans/plain-mode-and-the-way-out.md § 5.
    */
-  it("gives the source document to the one read that serves it, and no other", () => {
-    expect(POLICY.rawBytes).toEqual({ rawSource: "value" });
+  it("gives the source reference to the one read that serves it, and no other", () => {
+    expect(POLICY.rawSourceSha256).toEqual({ rawSource: "value" });
+    expect(POLICY.rawSourceKind).toEqual({ rawSource: "value" });
     expect(policyGrants("rawSource")).toEqual(
-      ["id", "rawBytes", "rawContentType", "rawFilename", "rawSourceKind", "rawSourceSha256"].sort(),
+      ["id", "rawFilename", "rawSourceKind", "rawSourceSha256"].sort(),
     );
+  });
+
+  /**
+   * **And `raw_content_type` to nobody**, which is a decision rather than an
+   * omission.
+   *
+   * It is the *origin's* `Content-Type` header. The response's is decided from
+   * `raw_source_kind`, so that a valid PDF fetched as
+   * `application/octet-stream` is not served as one. It was granted to
+   * `rawSource` only so `readRawDocument` could sniff the legacy `raw_bytes`
+   * branch, which had no recorded kind to prefer; that branch went with the
+   * column on 2026-09-01. `db:export` still writes it into `raw.json`, and
+   * reads the whole table to do it rather than coming through here.
+   */
+  it("gives the origin's content type to no read at all", () => {
+    expect(POLICY.rawContentType).toEqual({});
   });
 
   it("still carries the hash, which is what actually gets read", () => {
@@ -285,30 +309,34 @@ describe("the query actually uses its projection", () => {
   const sqlFor = (read: Parameters<typeof currentRevisionQuery>[2]): string =>
     currentRevisionQuery(new QueryBuilder() as never, "some-slug", read).toSQL().sql;
 
-  it("never sends the source document or the whole-article HTML", () => {
+  it("never sends the source reference or the whole-article HTML", () => {
     /* **All of them**, from the one list above. It said six, then eight, and
        was missing `sketch` and `arc` both times — which is how a projection
        acquires a column nobody notices. It is a shared const now, and the test
        above holds it against the real thing.
 
-       **Except `rawSource`, which is the one read that is for those bytes**, and
-       it is excluded by name rather than by a `try`: naming it is what makes
+       **Except `rawSource`, which is the one read that is for the document**,
+       and it is excluded by name rather than by a `try`: naming it is what makes
        adding a *second* exception a decision somebody has to write down here.
        Its own assertion is below, and it is the stronger one — that read may
-       take `raw_bytes` and still may not take the article. */
+       take the reference and still may not take the article.
+
+       This listed `"raw_bytes"` first until 2026-09-01, when the column was
+       dropped; the reference that replaced it is checked in its place, because
+       a column that no longer exists cannot fail this. */
     for (const read of READS.filter((r) => r !== "rawSource")) {
       const sql = sqlFor(read);
-      expect({ read, raw: sql.includes('"raw_bytes"') }).toEqual({ read, raw: false });
+      expect({ read, raw: sql.includes('"raw_source_sha256"') }).toEqual({ read, raw: false });
       expect({ read, x: sql.includes('"extracted_html"') }).toEqual({ read, x: false });
       expect({ read, s: sql.includes('"stamped_html"') }).toEqual({ read, s: false });
       expect({ read, l: sql.includes('"labels"') }).toEqual({ read, l: false });
     }
   });
 
-  it("sends the source document only on the read that serves it, and nothing else with it", () => {
+  it("sends the source reference only on the read that serves it, and nothing else with it", () => {
     const sql = sqlFor("rawSource");
-    expect(sql).toContain('"raw_bytes"');
     expect(sql).toContain('"raw_source_sha256"');
+    expect(sql).toContain('"raw_source_kind"');
     expect(sql).toContain('"raw_filename"');
     /* The whole point of a projection of its own: pressing *view the original*
        must not also drag the article, its tree or its artefacts across the
@@ -429,10 +457,11 @@ describe("the shelf's own query", () => {
     expect(sql).not.toContain('"fts"');
   });
 
-  it("never sends the source document or the whole-article HTML", () => {
+  it("never sends the source reference or the whole-article HTML", () => {
     for (const archived of [false, true]) {
       const sql = shelfSql(archived);
-      expect({ archived, raw: sql.includes('"raw_bytes"') }).toEqual({ archived, raw: false });
+      /* `"raw_bytes"` until 2026-09-01, when the column was dropped. */
+      expect({ archived, raw: sql.includes('"raw_source_sha256"') }).toEqual({ archived, raw: false });
       expect({ archived, x: sql.includes('"extracted_html"') }).toEqual({ archived, x: false });
       expect({ archived, s: sql.includes('"stamped_html"') }).toEqual({ archived, s: false });
       expect({ archived, l: sql.includes('"labels"') }).toEqual({ archived, l: false });
@@ -471,7 +500,8 @@ describe("the revision query that is not reachable as a builder", () => {
   it("publication selects its projection, not everything", async () => {
     const src = await code("src/store/pg-revisions.ts");
     expect(src).toContain(".select(REVISION_PROJECTIONS.publish)");
-    /* The bare form is what took `raw_bytes`. */
+    /* The bare form is what took the whole row — `raw_bytes` included, while
+       there was one. */
     expect(src).not.toMatch(/\.select\(\)\s*\n?\s*\.from\(articleRevisions\)/);
   });
 });

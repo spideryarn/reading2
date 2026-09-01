@@ -19,19 +19,19 @@
  * [data-root.ts](data-root.ts) § *Deployed with no job is an error,
  * deliberately* names by route. docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
- * ## Two eras, and both are served
+ * ## There used to be a second era, and it is gone
  *
  * Before docs/plans/260827aa-delete-the-importer.md § C6 the payload was
  * `article_revisions.raw_bytes`, a `bytea` up to 32 MiB, and there was nothing
- * pointing out of the row. **Every article the importer has ever written is
- * one of those** — src/store/import.ts writes `raw_bytes` and no
- * `raw_source_sha256` — so a reader that understood only references would 404
- * the whole local corpus while reporting nothing wrong.
+ * pointing out of the row. Every article the importer ever wrote was one of
+ * those, so this store carried a second query — guarded by `source = 'pdf'` so
+ * the ordinary path never dragged a 32 MiB column across the wire — for as long
+ * as such rows existed.
  *
- * The column is dropped in stage 5 of that plan, and the second query below
- * goes with it. It is a *second* query, guarded by `source = 'pdf'`, precisely
- * so that the ordinary path never selects a 32 MiB column it is not going to
- * use — which is the entire reason the reference exists.
+ * They do not. The corpus was refetched through the reference (stage 2.5 of
+ * docs/plans/260831b-finish-the-database-move.md) and the column was dropped on
+ * 2026-09-01, so a row with no `raw_source_sha256` has no source document and
+ * `null` is the whole of the answer.
  *
  * ## Why a dangling reference throws
  *
@@ -74,8 +74,6 @@ export function sourceReferenceQuery(
 ) {
   return db
     .select({
-      revisionId: articleRevisions.id,
-      source: articleRevisions.source,
       rawSourceSha256: articleRevisions.rawSourceSha256,
       rawSourceKind: articleRevisions.rawSourceKind,
       /* **The reader's own name for the file**, which the route hands back in
@@ -179,19 +177,10 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
         return { bytes, filename: row.rawFilename };
       }
 
-      /* The era before the bucket. `source` is the only thing on this row that
-         says what kind of document it was, and it is checked BEFORE the second
-         query so that a web page never drags its whole `raw_bytes` column
-         across the wire to be thrown away. Dies with the column in stage 5 of
-         docs/plans/260831b-finish-the-database-move.md. */
-      if (row.source !== "pdf") return null;
-      const [legacy] = await getDb()
-        .select({ rawBytes: articleRevisions.rawBytes })
-        .from(articleRevisions)
-        .where(eq(articleRevisions.id, row.revisionId))
-        .limit(1);
-      if (!legacy?.rawBytes) return null;
-      return { bytes: new Uint8Array(legacy.rawBytes), filename: row.rawFilename };
+      /* No reference, no document. This used to fall through to a second query
+         for `raw_bytes`; that column was dropped on 2026-09-01 and the header
+         above says why the fallback went with it. */
+      return null;
     },
   };
 }

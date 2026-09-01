@@ -42,7 +42,7 @@
  * second.
  */
 
-import { cp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
@@ -57,6 +57,7 @@ import { hashBlocks } from "../src/source-hash.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { Block } from "../src/types.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -64,6 +65,28 @@ loadEnvLocal();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FROM = "writes";
+/**
+ * The clone's **source** is the committed corpus; its **destination** is the
+ * working `data/`.
+ *
+ * `FROM` used to be read out of `path.join(ROOT, "data", FROM)`, which is a
+ * developer's own gitignored working copy — absent on a fresh clone, different
+ * on every machine. docs/plans/260901b-committed-fixture-corpus.md.
+ *
+ * The destination stays on `ROOT` and is passed to `loadArticleIntoPg` as
+ * `root`, because that now defaults to the corpus and the scratch article must
+ * not be written into a tracked fixture directory.
+ */
+requireFixture(FROM, [
+  "raw.json",
+  "meta.json",
+  "blocks.json",
+  "tree.json",
+  "labels.json",
+  "output.html",
+  "output.blocks.json",
+]);
+
 const SLUG = "test-block-roles-pg";
 
 const { reachable } = await pgReady({
@@ -121,7 +144,7 @@ async function makeClassifiedFixture(): Promise<{
 }> {
   const dir = path.join(ROOT, "data", SLUG);
   await rm(dir, { recursive: true, force: true });
-  await cp(path.join(ROOT, "data", FROM), dir, { recursive: true });
+  await cp(path.join(FIXTURE_ROOT, "data", FROM), dir, { recursive: true });
 
   for (const name of await readdir(dir)) {
     if (!name.endsWith(".json")) continue;
@@ -132,7 +155,12 @@ async function makeClassifiedFixture(): Promise<{
       await writeFile(at, JSON.stringify(value, null, 2));
     }
   }
-  await cp(path.join(ROOT, "output", `${FROM}.html`), path.join(ROOT, "output", `${SLUG}.html`));
+  /* `output/` is gitignored, so a fresh clone has no such directory yet. */
+  await mkdir(path.join(ROOT, "output"), { recursive: true });
+  await cp(
+    path.join(FIXTURE_ROOT, "output", `${FROM}.html`),
+    path.join(ROOT, "output", `${SLUG}.html`),
+  );
 
   const note: string[] = [];
   const body: string[] = [];
@@ -155,7 +183,7 @@ async function makeClassifiedFixture(): Promise<{
     path.join(ROOT, "output", `${SLUG}.blocks.json`),
   ]) {
     if (at.startsWith(path.join(ROOT, "output"))) {
-      await cp(path.join(ROOT, "output", `${FROM}.blocks.json`), at);
+      await cp(path.join(FIXTURE_ROOT, "output", `${FROM}.blocks.json`), at);
     }
     const parsed = JSON.parse(await readFile(at, "utf8")) as { blocks: Block[] };
     const blocks = classify(parsed.blocks);
@@ -241,7 +269,7 @@ when("a classified article through Postgres", () => {
     await forget();
     const { note, body } = await makeClassifiedFixture();
 
-    const loaded = await loadArticleIntoPg(SLUG);
+    const loaded = await loadArticleIntoPg(SLUG, { root: ROOT });
     expect(loaded.published).toBe(true);
     /* A genuine first write. Without this the whole suite could be reading
        columns carried forward from a revision some earlier run published. */
@@ -312,7 +340,7 @@ when("a classified article through Postgres", () => {
         contextType: revisionBlocks.contextType,
       })
       .from(revisionBlocks)
-      .where(eq(revisionBlocks.revisionId, (await loadArticleIntoPg(SLUG)).revisionId));
+      .where(eq(revisionBlocks.revisionId, (await loadArticleIntoPg(SLUG, { root: ROOT })).revisionId));
 
     const inContext = rows.filter((r) => r.contextId !== null);
     expect(inContext).toHaveLength(CONTEXT_ROWS.length);

@@ -33,7 +33,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { cp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
@@ -46,6 +46,7 @@ import type { RawManifest } from "../src/fetch.js";
 import { blobStore } from "../src/store/blobs.js";
 import { canonicalKey } from "../src/source.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -53,6 +54,31 @@ loadEnvLocal();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FROM = "writes";
+/**
+ * Where the article being cloned comes from: the **committed corpus**, not the
+ * working `data/`.
+ *
+ * `FROM` used to be read out of `path.join(ROOT, "data", FROM)` — a developer's
+ * own gitignored working copy, absent on a fresh clone and different on every
+ * machine. The corpus exists precisely so this suite has an article to clone
+ * that a fresh clone also has.
+ * docs/plans/260901b-committed-fixture-corpus.md.
+ *
+ * The **destination** is still `ROOT`, and is passed to `loadArticleIntoPg` as
+ * `root` because that now defaults to the corpus. The scratch article must not
+ * be written into the tracked fixture directory.
+ */
+requireFixture(FROM, [
+  "raw.json",
+  "raw.html",
+  "meta.json",
+  "blocks.json",
+  "tree.json",
+  "labels.json",
+  "output.html",
+  "output.blocks.json",
+]);
+
 
 const { reachable } = await pgReady({
   suite: "tests/helpers-load-article.test.ts",
@@ -89,7 +115,7 @@ async function makeFixture(
 ): Promise<{ storedSha256: string; storedBytes: number; file: string }> {
   const dir = path.join(ROOT, "data", slug);
   await rm(dir, { recursive: true, force: true });
-  await cp(path.join(ROOT, "data", FROM), dir, { recursive: true });
+  await cp(path.join(FIXTURE_ROOT, "data", FROM), dir, { recursive: true });
 
   for (const name of await readdir(dir)) {
     if (!name.endsWith(".json")) continue;
@@ -100,9 +126,15 @@ async function makeFixture(
       await writeFile(at, JSON.stringify(value, null, 2));
     }
   }
-  await cp(path.join(ROOT, "output", `${FROM}.html`), path.join(ROOT, "output", `${slug}.html`));
+  /* `output/` is gitignored, so on a fresh clone it does not exist yet and the
+     copy below would fail with ENOENT on the directory rather than the file. */
+  await mkdir(path.join(ROOT, "output"), { recursive: true });
   await cp(
-    path.join(ROOT, "output", `${FROM}.blocks.json`),
+    path.join(FIXTURE_ROOT, "output", `${FROM}.html`),
+    path.join(ROOT, "output", `${slug}.html`),
+  );
+  await cp(
+    path.join(FIXTURE_ROOT, "output", `${FROM}.blocks.json`),
     path.join(ROOT, "output", `${slug}.blocks.json`),
   );
 
@@ -165,7 +197,7 @@ when("the fixture loader", () => {
       const key = canonicalKey(raw.storedSha256, "html");
       expect(await blobStore().head(key)).toBeNull();
 
-      const loaded = await loadArticleIntoPg(slug);
+      const loaded = await loadArticleIntoPg(slug, { root: ROOT });
       expect(loaded.published).toBe(true);
 
       const head = await blobStore().head(key);
@@ -193,7 +225,7 @@ when("the fixture loader", () => {
          revision at a *different* document that happens to exist. */
       const at = path.join(ROOT, "data", slug, "raw.html");
       await writeFile(at, Buffer.concat([await readFile(at), Buffer.from("<!-- edited -->")]));
-      await expect(loadArticleIntoPg(slug)).rejects.toThrow(/has been edited/);
+      await expect(loadArticleIntoPg(slug, { root: ROOT })).rejects.toThrow(/has been edited/);
     } finally {
       await forget(slug);
     }
@@ -206,7 +238,7 @@ when("the fixture loader", () => {
       /* No `data/` directory at all. Carry-forward makes this dangerous rather
          than merely useless: on an article Postgres has already published, a
          zero-step copy would republish the old revision and report success. */
-      await expect(loadArticleIntoPg(slug)).rejects.toThrow(/nothing to load/);
+      await expect(loadArticleIntoPg(slug, { root: ROOT })).rejects.toThrow(/nothing to load/);
     } finally {
       /* **The draft survives the refusal, and that is production's behaviour.**
          `openOrBeginJobDraft` commits the revision in its own transaction before
@@ -222,13 +254,13 @@ when("the fixture loader", () => {
     await forget(slug);
     await makeFixture(slug);
     try {
-      const first = await loadArticleIntoPg(slug);
+      const first = await loadArticleIntoPg(slug, { root: ROOT });
       expect(first.basedOn).toBeNull();
       expect(first.copied).toContain("fetch");
 
       /* The second load is copied *from* the first, which is exactly the state
          that makes a parity assertion meaningless. It must be visible. */
-      const second = await loadArticleIntoPg(slug);
+      const second = await loadArticleIntoPg(slug, { root: ROOT });
       expect(second.basedOn).toBe(first.revisionId);
     } finally {
       await forget(slug);
@@ -241,7 +273,7 @@ when("the fixture loader", () => {
     await makeFixture(slug);
     const when = new Date("2019-07-04T09:30:00.000Z");
     try {
-      await loadArticleIntoPg(slug, { createdAt: when });
+      await loadArticleIntoPg(slug, { createdAt: when, root: ROOT });
       const [row] = await getDb()
         .select({ createdAt: articles.createdAt })
         .from(articles)
@@ -257,7 +289,7 @@ when("the fixture loader", () => {
     await forget(slug);
     await makeFixture(slug);
     try {
-      await loadArticleIntoPg(slug);
+      await loadArticleIntoPg(slug, { root: ROOT });
       const left = await getDb().select({ id: jobs.id }).from(jobs).where(eq(jobs.slug, slug));
       /* Deleted, not marked `done`. A synthetic job left in the table reads as
          real ingest history, and one left `running` wedges the single running
@@ -269,7 +301,7 @@ when("the fixture loader", () => {
 
     const failed = "test-load-job-cleanup-failed";
     await forget(failed);
-    await expect(loadArticleIntoPg(failed)).rejects.toThrow();
+    await expect(loadArticleIntoPg(failed, { root: ROOT })).rejects.toThrow();
     const afterFailure = await getDb().select({ id: jobs.id }).from(jobs).where(eq(jobs.slug, failed));
     expect(afterFailure).toEqual([]);
   }, 180_000);

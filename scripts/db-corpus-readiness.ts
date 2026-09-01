@@ -213,12 +213,7 @@ async function main() {
          that is too big to read, or to the wrong bytes under the right name. */
       const doc = await readRawDocument(
         r.slug,
-        {
-          rawBytes: null,
-          rawContentType: null,
-          rawSourceSha256: r.sha,
-          rawSourceKind: r.kind,
-        },
+        { rawSourceSha256: r.sha, rawSourceKind: r.kind },
         blobs,
       );
       if (!doc) {

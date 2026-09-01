@@ -105,7 +105,11 @@ describe("the public revision read", () => {
       '"unverified"',
       '"recall"',
       "pages_checked",
-      "raw_bytes",
+      /* `raw_bytes` was on this list until 2026-09-01, when the column was
+         dropped (docs/plans/260831b-finish-the-database-move.md § *Stage 4*).
+         The reference that replaced it is here in its place — a stranger has no
+         business knowing which object in the bucket a paper came from. */
+      "raw_source_sha256",
       "raw_filename",
     ]) {
       expect(article, column).not.toContain(column);

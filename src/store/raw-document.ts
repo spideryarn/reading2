@@ -1,6 +1,6 @@
 /**
- * **The document an article was made from, out of wherever that revision keeps
- * it** — the two storage eras, told apart once.
+ * **The document an article was made from, out of the object store the revision
+ * names** — read once, so two callers cannot read it differently.
  *
  * ## Why this is a module of its own
  *
@@ -17,21 +17,21 @@
  * canonical key, and the blob-store interface, and nothing else. `export.ts`
  * re-exports all three names, so nothing that used them had to change.
  *
- * **Two readings of these four columns is the thing being prevented**, and it is
+ * **Two readings of these columns is the thing being prevented**, and it is
  * why the answer was extraction rather than a second small function beside the
  * route. GPT Sol made it a blocker on the plan: *"extract and reuse the existing
  * raw-document resolution instead of implementing a second interpretation of the
- * same revision fields"*. The two callers want identical answers to *which era
- * is this row in*, *is a dangling reference an error*, and *do we trust what the
- * bucket handed back* — and the second implementation of any of those is the one
- * that goes quietly wrong.
+ * same revision fields"*. The two callers want identical answers to *does this
+ * row name an object at all*, *is a dangling reference an error*, and *do we
+ * trust what the bucket handed back* — and the second implementation of any of
+ * those is the one that goes quietly wrong.
  *
  * docs/plans/plain-mode-and-the-way-out.md § 5.
  */
 
 import { createHash } from "node:crypto";
 
-import { type DocumentKind, sniffKind } from "../fetch.js";
+import type { DocumentKind } from "../fetch.js";
 import { canonicalKey, MAX_UPLOAD_BYTES } from "../source.js";
 import type { RawSourceStore } from "./blobs.js";
 
@@ -69,20 +69,27 @@ export class CorruptRawObject extends Error {
 }
 
 /**
- * The document itself, from wherever this revision keeps it.
+ * The document itself, out of the object store this revision names.
  *
- * **Two eras, and the newer one is authoritative where both answer.** Until
- * docs/plans/260827aa-delete-the-importer.md § C6 the payload was `article_revisions.raw_bytes`,
- * an 11 MiB `bytea`; now it is a *reference* — `raw_source_sha256` plus
- * `raw_source_kind` — with the bytes in the `sources` bucket. The column is
- * dropped at the demolition, so the reference branch is the one with a future
- * and the column branch is here only for rows written before the change.
+ * **One era now.** Until docs/plans/260827aa-delete-the-importer.md § C6 the payload was
+ * `article_revisions.raw_bytes`, an 11 MiB `bytea`; then it became a
+ * *reference* — `raw_source_sha256` plus `raw_source_kind` — with the bytes in
+ * the `sources` bucket, and the column stayed beside it for rows written before
+ * the change. The column was dropped on 2026-09-01
+ * (docs/plans/260831b-finish-the-database-move.md § *Stage 4*), after every
+ * article had been refetched through the reference, so a revision with no
+ * reference has no source document and `null` is the whole of the answer.
  *
  * **The kind comes from the column, not from sniffing.** `rawFileName` exists
  * because there was no `raw_kind` column and the body was the only honest
  * authority; there is one now, written by the fetch that stored the object, and
- * a recorded answer beats re-deriving it. Sniffing stays for the legacy branch,
- * which has nothing else.
+ * a recorded answer beats re-deriving it.
+ *
+ * **`storedSha256` is not optional any more.** It was `string | null` while the
+ * legacy column could answer with bytes that named no object; now the only way
+ * to get a document back is through a reference, so a returned document always
+ * says which object it came from and `db:export` can write `storedSha256`
+ * unconditionally.
  *
  * **The bytes are re-hashed.** The key *is* the digest, so checking costs one
  * pass over a buffer already in memory and turns "the bucket handed us
@@ -93,21 +100,19 @@ export class CorruptRawObject extends Error {
    in src/routes.ts serves the same bytes to the reader who owns them, and it was
    reading them off the local filesystem — which Vercel does not have, so the
    link 404d in production while working perfectly on a laptop. What it needed
-   was this function, not a second reading of the same four columns: the two eras,
-   the refusal to fall through from a dangling reference to the legacy column,
-   and the re-hash are all decisions somebody would have had to make again, and
+   was this function, not a second reading of the same columns: the refusal to
+   answer `null` for a dangling reference, and the re-hash of what the bucket
+   handed back, are both decisions somebody would have had to make again, and
    GPT Sol's review of that plan was blunt that a second interpretation of these
    fields is how the two come to disagree. docs/plans/plain-mode-and-the-way-out.md § 5. */
 export async function readRawDocument(
   slug: string,
   revision: {
-    rawBytes: Buffer | null;
-    rawContentType: string | null;
     rawSourceSha256: string | null;
     rawSourceKind: string | null;
   },
   sources: RawSourceStore,
-): Promise<{ bytes: Uint8Array; kind: DocumentKind; storedSha256: string | null } | null> {
+): Promise<{ bytes: Uint8Array; kind: DocumentKind; storedSha256: string } | null> {
   if (revision.rawSourceSha256 && revision.rawSourceKind) {
     const kind = revision.rawSourceKind as DocumentKind;
     const key = canonicalKey(revision.rawSourceSha256, kind);
@@ -122,21 +127,20 @@ export async function readRawDocument(
        there, and anything we fetched stopped at src/fetch.ts's own 32 MiB.
        GPT Sol asked for the bound twice, 2026-08-31. */
     const bytes = await sources.get(key, { maxBytes: MAX_UPLOAD_BYTES });
-    /* **Throw, never fall through to `raw_bytes`.** A dangling reference and an
-       article with no source document are different facts, and the whole point
-       of the reference is that the row asserts the object exists. Quietly
-       exporting the legacy column instead — or nothing — would make a broken
-       bucket look like an article that was always sourceless. */
+    /* **Throw, never answer `null`.** A dangling reference and an article with
+       no source document are different facts, and the whole point of the
+       reference is that the row asserts the object exists. Quietly returning
+       nothing would make a broken bucket look like an article that was always
+       sourceless. (Until 2026-09-01 the thing not to fall through to was the
+       `raw_bytes` column; the rule outlived it.) */
     if (!bytes) throw new MissingRawObject(slug, key);
     const actual = createHash("sha256").update(bytes).digest("hex");
     if (actual !== revision.rawSourceSha256) throw new CorruptRawObject(slug, key, actual);
     return { bytes, kind, storedSha256: revision.rawSourceSha256 };
   }
 
-  if (!revision.rawBytes) return null;
-  return {
-    bytes: revision.rawBytes,
-    kind: sniffKind(revision.rawContentType, revision.rawBytes) === "pdf" ? "pdf" : "html",
-    storedSha256: null,
-  };
+  /* No reference, no document. Both columns null together is the legal pair
+     meaning "we do not hold the source" — `article_revisions_raw_source_both`
+     in src/db/schema.ts — and there is no longer a second place to look. */
+  return null;
 }

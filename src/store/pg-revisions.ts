@@ -196,7 +196,6 @@ export const REVISION_CARRY_POLICY: Record<
   requestedUrl: "carry",
   finalUrl: "carry",
   fetchedAt: "carry",
-  rawBytes: "carry",
   rawContentType: "carry",
   rawEncoding: "carry",
   rawSha256: "carry",
@@ -1424,12 +1423,13 @@ export async function publishRevisionIn(
   const article = await lockArticle(tx, slug);
   if (!article) throw new PublishRefused(slug, ["there is no such article"]);
 
-  /* A named projection, not `select()`. The bare form takes `raw_bytes` too —
-     up to 32 MiB of source document, pulled across the wire so that four
-     fields can be checked and the tree read. This used to share one selector
-     with every other revision read; since 2026-08-27 each read names its own
-     columns, and `publish` wants four. See `REVISION_CARRY_POLICY` in
-     src/store/pg.ts, and docs/plans/260827am-glossary-read-latency.md. */
+  /* A named projection, not `select()`. The bare form takes every column of the
+     revision — including, until 2026-09-01, `raw_bytes`, up to 32 MiB of source
+     document pulled across the wire so that four fields could be checked and
+     the tree read. This used to share one selector with every other revision
+     read; since 2026-08-27 each read names its own columns, and `publish` wants
+     four. See `REVISION_CARRY_POLICY` in src/store/pg.ts, and
+     docs/plans/260827am-glossary-read-latency.md. */
   const found = await tx
     .select(REVISION_PROJECTIONS.publish)
     .from(articleRevisions)
@@ -1648,10 +1648,12 @@ export function logDraftFailure(
  *
  * **Begin-time copying has a retention cost, and a review was right that nobody
  * had costed it.** A 360-block article is roughly 1.31 MiB of copied payload
- * before overhead, and `raw_bytes` can be 32 MiB at the fetch ceiling. TOAST
- * means this is not a row-size problem — it is a storage, WAL and cleanup
- * problem, and a crashed worker leaves a complete copied draft that nothing
- * else in this system would ever touch, because job rescue marks *jobs*.
+ * before overhead. A crashed worker leaves a complete copied draft that nothing
+ * else in this system would ever touch, because job rescue marks *jobs*. (It
+ * was worse while `raw_bytes` was a column: another 32 MiB at the fetch
+ * ceiling, copied per draft. That column was dropped on 2026-09-01 and the
+ * document is an object in the `sources` bucket, referenced rather than
+ * copied.)
  *
  * Three conditions, all of them: not `published`, not owned by any job, and
  * older than the cutoff. The article's current revision cannot match, because

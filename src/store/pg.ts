@@ -307,13 +307,15 @@ type RevisionReader =
   | "sketch"
   | "arc"
   /**
-   * **The raw document, and it is the only read that wants bytes.**
+   * **The raw document, and it is the only read that goes looking for it.**
    *
    * Its own projection rather than columns added to `article`, which every page
-   * load runs: `raw_bytes` is up to 32 MiB of source document, and putting it
-   * on the read that draws the reading view would spend that on every article
-   * anybody opens. This read runs once, when somebody presses *view the
-   * original*, and it is the request that is *for* those bytes.
+   * load runs. It held `raw_bytes` until 2026-09-01 — up to 32 MiB of source
+   * document — and putting that on the read that draws the reading view would
+   * have spent it on every article anybody opens. The bytes are an object in
+   * the `sources` bucket now and this takes the reference, but the split still
+   * earns its keep: this read runs once, when somebody presses *view the
+   * original*, and it is the only request that is *for* the document.
    *
    * **`rawSource`, not `source`**, because `source` is already a *column* on
    * this table (`Meta.source`, which says "pdf"). One word for two things in one
@@ -508,28 +510,29 @@ const REVISION_READ_POLICY: Record<
      fifth would not fit. */
   quiz: { metadata: "value", quiz: "value" },
 
-  /* **Read by nobody through here**, and the first three are why this map
-     exists. `raw_bytes` is up to 32 MiB of source document. The two HTML
-     columns are the whole article again, and they are pipeline artefacts
-     reached through src/store/artifacts.ts and src/store/export.ts, never
-     through a revision read — traced by grep, and independently by GPT Sol,
-     2026-08-27. `labels` likewise. */
-  /* **`raw_bytes` has one reader now**, and it is the legacy half of it. The
-     column is the pre-reference era's payload (see `readRawDocument` in
-     src/store/export.ts); a row written since carries a reference instead and
-     this comes back null, costing nothing. Nothing else may take it — the note
-     below stands for the other three. */
-  rawBytes: { rawSource: "value" },
+  /* **Read by nobody through here.** The two HTML columns are the whole article
+     again, and they are pipeline artefacts reached through
+     src/store/artifacts.ts and src/store/export.ts, never through a revision
+     read — traced by grep, and independently by GPT Sol, 2026-08-27. `labels`
+     likewise.
+
+     `rawBytes` used to head this list, at up to 32 MiB of source document, and
+     it was the finding this whole map was written for. The column was dropped
+     on 2026-09-01; the document is an object in the `sources` bucket now, and
+     the `rawSource` read takes the reference to it rather than the bytes. */
   extractedHtml: {},
   stampedHtml: {},
   labels: {},
   requestedUrl: {},
-  /* Not on the `source` read, deliberately. It is the *origin's* Content-Type
-     header, and the response's is decided from the recorded kind instead — a
-     valid PDF fetched as `application/octet-stream` would otherwise be served
-     as one. It is here only because `readRawDocument` sniffs the legacy branch
-     with it, where there is no recorded kind to prefer. */
-  rawContentType: { rawSource: "value" },
+  /* **Not on any read**, and deliberately not on `rawSource`. It is the
+     *origin's* Content-Type header, and the response's is decided from
+     `raw_source_kind` instead — a valid PDF fetched as
+     `application/octet-stream` would otherwise be served as one. It was granted
+     to `rawSource` only so that `readRawDocument` could sniff the legacy
+     `raw_bytes` branch, which had no recorded kind to prefer; that branch went
+     with the column on 2026-09-01. `db:export` still writes it into `raw.json`,
+     but that reads the whole table rather than coming through here. */
+  rawContentType: {},
   rawEncoding: {},
   rawSourceKind: { rawSource: "value" },
   rawSourceSha256: { rawSource: "value" },
@@ -778,24 +781,23 @@ export const REVISION_PROJECTIONS = {
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
   /**
-   * **The four columns `readRawDocument` reads, and `rawFilename` for the name
-   * to download it under.** src/store/raw-document.ts owns what they mean and
-   * how the two storage eras are told apart; this only says which read may take
-   * them.
+   * **The reference `readRawDocument` follows, and `rawFilename` for the name to
+   * download it under.** src/store/raw-document.ts owns what those columns mean;
+   * this only says which read may take them.
    *
-   * `rawBytes` is up to 32 MiB, which is exactly why this is a projection of its
-   * own and not three columns bolted onto `article`.
+   * A projection of its own rather than columns bolted onto `article`: this read
+   * runs when somebody presses *view the original* and nothing else needs the
+   * reference. Until 2026-09-01 it also took `raw_bytes`, up to 32 MiB of source
+   * document, which is why it was split out in the first place.
    *
    * **Not the projection the source route uses.** That one is
-   * `sourceReferenceQuery` in src/store/pg-source.ts, which deliberately selects
-   * the *reference* and not the bytes, and reaches `raw_bytes` only in a second
-   * query for a legacy row. This is `pgArticleReader.loadSource`, which answers
-   * the whole-document question in one go.
+   * `sourceReferenceQuery` in src/store/pg-source.ts, which answers only *is
+   * this article a PDF, and where is it*. This is
+   * `pgArticleReader.loadSource`, which answers the whole-document question in
+   * one go.
    */
   rawSource: {
     id: articleRevisions.id,
-    rawBytes: articleRevisions.rawBytes,
-    rawContentType: articleRevisions.rawContentType,
     rawSourceSha256: articleRevisions.rawSourceSha256,
     rawSourceKind: articleRevisions.rawSourceKind,
     rawFilename: articleRevisions.rawFilename,
@@ -1110,7 +1112,12 @@ function metaFrom(
  * typecheck here instead. Found in a review of the built seam, 2026-08-26.
  */
 const STEP_STORAGE: Record<StepName, string[]> = {
-  fetch: ["article_revisions.raw_bytes"],
+  /* The fetched document's facts — `RAW_COLUMNS` in src/store/artifacts-pg.ts —
+     of which `raw_source_sha256` names the object holding the bytes. That object
+     is in the `sources` bucket, which is not a table; `raw_sources` is the row
+     describing it. This said `article_revisions.raw_bytes` until 2026-09-01,
+     when the column that held the document itself was dropped. */
+  fetch: ["article_revisions.raw_source_sha256", "raw_sources"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   hierarchy: ["article_revisions.tree", "article_revisions.labels"],

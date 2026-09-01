@@ -730,11 +730,18 @@ describe("the raw artefact is a manifest, and the type has to say so", () => {
     expect(manifest?.url).toBe("https://example.test/a");
   });
 
-  it("names a file rather than carrying the bytes, which is the unfinished half", () => {
+  it("names a document rather than carrying it", () => {
     /* Said in a test because it is the thing a reader of the type would assume
-       and be wrong about. `article_revisions.raw_bytes` needs the payload, and
-       a manifest has only its *name* — so a Postgres adapter cannot be written
-       against this. docs/plans/260827j-transactional-stage-runner.md § B. */
+       and be wrong about: a `raw` artefact is a *manifest*, and the bytes are
+       somewhere else. When this was written that somewhere was
+       `article_revisions.raw_bytes`, which the manifest could not fill, so no
+       Postgres adapter could be written against it
+       (docs/plans/260827j-transactional-stage-runner.md § B). It is a
+       content-addressed object in the `sources` bucket now, and the manifest
+       names it by `storedSha256` — which is exactly why
+       src/store/artifacts-pg.ts refuses a manifest without one
+       (`NoStoredDocument`) rather than recording a fetch with no document
+       behind it. The column was dropped on 2026-09-01. */
     const manifest: ArtifactMap["raw"] = {
       kind: "html",
       file: "raw.html",

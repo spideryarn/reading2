@@ -20,11 +20,12 @@
  *
  * ## What it cannot put back
  *
- * `raw.html` is written from `raw_bytes`, which for imported articles is the
- * UTF-8 re-encoding the filesystem already held rather than the original
- * response bytes — see src/store/import.ts. So a round trip through Postgres is
- * faithful to `data/`, not to the web page. Nothing here can fix that; the
- * bytes were thrown away by stage 1 long before this existed.
+ * `raw.html` is written from the object in the `sources` bucket, which for a
+ * page that was not already UTF-8 is the *decoded* text rather than the original
+ * response bytes — `writeRaw` in src/fetch.ts stores what it decoded, which is
+ * why `raw_sha256` and `storedSha256` answer different questions. So a round
+ * trip through Postgres is faithful to what we kept, not to the web page.
+ * Nothing here can fix that; the original bytes were thrown away at stage 1.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
@@ -347,7 +348,6 @@ async function writeRawDocument(
   dir: string,
   slug: string,
   revision: {
-    rawBytes: Buffer | null;
     rawContentType: string | null;
     rawEncoding: string | null;
     rawSha256: string | null;
@@ -385,15 +385,17 @@ async function writeRawDocument(
      src/store/artifacts-pg.ts refuses a manifest without them (`NoStoredDocument`),
      because a manifest naming no object would record a fetch with no document
      behind it. Omit them and `db:export` produces a directory that nothing can
-     read back — a round trip that looks complete and is not. Absent on the
-     legacy `raw_bytes` branch, where there genuinely is no object.
+     read back — a round trip that looks complete and is not. `readRawDocument`
+     answers `null` rather than `storedSha256: null` when the row names no
+     object, so this function has already returned by then.
 
      **`bytes` is the network count, from its own column.** Not
      `bytes.byteLength`, which is the size of what we *stored* — the same two
      numbers `storedBytes` and `bytes` exist to keep apart, since `writeRaw`
      stores the decoded string and any page that was not already UTF-8 differs.
-     The fallback to the buffer length is for legacy rows, which have no column
-     and for which the two numbers were never distinguished anyway.
+     The fallback to the buffer length is for a revision written before
+     `raw_byte_count` existed, which never distinguished the two numbers
+     anyway.
 
      `origin`/`uploadId` remain genuinely unrecoverable and are therefore absent
      rather than invented: they live only in the manifest and have no column, so
@@ -417,7 +419,8 @@ async function writeRawDocument(
     encoding: revision.rawEncoding,
     bytes: revision.rawByteCount ?? bytes.byteLength,
     sha256: revision.rawSha256,
-    ...(storedSha256 === null ? {} : { storedSha256, storedBytes: bytes.byteLength }),
+    storedSha256,
+    storedBytes: bytes.byteLength,
     fetchedAt: (revision.fetchedAt ?? revision.createdAt).toISOString(),
     backfilled:
       "Rebuilt from the database by db:export. Provenance beyond the two URLs " +

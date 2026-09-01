@@ -67,6 +67,7 @@ import type { RawManifest } from "../../src/fetch.js";
 import { mintId } from "../../src/ids.js";
 import { type OwnerId, currentOwnerId, runAsOwner } from "../../src/owner.js";
 import { createFsArtifactStore } from "../../src/store/artifacts-fs.js";
+import type { ArtifactLocations } from "../../src/store/artifacts-fs.js";
 import { pgArtifactsIn } from "../../src/store/artifacts-pg.js";
 import { storeRawSource } from "../../src/store/blobs.js";
 import { insertWhenSlotFree } from "./running-slot.js";
@@ -79,8 +80,21 @@ import {
 } from "../../src/store/pg-revisions.js";
 import type { JobStep, StepName } from "../../src/types.js";
 import { copyArtefacts } from "../../src/store/copy-artefacts.js";
+import { FIXTURE_ROOT } from "./require-fixture.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
+/**
+ * `data/` and `output/` for one root, which is what the filesystem store's
+ * `locate` is.
+ *
+ * Written out here rather than reached for through `fsLocations`, because
+ * `fsLocations` calls `dataRoot()` and `dataRoot()` on a laptop is the
+ * **repository root** — the working `data/` a reader has been reading out of,
+ * not the corpus this suite is supposed to be testing against.
+ */
+const locationsIn = (root: string) => (slug: string): ArtifactLocations => ({
+  dir: path.join(root, "data", slug),
+  htmlFile: path.join(root, "output", `${slug}.html`),
+});
 
 /** What the load produced, so a caller can assert on it rather than assume. */
 export interface LoadedArticle {
@@ -143,6 +157,27 @@ export interface LoadOptions {
    * and an article belonging to another. Sol caught that shape, 2026-08-28.
    */
   readonly ownerId?: OwnerId;
+  /**
+   * Which data root to load out of. **Defaults to the committed corpus**, not
+   * to the repository root.
+   *
+   * This is the whole point of the option, and the default is the fix rather
+   * than a convenience. Until 2026-09-01 this file held
+   * `const ROOT = path.resolve(import.meta.dirname, "..", "..")` and built its
+   * store with a bare `createFsArtifactStore()`, so both halves resolved to the
+   * repository root: `loadArticleIntoPg("writes")` read **`data/writes`** — a
+   * developer's own working copy, gitignored and different on every machine —
+   * while `tests/fixtures/data-root/data/writes` sat tracked in git and unread
+   * by anything but `tests/fixture-corpus.test.ts` and the deploy gate. Every
+   * "the suite is green against the committed corpus" claim was a claim about
+   * one laptop's `data/`. docs/plans/260901b-committed-fixture-corpus.md, and
+   * the review that invalidated the earlier measurement for exactly this split
+   * brain (`260901b-fixture-corpus-review-sol.md`).
+   *
+   * A suite that *clones* a corpus slug under a scratch `test-` name passes the
+   * root it cloned into. Everything else should leave this alone.
+   */
+  readonly root?: string;
 }
 
 /** A job's step list has to be non-empty and well-formed; nothing reads these. */
@@ -168,8 +203,8 @@ const FIXTURE_STEPS: JobStep[] = [
  * Returns quietly when there is no manifest — `data/constitution` has none, and
  * an article with no stage-1 output is a legitimate fixture, not a failure.
  */
-async function storeRawBytesFor(slug: string): Promise<void> {
-  const at = path.join(ROOT, "data", slug, "raw.json");
+async function storeRawBytesFor(slug: string, root: string): Promise<void> {
+  const at = path.join(root, "data", slug, "raw.json");
   let manifest: RawManifest;
   try {
     manifest = JSON.parse(await readFile(at, "utf8")) as RawManifest;
@@ -179,7 +214,7 @@ async function storeRawBytesFor(slug: string): Promise<void> {
   }
   if (!manifest.storedSha256) return;
 
-  const bytes = await readFile(path.join(ROOT, "data", slug, manifest.file));
+  const bytes = await readFile(path.join(root, "data", slug, manifest.file));
   const { sha256 } = await storeRawSource(bytes, manifest.kind);
   /* **The manifest's key must be the key of the bytes beside it.** Both are on
      disk and either could have been edited, so a fixture where they disagree is
@@ -187,7 +222,7 @@ async function storeRawBytesFor(slug: string): Promise<void> {
      rather than mysterious three assertions later. */
   if (sha256 !== manifest.storedSha256) {
     throw new Error(
-      `data/${slug}: raw.json says the stored object is ${manifest.storedSha256}, but ` +
+      `${path.join(root, "data", slug)}: raw.json says the stored object is ${manifest.storedSha256}, but ` +
         `${manifest.file} beside it hashes to ${sha256}. One of the two has been edited.`,
     );
   }
@@ -275,12 +310,12 @@ export async function loadArticleIntoPg(
   slug: string,
   opts: LoadOptions = {},
 ): Promise<LoadedArticle> {
-  const { publish = true, ownerId = currentOwnerId() } = opts;
+  const { publish = true, ownerId = currentOwnerId(), root = FIXTURE_ROOT } = opts;
 
   return runAsOwner(ownerId, async () => {
-    await storeRawBytesFor(slug);
+    await storeRawBytesFor(slug, root);
 
-    const fs = createFsArtifactStore();
+    const fs = createFsArtifactStore(locationsIn(root));
     const db = getDb();
 
     return withRunningJob(slug, ownerId, async (job) => {
@@ -304,7 +339,8 @@ export async function loadArticleIntoPg(
          this, and it is the same shape as everything else in this landing. */
       if (copied.length === 0) {
         throw new Error(
-          `nothing to load for "${slug}": the filesystem store has no complete step for it. ` +
+          `nothing to load for "${slug}" under ${root}: the filesystem store has no ` +
+            "complete step for it. " +
             "Publishing now would republish whatever is already in Postgres and call it a load.",
         );
       }

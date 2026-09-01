@@ -9,13 +9,13 @@
  * same bug on 2026-08-31 and that narrower seam is the one the route took
  * (docs/plans/260831b-finish-the-database-move.md § stage 1b).
  *
- * **`readRawDocument` is still the reading of these four columns**, and that is
- * why it is still tested here. `db:export` calls it, `ArticleReader.loadSource`
- * calls it, and every decision below — which era a row is in, whether a dangling
- * reference is an error, whether the bucket handed back the right bytes — is
- * made here once. `pgSourceStore` makes the same decisions the same way for the
- * route; tests/source-store.test.ts is where that is pinned against a real
- * database, and the two must not drift.
+ * **`readRawDocument` is still the one reading of the source reference**, and
+ * that is why it is still tested here. `db:export` calls it,
+ * `ArticleReader.loadSource` calls it, and every decision below — whether a
+ * dangling reference is an error, whether the bucket handed back the right
+ * bytes — is made here once. `pgSourceStore` makes the same decisions the same
+ * way for the route; tests/source-store.test.ts is where that is pinned against
+ * a real database, and the two must not drift.
  *
  * ## Why the interesting tests are here and not on the route
  *
@@ -27,8 +27,11 @@
  * GPT Sol's review of the plan asked for exactly this list, and for the reason
  * to be written down: **the three failures are not the same failure.**
  *
- *  1. no reference and no legacy column → `null` → the route's 404. *This
- *     article kept no source document*, which is an ordinary state.
+ *  1. no reference → `null` → the route's 404. *This article kept no source
+ *     document*, which is an ordinary state. (Until 2026-09-01 there was a
+ *     second place to look first — `article_revisions.raw_bytes` — and this
+ *     outcome meant "and no legacy column either". The column is dropped;
+ *     docs/plans/260831b-finish-the-database-move.md § *Stage 4*.)
  *  2. a reference the bucket cannot answer → `MissingRawObject`, a 500. The row
  *     asserts the object exists, so this is a broken invariant — a deleted
  *     object, or a deployment pointing at the wrong bucket. Answering 404 would
@@ -83,10 +86,8 @@ function bucket(contents: Record<string, Uint8Array>): RawSourceStore {
   };
 }
 
-/** A revision row in the reference era, pointing at `SHA`. */
+/** A revision row pointing at `SHA`. */
 const REFERENCING = {
-  rawBytes: null,
-  rawContentType: null,
   rawSourceSha256: SHA,
   rawSourceKind: "pdf",
 };
@@ -98,31 +99,21 @@ describe("the raw document a source download resolves to", () => {
   });
 
   /**
-   * **The legacy era, and it stays inside Postgres.**
+   * **Half a reference is not a reference.**
    *
-   * A revision written before references carries its payload in `raw_bytes`.
-   * The plan's first draft had the route fall back to the *filesystem* for these
-   * rows, which is a store reaching into another store's storage — and on Vercel
-   * it would have turned a document the database still holds into "no source
-   * exists". GPT Sol made it a blocker, 2026-08-31.
+   * `article_revisions_raw_source_both` makes the pair all-or-nothing in the
+   * database, so this is belt-and-braces — but the function is handed rows by
+   * three callers and a `sha256` with no `kind` must not be followed to a key
+   * built from a guess.
    */
-  it("still answers from the legacy column for a row written before references", async () => {
-    const got = await readRawDocument(
-      "a-slug",
-      { rawBytes: Buffer.from(PDF), rawContentType: "application/pdf", rawSourceSha256: null, rawSourceKind: null },
-      bucket({}),
-    );
-    expect(got?.kind).toBe("pdf");
-    expect(got?.storedSha256).toBeNull();
-  });
-
   it("says null — not an error — when the article kept no source at all", async () => {
-    const got = await readRawDocument(
-      "a-slug",
-      { rawBytes: null, rawContentType: null, rawSourceSha256: null, rawSourceKind: null },
-      bucket({}),
-    );
-    expect(got).toBeNull();
+    for (const revision of [
+      { rawSourceSha256: null, rawSourceKind: null },
+      { rawSourceSha256: SHA, rawSourceKind: null },
+      { rawSourceSha256: null, rawSourceKind: "pdf" },
+    ]) {
+      expect(await readRawDocument("a-slug", revision, bucket({}))).toBeNull();
+    }
   });
 
   it("refuses, rather than 404s, when the bucket cannot answer a reference it holds", async () => {
@@ -131,24 +122,6 @@ describe("the raw document a source download resolves to", () => {
     await expect(readRawDocument("a-slug", REFERENCING, bucket({}))).rejects.toMatchObject({
       status: 500,
     });
-  });
-
-  /**
-   * **And it must not quietly fall through to the legacy column instead.**
-   *
-   * A dangling reference and an article with no source are different facts, and
-   * a row that has both would otherwise serve the older bytes while the
-   * reference it asserts is broken — the failure hidden behind a success, which
-   * is the class docs/reusable/silent-success.md is about.
-   */
-  it("does not fall back to the legacy column when a reference is dangling", async () => {
-    await expect(
-      readRawDocument(
-        "a-slug",
-        { ...REFERENCING, rawBytes: Buffer.from(PDF), rawContentType: "application/pdf" },
-        bucket({}),
-      ),
-    ).rejects.toThrow(MissingRawObject);
   });
 
   it("refuses an object that is not what its key says it is", async () => {

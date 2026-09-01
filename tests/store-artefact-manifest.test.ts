@@ -143,14 +143,19 @@ const FLOOR_FILES = ["blocks.json", "meta.json", "tree.json", "labels.json"];
  * without thinking.
  */
 const HOMES: Record<string, string> = {
-  "raw.html": "article_revisions.raw_bytes",
+  /* **An object in the `sources` bucket, named by the revision's reference** —
+     `raw_source_sha256` + `raw_source_kind`, and `canonicalKey` in
+     src/source.ts builds the key. This said `article_revisions.raw_bytes` until
+     2026-09-01, when that column was dropped
+     (docs/plans/260831b-finish-the-database-move.md § *Stage 4*). */
+  "raw.html": "the sources bucket, via article_revisions.{raw_source_sha256,raw_source_kind}",
   /* A PDF, and the record of which of the two it is. Stage 1 writes exactly one
      of `raw.html` / `raw.pdf` plus `raw.json` naming it — a refresh can leave
      both raw files there, and "whichever exists" then picks the stale one
-     silently (docs/plans/260826c-pdf-ingestion.md). The bytes go in the same column
-     either way; the manifest's fields are what the pipeline used to throw away,
-     and `raw_content_type` and `raw_encoding` already exist for them. */
-  "raw.pdf": "article_revisions.raw_bytes — the same column; raw.json says which arrived",
+     silently (docs/plans/260826c-pdf-ingestion.md). The bytes go to the same
+     bucket either way, and `raw_source_kind` — not the file's name — is what
+     says which arrived. */
+  "raw.pdf": "the sources bucket — the same place; raw_source_kind says which arrived",
   "raw.json": "article_revisions.{raw_content_type,raw_encoding,requested_url,final_url,fetched_at} + a raw_sha256 column that does not exist yet",
   "meta.json": "article_revisions.{title,byline,site_name,lang,excerpt,note,final_url,fetched_at}",
   "blocks.json": "revision_blocks (+ block_identities)",
@@ -273,6 +278,26 @@ const NOT_MIGRATED: Record<string, string> = {
      home to — the directory *is* the file store's rendering of that column, and
      it disappears with the file store. */
   steps: "revision_step_runs.status — the run marker, not an artefact",
+  /* **Referee mode's Claims run, and the decision is "not this table, not yet"
+     rather than "never".** docs/plans/260831an-referee-mode-for-peer-reviewers.md
+     § 2 is explicit that a claims run is an article-derived reusable artefact
+     whose right home is a **pipeline artefact** — a `StepName`, an
+     `ArtifactKind`, an `article_revisions` column — and it was built
+     route-shaped only because that layer was being rewritten underneath it.
+
+     So it deliberately has no bespoke table: one would be a migration to a place
+     the plan already says is wrong, and a second to leave it. It is in this list
+     rather than in `HOMES` because `HOMES` is a promise the stale check holds
+     you to — a name there that nothing has written on this machine goes red, and
+     this file only exists after somebody has run Claims.
+
+     **It is files-only and it fails loudly rather than quietly**: under
+     `SPIDERYARN_STORE=postgres` every method of `refereeClaimsStore` refuses
+     with a 501 (`notMigrated`, src/store/index.ts), so there is no write landing
+     in a store nothing reads. That is the one thing this list cannot check and
+     the reason it is worth writing down here. */
+  "referee-claims.json":
+    "no table on purpose — its home is a pipeline artefact, and the route-shaped store refuses under SPIDERYARN_STORE=postgres rather than writing where nothing reads",
 };
 
 /**
@@ -304,14 +329,12 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      below duly failed, and the exemption had to be deleted rather than left to
      go on excusing a name that had arrived. docs/project/quotes.md. */
 
-  /* `quiz.json` arrived here on 2026-09-01, the day the `quiz` step was
-     registered. Stage 1 of that plan ran the generator twelve times through its
-     own CLI, which *prints* the batch rather than writing it — the file is
-     written by the pipeline, and no job has run the step against a real article
-     yet. It has a home in `HOMES` and always did; the first real run will make
-     the assertion below fail and this line will have to go.
-     docs/plans/260831al-review-quiz-sub-mode.md. */
-  "quiz.json": "the quiz step landed 2026-09-01 and no job has run it yet",
+  /* `quiz.json` sat here for a few hours on 2026-09-01 — "the quiz step landed
+     today and no job has run it yet" — and is gone again, which is the third
+     time this pair of lists has worked as designed. Stage 4's browser pass
+     needed a real quiz to look at, generated one against
+     `data/fowler-phrenology`, and the assertion below went red the same
+     afternoon. docs/plans/260831al-review-quiz-sub-mode.md, Stage 4. */
 };
 
 /** The scan both tests below run: every filename beside an article in `data/`. */

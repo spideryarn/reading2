@@ -34,6 +34,44 @@
  *
  * So these write the rows directly, and say so. A seeder that is honest about
  * being a seeder is fine; a seeder wearing a store's clothes is not.
+ *
+ * ## Which root it reads, and why it cannot be told
+ *
+ * **This file names no directory, and that is the problem rather than the
+ * solution.** Every read here goes through `loadShelf`, `loadComments`,
+ * `loadThreads`, `loadRuns` and `loadLookups`, and each of those modules holds
+ * its own root at module scope:
+ *
+ * ```
+ * src/shelf.ts, src/comments.ts, src/chat.ts, src/searches.ts
+ *   const ROOT = path.resolve(import.meta.dirname, "..");   // the repository
+ * src/glossary-lookups.ts
+ *   const ROOT = process.cwd();
+ * ```
+ *
+ * None of them consults `SPIDERYARN_DATA_ROOT`, so **there is no way to point
+ * this seeder at the committed corpus** the way `./load-article.ts` is now
+ * pointed at it. Its companion takes a `root` and defaults to
+ * `tests/fixtures/data-root/`; this one goes wherever those five constants say.
+ *
+ * That is survivable for the suites that *clone* a corpus slug under a scratch
+ * `test-` name, because the clone is written into the repository root anyway
+ * and both halves then agree — which is why `tests/chat-anchor.test.ts` and
+ * `tests/helpers-seed-reader-state.test.ts` pass `root: ROOT` to the loader.
+ * It is **not** survivable for `tests/store-parity.test.ts` and
+ * `tests/store-roundtrip.test.ts`, which read corpus slugs where they lie:
+ * artefacts from the corpus and reader state from a developer's `data/` would
+ * be two different articles compared against each other. Both are therefore
+ * still pinned to `data/`, and they are the two suites the corpus was most
+ * meant to serve.
+ *
+ * The fix is five lines in `src/`, not here: those constants become
+ * `dataRoot()` (src/store/data-root.ts), which is where the same bug in
+ * src/store/artifacts-fs.ts and src/store/import.ts was already fixed — and
+ * which would also close the deployment half of it, since two levels above a
+ * bundled `api-dist/vercel.js` is `/var`. Out of scope for the sub-stage that
+ * wrote this note (2026-09-01);
+ * docs/plans/260901b-committed-fixture-corpus.md.
  */
 import { eq } from "drizzle-orm";
 

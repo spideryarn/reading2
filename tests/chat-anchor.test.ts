@@ -32,7 +32,7 @@
  * spread rather than the conflict clause it looks like it is guarding.
  */
 
-import { cp, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -46,6 +46,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { exportArticle } from "../src/store/export.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { seedChatFromFiles } from "./helpers/seed-reader-state.js";
 import { pgChatStore } from "../src/store/pg-chat.js";
 import type { ChatAnchor, ChatThread } from "../src/types.js";
@@ -83,13 +84,26 @@ const WHOLE_BLOCK: ChatAnchor = { blockId: BLOCK };
  * fixture: `GATE_FIXTURES` in `scripts/deploy-checks.ts` names it as the deploy
  * gate's sentinel slug and `tests/artefact-copy.test.ts` hardcodes it. It is
  * 10 KB of blocks, so the copy stays cheap — which is what "smallest" was for.
- * The gate reads the tracked copy under `tests/fixtures/data-root/`; the clone
- * below reads `data/`, and the two are the same slug rather than the same bytes
- * until the fixture sweep lands — see FLOOR_SLUG in
- * tests/store-artefact-manifest.test.ts.
- * docs/plans/260901b-committed-fixture-corpus.md.
+ * **Both the gate and this file now read the same tracked bytes.** Until
+ * 2026-09-01 the clone below read `data/writes` — a developer's own gitignored
+ * working copy, absent on a fresh clone — while the corpus under
+ * `tests/fixtures/data-root/` sat unread. Same slug, different bytes, and
+ * nothing said so. docs/plans/260901b-committed-fixture-corpus.md.
  */
 const SOURCE_SLUG = "writes";
+
+/* Loud at module load, before any `describe` registers, so a corpus that has
+   lost a file says which one rather than failing four frames inside a clone.
+   `requireCloneSource` below still runs — it asks the harder question, which is
+   whether the article is *loadable*, not merely present. */
+requireFixture(SOURCE_SLUG, [
+  "blocks.json",
+  "tree.json",
+  "labels.json",
+  "meta.json",
+  "output.html",
+  "output.blocks.json",
+]);
 
 /**
  * That the named article is really loadable, said out loud, one reason at a time.
@@ -106,7 +120,7 @@ const SOURCE_SLUG = "writes";
  * else was tested instead. Here each one names itself.
  */
 async function requireCloneSource(slug: string): Promise<void> {
-  const dir = path.join(ROOT, "data", slug);
+  const dir = path.join(FIXTURE_ROOT, "data", slug);
   const files = await readdir(dir).catch((err: NodeJS.ErrnoException) => {
     throw new Error(
       `${dir} is not there (${err.code}). This test clones a real article, and ` +
@@ -119,7 +133,8 @@ async function requireCloneSource(slug: string): Promise<void> {
   for (const [file] of outputPairs(slug, slug)) {
     expect(
       await stat(file).catch(() => null),
-      `${path.relative(ROOT, file)} is missing — half an extract step, which copyArtefacts refuses`,
+      `${path.relative(FIXTURE_ROOT, file)} is missing — half an extract step, which ` +
+        "copyArtefacts refuses",
     ).not.toBeNull();
   }
   const labels = JSON.parse(await readFile(path.join(dir, "labels.json"), "utf8")) as {
@@ -127,7 +142,8 @@ async function requireCloneSource(slug: string): Promise<void> {
   };
   expect(
     labels.sourceHash,
-    `data/${slug}/labels.json has no sourceHash, so the publication gate will refuse it`,
+    `${path.join(dir, "labels.json")} has no sourceHash, so the publication gate will ` +
+      "refuse it",
   ).toBeTruthy();
 }
 
@@ -142,8 +158,14 @@ async function requireCloneSource(slug: string): Promise<void> {
  * happened to be there, which is why this never came up before.
  */
 function outputPairs(source: string, slug: string): [string, string][] {
+  /* **The two halves have different roots.** `source` is a corpus slug and is
+     read out of the tracked fixture tree; `slug` is the scratch clone and is
+     written into the working `output/`, which is where `loadArticleIntoPg` is
+     then pointed with `root: ROOT`. `requireCloneSource` calls this as
+     `outputPairs(slug, slug)` and looks only at the first element, which is
+     therefore the corpus copy — the one whose absence matters. */
   return [".html", ".blocks.json"].map((ext) => [
-    path.join(ROOT, "output", `${source}${ext}`),
+    path.join(FIXTURE_ROOT, "output", `${source}${ext}`),
     path.join(ROOT, "output", `${slug}${ext}`),
   ]);
 }
@@ -365,7 +387,7 @@ when("the anchor, stored", () => {
     const out = await mkdtemp(path.join(tmpdir(), "spideryarn-anchor-"));
     try {
       await rm(dir, { recursive: true, force: true });
-      await cp(path.join(ROOT, "data", source), dir, { recursive: true });
+      await cp(path.join(FIXTURE_ROOT, "data", source), dir, { recursive: true });
       /* **The article's own name, rewritten inside every file it appears in.**
          The filesystem artefact store decodes `meta.json` by checking the
          `slug` field matches the directory, so a straight copy reads back as an
@@ -384,6 +406,8 @@ when("the anchor, stored", () => {
          read the file if it happened to be there and imported the article
          without it if it was not, which is the difference this whole exercise
          is about. */
+      /* `output/` is gitignored, so a fresh clone has no such directory yet. */
+      await mkdir(path.join(ROOT, "output"), { recursive: true });
       for (const [from, to] of outputPairs(source, slug)) {
         const text = await readFile(from, "utf8");
         await writeFile(to, text.replaceAll(`"${source}"`, `"${slug}"`));
@@ -428,7 +452,11 @@ when("the anchor, stored", () => {
          (docs/plans/260827aa-delete-the-importer.md § C7). Only the chat is needed here:
          seeding state this test never looks at would be slower and no more
          honest. */
-      await loadArticleIntoPg(slug);
+      /* `root: ROOT` because the clone was written there, and because
+         `seedChatFromFiles` reads `chat.json` through src/chat.ts, whose own
+         root is the repository and which consults no environment variable. Both
+         halves have to be looking at the same directory. */
+      await loadArticleIntoPg(slug, { root: ROOT });
       await seedChatFromFiles(slug);
       await exportArticle(slug, {
         dataRoot: path.join(out, "data"),

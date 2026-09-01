@@ -242,36 +242,33 @@ describe("the filesystem source store", () => {
 const SLUG = "test-source-store";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c4";
 const REVISION_ID = "00000000-0000-4000-8000-0000000000c5";
-const LEGACY_SLUG = "test-source-store-legacy";
-const LEGACY_ARTICLE_ID = "00000000-0000-4000-8000-0000000000c6";
-const LEGACY_REVISION_ID = "00000000-0000-4000-8000-0000000000c7";
 /** Nobody. Never inserted under — only ever asked with. */
 const OUTSIDER = "00000000-0000-4000-8000-0000000000c8" as OwnerId;
 
 /**
- * **The two web pages, which are the negative controls.**
+ * **The web page, which is the negative control.**
  *
  * GPT Sol's third review, 2026-08-31: every fixture here was a PDF, so an
- * implementation that returned referenced **or** legacy HTML bytes would have
- * passed the whole suite. That is the one assertion this file cannot do without
- * — the content type is the security boundary the `readPdf`-not-`readSource`
- * decision rests on (src/store/contracts.ts § SourceStore), and an HTML source
- * served from our own origin is stored XSS. A guard nothing can redden is not a
- * guard.
+ * implementation that returned referenced HTML bytes would have passed the whole
+ * suite. That is the one assertion this file cannot do without — the content
+ * type is the security boundary the `readPdf`-not-`readSource` decision rests on
+ * (src/store/contracts.ts § SourceStore), and an HTML source served from our own
+ * origin is stored XSS. A guard nothing can redden is not a guard.
  *
- * Two of them, because there are two kind checks and they read different
- * columns: `raw_source_kind` on the reference path, `source` on the legacy one.
- * One fixture would leave whichever guard it did not reach free to be deleted.
+ * There were two of these until 2026-09-01, because there were two kind checks
+ * reading different columns: `raw_source_kind` on the reference path, `source`
+ * on the legacy `raw_bytes` one. The column is gone and so is its guard.
  */
 const HTML_SLUG = "test-source-store-webpage";
 const HTML_ARTICLE_ID = "00000000-0000-4000-8000-0000000000c9";
 const HTML_REVISION_ID = "00000000-0000-4000-8000-0000000000ca";
-const LEGACY_HTML_SLUG = "test-source-store-webpage-legacy";
-const LEGACY_HTML_ARTICLE_ID = "00000000-0000-4000-8000-0000000000cb";
-const LEGACY_HTML_REVISION_ID = "00000000-0000-4000-8000-0000000000cc";
+
+/** An article whose revision names no object. Inserted by the test that uses it. */
+const SOURCELESS_SLUG = "test-source-store-sourceless";
+const SOURCELESS_ARTICLE_ID = "00000000-0000-4000-8000-0000000000cd";
+const SOURCELESS_REVISION_ID = "00000000-0000-4000-8000-0000000000ce";
 
 const REFERENCED = new TextEncoder().encode("%PDF-1.7\nthe object in the bucket\n");
-const LEGACY = new TextEncoder().encode("%PDF-1.7\nthe column, from before the bucket\n");
 const SHA = createHash("sha256").update(REFERENCED).digest("hex");
 /* What the browser sent when somebody uploaded it. The route puts this in the
    `Content-Disposition` rather than `<slug>.pdf`, so the download is called what
@@ -360,9 +357,7 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
     const owner = currentOwnerId();
     for (const [id, slug] of [
       [ARTICLE_ID, SLUG],
-      [LEGACY_ARTICLE_ID, LEGACY_SLUG],
       [HTML_ARTICLE_ID, HTML_SLUG],
-      [LEGACY_HTML_ARTICLE_ID, LEGACY_HTML_SLUG],
     ]) {
       await sql("insert into spideryarn.articles (id, owner_id, slug) values ($1, $2, $3)", [
         id,
@@ -382,20 +377,9 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
        values ($1, $2, 'published', 'A scanned paper', 'pdf', $3, 'pdf', $4)`,
       [REVISION_ID, ARTICLE_ID, SHA, UPLOADED_AS],
     );
-    /* The era before the reference: `raw_bytes` and nothing pointing out of the
-       row. Every article the importer has ever written is one of these
-       (src/store/import.ts writes no `raw_source_sha256`), so a reader that only
-       understood references would 404 the whole local corpus. */
-    await sql(
-      `insert into spideryarn.article_revisions
-         (id, article_id, status, title, source, raw_bytes)
-       values ($1, $2, 'published', 'A scan from before the bucket', 'pdf', $3)`,
-      [LEGACY_REVISION_ID, LEGACY_ARTICLE_ID, Buffer.from(LEGACY)],
-    );
-    /* The two web pages — the negative controls. See the note on `HTML_SLUG`.
-       The referenced one needs its own `raw_sources` row, because
-       `article_revisions_raw_source_fk` points at that table on both columns and
-       `kind` is half the key. */
+    /* The web page — the negative control. See the note on `HTML_SLUG`. It needs
+       its own `raw_sources` row, because `article_revisions_raw_source_fk`
+       points at that table on both columns and `kind` is half the key. */
     await sql(
       `insert into spideryarn.raw_sources (sha256, kind, bytes, content_type, verified_at)
        values ($1, 'html', $2, 'text/html', now()) on conflict do nothing`,
@@ -407,20 +391,9 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
        values ($1, $2, 'published', 'An ordinary web page', $3, 'html')`,
       [HTML_REVISION_ID, HTML_ARTICLE_ID, HTML_SHA],
     );
-    /* And the same page in the legacy shape: bytes in the column, `source` left
-       null the way every fetched web page leaves it (only src/pdf-read.ts sets
-       it). This is the row the `source !== "pdf"` guard exists for. */
-    await sql(
-      `insert into spideryarn.article_revisions
-         (id, article_id, status, title, raw_bytes)
-       values ($1, $2, 'published', 'A web page from before the bucket', $3)`,
-      [LEGACY_HTML_REVISION_ID, LEGACY_HTML_ARTICLE_ID, Buffer.from(WEBPAGE)],
-    );
     for (const [article, revision] of [
       [ARTICLE_ID, REVISION_ID],
-      [LEGACY_ARTICLE_ID, LEGACY_REVISION_ID],
       [HTML_ARTICLE_ID, HTML_REVISION_ID],
-      [LEGACY_HTML_ARTICLE_ID, LEGACY_HTML_REVISION_ID],
     ]) {
       await sql("update spideryarn.articles set current_revision_id = $2 where id = $1", [
         article,
@@ -465,11 +438,39 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
     await expect(wrong.readPdf(SLUG)).rejects.toMatchObject({ status: 500 });
   });
 
-  /** The rows written before the `sources` bucket existed still have a source. */
-  it("still serves a revision that only has raw_bytes", async () => {
-    /* No `raw_filename` on this one — the importer wrote it and there was no
-       reader to name it. The route falls back to `<slug>.pdf`. */
-    expect(await withObject().readPdf(LEGACY_SLUG)).toEqual({ bytes: LEGACY, filename: null });
+  /**
+   * **A revision that names no object has no source document**, and that is the
+   * whole of the answer now.
+   *
+   * Until 2026-09-01 there was a second place to look — `article_revisions.raw_bytes`,
+   * which every article the importer ever wrote used — and this file carried two
+   * fixtures for it. The corpus was refetched through the reference and the
+   * column was dropped, so the fallback is gone; what is left to assert is that
+   * its absence answers `null` rather than throwing, which is what the route
+   * turns into *"that article did not come from a PDF"*.
+   */
+  it("answers null for a revision that names no object at all", async () => {
+    await sql(
+      `insert into spideryarn.articles (id, owner_id, slug) values ($1, $2, $3)`,
+      [SOURCELESS_ARTICLE_ID, currentOwnerId(), SOURCELESS_SLUG],
+    );
+    await sql(
+      `insert into spideryarn.article_revisions (id, article_id, status, title, source)
+       values ($1, $2, 'published', 'A paper with no document behind it', 'pdf')`,
+      [SOURCELESS_REVISION_ID, SOURCELESS_ARTICLE_ID],
+    );
+    await sql("update spideryarn.articles set current_revision_id = $2 where id = $1", [
+      SOURCELESS_ARTICLE_ID,
+      SOURCELESS_REVISION_ID,
+    ]);
+    /* **The row has to be found for the `null` to mean anything.** A fixture
+       that failed to insert, or a slug the owner filter rejects, answers `null`
+       for a completely different reason and this test would pass while proving
+       nothing — docs/reusable/silent-success.md. */
+    expect(await sourceReferenceQuery(getDb(), SOURCELESS_SLUG)).toEqual([
+      { rawSourceSha256: null, rawSourceKind: null, rawFilename: null },
+    ]);
+    expect(await withObject().readPdf(SOURCELESS_SLUG)).toBeNull();
   });
 
   /**
@@ -486,18 +487,6 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
   it("refuses a referenced source that is a web page, object present and all", async () => {
     const store = createPgSourceStore(() => bucket(new Map([[HTML_KEY, WEBPAGE]])));
     expect(await store.readPdf(HTML_SLUG)).toBeNull();
-  });
-
-  /**
-   * **And the same control for the legacy path's kind guard**, which reads a
-   * different column — `source`, not `raw_source_kind`.
-   *
-   * One fixture cannot cover both: this row has no reference at all, so it never
-   * reaches the check above. `source` is null here because that is what a
-   * fetched web page leaves it as; only src/pdf-read.ts ever writes `'pdf'`.
-   */
-  it("refuses a legacy raw_bytes source that is a web page", async () => {
-    expect(await withObject().readPdf(LEGACY_HTML_SLUG)).toBeNull();
   });
 
   /**
@@ -535,25 +524,31 @@ when("the Postgres source store", { timeout: 20_000 }, () => {
   });
 
   /**
-   * **And it does not select `raw_bytes`** — the whole point of the reference.
+   * **And it stays a reference lookup rather than a document read.**
    *
-   * `raw_bytes` is up to 32 MiB of somebody's scan, and this query runs for
-   * every request to `/api/source/:slug` including the ones that answer 404.
-   * Putting the column back into the projection is a one-word edit that changes
-   * no answer anywhere — every behavioural test in this file would stay green
-   * while the route dragged the entire document across the wire twice. GPT Sol,
-   * 2026-08-31: nothing asserted it.
+   * This asserted `not.toContain("raw_bytes")` until 2026-09-01 — the column was
+   * up to 32 MiB of somebody's scan and this query runs for every request to
+   * `/api/source/:slug`, including the ones that answer 404, so putting it back
+   * in the projection was a one-word edit that changed no answer anywhere and
+   * every behavioural test here would have stayed green. GPT Sol, 2026-08-31:
+   * nothing asserted it. The column is gone, so that assertion is now a
+   * tautology and this is the property that survives it: three narrow scalars
+   * and nothing else off the revision.
    *
-   * The second, `source = 'pdf'`-guarded query is where those bytes are allowed
-   * to be read, and only for the pre-bucket rows that have nowhere else to keep
-   * them. src/store/pg-source.ts § *Two eras, and both are served*.
+   * Named columns rather than a count, so widening the projection to `select()`
+   * — which takes the whole row, artefacts and extracted HTML included — fails
+   * here.
    */
-  it("and it does not drag the 32 MiB column along for the ride", () => {
+  it("and it stays three narrow scalars, not the revision row", () => {
     const { sql: text } = sourceReferenceQuery(getDb(), SLUG).toSQL();
-    expect(text).not.toContain("raw_bytes");
-    /* The reference, which is what it selects instead — so this test fails if
-       the projection is emptied rather than merely trimmed. */
+    /* The reference, which is what it is for — so this fails if the projection
+       is emptied rather than merely trimmed. */
     expect(text).toContain("raw_source_sha256");
+    expect(text).toContain("raw_source_kind");
+    expect(text).toContain("raw_filename");
+    for (const column of ["extracted_html", "stamped_html", "tree", "glossary", "labels"]) {
+      expect({ column, taken: text.includes(column) }).toEqual({ column, taken: false });
+    }
   });
 });
 
@@ -570,7 +565,7 @@ async function sql(text: string, values: unknown[] = []): Promise<void> {
  * `article_revisions_raw_source_fk` points at it.
  */
 async function clean() {
-  for (const id of [ARTICLE_ID, LEGACY_ARTICLE_ID, HTML_ARTICLE_ID, LEGACY_HTML_ARTICLE_ID]) {
+  for (const id of [ARTICLE_ID, HTML_ARTICLE_ID, SOURCELESS_ARTICLE_ID]) {
     await sql("update spideryarn.articles set current_revision_id = null where id = $1", [id]);
     await sql("delete from spideryarn.article_revisions where article_id = $1", [id]);
     await sql("delete from spideryarn.articles where id = $1", [id]);

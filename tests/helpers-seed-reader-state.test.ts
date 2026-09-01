@@ -31,7 +31,7 @@
  * Skips loudly when there is no database — see tests/db-schema.test.ts.
  */
 
-import { cp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { and, eq } from "drizzle-orm";
@@ -41,6 +41,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, blockIdentities, comments as commentsTable, jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
@@ -50,6 +51,29 @@ loadEnvLocal();
 const ROOT = path.resolve(import.meta.dirname, "..");
 /** The smallest complete article in the corpus; copied, never used in place. */
 const FROM = "writes";
+/**
+ * The clone's **source** is the committed corpus; its **destination** is the
+ * working `data/`.
+ *
+ * `FROM` used to be read out of `path.join(ROOT, "data", FROM)`, which is a
+ * developer's own gitignored working copy — absent on a fresh clone, different
+ * on every machine. docs/plans/260901b-committed-fixture-corpus.md.
+ *
+ * The destination stays on `ROOT` and is passed to `loadArticleIntoPg` as
+ * `root`, because that now defaults to the corpus and the scratch article must
+ * not be written into a tracked fixture directory.
+ */
+requireFixture(FROM, [
+  "raw.json",
+  "raw.html",
+  "meta.json",
+  "blocks.json",
+  "tree.json",
+  "labels.json",
+  "output.html",
+  "output.blocks.json",
+]);
+
 /** A block id that is not in `writes`'s text, and never was. */
 const VANISHED = "spya-zzzzzz";
 
@@ -78,7 +102,7 @@ afterAll(async () => {
 async function makeFixture(slug: string, comments: unknown[]): Promise<void> {
   const dir = path.join(ROOT, "data", slug);
   await rm(dir, { recursive: true, force: true });
-  await cp(path.join(ROOT, "data", FROM), dir, { recursive: true });
+  await cp(path.join(FIXTURE_ROOT, "data", FROM), dir, { recursive: true });
 
   for (const name of await readdir(dir)) {
     if (!name.endsWith(".json")) continue;
@@ -89,9 +113,12 @@ async function makeFixture(slug: string, comments: unknown[]): Promise<void> {
       await writeFile(at, JSON.stringify(value, null, 2));
     }
   }
+  /* `output/` is gitignored, so a fresh clone has no such directory and the
+     copy would fail on it rather than on the file. */
+  await mkdir(path.join(ROOT, "output"), { recursive: true });
   for (const ext of [".html", ".blocks.json"]) {
     await cp(
-      path.join(ROOT, "output", `${FROM}${ext}`),
+      path.join(FIXTURE_ROOT, "output", `${FROM}${ext}`),
       path.join(ROOT, "output", `${slug}${ext}`),
     );
   }
@@ -132,7 +159,7 @@ when("the reader-state seeder", () => {
     await forget(slug);
     await makeFixture(slug, [comment("spya-cmtaaa", VANISHED)]);
     try {
-      const loaded = await loadArticleIntoPg(slug);
+      const loaded = await loadArticleIntoPg(slug, { root: ROOT });
       // A load that carried a previous revision forward would bring its
       // identities with it, and this test would prove nothing.
       expect(loaded.basedOn).toBeNull();
@@ -178,7 +205,7 @@ when("the reader-state seeder", () => {
     await forget(slug);
     await makeFixture(slug, [comment("spya-cmtaaa", VANISHED), comment("spya-cmtbbb", VANISHED)]);
     try {
-      await loadArticleIntoPg(slug);
+      await loadArticleIntoPg(slug, { root: ROOT });
       const db = getDb();
       const [article] = await db
         .select({ id: articles.id })
@@ -221,7 +248,7 @@ when("the reader-state seeder", () => {
       ),
     );
     try {
-      await loadArticleIntoPg(slug);
+      await loadArticleIntoPg(slug, { root: ROOT });
       const written = await seedShelfFromFiles(slug);
       expect(written.opens).toBe(874);
       expect(written.archivedAt?.toISOString()).toBe("2019-07-04T09:30:00.000Z");
