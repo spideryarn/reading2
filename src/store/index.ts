@@ -98,6 +98,7 @@ import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
+import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
@@ -260,36 +261,44 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded(
 );
 
 /**
- * **A paper's claims run** — the one store here with a filesystem side and no
- * Postgres side, and the second thing ever to sit behind `notMigrated`.
+ * **A paper's claims run** — `guarded(...)` like the criteria above it, since
+ * 2026-09-01.
  *
- * Not an oversight and not a to-do that slipped. A claims run is an
- * article-derived, reusable artefact, and the plan
+ * It was not, and the reason is worth keeping rather than deleting. Claims
+ * shipped on 2026-08-31 with a filesystem store only, and every method here
+ * refused with a 501 under `SPIDERYARN_STORE=postgres` — a recorded decision
+ * with two arguments behind it.
+ *
+ * **The first still stands**: a claims run is an article-derived reusable
+ * artefact, and the plan
  * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2) is explicit that
  * its right home is a **pipeline artefact** — `StepName`, `ArtifactKind`, an
- * `article_revisions` column — rather than a bespoke table beside the criteria.
- * It was built route-shaped because the artefact layer was being rewritten
- * underneath it, and building a bespoke Postgres table for something already
- * scheduled to be replaced would be two migrations to reach the same place.
+ * `article_revisions` column. `referee_claims` is therefore an **interim**, and
+ * drizzle/0051_referee_claims.sql says so in its own header so that the day it
+ * is replaced is a decision rather than a discovery.
  *
- * So under `SPIDERYARN_STORE=postgres` every method refuses, loudly, with a 501.
- * That is the rule this file's header states and the reason it states it: a
- * write that lands in the store nobody is reading is the worst available
- * outcome, because it reports success and loses the data. Claims is therefore
- * **files-only today**, which is written down here, in
- * docs/project/referee-mode.md and in contracts.ts, rather than waiting to be
- * discovered by a referee whose panel is empty on a deployed server.
+ * **The second has expired, and it was the blocking one.** src/store/export.ts
+ * was being rewritten in another session that day, so a new table could only
+ * have landed *without* an `ARTICLE_TABLE_COVERAGE` entry — precisely the
+ * accident of the day before, when `db:export` had never heard of
+ * `referee_criteria` and dropped every one of them from the rollback while
+ * reporting success. That file is committed and stable, so the table lands with
+ * its coverage entry and with the fixture that makes the entry true.
+ *
+ * What stood against the interim was a cross-family review's finding 4: under
+ * the store that actually deploys, *"'Pull the paper's claims' cannot load,
+ * start or persist a run"*. A sub-mode that only works on a laptop is not built.
+ *
+ * `guarded(...)` is not optional. The parameters Drizzle puts into a failed
+ * query's message here are the paper's own sentences — a claims run is nothing
+ * but quotations from somebody else's unpublished work. See
+ * [db-errors.ts](db-errors.ts).
  */
-export const refereeClaimsStore: RefereeClaimsStore =
-  STORE === "postgres"
-    ? {
-        load: notMigrated("Reading a claims run"),
-        sourceHash: notMigrated("Fingerprinting a paper for a claims run"),
-        begin: notMigrated("Starting a claims run"),
-        finish: notMigrated("Recording a claims run"),
-        sweep: notMigrated("Sweeping a claims run"),
-      }
-    : fsRefereeClaimsStore;
+export const refereeClaimsStore: RefereeClaimsStore = guarded(
+  "referee-claims",
+  pgRefereeClaimsStore,
+  fsRefereeClaimsStore,
+);
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded(
   "lookups",

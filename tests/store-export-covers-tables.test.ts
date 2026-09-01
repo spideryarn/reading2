@@ -307,6 +307,21 @@ function fixtures(): Record<ExportedTable, Fixture> {
         status: "done",
       });
     },
+    referee_claims: async () => {
+      /* One row and no id — a referee asks the paper what it claims exactly
+         once. The sentinel goes in `model` rather than in a claim, because a
+         claim has to anchor to a block that exists and `Claim`'s shape is
+         currently moving under another session; `model` is a plain exported
+         column and the check here is "did this table's row reach that file",
+         not "is a claim well formed". */
+      await db.insert(schema.refereeClaims).values({
+        articleId: ARTICLE_ID,
+        ownerId: owner(),
+        status: "done",
+        claims: [],
+        model: sentinel("referee_claims"),
+      });
+    },
     glossary_lookups: async () => {
       await db.insert(schema.glossaryLookups).values({
         articleId: ARTICLE_ID,
@@ -331,7 +346,11 @@ function declaredExported(): ExportedTable[] {
 
 const { reachable } = await pgReady({
   suite: "tests/store-export-covers-tables.test.ts",
-  tables: ["spideryarn.referee_criteria", "spideryarn.glossary_lookups"],
+  tables: [
+    "spideryarn.referee_criteria",
+    "spideryarn.referee_claims",
+    "spideryarn.glossary_lookups",
+  ],
 });
 
 const when = reachable ? describe : describe.skip;
@@ -379,6 +398,7 @@ when("what the record calls exported, the export was watched writing", () => {
     await db
       .delete(schema.refereeCriteria)
       .where(eq(schema.refereeCriteria.articleId, ARTICLE_ID));
+    await db.delete(schema.refereeClaims).where(eq(schema.refereeClaims.articleId, ARTICLE_ID));
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.articleId, ARTICLE_ID));
     await db.delete(schema.chatThreads).where(eq(schema.chatThreads.articleId, ARTICLE_ID));
     await db.delete(schema.searchRuns).where(eq(schema.searchRuns.articleId, ARTICLE_ID));

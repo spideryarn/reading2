@@ -1,6 +1,6 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
-**Status, 2026-09-01: all four sub-modes are built.**
+**Status, 2026-09-01: all four sub-modes are built, and all four work in the store that deploys.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
 ranked in the panel, and on a `diverging` criterion each passage carries a signed valence. Verified
@@ -22,12 +22,30 @@ prose. `GET`/`POST /api/referee/claims/:slug`,
 [`src/referee-claims.ts`](../../src/referee-claims.ts) for what a claim is,
 [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
 
-**Claims is files-only.** Its store has a filesystem implementation and no Postgres one, so under
-`SPIDERYARN_STORE=postgres` every method refuses with a 501 rather than writing a file no Postgres
-read will return ([`src/store/index.ts`](../../src/store/index.ts) § `refereeClaimsStore`). That is a
-decision rather than a gap: a claims run is an article-derived reusable artefact whose right home is
-a **pipeline artefact**, which the plan says out loud, and a bespoke table for something already
-scheduled to be replaced is two migrations to reach one place. Claims added no migration.
+**Claims runs in the store that deploys, as of 2026-09-01.** It was files-only for a day: under
+`SPIDERYARN_STORE=postgres` every method refused with a 501, so on a deployed server *"Pull the
+paper's claims"* could not load, start or persist a run — which is how the cross-family review found
+it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mode-submodes-review-sol.md),
+finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks
+between them like every other pair.
+
+**The table is an interim and says so.** A claims run is an article-derived reusable artefact whose
+right home is a **pipeline artefact** — a `StepName`, an `ArtifactKind`, an `article_revisions`
+column — which the plan says out loud, and that has not changed;
+[`drizzle/0051_referee_claims.sql`](../../drizzle/0051_referee_claims.sql) records it in its own
+header so the day it is replaced is a decision rather than a discovery. What *had* also been true was
+that [`src/store/export.ts`](../../src/store/export.ts) was being rewritten in another session, so a
+table could only have landed without an `ARTICLE_TABLE_COVERAGE` entry — the accident of the day
+before, when `db:export` silently dropped every criterion for a day. That file is settled, so the
+table landed with its entry and with a fixture that inserts a row and requires it back out of
+`referee-claims.json`.
+
+**One run per article, and no id.** A referee writes several criteria and asks the paper what *it*
+claims exactly once, so the primary key is `article_id` alone and starting a run **replaces** what is
+there. `created_at` doubles as the sweep's clock, which is how the Postgres store gets the grace
+window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a second Vercel process
+loading the panel would error a run the first one is still streaming
+([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
 **Candidates works end to end** as of 2026-09-01 — open the sub-mode and the fit brief arrives
 unprompted, then scope the search in the composer and names arrive with the shortlist above the
@@ -355,22 +373,64 @@ panel out of printing. The difference is the point:
   Presenting an algorithmic pass as though it caught everything is the specific move the research
   says editors already distrust.
 
-**The weak half of rule 1, measured rather than guessed.** With
-`tools: [{ type: "openrouter:web_search" }]` the search runs inside Anthropic and OpenRouter emits a
-`url_citation` annotation only where the model attributes a result *in its prose*. The first live run
-of Candidates ran four searches, produced six well-sourced people, emitted **zero** annotations, and
-every one of the six was dropped as uncited — the rule doing the exact opposite of its job. The fix
-that is in is a prompt one: the model is required to link the page in the sentence that introduces
-the person, not only in the JSON, and the next run of the same paper returned five annotations and
-one drop, with every URL resolving. That works, and it means the *supply* of the thing the code
-checks rests on an instruction the model can ignore. The real fix is on the wire —
-`plugins: [{ id: "web" }]` annotates everything it returns unconditionally, but runs exactly one
-search per request whatever the model wanted, a trade [`src/explain.ts`](../../src/explain.ts)
-already writes down from the other side. It is the first follow-up job here.
+**Where rule 1's evidence comes from, measured on the wire.** The rule can only check what
+OpenRouter's `url_citation` annotations report, and **the search engine decides whether those arrive
+at all**. Under the default engine the search runs inside Anthropic and an annotation appears only
+where the model attributes a result *in its prose*: the first live run of Candidates ran four
+searches, produced six well-sourced people, emitted **zero** annotations, and had all six dropped as
+uncited — the rule doing the exact opposite of its job. A probe on 2026-09-01 settled it. Identical
+prompt both ways, two searches each, the answer told to reply with the single word `DONE` and
+attribute nothing:
 
-**What was dropped is counted on screen.** *The model named nobody* and *the model named eleven
-people and none of them could be shown* are different sentences and the panel prints different ones —
-Claims' lesson rather than Criteria's, built in from the start. **And the bias is labelled rather
+| | searches | annotations |
+| --- | --- | --- |
+| default engine | 2 | **0** |
+| `engine: "exa"` | 2 | **9** |
+
+Every one of the nine arrived *before the first content token*, with `start_index === end_index === 0`,
+carrying `url`, `title` and a 250–5,300 character extract of the page. So under Exa the results are
+delivered at search time rather than at attribution time, which is what turns rule 1 from a hope into
+a check — and it is why [`webSearchTool`](../../src/converse.ts) asks for that engine on Candidates
+turns and no others. The earlier note here recommending `plugins: [{ id: "web" }]` was wrong twice
+over: OpenRouter documents that plugin as deprecated in favour of this server tool, and the server
+tool solves the problem better, since the plugin always runs exactly one search.
+
+**There is no search budget, and the code must not claim one.** The same probe sent `max_uses: 2` and
+asked for six searches; OpenRouter reported `web_search_requests: 6` and `tool_calls_executed: 6`.
+`max_total_results` *was* honoured to the row — four asked for, four returned, out of those six
+searches — so that is the cap Candidates sets. What is limited is how much comes back, not how often
+it searches.
+
+**Rule 1 governs the screen, not the JSON.** A cross-family review found the hole on 2026-09-01: the
+validator ran on the fenced block, the panel then stripped the fence and rendered the surrounding
+prose, and a model that listed six people in the block and introduced the same six in the paragraph
+above it put all six on screen beside an empty shortlist. So the names are now cut out of the prose
+too — `redactNames` in [`referee-candidates.ts`](../../src/referee-candidates.ts), against the exact
+strings the block put forward, so no guess is needed about what a name looks like in running text.
+The paragraph itself stays: what was searched and why somebody fits is the point of the sub-mode, and
+an editor who lost the transcript would be worse off than one who read a name too many. The prompt
+now forbids names in prose outright, which leaves one residual and it is stated rather than left to
+be found — **a name the model writes in prose and omits from the block entirely is not known here and
+is not cut.**
+
+**A citation cannot reach backwards.** The allowed-URL pool is every citation from the start of the
+thread **up to and including** the answer being validated, and not one message further. More than one
+answer, because the model re-emits the whole shortlist every turn and a person found at turn two is
+still in turn five's fence; but nothing later, because a search run at turn five standing up a name
+written at turn two is a rule that can be satisfied by waiting. What the pool still does **not**
+prove is that the page is about the person it is filed under: a hallucinated name paired with a real
+URL from an earlier search passes. Closing that means matching the person's name against the search
+result's own title and snippet — now feasible, since the Exa probe shows the wire supplies both, but
+it needs `Citation` to carry the snippet through [`types.ts`](../../src/types.ts),
+[`openrouter-stream.ts`](../../src/openrouter-stream.ts) and the thread store. That is the first
+follow-up job here.
+
+**What was dropped is counted on screen, and so is what the cap never read.** *The model named
+nobody* and *the model named eleven people and none of them could be shown* are different sentences
+and the panel prints different ones — Claims' lesson rather than Criteria's, built in from the start.
+Past forty rows the panel says how many more were listed and not read, the way Mirror surfaces
+`placementsOmitted`: a list that silently truncates has made *position* a ranking, in the one panel
+built to have none. **And the bias is labelled rather
 than denied**: the panel says the list leans towards people the web indexes well, which is the honest
 version and the useful one, because it tells the editor what they are looking at.
 

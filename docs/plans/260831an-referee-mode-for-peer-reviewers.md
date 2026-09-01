@@ -582,9 +582,30 @@ is a fair description of what shipped.
   the cap, because digits are not letters and `Surname1`/`Surname2` reduce to one key. Both are
   written up beside the code.
 
+  **Rule 1 was true of the data and false of the screen, and a wire probe fixed the cause.** The
+  third cross-family review found that the validator governed the fenced JSON while the panel
+  stripped the fence and rendered the prose around it, names and all — so the first live run's six
+  refused people were on screen beside an empty shortlist. Two changes, one at each end. At the
+  screen, `redactNames` cuts every name the block put forward and did not get shown, by its exact
+  string, and the prompt now keeps names out of prose altogether; the *paragraph* stays, because the
+  discussion of fit is the point of the sub-mode. On the wire, a probe on 2026-09-01 found the real
+  cause of the drops: with the default engine OpenRouter annotates only what the model attributes in
+  prose (2 searches, **0** annotations), and with `engine: "exa"` it annotates every result at search
+  time (2 searches, **9** annotations, each with url, title and a page extract). Candidates asks for
+  Exa for that reason and no other. The same probe killed the search budget: `max_uses: 2` with six
+  searches asked for returned six executed, while `max_total_results` was honoured exactly — so the
+  code caps results and claims no cap on searches. The simpler option passed over was a name
+  *detector* over the prose rather than exact strings, and it was passed over because it would have
+  had to choose between cutting "Item Response Theory" out of the fit brief and letting a real name
+  through. [referee-mode.md § Candidates](../project/referee-mode.md) has the numbers.
+
   What is **not** built, deliberately: any scholarly identity graph. OpenAlex, ORCID and Crossref
   could back real co-authorship COI checks and that is the obvious next step. Greg's framing was
-  *"see how far we can get in a stage or two"*, and this is the end of the second stage.
+  *"see how far we can get in a stage or two"*, and this is the end of the second stage. The nearer
+  follow-up is smaller: the Exa wire carries each result's **snippet**, so matching a candidate's
+  name against the title and text of the page filed under them is now cheap — it needs `Citation` to
+  carry a snippet through `types.ts`, `openrouter-stream.ts` and the thread store, which is the one
+  thing standing between "this URL came back from a search" and "this URL is about this person".
 - **Stage 8 — finish.** A browser pass over all four sub-modes including a colour-vision simulation,
   a narrow screen and a screen reader; GPT Sol on the code again; and the status paragraph at the
   top of [referee-mode.md](../project/referee-mode.md) rewritten to match what is then true.

@@ -31,20 +31,16 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { and, asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import {
-  articleRevisions,
-  articles,
-  chatMessages,
-  chatThreads,
-  comments as commentsTable,
-  glossaryLookups,
-  refereeCriteria,
-  revisionBlocks,
-  searchRuns,
-} from "../db/schema.js";
+import { articleRevisions, articles } from "../db/schema.js";
+/* **The queries moved out on 2026-09-01**, and only the queries. Everything
+   below still projects those rows into the filesystem store's layout exactly as
+   it did — the rollback is pinned byte for byte by tests/store-roundtrip.test.ts,
+   so this file's job is the lossy projection and article-rows.ts's job is the
+   faithful read. docs/plans/260901h-export-article-data.md § The design. */
+import { ArticleNotFound, messagesOfThread, readArticleRows } from "./article-rows.js";
 /* Pure — it reaches for `quote-match` and `urls` and nothing else — so naming
    the union's two spellings in one place costs this file no dependency it did
    not already have. */
@@ -57,11 +53,15 @@ import { type RawSourceStore, postgresBlobStore } from "./blobs.js";
 /* **Moved to a module of its own on 2026-08-31**, and re-exported below so that
    every existing importer — and tests/store-export-raw.test.ts — is unchanged.
    `GET /api/source/:slug` became a second caller and importing it from here
-   would have made a cycle: this file reaches into `pg.ts` for `ownedSlug`, and
-   `pg.ts` would then have reached back. raw-document.ts has the reasoning. */
+   would have made a cycle: this file reaches into `pg.ts` for `ownedByReader`,
+   and `pg.ts` would then have reached back. raw-document.ts has the reasoning. */
 import { CorruptRawObject, MissingRawObject, readRawDocument } from "./raw-document.js";
 export { CorruptRawObject, MissingRawObject, readRawDocument };
-import { ownedByReader, ownedSlug } from "./pg.js";
+/* Re-exported for the same reason: a caller that wants to tell "no such
+   article" apart from a real failure should not have to know which file the
+   query walk lives in. */
+export { ArticleNotFound };
+import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
 
@@ -178,6 +178,7 @@ export const ARTICLE_TABLE_COVERAGE = {
   chat_messages: { exported: true, into: "chat.json" },
   search_runs: { exported: true, into: "searches.json" },
   referee_criteria: { exported: true, into: "referee-criteria.json" },
+  referee_claims: { exported: true, into: "referee-claims.json" },
   glossary_lookups: { exported: true, into: "glossary-lookups.json" },
 
   block_identities: {
@@ -448,17 +449,12 @@ export async function exportArticle(
      `blobStore()`'s filesystem fallback. */
   sources: RawSourceStore = exportBlobStore(),
 ): Promise<ExportResult> {
-  const db = getDb();
-  const rows = await db
-    .select({ article: articles, revision: articleRevisions })
-    .from(articles)
-    .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(ownedSlug(slug))
-    .limit(1);
-
-  const found = rows[0];
-  if (!found) throw new Error(`${slug}: no article with a current revision in Postgres`);
-  const { article, revision } = found;
+  /* One owner-scoped read, up front. It throws `ArticleNotFound` — a subclass
+     of `Error` carrying the message this function has always thrown for a slug
+     that is not this reader's, so `npm run db:export`'s output is unchanged and
+     a route can still tell the case apart. */
+  const rows = await readArticleRows(slug);
+  const { article, revision } = rows;
 
   const dir = path.join(target.dataRoot, slug);
   await mkdir(dir, { recursive: true });
@@ -518,14 +514,11 @@ export async function exportArticle(
   });
   if (revision.title) await put("article_revisions", "meta.json", meta);
 
-  /* blocks.json — `order by ordinal`, which is the whole ballgame. Ids are
-     random and carry no position, so a missing ORDER BY here silently exports
-     a shuffled article that still validates. */
-  const blockRows = await db
-    .select()
-    .from(revisionBlocks)
-    .where(eq(revisionBlocks.revisionId, revision.id))
-    .orderBy(revisionBlocks.ordinal);
+  /* blocks.json — in document order, which is the whole ballgame. Ids are
+     random and carry no position, so rows arriving unordered would silently
+     export a shuffled article that still validates. The `order by ordinal` that
+     guarantees it is in `readArticleRows`. */
+  const blockRows = rows.blocks;
 
   const blocks: Block[] = blockRows.map((row) => ({
     id: row.blockId,
@@ -621,7 +614,9 @@ export async function exportArticle(
 
      `shelf.json` above is the one that does NOT wrap — it is the state itself,
      not a list of anything, and src/shelf.ts reads it that way. */
-  /* **Every list here is ordered explicitly, and none of them was.**
+  /* **Every list here is ordered explicitly, and none of them was.** The
+     `order by` itself now lives in `readArticleRows`, which is the only place
+     these rows are read; this note stays because it is the reason it is there.
 
      A `select` with no `order by` returns rows in whatever order Postgres finds
      them, which is usually the order they were written and is guaranteed to be
@@ -640,11 +635,7 @@ export async function exportArticle(
      `createdAt` then `id` chain to break ties, so the file's array order is
      insertion order and nothing reads it. GPT Sol raised both the missing
      order and the array-order claim in review, 2026-08-26. */
-  const commentRows = await db
-    .select()
-    .from(commentsTable)
-    .where(eq(commentsTable.articleId, article.id))
-    .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id));
+  const commentRows = rows.comments;
   if (commentRows.length) {
     const comments: Comment[] = commentRows.map((row) =>
       compact({
@@ -685,11 +676,7 @@ export async function exportArticle(
     await put("comments", "comments.json", { comments });
   }
 
-  const threadRows = await db
-    .select()
-    .from(chatThreads)
-    .where(eq(chatThreads.articleId, article.id))
-    .orderBy(asc(chatThreads.createdAt), asc(chatThreads.id));
+  const threadRows = rows.chatThreads;
   if (threadRows.length) {
     const threads = [];
     /* Counted rather than assumed. `chat.json` is written from two tables and a
@@ -699,19 +686,17 @@ export async function exportArticle(
        exists to stop. */
     let messagesSeen = 0;
     for (const thread of threadRows) {
-      /* `article_id` AND `thread_id`, never `thread_id` alone. A thread id is
-         unique only within its article — `chat_threads`'s primary key is
-         `(article_id, id)`, the same rule as block ids — so two articles can
-         hold a thread called `thr-1`, and filtering on the id by itself would
-         write both articles' messages into one article's rollback file. That is
-         one reader's private conversation appearing under someone else's
-         article, and the round-trip test would not have noticed: it exports one
-         article at a time. */
-      const messageRows = await db
-        .select()
-        .from(chatMessages)
-        .where(and(eq(chatMessages.articleId, article.id), eq(chatMessages.threadId, thread.id)))
-        .orderBy(chatMessages.ordinal);
+      /* Grouping only — the rows in hand are this article's alone, because
+         `readArticleRows` reads them by `article_id`. That is load-bearing and
+         not a detail of where the query sits: a thread id is unique only within
+         its article (`chat_threads`'s primary key is `(article_id, id)`, the
+         same rule as block ids), so two articles can hold a thread called
+         `thr-1`, and a read keyed on the thread id alone would write both
+         articles' messages into one article's rollback file. That is one
+         reader's private conversation appearing under someone else's article,
+         and the round-trip test would not have noticed: it exports one article
+         at a time. */
+      const messageRows = messagesOfThread(rows, thread.id);
       messagesSeen += messageRows.length;
       threads.push({
         id: thread.id,
@@ -778,11 +763,7 @@ export async function exportArticle(
     );
   }
 
-  const runRows = await db
-    .select()
-    .from(searchRuns)
-    .where(eq(searchRuns.articleId, article.id))
-    .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
+  const runRows = rows.searchRuns;
   if (runRows.length) {
     const runs: SearchRun[] = runRows.map((row) =>
       compact({
@@ -825,11 +806,7 @@ export async function exportArticle(
      `comments.criterion_id` points at these rows, so an export that wrote the
      comments and dropped the criteria would produce a `data/` directory whose
      referee marks name criteria that are not there. */
-  const criterionRows = await db
-    .select()
-    .from(refereeCriteria)
-    .where(eq(refereeCriteria.articleId, article.id))
-    .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id));
+  const criterionRows = rows.refereeCriteria;
   if (criterionRows.length) {
     const criteria: SavedCriterion[] = [];
     let unreadable = 0;
@@ -866,11 +843,46 @@ export async function exportArticle(
     if (criteria.length) await put("referee_criteria", "referee-criteria.json", { criteria });
   }
 
-  const lookupRows = await db
-    .select()
-    .from(glossaryLookups)
-    .where(eq(glossaryLookups.articleId, article.id))
-    .orderBy(asc(glossaryLookups.entryId));
+  /* referee-claims.json — the paper's own claims and where it takes each one
+     up. `src/referee-claims-store.ts` writes this file, and the shape on disk is
+     `{ run }` rather than a bare run, so a rollback lands somewhere
+     `loadClaimsRun` can read it back: that function reads `parsed.run`, and a
+     file holding the run at the top level would come back as `null` — an export
+     that wrote the bytes and lost the answer.
+
+     **One row and no id**, unlike every other table here: a referee asks the
+     paper what it claims exactly once, so there is nothing to order and nothing
+     to loop over. `referee_claims` is an interim table
+     (drizzle/0051_referee_claims.sql); when Claims becomes the pipeline artefact
+     the plan wants, this block moves up to the `article_revisions` group above
+     and the coverage entry moves with it.
+
+     `claims` is JSONB and is written back verbatim. There is no `configFromRow`
+     equivalent to fail on, because there is no discriminated union in the row —
+     the shape is validated by `validateClaims` on the way in. */
+  const claimsRow = rows.refereeClaims[0];
+  if (claimsRow) {
+    await put("referee_claims", "referee-claims.json", {
+      run: compact({
+        status: claimsRow.status,
+        createdAt: claimsRow.createdAt.toISOString(),
+        /* Not `compact`ed away: `claims` is `not null default []`, and an empty
+           array is a real answer — a run that failed, or one still pending —
+           which is a different fact from a run that was never made. `compact`
+           drops only null and undefined, so `[]` stays. */
+        claims: claimsRow.claims,
+        model: claimsRow.model,
+        /* `compact` drops it when null, which is right: null means *not
+           recorded*, and `"claimsOmitted": null` on disk would read as a
+           recorded zero. */
+        claimsOmitted: claimsRow.claimsOmitted,
+        error: claimsRow.error,
+        sourceHash: claimsRow.sourceHash,
+      }),
+    });
+  }
+
+  const lookupRows = rows.glossaryLookups;
   if (lookupRows.length) {
     const lookups: Record<string, unknown> = {};
     for (const row of lookupRows) {

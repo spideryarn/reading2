@@ -71,6 +71,10 @@ import type { Assets } from "../assets.js";
    rather than src/types.ts because the validator that guarantees it is in the
    same file, and the two are one decision — see that file's header. */
 import type { RefereeResult } from "../referee-criteria.js";
+/* Referee mode's second sub-mode, and the same reasoning as the line above: the
+   shape and the validator that guarantees it live together in
+   src/referee-claims.ts. */
+import type { Claim } from "../referee-claims.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { LabelsFile } from "../labels.js";
 import type {
@@ -1207,6 +1211,118 @@ export const refereeCriteria = spideryarn.table(
       "referee_criteria_attempt_both",
       sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
     ),
+  ],
+);
+
+/* -------------------------------------------------------- referee claims -- */
+
+/**
+ * **The claims a paper makes about itself, and where it takes each one up** —
+ * Referee mode's second sub-mode. `ClaimsRun` in src/referee-claims.ts is the
+ * shape; src/store/pg-referee-claims.ts is the store.
+ *
+ * ## One row per article, and the primary key says so
+ *
+ * `referee_criteria` beside it is keyed `(article_id, id)` because a referee
+ * writes several criteria. This one is keyed on `article_id` **alone**: a
+ * referee asks the paper what *it* claims exactly once, so running it again
+ * replaces the row rather than adding one. There is no minted id, no cap and no
+ * three-condition retry rule, because there is nothing to collide with — the
+ * answer a second run overwrites was about the same paper.
+ *
+ * That is not a shape to tidy into line with its neighbour. A surrogate id here
+ * would let two runs exist, and then something would have to decide which one
+ * the panel shows, which is the decision the single key removes.
+ *
+ * ## Why this table exists at all, having been argued against
+ *
+ * It was deliberately *not* built on 2026-08-31, and the reasoning is worth the
+ * two sentences: a claims run is an article-derived reusable artefact, so its
+ * right long-term home is a **pipeline artefact** — a `StepName`, an
+ * `ArtifactKind` and an `article_revisions` column — rather than a bespoke table
+ * beside the criteria. That is still true, and this table is still an interim.
+ *
+ * What changed on 2026-09-01 is the *other* half of the argument. The reason not
+ * to build it then was that src/store/export.ts was being rewritten in another
+ * session, so a table could only have landed without an `ARTICLE_TABLE_COVERAGE`
+ * entry — which is exactly the accident this repo carries a postmortem for, a
+ * day of `db:export` silently dropping every `referee_criteria` row. That file
+ * is settled, so the table lands *with* its coverage entry and its behavioural
+ * fixture. Against it stood a sub-mode that returned 501 for every operation in
+ * the only configuration that deploys.
+ *
+ * ## `claims` is JSONB for the reason `referee_criteria.results` is
+ *
+ * One model call's wholesale output, written together and never edited a row at
+ * a time. docs/project/sql.md's default is a column, and this is the case that
+ * argues itself out: the passages under a claim are read as a unit, replaced as
+ * a unit, and nothing ever queries across them.
+ */
+export const refereeClaims = spideryarn.table(
+  "referee_claims",
+  {
+    /** The key, on its own. See the header: one run per article. */
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /** Written before the model is called, so a crash leaves a visible unfinished run. */
+    status: text("status").notNull(),
+    /**
+     * The claims and their passages — a `Claim[]`, validated by `validateClaims`
+     * in src/referee-claims.ts. Every claim and every passage under it is
+     * anchored by `blockId` + `quote` (+ `start` as a disambiguator only), which
+     * is the contract in docs/project/block-ids.md.
+     */
+    claims: jsonb("claims").$type<Claim[]>().notNull().default([]),
+    model: text("model"),
+    /**
+     * **How many claims `MAX_CLAIMS` cut off the end of this run** — `ClaimsRun.
+     * claimsOmitted`, and a column rather than a field inside `claims` because
+     * it is a fact about the run and not about any claim in it.
+     *
+     * Nullable, and null means *not recorded* rather than *none omitted*. Those
+     * are genuinely different: the route that stores a run writes `claims` and
+     * `model` and nothing else today, so every run stored before it learns to
+     * write this has no answer, and the panel's fallback copy depends on telling
+     * that from a truthful zero.
+     */
+    claimsOmitted: integer("claims_omitted"),
+    /**
+     * Whatever the call threw. **Never logged** — a provider that echoes the
+     * request back would put the paper's own prose in here, which is the trap
+     * src/searches.ts § `finishRun` sets out and which three files have now had
+     * to write down.
+     */
+    error: text("error"),
+    /**
+     * When this run *started*, and it is also the sweep's clock.
+     *
+     * `begin` sets it and `finish` never touches it, so the age of a `pending`
+     * row is how long that attempt has been in flight. `referee_criteria` needs
+     * a separate `attempt_started_at` because a criterion outlives its attempts;
+     * here a second run **is** a new row's worth of state written over the old
+     * one, so there is exactly one clock and no way for the two to disagree.
+     * src/store/pg-referee-claims.ts § `sweep`.
+     */
+    createdAt: createdAt(),
+    /**
+     * **The article this run was answered against** — `hashBlocks`,
+     * src/source-hash.ts. Same field, same function and same word as
+     * `search_runs` and `referee_criteria`, and null counts as stale for the
+     * same reason: not knowing is not the same as knowing it is fine.
+     */
+    sourceHash: text("source_hash"),
+  },
+  (t) => [
+    check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
+    /* **No `empty unless done` check, deliberately.** It was written and taken
+       out again: `begin` does write `[]` over whatever was there, so a `pending`
+       row carrying claims would be a half-applied write — but the filesystem
+       store cannot refuse one, and a constraint only one of the two stores keeps
+       turns a shrug on a laptop into a 500 on Vercel. The invariant is held
+       where both stores can hold it, in `begin`. */
   ],
 );
 

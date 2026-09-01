@@ -166,24 +166,16 @@ const HOMES: Record<string, string> = {
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
      docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.json": "article_revisions.assets",
-  /* The label run's checkpoint, and the one entry here whose home is decided
-     but **not yet wired**. `src/db/schema.ts` § checkpoints says in as many
-     words that the table is "the Postgres home of `labels-progress.json`", and
-     `src/store/checkpoints.ts` exists — but `src/labels.ts` still reads and
-     writes the flat file directly against `opts.dir` (`CHECKPOINT_FILE`, line
-     877), so nothing puts one in Postgres today.
+  /* The label run's checkpoint. **Wired on 2026-09-01** (landing D2): the file
+     is gone, `src/labels.ts` takes a `CheckpointStore` and writes one row per
+     batch, and `StoreSession` is what hands it down. The name stays in this
+     list because `data/` fixtures still carry the file and this list is what
+     says where such a file's contents went.
 
-     It belongs here rather than in `NOT_YET_WRITTEN` for a reason the two
-     lists' own headers settle: that one is for artefacts with **no example on
-     disk**, and it clears itself the moment one appears — so an entry there
-     would fail on the very file that prompted it. This list is a record of
-     where a thing goes, not a claim that it has got there.
-
-     What is genuinely unanswered is who *reclaims* a finished run's checkpoint
-     once it is in Postgres: on the filesystem `scripts/checkpoints-sweep.ts`
-     sweeps the `data/` root, which is a filesystem answer that does not carry
-     over. docs/plans/260827aa-delete-the-importer.md § D2 records it as open. */
-  "labels-progress.json": "checkpoints (namespace 'hierarchy-labels') — decided, not yet wired",
+     Reclamation is answered too: `sweepPgCheckpoints` on `last_used_at`,
+     `scripts/checkpoints-sweep.ts`, src/store/checkpoints.ts § Retention. There
+     is deliberately no delete on success. */
+  "labels-progress.json": "checkpoints (namespace 'hierarchy-labels')",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
@@ -215,6 +207,22 @@ const HOMES: Record<string, string> = {
      test exists to catch. The export is covered instead by
      tests/store-export-referee.test.ts, which makes the rows it needs. */
   "referee-criteria.json": "referee_criteria (results stay JSONB)",
+  /* `drizzle/0051_referee_claims.sql`, applied locally on 2026-09-01. **It sat
+     in `NOT_MIGRATED` until then**, saying the decision was "not this table, not
+     yet": a claims run is an article-derived reusable artefact whose right home
+     is a pipeline artefact, and a bespoke table for something already scheduled
+     to be replaced is two migrations to reach one place. That is still true and
+     `referee_claims` still calls itself an interim — what changed is that the
+     alternative was a sub-mode returning 501 for every operation in the only
+     configuration that deploys.
+
+     Like `referee-criteria.json` it is **deliberately not in `ARTEFACTS` in
+     tests/store-roundtrip.test.ts**: no article in the committed corpus carries a
+     claims run, so that suite's `preserves %s exactly` row would assert only that
+     the export invented nothing. The export is covered instead by the sentinel
+     fixture in tests/store-export-covers-tables.test.ts, which inserts a row and
+     requires it back out of this file. */
+  "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
@@ -261,14 +269,15 @@ const NOT_MIGRATED: Record<string, string> = {
      and label checkpoints are in the same state, and either both are exempt or
      neither is.
 
-     Like `labels-progress.json`, the destination and both adapters exist and
-     **no caller is wired** — `src/pdf-read.ts` still reads and writes
-     `data/<slug>/pdf-chunks` directly. Nothing here expires when that changes,
-     which is the honest limit of this file: a name in any of these three lists
-     makes the canary green whether or not the value is true. Only a behavioural
-     test that runs a caller through a `CheckpointStore` and proves a second
-     store instance reuses the entry can redden on the wiring. */
-  "pdf-chunks": "checkpoints (namespace 'pdf-chunk') — decided, not yet wired",
+     Like `labels-progress.json`, it was **decided and not wired** until
+     2026-09-01, and the note that used to sit here named the only thing that
+     could ever have caught that: *"a name in any of these three lists makes the
+     canary green whether or not the value is true. Only a behavioural test that
+     runs a caller through a `CheckpointStore` and proves a second store instance
+     reuses the entry can redden on the wiring."* That test now exists —
+     tests/checkpoints-durable-resume.test.ts — and it is the one to change if
+     this line ever stops being true, because this line still cannot fail. */
+  "pdf-chunks": "checkpoints (namespace 'pdf-chunk')",
   /* Not an artefact either, and not migrated *as a file* — but the thing it
      records is already in the schema. One marker per step that has started and
      not finished, which is what stops a step killed between two of its own
@@ -278,26 +287,6 @@ const NOT_MIGRATED: Record<string, string> = {
      home to — the directory *is* the file store's rendering of that column, and
      it disappears with the file store. */
   steps: "revision_step_runs.status — the run marker, not an artefact",
-  /* **Referee mode's Claims run, and the decision is "not this table, not yet"
-     rather than "never".** docs/plans/260831an-referee-mode-for-peer-reviewers.md
-     § 2 is explicit that a claims run is an article-derived reusable artefact
-     whose right home is a **pipeline artefact** — a `StepName`, an
-     `ArtifactKind`, an `article_revisions` column — and it was built
-     route-shaped only because that layer was being rewritten underneath it.
-
-     So it deliberately has no bespoke table: one would be a migration to a place
-     the plan already says is wrong, and a second to leave it. It is in this list
-     rather than in `HOMES` because `HOMES` is a promise the stale check holds
-     you to — a name there that nothing has written on this machine goes red, and
-     this file only exists after somebody has run Claims.
-
-     **It is files-only and it fails loudly rather than quietly**: under
-     `SPIDERYARN_STORE=postgres` every method of `refereeClaimsStore` refuses
-     with a 501 (`notMigrated`, src/store/index.ts), so there is no write landing
-     in a store nothing reads. That is the one thing this list cannot check and
-     the reason it is worth writing down here. */
-  "referee-claims.json":
-    "no table on purpose — its home is a pipeline artefact, and the route-shaped store refuses under SPIDERYARN_STORE=postgres rather than writing where nothing reads",
 };
 
 /**
