@@ -738,9 +738,22 @@ describe("the placements, minted rather than asked for", () => {
     /* One rendering of a valence, in a note the server writes and a chip the
        browser draws. They cannot share code — `signedValence` is a client
        module and nothing on the server may import one — so they share this
-       test instead. */
-    for (const v of [-80, -1, 0, 1, 40]) {
-      expect(placementNote(v)).toContain(signedValence(v));
+       test instead.
+
+       **Anchored on the punctuation the template puts on either side of the
+       number**, because a bare `toContain` here is barely an assertion. The
+       template is `…at ${signedPlacement(v)}${on}, and this comment…`, and
+       `placementNote(v)` is called with no criterion, so `on` is empty and the
+       number sits between `at ` and a comma. Without those two anchors,
+       `signedValence(0)` is `"0"` — true of very nearly any sentence with a
+       number in it — and a note printing `+400` satisfies a needle of `+40`.
+
+       And the sweep reaches both ends of the scale. ±100 is where a sign that
+       gets dropped, a number that gets clipped, or a clamp borrowed from
+       `clampConfidence` would first show, and it is exactly where the old
+       five-point sweep — which stopped at 40 — could not look. */
+    for (const v of [-100, -80, -1, 0, 1, 40, 100]) {
+      expect(placementNote(v), `the note for ${v}`).toContain(`at ${signedValence(v)},`);
     }
   });
 

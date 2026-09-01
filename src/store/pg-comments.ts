@@ -36,6 +36,7 @@ import {
   CommentIdTaken,
   NotAnExplanation,
   type AnswerPatch,
+  type MarkPatch,
   type NewComment,
 } from "../comments.js";
 import { getDb } from "../db/client.js";
@@ -460,6 +461,42 @@ export const pgCommentStore: CommentStore = {
     if (!row) throw new NotAnExplanation(id, "missing");
     // Length, never the text. How much somebody wrote is a fact about the app.
     logger.info({ slug, id, chars: body?.length ?? 0 }, "comment body edited");
+    return toComment(row);
+  },
+
+  /**
+   * The referee changed where they put the passage. `criterion_id`, `valence`
+   * and `updated_at`, and nothing else.
+   *
+   * Both columns are written together, always: a `valence` with no
+   * `criterion_id` is a number against nothing, and
+   * `comments_valence_needs_criterion` refuses that pair in the database as
+   * well. `null` for both clears the placement back to a plain reading note.
+   *
+   * **`valence` is set straight from the request, with no coalesce and no
+   * clamp.** A `?? 0` here would turn a cleared placement into "counts neither
+   * way", and anything shaped like `clampConfidence` would turn a −80 into a
+   * 0 — the failure `toComment` above and `Comment.valence` in src/types.ts are
+   * both written about. The route has already checked the pair with
+   * `markProblem`, so anything that reaches here is a placement a referee
+   * really made.
+   */
+  async patchMark(slug: string, id: string, mark: MarkPatch): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    const [row] = await db
+      .update(commentsTable)
+      .set({ criterionId: mark.criterionId, valence: mark.valence, updatedAt: new Date() })
+      .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)))
+      .returning();
+    if (!row) throw new NotAnExplanation(id, "missing");
+    /* The criterion is an id and `placed` is a flag. Whether a referee scored a
+       passage is a fact about the app; the number they chose is their judgement
+       of somebody's paper, and a log is a durable copy nobody chose to keep. */
+    logger.info(
+      { slug, id, criterionId: mark.criterionId, placed: mark.valence !== null },
+      "comment placement edited",
+    );
     return toComment(row);
   },
 

@@ -434,11 +434,23 @@ describe("the criterion", () => {
     });
   });
 
-  it("defaults to red ↔ green, which is a default with a condition on it", () => {
-    // colour-scales.md permits `rg` only where the direction is carried by
-    // something other than the colour. See the comment on `DivergingScale`.
-    expect(DEFAULT_DIVERGING_SCALE).toBe("rg");
-  });
+  /* **There used to be a test here reading `expect(DEFAULT_DIVERGING_SCALE)
+     .toBe("rg")`**, called *"a default with a condition on it"*. It was a
+     constant compared to its own literal: it could only fail if somebody
+     changed the default, which is the one thing it was not written to protect
+     against, and the condition it was named for was asserted nowhere at all.
+
+     The condition — colour-scales.md permits red ↔ green **only** where the
+     direction is carried by something other than the colour — is a property of
+     the panel, so it is asserted on the panel:
+     `tests/referee-criteria-panel.test.tsx` renders a real `CriterionResult`
+     and requires the direction, the referee's own pole and the signed number
+     on screen and in the accessible sentence. Swapping the two poles there
+     leaves this file, and every other one, green.
+
+     The other half of the same condition — that the token `valenceToken`
+     emits is a custom property the stylesheet actually defines — is in
+     `tests/valence.test.ts`. Removed 2026-09-01. */
 });
 
 describe("the referee's own mark", () => {

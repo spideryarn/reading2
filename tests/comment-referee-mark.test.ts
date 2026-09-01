@@ -300,15 +300,24 @@ when("what the route refuses, and it refuses rather than rounds", () => {
        The criteria are read for THIS slug, so a criterion saved under another
        one is the same refusal as a made-up id.
 
-       **That is all this case proves, and the name says so.** It runs against
-       the filesystem store, which has no notion of an owner at all, so it is
-       not evidence about *another referee's* criterion. Owner scoping lives in
-       `ownedSlug` (src/store/pg.ts), which the Postgres store puts in front of
-       every read, and the test that actually holds it there is "a criterion
-       under somebody else's article is not theirs to place on" in
+       **That is all this case proves, and the name says so.** Both articles
+       here belong to the same person — every call goes through `asTestOwner` —
+       so `other` is a criterion of *theirs*, saved under a different slug, and
+       nothing here is evidence about *another referee's* criterion. Owner
+       scoping lives in `ownedSlug` (src/store/pg.ts), which the Postgres store
+       puts in front of every read, and the test that actually holds it there is
+       "a criterion under somebody else's article is not theirs to place on" in
        tests/referee-criteria-store.test.ts — against a real database, with two
        owners in it. GPT Sol's finding 6 named this comment as claiming more
-       than the case beneath it checked. */
+       than the case beneath it checked.
+
+       (The reason given here used to be *"it runs against the filesystem
+       store, which has no notion of an owner at all"*, which is simply false:
+       this file sets `SPIDERYARN_STORE=postgres` before any import and asserts
+       it, in "the store these tests are actually talking to" above. The
+       conclusion was right and the reason was wrong, which is the worse of the
+       two ways to be wrong in a file whose whole value is that a reader can
+       tell what it proves.) */
     const { row: other } = await asTestOwner(() =>
       refereeCriteriaStore.begin(ELSEWHERE, "someone else's question", { kind: "single" }),
     );
@@ -436,5 +445,201 @@ when("a second Save under a stored id", () => {
     });
     expect(clash.status).toBe(409);
     expect((await asTestOwner(() => commentStore.load(SLUG)))[0]?.valence).toBe(-80);
+  });
+});
+
+/* ------------------------------------------- changing a placement already made -- */
+
+/**
+ * `PATCH /api/comments/:slug/:id/mark` — the fifth operation.
+ *
+ * Until 2026-09-01 a placement could be made and never changed: `create`
+ * refuses a re-score under a stored id (the 409 above), and there was nothing
+ * else that could write the pair. That was correct and unfinished — a referee
+ * who mis-clicked had to delete the comment and write it again.
+ * docs/plans/260901i-the-referee-places-the-passage-themselves.md § *Overwriting
+ * gets an operation of its own*.
+ */
+const markUrl = (id: string) => `/api/comments/${SLUG}/${id}/mark`;
+
+/** Make a comment through the real route, and hand back the id it got. */
+async function madeComment(fields: Record<string, unknown>): Promise<string> {
+  const r = await call("POST", POST, { blockId: BLOCK, quote: QUOTE, start: AT, ...fields });
+  expect(r.status).toBe(201);
+  const id = r.body.comment?.id;
+  if (id === undefined) throw new Error("the create route answered 201 with no comment");
+  return id;
+}
+
+/** What the store holds for one comment — never what the route just said. */
+async function fromStore(id: string): Promise<Comment | undefined> {
+  return (await asTestOwner(() => commentStore.load(SLUG))).find((c) => c.id === id);
+}
+
+when("changing a placement the referee already made", () => {
+  it("moves a passage from one end of the scale to the other", async () => {
+    const criterionId = await aCriterion();
+    const id = await madeComment({ criterionId, valence: -80 });
+
+    const r = await call("PATCH", markUrl(id), { criterionId, valence: 50 });
+    expect(r.status).toBe(200);
+    expect(r.body.comment?.valence).toBe(50);
+    expect(r.body.comment?.criterionId).toBe(criterionId);
+
+    /* Off the store, not off the answer. A route that reported the number it
+       was handed and wrote nothing would pass every assertion above. */
+    const stored = await fromStore(id);
+    expect(stored?.valence).toBe(50);
+    expect(stored?.criterionId).toBe(criterionId);
+  });
+
+  it("keeps the minus sign, which is the one thing this operation is for", async () => {
+    /* `+50 → −70`, and read back as −70. Anything routed through a
+       confidence-shaped validator clamps negatives to zero (`validateHits`,
+       src/search.ts), and the referee is then shown the opposite of what they
+       said with nothing erroring. `toBe(-70)`, never `toBeLessThan(0)`: the
+       loose form also passes on −1, which is the same feature quietly broken. */
+    const criterionId = await aCriterion();
+    const id = await madeComment({ criterionId, valence: 50 });
+
+    const r = await call("PATCH", markUrl(id), { criterionId, valence: -70 });
+    expect(r.status).toBe(200);
+    expect(r.body.comment?.valence).toBe(-70);
+    expect((await fromStore(id))?.valence).toBe(-70);
+  });
+
+  it("clears a placement back to a plain reading note", async () => {
+    const criterionId = await aCriterion();
+    const id = await madeComment({ body: "the randomisation is not described", criterionId, valence: -80 });
+
+    const r = await call("PATCH", markUrl(id), { criterionId: null, valence: null });
+    expect(r.status).toBe(200);
+
+    const stored = await fromStore(id);
+    // Absent, not null and not zero — `exactOptionalPropertyTypes`, and a
+    // fabricated neutral is what this feature must never invent.
+    expect("criterionId" in (stored ?? {})).toBe(false);
+    expect("valence" in (stored ?? {})).toBe(false);
+    // The note and the passage are untouched: clearing a placement is not a delete.
+    expect(stored?.body).toBe("the randomisation is not described");
+    expect(stored?.blockId).toBe(BLOCK);
+    expect(stored?.quote).toBe(QUOTE);
+  });
+
+  it("writes the placement and nothing else", async () => {
+    /* The allowlist, actually exercised rather than asserted in a comment. A
+       spread of the request body would take the anchor with it, and every other
+       assertion in this file would still pass. */
+    const criterionId = await aCriterion();
+    const id = await madeComment({ body: "this is the bit I doubt", criterionId, valence: -80 });
+    await asTestOwner(() =>
+      commentStore.linkThread(SLUG, id, "spya-thr222", { blockId: BLOCK, quote: QUOTE, start: AT }),
+    );
+    const before = await fromStore(id);
+
+    const r = await call("PATCH", markUrl(id), { criterionId, valence: 100 });
+    expect(r.status).toBe(200);
+
+    const after = await fromStore(id);
+    expect(after?.valence).toBe(100);
+    for (const field of ["body", "blockId", "quote", "start", "createdAt", "status", "threadId", "id"] as const) {
+      expect(after?.[field], `patchMark moved ${field}`).toEqual(before?.[field]);
+    }
+    // And it does stamp the one field it is allowed to stamp.
+    expect(after?.updatedAt).toBeTruthy();
+  });
+
+  it("places a passage that had no placement at all", async () => {
+    // An ordinary reading note becoming a review comment. The same operation,
+    // because "edit" and "place for the first time" are the same write.
+    const criterionId = await aCriterion();
+    const id = await madeComment({ body: "hm" });
+
+    const r = await call("PATCH", markUrl(id), { criterionId, valence: -50 });
+    expect(r.status).toBe(200);
+    const stored = await fromStore(id);
+    expect(stored?.criterionId).toBe(criterionId);
+    expect(stored?.valence).toBe(-50);
+  });
+});
+
+when("what the placement edit refuses, and it refuses rather than rounds", () => {
+  /**
+   * Every refusal must also leave the placement that was already there alone.
+   *
+   * The status **and** the tag, because "it threw" is not evidence: a route
+   * that 400s on everything would pass a test that only counted throws.
+   */
+  const refused = async (
+    body: Record<string, unknown>,
+    status: number,
+    match: RegExp,
+  ): Promise<void> => {
+    const criterionId = await aCriterion();
+    const id = await madeComment({ criterionId, valence: -80 });
+    const r = await call("PATCH", markUrl(id), body);
+    expect(r.status).toBe(status);
+    expect(r.body.error).toMatch(match);
+    // The judgement already made is still the judgement.
+    expect((await fromStore(id))?.valence).toBe(-80);
+  };
+
+  it("refuses a criterion that is not one of yours on this article", async () => {
+    await refused({ criterionId: "spya-k3m9qt", valence: -50 }, 400, /not one of your criteria/);
+  });
+
+  it("refuses a valence past either end of the scale rather than clamping it", async () => {
+    const criterionId = await aCriterion();
+    await refused({ criterionId, valence: 101 }, 400, /−100 to \+100\. \[cmt-valence-range\]/);
+    await refused({ criterionId, valence: -101 }, 400, /−100 to \+100\. \[cmt-valence-range\]/);
+  });
+
+  it("refuses a fractional placement", async () => {
+    const criterionId = await aCriterion();
+    await refused({ criterionId, valence: -12.5 }, 400, /whole number\. \[cmt-valence-range\]/);
+  });
+
+  it("refuses a number with nothing to place it on", async () => {
+    await refused({ criterionId: null, valence: -50 }, 400, /which criterion it is placing\. \[cmt-valence-range\]/);
+  });
+
+  it("refuses a placement on a criterion that has no scale to place it on", async () => {
+    const criterionId = await aScalelessCriterion();
+    await refused({ criterionId, valence: -80 }, 400, /two ends\. \[cmt-valence-range\]/);
+  });
+
+  it("refuses a body that names only one of the two fields", async () => {
+    /* **Both fields, always.** The route deliberately cannot express "leave the
+       other one alone": a partial shape means an absent `valence` is either
+       *keep it* or *clear it*, and a client one missing branch away from the
+       wrong reading would silently destroy a judgement with nothing erroring —
+       docs/reusable/silent-success.md. So a half body is a 400 rather than a
+       guess. This is the route's own rule and not a second copy of what a
+       placement is; `tidyMark` still owns that. */
+    const criterionId = await aCriterion();
+    await refused({ criterionId }, 400, /both criterionId and valence, .* \[cmt-mark-pair\]/);
+    await refused({ valence: 50 }, 400, /both criterionId and valence, .* \[cmt-mark-pair\]/);
+  });
+
+  it("refuses a body that is not a bag of fields at all", async () => {
+    /* `"key" in raw` is a TypeError on a string or a number, so a route that
+       asks whether a key was sent has to ask whether it was sent an object
+       first — otherwise a nonsense body is a 500 where a 400 is meant, and a
+       500 goes to Sentry as our fault. `fields` in src/routes.ts. */
+    const criterionId = await aCriterion();
+    const id = await madeComment({ criterionId, valence: -80 });
+    for (const sent of ["hello", 12, [1, 2], null]) {
+      const r = await call("PATCH", markUrl(id), sent);
+      expect(r.status, `${JSON.stringify(sent)} was not refused`).toBe(400);
+      expect(r.body.error).toMatch(/\[cmt-mark-pair\]/);
+    }
+    expect((await fromStore(id))?.valence).toBe(-80);
+  });
+
+  it("404s on a comment that is not there", async () => {
+    const criterionId = await aCriterion();
+    const r = await call("PATCH", markUrl("spya-k3m9qt"), { criterionId, valence: 50 });
+    expect(r.status).toBe(404);
+    expect(r.body.error).toMatch(/No comment with the id/);
   });
 });

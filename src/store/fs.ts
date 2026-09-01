@@ -54,6 +54,7 @@ import {
   loadComments,
   patchComment,
   patchCommentBody,
+  patchCommentMark,
   sweepPendingComments,
 } from "../comments.js";
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
@@ -155,6 +156,7 @@ export const fsCommentStore: CommentStore = {
   create: createComment,
   beginAnswer,
   patchBody: patchCommentBody,
+  patchMark: patchCommentMark,
   linkThread: linkCommentThread,
   patch: patchComment,
   remove: deleteComment,

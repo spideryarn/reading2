@@ -66,8 +66,8 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 const SLUG = "test-pg-referee-claims";
-const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c4";
-const REVISION_ID = "00000000-0000-4000-8000-0000000000c5";
+const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f2";
+const REVISION_ID = "00000000-0000-4000-8000-0000000000f3";
 const BLOCK_ID = "spya-qwm234";
 
 /**
@@ -78,7 +78,7 @@ const BLOCK_ID = "spya-qwm234";
  * failing this suite whenever auth is down rather than whenever isolation
  * breaks. tests/owner-isolation.test.ts made the same call for the same reason.
  */
-const OUTSIDER = "00000000-0000-4000-8000-0000000000b1" as OwnerId;
+const OUTSIDER = "00000000-0000-4000-8000-0000000000f4" as OwnerId;
 
 const { reachable } = await pgReady({
   suite: "tests/store-pg-referee-claims.test.ts",

@@ -154,6 +154,28 @@ export interface NewComment {
 }
 
 /**
+ * A placement as `patchMark` writes it — **both halves, and `null` for none**.
+ *
+ * Not `Pick<NewComment, "criterionId" | "valence">`, and the difference is the
+ * whole point. `NewComment` says "there is no placement" by leaving the fields
+ * off, because `exactOptionalPropertyTypes` is on and the two stores are
+ * compared structurally, so a `null` on one side against an absent key on the
+ * other is a real failure. An *edit* cannot say "clear this" with an absent
+ * key — absent would have to mean either *leave it* or *remove it*, and a
+ * client one missing branch away from the wrong reading would destroy a
+ * judgement with nothing erroring. So a patch says it with `null`.
+ *
+ * The two halves travel together because they are one value: a `valence` with
+ * no `criterionId` is a number against nothing. `tidyMark` (src/routes.ts) is
+ * the one validator, and it hands this shape to the store and the absent-key
+ * shape to `create`.
+ */
+export interface MarkPatch {
+  criterionId: string | null;
+  valence: number | null;
+}
+
+/**
  * Thrown when a client-minted id is already taken by a different comment.
  *
  * **The `status` is the whole of it, and it is here because of a live 500.**
@@ -461,6 +483,63 @@ export async function patchCommentBody(
   // Length rather than the text. Whether somebody wrote three words or three
   // hundred is a fact about the app; what they wrote is theirs.
   log("store").info({ slug, id, chars: body?.length ?? 0 }, "comment body edited");
+  return stored;
+}
+
+/**
+ * The referee changed where they put the passage. Sets `criterionId`, `valence`
+ * and `updatedAt`, and nothing else.
+ *
+ * `{ criterionId: null, valence: null }` clears the placement, and the comment
+ * is a plain reading note again — the referee's words and their passage are
+ * untouched, because clearing a placement is not deleting a comment.
+ *
+ * **The pair is written as a pair.** Both halves are removed from the stored
+ * row and both are written back, so there is no path on which a comment ends up
+ * holding a criterion from one request and a number from another. Everything
+ * they may be was checked by the route: `markProblem` (src/referee-criteria.ts)
+ * for the number, and the owner's own criteria for the id. Nothing here clamps
+ * anything — see `Comment.valence` in src/types.ts for why a clamp on this path
+ * is the failure the whole feature was designed around.
+ *
+ * A named allowlist and never a spread of what it was handed, exactly as the
+ * other four operations are: `CommentStore` in src/store/contracts.ts says
+ * which field each of the five may write.
+ */
+export async function patchCommentMark(
+  slug: string,
+  id: string,
+  mark: MarkPatch,
+  now: () => string = () => new Date().toISOString(),
+): Promise<Comment> {
+  let stored!: Comment;
+  await update(slug, (comments) =>
+    comments.map((c) => {
+      if (c.id !== id) return c;
+      /* Both fields off the stored row first, then back on only when there is
+         one — the same move `patchCommentBody` makes with `body`. Absent rather
+         than `null`, because `exactOptionalPropertyTypes` is on and
+         tests/store-parity-referee.test.ts compares the two stores
+         structurally. */
+      const { criterionId: _wasOn, valence: _wasAt, ...rest } = c;
+      stored = {
+        ...rest,
+        ...(mark.criterionId === null ? {} : { criterionId: mark.criterionId }),
+        ...(mark.valence === null ? {} : { valence: mark.valence }),
+        updatedAt: now(),
+      };
+      return stored;
+    }),
+  );
+  if (!stored) throw new NotAnExplanation(id, "missing");
+  /* The criterion is an id and `placed` is a flag, in the spirit of the `chars`
+     above: whether a referee scored a passage is a fact about the app, and the
+     number they chose is their judgement of somebody's paper. It costs nothing
+     to leave it out and a log is a durable copy nobody chose to keep. */
+  log("store").info(
+    { slug, id, criterionId: mark.criterionId, placed: mark.valence !== null },
+    "comment placement edited",
+  );
   return stored;
 }
 

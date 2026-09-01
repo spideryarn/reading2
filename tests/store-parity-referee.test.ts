@@ -83,13 +83,15 @@ import { currentOwnerId } from "../src/owner.js";
 import type { ClaimsRun } from "../src/referee-claims.js";
 import { CLAIMS_SWEPT } from "../src/referee-claims-store.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
+import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
-import type { RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
-import { fsRefereeClaimsStore, fsRefereeCriteriaStore } from "../src/store/fs.js";
+import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
+import { fsCommentStore, fsRefereeClaimsStore, fsRefereeCriteriaStore } from "../src/store/fs.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
   pgRefereeClaimsStore,
 } from "../src/store/pg-referee-claims.js";
+import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -321,6 +323,10 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
     const dir = path.join(ROOT, "data", SLUG);
     await rm(path.join(dir, "referee-criteria.json"), { force: true });
     await rm(path.join(dir, "referee-claims.json"), { force: true });
+    // The comments too, since a placement is a comment — see the placement
+    // script below. Without this the Postgres half would compare against an
+    // article the filesystem still has a comment on.
+    await rm(path.join(dir, "comments.json"), { force: true });
   }
 
   /* ------------------------------------------------------------ the fixture -- */
@@ -534,6 +540,161 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
       expect(first.confidence, `${name} moved the valence into confidence`).toBe(55);
     }
     expect(wire(fromPg)).toEqual(wire(fromFiles));
+  });
+
+  /* ---------------------------------------------- the referee's own placement -- */
+
+  /**
+   * A placement's whole life, driven through whichever pair of stores it is
+   * handed: made with the comment, changed, changed again across zero, cleared,
+   * and made a second time.
+   *
+   * **The comment stores are in this file rather than in
+   * `store-comments.test.ts`**, which is a Postgres-only suite by its own
+   * header, because a placement is Referee mode and this is the file that
+   * compares Referee mode across the two stores. `patchMark` landed on
+   * 2026-09-01 with an implementation on each side, and the way this repo has
+   * twice shipped a one-sided store is by nobody writing the comparison.
+   *
+   * ## Timestamps are dropped by name, and asserted separately
+   *
+   * `CommentStore` has **no clock seam** — `create` and `patchMark` take a slug,
+   * an id and a value, and each store reads its own clock — where
+   * `RefereeCriteriaStore.begin` takes a `now`. So `createdAt` and `updatedAt`
+   * cannot agree between two runs and are removed by name, exactly as `attempt`
+   * is above and for the same reason: letting `JSON.stringify` drop one side
+   * would compare "absent" against a real timestamp and pass by accident. What
+   * they must do is checked positively below, against each store, rather than
+   * normalised into agreement.
+   */
+  function wireComment(value: unknown): unknown {
+    return normalise(
+      JSON.parse(
+        JSON.stringify(value, (key, v) =>
+          key === "createdAt" || key === "updatedAt" ? undefined : v,
+        ),
+      ),
+    );
+  }
+
+  /** The id both stores mint the placement's criterion under, so the two agree. */
+  const PLACED_ON = "spya-crtm22";
+  const PLACED_COMMENT = "spya-cmtm22";
+  const PLACED_QUOTE = "not pre-registered";
+
+  async function placementScript(
+    criteria: RefereeCriteriaStore,
+    comments: CommentStore,
+  ): Promise<unknown[]> {
+    const now = clock();
+    const snapshots: unknown[] = [];
+    const take = async (label: string, returned?: unknown) => {
+      snapshots.push({ label, returned, comments: await comments.load(SLUG) });
+    };
+
+    /* The criterion first: `comments_criterion_fk` points at `referee_criteria`,
+       so on the Postgres side a placement naming a criterion that is not there
+       is refused by the database — which is the constraint working, not a
+       fixture to route around. The filesystem store has no such constraint, and
+       the two agreeing here is part of what is being checked. */
+    await criteria.begin(
+      SLUG,
+      "Are the controls adequate?",
+      {
+        kind: "diverging",
+        poles: { against: "the controls are inadequate", favour: "the controls are adequate" },
+        scale: "rg",
+      },
+      PLACED_ON,
+      now,
+    );
+
+    await take("nothing is placed yet");
+
+    await take(
+      "place the passage at −80",
+      await comments.create(SLUG, {
+        id: PLACED_COMMENT,
+        blockId: SECOND_BLOCK.id,
+        quote: PLACED_QUOTE,
+        start: SECOND_BLOCK.text.indexOf(PLACED_QUOTE),
+        body: "no pre-registration is mentioned anywhere",
+        criterionId: PLACED_ON,
+        valence: -80,
+      }),
+    );
+
+    await take(
+      "change it to +50",
+      await comments.patchMark(SLUG, PLACED_COMMENT, { criterionId: PLACED_ON, valence: 50 }),
+    );
+
+    /* Across zero and back to the far end. A store that dropped the sign and one
+       that stored the absolute value are different bugs, and only a positive
+       step beside a negative one tells them apart. */
+    await take(
+      "change it to −70",
+      await comments.patchMark(SLUG, PLACED_COMMENT, { criterionId: PLACED_ON, valence: -70 }),
+    );
+
+    /* Clearing is a legal state and not a delete: the referee's words and their
+       passage stay, and both fields go — absent, not `null` and not `0`. */
+    await take(
+      "clear it back to a reading note",
+      await comments.patchMark(SLUG, PLACED_COMMENT, { criterionId: null, valence: null }),
+    );
+
+    await take(
+      "place it again, with no number",
+      await comments.patchMark(SLUG, PLACED_COMMENT, { criterionId: PLACED_ON, valence: null }),
+    );
+
+    return snapshots;
+  }
+
+  it("walks a placement through create, two edits, a clear and a re-place", async () => {
+    const fromFiles = await placementScript(fsRefereeCriteriaStore, fsCommentStore);
+    await forgetFiles();
+    const fromPg = await placementScript(pgRefereeCriteriaStore, pgCommentStore);
+
+    expect(fromPg, "placement: the two stores produced different numbers of steps").toHaveLength(
+      fromFiles.length,
+    );
+    for (const [i, step] of fromFiles.entries()) {
+      const label = (step as { label: string }).label;
+      expect(wireComment(fromPg[i]), `placement parity diverged at: ${label}`).toEqual(
+        wireComment(step),
+      );
+    }
+
+    /* Each store against the literal as well as against the other — two stores
+       that both clamped a negative to `0` would agree perfectly, and the
+       comparison above would say nothing. The step numbers are the script's. */
+    for (const [name, steps] of [
+      ["files", fromFiles],
+      ["postgres", fromPg],
+    ] as const) {
+      const at = (i: number) => (steps[i] as { comments: Comment[] }).comments[0];
+      expect(at(1)?.valence, `${name} did not store the placement`).toBe(-80);
+      expect(at(2)?.valence, `${name} did not change the placement`).toBe(50);
+      expect(at(3)?.valence, `${name} did not keep the edited placement signed`).toBe(-70);
+      expect("valence" in (at(4) ?? {}), `${name} left a number behind after a clear`).toBe(false);
+      expect("criterionId" in (at(4) ?? {}), `${name} left a criterion behind`).toBe(false);
+      // Clearing a placement is not deleting a comment.
+      expect(at(4)?.body, `${name} lost the reader's words`).toBe(
+        "no pre-registration is mentioned anywhere",
+      );
+      expect(at(4)?.quote, `${name} lost the passage`).toBe(PLACED_QUOTE);
+      expect(at(5)?.criterionId, `${name} did not re-place the passage`).toBe(PLACED_ON);
+      expect("valence" in (at(5) ?? {}), `${name} invented a number nobody chose`).toBe(false);
+
+      /* The two fields `wireComment` drops, checked here instead: `createdAt` is
+         `create`'s alone and a patch may not move it, and `updatedAt` has to be
+         stamped or "when did this change" is unanswerable in both stores. */
+      expect(at(3)?.createdAt, `${name} moved createdAt on a patch`).toBe(at(1)?.createdAt);
+      expect(at(3)?.updatedAt, `${name} did not stamp updatedAt`).toBeTruthy();
+      expect(at(1)?.updatedAt, `${name} stamped updatedAt on a create`).toBeUndefined();
+    }
   });
 
   /* --------------------------------------------------------------- claims -- */

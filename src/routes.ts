@@ -37,6 +37,11 @@
  *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }
  *                                → the stored comment. `criterionId` + `valence` are the referee's
  *                                  own placement of the passage — `tidyMark`
+ *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
+ *                                  The key is required: a patch that never mentions the body
+ *                                  is a 400, not a silent wipe
+ *   PATCH  /api/comments/:slug/:id/mark   { criterionId, valence } — both keys, always, each a
+ *                                  value or `null`; both `null` clears the placement
  *   DELETE /api/comments/:slug/:id
  *   GET    /api/chat/:slug       every stored conversation for the article
  *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
@@ -124,7 +129,7 @@ import {
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
-import { CommentIdTaken, NotAnExplanation, type AnswerPatch } from "./comments.js";
+import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
    has to satisfy before one is made. `referee-criteria.js` is pure (it reaches
@@ -561,6 +566,15 @@ async function sendExport(res: ServerResponse, slug: string): Promise<void> {
      for the same reason `sendSource` sets it: the one place a wrong content
      type becomes script. */
   res.setHeader("X-Content-Type-Options", "nosniff");
+  /* **The response least suited to sitting in a disk cache**, and the same
+     reasoning as `/api/admin/users` above: one reader's entire article — prose,
+     comments, notes, every conversation they had about it — in one file, on a
+     URL that is nothing but a slug. Nothing of ours would store it (the offline
+     cache in src/web/lib/api.ts keeps to an allowlist this route is not on, and
+     a zip is not JSON), but an intermediary or a shared browser has no way to
+     know that unless the response says so, and "our own cache has good manners"
+     is not the guarantee to rest a whole article on. */
+  res.setHeader("Cache-Control", "private, no-store");
   /* The bytes actually being written. `bundle.byteLength` is the same number,
      and this is the one that stays true if it ever is not. */
   res.setHeader("Content-Length", String(bundle.bytes.byteLength));
@@ -699,6 +713,23 @@ async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<u
     // article instead of the malformed body it actually sent.
     throw httpError(400, "Request body is not valid JSON");
   }
+}
+
+/**
+ * A request body as a bag of fields — anything that is not a JSON object is an
+ * empty one.
+ *
+ * `readBody` answers whatever the client sent, which may be a string, a number,
+ * `null` or an array, and `"key" in raw` is a **TypeError** on the first two —
+ * a 500 for a request that deserves a 400. A route that asks *did they send
+ * this key?* has to ask *is this even a bag of fields?* first, and this is
+ * where that question is answered once. Destructuring never needed it, which is
+ * why it did not exist until a route started asking about a key's presence.
+ */
+function fields(body: unknown): Record<string, unknown> {
+  return typeof body === "object" && body !== null && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {};
 }
 
 /**
@@ -1020,10 +1051,7 @@ const MAX_BODY_CHARS = 4000;
  * No message built here may contain the reader's prose — same rule as
  * `createFree` below, whose header says why.
  */
-async function tidyMark(
-  slug: string,
-  raw: Record<string, unknown>,
-): Promise<{ criterionId?: string; valence?: number }> {
+async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<MarkPatch> {
   const { criterionId, valence } = raw;
 
   /* Absent and `null` both mean "no mark"; anything else is a bad request.
@@ -1069,9 +1097,25 @@ async function tidyMark(
   const problem = markProblem({ criterionId: id, valence: placed, config: named?.config ?? null });
   if (problem) throw httpError(400, `${problem} [cmt-valence-range]`);
 
+  return { criterionId: id, valence: placed };
+}
+
+/**
+ * The same placement, in the shape `create` takes: absent keys, not `null`s.
+ *
+ * **One validator, two shapes, and the two shapes are not interchangeable.**
+ * `NewComment` says "no placement" by leaving the fields off, because
+ * `exactOptionalPropertyTypes` is on and the two stores are compared
+ * structurally — a `null` on one side against an absent key on the other is a
+ * real failure, not a cosmetic one. An *edit* has to be able to say "clear
+ * this", which an absent key cannot say, so `patchMark` takes `null`s. Adapting
+ * here rather than validating twice is what keeps one definition of what a
+ * placement is: a second copy of `markProblem`'s rules is the thing that drifts.
+ */
+function asNewComment(mark: MarkPatch): { criterionId?: string; valence?: number } {
   return {
-    ...(id === null ? {} : { criterionId: id }),
-    ...(placed === null ? {} : { valence: placed }),
+    ...(mark.criterionId === null ? {} : { criterionId: mark.criterionId }),
+    ...(mark.valence === null ? {} : { valence: mark.valence }),
   };
 }
 
@@ -1135,7 +1179,7 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
   /* After the anchor checks, so a request that is wrong about the passage does
      not first pay for a criteria read — and before the write, so a bad
      placement leaves nothing behind. */
-  const mark = await tidyMark(slug, raw);
+  const mark = asNewComment(await tidyMark(slug, raw));
 
   return commentStore.create(slug, {
     blockId,
@@ -5716,6 +5760,16 @@ export async function serveAuthenticatedApi(
      place that knows the real thread id is the chat stream itself, so the link
      is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
   const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(path);
+  /* **The referee's own placement, changed** — its own sub-path rather than two
+     more fields on the `PATCH` above, and the reason is what that route's own
+     bug turned out to be. A patch route carrying more than one thing has to
+     decide what an absent key means, and "leave it alone" is one missing branch
+     away from "clear it": a placement would then be destroyed by a request that
+     never mentioned it, with a 200 in the answer and nothing in the log.
+     docs/reusable/silent-success.md, and
+     docs/plans/260901i-the-referee-places-the-passage-themselves.md § *Why a
+     separate path*. A named path cannot express the ambiguity. */
+  const commentMark = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/.exec(path);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(path);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(path);
@@ -6159,12 +6213,59 @@ export async function serveAuthenticatedApi(
       );
       return;
     }
+    if (commentMark && req.method === "PATCH") {
+      /* **Both fields, always, and a half body is a 400.** `tidyMark` reads an
+         absent key as "no placement", which is right on the create path and
+         would be a silent wipe here — a request naming only `criterionId` would
+         clear the number the referee chose and answer 200. The pair is one
+         value, so the route asks for the pair; `{ criterionId: null, valence:
+         null }` is how a placement is cleared, deliberately and in writing.
+
+         This rule is the route's own and is not a second copy of what a
+         placement is: `tidyMark` still owns every rule about the values, and it
+         is the same `tidyMark` the create path uses. */
+      const [slug, id] = [slugPart(commentMark, 1), part(commentMark, 2)];
+      const raw = fields(await readBody(req));
+      if (!("criterionId" in raw) || !("valence" in raw)) {
+        throw httpError(
+          400,
+          "A placement carries both criterionId and valence, each a value or null [cmt-mark-pair]",
+        );
+      }
+      const mark = await tidyMark(slug, raw);
+      send(res, 200, { comment: await commentStore.patchMark(slug, id, mark) });
+      return;
+    }
     if (one && req.method === "PATCH") {
       const [slug, id] = [slugPart(one, 1), part(one, 2)];
-      const { body } = (await readBody(req) ?? {}) as Record<string, unknown>;
+      const raw = fields(await readBody(req));
+      /* **A patch that never mentions the body must not delete it.**
+         `tidyBody(undefined)` is `null` and `patchBody` writes `body` whatever
+         it is handed, so `PATCH {}` — or a `PATCH` carrying any other field —
+         answered 200 and destroyed the reader's words, with nothing erroring
+         and nothing in the log. It was latent only because `useComments.edit`
+         is the sole caller and always sends `{ body }`, and it would have
+         stopped being latent the moment this route grew a second field. Found
+         by reading, 2026-09-01.
+
+         `"body" in raw` is the whole fix, and the distinction it draws is
+         real: `{ body: null }` is a reader clearing their words back to a bare
+         bookmark and stays a 200, while no `body` key at all is a request that
+         does not say what it wants — absent could mean *clear it* or *leave
+         it*, and the route must not guess. docs/reusable/silent-success.md.
+
+         **Unknown keys are ignored rather than refused**, deliberately: with
+         the body required, the worst a field this route does not act on can do
+         is nothing, and a no-op is visible where a wipe was not. Refusing every
+         unrecognised key is a stricter rule than any other route here keeps,
+         and `POST /api/comments/:slug` cannot keep it at all — it reads several
+         fields off one body. */
+      if (!("body" in raw)) {
+        throw httpError(400, "A body patch has to say what the body is, or null [cmt-body-missing]");
+      }
       // `tidyBody` is the one place that decides what a body may be, so the
       // route no longer keeps a second, slightly different copy of that rule.
-      send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(body)) });
+      send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(raw.body)) });
       return;
     }
     if (one && req.method === "DELETE") {

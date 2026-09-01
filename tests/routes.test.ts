@@ -966,6 +966,58 @@ describe("making a comment costs nothing", () => {
     // The mark is still there. Clearing the words is not deleting the comment.
     expect(await loadComments(SLUG)).toHaveLength(1);
   });
+
+  /**
+   * **A patch that does not mention the body must not delete it.**
+   *
+   * `tidyBody(undefined)` is `null`, and both stores' `patchBody` then write
+   * `body = null` unconditionally — so `PATCH {}`, or a `PATCH` carrying some
+   * other field, answered **200 and destroyed the reader's words**, with
+   * nothing erroring and nothing in the log. It was latent only because
+   * `useComments.edit` is the sole caller and always sends `{ body }`; it stops
+   * being latent the moment a second field is added to this route, which is
+   * exactly what a careless version of the placement work would have done.
+   * Found by reading, 2026-09-01, alongside
+   * docs/plans/260901i-the-referee-places-the-passage-themselves.md.
+   *
+   * `{ body: null }` still clears — that is how a comment becomes a bare
+   * bookmark, and the test above covers it. What is refused is a request with
+   * **no `body` key at all**, where absent could mean either *clear it* or
+   * *leave it* and the route must not guess.
+   */
+  it("refuses a body patch that never says what the body is", async () => {
+    const made = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+      body: "first thought",
+    });
+    const id = made.body.comment?.id;
+
+    /* The last three are valid JSON that is not an object, and they are here
+       because `"body" in raw` is a **TypeError** on a string or a number — a
+       500 for a request that deserves a 400, which is a second bug wearing the
+       first one's clothes. `readBody` hands back whatever JSON arrived, so "is
+       this even a bag of fields" is a question the route has to ask. (The
+       harness sends a string body as raw bytes, hence the quotes inside it.) */
+    for (const sent of [
+      {},
+      { criterionId: "spya-k3m9qt", valence: -80 },
+      { note: "hm" },
+      '"hello"',
+      "123",
+      "[1, 2]",
+    ]) {
+      const r = await call("PATCH", `/api/comments/${SLUG}/${id}`, sent);
+      expect(r.status, `${JSON.stringify(sent)} was not refused`).toBe(400);
+      expect(r.body.error).toMatch(/\[cmt-body-missing\]/);
+      // The words are still there, which is the whole point.
+      expect(
+        (await loadComments(SLUG))[0]?.body,
+        `${JSON.stringify(sent)} took the words with it`,
+      ).toBe("first thought");
+    }
+  });
 });
 
 describe("the tweets route", () => {

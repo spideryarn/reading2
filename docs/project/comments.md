@@ -49,6 +49,13 @@ is a real answer meaning "counts neither way". It is optional on top of `criteri
 sentence about a criterion without scoring it is the ordinary case — and `criterionId` is required
 under it, because a number with nothing to place it on is a number against nothing.
 
+**Where a referee actually makes one**: the comment box a prose selection opens, in Referee mode
+only. It grows a *"Place on a criterion"* section — the criteria with two ends, and five labelled
+positions in that criterion's own pole words — and `CommentDialog` shows and changes the placement on
+a comment that already exists. Placing stays optional and saving without one is still a single press.
+[`src/web/PlaceOnCriterion.tsx`](../../src/web/PlaceOnCriterion.tsx) and
+[referee-mode.md § the referee's own mark](referee-mode.md#the-referees-own-mark).
+
 Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/routes.ts)):
 
 - **A criterion that is not yours is refused, not stored.** `criterionId` comes off a request, so on
@@ -63,12 +70,21 @@ Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/route
   confidence ones. `tests/comment-referee-mark.test.ts` puts a −80 in through the real route and
   reads it back off the store.
 
-There is **no operation that edits a placement**. A second `create` under a stored id carrying a
-different valence is a 409, exactly as a changed body is: a re-score is not a retry, and letting
-`create` mean both would silently overwrite a judgement the referee already made. When editing is
-wanted it gets an operation of its own, named, like the other four.
+**Changing a placement is `PATCH /api/comments/:slug/:id/mark`**, which arrived on 2026-09-01 as the
+fifth operation. A second `create` under a stored id carrying a different valence is still a 409,
+exactly as a changed body is: a re-score is not a retry, and letting `create` mean both would
+silently overwrite a judgement the referee already made. So the edit is named, like the other four.
 
-### The four operations, and why there are four
+The request carries **both fields, always** — `{ criterionId, valence }`, each a value or `null` —
+and a body naming only one is a 400. Both `null` clears the placement back to a plain reading note,
+leaving the words and the passage alone. It is a path of its own rather than two more fields on
+`PATCH /api/comments/:slug/:id`, because a patch route carrying more than one thing has to decide
+what an absent key means, and *leave it alone* is one missing branch away from *clear it*: a
+judgement destroyed by a request that never mentioned it, with a 200 in the answer and nothing in
+the log. A named path cannot express the ambiguity. It goes through the **same `tidyMark`** the
+create path uses, so there is one definition of what a placement is and not a second that can drift.
+
+### The five operations, and why there are five
 
 There used to be one writer, `create`, which meant both *make this* and *redo this*. That was safe
 only while making one cost a model call, so a colliding id could only ever be a retry. **Once a
@@ -80,8 +96,15 @@ plan; it is the reason the store contract now names who may write what.
 |---|---|---|
 | `create` | the anchor, `body`, the placement, `status: "none"` | a stored id whose anchor, body **or placement** differs — **409**, never an overwrite |
 | `beginAnswer` | the answer fields — plus, in Postgres, an attempt id and a lease | a bookmark, and a `pending` row whose attempt is **still live** — one answer at a time |
-| `patchBody` | `body`, `updatedAt` | — |
+| `patchBody` | `body`, `updatedAt` | a request with **no `body` key at all** — 400, because absent could mean *clear it* or *leave it* |
+| `patchMark` | `criterionId`, `valence`, `updatedAt` | a half-named placement, and everything `tidyMark` refuses on the create path |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
+
+`patchBody` refusing an absent key is a fix rather than a rule that was always there. Until
+2026-09-01 the route read `{ body }` off whatever arrived, `tidyBody(undefined)` is `null`, and the
+store writes `body` unconditionally — so `PATCH {}` answered **200 and deleted the reader's words**,
+with nothing erroring. It was latent only because one caller exists and it always sends the key.
+`{ body: null }` is still a reader clearing their words back to a bare bookmark, and is still a 200.
 
 `beginAnswer` takes an id and *nothing else*: it reads the stored passage rather than accepting one,
 so a retry cannot quietly move a comment to different words. **It claims a terminal row, or an
@@ -580,10 +603,10 @@ must not be able to dress itself up as the article.
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
-| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same four operations against Postgres |
+| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same five operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | `data/<slug>/comments.json`, and the write serialisation |
-| [`src/routes.ts`](../../src/routes.ts) | the four endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |
+| [`src/routes.ts`](../../src/routes.ts) | the endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |
 | [`src/env.ts`](../../src/env.ts) | `.env.local` → `process.env` |
 
 ```
@@ -591,7 +614,11 @@ GET    /api/comments/:slug              every stored comment
 POST   /api/comments/:slug              { id?, blockId, quote, start, body? } → the comment
                                         FREE. 201, ordinary JSON, no model call.
                                         409 if that id is a different comment.
-PATCH  /api/comments/:slug/:id          { body }  — null clears it back to a bookmark
+PATCH  /api/comments/:slug/:id          { body }  — null clears it back to a bookmark.
+                                        The key is required: no `body` key is a 400.
+PATCH  /api/comments/:slug/:id/mark     { criterionId, valence } — the referee's own
+                                        placement. Both keys, always, each a value or
+                                        null; both null clears it.
 POST   /api/comments/:slug/:id/answer   {} or { deep: true } → **a stream**
                                         The legacy explanation path: Try again, and
                                         Search the web properly. 409 on a bookmark.

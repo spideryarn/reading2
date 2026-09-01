@@ -47,7 +47,7 @@ import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
-import type { AnswerPatch, NewComment } from "../comments.js";
+import type { AnswerPatch, MarkPatch, NewComment } from "../comments.js";
 import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
@@ -281,7 +281,7 @@ export interface GlossaryStore {
  * gets it for free from having no referential integrity at all. Both must
  * behave the same, and there is a test for it.
  *
- * ## Four operations, because four fields have four different lifetimes
+ * ## Five operations, because five fields have five different lifetimes
  *
  * There used to be one writer for everything — `create`, which meant both "make
  * this" and "redo this". That was safe only while making one cost a model call
@@ -293,7 +293,8 @@ export interface GlossaryStore {
  * |--------------------------------------|------------------------|
  * | `blockId`, `quote`, `start`, `createdAt` | `create` only       |
  * | `body`                               | `create`, `patchBody`  |
- * | `updatedAt`                          | `patchBody`, server-set |
+ * | `criterionId`, `valence`             | `create`, `patchMark`  |
+ * | `updatedAt`                          | `patchBody`, `patchMark`, server-set |
  * | `threadId`                           | `linkThread`, once, from absent |
  * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
  *
@@ -368,6 +369,44 @@ export interface CommentStore {
    * `null`, so "wrote nothing" has one representation across both stores.
    */
   patchBody(slug: string, id: string, body: string | null): Promise<Comment>;
+
+  /**
+   * The referee changed where they put the passage. Writes `criterionId`,
+   * `valence` and `updatedAt`, nothing else.
+   *
+   * **The fifth operation, and it exists because `create` must not be the
+   * fourth thing it already is.** A second `create` under a stored id carrying
+   * a different placement is refused with a 409, deliberately — a re-score is
+   * not a retry, and letting one function mean both would silently overwrite a
+   * judgement the referee had already made. So changing one is named, like the
+   * other four. docs/plans/260901i-the-referee-places-the-passage-themselves.md
+   * § *Overwriting gets an operation of its own*.
+   *
+   * **Both fields, together, always.** The pair is one value: a `valence` with
+   * no `criterionId` is a number against nothing, which is what
+   * `comments_valence_needs_criterion` refuses in the database and `markProblem`
+   * refuses above the stores. A shape where one could be written without the
+   * other would let the two halves of a placement drift apart between two
+   * requests. `{ criterionId: null, valence: null }` clears the placement back
+   * to a plain reading note, which is already a legal state.
+   *
+   * `null` rather than absent, and the difference is not cosmetic: `NewComment`
+   * says "no placement" by leaving the fields off, because
+   * `exactOptionalPropertyTypes` is on and the two stores are compared
+   * structurally. A patch cannot say "clear this" with an absent key, so it
+   * says it with `null`. `tidyMark` in src/routes.ts validates the pair once
+   * and adapts it to whichever of the two shapes the caller needs.
+   *
+   * Everything the pair may be has already been checked by the route:
+   * `criterionId` names a `diverging` criterion of this owner's on this
+   * article, and `valence` is a whole number from −100 to +100. **No clamp
+   * anywhere on this path** — see `Comment.valence` in src/types.ts for the
+   * failure that rule exists to prevent.
+   *
+   * Throws `NotAnExplanation(id, "missing")` for an unknown id, as `patchBody`
+   * does, which src/routes.ts answers with a 404.
+   */
+  patchMark(slug: string, id: string, mark: MarkPatch): Promise<Comment>;
 
   /**
    * Point a comment at the conversation it started. Compare-and-set from absent.
