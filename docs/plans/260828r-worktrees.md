@@ -1042,11 +1042,30 @@ Four steps, not seven. The order matters: Step 0 is independently useful and unb
 nothing that creates a worktree ships before the database and removal safeguards exist, because both
 of those failures are silent and both land on work that is not in git.
 
-### 0. The dev branch — do this first, on its own
+### 0. The dev branch — **half done (`0df4e45`, `3ccce8e`), and the rest is a runbook**
 
-Described in full in [Step 0](#step-0-the-dev-branch-and-what-it-costs). One line in `deploy.ts`, one
-key in `vercel.json`, a GitHub default-branch change, and the env-var scoping read and written down.
-It stands on its own merits and is the prerequisite for everything below.
+Described in full in [Step 0](#step-0-the-dev-branch-and-what-it-costs). Split on 2026-09-01 so that
+nothing disturbed the dozen agents in this tree.
+
+**Done and committed:**
+
+| | |
+|---|---|
+| `deploy.ts` accepts `dev` | Via `deployBranchProblem` + `DEPLOY_SOURCE_BRANCHES` in `scripts/deploy-checks.ts`, so the rule is a pure judgement with tests rather than an inline string. Four of its five tests were watched red. |
+| the `level with origin/dev` gate | **New, and the reason this slice needed a code review.** Accepting `dev` opened a hole: `preflight` only ever compared against `origin/main`, which proves a candidate contains current *production* and says nothing about current *trunk*. A stale `dev` at `B`, with `origin/dev` at `D`, passed and promoted code missing `C` and `D` while reporting success. The gate requires the captured sha to **equal** a freshly fetched `origin/dev` — equality not ancestry, because one direction allows the stale deploy and the other allows a commit that was never pushed. Fails closed if the trunk cannot be read; inert on `main`; forcible as `--force-gate='level with origin/dev'`. Three of its six tests watched red. GPT Sol, finding 1. |
+| `vercel.json` default-deny | `{"**": false, "main": true}`. `**` not `*`, because minimatch's single star does not cross a slash. |
+| the branch is read with `git branch --show-current` | `rev-parse --abbrev-ref HEAD` returns a disambiguated `heads/dev` when a tag shares the short name, and would refuse a legitimate branch. GPT Sol, finding 6. |
+| `docs/project/worktrees.md` | The operational doc, including both runbooks. |
+| **always merge, never rebase** | Now a repo-wide rule in [version-control.md](../project/version-control.md#always-merge-never-rebase), signposted from `AGENTS.md`. See the Status section above for why, and what it deleted. |
+
+**Not done, deliberately, and written up rather than run:**
+[worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run) —
+create `dev`, `git switch -c dev` in the primary, the GitHub default-branch change, and
+`git remote set-head origin -a` on **every** clone. It needs a quiet moment and Greg present, because
+it moves the branch under every session in the tree. The runbook also carries the two independent
+jobs that belong with it: taking the model keys off Vercel Preview, and updating
+[version-control.md](../project/version-control.md)'s `Branch` row, which still says "`main`, and only
+`main`" (GPT Sol, finding 5).
 
 ### 1. The two `deploy.ts` bugs — done (`96c7661`)
 
@@ -1209,13 +1228,21 @@ an explicit discard flag. See [The native cleanup cannot see
 sits in Claude Code's own sweep, which is why the v1 answer is to keep paid pipeline output out of
 worktrees entirely.
 
-### 6. Docs, alongside each step rather than batched
+### 6. Docs — **`worktrees.md` exists; one `AGENTS.md` change is still owed**
 
-`AGENTS.md` — see [What changes in `CLAUDE.md`](#what-changes-in-claudemd) — and
-`docs/project/worktrees.md`, parented under
-[dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md), or
-`tests/doc-links.test.ts` fails. The worktrees doc is the overview Greg asked for: how to start one,
-what to run first, what the ports are, what the sweep does, and the traps above.
+[`docs/project/worktrees.md`](../project/worktrees.md) is written, parented under
+[dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md), and carries the overview
+Greg asked for plus both runbooks. Keep adding to it alongside each step rather than batching.
+
+**One `AGENTS.md` rule change remains**, and it would be wrong to land before `dev` exists: commit and
+push to `dev`; `main` is written only by `npm run deploy`. See
+[What changes in `CLAUDE.md`](#what-changes-in-claudemd).
+
+**There were two.** The second was a carve-out letting agents rebase inside a worktree, and choosing
+merge deleted it — which is the cheapest kind of progress and worth noticing as a pattern: the
+always-merge decision removed a rule change, a doc contradiction, and one of GPT Sol's findings at
+once. Rule changes go one approved set at a time
+([edit-important-docs.md](../reusable/edit-important-docs.md)).
 
 ### 7. Later: move the repo out of Dropbox
 

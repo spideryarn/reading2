@@ -199,6 +199,10 @@ actually reaches is not always the one on its command line, and both mistakes pr
   on my own file", because you can't tell whose edits are in it. Other agents' unsaved work is in
   this tree and there is no second copy. Undo your own mistake by editing the text back. If you
   think you really need one of these, ask Greg first.
+- **Always merge, never rebase** — including in your own worktree, where the reason above doesn't
+  apply but the rule still does. Integrate with `git merge`. Six reasons, two of them specific to
+  this repo, in
+  [version-control.md § Always merge, never rebase](docs/project/version-control.md#always-merge-never-rebase).
 - **Commit only your own files, by name, in one command:**
 
   ```

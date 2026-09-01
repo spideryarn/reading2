@@ -57,34 +57,15 @@ Three things follow from `push origin HEAD:dev`, and they are all improvements:
   question shrinks to the trunk itself.
 - **The "did it land?" test becomes one command** — `git merge-base --is-ancestor HEAD origin/dev` —
   which is what makes a safe sweep possible at all.
-- **Integrate by merging, never by rebasing** — and note this needs no change to any rule, because
-  the ban on rebasing in [AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share) and
-  [version-control.md](version-control.md) stays exactly as written. An earlier draft of this doc had
-  it the other way round and claimed the workflow *required* rebase. It does not. It requires
-  **integration** before a push to a moved `dev`, and merge is integration. Why merge, specifically:
-
-  1. **Your shas survive.** This repo references commits everywhere — Sol reviews cite them, plans say
-     "done (`96c7661`)", postmortems are built around the commit that introduced a bug. Rebase rewrites
-     every commit it moves, and those references do not break loudly; they keep looking fine and point
-     at nothing.
-  2. **You push what you tested.** After a merge the pushed commit is the one `npm test` ran on. After
-     a rebase, and especially after losing the push race twice, the tested arrangement no longer
-     exists.
-  3. **A conflict arrives once, not once per commit.** Rebase replays each of your commits over the new
-     base, so one conflict can surface N times — and with
-     [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)'s "make a proposal,
-     don't make changes yet" rule, N replays means N round trips with Greg.
-  4. **It degrades better under contention.** Losing the race is routine with a dozen agents. A merge
-     retry costs one more merge commit; a rebase retry replays your whole stack against a new base.
-  5. **A stopped merge is a state you can read.** Interrupted mid-rebase you are on a detached HEAD
-     with a rebase in progress, and the ways out — `git rebase --abort`, `--skip` — are indistinguishable
-     from the throw-work-away commands you are told never to run, so a stuck agent is stuck between two
-     rules. An interrupted merge leaves you on your own branch with markers in files.
-
-  What it costs is a braided log on `dev`; `git log --first-parent` reads it back. The sweep is
-  indifferent — `git merge-base --is-ancestor HEAD origin/dev` answers "did it land?" the same either
-  way. And most landings never conflict at all: a plain non-fast-forward merges automatically, so the
-  proposal rule only fires on real textual conflicts.
+- **Integrate by merging, never by rebasing.** That is now a repo-wide rule rather than a worktrees
+  one, with its six reasons in
+  [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase), and
+  it applies **inside your own worktree** as much as in the shared primary. An earlier draft of this
+  doc had it the other way round and claimed the workflow *required* rebase. It does not: it requires
+  **integration** before a push to a moved `dev`, and merge is integration. Greg settled it on
+  2026-09-01, and the settling deleted work — the ban in
+  [AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share) stays whole rather than growing a
+  carve-out.
 
 `main` is still written **only** by a gated `npm run deploy`, which pushes one gated sha
 (`git push origin <sha>:refs/heads/main`) rather than the branch you are standing on. That is why

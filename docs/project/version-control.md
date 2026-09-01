@@ -136,6 +136,52 @@ refused, controls that must be allowed, and the whole suite re-run with `python3
 sabotaged. It is not wired into `npm test` — it is a shell script guarding a shell, and it takes a
 second to run by hand.
 
+### Always merge, never rebase
+
+Integrate with `git merge`, never `git rebase`. **This holds inside your own worktree too**, where the
+"you cannot tell whose edits are in it" reason above genuinely does not apply — so it needs its own
+reasons, and it has six. Decided 2026-09-01, when Greg asked the right question about a draft that had
+proposed the opposite:
+
+> Does rebase make things more difficult for the agents than having always-merge as a rule?
+>
+> — Greg, 2026-09-01
+
+It does. Two of the reasons are specific to this repo:
+
+1. **A rebased sha is a citation that points at nothing.** This repo references commits constantly —
+   GPT Sol reviews cite them, plans say "done (`96c7661`)", every postmortem names the commit that
+   introduced the bug. Rebase rewrites every commit it moves, and the reference does not break loudly:
+   it keeps looking like a sha and resolves to nothing.
+2. **A replayed conflict is one round trip per commit.** Rebase replays each of your commits over the
+   new base, so a single conflict can surface as many times as you have commits — and under
+   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)'s *"Make a proposal.
+   Don't make changes yet"* rule, that is a round trip with Greg each time. One merge, one proposal.
+
+And four that are ordinary good sense:
+
+3. **You push the commit you tested.** After a merge, the thing you push is the thing `npm test` ran
+   on. After a rebase — especially a second one, after losing a push race — the tested arrangement no
+   longer exists anywhere.
+4. **It degrades better under contention.** With a dozen agents landing on one branch, losing the race
+   is routine. A merge retry costs one more merge commit; a rebase retry replays your whole stack
+   against yet another base.
+5. **A stopped merge is a state an agent can read.** Interrupted mid-rebase you are on a detached HEAD
+   with a rebase in progress, and the ways out — `git rebase --abort`, `--skip` — are indistinguishable
+   from the throw-work-away commands the rule above forbids. An agent is then stuck between two rules.
+   An interrupted merge leaves you on your own branch with markers in files.
+6. **Nothing has to change to allow it.** The ban above stays exactly as written, rather than growing a
+   carve-out that a future reader has to reason about.
+
+**What it costs** is a braided history once several agents are landing: `git log` on the trunk stops
+being readable, and `git log --first-parent` is how you read it back. Worth knowing rather than worth
+avoiding — and nothing downstream cares, because `git merge-base --is-ancestor` answers "did this
+land?" identically either way, which is what a worktree sweep asks
+([worktrees.md](worktrees.md)).
+
+**Most landings never conflict.** A plain non-fast-forward merges automatically, so the proposal rule
+fires on real textual conflicts only, not on every push.
+
 ### Commit your own files, by name, in one command
 
 ```bash
