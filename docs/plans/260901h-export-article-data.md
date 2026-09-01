@@ -383,33 +383,34 @@ from `data/` under other agents' work and it diffs red on an unmodified codebase
       attempted, and no test in this suite claims otherwise.
 
 
-## Open, and honestly unresolved
+## The intermittent 404, now pinned — and it was not what I guessed
 
-**`tests/export-route.test.ts` 404s intermittently under heavy peer load.** Run alone it passes
-10/10, twice, reliably. In a batch alongside eight other suites with ~14 peer vitest processes
-against the one local Postgres, three of its cases failed — including *the owner still gets it*,
-which returned 404 where it should return 200.
+`tests/export-route.test.ts` 404s intermittently under load. I recorded connection starvation from
+Stage I's snapshot transaction as "the most plausible remaining explanation". **That was a guess and
+it was wrong**, and it is worth keeping the correction visible, because the guess was plausible
+enough to have been believed.
 
-What has been ruled out, rather than assumed:
-- **Not a fixture-id collision** — its three uuids appear in no other test file, and
-  `fixture-ids.test.ts`'s docstring names "every test in the loser 404s" as exactly that symptom, so
-  this was the first suspect.
-- **Not a slug collision** — `test-export-route` is used nowhere else.
-- **Not a broad delete from another suite** — every `delete(articles)` in `tests/` is narrowed by id
-  or by that suite's own slug.
-- **Not a database error masquerading as a 404** — `sendExport` catches `ArticleNotFound` alone and
-  rethrows everything else, so a pool timeout surfaces as a 500, which is correct.
+The real cause, found by *reproducing* it rather than reasoning about it: the test's fixture uses a
+fixed uuid and calls `clean()` in both `beforeAll` and `afterAll`. **Two concurrent processes running
+that one file delete each other's article mid-test.** Peers were running `npm test` while the file
+was also being run directly.
 
-So the mechanism is **not pinned**. The most plausible remaining explanation is connection
-starvation during the suite's own `beforeAll` seeding: the pool is `max: 5`, and Stage I's snapshot
-transaction now holds one connection for the whole walk where the previous parallel reads borrowed
-three briefly. That agent flagged the same risk unprompted after seeing one such failure.
+`tests/fixture-ids.test.ts` guards this collision **between files**. This is the same failure
+**between processes**, and nothing guards it — which is why the uuids being unique, checked first,
+ruled nothing out.
 
-**Why it is being left:** the fix would be either a bigger pool (a system-wide change affecting every
-other agent on this box, and production pools per instance anyway) or giving up the snapshot, which
-is the correctness property Stage I existed to add. Neither is worth doing on the evidence of a
-contended dev box. **It is recorded rather than closed**, and if it is ever seen on a quiet machine
-or in production it is a real bug and this is the first place to look.
+Proved independent of Stage I by A/B against `4fa63ba~1`, swapping `article-rows.ts` in and out and
+restoring byte-identically each time:
+
+| | sequential ×10 | two concurrent |
+|---|---|---|
+| before the snapshot change | 0/10 failed | one of two failed, `expected 404 to be 200` |
+| after  | 0/10 failed | one of two failed, same error |
+
+Identical either side. So the snapshot transaction is exonerated, the pool theory is dead, and this
+is a **test-isolation limitation in `export-route.test.ts`**, triggered only by something no CI does
+— running one file in two processes at once. Left as it is, recorded rather than fixed, because the
+trigger is an artefact of several agents sharing one checkout and one database.
 
 ## What this is deliberately not doing
 
