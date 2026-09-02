@@ -350,6 +350,18 @@ except OSError:
 sys.exit(0)
 `;
 
+/** Exit 0 if the lock is free, 1 if somebody holds it. The outside observer for
+ *  "the lock's lifetime is the work, not the pane". */
+const FLOCK_TRY = `#!/usr/bin/env python3
+import fcntl, sys
+f = open(sys.argv[1], "a")
+try:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(1)
+sys.exit(0)
+`;
+
 /** Takes the lock and holds it until it is killed, so the job under test meets
  *  a genuinely contended lock rather than a simulated one. */
 const FLOCK_HOLDER = `#!/usr/bin/env python3
@@ -387,7 +399,16 @@ beforeAll(() => {
 type Job = ReturnType<typeof buildJob>;
 
 /** One attempt's worth of files, and the script that would run on the box. */
-function buildJob(o: { name: string; command: string; check?: string; dir?: string; attempt?: string; work?: string }) {
+function buildJob(o: {
+  name: string;
+  command: string;
+  check?: string;
+  dir?: string;
+  attempt?: string;
+  work?: string;
+  /** Stands in for the login shell the box's pane gets. See SETUP_AFTERWARDS. */
+  afterwards?: string;
+}) {
   const work = o.work ?? mkdtempSync(join(jobRoot, `${o.name}-`));
   const dir = o.dir ?? join(work, "checkout");
   if (o.dir === undefined) mkdirSync(dir, { recursive: true });
@@ -400,6 +421,7 @@ function buildJob(o: { name: string; command: string; check?: string; dir?: stri
     attempt,
     command: o.command,
     ...(o.check === undefined ? {} : { check: o.check }),
+    ...(o.afterwards === undefined ? {} : { afterwards: o.afterwards }),
     configSha256,
     home: work,
     user: "greg",
@@ -631,6 +653,54 @@ describe("setupJobScript, run for real", () => {
     expect(r.stderr).toContain("no status written");
     expect(existsSync(job.paths.statusPath)).toBe(false);
     expect(existsSync(job.paths.logPath)).toBe(false);
+  });
+
+  it.skipIf(!HAVE_PYTHON)("releases the lock when the work finishes, not when the pane closes", async () => {
+    // THE PANE OUTLIVES THE WORK, ON PURPOSE — the job ends by `exec`ing a
+    // login shell so the tmux session stays readable. The bug this pins is that
+    // the shell used to inherit fd 9 and so the LOCK outlived the work too: a
+    // second `gjd-remote setup` for the same repo hit exit 75 half a second in,
+    // inside a pane that then vanished, which reached the laptop as "the job
+    // did not survive starting". Found against the box on 2026-09-02.
+    //
+    // `exec sleep` rather than `exec bash -l`, because a login shell handed a
+    // closed stdin exits at once — and a pane that is already gone would pass
+    // this test for entirely the wrong reason.
+    const job = buildJob({
+      name: "lock-release",
+      command: "echo work-done",
+      afterwards: "printf 'pane-alive\\n'; exec sleep 30",
+    });
+    const pane = spawn("bash", [job.jobPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, PATH: runPath },
+    });
+    holders.push(pane);
+
+    // Waited for on the PANE'S OWN OUTPUT rather than on the status file: the
+    // file is written several lines before fd 9 is closed, so polling for it
+    // would race the very statement under test. This marker is printed by the
+    // process that inherited whatever the job left open.
+    await new Promise<void>((resolve, reject) => {
+      let seen = "";
+      pane.stdout?.on("data", (d: Buffer) => {
+        seen += d.toString();
+        if (seen.includes("pane-alive")) resolve();
+      });
+      pane.on("exit", (code) => reject(new Error(`the pane exited before it said it was alive (${code})`)));
+      setTimeout(() => reject(new Error("the pane never printed its marker")), 15_000);
+    });
+
+    // The work really did finish, and the pane really is still there — without
+    // both of these the lock being free would prove nothing.
+    expect(readStatus(job).outcome).toBe("success");
+    expect(pane.exitCode).toBe(null);
+
+    const tryPath = join(job.work, "trylock.py");
+    writeFileSync(tryPath, FLOCK_TRY);
+    const second = spawnSync("python3", [tryPath, job.paths.lockPath], { encoding: "utf8" });
+    expect(second.stderr).toBe("");
+    expect(second.status).toBe(0);
   });
 
   it.skipIf(HAVE_REAL_FLOCK)("says so, distinctly, when the box has no flock at all", () => {

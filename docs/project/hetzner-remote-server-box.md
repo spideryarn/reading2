@@ -175,8 +175,33 @@ it the way `push-env` does — same origin, not a symlink, a HEAD that resolves 
 allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) is a list of key *names*
 and it is Spideryarn's.
 
-The plan, including the auto-clone and per-repo setup that are not built yet, is
+The plan, including the auto-clone that is not built yet, is
 [../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
+
+### Setting a repo up: `gjd-remote setup`
+
+One command, the repo's own, run inside its checkout **on the box** — from `.gjd-remote/config.toml`,
+or an executable `.gjd-remote/setup`, or `npm ci && npm run setup` when the `package.json` has a
+`setup` script. A repo with none of those is refused rather than called set up.
+
+Three things about it are worth knowing before you read
+[`scripts/gjd-remote-setup.ts`](../../scripts/gjd-remote-setup.ts), which is where the design is
+written down:
+
+- **The config that runs is the box's copy, not the one on your laptop.** Both are read and a
+  disagreement refuses, naming each — because the two differ whenever a change is uncommitted,
+  unpushed or unpulled, which is most of the time while somebody is editing one.
+- **Readiness is the status file, never the checkout's presence.** A failed setup leaves a perfectly
+  ordinary-looking directory behind. `~/gjd-remote/setup/<owner>--<name>.json` records which attempt
+  wrote it and a hash of both commands, so a cut stream cannot read as success and a repo whose
+  `setup =` line changed since is `config-changed` rather than ready. `gjd-remote setup --status`
+  reads it, and `doctor`'s `setup status` check is the same question.
+- **It is a tmux job under a per-repo `flock`**, because `npm ci` plus Docker pulls outlive an ssh
+  from a laptop that sleeps. You are attached so you can watch, and detaching leaves it running.
+  **The lock's lifetime is the work, not the pane**: the job closes fd 9 before it `exec`s the login
+  shell that keeps the session readable, so a held lock means a setup is genuinely running. It did
+  not until 2026-09-02, and the pane holding the lock after finishing made the next run fail as
+  "the job did not survive starting" — the plan's Log has it.
 
 ## Running `gjd-remote` from the box
 

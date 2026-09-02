@@ -274,7 +274,7 @@ keeps the plan, the briefs, the diffs and the commits.
 
 ### Stage 2 — config, durable setup, `clone`, repo-doctor
 
-- [ ] `gjd-remote setup [--repo]`: `flock` per slug under `~/gjd-remote/locks/`; a tool-owned tmux
+- [x] `gjd-remote setup [--repo]`: `flock` per slug under `~/gjd-remote/locks/`; a tool-owned tmux
   job (`GJD_KIND=setup`) running the config's `setup` from the checkout with the small explicit
   environment; attempt id; status file `~/gjd-remote/setup/<slug>.json` written atomically with
   attempt, config hash, started/finished, outcome; then `check` if defined. The laptop attaches to
@@ -283,8 +283,11 @@ keeps the plan, the briefs, the diffs and the commits.
   file whose attempt id is not this one.
 - [ ] `gjd-remote clone` with no argument = the repo you are in; staging sibling + verify + rename;
   a failure leaves the destination absent and names the staging path.
-- [ ] `doctor` splits box checks from repo checks; the repo half needs identity, runs `check`,
-  reports the setup status file, and fails an ssh-origin checkout by name.
+- [x] `doctor` splits box checks from repo checks; the repo half needs identity, reports the setup
+  status file as a check of its own, and fails an ssh-origin checkout by name. **Running `check`
+  from `doctor` is deferred**: it is the repo's own command against a live checkout, and running it
+  is a side effect a diagnostic should not have without being asked. Setup runs it, and the status
+  file records what it said.
 - [ ] `@inquirer/prompts` wrapper (`scripts/gjd-remote-prompt.ts`, built) wired to a
   `promptStreams()` that always verifies a controlling TTY and wraps `/dev/tty` as a non-closing
   `Readable`; Ctrl-C ⇒ exit 130, nothing mutated. Tests: piped stdin, `-p -`, redirected output.
@@ -365,6 +368,41 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 
 ## Log
 
+- 2026-09-02 — **`gjd-remote setup` is wired up and was exercised end to end on the box against a
+  throwaway checkout of `gregdetre/gjdutils`.** Every arm was made to happen rather than reasoned
+  about: no config ⇒ `no setup known for gregdetre/gjdutils: add .gjd-remote/config.toml or
+  .gjd-remote/setup`; a one-line config ⇒ a `setup-gregdetre--gjdutils-092fa6af` session that `ls`
+  lists with `REPO gregdetre/gjdutils`, `hello-from-setup` and `v26.8.1` in the box-side log, and a
+  status file whose verdict reads back as `success`; the same command again ⇒ "already set up …
+  `--force` to run it again"; the config's command changed on the box ⇒ `config-changed`, naming
+  both hashes; `exit 3` ⇒ `setup failed on attempt …, exit 3`; a `check` of `exit 1` over a setup
+  that exited 0 ⇒ `setup ran … but the repo's check failed`. `gjd-remote kill` takes a setup session
+  by name with no change needed — it reads `CLAUDE_SESSION_ID` with `check: false` and a setup
+  session simply has none. The box was left as found: only `spideryarn2` under `~/code`, and the
+  three setup sessions and every file for that slug removed.
+- 2026-09-02 — **The lock outlives the work, and the first version of the wiring did not know it.**
+  The generated job takes the `flock` on fd 9 and ends with `exec bash -l`, so the login shell
+  inherits the descriptor and the lock is held until the *pane* closes — long after the status file
+  said `success`. Checking the lock only on an `in-progress` verdict therefore let a
+  `config-changed` re-run start a job that hit exit 75 half a second later inside a pane that then
+  vanished, which reached the laptop as "the setup job did not survive starting". **Fixed at the
+  source**: the job now does `exec 9>&-` before it `exec`s the pane's shell, so the lock's lifetime
+  is the work. A red-first test holds the pane alive (`afterwards` on `SetupJobOptions`, defaulting
+  to `exec bash -l`, replaced by `printf …; exec sleep 30`) and takes the lock from outside — it
+  failed with the second `flock -n` exiting 1 before the one-line fix and passes after it. The
+  laptop-side lock check stays as belt and braces, and its message now says a setup is *running*
+  rather than telling you to kill a finished pane. This is the plan's own rule biting: the exit code
+  and the stream are not the verdict, and neither is the absence of one.
+- 2026-09-02 — **`gjd-remote doctor` from this repo now FAILS on `setup status`, honestly**:
+  `✗ setup status  this repo has no setup status on the box — nothing has ever set it up — gjd-remote
+  setup`. Nobody has ever run Spideryarn's setup through the tool, and `~/code/spideryarn2` is in use
+  by ten live sessions where `npm ci` would delete `node_modules` underneath them, so it was not run.
+  The red cross is the true answer, and it is the one Sol's blocker 2 asked for: the checkout being
+  there is not readiness.
+- 2026-09-02 — **The box's `spideryarn2` has no `.gjd-remote/` at all** — the config was added in
+  this worktree and has not been pushed and pulled. The authority check passed anyway, and that is
+  by design: it compares the *resolved commands*, not their source, and both sides resolve to
+  `npm ci && npm run setup` (the file on this laptop, the `package.json` convention on the box).
 - 2026-09-02 — Stage 1's metadata joined up and exercised against the box. `ls` renders every
   session that existed before this as a dimmed `(unknown)` in the new REPO column and lists them
   all, so legacy rows are shown rather than refused. A `new-claude --wait` and a `new-shell` started

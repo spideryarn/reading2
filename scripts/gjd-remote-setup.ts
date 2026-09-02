@@ -498,7 +498,22 @@ export type SetupJobOptions = {
   logPath: string;
   setupDir: string;
   locksDir: string;
+  /**
+   * What the job becomes once the verdict is written. Defaults to `exec bash
+   * -l`, which is what keeps the tmux pane readable after the work.
+   *
+   * A SEAM FOR THE TEST, and it earns its place: the lock is released by
+   * closing fd 9, and proving that means keeping the pane's process alive after
+   * the work while a second `flock -n` tries the file. `exec bash -l` under a
+   * closed stdin exits immediately, which passes the test for the wrong reason.
+   * Nothing outside tests/gjd-remote-setup.test.ts passes it.
+   */
+  afterwards?: string;
 };
+
+/** The default for `afterwards`, named so the test can say what it is
+ *  replacing. */
+export const SETUP_AFTERWARDS = "exec bash -l";
 
 /**
  * A command that cannot travel in this script.
@@ -572,9 +587,10 @@ function requireOneLine(what: string, command: string): void {
  *     docs/postmortems/260831f-the-match-that-still-failed.md.
  *  7. **The final status, atomically**: written to a temp file beside it and
  *     renamed, so a reader never sees half of one.
- *  8. **`exec bash -l`**, so the pane survives for reading, exactly as
- *     `cmdNewClaude`'s job does. Note that this makes the pane's eventual exit
- *     code the login shell's — which is why the verdict is the file.
+ *  8. **fd 9 closed, THEN `exec bash -l`**, so the pane survives for reading,
+ *     exactly as `cmdNewClaude`'s job does, and the lock does not survive with
+ *     it. Note that this makes the pane's eventual exit code the login shell's
+ *     — which is why the verdict is the file.
  *
  * Every path out of here either writes a status or says on stderr that it did
  * not and why. The three that do not write one exit before the `started` status
@@ -583,6 +599,9 @@ function requireOneLine(what: string, command: string): void {
 export function setupJobScript(o: SetupJobOptions): string {
   requireOneLine("setup", o.command);
   if (o.check !== undefined) requireOneLine("check", o.check);
+  // Tool-owned rather than repo-owned, so this is a guard against our own
+  // mistakes rather than against the config — but it lands in the same script.
+  if (o.afterwards !== undefined) requireOneLine("afterwards", o.afterwards);
   if (!/^[0-9a-f]{64}$/.test(o.configSha256)) {
     throw new Error(`setupJobScript: '${o.configSha256}' is not a sha256`);
   }
@@ -716,6 +735,15 @@ printf '\\ngjd-remote setup: %s — %s exited %s, check %s\\n' \\
   "$outcome" ${shq(slug)} "$code" "$chk"
 printf 'gjd-remote setup: the verdict is %s; the log is %s\\n' "$status" "$log"
 printf -- '--- setup finished; shell follows, session stays alive ---\\n'
-exec bash -l
+
+# THE LOCK'S LIFETIME IS THE WORK, NOT THE PANE, and this one line is the whole
+# of it. Without the close, the shell below inherits fd 9 and the kernel holds
+# the lock for as long as somebody has the session open — so a second
+# 'gjd-remote setup' for this repo hit exit ${SETUP_EXIT.locked} half a second in, inside a pane
+# that then vanished, which reached the laptop as "the job did not survive
+# starting". Found against the box on 2026-09-02; tests/gjd-remote-setup.test.ts
+# holds the pane alive and takes the lock from outside to keep it fixed.
+exec 9>&-
+${o.afterwards ?? SETUP_AFTERWARDS}
 `;
 }
