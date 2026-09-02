@@ -213,6 +213,31 @@ const { reachable } = await pgReady({
 if (reachable) {
   const { pgRealtimeSessionStore } = await import("../src/store/realtime-sessions-pg.js");
 
+  beforeAll(async () => {
+    /* **`realtime_sessions.owner_id` is a foreign key into `auth.users`**, so a
+       made-up uuid is a `23503`, not a row. This was invisible until the
+       migration landed: the whole block skipped for want of the table, and a
+       test that has never run is not evidence
+       (docs/reusable/silent-success.md). All seven failed the first time they
+       were allowed to execute.
+
+       **Through `seedAuthUser`, never by hand.** Four of `auth.users`' token
+       columns are nullable with no default, GoTrue scans them into non-null Go
+       strings, and one row with them NULL makes `GET /auth/v1/admin/users`
+       answer 500 for the **whole database** — every other suite and the dev
+       server's /admin page with it. tests/helpers/seed-auth-user.ts has the
+       reproduction. */
+    const { getDb } = await import("../src/db/client.js");
+    const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
+    for (const id of [OWNER, STRANGER]) {
+      await seedAuthUser(getDb(), {
+        id,
+        email: `${id}@realtime-sessions.test`,
+        onConflictDoNothing: true,
+      });
+    }
+  });
+
   afterAll(async () => {
     /* **Explicit cleanup, because these rows are real.** Nothing deletes a
        session through the contract — a billing parent is not something the app
@@ -222,6 +247,11 @@ if (reachable) {
     const { realtimeSessions } = await import("../src/db/schema.js");
     const { eq } = await import("drizzle-orm");
     await getDb().delete(realtimeSessions).where(eq(realtimeSessions.ownerId, OWNER));
+    /* The seeded accounts go too, and after the sessions that point at them —
+       a left-behind `auth.users` row is not inert here, it is the 500 above
+       waiting for the next suite to run. */
+    const { sql } = await import("drizzle-orm");
+    await getDb().execute(sql`delete from auth.users where id in (${OWNER}, ${STRANGER})`);
     await closeDb();
   });
 
