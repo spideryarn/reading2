@@ -333,13 +333,36 @@ guard watched to fail first.
   `wire = 'realtime'` *is* "a browser reported this", so it would carry one value. An additive
   migration on the day a sideband exists is cheaper than a column nothing distinguishes.
 
-**Outstanding, and not mine to clear — the same peer collision as 1b.** `npm run db:migrate` still
-refuses (`1 ledger row(s) belong to no migration in this journal: 1788351034981`), so the migration
-has been applied nowhere. `tests/store-realtime-sessions.test.ts` skips its Postgres half loudly
+**Outstanding, and not mine to clear — the same peer collision as 1b, twice over.** The migration
+has been applied nowhere, and the reason changed under it on 2026-09-02. First `npm run db:migrate`
+refused on one orphan ledger row, `1788351034981`, which was `0052_per_article_job_queue` applied to
+the shared local Postgres from a worktree whose journal entry had not been pushed. That cleared when
+`0052` landed. What refuses now is worse and is the defect
+[database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger)
+exists to catch:
+
+```
+✗ 1 migration(s) can never be applied: the newest ledger row is stamped 1788365753441,
+  and drizzle only applies entries stamped after it —
+  20260902150952_realtime_sessions_and_usage (1788361792046)
+✗ 2 ledger row(s) belong to no migration in this journal: 1788365729661, 1788365753441
+```
+
+Both orphan rows are stamped **later** than this migration, so even once they are accounted for,
+drizzle's single-watermark loop would skip `20260902150952` for ever in silence. **The remedy is not
+to delete this file and regenerate**, tempting as the table in database.md makes it look, until
+somebody has worked out what those two rows did — they are the feedback/privacy work applied under
+numbers that have since been regenerated, and a regeneration now merely chases their stamps. Whoever
+clears them should then check that this entry still clears the new watermark before running
+`npm run db:migrate`.
+
+Until it runs, `tests/store-realtime-sessions.test.ts` skips its Postgres half loudly
 (*"spideryarn.realtime_sessions is not there — run npm run db:migrate"*) and the filesystem half of
-the same parity suite runs. **Run `npm run db:migrate` and then
-`npx vitest run tests/store-realtime-sessions.test.ts tests/db-schema.test.ts tests/db-schema-drift.test.ts`
-once `0052` lands** — that is the whole of what is unverified here.
+the same parity suite runs; `tests/store-ai-calls.test.ts`, `tests/db-schema.test.ts` and
+`tests/db-schema-drift.test.ts` fail on the missing realtime columns. **Run `npm run db:migrate` and
+then
+`npx vitest run tests/store-realtime-sessions.test.ts tests/store-ai-calls.test.ts tests/db-schema.test.ts tests/db-schema-drift.test.ts`**
+— that is the whole of what is unverified here. Everything that does not need a database passes.
 
 Sol split Stage 2 in two, **at the server/client contract** — deliberately not between responses and
 transcription, because that would ship a meter known to omit a cost source.
