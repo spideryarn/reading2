@@ -213,6 +213,38 @@ describe("opening the Candidates sub-mode", () => {
     );
   });
 
+  /**
+   * **The disclosure itself, in the visible note and nowhere else.**
+   *
+   * The test above requires *"model"*, *"search"* and *"may run"*, and a
+   * cross-family review pointed out on 2026-09-02 that a note which had stopped
+   * saying **where the search terms come from and who receives them** would
+   * still satisfy all three. That sentence is the disclosure: the model is the
+   * third party the band's confidentiality notice already covers, and the search
+   * engine is a *different* third party reached at a *different* time, which is
+   * the whole reason the opening run went behind a press
+   * (docs/plans/260902f-make-referee-mode-understandable.md § stage 3).
+   *
+   * Read out of `.cnd-start-note` alone rather than the button-and-note string
+   * the case above builds, and deliberately not out of the `ControlTip`, which
+   * says the same thing: a card is not read by anybody in a hurry, and a referee
+   * deciding whether to press is exactly somebody in a hurry. A card carrying it
+   * while the note does not is the failure this is written to catch.
+   */
+  it("says in the visible note that paper-derived terms would go to a search engine", async () => {
+    mount();
+    await flush();
+    const note = (host.querySelector(".cnd-start-note")?.textContent ?? "").toLowerCase();
+    expect(note, "there is no visible note at all").not.toBe("");
+    expect(note, "the recipient of the terms is not named as a search engine").toContain(
+      "search engine",
+    );
+    expect(
+      note,
+      "the note no longer says the search terms are drawn from the paper being reviewed",
+    ).toMatch(/(terms|words|phrases)[^.]*from the paper/);
+  });
+
   it("asks nothing, and offers nothing, when the thread is already there", async () => {
     threads = [
       {

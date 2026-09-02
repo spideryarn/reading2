@@ -91,7 +91,28 @@ export const ALLOWLIST: readonly string[] = [
      A name on this list sends nothing on its own; only a value that is actually
      set travels. */
   "SPIDERYARN_STORE",
+  /* The TEST-MODE Stripe secret, for the payments work
+     (docs/plans/260902i-stripe-payments-and-subscription-tiers.md). Only ever
+     `sk_test_…`: buildEnvPayload refuses any live-mode Stripe secret by its
+     prefix, whatever name it travels under, the way the Supabase-JWT check
+     works. STRIPE_WEBHOOK_SECRET is deliberately NOT here — the local one is
+     minted per machine by `stripe listen`, so the laptop's value would be
+     wrong on the box, like the admin password. Greg's call, 2026-09-02. */
+  "STRIPE_SECRET_KEY",
 ];
+
+/**
+ * Is this value a live-mode Stripe secret?
+ *
+ * Stripe encodes the mode in the key itself — `sk_test_…`/`rk_test_…` against
+ * `sk_live_…`/`rk_live_…` — so, as with `supabaseJwtIssuer`, the SHAPE of the
+ * value decides, not the name it sits under: a live key pasted into the wrong
+ * variable is still a live key. Publishable keys (`pk_live_…`) are public by
+ * construction and none of this function's business.
+ */
+export function isLiveStripeSecret(value: string): boolean {
+  return /^(?:sk|rk)_live_/.test(value);
+}
 
 /** Only this name, ever. See assertPushableName. */
 export const ENV_BASENAME = ".env.local";
@@ -299,6 +320,18 @@ export function buildEnvPayload(localText: string): EnvPayload {
       problems.push(
         `${key} is a Supabase key issued by something other than the local stack, and only the ` +
           `local stack's keys go on the box. (Its issuer, not its value, is what was read.)`,
+      );
+    }
+  }
+
+  /* Same reasoning, Stripe edition: the mode is in the key's own prefix, so a
+     live-mode secret is refused whatever variable name it is under. Only test
+     keys belong on a box shared by autonomous agents. */
+  for (const [key, value] of pushed) {
+    if (isLiveStripeSecret(value)) {
+      problems.push(
+        `${key} is a LIVE-mode Stripe secret, and only test-mode keys go on the box. ` +
+          `(Its prefix, not its value, is what was read.)`,
       );
     }
   }

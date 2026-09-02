@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_HITS, findPassages, findPassagesStream, disagree, hitIdentities } from "../src/search.js";
 import type { SearchEvent, SearchRequest, SearchResult } from "../src/search.js";
 import type { Block, Meta, SearchHit } from "../src/types.js";
+import { ANSWER_OVERFLOWED } from "../src/messages.js";
 
 const meta = { title: "A piece", url: "https://example.com/a" } as Meta;
 const BLOCKS = [
@@ -221,6 +222,16 @@ describe("the final `done` is authoritative, not a rollup of what streamed", () 
     }
     expect(hits).toHaveLength(1); // the preview really did show something
     expect(thrown).toBeDefined(); // but it was never treated as the answer
+    /* **The sentence, not merely that something was thrown.** Every failure in
+       this module is defined, so `toBeDefined` passed over the whole of
+       src/messages.ts — including the message split of 2026-09-02, where Search
+       is the one caller that keeps the narrowing advice and the three Referee
+       callers get `ANSWER_OVERFLOWED_FIXED_ASK`. Dropping `"editable"` at the
+       one call site in `runSearch` left this green. The four callers are
+       compared side by side in
+       tests/overflow-message-reaches-its-caller.test.ts; this asserts the half
+       of it that belongs to the file that owns this stream. */
+    expect(thrown?.message).toBe(ANSWER_OVERFLOWED.message);
   });
 });
 

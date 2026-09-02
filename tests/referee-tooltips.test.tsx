@@ -49,8 +49,6 @@ import type { Claim } from "../src/referee-claims.js";
 import type { MirrorInput, MirrorRemark, MirrorResult } from "../src/referee-mirror-types.js";
 import type { RefereeView } from "../src/web/referee-views.js";
 import type { Block, BlockId } from "../src/types.js";
-import { ANSWER_OVERFLOWED, ANSWER_OVERFLOWED_FIXED_ASK } from "../src/messages.js";
-import { parseHits } from "../src/search.js";
 
 /** One reply, decided by the test that is running — tests/referee-criteria-panel.test.tsx. */
 let answer: (url: string, init: RequestInit) => Promise<Response>;
@@ -270,6 +268,26 @@ function words(s: string): string[] {
  * - **Under three content words, nothing counts as a restatement.** A head like
  *   *Try again* or *For / against* reduces to one or two words, and every honest
  *   sentence about that control contains them.
+ *
+ *   **This floor let one real restatement through**, and a cross-family review
+ *   found it by reading rather than by running anything: Mirror's jump card said
+ *   *"Scrolls the paper to the passage this remark is about"* under the head *Go
+ *   to this passage*, which reduces to the single content word *passage*
+ *   (`go` and `to` and `this` are all stopwords). Lowering the floor was tried
+ *   and **measured** before being rejected, 2026-09-02:
+ *
+ *   | floor | the old Mirror card | honest copy under *Try again* / *For / against* |
+ *   |---|---|---|
+ *   | 3 (today) | passes | passes |
+ *   | 2 | **still** passes — its head is one word, not two | *Try again* now fails |
+ *   | 1 | caught | both fail, **and so does the honest rewrite** that replaced it |
+ *
+ *   So there is no floor that catches this and keeps the honest cards: at 2 it
+ *   is not caught at all, and at 1 the check fires on any card that uses the one
+ *   noun its control is named after, which every truthful sentence about a
+ *   *passage* button does. The card is asserted by hand instead — § the jump —
+ *   which is what the review adjudicated: keep this as a copying floor and spend
+ *   explicit assertions on the cards that matter.
  * - **The two have to be comparable in length.** A four-line paragraph that
  *   happens to use two of a three-word label's words is not saying the label
  *   again — Claims' *"Marks are off until you ask for them…"* under *Mark these
@@ -630,6 +648,17 @@ describe("Mirror's rows say what they mean by evidence, and where they go", () =
    * second's wait, unstyleable, truncated, and **absent altogether on a touch
    * device**. What this pins is the removal as well as the card, because a
    * `title` creeping back is invisible on a laptop: it still shows something.
+   *
+   * **And its first paragraph is asserted by hand**, which the generic check
+   * cannot do here. Until 2026-09-02 that paragraph was *"Scrolls the paper to
+   * the passage this remark is about"* under the head *Go to this passage* —
+   * the heading again, in the one card a review picked out as worth an explicit
+   * assertion. `restates` skips it because the head reduces to a single content
+   * word (*passage*), and § `restates` says what was measured about lowering
+   * that floor and why it is not lowered. So the fact the card now carries is
+   * pinned instead: **provenance** — the passage is where the referee anchored
+   * their own comment, not something Mirror picked out of a paper it is never
+   * given.
    */
   it("explains the jump in a card rather than in a title attribute", { timeout: 20000 }, async () => {
     paint();
@@ -639,6 +668,21 @@ describe("Mirror's rows say what they mean by evidence, and where they go", () =
     const card = await cardFor(jump as Element);
     expect(card.head).toBe("Go to this passage");
     expectEarnsItsHover(card, "the jump");
+
+    const what = card.what.toLowerCase();
+    expect(
+      what,
+      "the first paragraph no longer says the passage is where the referee's own comment sits",
+    ).toMatch(/(you anchored|your (own )?comment)/);
+    expect(
+      what,
+      "the first paragraph no longer says Mirror did not choose the passage",
+    ).toMatch(/never the passage|not the passage|did not (choose|pick)/);
+    /* The restatement it replaced, refused by name. A rewrite that says the
+       provenance and then adds the heading back would pass both checks above. */
+    expect(what, "the card has gone back to restating its own heading").not.toMatch(
+      /scrolls the paper/,
+    );
   });
 
   /**
@@ -853,71 +897,5 @@ describe("placing a comment on a criterion says what switching costs", () => {
       card.how.toLowerCase(),
       "the card no longer says that switching throws the position away",
     ).toContain("clears the position");
-  });
-});
-
-/* ----------------------------------- an action three of the four callers lack -- */
-
-/**
- * **A failure message may not name a lever the screen does not have.**
- *
- * `ANSWER_OVERFLOWED` said *"Asking for something narrower usually fits"*, flat,
- * and a browser pass hit it in **Claims**, which has no scoping control of any
- * kind — nor has Mirror, and a criterion's words are a saved row rather than a
- * box on that screen. All three land there because `parseHits` in src/search.ts
- * is Search's parser and Referee mode's alike.
- *
- * **The first fix conditioned the clause and that was not enough**, which a
- * cross-family review showed on 2026-09-02: it read *"where you asked a question
- * of your own"*, and a criterion **is** the referee's own question, so the
- * condition reads as satisfied on the one screen it was written to exclude. The
- * old test greped for `where you|if you|when you` and blessed exactly that.
- *
- * So the message split, `MARK_CUT_OFF`'s shape — one diagnosis, a caller who
- * cannot take the advice, its own code, because tests/messages.test.ts refuses
- * two sentences under one code and is right to. What is checked here is the
- * split rather than the phrasing.
- */
-describe("what Referee says when an answer overflowed", () => {
-  it("offers the referee's three callers the one lever their screens have", () => {
-    const message = ANSWER_OVERFLOWED_FIXED_ASK.message.toLowerCase();
-    expect(message, "the retry is not offered, and it is the only lever Claims has").toMatch(
-      /trying again/,
-    );
-    /* No conditional clause either: a criterion **is** the referee's own
-       question, so any wording hung on "you asked" reads as available here. That
-       is the mistake the first fix made, and the test that blessed it greped for
-       exactly those words. */
-    expect(message, "narrowing is back on the message three screens cannot act on").not.toMatch(
-      /narrow/,
-    );
-    expect(
-      ANSWER_OVERFLOWED_FIXED_ASK.message,
-      "the code a reader quotes has gone, or gone back to Search's",
-    ).toMatch(/\[ai-overflowed-no-ask\]$/);
-  });
-
-  it("keeps the narrowing advice for Search, which is the caller that can act on it", () => {
-    const search = ANSWER_OVERFLOWED.message.toLowerCase();
-    expect(search, "Search lost the lever only Search has").toMatch(/narrower/);
-    expect(search, "Search lost the retry").toMatch(/trying again/);
-    expect(ANSWER_OVERFLOWED.message, "Search's already-quoted code changed").toMatch(
-      /\[ai-overflowed\]$/,
-    );
-    expect(
-      ANSWER_OVERFLOWED_FIXED_ASK.message,
-      "the split collapsed and all four callers are getting one sentence again",
-    ).not.toBe(ANSWER_OVERFLOWED.message);
-  });
-
-  /**
-   * **The default is the one that promises least**, so a sub-mode added later
-   * cannot inherit advice about a control it does not have. Only Search opts in,
-   * and it is the only caller of `parseHits` that passes anything.
-   */
-  it("gives a caller that says nothing the message with no narrowing in it", () => {
-    const cutOff = '{"hits":[{"blockId":"spya-k3m9qt","quo';
-    expect(() => parseHits(cutOff)).toThrow(ANSWER_OVERFLOWED_FIXED_ASK.message);
-    expect(() => parseHits(cutOff, "editable")).toThrow(ANSWER_OVERFLOWED.message);
   });
 });

@@ -40,8 +40,8 @@ import { TRUNK_BRANCH } from "./deploy-checks.js";
 export type FreshenResult =
   /** Tracked files are modified, so nothing was fetched or merged. */
   | { kind: "dirty"; files: string[] }
-  /** `git fetch` failed — offline, or no `origin`. Nothing was merged. */
-  | { kind: "fetch-failed"; out: string }
+  /** `git fetch` failed — offline, no `origin`, or it hung. Nothing was merged. */
+  | { kind: "fetch-failed"; out: string; timedOut: boolean }
   /** The remote trunk could not be read after a successful fetch. */
   | { kind: "trunk-unreadable"; out: string }
   /** Already contains the remote trunk; no merge was attempted. */
@@ -51,14 +51,43 @@ export type FreshenResult =
   /** The merge stopped. The tree is left mid-merge for a human to resolve. */
   | { kind: "conflict"; trunkSha: string; out: string };
 
+/**
+ * How long a fetch of the trunk may take before it is treated as wedged.
+ *
+ * A fetch has no transfer timeout of its own: a stalled connection sits at 0%
+ * CPU indefinitely, and `worktree:setup` waiting forever looks exactly like
+ * `worktree:setup` working. Borrowed, with its 120 s, from the worktree tooling
+ * in MindstoneRebel, where one stalled clone wedged an init for about three
+ * hours.
+ *
+ * No retry ladder to go with it. Theirs exists for submodule clones over SSH;
+ * we have no submodules, and one fetch of one branch either works or is worth
+ * a person's attention.
+ *
+ * The limit worth knowing: `spawnSync`'s timeout kills **git**, not necessarily
+ * a helper git spawned. That is enough to unwedge the setup, which is the point;
+ * it is not a promise that nothing is left running.
+ */
+export const TRUNK_FETCH_TIMEOUT_MS = 120_000;
+
 interface Run {
   ok: boolean;
   out: string;
+  /** The command was killed for running too long, rather than failing. */
+  timedOut: boolean;
 }
 
-function run(cwd: string, args: string[]): Run {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
-  return { ok: r.status === 0, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
+function run(cwd: string, args: string[], timeoutMs?: number): Run {
+  const r = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
+  });
+  /* Node reports a timeout as a signal kill, and on some platforms also as an
+     ETIMEDOUT error. Take either, so this does not read as an ordinary failure
+     and send somebody looking for a network problem that is not there. */
+  const timedOut = r.signal !== null || (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+  return { ok: r.status === 0, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim(), timedOut };
 }
 
 /**
@@ -69,14 +98,18 @@ function run(cwd: string, args: string[]): Run {
  * to git, because git's own refusal names one file at a time and arrives as a
  * failed merge, which reads like a conflict.
  */
-export function freshenFromTrunk(cwd: string, trunk: string = TRUNK_BRANCH): FreshenResult {
+export function freshenFromTrunk(
+  cwd: string,
+  trunk: string = TRUNK_BRANCH,
+  fetchTimeoutMs: number = TRUNK_FETCH_TIMEOUT_MS,
+): FreshenResult {
   const status = run(cwd, ["status", "--porcelain", "--untracked-files=no"]);
   if (status.ok && status.out !== "") {
     return { kind: "dirty", files: status.out.split("\n").map((l) => l.trim()) };
   }
 
-  const fetched = run(cwd, ["fetch", "origin", trunk, "--quiet"]);
-  if (!fetched.ok) return { kind: "fetch-failed", out: fetched.out };
+  const fetched = run(cwd, ["fetch", "origin", trunk, "--quiet"], fetchTimeoutMs);
+  if (!fetched.ok) return { kind: "fetch-failed", out: fetched.out, timedOut: fetched.timedOut };
 
   const trunkRef = `origin/${trunk}`;
   const rev = run(cwd, ["rev-parse", trunkRef]);
@@ -104,7 +137,9 @@ export function describeFreshen(r: FreshenResult, trunk: string = TRUNK_BRANCH):
     case "dirty":
       return `${r.files.length} tracked file(s) modified — not merging origin/${trunk} over them`;
     case "fetch-failed":
-      return `could not fetch origin/${trunk} — this worktree may be behind the trunk`;
+      return r.timedOut
+        ? `fetching origin/${trunk} hung and was killed — this worktree may be behind the trunk`
+        : `could not fetch origin/${trunk} — this worktree may be behind the trunk`;
     case "trunk-unreadable":
       return `fetched, but could not read origin/${trunk}`;
     case "already-level":

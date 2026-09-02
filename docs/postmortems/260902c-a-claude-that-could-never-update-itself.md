@@ -115,18 +115,20 @@ Ranked by value for the effort.
 A general form of (1): when provisioning installs something that maintains itself, the thing worth
 asserting is that it can perform its own maintenance — not that it starts.
 
-## Not fixed, deliberately
+## Deferred, then done
 
-The npm copy at `/usr/lib/node_modules/@anthropic-ai/claude-code` was **left in place** on the live
-box, dormant and shadowed by the symlink, because ten agent sessions were running and Greg asked that
-they not be disturbed. Removing it is safe for them — the package's own `install.cjs` says the
-executable is standalone with "no Node.js process stays resident", and `/proc/<pid>/exe` showed each
-session holding only that one inode, which survives unlink — but there was no reason to take even a
-residual risk for no gain.
+The npm copy at `/usr/lib/node_modules/@anthropic-ai/claude-code` was left in place at first, dormant
+and shadowed by the symlink, because ten agent sessions were running and Greg asked that they not be
+disturbed. Removing it was safe for them — the package's own `install.cjs` says the executable is
+standalone with "no Node.js process stays resident", and `/proc/<pid>/exe` showed each session
+holding only that one inode, which survives unlink — but there was no reason to take even a residual
+risk for no gain.
 
-Until somebody runs `sudo npm -g uninstall @anthropic-ai/claude-code`, the new
-`no npm-global claude beside the native one` check reports FAIL on this box. That is the check
-working: the migration is genuinely unfinished. A freshly built box passes it.
+**Both migrations were completed on 2026-09-02**, with all ten sessions still running and none
+disturbed. Claude's npm package was removed first; Codex's waited for the `/proc` scan below to come
+back empty, which it did once two in-flight reviews finished. `/usr/bin/claude`, `/usr/bin/codex` and
+both `node_modules` trees are gone; every check in this postmortem now passes, and a `run-codex.ts`
+review end-to-end confirms the standalone codex works rather than merely starting.
 
 **`@openai/codex` had the identical problem** — same `npm install -g` as root, same root-owned `/usr`
 prefix — and was left alone in the first pass, on the stated grounds that it "does not self-update,

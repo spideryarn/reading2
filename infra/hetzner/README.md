@@ -376,6 +376,10 @@ report FAIL — correctly, because two installs are present. The commands are in
 Re-running the whole provisioner does *not* do it: the old npm packages are not removed by anything
 here, on purpose, since removing Codex's tree from under a running review breaks it.
 
+The one box that existed was migrated on 2026-09-02 and passes both. **A box built from this file
+needs none of that** — it installs both tools the right way from the start, and the two checks pass
+trivially because nothing ever puts them on the npm prefix.
+
 **It already works with no login**, because `CODEX_API_KEY` is on `gjd-remote push-env`'s allowlist
 and the wrapper reads it out of the repo's `.env.local`. But the wrapper spends the ChatGPT
 subscription *first* by default, and with no `~/.codex/auth.json` that attempt fails and falls back
