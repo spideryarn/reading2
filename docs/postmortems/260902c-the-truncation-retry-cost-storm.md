@@ -19,8 +19,9 @@ The chain, link by link:
 
 1. [`vite.config.ts`](../../vite.config.ts) mounts the API with a dynamic import of `src/routes.js`
    inside `configureServer`. Vite's config bundler externalises only non-relative specifiers, so that
-   import is **bundled into the config** — which makes every server module a config dependency. 175
-   of them, `src/jobs.ts`, `src/store/jobs-fs.ts` and `src/hierarchy.ts` among them.
+   import is **bundled into the config** — which makes every server module a config dependency.
+   `resolveConfig` reports **176** of them here, with `src/jobs.ts`, `src/store/jobs-fs.ts` and
+   `src/hierarchy.ts` in the list and `src/web/jobEngine.ts`, which only the client reaches, not.
 2. A change to any of those restarts the server. Measured on the box, not inferred:
 
    ```
@@ -81,6 +82,11 @@ the only trace is a number in a ledger nobody reads.
 
 `spya-ug2qtq` is the control: same article, same afternoon, one call. The difference between the rows
 is how much anybody was editing.
+
+**Keeping one call from each group and calling the rest waste, this cost $9.62** of the $11.36 those
+four jobs spent — and that is the whole ledger, 565 rows, a few days of one laptop's development. The
+question that produces it is one line (*more than one `runId` for one `(jobId, step)`*) and nobody
+had ever asked it.
 
 ## The class
 
@@ -185,6 +191,19 @@ Ranked by what they cost against what they are worth.
   possible three-call one, and that the answer is to make `npm run dev` use Postgres by default or to
   refuse a second files-mode server. Both change how every agent on this box works, so both are
   Greg's call rather than something to fold into a bug fix.
+- **Eleven more of the same class are still in the tree**, and they are named rather than moved. The
+  full list, and what each one's duplication costs, is in
+  [the plan](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md) — the two
+  worth knowing here are [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts)'s `writing`,
+  the ledger's own append mutex, whose duplication can corrupt the file this bug was diagnosed from;
+  and the four stores that say *"read-modify-write serialised per process"* in those words
+  ([`src/comments.ts`](../../src/comments.ts), [`src/chat.ts`](../../src/chat.ts),
+  [`src/searches.ts`](../../src/searches.ts),
+  [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts)), where the cost is a silent
+  lost update of the reader's own comment or chat turn. Found by GPT Sol reviewing this fix; left
+  alone because the ledger is another workstream's, `src/routes.ts` has a split in flight, and a
+  promise chain kept for the life of the process is a chain one rejection can wedge for the life of
+  the process — which is a question per site, and a separate piece of work.
 - **An expired lease does not prove nobody is still spending.** Abort is cooperative and `walkClaim`
   explicitly handles a step that ignores its signal, so after an expiry the job can be terminalised,
   Retry pressed, and the new job's calls overlap the old computation still unwinding — overlapping

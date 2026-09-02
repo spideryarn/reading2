@@ -31,11 +31,13 @@
  *
  * **And "one process" had to be made true, because it was not.** It said
  * *process* and meant *module*, and those stopped being the same thing the day
- * the API became a Vite config dependency: every save under `src/` restarts the
- * dev server in place, re-evaluating this file with empty Maps while the request
- * inside a step keeps running. `QueueState` below is what closed that — the
- * state has the lifetime of the process now, which is the lifetime this file
- * always claimed for it. docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
+ * the API became a Vite config dependency: saving any file the **server**
+ * imports restarts the dev server in place, re-evaluating this file with empty
+ * Maps while the request inside a step keeps running. (Only the server's graph —
+ * a client-only module gets ordinary HMR and no restart.) `QueueState` below is
+ * what closed that: the state has the lifetime of the process now, which is the
+ * lifetime this file always claimed for it.
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  */
 
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
@@ -75,8 +77,8 @@ const TERMINAL = new Set(["done", "error", "cancelled"]);
  *
  * The single-running rule and the attempt tokens below are a **lock**, and a
  * second copy of a lock is not a slower lock, it is no lock at all. This module
- * is re-evaluated whenever the dev server restarts — which is every save to any
- * file under `src/`, because the API is a Vite config dependency — and the
+ * is re-evaluated whenever the dev server restarts — which is every save to a
+ * file the server imports, because the API is a Vite config dependency — and the
  * restart does not stop the request that is already inside a step. Before
  * 2026-09-02 the new copy therefore began with empty Maps, `loadFromDisk` swept
  * a `running` job back to `queued` believing nobody could be inside it, and the
@@ -111,7 +113,10 @@ interface QueueState {
   loaded: Promise<void> | null;
 }
 
-const state = processSingleton<QueueState>("jobs-fs", () => ({
+/* Bump the version whenever a field above is added or renamed: a dev server that
+   restarts in place keeps the object an older copy made, and the alternative to
+   failing loudly is reading `undefined` out of the queue's own index. */
+const state = processSingleton<QueueState>("jobs-fs", "2026-09-02", () => ({
   index: new Map(),
   attempts: new Map(),
   keys: new Map(),
@@ -322,9 +327,22 @@ async function loadFromDisk(): Promise<void> {
   }
 }
 
-/** Load once, and make every entry point wait for it. */
+/**
+ * Load once, and make every entry point wait for it.
+ *
+ * **A failed load is not memoised**, and it had to stop being once `loaded`
+ * outlived the module. A rejected promise cached here used to be cleared by the
+ * next dev-server restart, which is often — so a transient unreadable directory
+ * healed itself. Kept in process state it would survive every restart, and only
+ * stopping the server would clear it: a one-off `EACCES` turning into a queue
+ * that is broken until somebody works out why. Success is still loaded exactly
+ * once, which is the property that matters. GPT Sol, reviewing the built code.
+ */
 function ready(): Promise<void> {
-  state.loaded ??= loadFromDisk();
+  state.loaded ??= loadFromDisk().catch((err: unknown) => {
+    state.loaded = null;
+    throw err;
+  });
   return state.loaded;
 }
 

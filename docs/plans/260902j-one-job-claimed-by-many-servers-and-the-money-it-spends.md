@@ -63,7 +63,9 @@ copy of every server module — and does not stop the step that is running.**
 
 *A file the server imports*, not every file under `src/`: the trigger is membership of the bundled
 config graph, so `src/web/**` and anything else only the client reaches gets ordinary HMR and no
-restart. The 175 files that do trigger it are the whole of the API.
+restart. Asked directly, `resolveConfig` lists **176** files that do, which is the whole of the API:
+`src/routes.ts`, `src/jobs.ts`, `src/store/jobs-fs.ts` and `src/hierarchy.ts` are in it, and
+`src/web/jobEngine.ts` is not.
 
 Run on this box on 2026-09-02, `npx vite --port 5721`, then `touch src/hierarchy.ts`:
 
@@ -77,7 +79,7 @@ The chain, each link checked in the code:
 
 1. **The whole server is part of the Vite config graph.** `vite.config.ts` mounts the API with
    `await import("./src/routes.js")` inside `configureServer`. Vite's config bundler externalises
-   only non-relative specifiers, so that dynamic import is **bundled into the config** — 175
+   only non-relative specifiers, so that dynamic import is **bundled into the config** — 176
    `configFileDependencies`, `src/routes.ts`, `src/jobs.ts`, `src/store/jobs-fs.ts` and
    `src/hierarchy.ts` among them.
 2. **A change to any of them restarts the server** (`isConfigDependency` → `restartServerWithUrls`),
@@ -273,10 +275,27 @@ and answered.
   records it so it is somebody's.
 - **Nothing caps spend anywhere.** [ingest-queue.md](../project/ingest-queue.md) already says so. A
   duplicate-claim fence is not a spend cap and must not be read as one.
-- **Every other module-scope cache in the server is still re-created on each restart.** That is
-  usually harmless — a cache that starts empty is a cache — and it is only load-bearing where the
-  state *is* a lock. The two places where it is are the two this plan moves. Anything else is a
-  proposal rather than something to sweep in.
+- **This was not the only module-lifetime lock in the server, and an earlier draft of this plan said
+  it was.** That sentence was false and GPT Sol said so. `src/jobs.ts` and `src/store/jobs-fs.ts` do
+  now have none left — everything mutable in them went through `processSingleton` or is a `const` —
+  but the same premise, often in the same words, holds up eleven more:
+
+  | where | what it is | if it is duplicated |
+  |---|---|---|
+  | [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) `writing` | the ledger's append mutex | two `appendFile` chains interleaving inside one line — **corrupting the ledger this bug was diagnosed from** |
+  | [`src/routes.ts`](../../src/routes.ts) `streaming` | an abort registry and stale-writer barrier | Stop cannot find the old stream; edit and retry cannot await it |
+  | `src/routes.ts` `turnOrder` | calls itself a lock | multi-write chat operations interleave |
+  | `src/routes.ts` `answering`, `searching`, `refereeing`, `pullingClaims` | liveness registries | the new copy calls work the old copy is still doing abandoned, and pays for it again |
+  | [`src/comments.ts`](../../src/comments.ts), [`src/chat.ts`](../../src/chat.ts), [`src/searches.ts`](../../src/searches.ts), [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts) | *"read-modify-write serialised per process"*, four times | a silent lost update of the reader's own comment, chat turn or saved search |
+
+  **None of them is moved here, and that is a decision rather than an omission.** Three reasons, in
+  order. The ledger one is explicitly out of scope — other agents are working on cost tracking and
+  this piece of work was told to read that machinery and not write to it, so it is handed over rather
+  than touched. `src/routes.ts` has a split in flight in another worktree. And the last four each
+  need a thought this change cannot give them: a chain kept for the life of the process is a chain a
+  single rejection can wedge for the life of the process, so each site has to be read for what
+  happens when its promise rejects — which is a piece of work with its own plan and its own review,
+  not a sweep at the end of somebody else's. The move itself is one line each; the thinking is not.
 - **Several OS processes over one `data/` remain unfenced**, and the files adapter still says so.
   Evidence that they interfere: `spya-zf0bgj` and `spya-gv99gh` were both active on the same slug at
   once on 2026-08-30, which `activeForSlug` is supposed to make impossible, and `ps aux` today shows

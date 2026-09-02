@@ -132,7 +132,11 @@ const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
  * reached nothing at all after a save. src/process-state.ts, and
  * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  */
-const aborts = processSingleton<Map<string, AbortController>>("jobs.aborts", () => new Map());
+const aborts = processSingleton<Map<string, AbortController>>(
+  "jobs.aborts",
+  "2026-09-02",
+  () => new Map(),
+);
 
 /**
  * How long a claim is good for, and how long before that the claimant stops.

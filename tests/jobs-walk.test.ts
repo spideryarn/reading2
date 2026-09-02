@@ -442,6 +442,48 @@ describe("one claim walks the whole job", () => {
     expect(advanced?.job.status).toBe("cancelled");
   });
 
+  it("makes a dev-server reload a pause: the new copy waits and the old one finishes", async () => {
+    /**
+     * **The claim the whole fix rests on, and nothing pinned it.**
+     *
+     * Once the store's state has the lifetime of the process, a reload is not a
+     * duplicate — the new copy is told `busy`, the old claimant still holds the
+     * claim, its writes still pass the fence, and the ingest finishes. That is
+     * also the argument for *not* aborting the in-flight step on restart, which
+     * looks like the money-saver and would throw away a call about to be
+     * useful. An argument in a comment is not a test. GPT Sol asked for this
+     * one by name.
+     *
+     * The reload happens **inside step one**, which is where the eight minutes
+     * of model call are, and the second step is here so that the walk visibly
+     * carries on past the moment it was interrupted.
+     */
+    const names: StepName[] = ["fetch", "extract"];
+    let refused: string | undefined;
+    let reloaded: typeof import("../src/store/jobs-fs.js") | undefined;
+    const { ran, job, parts } = await fixture("test-walk-reload-pause", names, {
+      fetch: async () => {
+        vi.resetModules();
+        reloaded = await import("../src/store/jobs-fs.js");
+        const race = await reloaded.fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS, 8);
+        refused = race.kind;
+      },
+    });
+
+    const advanced = await advanceAsOwner(job.id, parts);
+
+    expect(refused, "the reloaded copy must be told busy, not handed the job").toBe("busy");
+    expect(ran.names, "and the claimant it interrupted carries on past it").toEqual([
+      "fetch",
+      "extract",
+    ]);
+    expect(advanced?.job.status).toBe("done");
+    expect(
+      (await reloaded?.fsJobStore.get(job.id, OWNER))?.status,
+      "and the new copy sees the finished job, so the work was not wasted",
+    ).toBe("done");
+  });
+
   it("hands the claim back rather than starting a step it cannot finish", async () => {
     /**
      * **The deliberate handoff, and the only one left.** The self-abort bounds

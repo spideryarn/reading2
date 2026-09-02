@@ -8,8 +8,8 @@
  * the attempt token is — in the file's own words — *"never written to disk. It
  * dies with the process."*
  *
- * The process is not what dies. **Saving any file under `src/` restarts the Vite
- * dev server inside the same process** — the API is mounted by
+ * The process is not what dies. **Saving any file the server imports restarts
+ * the Vite dev server inside the same process** — the API is mounted by
  * a dynamic import of `src/routes.js` from `vite.config.ts`, so every server module
  * is a config dependency, and the restart re-evaluates all of them from a
  * uniquely named temp file that the module registry cannot dedupe. The new copy
@@ -43,6 +43,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { mintId } from "../src/ids.js";
+import { INTERRUPTED } from "../src/messages.js";
 import { environmentOwnerId } from "../src/owner.js";
 import { forgetForTests } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -129,6 +130,13 @@ describe("one job, two servers over the same data directory", () => {
        Only the module did, and the first copy is inside an eight-minute model
        call at the time. */
     const second = await aServer();
+    /* **That there really are two copies**, which every case below is a
+       statement about. If a change to vitest's isolation ever made
+       `vi.resetModules()` hand back the same module, the fence cases would pass
+       without proving anything — green for the reason the whole file exists to
+       rule out. GPT Sol, reviewing the built code. */
+    expect(second.fsJobStore, "two module copies, not one").not.toBe(first.fsJobStore);
+
     const race = await second.fsJobStore.claim(
       job.id,
       job.ownerId,
@@ -235,7 +243,12 @@ describe("one job, two servers over the same data directory", () => {
     await new Promise((r) => setTimeout(r, 5));
 
     const second = await aServer();
-    expect((await second.fsJobStore.settleExpired()).map((s) => s.id)).toContain(job.id);
+    /* The exact settlement, not `toContain`: an ending is *what* it settled to
+       as much as *that* it settled, and `error` rather than `cancelled` is the
+       difference between telling the reader something broke and telling them
+       they stopped something they did not. GPT Sol. Nothing else can be in this
+       list — `afterEach` clears the maps and the ids are minted. */
+    expect(await second.fsJobStore.settleExpired()).toEqual([{ id: job.id, status: "error" }]);
 
     const after = await second.fsJobStore.claim(
       job.id,
@@ -246,5 +259,8 @@ describe("one job, two servers over the same data directory", () => {
     );
 
     expect(after.kind).toBe("finished");
+    expect(after.kind === "finished" && after.job.error, "and it says why").toBe(
+      INTERRUPTED.message,
+    );
   });
 });
