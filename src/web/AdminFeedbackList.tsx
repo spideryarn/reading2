@@ -13,9 +13,9 @@
  * table is the right shape for numbers: eleven of them line up, and comparing
  * two accounts means reading down a column.
  *
- * A bug report is three paragraphs of somebody's prose. Twelve of them in a
- * `<td>` is a page nobody can read, and the comparison a table exists for —
- * *which report has the bigger `steps`* — is not a question anybody has. So:
+ * A bug report is a box of somebody's prose. Twelve of them in a `<td>` is a
+ * page nobody can read, and the comparison a table exists for — *which report
+ * is longer* — is not a question anybody has. So:
  * one card per report, newest first, and the sort is the server's single
  * promise rather than eleven of the reader's.
  *
@@ -31,7 +31,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, Clock } from "lucide-react";
 
-import type { AdminFeedbackDetail, AdminFeedbackReport } from "../types.js";
+import type { AdminFeedbackDetail, AdminFeedbackReport, FeedbackKind } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { exactly, timeAgo } from "./relative-time.js";
 
@@ -79,24 +79,46 @@ const TONE: Record<"ok" | "warn" | "quiet", string> = {
   quiet: "tw:text-ink-faint",
 };
 
-/** One of the three answers, with an empty one saying so rather than vanishing. */
-function Answer({ label, text }: { label: string; text: string | null }) {
+/**
+ * **What the reader wrote**, as one block, in their own order.
+ *
+ * `whitespace-pre-wrap`, because they pressed Return in a textarea and meant it
+ * — a report reflowed into one paragraph loses the numbered steps, which is the
+ * half that reproduces the bug. And `break-words` beside it, because a pasted
+ * 2,000-character URL with no space in it would otherwise push the card off the
+ * page.
+ *
+ * **Never truncated.** Reports filed before 2026-09-02 carry the three old
+ * answers glued together with their headings, so a legacy body can be three
+ * times the dialog's current limit — and the oldest reports are the ones most
+ * likely to be why somebody opened this page. GPT Sol, 2026-09-02.
+ */
+function Body({ text }: { text: string }) {
   return (
-    <div className="tw:mt-3">
-      <div className="tw:text-xs tw:font-medium tw:text-muted-foreground">{label}</div>
-      {text ? (
-        /* `whitespace-pre-wrap`: the reader pressed Return in a textarea and
-           meant it. A bug report reflowed into one paragraph loses the numbered
-           steps, which is the half of the report that reproduces the bug. And
-           `break-words` beside it, because a pasted 2,000-character URL with no
-           space in it would otherwise push the whole card off the page. */
-        <p className="tw:m-0 tw:mt-0.5 tw:break-words tw:whitespace-pre-wrap tw:text-sm tw:text-foreground">
-          {text}
-        </p>
-      ) : (
-        <p className="tw:m-0 tw:mt-0.5 tw:text-sm tw:italic tw:text-ink-faint">left blank</p>
-      )}
-    </div>
+    <p className="tw:m-0 tw:mt-3 tw:break-words tw:whitespace-pre-wrap tw:text-sm tw:text-foreground">
+      {text}
+    </p>
+  );
+}
+
+/**
+ * *Problem*, *suggestion*, or **not specified** — and the third is drawn rather
+ * than left blank.
+ *
+ * Greg, 2026-09-02: *"don't default to Problem. Default to null/unknown."* So
+ * `null` is a real answer, and it is also every report filed before the toggle
+ * existed. A page that simply omitted the chip would make "they did not say"
+ * and "we forgot to render it" the same thing on screen.
+ */
+function Kind({ kind }: { kind: FeedbackKind | null }) {
+  return (
+    <span
+      className={`tw:rounded-full tw:border tw:border-border tw:px-2 tw:py-0.5 ${
+        kind === null ? "tw:text-ink-faint tw:italic" : "tw:text-muted-foreground"
+      }`}
+    >
+      {kind === null ? "kind not specified" : kind}
+    </span>
   );
 }
 
@@ -271,6 +293,7 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
             was on, which in this app carries `?q=`, `?find=` and whole
             third-party addresses. docs/project/feedback.md § What is
             deliberately NOT here. */}
+        <Kind kind={report.kind} />
         <span>{report.environment}</span>
         <span>{report.routeKind}</span>
         {report.slug && <code className="tw:font-mono tw:text-[0.7rem]">{report.slug}</code>}
@@ -286,9 +309,7 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
         </span>
       </div>
 
-      <Answer label="Steps to reproduce" text={report.steps} />
-      <Answer label="What they expected to see" text={report.expected} />
-      <Answer label="What they saw instead" text={report.actual} />
+      <Body text={report.body} />
 
       {report.screenshotBytes !== null && report.screenshotBytes > 0 && (
         <Screenshot ownerId={report.ownerId} id={report.id} bytes={report.screenshotBytes} />

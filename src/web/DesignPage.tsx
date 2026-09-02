@@ -40,7 +40,6 @@
 import { useEffect, useState } from "react";
 import { Circle, LoaderCircle, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ARTICLE_IS_BUSY } from "../job-state.js";
 import { providerHttpFailure } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import type { Job } from "../types.js";
@@ -130,30 +129,18 @@ const DESIGN_JOB = {
       },
     ],
   },
-  /* **Somebody else's job**, holding the article this band is on. Nothing in
-     it writes `glossary`, which is the whole point: this is the shape the run
-     button's own filter can never surface, so the reader used to be told to
-     stop something with nothing on screen to stop. */
-  blocking: {
-    id: "design-5",
-    slug: "example",
-    status: "running",
-    steps: [
-      {
-        name: "hierarchy",
-        status: "running",
-        label: "Building the hierarchy",
-        startedAt: new Date(Date.now() - 134_000).toISOString(),
-      },
-    ],
-  },
+  /* **Somebody else's job holding the article** was a seventh example here
+     until 2026-09-02, drawn beside the button that had just been refused. A
+     second, different job on one article is queued rather than refused now
+     (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
+     § 1g), so it shows in this band's own `running` or `queued` shape and there
+     is no second band to draw. */
 } as unknown as {
   queued: Job;
   running: Job;
   slow: Job;
   slowMeasured: Job;
   stopping: Job;
-  blocking: Job;
 };
 
 import { Toggle } from "@/components/ui/toggle";
@@ -576,7 +563,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={null}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -588,7 +574,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.queued}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -600,7 +585,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.running}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -612,7 +596,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.slow}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -624,7 +607,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.slowMeasured}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -636,7 +618,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.running}
             failed={null}
-            blocking={null}
             stalled
             onRun={async () => {}}
             onCancel={() => {}}
@@ -648,7 +629,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={DESIGN_JOB.stopping}
             failed={null}
-            blocking={null}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -660,19 +640,6 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <JobProgress
             job={null}
             failed={providerHttpFailure(402).message}
-            blocking={null}
-            stalled={false}
-            onRun={async () => {}}
-            onCancel={() => {}}
-            label="Find the terms"
-            step="glossary"
-            icon={<Search size={13} />}
-            runningLabel="Finding…"
-          />
-          <JobProgress
-            job={null}
-            failed={ARTICLE_IS_BUSY}
-            blocking={DESIGN_JOB.blocking}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}
@@ -696,11 +663,10 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           trying. Then a real failure message out of{" "}
           <code className="design-token">src/messages.ts</code>, not a placeholder — the failure copy
           has to be read at the width it will actually wrap at. Its rules are in
-          docs/project/copy.md, and the bracketed code at the end is deliberate. The last is the
-          refusal that arrives when the article already has an import running: the button stays, and
-          under it is the job that is in the way, in the same words and with the same Stop as any
-          other running job — because the reader was previously told to stop something no surface
-          showed them.
+          docs/project/copy.md, and the bracketed code at the end is deliberate. There was a
+          seventh — the refusal that arrived when the article already had an import running, with
+          the blocking job drawn under the button. It went on 2026-09-02: a second job on one
+          article is queued now rather than refused, so it appears as the queued shape above.
         </p>
       </section>
 

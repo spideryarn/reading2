@@ -28,7 +28,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
-import { publicArticle, publicMetadata } from "../src/public/dto.js";
+import { publicArticle } from "../src/public/dto.js";
 import type {
   Arc,
   Block,
@@ -1042,59 +1042,6 @@ describe("the artefacts a shared link carries", () => {
       expect(key in bare, key).toBe(false);
     }
   });
-});
-
-describe("the public metadata payload", () => {
-  const built = publicMetadata({
-    slug: "noema",
-    title: "The mythology of conscious AI",
-    headingTitle: null,
-    available: {
-      arc: true,
-      tweets: false,
-      glossary: true,
-      ideas: false,
-      quotes: false,
-    },
-  });
-
-  /**
-   * **A handful of booleans and a title.** The owner's `ArticleMetadata` carries `dir`,
-   * the whole of `stages` — internal paths, column names, run times, byte
-   * counts — plus `comments`, `profile`, `purpose` and `archivedAt`. None of it
-   * is a visitor's business and most of it is about us rather than about the
-   * article.
-   */
-  it("has exactly the keys it is allowed", () => {
-    expect(keyPaths(built)).toEqual(
-      [
-        "available",
-        "available.arc",
-        "available.glossary",
-        "available.ideas",
-        "available.quotes",
-        "available.tweets",
-        "slug",
-        "title",
-      ].sort(),
-    );
-  });
-
-  it("and says which artefacts exist, which is what it is for", () => {
-    expect(built.available).toEqual({
-      arc: true,
-      tweets: false,
-      glossary: true,
-      ideas: false,
-      quotes: false,
-    });
-  });
-
-  for (const forbidden of ["dir", "stages", "comments", "profile", "purpose", "archivedAt"]) {
-    it(`has no ${forbidden}`, () => {
-      expect(keyPaths(built)).not.toContain(forbidden);
-    });
-  }
 });
 
 /**

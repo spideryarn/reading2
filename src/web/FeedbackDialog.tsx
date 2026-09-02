@@ -1,5 +1,6 @@
 /**
- * "Something went wrong" — three boxes, a tick-box, and somewhere for it to go.
+ * "Tell us" — one box, a toggle, a microphone, a tick-box, and somewhere for it
+ * to go.
  *
  * Greg, 2026-08-31, asking for this:
  *
@@ -9,10 +10,49 @@
  * > should always send the user-email. It should give them the option
  * > (default-false) to send extra diagnostics.
  *
- * The whole design, and the arguments behind each decision, are in
+ * It had exactly that, in three boxes, and on 2026-09-02 he asked for the
+ * opposite:
+ *
+ * > It has three input boxes. I worry that will be intimidating/off-putting to
+ * > users, so let's combine them into one, with combined instructions (and
+ * > perhaps a tooltip with extra guidance/reassurance). And add some kind of
+ * > indication of our appreciation for them making the effort to provide
+ * > feedback at the top of the dialog box.
+ * >
+ * > Maybe also add toggle for "Bug/problem" vs "Suggestion".
+ *
+ * Three boxes is a form. A form is what you fill in once you have *decided* to
+ * file a bug — and the reader this whole feature exists for is the one who was
+ * merely annoyed and would otherwise close the tab.
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
+ *
+ * The original design, and the arguments behind each decision, are in
  * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. This file is
  * the reader-facing half; `POST /api/feedback` in src/routes.ts is the other,
  * and the row it writes is the authoritative copy of the report.
+ *
+ * ## What the toggle starts as
+ *
+ * Nothing. Greg: *"don't default to Problem. Default to null/unknown."* So the
+ * two are `aria-pressed` buttons rather than radios — pressing the pressed one
+ * puts it back to unset, which a native radio group cannot do, and there is
+ * nothing to explain about a third "not sure" option that does not exist.
+ *
+ * ## The microphone, and the two ways it can lose what was said
+ *
+ * `useDictationField`, the same three lines every other box uses
+ * (docs/project/dictation.md). Two guards are specific to *this* box, and both
+ * were GPT Sol's, 2026-09-02:
+ *
+ * - **Send is refused while the microphone is on.** `dictate.readOnly` is only
+ *   the two seconds *after* stop, so a guard on it alone would let ⌘+Enter file
+ *   the rough half-transcribed words while the reader was still talking.
+ *   `armed` is the other half.
+ * - **Closing the dialog stops the microphone.** This component is mounted for
+ *   the life of the page — FeedbackButton renders it whether or not it is open
+ *   — so Escape does not unmount anything, and without the effect below the
+ *   recorder would go on running behind a closed dialog with the browser's
+ *   recording indicator lit.
  *
  * ## It is a native `<dialog>`, following Lightbox.tsx
  *
@@ -26,9 +66,9 @@
  *
  * **AnnotateDialog would have been the wrong precedent for a second reason**, and
  * it is the one that would have hurt: its first Escape *clears the box*. Here
- * there are three populated boxes to lose, and a reader who has just typed out
- * what went wrong is the last person in the app who should be able to lose it to
- * one keystroke. GPT Sol's review of the plan, 2026-08-31.
+ * there is a populated box to lose, and a reader who has just typed out what
+ * went wrong is the last person in the app who should be able to lose it to one
+ * keystroke. GPT Sol's review of the plan, 2026-08-31.
  *
  * ## The report id is minted when the dialog opens, not when Send is pressed
  *
@@ -39,17 +79,23 @@
  * cannot file the same bug twice there either. Mint it per opening and the
  * property holds; mint it per click and there is no idempotency at all.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy, LoaderCircle, Mail, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Bug, Check, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
 
 import { ADMIN_EMAIL } from "../admin.js";
 import { mintId } from "../ids.js";
 import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
-import { MAX_FEEDBACK_ANSWER_CHARS, type FeedbackRouteKind } from "../types.js";
+import {
+  MAX_FEEDBACK_ANSWER_CHARS,
+  type FeedbackKind,
+  type FeedbackRouteKind,
+} from "../types.js";
 import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
+import { useDictationField } from "./useDictationField.js";
 
 declare const __SPIDERYARN_BUILD_COMMIT__: string;
 
@@ -90,18 +136,23 @@ interface Shot {
 }
 
 /** What the reader would paste into an email if the send never works. */
-function asPlainText(
-  answers: { steps: string; expected: string; actual: string },
-  where: FeedbackWhere,
-): string {
+function asPlainText(body: string, kind: FeedbackKind | null, where: FeedbackWhere): string {
   return [
-    `Steps to reproduce:\n${answers.steps || "(blank)"}`,
-    `What I expected to see:\n${answers.expected || "(blank)"}`,
-    `What I saw instead:\n${answers.actual || "(blank)"}`,
+    /* The kind goes in too. Without it, the one copy of the report that survives
+       a failed send is the one that has lost whether the reader called it a
+       problem or a suggestion. GPT Sol, 2026-09-02. */
+    `Kind: ${kind === null ? "not specified" : KIND_LABEL[kind]}`,
+    body,
     `Page: ${where.routeKind}${where.slug ? ` / ${where.slug}` : ""}`,
     `Build: ${buildCommit() ?? "unknown"}`,
   ].join("\n\n");
 }
+
+/** What each kind is called, in one place — the buttons and the copied text. */
+const KIND_LABEL: Record<FeedbackKind, string> = {
+  problem: "A problem",
+  suggestion: "A suggestion",
+};
 
 /**
  * **The request body, built field by field.**
@@ -115,7 +166,8 @@ function asPlainText(
  */
 function reportBody(input: {
   id: string;
-  answers: { steps: string; expected: string; actual: string };
+  body: string;
+  kind: FeedbackKind | null;
   consented: boolean;
   where: FeedbackWhere;
   diagnostics: FeedbackDiagnosticsV1 | null;
@@ -123,9 +175,8 @@ function reportBody(input: {
 }) {
   return {
     id: input.id,
-    steps: input.answers.steps.trim() || null,
-    expected: input.answers.expected.trim() || null,
-    actual: input.answers.actual.trim() || null,
+    body: input.body.trim(),
+    kind: input.kind,
     consented: input.consented,
     routeKind: input.where.routeKind,
     slug: input.where.slug,
@@ -142,14 +193,17 @@ function buildCommit(): string | null {
 
 export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  /** The one box. `useDictationField` needs it to find the caret. */
+  const box = useRef<HTMLTextAreaElement>(null);
   /* Lightbox.tsx § closingOurselves, and the same trap: `close()` fires the same
      `close` event Escape does, so without this our own "shut it" comes straight
      back as a second `onClose`. */
   const closingOurselves = useRef(false);
 
-  const [steps, setSteps] = useState("");
-  const [expected, setExpected] = useState("");
-  const [actual, setActual] = useState("");
+  const [body, setBody] = useState("");
+  const [kind, setKind] = useState<FeedbackKind | null>(null);
+  /** The "what helps" guidance, shut until somebody wants it. */
+  const [helpOpen, setHelpOpen] = useState(false);
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -244,9 +298,9 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
    * report is filed, on the reader's way out of the thank-you panel.
    */
   const discard = useCallback(() => {
-    setSteps("");
-    setExpected("");
-    setActual("");
+    setBody("");
+    setKind(null);
+    setHelpOpen(false);
     setConsented(false);
     setShot(null);
     setShotProblem(null);
@@ -294,11 +348,67 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
     });
   }, []);
 
-  const somethingSaid = steps.trim() !== "" || expected.trim() !== "" || actual.trim() !== "";
+  const somethingSaid = body.trim() !== "";
+  /* Only once it matters. A character counter under a box a person is being
+     encouraged to write freely in is a form asking to be filled in correctly. */
+  const over = body.length > MAX_FEEDBACK_ANSWER_CHARS;
+
+  /**
+   * **The microphone, on the one box.** docs/project/dictation.md § Adding it to
+   * a box — three lines, and the only decision a caller makes is `context`,
+   * which says *where* rather than *what*.
+   *
+   * The two kinds that exist are the right two. On an article the server primes
+   * the transcript with that article's glossary and proper nouns, which is
+   * exactly the vocabulary of somebody describing what went wrong on the page in
+   * front of them; anywhere else it primes with the app's own words and the
+   * reader's own profile prose. A third `Where` kind for feedback would buy
+   * nothing these two do not already give.
+   */
+  const dictate = useDictationField({
+    value: body,
+    onChange: setBody,
+    box,
+    context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
+  });
+
+  /**
+   * **Nothing may be sent while the microphone is involved**, and that is two
+   * states rather than one.
+   *
+   * `readOnly` is `transcribing` alone — the two seconds *after* the reader
+   * presses stop. A guard on that by itself leaves the case that actually
+   * happens: press Cmd+Enter while still talking, and the report goes with
+   * Chrome's rough live guesses in it, or with nothing at all on a browser that
+   * has no live recogniser — and the microphone is still on over the thank-you
+   * panel. `armed` is the other half. GPT Sol, 2026-09-02.
+   */
+  const dictationBusy = dictate.dictation.armed || dictate.readOnly;
+
+  /**
+   * **Shutting the dialog stops the microphone.**
+   *
+   * This component is mounted for the whole life of the page — FeedbackButton
+   * renders it open or shut — so Escape, Cancel, the close button and the
+   * backdrop all merely flip a prop, and `useDictation`'s cleanup, which runs on
+   * *unmount*, never runs at all. Without this the recorder keeps going behind a
+   * closed dialog with the browser's recording light on. GPT Sol, 2026-09-02.
+   *
+   * `dictation.toggle` and not `dictate.toggle`: the field wrapper deliberately
+   * puts the focus back in the textarea, which is inside a dialog that has just
+   * closed. Stopping rather than aborting, so the words already said are still
+   * in the draft when the reader comes back to it.
+   */
+  useEffect(() => {
+    if (!open && dictate.dictation.armed) dictate.dictation.toggle();
+  }, [open, dictate.dictation.armed, dictate.dictation.toggle]);
 
   const send = useCallback(async () => {
     if (sending.current) return;
     if (!somethingSaid) return;
+    /* The microphone is still on, or the good words are still on their way.
+       Either way the draft is not what the reader means to send yet. */
+    if (dictationBusy) return;
     /* **A screenshot still being re-encoded is not a screenshot to send.** Paste
        a large image and press ⌘+Enter in the same second and the POST would
        otherwise be built with `shot === null` — the report goes without the
@@ -336,7 +446,8 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
         body: JSON.stringify(
           reportBody({
             id: mine,
-            answers: { steps, expected, actual },
+            body,
+            kind,
             consented,
             where,
             diagnostics,
@@ -369,22 +480,19 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
       sending.current = false;
       setStage({ kind: "failed", message: FEEDBACK_SEND_FAILED.message });
     }
-  }, [reportId, somethingSaid, preparing, consented, steps, expected, actual, where, shot]);
+  }, [reportId, somethingSaid, preparing, consented, body, kind, where, shot, dictationBusy]);
 
   const copy = useCallback(() => {
     const clipboard = navigator.clipboard;
     if (!clipboard) return setCopyFailed(true);
     void clipboard
-      .writeText(asPlainText({ steps, expected, actual }, where))
+      .writeText(asPlainText(body, kind, where))
       .then(() => {
         setCopied(true);
         setCopyFailed(false);
       })
       .catch(() => setCopyFailed(true));
-    /* The three strings, not the `answers` object built from them — that one is
-       a new object on every render, so naming it here would be a dependency
-       that always differs and a `useCallback` that never caches. */
-  }, [steps, expected, actual, where]);
+  }, [body, kind, where]);
 
   return (
     /* The click handled below is the backdrop, whose keyboard equivalent is
@@ -394,7 +502,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
     <dialog
       ref={ref}
       className="fb-dialog"
-      aria-label="Report a problem"
+      aria-label="Feedback"
       onClose={() => {
         if (closingOurselves.current) return;
         onClose();
@@ -462,14 +570,24 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
         }}
       >
         <div className="fb-head">
-          <h2 className="fb-title">Report a problem</h2>
+          <h2 className="fb-title">Feedback</h2>
           <button type="button" className="fb-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
+        {/* **The thanks goes first**, because it is the reason to keep reading
+            rather than a sign-off. Greg asked for "some kind of indication of our
+            appreciation for them making the effort", and it is true in a way
+            that is worth a reader knowing: most of what goes wrong in this app
+            never throws, so nothing tells us about it unless a person does. */}
+        <p className="fb-thanks">
+          Thank you — telling us is genuinely the most useful thing you can do
+          with two minutes here.
+        </p>
+
         <p className="fb-intro">
-          Fill in whichever of these you can — one is enough.
+          A rough note is worth far more than nothing.
           {readerEmail ? (
             <>
               {" "}
@@ -478,19 +596,86 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
           ) : null}
         </p>
 
-        <Answer
-          label="Steps to reproduce"
-          hint="What you did, in order."
-          value={steps}
-          onChange={setSteps}
-        />
-        <Answer
-          label="What you expected to see"
-          hint=""
-          value={expected}
-          onChange={setExpected}
-        />
-        <Answer label="What you saw instead" hint="" value={actual} onChange={setActual} />
+        {/* **Two buttons rather than radios**, so that pressing the pressed one
+            puts it back to unset — Greg asked for the toggle to start on
+            neither, and a native radio group cannot be un-picked. `aria-pressed`
+            is what says so to a screen reader, and the `<legend>` is what stops
+            two toggles standing there unnamed. */}
+        <fieldset className="fb-kind">
+          <legend className="fb-kind-legend">Is this…</legend>
+          <KindButton
+            kind="problem"
+            chosen={kind}
+            onChoose={setKind}
+            icon={<Bug size={14} aria-hidden="true" />}
+          />
+          <KindButton
+            kind="suggestion"
+            chosen={kind}
+            onChoose={setKind}
+            icon={<Lightbulb size={14} aria-hidden="true" />}
+          />
+        </fieldset>
+
+        <label className="fb-field">
+          <span className="fb-label">What happened, or what would you like?</span>
+          <textarea
+            ref={box}
+            className="fb-input fb-body"
+            rows={6}
+            value={body}
+            readOnly={dictate.readOnly}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="In your own words…"
+          />
+        </label>
+
+        <div className="fb-under-box">
+          {/* The microphone, for a reader who would rather say it than type it.
+              Hidden entirely where the browser cannot open one, the way every
+              other box in the app does it. */}
+          {dictate.dictation.supported && (
+            <DictationButton
+              dictation={dictate.dictation}
+              toggle={dictate.toggle}
+              disabled={stage.kind === "sending"}
+            />
+          )}
+          {/* **A disclosure rather than a hover tooltip.** Greg asked for
+              "perhaps a tooltip"; this dialog is a modal `<dialog>` painted in
+              the top layer and the house tooltip portals to `document.body`,
+              which is underneath it — and hover-only guidance is invisible on a
+              phone. A line that opens is the same help without either problem. */}
+          <button
+            type="button"
+            className="fb-help-toggle"
+            aria-expanded={helpOpen}
+            onClick={() => setHelpOpen((was) => !was)}
+          >
+            {helpOpen ? "Hide the hints" : "Not sure what to write?"}
+          </button>
+        </div>
+        <DictationStrip dictation={dictate.dictation} />
+
+        {helpOpen ? (
+          <div className="fb-help">
+            <p>
+              If something went wrong, the three things that help most are what you were
+              doing, what you expected, and what happened instead — in any order, in as
+              few words as you like.
+            </p>
+            <p>
+              Don't polish it. A half-sentence we can ask you about beats a tidy report
+              you never send, and nobody is going to judge the writing.
+            </p>
+          </div>
+        ) : null}
+
+        {over ? (
+          <span className="fb-over">
+            {body.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
+          </span>
+        ) : null}
 
         <div className="fb-shot">
           <span className="fb-shot-label">Screenshot (optional)</span>
@@ -564,7 +749,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
               <a
                 className="fb-copy"
                 href={`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
-                  `Spideryarn bug report ${reportId}`,
+                  `Spideryarn feedback ${reportId}`,
                 )}`}
               >
                 <Mail size={14} />
@@ -579,7 +764,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
             {copyFailed ? (
               <p className="fb-shot-problem">
                 Your browser would not let us reach the clipboard. Select the text
-                in the boxes above and copy it by hand.
+                in the box above and copy it by hand.
               </p>
             ) : null}
           </div>
@@ -592,7 +777,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
           <button
             type="submit"
             className="fb-send"
-            disabled={!somethingSaid || stage.kind === "sending" || preparing}
+            disabled={!somethingSaid || stage.kind === "sending" || preparing || dictationBusy}
           >
             {stage.kind === "sending" ? (
               <>
@@ -603,6 +788,11 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
               <>
                 <LoaderCircle className="cmt-spinner" size={14} />
                 Adding the picture
+              </>
+            ) : dictate.readOnly ? (
+              <>
+                <LoaderCircle className="cmt-spinner" size={14} />
+                Writing that down
               </>
             ) : (
               "Send"
@@ -615,37 +805,35 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   );
 }
 
-function Answer({
-  label,
-  hint,
-  value,
-  onChange,
+/**
+ * One half of the toggle, and **pressing it while it is pressed clears it**.
+ *
+ * That is the whole reason these are buttons rather than radios: Greg asked for
+ * the toggle to start unset, and a reader who picks the wrong one should be able
+ * to put it back rather than being stuck with a classification they did not
+ * mean. A radio group has no such move.
+ */
+function KindButton({
+  kind,
+  chosen,
+  onChoose,
+  icon,
 }: {
-  label: string;
-  hint: string;
-  value: string;
-  onChange(next: string): void;
+  kind: FeedbackKind;
+  chosen: FeedbackKind | null;
+  onChoose(next: FeedbackKind | null): void;
+  icon: ReactNode;
 }) {
-  const over = value.length > MAX_FEEDBACK_ANSWER_CHARS;
+  const pressed = chosen === kind;
   return (
-    <label className="fb-field">
-      <span className="fb-label">
-        {label}
-        {hint ? <span className="fb-hint"> {hint}</span> : null}
-      </span>
-      <textarea
-        className="fb-input"
-        rows={3}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      {/* Only once it matters. A character counter under every box turns three
-          plain questions into a form. */}
-      {over ? (
-        <span className="fb-over">
-          {value.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
-        </span>
-      ) : null}
-    </label>
+    <button
+      type="button"
+      className="fb-kind-button"
+      aria-pressed={pressed}
+      onClick={() => onChoose(pressed ? null : kind)}
+    >
+      {icon}
+      {KIND_LABEL[kind]}
+    </button>
   );
 }

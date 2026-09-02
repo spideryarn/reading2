@@ -146,15 +146,16 @@ describe("a single-step job on an instance that never ingested the article", () 
    * entire fixture, and `coldContext()` must never be given a directory with an
    * article in it.
    *
-   * **But production does not yet hand the step a store like this one.**
-   * src/jobs.ts still builds `fsStoreSession({ artifacts: fsArtifacts })`, and
-   * on a deployment that store is rooted at the same job-scoped `/tmp` the
-   * directory is. So the production failure of 2026-08-30 is still there; it
-   * now arrives as *"No blocks or tree … run the hierarchy step first"* rather than
-   * as an `ENOENT` from three layers down. **These tests are the stage being
-   * ready for a store that can see the article, not evidence that one exists.**
-   * The line that makes it exist is the `pgStoreSession` swap in stage 3, and
-   * this file is what will say it worked.
+   * **Production hands the step a store like this one, since 2026-09-01.** This
+   * paragraph said the opposite for a day after the work landed, and it is kept
+   * rather than deleted because the thing it warned about was real: while
+   * src/jobs.ts built `fsStoreSession({ artifacts: fsArtifacts })`, a deployment
+   * rooted that store at the same job-scoped `/tmp` as the directory, so these
+   * cases were *the stage being ready for a store that can see the article, not
+   * evidence that one exists*. `claimSession` returns `openPgStoreSession` under
+   * `SPIDERYARN_STORE=postgres` now — commit `c42c940`,
+   * docs/plans/260830aq-late-steps-read-the-store.md — and
+   * tests/claim-session-postgres.test.ts is the end-to-end case that says so.
    *
    * The two stages here are the two that failed in production. The other five
    * — `glossary`, `ideas`, `quotes`, `sketch` and `assets` — took the identical

@@ -191,7 +191,6 @@ export function QuizPanel({
     <JobProgress
       job={owner.job}
       failed={owner.failed}
-      blocking={owner.blocking}
       stalled={owner.stalled}
       onRun={() => owner.write()}
       onCancel={owner.cancel}

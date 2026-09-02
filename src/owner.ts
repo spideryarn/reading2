@@ -127,16 +127,10 @@ export const DEV_OWNER_EMAIL = process.env.SPIDERYARN_OWNER_EMAIL ?? "dev@spider
  * browser. A separate owner is what actually isolates it, because
  * `GET /api/jobs` lists by owner.
  *
- * The id sits one along from `DEV_OWNER_ID` deliberately, and **not** in the
- * `…0000e1` block, which `tests/store-export-isolation.test.ts` already claims
- * for a fixture article — `tests/fixture-ids.test.ts` is the guard that caught
- * the first choice, and two different things wearing one uuid in one database is
- * exactly what it exists to prevent.
- *
  * Raised by GPT Sol reviewing the cost runner, 2026-09-02;
  * docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md.
  */
-export const EVAL_OWNER_ID = "00000000-0000-4000-8000-000000000002" as OwnerId;
+export const EVAL_OWNER_ID = "00000000-0000-4000-8000-0000000000e1" as OwnerId;
 
 /** Deliberately not a real address, for the reason `DEV_OWNER_EMAIL` gives. */
 export const EVAL_OWNER_EMAIL = "eval@spideryarn.local";

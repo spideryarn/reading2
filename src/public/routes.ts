@@ -157,7 +157,6 @@ export interface PublicRoute extends PublicRouteName {
  */
 const READS: Record<string, (slug: string) => Promise<unknown>> = {
   article: (slug) => pgPublicReader.loadArticle(slug),
-  metadata: (slug) => pgPublicReader.loadMetadata(slug),
 };
 
 /**
@@ -300,9 +299,12 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
 
      A loop over `PUBLIC_ROUTES` rather than one `if` per route, so that the
      four checks happen once and a route added later cannot be added with three
-     of them. The authenticated half is deliberately still an `if` chain — see
-     `serveAuthenticatedApi` — because it has forty routes with genuinely
-     different shapes; this has two that differ only in which read they call. */
+     of them. **A loop over one route, since `metadata` was deleted on
+     2026-09-02, and it stays a loop**: the four checks and the three sweeps
+     that drive off this inventory are what make the next route safe to add, and
+     unrolling them into an `if` would hand that back. The authenticated half is
+     deliberately still an `if` chain — see `serveAuthenticatedApi` — because it
+     has forty routes with genuinely different shapes. */
   for (const route of PUBLIC_ROUTES) {
     const matched = route.pattern.exec(path);
     if (!matched) continue;

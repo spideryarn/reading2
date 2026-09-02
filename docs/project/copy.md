@@ -146,9 +146,8 @@ family of reader-facing messages in the app without one.
 `mic-` family in the one way that matters: they carry **no bracketed code at
 all**. They live in [`src/job-state.ts`](../../src/job-state.ts) —
 `WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `KEEP_A_TAB_OPEN`,
-`DRIVER_STALLED`, `RUNNING_A_WHILE`, `ARTICLE_IS_BUSY`, `WORKING_ON_THIS_ARTICLE` and
-`STEP_USUALLY_A_COUPLE_OF_MINUTES` — beside `displayJob`, which is the one place that decides
-what state an import is in.
+`DRIVER_STALLED`, `RUNNING_A_WHILE` and `STEP_USUALLY_A_COUPLE_OF_MINUTES` — beside `displayJob`,
+which is the one place that decides what state an import is in.
 
 Not in `src/messages.ts` for the same reason as the `mic-` family: that file is
 about **failures a model call can return**, and *"Waiting to continue."* is not a
@@ -163,21 +162,21 @@ running for a while"* would invite a bug report about a step that is working. Th
 import can have already have codes, and they come from `src/messages.ts` through
 `failureKind` as they always did.
 
-**`ARTICLE_IS_BUSY` tests that argument, because it is the first of the family
-the *server* raises and the first that is a refusal** — the 409 you get for
-asking for work on an article that already has a job in flight. It still carries
-no code, and the reason is worth stating rather than inheriting: **a 409 here is
-an answer, not a fault.** The reader asked for something, and the reply says why
-not, names the job in the way, and puts a Stop button next to it. There is
-nothing to report and nothing to quote. A code would invite a bug report about
-the system working.
+**There was a `ARTICLE_IS_BUSY` in that family and it is worth saying why it went**, because the
+argument it was used to test is still the argument. It was the 409 you got for asking for work on an
+article that already had a job in flight — the first of the family the *server* raised, and the first
+that was a refusal — and it carried no code, on the reasoning that **a 409 there was an answer, not a
+fault**: the reader asked for something, the reply said why not and put a Stop button beside the job
+in the way, and a code would have invited a bug report about the system working.
 
-It also says nothing about *state* — not "already running", which the old
-sentence said and which was untrue whenever the blocking job was idle in
-`queued`. The client has the job itself now, so `displayJob` says *Building the
-hierarchy · 2m 14s* or *Waiting to continue.* live, from the one vocabulary. A
-state word baked into a server sentence is a second account, and it arrives
-stale.
+The refusal is gone. A second, different job on one article is queued now rather than turned away
+([ingest-queue.md](ingest-queue.md)), so the sentence has nothing to be about and was deleted with
+it on 2026-09-02, along with `WORKING_ON_THIS_ARTICLE`, the label its band borrowed. What survives is
+the rule: **a refusal that is an answer gets no code**, and a server sentence says nothing about
+*state* — the old one said "already running" of a job that might be idle in `queued`, and the client
+has the job itself, so `displayJob` says *Building the hierarchy · 2m 14s* or *Waiting to continue.*
+live, from the one vocabulary. A state word baked into a server sentence is a second account, and it
+arrives stale.
 
 The `db-` pair also marks the **second widening of `src/messages.ts`**, after
 `UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts

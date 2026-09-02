@@ -1,15 +1,25 @@
 # Late steps read the store, not `ctx.dir`
 
-**Status:** plan, unbuilt. The repro is in the tree at
-`tests/late-step-on-a-cold-instance.test.ts` and it is **green, because it asserts the defect**:
-its two live cases expect `ENOENT` on `blocks.json` rather than a result. It was unmarked and red
-until 2026-08-31, and was pinned this way so that `npm test` stays a gate several agents can read —
-the fault has to stay visible without the suite going permanently red
-([code-quality-overview.md](../project/code-quality-overview.md)).
+**Status: built.** Corrected 2026-09-02 — this line said `plan, unbuilt` for a day after the work
+landed, and [260902e](260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md)
+was planned around it as a blocker before the code was checked. A status line is read as a fact,
+so a stale one is worse than none.
 
-**When this plan is built, flip both cases back to their `.resolves` form**, which is written out in
-a comment beside each one. The regex names the exact failure, so the test reddens if the defect
-disappears *and* if it turns into a different error — which `it.fails` would not.
+`claimSession` ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under
+`SPIDERYARN_STORE=postgres` a claim gets `openPgStoreSession({slug, job})`, whose reads are the
+article's draft revision through `readsPgArtifacts`, not a job-scoped `/tmp`. Every late step's
+`run` takes the article through `readArticle(ctx.slug, store)`. `publish-session.ts`, the decorator
+that wrapped a filesystem session, was deleted with it. Commit `c42c940`, 2026-09-01.
+
+`tests/late-step-on-a-cold-instance.test.ts` was flipped back to its `.resolves` form in `cc2b67d`
+and passes; `tests/claim-session-postgres.test.ts` § *"runs a late single step that reads the
+article from the store, not from its empty root"* is the end-to-end case, ingesting under one job id
+and running `["arc"]` under a second.
+
+> **What follows was written before the work and is kept as the diagnosis**, which was right. The
+> repro was pinned green-asserting-the-defect so that `npm test` stayed a gate several agents could
+> read, rather than left permanently red
+> ([code-quality-overview.md](../project/code-quality-overview.md)).
 
 ## What happened
 

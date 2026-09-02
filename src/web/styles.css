@@ -12647,6 +12647,97 @@ table.only-prose thead { display: none; }
 .fb-input:focus-visible { outline: 1px solid var(--highlight); outline-offset: -1px; }
 .fb-over { font-size: 0.72rem; color: var(--highlight); }
 
+/* One box now, so it gets the height the three used to have between them.
+   docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md. */
+.fb-body { min-height: 7.5rem; }
+
+/* **The thanks, and it is the first thing in the panel.** Warmer than the
+   intro under it — `--ink` rather than `--ink-soft` — because a sentence in the
+   same grey as the instructions reads as more instructions. */
+.fb-thanks {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+/* Problem / Suggestion. Two toggles that behave as one choice, and neither is
+   pressed to begin with — FeedbackDialog.tsx says why they are not radios. */
+.fb-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* A `<legend>` inside a flex `<fieldset>` is not a flex item in every engine, so
+   it is taken out of the flow and set inline instead — the label reads as part of
+   the row rather than floating above it. */
+.fb-kind-legend {
+  float: left;
+  padding: 0 0.4rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.9;
+}
+.fb-kind-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.fb-kind-button:hover { color: var(--ink); border-color: var(--ink-faint); }
+.fb-kind-button:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+/* The pressed one is the state, so it is the attribute that carries the look —
+   one source of truth for "chosen", shared by the screen reader and the eye. */
+.fb-kind-button[aria-pressed="true"] {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: color-mix(in oklch, var(--highlight) 12%, transparent);
+}
+
+/* The microphone and the hints link share a line under the box. */
+.fb-under-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.fb-help-toggle {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.fb-help-toggle:hover { color: var(--highlight); }
+.fb-help-toggle:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+.fb-help {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.fb-help p { margin: 0; }
+
 .fb-shot { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-shot-label { font-size: 0.78rem; font-weight: 600; }
 /* **`--rule-strong`, not `--rule`, and the reason is worth writing down because
