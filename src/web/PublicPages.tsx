@@ -186,6 +186,7 @@ export function VisitorPage({
   gap,
   available,
   signedIn,
+  sessionUnconfirmed,
 }: {
   slug: string;
   article: Article;
@@ -206,6 +207,8 @@ export function VisitorPage({
   available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /** For the notice at the foot — reader-capability.ts § sessionUnconfirmed. */
+  sessionUnconfirmed: boolean;
 }) {
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
   return (
@@ -216,6 +219,33 @@ export function VisitorPage({
           {article.meta.title}
         </h1>
         <VisitorNotice gap={gap} signedIn={signedIn} />
+        {/* **The read-only chrome, which this page went without until
+            2026-09-02** — and it was the only one of the four visitor pages
+            missing it (`PublicMetadataPage` above, and the thread arm below).
+            A comment here called that deliberate, on the grounds that
+            `VisitorNotice` is about the artefact rather than about the page.
+            Both of those are true and the conclusion did not follow: a reader
+            whose session could not be confirmed lost the fact *and* the
+            *Continue signed out* button by clicking Tweets on a piece that has
+            no thread — the default state of most articles. `VisitorArticle`
+            states the opposite guarantee in as many words (App.tsx §
+            `sessionUnconfirmed`: the explanation goes to all three views
+            precisely because the other two are one click away), so the comment
+            was claiming a gap was a decision. GPT Sol, reviewing stage 1b.
+
+            **Below the sentence above it, not beside the title**, which is where
+            the metadata page puts it. Two reasons, and the second is the one
+            that decided it. The thread arm below puts it at the foot too, so the
+            two halves of `/read/:slug/tweets` differ by whether there is a
+            thread rather than by where the chrome sits. And stacked the other
+            way — *we couldn't confirm you're signed in* directly above *nobody
+            has built a tweet thread* — the page invites the reader to read the
+            second as a consequence of the first, which is the one thing it must
+            not say. `SharedNotice`'s own ordering rule, one level up: the thing
+            the reader came for first, the news about their session second. */}
+        <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
+          <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
+        </div>
       </main>
       <VisitorDock slug={slug} view={view} available={available} signedIn={signedIn} />
     </>
@@ -257,9 +287,9 @@ export function VisitorTweetsPage({
   signedIn: boolean;
   /**
    * For the notice at the foot of the page — reader-capability.ts §
-   * sessionUnconfirmed. The no-thread arm below draws `VisitorNotice` instead,
-   * which is about this artefact rather than about this page, so it does not
-   * take it.
+   * sessionUnconfirmed. **Both arms take it**: the no-thread one draws
+   * `VisitorNotice` about the artefact *and* this about the page, for the reason
+   * written where it lands in `VisitorPage`.
    */
   sessionUnconfirmed: boolean;
 }) {
@@ -274,6 +304,7 @@ export function VisitorTweetsPage({
         gap={notBuiltGap("tweets")}
         available={available}
         signedIn={signedIn}
+        sessionUnconfirmed={sessionUnconfirmed}
       />
     );
   }
