@@ -134,6 +134,35 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+
+## A change to the box is a change to a file
+
+Anything you do to this box that should still be true next week — an apt package, a `sudo` install,
+a key in `.env.local`, a config file, an MCP server, and plenty this list does not name — is a change
+to **two** things: this box now, and the file that builds the next one. Do only the first and it is
+gone at the next rebuild, and no box after this one ever has it.
+
+**Ask Greg first, and offer both**: this box now, *and* every box after it. He may want only one;
+what he should not have to do is notice that you did half.
+
+The usual homes, not all of them:
+
+| What you changed | Where it lives going forwards |
+| --- | --- |
+| A package, a tool, a config file | [`provision.sh`](../../infra/hetzner/provision.sh) — re-runnable, so the only file that reaches boxes that already exist |
+| Something `provision.sh` needs before it can run | [`cloud-init.yaml`](../../infra/hetzner/cloud-init.yaml) — first boot only |
+| The machine: size, volume, firewall, keys | [`main.tf`](../../infra/hetzner/main.tf), `variables.tf` |
+| A key for `.env.local` | the allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) and [`.env.example`](../../.env.example) — `push-env` rebuilds the file, so a line typed on the box is gone at the next push |
+| An MCP server | [`.mcp.json`](../../.mcp.json) |
+
+Not everything is made permanent: a secret belonging to this machine alone stays in
+`~/.config/spideryarn/`, and anything you were only trying out stays a trial. When in doubt, that is
+the question to ask.
+
+The failure mode this exists for is the second copy, not the missing one —
+[The editor is `emacs -nw`](#the-editor-is-emacs--nw) is in `provision.sh` and deliberately not in
+cloud-init's `packages:` list as well.
+
 ## Running `gjd-remote` from the box
 
 `gjd-remote` is written to run **from the laptop**, and for a while that was the only place it ran.
