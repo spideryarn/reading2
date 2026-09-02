@@ -22,10 +22,34 @@ Cost-tracking and cost-estimating are **out of scope** — other agents are work
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota
 enforcement at the ingest choke points.
 
-**Status (2026-09-02)**: plan reviewed by GPT Sol (verdict: rework —
-[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)); all findings checked and
-folded into this revision. Every product question is decided — nothing is waiting on Greg. No
-implementation code exists yet; the only landed work is the env plumbing (first stage, marked ✅).
+**Status (2026-09-02)**: reviewed twice before building — GPT Sol on the plan (verdict: rework —
+[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)), then **Fable against the
+code**, which is the review that changed the design. Sol's hardening was sound but written in
+mechanisms this repo does not use, and one of its rules could not be implemented as stated. Both
+sets of findings are folded in below and marked where they landed. Every product question is
+decided — nothing is waiting on Greg. The first stage is built (✅); the build is in the worktree
+`stripe-payments`.
+
+**What Fable changed, in one place so it is not scattered:**
+
+1. **Postgres advisory locks → `select … for update` row locks.** This repo has no advisory locks
+   in production code; its cross-instance serialisation idiom is a row lock, and the worked example
+   is `src/store/pg-jobs.ts` (~`:445`) taking `for update nowait` on the `queue_state` singleton.
+   Same guarantee, house mechanism, none of the pool/connection-pinning traps that
+   `tests/helpers/run-lock.ts` exists to document.
+2. **"Admit and insert the job in the same transaction" cannot be built.** The insert is
+   `enqueueOrGet` (`src/store/pg-jobs.ts` ~`:362`), which is deliberately **not** a transaction —
+   it is a bounded retry loop of two pooled statements around `on conflict do nothing`, reached
+   only after `enqueue()`'s own slug loop, and it has a filesystem twin pinned by
+   `tests/store-jobs-parity.test.ts`. Admission therefore happens **at the route**, serialised per
+   owner by `for update` on that owner's `billing_accounts` row, held across the count and the
+   `enqueue()` call. Verified rather than taken on trust.
+3. **The ledger is not optional, and the reason is stronger than the plan said.** Jobs are
+   *reader-deletable* — `DELETE /api/jobs/:id` → `forgetJob` — so any count derived from job rows
+   is erasable by the person being counted. The ledger is the abuse boundary.
+4. **Two pieces of Checkout hardening dropped as over-built** — see the Checkout stage.
+5. **The files-store hole**, which neither earlier review saw: see *Billing is a Postgres feature*
+   below. It was the one unplanned thing that would have cost an afternoon.
 
 ## Picking this up
 
@@ -36,12 +60,15 @@ For an agent starting fresh, with no other context than this doc:
    (`claude --worktree stripe-payments`, then `npm run worktree:setup`), run it the
    [engineering-manager.md](../reusable/engineering-manager.md) way, commit each stage, land with
    `git push origin HEAD:dev`.
-2. **What already exists**: a Stripe account (Greg's, test mode); `STRIPE_SECRET_KEY`
-   (`sk_test_…`) in `.env.local` on the Hetzner box and Greg's laptop, and on the
-   `gjd-remote push-env` allowlist. **What does not**: no `stripe` npm package, no Stripe CLI on
-   the box, no Stripe product/price/portal-config objects, no billing code, no
-   `STRIPE_PRICE_READER` (create the price, then add the var to `.env.local`, `.env.example` and
-   the push-env allowlist — it is not a secret).
+2. **What already exists** (first stage, all ✅ below): a Stripe account (Greg's, test mode) with
+   the product, price and portal configuration created; `STRIPE_SECRET_KEY` and
+   `STRIPE_PRICE_READER` on the `gjd-remote push-env` allowlist and in `.env.example`; the
+   `stripe` package, the Stripe CLI, `src/billing/stripe.ts`, `scripts/stripe-setup.ts` and the
+   `/api/health` mode check. **What does not**: any of the database schema, the webhook, the
+   quota, the routes or the UI.
+   **One thing to check before your first run**: `STRIPE_PRICE_READER` was added to the
+   *worktree's* `.env.local`. If yours does not have it, run
+   `npx tsx scripts/stripe-setup.ts` — it is idempotent and prints the line.
 3. **The stages below are in build order** — start with the unfinished items of the first stage
    (Stripe CLI, product/price/portal via API), then the thin end-to-end round trip. Tests first
    in every stage, watched red before the fix ([AGENTS.md](../../AGENTS.md)); reader-visible
@@ -170,7 +197,26 @@ before adoption.
   until the cost-tracking work lands; the natural future choke point is the AI gateway
   ([ai-gateway.md](../project/ai-gateway.md)).
 
-### Quota accounting (reworked per Sol P1.1, P1.7, P2.5)
+### Billing is a Postgres feature, and says so out loud
+
+The store flag still has a `files` setting, it is still the default in `src/store/index.ts`, and
+`tests/store-jobs-parity.test.ts` exercises both halves. Quota does not work there: the ledger
+insert joins the *Postgres* publish transaction (`pg-session.ts` ~`:444`), which has no filesystem
+counterpart, and admission counts Postgres job rows.
+
+**So quota is enforced when `SPIDERYARN_STORE=postgres`, and not otherwise** — one implementation,
+no second code path, and no pretending. The two alternatives are worse: writing a filesystem ledger
+is the two-implementations-of-one-count trap this plan already rejected once, and refusing every
+ingest in files mode would break every default-configured laptop and most of the suite for a
+feature it is not testing.
+
+**And the hole this leaves cannot exist in production**: `src/store/index.ts` throws at *import*
+when a filesystem store is live in production, so the app does not start rather than serving
+unmetered ingests. Locally it is visible — `/api/health` already warns that
+`SPIDERYARN_STORE is '…'`, and CLAUDE.md has told every agent to run `postgres` since the move
+began. Documented in `docs/project/billing.md` rather than left to be discovered.
+
+### Quota accounting (reworked per Sol P1.1, P1.7, P2.5, then Fable)
 
 - **An unconditional append-only `ingest_events` ledger** is the source of truth for "successful
   ingests": immutable id, `owner_id`, unique successful job identity, `succeeded_at`
@@ -179,16 +225,33 @@ before adoption.
   deletion story but hard deletes exist in maintenance/tests, and one mechanism beats two
   conditional ones.
 - **Durable `counts_as_ingest` provenance on jobs**, set only by the authenticated new-ingest
-  route (and copied by a failed ingest's retry). `Job.url` cannot carry this — re-runs have URLs
-  too.
+  route. `Job.url` cannot carry this — re-runs recover the URL too (`src/jobs.ts` ~`:2068`,
+  checked). A **boolean**, not the nullable-timestamptz the schema's house style prefers for
+  "since when": the fact here is genuinely boolean, and `jobs.created_at` already says when.
+  **Three edits, not one** — the field goes on `EnqueueRequest` (`src/jobs.ts` ~`:1902`), is
+  threaded through `enqueue()` onto the job row, and is copied from the old job by `retryJob`
+  (~`:2558`), which builds a fresh request rather than reusing the old one.
+- **Two callers are deliberately outside the gate.** `POST /api/jobs/:id/retry` is a different
+  route and does not re-admit: the work was admitted once, and charging twice for one article
+  because the first attempt crashed is the wrong answer. CLI and script callers of `enqueue()`
+  never set the flag, so pipeline work and seeding are free. Both are properties to assert in
+  tests, not incidental.
 - **The ledger insert joins the same Postgres transaction** that publishes the revision and
-  finishes the job (`pg-session.ts` ~`:444`). After-completion inserts have a crash gap;
+  finishes the job — `settleIn()` in `pg-session.ts` (~`:423`–`:471`), the `ending.status ===
+  "done"` branch, which is the single place a successful ingest is published and is already
+  wrapped in `db.transaction(…)` by both its callers. After-completion inserts have a crash gap;
   before-publication inserts charge failures.
-- **Admission is atomic**: under a per-owner lock, count successful events **plus active
-  quota-marked jobs**, then admit and insert the job in the same transaction. Failed/cancelled
-  jobs stop occupying a reservation but never become a success event. This replaces the earlier
-  draft's "small acknowledged race", which Sol correctly called a scripted bypass: N concurrent
-  enqueues against a zero success-count all pass a count-only check.
+- **Admission is serialised per owner at the route**, not inside the job store: take
+  `for update` on the owner's `billing_accounts` row, count successful events **plus active
+  quota-marked jobs**, then call `enqueue()` while still holding it. Failed/cancelled jobs stop
+  occupying a reservation but never become a success event. This replaces the earlier draft's
+  "small acknowledged race", which Sol correctly called a scripted bypass — N concurrent enqueues
+  against a zero success-count all pass a count-only check — and it replaces Sol's own
+  "insert in the same transaction", which `enqueueOrGet` cannot honour (see the status note).
+- **A stuck job pins a reservation, and that is the safe direction.** A job wedged `queued` or
+  `running` counts against the owner until it settles, so the failure is a *false block* rather
+  than free ingests. The lease machinery already reaps these; the admission count does not
+  second-guess it. Noted rather than solved.
 - **Period arithmetic is half-open on database time**: `succeeded_at >= start AND < end`. If the
   stored period does not contain `now`, resync from Stripe once synchronously; if there is still
   no current period (or Stripe is down), **fail closed with 503** rather than allow spend — a
@@ -211,10 +274,13 @@ before adoption.
   pins an exact API version in `src/billing/stripe.ts`; sync validates exactly one supported
   recurring item at quantity one, and any unknown price/quantity/item combination **fails closed
   to free**, logged, rather than accidentally receiving Reader quota.
-- **`syncSubscriptionFromStripe(customerId)` is serialized per customer** with a Postgres
-  advisory lock spanning the **Stripe fetch and the write** — fetch-then-overwrite without the
-  lock lets a slow handler commit stale state after a newer one (restoring a cancelled
-  subscription, or reverting a renewal). It lists all the customer's subscriptions and applies a
+- **`syncSubscriptionFromStripe(customerId)` is serialized per customer** by `select … for
+  update` on that customer's `billing_accounts` row, held across the **Stripe fetch and the
+  write** — fetch-then-overwrite without it lets a slow handler commit stale state after a newer
+  one (restoring a cancelled subscription, or reverting a renewal). A row lock rather than an
+  advisory lock because that is what this repo already does
+  (`src/store/pg-jobs.ts` ~`:445`); the guarantee is Sol's, the mechanism is the house's.
+  It lists all the customer's subscriptions and applies a
   deterministic written policy: zero → free (customer mapping retained); one supported → current;
   multiple entitled → anomaly, logged and surfaced, never silently picked from. A late deletion
   event for a replaced subscription resyncs and retains the replacement.
@@ -226,11 +292,15 @@ before adoption.
 - **The handler awaits durable sync and returns 2xx only when state is synchronized**; Stripe or
   database failure returns 5xx so Stripe retries. Replays re-run the (idempotent) sync — "no-op"
   means same resulting state, not zero work.
-- **Customer creation is serialized per owner** (reuse the mapped customer; Stripe idempotency
-  keys for retries, but they expire after ~24h so the DB uniqueness is the real mechanism).
-  Checkout is refused (redirected to the Portal) when a non-terminal subscription exists; an open
-  unexpired Checkout Session is reused rather than a second one created. An abandoned Checkout
-  leaves only a reusable mapped customer.
+- **Customer creation reuses the mapped customer**, and the unique `stripe_customer_id` plus an
+  on-conflict re-read is the whole mechanism — *no lock*. Sol asked for serialisation here and
+  Fable was right that it buys nothing: the worst case a double-click can reach is an orphaned
+  Stripe customer with no subscription, which costs nothing and is invisible. Checkout is still
+  refused (redirected to the Portal) when a non-terminal subscription exists.
+  **Reusing an open Checkout Session is dropped too** — it needs stored session state and expiry
+  handling to defend against a double-click whose real worst case (two subscriptions) the
+  multiple-entitled anomaly policy above already catches, and abandoned sessions expire by
+  themselves.
 
 ### Security invariants (per Sol P1.4, P1.5, P2.6)
 
@@ -283,16 +353,59 @@ exact webhook route over a namespace; hosted surfaces over any owned billing UI.
 - [ ] **Greg (dashboard-only, optional now)**: Settings → Customer emails — receipts for
   successful payments, notifications for failed ones. Billing → Subscriptions: enable automatic
   subscription cancellation on dispute; review dunning/retry schedule so `past_due` terminates.
-- [ ] Agent: install the Stripe CLI on this box (binary from GitHub releases; `--api-key` mode,
-  no interactive login needed).
-- [ ] Agent, via API: create product "Spideryarn Reader" + $10/mo recurring price (card-only
-  Checkout config); create the Customer Portal configuration (invoice history, payment-method
-  update, cancel at period end); record the price id as `STRIPE_PRICE_READER`.
-- [ ] Add `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_READER` to `.env.example`,
-  the deployment.md env table, and `/api/health`.
-- [ ] `npm install --save-exact stripe`; `src/billing/stripe.ts` constructs the client, **pins
-  the exact API version** (named in code, verified against current Stripe docs at implementation
-  time), and enforces the live/test key-vs-environment rules above.
+- ✅ Stripe CLI 1.50.8 installed at `~/.local/bin/stripe` (GitHub release tarball; `--api-key`
+  mode, no interactive login). **Not on the box's `PATH` by default** — call it by full path, or
+  add `~/.local/bin` to `PATH`, which is a change to the file that builds the next box and so is
+  Greg's call ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md)).
+- ✅ [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) creates the product, the $10/mo
+  price and the Customer Portal configuration through the API, and is **idempotent by
+  `lookup_key`** rather than by product name — a name is a label a human may edit, and re-running
+  against a name match is how you end up with two $10 prices and two cohorts of customers on
+  different ones. It **refuses** rather than adopts a lookup key already pointing at a different
+  amount, because Stripe prices are immutable and "change the price" is really "create a price and
+  move the variable". Run against the test key on 2026-09-02:
+  `prod_VBcD7vMsjj575p`, `price_1UBEzHLZ0dGTJEEPKUKntx4k`, `bpc_1UBEzILZ0dGTJEEPDr4NVd5q`;
+  re-running found them rather than minting more.
+  **Currency note for Greg**: the Stripe account is GB with a GBP default, and the price is USD
+  $10 as specified. A GB account charging USD is ordinary, and a GBP price would be a different
+  number rather than a translation — say if you would rather sell in pounds.
+- ✅ `STRIPE_PRICE_READER` in `.env.example`, on the `gjd-remote push-env` allowlist (not a
+  secret — it is in the Checkout URL every customer sees), and in the worktree's `.env.local`.
+  **The primary checkout and the laptop still need the line** — see the hand-off note at the end
+  of this stage.
+- ✅ `stripe@22.6.1` (`--save-exact`); [`src/billing/stripe.ts`](../../src/billing/stripe.ts) is
+  the one place that constructs a client, pins `STRIPE_API_VERSION = "2026-08-26.dahlia"` — the
+  version the installed SDK's own types were generated from, which is the only version whose types
+  are not lying — and enforces the mode rules. `tests/billing-stripe.test.ts` fails if the pin and
+  the SDK drift apart, and separately asserts that `current_period_start` is still on
+  `SubscriptionItems.d.ts` and not on the subscription, by reading the shipped declarations rather
+  than by trusting a type.
+- ✅ `/api/health` reports both variables and **warns when the key's mode is wrong**, which needed
+  a small fix to `checkEnv` in [`src/vercel-health.ts`](../../src/vercel-health.ts): a `valid`
+  clause used to be checked only when a `breaks` clause was also set. Stripe is the first entry
+  where *absence* is fine and *presence of the wrong thing* is catastrophic, so `valid` is now
+  checked independently. A second defect the tests caught: the first version built the warning's
+  wording from `expectedLivemode()` inside a module-level constant, freezing it at import — it
+  detected the fault correctly and then told a production operator to install a test key. The
+  message now names both directions and is evaluated nowhere.
+- [ ] `STRIPE_SECRET_KEY` / `STRIPE_PRICE_READER` in the deployment.md env table (goes with the
+  routes, in the checkout stage, so the table describes something that exists).
+
+### How Stripe is tested — the house patterns, named once
+
+Fable's finding: the patterns exist and the plan did not name them, so each stage would have
+reinvented one.
+
+- **Inject the client, never mock the module.** The seam is a constructor/parameter argument, the
+  way `AdvanceParts` and `fetchDocument` already work here.
+- **Sign webhook payloads offline** with the SDK's `generateTestHeaderString`. No network, real
+  signatures, and the "parsed and re-encoded fails" test becomes trivial.
+- **Add `api.stripe.com` to the test-time network backstop**
+  ([`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts)), so no test can reach
+  Stripe for real with the key that is sitting in `.env.local`. **Not** by adding it to
+  `PROVIDER_HOSTS` in `src/spend-declarations.ts`: that list means *inference spend*, it drives
+  the undeclared-spend capability scan, and a Stripe host in it would demand a spend declaration
+  from every billing file. A second, small list in the guard keeps both meanings honest.
 
 ### Stage: Thin end-to-end round trip (front-loaded risk, per Sol P3)
 
@@ -305,10 +418,14 @@ the delivery.
   parsed-and-re-encoded fails; missing secret/header, oversized body, wrong method, sibling
   `/api/webhooks/*` path all refused; signed event with unknown mapping / Stripe failure / DB
   failure does **not** return 200.
-- [ ] Drizzle migration: `billing_accounts` as specified above.
-- [ ] `syncSubscriptionFromStripe` with the per-customer advisory lock; controlled-interleaving
-  test proving stale state cannot land after fresher state; replay test (same logical state, no
-  duplicates).
+- [ ] Drizzle migration: `billing_accounts` as specified above. The `owner_id` foreign key into
+  `auth.users` is **not** declared in `src/db/schema.ts` — no table's is; it goes in a
+  hand-written `npm run db:generate -- --custom` migration, and `tests/db-schema.test.ts` checks
+  `pg_constraint` directly, so getting this wrong turns that guard into a trap
+  (`schema.ts` ~`:29`).
+- [ ] `syncSubscriptionFromStripe` serialised by `for update` on the customer's row;
+  controlled-interleaving test proving stale state cannot land after fresher state; replay test
+  (same logical state, no duplicates).
 - [ ] Exact-route webhook handler as specified in the security invariants.
 - [ ] Manual verification with `stripe listen --api-key … --forward-to
   localhost:PORT/api/webhooks/stripe` and a real test-mode Checkout completed by hand.
@@ -329,21 +446,27 @@ the delivery.
   boundaries (half-open); delayed-renewal (stale stored period → resync → 503 when Stripe
   unavailable); admin owner never blocked; dev exemption inert outside local; blocked response
   carries machine-readable reason + upgrade/reset info.
-- [ ] Migration: `ingest_events` ledger + `counts_as_ingest` on jobs.
-- [ ] Ledger insert inside the publish/finish transaction (`pg-session.ts` ~`:444`).
+- [ ] Migration: `ingest_events` ledger + `counts_as_ingest` on jobs (same `--custom` FK rule as
+  above).
+- [ ] `counts_as_ingest` threaded through `EnqueueRequest` → `enqueue()` → the job row, and
+  copied from the old job by `retryJob`.
+- [ ] Ledger insert inside the publish/finish transaction — the `done` branch of `settleIn()`
+  (`pg-session.ts` ~`:423`).
 - [ ] `entitlementFor(ownerId)` → `{ tier, limit, periodStart?, periodEnd? }` from
   `billing_accounts` + the hardcoded `TIERS` map; unknown price → free, logged.
-- [ ] Atomic admission in `POST /api/jobs` (new-ingest shapes only); non-reserving eligibility
-  check in `POST /api/uploads`.
+- [ ] Serialised admission in `POST /api/jobs` (new-ingest shapes only — `{url}` and `{uploadId}`;
+  a `{slug}`-only body is a step re-run and is free); non-reserving eligibility check in
+  `POST /api/uploads`. Enforced only under `SPIDERYARN_STORE=postgres` — see *Billing is a
+  Postgres feature*.
 - [ ] Reader-facing refusal copy per [copy.md](../project/copy.md).
 - [ ] `npm test`, `npm run typecheck`. Commit.
 
 ### Stage: Checkout, portal, and the reader-facing UI
 
 - [ ] Tests first: checkout route refuses when a non-terminal subscription exists (redirects to
-  portal); reuses an open session; serialized customer creation under concurrent requests
-  (double-click test); authenticated success callback cannot sync another owner's session;
-  live/test mode mismatch refused.
+  portal); a double-click creates at most one customer mapping (the unique constraint, not a
+  lock); authenticated success callback cannot sync another owner's session; live/test mode
+  mismatch refused.
 - [ ] `POST /api/billing/checkout` and `POST /api/billing/portal` as ordinary authenticated
   routes, per the customer-creation protocol above.
 - [ ] Success-page return path: authenticated, session-id-only, ownership-proved, then sync.
@@ -406,6 +529,13 @@ Greg, 2026-09-02:
   [260902i-…-review-sol.md](260902i-stripe-payments-and-subscription-tiers-review-sol.md).
   **Verdict: rework.** All seven P1s and the P2s checked and folded into this revision; the
   backfill question (P2.1) escalated to Greg in the ledger stage.
+- ✅ **Fable review of the reworked plan against the code**, 2026-09-02 — the one that found the
+  unbuildable rule, the wrong locking idiom and the files-store hole. Its findings are the status
+  note at the top; each was verified in the code before adoption rather than taken on trust.
+  **Worth keeping as a lesson**: Sol's review was right about every *risk* and wrong about two
+  *mechanisms*, because a plan-stage reviewer with no repository in front of it cannot know that
+  `enqueueOrGet` is not a transaction. A second review from something that reads the code is not
+  the same review again.
 - [ ] After implementation: second Sol review of the code diff — weighted higher than this one
   (a plan review cannot find the bug that doesn't exist yet).
 

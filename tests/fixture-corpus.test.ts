@@ -51,6 +51,7 @@ import type {
   Tree,
 } from "../src/types.js";
 import { FIXTURE_ROOT, fixturePath, requireFixture } from "./helpers/require-fixture.js";
+import { ROUNDTRIP_JSON_ARTEFACTS } from "./helpers/roundtrip-artefacts.js";
 
 /* Module scope, above the describes, the way pg-ready is called — so a corpus
    that is not there fails before a single test registers, rather than
@@ -564,28 +565,18 @@ describe("the committed fixture corpus", () => {
        no article carries turns that suite's `preserves %s exactly` row into
        "the export invented nothing" on every slug — three of these
        (`quotes.json`, `timeline.json`, `assets.json`) live on exactly one
-       article, which is why `openai-huggingface` is in the corpus at all. */
-    const ARTEFACTS = [
-      "meta.json",
-      "blocks.json",
-      "tree.json",
-      "assets.json",
-      "arc.json",
-      "tweets.json",
-      "glossary.json",
-      "ideas.json",
-      "quotes.json",
-      "timeline.json",
-      "sketch.json",
-      "labels.json",
-      "comments.json",
-      "chat.json",
-      "searches.json",
-      "glossary-lookups.json",
-      "shelf.json",
-    ];
+       article, which is why `openai-huggingface` is in the corpus at all.
+
+       **The list is imported, and it did not used to be.** This test kept its
+       own hand-maintained copy of the round trip's `ARTEFACTS`, the two drifted
+       by exactly `quiz.json`, and so the one test whose entire job is "the
+       corpus covers everything the round trip claims" was structurally blind to
+       the one artefact the corpus did not cover. Two lists cannot check each
+       other. docs/plans/260902g-corpus-evidence-for-artefact-coverage.md, and
+       tests/helpers/roundtrip-artefacts.ts for why the list is written down
+       rather than derived from `HOMES` or from the exporter. */
     const carried = new Set(SLUGS.flatMap((s) => readdirSync(path.join(FIXTURE_ROOT, "data", s))));
-    expect(ARTEFACTS.filter((a) => !carried.has(a))).toEqual([]);
+    expect(ROUNDTRIP_JSON_ARTEFACTS.filter((a) => !carried.has(a))).toEqual([]);
   });
 
   it("gives every article both halves of output/, or neither", () => {
