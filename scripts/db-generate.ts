@@ -39,7 +39,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readJournal, type JournalEntry } from "./migration-ledger.js";
-import { HISTORICAL, readSnapshots, snapshotProblems } from "./migration-snapshots.js";
+import { HISTORICAL, prefixOf, readSnapshots, snapshotProblems } from "./migration-snapshots.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FOLDER = path.join(ROOT, "drizzle");
@@ -144,7 +144,7 @@ function postcondition(before: FolderState, after: FolderState): string[] {
   }
 
   for (const entry of fresh) {
-    const prefix = entry.tag.split("_")[0] ?? entry.tag;
+    const prefix = prefixOf(entry.tag);
     const sql = `${entry.tag}.sql`;
     const snapshot = `${prefix}_snapshot.json`;
 

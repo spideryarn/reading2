@@ -229,110 +229,122 @@ export function readSnapshots(folder: string): Snapshot[] {
  *     `drizzle-kit check`, which knows what it supports; this only asks that
  *     the folder agrees with itself.
  */
-export function snapshotProblems(
-  journal: readonly JournalEntry[],
-  snapshots: readonly Snapshot[],
-  exceptions: SnapshotExceptions = NO_EXCEPTIONS,
-): string[] {
-  const problems: string[] = [];
+/** Group by a key, keeping the file names, so a duplicate can name both sides. */
+function groupBy<T>(items: readonly T[], key: (t: T) => string | null): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    if (k === null) continue;
+    out.set(k, [...(out.get(k) ?? []), item]);
+  }
+  return out;
+}
 
-  /* 1 */
+/** 1. Every file parses, and is named `<prefix>_snapshot.json`. */
+function unreadable(snapshots: readonly Snapshot[]): string[] {
+  const problems: string[] = [];
   for (const s of snapshots) {
     if (s.id === null || s.prevId === null) {
       problems.push(
         `drizzle/meta/${s.file} could not be read as a snapshot with an id and a prevId — ` +
           "drizzle parses every non-underscore file in that folder, so it will fail on this too",
       );
-      continue;
-    }
-    if (!s.file.endsWith("_snapshot.json")) {
+    } else if (!s.file.endsWith("_snapshot.json")) {
       problems.push(
         `drizzle/meta/${s.file} is not named <prefix>_snapshot.json, and drizzle derives the ` +
           "snapshot path from the tag's prefix — it will never find this one",
       );
     }
   }
+  return problems;
+}
 
-  /* 2 */
-  const byId = new Map<string, string[]>();
-  for (const s of snapshots) {
-    if (s.id === null) continue;
-    byId.set(s.id, [...(byId.get(s.id) ?? []), s.file]);
-  }
-  for (const [id, files] of byId) {
-    if (files.length > 1) problems.push(`${files.join(" and ")} both carry the id ${id}`);
-  }
+/** 2. Two snapshots with one `id` — which makes a wrong link look like a right one. */
+function duplicateIds(snapshots: readonly Snapshot[]): string[] {
+  return [...groupBy(snapshots, (s) => s.id)]
+    .filter(([, files]) => files.length > 1)
+    .map(([id, files]) => `${files.map((s) => s.file).join(" and ")} both carry the id ${id}`);
+}
 
-  /* 3 */
-  const byPrev = new Map<string, string[]>();
-  for (const s of snapshots) {
-    if (s.prevId === null) continue;
-    byPrev.set(s.prevId, [...(byPrev.get(s.prevId) ?? []), s.file]);
-  }
-  for (const [prev, files] of byPrev) {
-    if (files.length > 1) {
-      problems.push(
-        `${files.join(" and ")} both claim ${prev} as their parent — the chain has forked, ` +
-          "which is what two worktrees generating from one trunk produces. The next " +
-          "`drizzle-kit generate` will refuse and exit 0 without writing anything",
-      );
-    }
-  }
+/** 3. The fork: two snapshots claiming one parent. `drizzle-kit check` catches this too. */
+function forks(snapshots: readonly Snapshot[]): string[] {
+  return [...groupBy(snapshots, (s) => s.prevId)]
+    .filter(([, files]) => files.length > 1)
+    .map(
+      ([prev, files]) =>
+        `${files.map((s) => s.file).join(" and ")} both claim ${prev} as their parent — ` +
+        "the chain has forked, which is what two worktrees generating from one trunk " +
+        "produces. The next `drizzle-kit generate` will refuse and exit 0 without writing anything",
+    );
+}
 
-  /* 4 */
-  const journalByPrefix = new Map<string, string[]>();
-  for (const e of journal) {
-    const p = prefixOf(e.tag);
-    journalByPrefix.set(p, [...(journalByPrefix.get(p) ?? []), e.tag]);
-  }
-  for (const [prefix, tags] of journalByPrefix) {
-    if (tags.length > 1) {
-      problems.push(
-        `${tags.join(" and ")} share the prefix ${prefix}, so they want one ` +
-          `drizzle/meta/${prefix}_snapshot.json and the repository can only hold one of them`,
-      );
-    }
-  }
+/** 4. Two journal tags numbered the same, wanting one snapshot file between them. */
+function collidingPrefixes(byPrefix: ReadonlyMap<string, JournalEntry[]>): string[] {
+  return [...byPrefix]
+    .filter(([, entries]) => entries.length > 1)
+    .map(
+      ([prefix, entries]) =>
+        `${entries.map((e) => e.tag).join(" and ")} share the prefix ${prefix}, so they want ` +
+        `one drizzle/meta/${prefix}_snapshot.json and the repository can only hold one of them`,
+    );
+}
 
-  /* 5, snapshot → journal */
-  for (const s of snapshots) {
-    if (!journalByPrefix.has(s.prefix)) {
-      problems.push(
+/** 5a. A snapshot for a prefix the journal has never heard of: debris, or a rename. */
+function unclaimedSnapshots(
+  snapshots: readonly Snapshot[],
+  byPrefix: ReadonlyMap<string, JournalEntry[]>,
+): string[] {
+  return snapshots
+    .filter((s) => !byPrefix.has(s.prefix))
+    .map(
+      (s) =>
         `drizzle/meta/${s.file} belongs to no migration in the journal — either it is debris ` +
-          "from a migration that was removed, or it was renamed, and a renamed snapshot can " +
-          "become the base every future migration is diffed against",
-      );
-    }
-  }
+        "from a migration that was removed, or it was renamed, and a renamed snapshot can " +
+        "become the base every future migration is diffed against",
+    );
+}
 
-  /* 5, journal → snapshot */
-  const havePrefix = new Set(snapshots.map((s) => s.prefix));
-  const excusedMissing = new Set(exceptions.missing.map((m) => m.tag));
-  for (const e of journal) {
-    if (havePrefix.has(prefixOf(e.tag)) || excusedMissing.has(e.tag)) continue;
-    problems.push(
-      `${e.tag} is in the journal and drizzle/meta/${prefixOf(e.tag)}_snapshot.json is not ` +
+/** 5b. The `0029_assets` hole: a journal entry whose snapshot never reached the folder. */
+function missingSnapshots(
+  journal: readonly JournalEntry[],
+  havePrefix: ReadonlySet<string>,
+  exceptions: SnapshotExceptions,
+): string[] {
+  const excused = new Set(exceptions.missing.map((m) => m.tag));
+  return journal
+    .filter((e) => !havePrefix.has(prefixOf(e.tag)) && !excused.has(e.tag))
+    .map(
+      (e) =>
+        `${e.tag} is in the journal and drizzle/meta/${prefixOf(e.tag)}_snapshot.json is not ` +
         "there — the next generate will diff against an older snapshot and re-emit DDL that " +
         "has already run (drizzle/0030_drop_summary_steer.sql is the last time this happened)",
     );
-  }
+}
 
-  /* 6 */
+/** 6. Lexical order and journal order are two orderings of one sequence. */
+function orderDisagreement(
+  journal: readonly JournalEntry[],
+  snapshots: readonly Snapshot[],
+  havePrefix: ReadonlySet<string>,
+  byPrefix: ReadonlyMap<string, JournalEntry[]>,
+): string[] {
   const journalOrder = journal.map((e) => prefixOf(e.tag)).filter((p) => havePrefix.has(p));
-  const fileOrder = snapshots.map((s) => s.prefix).filter((p) => journalByPrefix.has(p));
-  if (journalOrder.join(",") !== fileOrder.join(",")) {
-    problems.push(
-      `drizzle/meta/ sorts as [${fileOrder.join(", ")}] and the journal runs in the order ` +
-        `[${journalOrder.join(", ")}] — drizzle uses both orderings and they must agree`,
-    );
-  }
+  const fileOrder = snapshots.map((s) => s.prefix).filter((p) => byPrefix.has(p));
+  if (journalOrder.join(",") === fileOrder.join(",")) return [];
+  return [
+    `drizzle/meta/ sorts as [${fileOrder.join(", ")}] and the journal runs in the order ` +
+      `[${journalOrder.join(", ")}] — drizzle uses both orderings and they must agree`,
+  ];
+}
 
-  /* 7 */
+/** 7. Each snapshot links to the one physically before it. */
+function brokenLinks(snapshots: readonly Snapshot[], exceptions: SnapshotExceptions): string[] {
+  const problems: string[] = [];
   let last: Snapshot | null = null;
   for (const s of snapshots) {
-    /* Bound rather than used through `last!`: the narrowing on a `let` does not
-       survive into the closure below, and an assertion that is merely true
-       today is how a refactor gets to be wrong quietly. */
+    /* Bound rather than reached for through `last!` inside the closure below:
+       narrowing on a `let` does not survive into one, and an assertion that is
+       merely true today is how a refactor gets to be wrong quietly. */
     const previous = last;
     last = s;
     if (!previous || s.prevId === null || previous.id === null || s.prevId === previous.id) continue;
@@ -349,27 +361,53 @@ export function snapshotProblems(
         `(${previous.file}) is ${previous.id} — the chain is broken here`,
     );
   }
+  return problems;
+}
 
-  /* 8 */
+/** 8. The rename trap: drizzle diffs against whichever snapshot sorts last. */
+function wrongTerminal(journal: readonly JournalEntry[], snapshots: readonly Snapshot[]): string[] {
   const lastEntry = journal[journal.length - 1];
   const lastSnapshot = snapshots[snapshots.length - 1];
-  if (lastEntry && lastSnapshot && lastSnapshot.prefix !== prefixOf(lastEntry.tag)) {
-    problems.push(
-      `drizzle/meta/${lastSnapshot.file} sorts last, and the journal's last migration is ` +
-        `${lastEntry.tag} — drizzle diffs the next migration against whichever snapshot sorts ` +
-        "last, so this one would rewind the schema it compares against",
-    );
-  }
+  if (!lastEntry || !lastSnapshot || lastSnapshot.prefix === prefixOf(lastEntry.tag)) return [];
+  return [
+    `drizzle/meta/${lastSnapshot.file} sorts last, and the journal's last migration is ` +
+      `${lastEntry.tag} — drizzle diffs the next migration against whichever snapshot sorts ` +
+      "last, so this one would rewind the schema it compares against",
+  ];
+}
 
-  /* 9 */
-  const versions = new Set(snapshots.map((s) => s.version).filter((v): v is string => v !== null));
-  if (versions.size > 1) {
-    problems.push(`drizzle/meta/ holds snapshots of versions ${[...versions].sort().join(" and ")}`);
-  }
-  const dialects = new Set(snapshots.map((s) => s.dialect).filter((d): d is string => d !== null));
-  if (dialects.size > 1) {
-    problems.push(`drizzle/meta/ holds snapshots for dialects ${[...dialects].sort().join(" and ")}`);
-  }
-
+/** 9. A folder half-migrated by `drizzle-kit up`, or holding two dialects. */
+function mixedMetadata(snapshots: readonly Snapshot[]): string[] {
+  const problems: string[] = [];
+  const distinct = (pick: (s: Snapshot) => string | null): string[] =>
+    [...new Set(snapshots.map(pick).filter((v): v is string => v !== null))].sort();
+  const versions = distinct((s) => s.version);
+  if (versions.length > 1) problems.push(`drizzle/meta/ holds snapshots of versions ${versions.join(" and ")}`);
+  const dialects = distinct((s) => s.dialect);
+  if (dialects.length > 1) problems.push(`drizzle/meta/ holds snapshots for dialects ${dialects.join(" and ")}`);
   return problems;
+}
+
+export function snapshotProblems(
+  journal: readonly JournalEntry[],
+  snapshots: readonly Snapshot[],
+  exceptions: SnapshotExceptions = NO_EXCEPTIONS,
+): string[] {
+  /* Two indices, built once and shared, because six of the nine checks want one
+     or the other and rebuilding them per check is how they drift apart. */
+  const byPrefix = groupBy(journal, (e) => prefixOf(e.tag));
+  const havePrefix = new Set(snapshots.map((s) => s.prefix));
+
+  return [
+    ...unreadable(snapshots),
+    ...duplicateIds(snapshots),
+    ...forks(snapshots),
+    ...collidingPrefixes(byPrefix),
+    ...unclaimedSnapshots(snapshots, byPrefix),
+    ...missingSnapshots(journal, havePrefix, exceptions),
+    ...orderDisagreement(journal, snapshots, havePrefix, byPrefix),
+    ...brokenLinks(snapshots, exceptions),
+    ...wrongTerminal(journal, snapshots),
+    ...mixedMetadata(snapshots),
+  ];
 }
