@@ -15,8 +15,14 @@ believe.
 whether the agent editing it finished an hour ago or is mid-save right now. Poll instead:
 
 ```bash
-git status --porcelain; git status --porcelain -z | xargs -0 -n1 sh -c 'stat -f "%m %N" "$1" 2>/dev/null' _
+# Linux
+git status --porcelain -z | xargs -0 -n1 sh -c 'stat -c "%Y %n" "$1"' _
+# macOS
+git status --porcelain -z | xargs -0 -n1 sh -c 'stat -f "%m %N" "$1"' _
 ```
+
+`stat` takes different flags on the two, and the wrong one prints nothing — which reads as "the
+tree is quiet". Keep its errors visible.
 
 Take that reading, wait, take it again. If nothing has moved for a few minutes, the tree is quiet.
 If mtimes keep ticking, wait longer or narrow to the files that have gone still — and don't touch a
