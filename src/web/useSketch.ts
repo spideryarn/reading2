@@ -32,6 +32,7 @@ import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 import { useAutoRun } from "./useAutoRun.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 
 export type SketchStatus = "loading" | "ready" | "none" | "error";
@@ -108,9 +109,16 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
    */
   const order = blockOrder.join(",");
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         // The ordinary case, not a fault: `sketch` is off DEFAULT_INGEST_STEPS,
         // so most articles have never had one drawn. This is what the button is
@@ -126,6 +134,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         return;
       }
       const loaded = await readJson<SketchResponse>(res);
+      if (!current()) return;
       const ids = order ? (order.split(",") as BlockId[]) : [];
       const { sketch: checked, report } = readSketch(loaded.sketch, { blockOrder: ids });
 
@@ -154,6 +163,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
@@ -161,11 +171,18 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     }
   }, [slug, order]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
 
-  const queue = useStepJob(slug, "sketch", load);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const queue = useStepJob(slug, "sketch", refresh);
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(
@@ -184,7 +201,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   /* **Armed by the Sketch chip, not by opening Diagram.** Opening the mode
      costs nothing and lands on a picture drawn from the tree; picking this
      picture is the gesture that spends. src/web/DiagramPanel.tsx. */
-  const auto = useAutoRun(slug, "sketch", status, ensure, load);
+  const auto = useAutoRun(slug, "sketch", status, ensure, reload);
 
   return {
     status,

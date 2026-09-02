@@ -115,7 +115,7 @@ function statusLabel(res: Response): string {
 function logFailure(res: Response, text: string, parsed: boolean): void {
   console.error(`[api] ${res.status} ${res.url || "(no url)"}${parsed ? "" : " — reply was not JSON"}`, {
     status: res.status,
-    contentType: res.headers.get("content-type"),
+    contentType: header(res, "content-type"),
     bytes: text.length,
     body: text.length > SNIPPET ? `${text.slice(0, SNIPPET)}…` : text,
   });
@@ -166,8 +166,17 @@ function mediaType(res: Response): string | null {
  * added to observe, which is the worst possible way for one to fail.
  *
  * Twelve tests in `tests/use-search.test.ts` and `tests/use-chat-recovery.test.ts`
- * went red on it, 2026-08-31. The rule it leaves behind: **anything read only
- * for the log buffer is read through a function that cannot throw.**
+ * went red on it, 2026-08-31.
+ *
+ * **Every header read in this file goes through here — not only the ones read
+ * for the log buffer.** That was the original rule and it was too narrow:
+ * `logFailure` kept one direct `res.headers.get("content-type")` for its
+ * `console.error`, so the same accepted stub turned `failure()` — the one
+ * function whose whole job is to *build* an error — into a `TypeError`. The
+ * module has decided to accept incomplete `Response`s, and a decision that
+ * holds in most of a file holds in none of it. GPT Sol, 2026-09-02:
+ * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 2, and
+ * `tests/web-api.test.ts` § survives a response with no headers at all.
  */
 function header(res: Response, name: string): string | null {
   try {
@@ -622,7 +631,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
        chat thread and then going offline must not bring the thread back, which
        is what a cache kept past the delete would do — and it would look exactly
        like the delete having failed. See `invalidate`. */
-    if (res.ok) {
+    if (res.ok && !leavesCachedResourceCurrent(input)) {
       const user = lastKnownUser();
       const prefix = resourceOf(input);
       if (user && prefix) void invalidate(prefix, user);
@@ -648,7 +657,14 @@ function saving(input: string, init: RequestInit, res: Response): Response {
   }
   if (!res.ok || res.status !== 200) return res;
   if (!cacheable(input)) return res;
-  if (res.headers.get("x-spideryarn-offline") === "copy") return res;
+  /* Through `header`, which cannot throw — the rule this file already learned
+     once and this line was outside. `saving` is called *after* `attempt`
+     returns, so a throw here is not caught anywhere and comes out of `apiFetch`
+     as a failed request; a hand-built stub `Response` with no `headers` is
+     enough to do it, which is how four tests in tests/quiz-mark-stream.test.tsx
+     went red the moment `/api/quiz/` joined `CACHEABLE` and this branch became
+     reachable for them. See § A response header, or `null`. */
+  if (header(res, "x-spideryarn-offline") === "copy") return res;
   /* Only JSON, and the media type parsed rather than searched. An HTML body
      with a 200 is Vercel's SPA fallback or a captive portal's sign-in page, and
      freezing either into the cache would poison the article rather than save
@@ -710,17 +726,41 @@ function slugOf(input: string): string {
  * (docs/plans/260831s-gist-only-summaries.md). Cached responses under that key are
  * unreachable and expire through ordinary eviction.
  *
+ * **Every per-article artefact GET is here**, and until 2026-09-02 four of them
+ * were not: `/api/arc/`, `/api/quiz/`, `/api/sketch/` and `/api/timeline/` each
+ * had a route and a hook and no line here, so the offline store kept a quotes
+ * list and dropped a timeline for no stated reason. Nothing paired the list
+ * with the routes; `tests/cacheable-covers-artefact-routes.test.ts` now does,
+ * deriving the routes from `SHAPE` and src/routes.ts rather than retyping them.
+ * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.1.
+ *
  * What is missing is as deliberate. `/api/jobs` describes work in flight and a
  * stale copy of it would be a lie about the present; `/api/library/search`
  * spends a model call per query, so a cached answer to one question would be
  * served for a different one; `/api/models` is configuration nobody reads
  * offline.
+ *
+ * And a fourth omission, which is a **decision** rather than a policy:
+ * `/api/referee/criteria/:slug` and `/api/referee/claims/:slug` are stored
+ * reads a referee would want offline, and they are left out because their paths
+ * are nested one segment deeper than every other artefact's. `slugOf` reads
+ * path segment 3, so it would file them under the slug `"criteria"`, and
+ * `resourceOf` would map `POST /api/referee/criteria/:slug` to
+ * `/api/referee/criteria` and invalidate every article's criteria at once.
+ * Caching them means both of those growing a route-aware case, which is a
+ * follow-up rather than a line here — and the derived test asserts their
+ * absence explicitly, so this stays a decision somebody made rather than a gap
+ * the test quietly defined out of scope.
  */
 const CACHEABLE = [
   "/api/article/",
+  "/api/arc/",
   "/api/glossary/",
   "/api/ideas/",
   "/api/quotes/",
+  "/api/timeline/",
+  "/api/quiz/",
+  "/api/sketch/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",
@@ -733,6 +773,42 @@ function cacheable(input: string): boolean {
   const path = input.split("?")[0] ?? input;
   if (path === "/api/library") return true;
   return CACHEABLE.some((prefix) => path.startsWith(prefix));
+}
+
+/**
+ * **The writes that leave our copy still correct**, so that answering a
+ * question does not throw away the questions.
+ *
+ * A non-GET is assumed to have changed the thing it names, which is right for
+ * every route but one: `POST /api/quiz/<slug>/mark` sends one answer and
+ * streams the marking back. **It stores no quiz state** — no attempt, no score,
+ * no answer, no change to the questions — so `GET /api/quiz/<slug>` answers
+ * exactly what it answered before and the cached copy is still current.
+ *
+ * **It is not literally a write that writes nothing**, which is what this used
+ * to be called. Marking makes a model call, and that call's spend goes through
+ * the request's collector to an `ai_calls` ledger row — the route says so
+ * itself, of the article it attaches to *"every row this request writes"*.
+ * Accounting is recorded; nothing the offline store holds is affected by it.
+ * That distinction is the whole name: the test is not *did the server write*,
+ * it is *did the thing we cached change*. GPT Sol, 2026-09-02:
+ * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3.
+ *
+ * Exempted here rather than inside `resourceOf`, which answers a different
+ * question — *which* resource a URL is about — and would still be right if it
+ * answered it for this one.
+ *
+ * Exact, anchored patterns, and a list so that a second one is a line: the same
+ * last segment on `PATCH /api/comments/<slug>/<id>/mark` is a real write — the
+ * referee's placement on a criterion — and must keep invalidating.
+ * tests/api-fetch-offline.test.ts § marking an answer keeps the quiz it did not
+ * change asserts both directions.
+ */
+const LEAVE_CACHED_RESOURCE_CURRENT = [/^\/api\/quiz\/[^/]+\/mark$/];
+
+function leavesCachedResourceCurrent(input: string): boolean {
+  const path = input.split("?")[0] ?? input;
+  return LEAVE_CACHED_RESOURCE_CURRENT.some((shape) => shape.test(path));
 }
 
 /**

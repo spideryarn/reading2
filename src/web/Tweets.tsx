@@ -79,6 +79,7 @@ import { recordLog } from "./log-buffer.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { useSlow } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -130,18 +131,23 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * articles have no thread, so carrying one on the article payload would make
    * every reader of every article download a `null`.
    */
-  const load = useCallback(async () => {
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         setLoaded({ status: "none" });
         setReloadError(null);
         return;
       }
       const { thread, stale, profileChanged } = await readJson<ThreadResponse>(res);
+      if (!current()) return;
       setLoaded({ status: "ready", thread, stale, profileChanged });
       setReloadError(null);
     } catch (err) {
+      /* Nothing is said about a read this page has moved on from — not the
+         console line, not the log record, not the sentence. */
+      if (!current()) return;
       const message = (err as Error).message;
       /* **The raw message stops here.** lib/api.ts logs every failure it
          *builds*, and the sentence it builds is safe to show — but the
@@ -181,9 +187,16 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   /**
    * The queue, because writing a thread is half a minute of model time and this
@@ -206,7 +219,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * `tests/refused-job-reason-survives.test.tsx` mounts this page whole and
    * drives that sequence with the polls held.
    */
-  const queue = useStepJob(slug, "tweets", load);
+  const queue = useStepJob(slug, "tweets", refresh);
   /* Destructured because the four surfaces below took `job` and `failed` as
      props long before the hook existed, and threading `queue` through them
      would be a rename of this file's whole render for no gain. `cancel` stays

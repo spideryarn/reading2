@@ -666,7 +666,11 @@ export function buildQuotes(
  */
 export function isStale(
   quotes: Quotes,
-  blocks: BlockFingerprint[],
+  /* `readonly`, like `inputFingerprint` above and like the same parameter in
+     ideas, timeline, quiz, sketch and arc. Nothing here mutates the array, and
+     a caller holding a `readonly BlockFingerprint[]` was the one thing that
+     made this signature different from its five peers'. */
+  blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprint | null,
 ): boolean {

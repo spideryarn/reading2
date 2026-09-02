@@ -148,7 +148,7 @@ export type { StepName };
  * docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely and
  * docs/project/glossary.md.
  */
-export const STEP_ORDER: StepName[] = [
+export const STEP_ORDER = [
   "fetch",
   "extract",
   "blocks",
@@ -197,7 +197,36 @@ export const STEP_ORDER: StepName[] = [
      is the slowest single model call in the app at 121–194 seconds measured.
      docs/project/diagram.md § Sketch. */
   "sketch",
-];
+] as const satisfies readonly StepName[];
+
+/**
+ * **Every `StepName` that `STEP_ORDER` above does not list.** Always `never`.
+ *
+ * Add a step to `StepName` (src/types.ts) and forget the row above, and this
+ * line goes red naming the step you forgot: `T extends never` is a constraint,
+ * and the default it is checked against stops being `never` the moment a name
+ * is missing. That is the check the plain `StepName[]` annotation could not
+ * make — it widened the tuple away and said only that each entry *is* a step,
+ * never that every step *is* an entry.
+ *
+ * The consequences of a gap are not cosmetic: `orderSteps` sorts by `indexOf`,
+ * so an unlisted step gets `-1` and runs before `fetch`; `isStepName` rejects
+ * it over HTTP; and tests/db-step-constraint.test.ts derives the SQL CHECK from
+ * this array, so a name missing here is a name the database refuses to store.
+ *
+ * **Exported only so it survives.** `noUnusedLocals` deletes an unreferenced
+ * type alias, which would take the check with it; nothing imports this and
+ * nothing should — which is why it is tagged `@public`, so knip does not list
+ * it as an unused export and nobody tidies the check away.
+ *
+ * tests/jobs.test.ts is the runtime half, and it is the one that catches a
+ * duplicate or a wrong order — a union discards both.
+ *
+ * @public
+ */
+export type StepsMissingFromOrder<
+  T extends never = Exclude<StepName, (typeof STEP_ORDER)[number]>,
+> = T;
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
@@ -2749,5 +2778,5 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
  * several layers from the request that caused it. Covered by tests/jobs.test.ts.
  */
 export function isStepName(value: unknown): value is StepName {
-  return typeof value === "string" && (STEP_ORDER as string[]).includes(value);
+  return typeof value === "string" && (STEP_ORDER as readonly string[]).includes(value);
 }

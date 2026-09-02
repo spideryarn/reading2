@@ -30,6 +30,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -124,9 +125,16 @@ export function useIdeas(slug: string): UseIdeas {
   const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/ideas/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
@@ -140,6 +148,7 @@ export function useIdeas(slug: string): UseIdeas {
         return;
       }
       const loaded = await readJson<IdeasResponse>(res);
+      if (!current()) return;
       setIdeas(loaded.ideas);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
@@ -150,6 +159,7 @@ export function useIdeas(slug: string): UseIdeas {
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
@@ -162,14 +172,21 @@ export function useIdeas(slug: string): UseIdeas {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary and
      the summaries. It carries the reasoning that used to be copied here. */
-  const queue = useStepJob(slug, "ideas", load);
+  const queue = useStepJob(slug, "ideas", refresh);
 
   /* Two verbs where there was one. See `ensure` and `regenerate` on the
      interface above for why the difference is the identity of the request
@@ -187,10 +204,12 @@ export function useIdeas(slug: string): UseIdeas {
     [queue],
   );
 
-  /* `load`, not `ensure`, for the second argument: a read that failed is
+  /* `reload`, not `ensure`, for the last argument: a read that failed is
      answered by reading again, not by spending. useAutoRun.ts § A failed read
-     is not an answer. */
-  const auto = useAutoRun(slug, "ideas", status, ensure, load);
+     is not an answer. And `reload` rather than the raw `load`, which takes the
+     ordering predicate from useOrderedRead and is not a standalone read — the
+     merge of the two on 2026-09-02 was a typecheck error at this line. */
+  const auto = useAutoRun(slug, "ideas", status, ensure, reload);
 
   return {
     status,

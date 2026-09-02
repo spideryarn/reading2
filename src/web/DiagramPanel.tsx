@@ -1279,8 +1279,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
   return (
     <aside className="mode-band diag" aria-label="Diagram">
-      <div className="diag-head">
-        <Network size={14} className="diag-head-icon" />
+      <div className="band-head">
+        <Network size={14} className="band-head-icon" />
         <h2>Diagram</h2>
         {/* **The scatter's caveat lives in this row, and the reason is that this
             row cannot wrap.** It was four lines of prose above the picture until
@@ -2154,7 +2154,7 @@ function kept(p: UseProjection): { what: string; how: string } {
  * > It uses up valuable vertical real estate. Hide it behind a tooltip or
  * > warning icon or something.
  *
- * It is rendered in `.diag-head` rather than on the controls strip, and **why**
+ * It is rendered in `.band-head` rather than on the controls strip, and **why**
  * is at the call site: that row cannot wrap, and the strip can.
  *
  * Two things it keeps, because a hover card on its own would drop both.
