@@ -52,6 +52,7 @@ import {
   planAccountEmail,
   staleIdentities,
   readOrCreateAdminPassword,
+  writeAdminEmail,
   readPasswordVerdict,
   refuseMismatchedStack,
   refuseNonLocalSeed,
@@ -457,6 +458,11 @@ async function assertCanSignIn(account: SeededAccount): Promise<void> {
         "  src/admin.ts gates on the id, so that session is not an administrator.",
     );
   }
+  /* Recorded only now, after a real sign-in proved this address is the one this
+     machine's database answers to. Writing it earlier would record an intention;
+     writing it here records a fact, which is what a checkout on another commit
+     needs — scripts/seed-accounts.ts, `adminEmailPath`. */
+  writeAdminEmail(homedir(), email);
   console.log(`✓ signed in as ${email}, token sub is ${id}`);
 }
 
