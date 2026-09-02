@@ -52,13 +52,15 @@ import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import type {
-  AdminFeedbackReport,
+  AdminFeedbackDetail,
+  AdminFeedbackPage,
   Article,
   ArticleMetadata,
   ChatAnchor,
   ChatMessage,
   ChatThread,
   Comment,
+  FeedbackCursor,
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackRouteKind,
@@ -1160,7 +1162,17 @@ export interface AdminStore {
    * `limit` is capped by the implementation. This is the only table in the app
    * an ordinary account holder can add rows to.
    */
-  listFeedbackAcrossOwners(limit: number): Promise<AdminFeedbackReport[]>;
+  listFeedbackAcrossOwners(limit: number, cursor: FeedbackCursor | null): Promise<AdminFeedbackPage>;
+  /**
+   * **One report in full**, including the diagnostics blob the list leaves out
+   * — `GET /api/admin/feedback/:ownerId/:id`.
+   *
+   * Keyed on the **pair**, like everything that addresses a report here: the id
+   * is minted by a browser, `feedback`'s primary key is `(owner_id, id)`, and a
+   * lookup on the id alone can hand back somebody else's report. GPT Sol caught
+   * that in the first draft, 2026-09-02.
+   */
+  readFeedbackAcrossOwners(ownerId: string, id: string): Promise<AdminFeedbackDetail | null>;
   /**
    * **One report's screenshot bytes, whoever filed it** — for
    * `GET /api/admin/feedback/:id/screenshot`.
@@ -1175,28 +1187,10 @@ export interface AdminStore {
    * too. The cross-owner read is a different method, on the contract whose name
    * already says what it does, reached from one gated route.
    */
-  readFeedbackScreenshotAcrossOwners(id: string): Promise<Uint8Array | null>;
+  readFeedbackScreenshotAcrossOwners(ownerId: string, id: string): Promise<Uint8Array | null>;
 }
 
-/**
- * **The two feedback shapes are one shape**, checked rather than trusted.
- *
- * `AdminFeedbackReport` is written out in src/types.ts because the browser
- * reads it and may not import this file (tests/client-imports.test.ts). This
- * makes the copy safe: mutual assignability, so a column added to `NewFeedback`
- * or `FeedbackReport` and forgotten in the wire shape — or the reverse — is a
- * compile error here, at the seam, rather than an `undefined` on a page months
- * later. `Exact` resolves to `never` in either direction of drift, and `never`
- * has no value to initialise it with.
- */
-type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
-/* Exported so nothing reads it as dead code and deletes it. The declaration
-   *is* the check: `Exact` is `never` the moment the two shapes disagree, and
-   `never` cannot be initialised with `true`. */
-export const ADMIN_FEEDBACK_SHAPE_MATCHES: Exact<
-  AdminFeedbackReport,
-  FeedbackReport & { ownerId: string }
-> = true;
+
 
 /* --------------------------------------------- the document it came from -- */
 

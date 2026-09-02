@@ -439,6 +439,12 @@ const adminOnFiles: AdminStore = {
       { status: 501 },
     );
   },
+  readFeedbackAcrossOwners: () => {
+    throw Object.assign(
+      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
+      { status: 501 },
+    );
+  },
   readFeedbackScreenshotAcrossOwners: () => {
     throw Object.assign(
       new Error("Feedback needs Postgres — there are no reports on the filesystem store."),

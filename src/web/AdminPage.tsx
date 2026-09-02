@@ -1,5 +1,5 @@
 /**
- * `/admin` and `/admin/users` — the administrator's pages.
+ * `/admin`, `/admin/users` and `/admin/feedback` — the administrator's pages.
  *
  * Greg, 2026-08-27:
  *
@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, type ReactNode } from "react";
-import { ArrowLeft, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -36,7 +36,9 @@ import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/tabl
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { adminByParam, sortDirParam } from "./params.js";
-import { ADMIN_HREF, ADMIN_USERS_HREF, LIBRARY_HREF } from "./router.js";
+import { ADMIN_FEEDBACK_HREF, ADMIN_HREF, ADMIN_USERS_HREF, LIBRARY_HREF } from "./router.js";
+import { FeedbackCard } from "./AdminFeedbackList.js";
+import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
 
@@ -86,11 +88,48 @@ function Shell({
 }
 
 /**
+ * One line on the index: an icon, a name and a sentence saying what is behind
+ * it.
+ *
+ * A component rather than two copies of the same markup, from the moment there
+ * were two — the point at which "one entry today" stops being a good reason not
+ * to have one.
+ */
+function Entry({
+  href,
+  icon,
+  title,
+  blurb,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+  blurb: string;
+}) {
+  return (
+    <li className="tw:rounded-lg tw:border tw:border-border tw:bg-card">
+      <Link
+        href={href}
+        className="tw:flex tw:items-center tw:gap-3 tw:p-4 tw:no-underline tw:hover:bg-highlight/5"
+      >
+        {icon}
+        <span className="tw:min-w-0">
+          <span className="tw:block tw:text-foreground">{title}</span>
+          <span className="tw:block tw:text-xs tw:text-muted-foreground">{blurb}</span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/**
  * `/admin` — the index.
  *
- * One entry today. It exists rather than redirecting to `/admin/users` because
- * Greg asked for the address, and because the second admin page then has
- * somewhere to be listed rather than somewhere to be remembered.
+ * It exists rather than redirecting to `/admin/users` because Greg asked for the
+ * address, and because the second and third admin pages then have somewhere to
+ * be listed rather than somewhere to be remembered. That paid off on
+ * 2026-09-02, when `/admin/feedback` was added and this page needed one entry
+ * rather than a decision.
  */
 export function AdminHome() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "home" }));
@@ -99,21 +138,21 @@ export function AdminHome() {
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
         Everything on these pages reads across accounts. Nothing on them can change anything.
       </p>
-      <ul className="tw:m-0 tw:list-none tw:p-0">
-        <li className="tw:rounded-lg tw:border tw:border-border tw:bg-card">
-          <Link
-            href={ADMIN_USERS_HREF}
-            className="tw:flex tw:items-center tw:gap-3 tw:p-4 tw:no-underline tw:hover:bg-highlight/5"
-          >
-            <Users size={18} className="tw:shrink-0 tw:text-muted-foreground" />
-            <span className="tw:min-w-0">
-              <span className="tw:block tw:text-foreground">Users</span>
-              <span className="tw:block tw:text-xs tw:text-muted-foreground">
-                Who has signed up, when they last signed in, and how much each of them has read
-              </span>
-            </span>
-          </Link>
-        </li>
+      <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
+        <Entry
+          href={ADMIN_USERS_HREF}
+          icon={<Users size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Users"
+          blurb="Who has signed up, when they last signed in, and how much each of them has read"
+        />
+        <Entry
+          href={ADMIN_FEEDBACK_HREF}
+          icon={
+            <MessageSquareWarning size={18} className="tw:shrink-0 tw:text-muted-foreground" />
+          }
+          title="Feedback"
+          blurb="Bug reports readers filed with the Feedback button, newest first"
+        />
       </ul>
     </Shell>
   );
@@ -238,6 +277,94 @@ export function AdminUsersPage() {
         </p>
       ) : (
         <DataTable table={table} rows={sorted} caption="Everyone with an account" />
+      )}
+    </Shell>
+  );
+}
+
+
+/**
+ * `/admin/feedback` — the bug reports, newest first.
+ *
+ * **The one page in this app that shows one reader's words to another person**,
+ * and the whole of what makes that legitimate is consent: they typed those three
+ * answers into a box labelled with what happens to them.
+ * docs/project/feedback.md § The one rule, and docs/project/admin.md § the
+ * second clause. The card itself is [AdminFeedbackList.tsx](AdminFeedbackList.tsx).
+ *
+ * No sort in the address bar, unlike the users page, and that is not an
+ * oversight: an inbox has one order and the server promises it
+ * (`listFeedbackAcrossOwners`). A `?by=` here would be a second opinion about
+ * which end of the list the cap cut.
+ */
+export function AdminFeedbackPage() {
+  useDocumentTitle(pageTitle({ kind: "admin", page: "feedback" }));
+  const { reports, error, loading, hasMore, reload, loadMore } = useAdminFeedback();
+  const now = useNow();
+
+  return (
+    <Shell title="Feedback" back={{ href: ADMIN_HREF, label: "Admin" }}>
+      {error && (
+        /* Same sentence-shape as the users page, and the distinction it draws
+           matters more here: an empty inbox is an ordinary answer, so an error
+           that left the previous reports on screen must say so or the page
+           looks current when it is not. */
+        <p className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
+          {reports ? `That request failed, so these are the reports we already had. ${error}` : error}
+        </p>
+      )}
+
+      {/* Always drawn, error or not — a first load that failed must leave
+          something to press. The users page learned this in review. */}
+      <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
+        <span className="tw:text-xs tw:text-muted-foreground">
+          {reports === null ? "" : reports.length === 1 ? "1 report" : `${reports.length} reports`}
+          {/* **When the list is not the whole story, the page says so** — and
+              `hasMore` is a thing the server saw rather than something inferred
+              from a length. A page that quietly stops being complete is the
+              failure this whole feature exists to catch elsewhere. */}
+          {reports && hasMore ? " — there are older ones" : ""}
+        </span>
+        <button
+          type="button"
+          onClick={() => void reload()}
+          disabled={loading}
+          aria-label="Refresh the reports"
+          title="Refresh the reports"
+          className="tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
+        >
+          <RefreshCw size={12} />
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      {/* `null` is "still loading". An empty array is a real and perfectly
+          ordinary answer here — unlike the users page, where it cannot be true
+          — so it gets a plain sentence rather than an alarm. */}
+      {reports === null ? null : reports.length === 0 ? (
+        <p className="tw:text-sm tw:text-muted-foreground">Nobody has filed a report yet.</p>
+      ) : (
+        <>
+          <ul className="tw:m-0 tw:p-0">
+            {reports.map((report) => (
+              /* **Both halves of the key.** A report id is minted by a browser
+                 and is unique within an owner, not globally — two readers may
+                 legitimately hold the same one, and React would then draw one
+                 card where there are two. src/store/pg-admin-feedback.ts. */
+              <FeedbackCard key={`${report.ownerId}:${report.id}`} report={report} now={now} />
+            ))}
+          </ul>
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loading}
+              className="tw:mt-2 tw:inline-flex tw:h-8 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-4 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
+            >
+              {loading ? "Loading…" : "Load older"}
+            </button>
+          )}
+        </>
       )}
     </Shell>
   );

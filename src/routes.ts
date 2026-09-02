@@ -230,7 +230,7 @@ import { markAnswerStream } from "./quiz-mark.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { isSpideryarnId } from "./ids.js";
+import { isSpideryarnId, isUuid } from "./ids.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
    all. src/live.ts holds the whole of it, including the only use of
@@ -264,7 +264,7 @@ import {
 } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
-import { ADMIN_FEEDBACK_DEFAULT_LIMIT } from "./types.js";
+import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
@@ -5816,11 +5816,19 @@ export async function serveAuthenticatedApi(
      sentences. Exact on `path` for the same reason as the one above.
      docs/plans/260902l-admin-feedback-page.md. */
   const adminFeedback = path === "/api/admin/feedback";
-  /* One report's screenshot. `[\w-]+` is the id *shape*; `isSpideryarnId` is
-     the id *rule*, and the handler applies it before the store sees the value —
-     the same division every other id route here uses, and the reason a pattern
-     that merely looks strict is not treated as validation. */
-  const adminFeedbackShot = /^\/api\/admin\/feedback\/([\w-]+)\/screenshot$/.exec(path);
+  /* **One report, and it takes two segments** — `feedback`'s primary key is
+     `(owner_id, id)` because the id is minted by a browser, so an address with
+     only the id in it can name two different people's reports. GPT Sol,
+     2026-09-02; src/store/pg-admin-feedback.ts has the whole argument.
+
+     The patterns are id *shapes*; `isUuid` and `isSpideryarnId` are the *rules*,
+     applied in the handler before the store sees either value — the division
+     every other id route here uses, and the reason a pattern that merely looks
+     strict is not treated as validation. */
+  const adminFeedbackOne = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/.exec(path);
+  const adminFeedbackShot = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/.exec(
+    path,
+  );
   const library = path === "/api/library";
   /* Before the `:slug` pattern below, and it has to be: `search` is a valid
      slug shape, so the two patterns overlap and the specific one must win.
@@ -6090,26 +6098,49 @@ export async function serveAuthenticatedApi(
          decided to make. */
       res.setHeader("Cache-Control", "private, no-store");
       /* Absent means the default. A `?limit=` that is not a number is the
-         default too rather than a 400: the store clamps into [1, ADMIN_FEEDBACK_MAX]
-         whatever arrives, so there is no value here that can do harm, and a
-         refusal would be ceremony on a page only one person can open. */
+         default too rather than a 400: the store clamps into
+         [1, ADMIN_FEEDBACK_MAX] whatever arrives, so there is no value here
+         that can do harm, and a refusal would be ceremony on a page only one
+         person can open. */
       const asked = Number(query.get("limit"));
-      send(res, 200, {
-        reports: await adminStore.listFeedbackAcrossOwners(
+      /* **A malformed cursor is a 400, and that one is not ceremony.** Silently
+         starting from the top instead would hand back page 1 while the reader
+         pressed *Load older* — a page that looks like it worked and quietly
+         skipped everything in between, which is the shape docs/reusable/silent-success.md
+         is about. */
+      const cursor = decodeFeedbackCursor(query.get("before"));
+      if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
+      send(
+        res,
+        200,
+        await adminStore.listFeedbackAcrossOwners(
           Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
+          cursor,
         ),
-      });
+      );
+      return;
+    }
+
+    if (adminFeedbackOne && req.method === "GET") {
+      const [, owner = "", id = ""] = adminFeedbackOne;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
       return;
     }
 
     if (adminFeedbackShot && req.method === "GET") {
-      const id = adminFeedbackShot[1] ?? "";
-      /* The shape in the pattern is not the rule. `isSpideryarnId` is, and it
-         runs before the store does — src/ids.ts, and docs/project/block-ids.md
-         on why a regex that looks strict enough is the way range checks go
-         quietly wrong. */
+      const [, owner = "", id = ""] = adminFeedbackShot;
+      /* The shapes in the pattern are not the rules. These are, and they run
+         before the store does — src/ids.ts, and docs/project/block-ids.md on
+         why a regex that looks strict enough is how range checks go quietly
+         wrong. Both halves, because both are half of the key. */
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
       if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
-      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(id);
+      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(owner, id);
       /* No such report and a report with no screenshot are one answer, and the
          store says so — see its docstring. Distinguishing them here would tell
          the caller a thing it may do nothing with. */
@@ -6631,11 +6662,12 @@ export async function serveAuthenticatedApi(
     }
     if (chatSpoken && req.method === "POST") {
       /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today — no row is
-         written for realtime audio at all, and `npm run cost` says so by name
-         (scripts/ai-cost.ts § `liveConversationGap`) — but this is the only
-         request in a live conversation that knows which article it belongs to,
-         so it is where a meter would attach. */
+         session this server can see.** It buys nothing today: the realtime rows
+         are written by `/api/live/:sessionId/usage` above, which takes its
+         article off the session row rather than off the ambient scope. Kept
+         because this request makes model calls of its own the moment anything
+         here does, and because it is the only request in a live conversation
+         that knows which article it belongs to. */
       const [slug, id] = [slugPart(chatSpoken, 1), part(chatSpoken, 2)];
       const spokenBody = await readBody(req);
       send(
