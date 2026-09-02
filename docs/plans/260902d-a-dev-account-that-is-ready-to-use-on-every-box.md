@@ -275,3 +275,50 @@ administrator — which is what every doc here tells you to do — that is this 
 symptom is the "since" date moving, which reads exactly like a broken `coalesce`. It is not: three
 back-to-back seeds hold the date steady. Re-running the seed fixes it in a second, and both the script
 and [supabase-local.md](../project/supabase-local.md#a-shelf-with-something-on-it) now say so.
+
+## What the code review changed
+
+Sol reviewed the **built** code afterwards — the review CLAUDE.md says to weight higher, and it
+earned that here, finding one high and one medium that the plan review could not have seen.
+
+- **High: a library card is not an article.** The seed decided and reported using `listArticles()`,
+  which trusts the **cached `block_count` column**. The reading route reads the actual
+  `revision_blocks` rows. So a revision with a tree, a positive `block_count` and no block rows is
+  *listed on the shelf* and *404s when opened* — the seed would skip it and exit 0.
+  **Reproduced deliberately**: deleting `todo`'s block rows left `block_count = 10` against 0 real
+  rows, and `listArticles()` still returned the slug while `loadArticle()` threw 404. The seed now
+  asks `loadArticle` — the route's own bar — for every decision and for the final answer, and on that
+  broken state it reloaded and republished instead of skipping.
+- **High, second half: `archived_at` was being treated as proof of health.** An archived article was
+  skipped *and* left out of the expected set, so an archived-and-broken one exited green while absent
+  from both the active shelf and the archived one. Archived is now reported and never a reason to
+  skip: a healthy archived article is skipped because it is readable, and a broken one is reloaded —
+  publishing preserves the archive state. A unit test covers each, and breaking the branch turns the
+  right one red.
+- **High, third half: the mutable `expected` list was the bug's vehicle.** Built branch by branch as
+  the loop ran, so a wrong branch silently shrank what got checked. It is now the fixed seeded set
+  minus whatever belongs to another owner — a rule rather than bookkeeping.
+- **Medium: `serialise: true` was the wrong lock, held for the wrong span.** It takes `RUN_LOCK`
+  around each individual load, leaving the decisions, the gaps between slugs and the postcondition
+  unprotected. `store-parity` and `store-roundtrip` take the separate **`CORPUS_LOCK`** and then clear
+  every current revision, so a corpus wipe could land between the last load and the answer and the run
+  would exit 0 over state that had already gone. That is also what produced the mid-run
+  `404 /api/article/writes` seen while testing. The seed now takes `CORPUS_LOCK` around the whole
+  article phase, **outside** `RUN_LOCK`, which is the documented order and the only one that cannot
+  deadlock.
+- **Low: the blob fence was not before the first write**, as its own comment claimed — the experimental
+  upsert ran first. Moved above it, so every preflight refusal precedes every mutation.
+- **Low: four stale sentences.** `supabase-local.md` still said the store check "warns" when it now
+  exits non-zero; it and the fixture README still said both excluded fixtures "exist to be refused",
+  which is untrue of `noema`; `seed-dev-rules.ts` still explained why it was a warning and not a
+  refusal; and `setup-local.ts` still described the world before the corpus was committed.
+
+Sol cleared three things explicitly: the non-zero exit is correctly placed after the durable work, the
+`scripts/` → `tests/helpers/` import has no vitest dependency and no import-time side effect (~128 ms),
+and another owner's slug cannot produce a successful exit.
+
+**One thing was left as it is, with the comment corrected instead.** The blob fence checks
+configuration — it refuses a missing credential and a database/bucket project mismatch — but it makes
+no Storage call, so on an all-skip run a present-but-invalid key passes. Adding a `loadSource` probe
+would be the fix if "ready" has to include opening the original document. It does not today, and the
+narrower claim is now what the comment says.
