@@ -186,6 +186,25 @@ not be a fourth. `drizzle/0035_timeline.sql` is the shape to copy.
 **Writing a migration is free; applying one is Greg's call, locally as well as remotely** —
 [AGENTS.md](../../AGENTS.md).
 
+## It starts itself when you press the mode
+
+Since 2026-09-02, pressing **Timeline** in the bottom bar on an article that has never had one starts
+the job — no second button. Only a *press* does: a pasted `?mode=timeline` link, a Back step and a
+link in from the metadata page all show the empty state and its button, and spend nothing. A press is
+recorded as data by the bar itself ([`src/web/activation.ts`](../../src/web/activation.ts)), because
+a mount is not a click.
+
+The loop that made Greg choose a button in the first place —
+[glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
+— is closed structurally: one automatic attempt per `(slug, step)` per tab session, claimed before
+the request goes out. Hence the two verbs on the hook: `ensure` is unforced and is what **both** the
+automatic run and the empty state's button call, because `work_key` is computed from the request and
+two keys are two paid jobs; `regenerate` is forced and is *Read it again*, offered beside a timeline
+that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+
+The reader profile is not in this stage's stamp at all (§ Freshness), so this is the one of the five
+with no profile tickbox to replace and nothing extra to say about an automatic run.
+
 ## Owners only, for now
 
 [`src/web/visitor.ts`](../../src/web/visitor.ts) names `timeline` in `COSTS` — stated deliberately

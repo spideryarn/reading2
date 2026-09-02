@@ -118,6 +118,7 @@ import {
   Quote,
 } from "lucide-react";
 import type { Comment } from "../types.js";
+import { armActivationForMode } from "./activation.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
@@ -621,7 +622,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes mode={mode} onMode={onMode} marked={marked} />
+          <DockModes slug={slug} mode={mode} onMode={onMode} marked={marked} />
         ) : (
           MODES_UI.map((m) => (
             <DockLink
@@ -865,10 +866,13 @@ export function withMode(search: string, mode: Mode): string {
 const MARKED = "tw:opacity-55";
 
 function DockModes({
+  slug,
   mode,
   onMode,
   marked,
 }: {
+  /** The article a press is about, for the activation token. */
+  slug: string;
   mode: Mode;
   onMode(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
@@ -953,6 +957,14 @@ function DockModes({
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
+                /* **The one place in the app that knows a mode was pressed**,
+                   which is why the token is minted here and not in `onMode` —
+                   `setMode` is a query-state setter, and Back and Forward move
+                   it too. Four of the thirteen modes open on an artefact
+                   nobody has paid for yet, and this is what tells that panel
+                   the difference between a press and a pasted link.
+                   src/web/activation.ts. */
+                armActivationForMode(slug, m.mode);
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the

@@ -635,12 +635,20 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             hasProfile={view.hasProfile}
             slug={slug}
             disabled={view.job !== null}
+            automatic={view.automatic}
           />
+          {/* **`ensure`, not `regenerate`.** There is no picture — that is what
+              this state means — so the freshness check will agree, and it has
+              to be the identical request the automatic run makes: a forced
+              press landing inside the auto-start window is a different
+              `work_key`, is not de-duplicated, and buys a second two-minute
+              $0.20 job. useSketch.ts § `ensure`. */}
           <JobProgress
             job={view.job}
+            starting={view.starting}
             failed={view.failed}
             stalled={view.stalled}
-            onRun={() => view.draw(useProfile)}
+            onRun={() => view.ensure(useProfile)}
             onCancel={view.cancel}
             label="Draw the argument"
             step="sketch"

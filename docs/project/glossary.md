@@ -148,13 +148,43 @@ opened — is the one the original version took, and its effect re-fired on ever
 failing, generating again, for as long as the tab stayed open. A button removes that bug
 structurally rather than by remembering to set a flag on every error path.
 
+### That decision was reversed on 2026-09-02, and the loop is still closed structurally
+
+Greg asked for the third option after all:
+
+> And let's have a rule that if the user clicks a mode that hasn't been run yet, automatically run it
+> (rather than requiring them to click a button to start it running).
+>
+> — Greg, 2026-08-31
+
+So **pressing Glossary in the bar on an article with no glossary starts the job**. The word that
+carries the money is *clicks*: a pasted `?mode=glossary` link, a Back step, and a link in from the
+metadata page all show the empty state and its button, and spend nothing. A press is real data —
+[`src/web/activation.ts`](../../src/web/activation.ts) — rather than something inferred from the
+state a mount happens to be in, because a mount is not a click.
+
+The 2026-08-25 reasoning is still true, so the loop it was avoiding is answered by the shape of the
+code rather than by a flag on every error path: **one automatic attempt per `(slug, step)` per tab
+session**, claimed synchronously before the request goes out, in
+[`jobEngine.beginAutoAttempt`](../../src/web/jobEngine.ts). A failure cannot loop because a loop
+needs a second attempt and there is not one. The button stays and is the only retry — a person
+pressing it is not a loop — and a reload is deliberately one more attempt, because a reader who
+reloads after a failure is asking again.
+
+The same four also apply to Ideas, Quotes, Timeline and the Sketch picture inside Diagram;
+[`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts) is the one place the rule lives.
+docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2.
+
 ```
 POST /api/jobs { "slug": "…", "steps": ["glossary"] }                          # once for a list
 POST /api/jobs { "slug": "…", "steps": ["glossary"], "force": ["glossary"] }   # again, to add more
 ```
 
-The first is what the panel's button does, the second what "Find more" does. There is no command
-line: the stage's own one was deleted on 2026-09-01 as a second way to do this
+The first is what the panel's button does **and what the automatic run does** — they have to be the
+same bytes, because `work_key` is computed from the request and two keys are two paid jobs. The
+glossary is the one of the five that already had this right: forcing this step *appends*, so its
+`find` was never allowed to force. The second is "Find more". There is no command line: the stage's
+own one was deleted on 2026-09-01 as a second way to do this
 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
 ## The two bugs this feature is shaped around

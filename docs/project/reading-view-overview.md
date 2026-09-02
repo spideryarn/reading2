@@ -26,6 +26,16 @@ of compression, down the page for position and across for detail. Read that firs
   invariants a stream needs and a single response does not.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
+- **Pressing a mode with nothing in it runs it; arriving at one does not.** Five surfaces are backed
+  by a paid step — Glossary, Ideas, Quotes, Timeline, and the Sketch picture inside Diagram — and
+  since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
+  Back step and a link in from the metadata page all show the empty state and its button, and spend
+  nothing: the press is recorded as data by the control that saw it
+  ([`src/web/activation.ts`](../../src/web/activation.ts)), because a mount is not a click. One
+  automatic attempt per `(slug, step)` per tab session is what keeps a failure from looping —
+  [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally),
+  which is the decision this reverses and the reason it still holds.
+  [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, in one place.
 
 ## The docs
 

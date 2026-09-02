@@ -83,6 +83,9 @@ vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
+const { useQuotes } = await import("../src/web/useQuotes.js");
+const { useTimeline } = await import("../src/web/useTimeline.js");
+const { useSketch } = await import("../src/web/useSketch.js");
 
 /** What `Reader` hands the band. Posed rather than run — see refused-writes. */
 const READ: GlossaryRead = {
@@ -101,10 +104,16 @@ const READ: GlossaryRead = {
 
 let ideas: ReturnType<typeof useIdeas> | null = null;
 let glossary: ReturnType<typeof useGlossary> | null = null;
+let quotes: ReturnType<typeof useQuotes> | null = null;
+let timeline: ReturnType<typeof useTimeline> | null = null;
+let sketch: ReturnType<typeof useSketch> | null = null;
 
 function Surfaces(): ReactElement {
   ideas = useIdeas("constitution");
   glossary = useGlossary("constitution", READ);
+  quotes = useQuotes("constitution");
+  timeline = useTimeline("constitution");
+  sketch = useSketch("constitution", []);
   return createElement("div");
 }
 
@@ -143,28 +152,75 @@ function forcedByPipeline(request: Posted): Set<StepName> {
 }
 
 describe("ideas", () => {
-  it("names its own step in `force`, every time", async () => {
+  it("names its own step in `force` when it regenerates", async () => {
     await act(async () => {
-      await ideas?.find();
+      await ideas?.regenerate();
     });
     const request = only();
     expect(request.steps).toEqual(["ideas"]);
-    /* **Always forced**, unlike the other two: the button is offered beside a
-       list that is current, so an unforced run would skip. useIdeas.ts § find. */
+    /* The *again* button is offered beside a list that is current, so an
+       unforced run would skip. useIdeas.ts § `regenerate`. */
     expect(request.force).toEqual(["ideas"]);
     expect(forcedByPipeline(request).has("ideas")).toBe(true);
   });
 
   it("sends `useProfile` only when it is false", async () => {
     await act(async () => {
-      await ideas?.find();
+      await ideas?.regenerate();
     });
     expect(only()).not.toHaveProperty("useProfile");
     posted.length = 0;
     await act(async () => {
-      await ideas?.find(false);
+      await ideas?.regenerate(false);
     });
     expect(only().useProfile).toBe(false);
+  });
+});
+
+/**
+ * **The empty state's button and the automatic run have to be one request.**
+ *
+ * `work_key` is computed from the request, `force` included (src/jobs.ts), so
+ * an unforced automatic start and a forced press inside the same second are two
+ * different keys — `enqueueOrGet` does not collapse them, stage 1 dutifully
+ * queues the second, and the reader pays for two model calls. Four of these
+ * five forced *from their empty state* until 2026-09-02, which was harmless
+ * while a press was the only caller and is not now.
+ *
+ * Asserted as `force` **absent** rather than as an empty array:
+ * `parseJobRequest` reads the two the same way, but the work key is computed
+ * over the request, so they are not the same key.
+ */
+describe("what the empty state asks for, on all five", () => {
+  it.each([
+    ["the glossary", () => glossary?.find(), "glossary"],
+    ["the ideas", () => ideas?.ensure(), "ideas"],
+    ["the quotes", () => quotes?.ensure(), "quotes"],
+    ["the timeline", () => timeline?.ensure(), "timeline"],
+    ["the sketch", () => sketch?.ensure(), "sketch"],
+  ])("is an unforced run of its own step — %s", async (_name, press, step) => {
+    await act(async () => {
+      await press();
+    });
+    const request = only();
+    expect(request.steps).toEqual([step]);
+    expect(request).not.toHaveProperty("force");
+    expect(forcedByPipeline(request).has(step as StepName)).toBe(false);
+  });
+
+  it.each([
+    ["the ideas", () => ideas?.regenerate(), "ideas"],
+    ["the quotes", () => quotes?.regenerate(), "quotes"],
+    ["the timeline", () => timeline?.regenerate(), "timeline"],
+    ["the sketch", () => sketch?.regenerate(), "sketch"],
+  ])("and the again button forces the same step — %s", async (_name, press, step) => {
+    await act(async () => {
+      await press();
+    });
+    const request = only();
+    expect(request.steps).toEqual([step]);
+    expect(request.force).toEqual([step]);
+    expect(forcedByPipeline(request).has(step as StepName)).toBe(true);
   });
 });
 
