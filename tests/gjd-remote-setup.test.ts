@@ -15,7 +15,17 @@
  * docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md.
  */
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -35,6 +45,8 @@ import {
 } from "../scripts/gjd-remote-setup.js";
 
 const SLUG = "spideryarn/reading2";
+/** The checkout the fixture status is about. */
+const DIR = "/home/greg/code/spideryarn2";
 const ATTEMPT = "3f1c0b6e-0a4d-4a1e-9f77-2c8b5a0d1e42";
 const OTHER_ATTEMPT = "11111111-2222-3333-4444-555555555555";
 const SHA = "a".repeat(64);
@@ -57,7 +69,7 @@ function statusText(over: Partial<Record<string, unknown>> = {}): string {
   return JSON.stringify({
     v: 1,
     slug: SLUG,
-    dir: "/home/greg/code/spideryarn2",
+    dir: DIR,
     attempt: ATTEMPT,
     configSha256: SHA,
     command: "npm ci && npm run setup",
@@ -193,7 +205,7 @@ function status(over: Partial<Record<string, unknown>> = {}): SetupStatus {
 }
 
 describe("setupVerdict", () => {
-  const ready = { attempt: null, configSha256: SHA };
+  const ready = { attempt: null, configSha256: SHA, slug: SLUG, dir: DIR };
 
   it("never-run when there is no status file at all", () => {
     const v = setupVerdict(undefined, ready);
@@ -208,14 +220,14 @@ describe("setupVerdict", () => {
   });
 
   it("success when the attempt being watched is the one that wrote the file", () => {
-    expect(setupVerdict(status(), { attempt: ATTEMPT, configSha256: SHA }).kind).toBe("success");
+    expect(setupVerdict(status(), { attempt: ATTEMPT, configSha256: SHA, slug: SLUG, dir: DIR }).kind).toBe("success");
   });
 
   it("STALE-ATTEMPT when the file is a previous run's, however healthy it looks", () => {
     // The whole reason the attempt id exists, and the one clause that can fire
     // on a file saying success. `gjd-remote setup` launched a job and is asking
     // about THAT job; a file from another one is not evidence about it.
-    const v = setupVerdict(status(), { attempt: OTHER_ATTEMPT, configSha256: SHA });
+    const v = setupVerdict(status(), { attempt: OTHER_ATTEMPT, configSha256: SHA, slug: SLUG, dir: DIR });
     expect(v.kind).toBe("stale-attempt");
     if (v.kind !== "stale-attempt") throw new Error("unreachable");
     expect(v.found).toBe(ATTEMPT);
@@ -236,7 +248,7 @@ describe("setupVerdict", () => {
     // A success is a success at whatever it did. The repo changing its setup
     // line does not make the old run wrong; it makes it about a different
     // question. Readiness has to mean "for the config in front of me".
-    const v = setupVerdict(status(), { attempt: null, configSha256: OTHER_SHA });
+    const v = setupVerdict(status(), { attempt: null, configSha256: OTHER_SHA, slug: SLUG, dir: DIR });
     expect(v.kind).toBe("config-changed");
     expect(v.remedy).toContain("gjd-remote setup");
   });
@@ -246,11 +258,11 @@ describe("setupVerdict", () => {
     // gets. Telling them to re-run setup while a run holds the lock sends them
     // into exit 75; telling them a run is under way lets them wait or look.
     const live = status({ outcome: "started", finishedAt: undefined, exitCode: undefined, checkOutcome: undefined });
-    expect(setupVerdict(live, { attempt: null, configSha256: OTHER_SHA }).kind).toBe("in-progress");
+    expect(setupVerdict(live, { attempt: null, configSha256: OTHER_SHA, slug: SLUG, dir: DIR }).kind).toBe("in-progress");
   });
 
   it("reports a stale attempt before anything else", () => {
-    const v = setupVerdict(status({ configSha256: OTHER_SHA }), { attempt: OTHER_ATTEMPT, configSha256: SHA });
+    const v = setupVerdict(status({ configSha256: OTHER_SHA }), { attempt: OTHER_ATTEMPT, configSha256: SHA, slug: SLUG, dir: DIR });
     expect(v.kind).toBe("stale-attempt");
   });
 
@@ -268,12 +280,74 @@ describe("setupVerdict", () => {
     expect(checked.why).toContain("check failed");
   });
 
+  // ---------------------------------------------- bound to THIS checkout
+
+  /** The expectation `new-claude` would build for the fixture's own checkout. */
+  const here = { attempt: null, configSha256: SHA, slug: SLUG, dir: DIR };
+
+  it("success only when the file is about this repo, in this directory", () => {
+    // The base case for the three below: all of slug, dir and inode agree, so
+    // the success is evidence about the checkout in front of us.
+    const v = setupVerdict(status({ checkoutInode: "12345" }), { ...here, checkoutInode: "12345" });
+    expect(v.kind).toBe("success");
+  });
+
+  it("WRONG-CHECKOUT when the status is about another repo", () => {
+    // Two repos can share a status file only by accident — a slug that was
+    // mangled into the same file name, or a file copied about. Either way the
+    // success it records was a success at something else.
+    const v = setupVerdict(status(), { ...here, slug: "someone/else" });
+    expect(v.kind).toBe("wrong-checkout");
+    if (v.kind !== "wrong-checkout") throw new Error("unreachable");
+    expect(v.field).toBe("slug");
+    expect(v.found).toBe(SLUG);
+    expect(v.wanted).toBe("someone/else");
+  });
+
+  it("WRONG-CHECKOUT when the status is about a different directory", () => {
+    // `--dir` can point anywhere, and the status file is per-slug: a success
+    // recorded for /home/greg/code/x says nothing about /tmp/y.
+    const v = setupVerdict(status(), { ...here, dir: "/home/greg/other/tree" });
+    expect(v.kind).toBe("wrong-checkout");
+    if (v.kind !== "wrong-checkout") throw new Error("unreachable");
+    expect(v.field).toBe("dir");
+    expect(v.found).toBe(DIR);
+  });
+
+  it("WRONG-CHECKOUT, re-cloned, when the path is the same but the checkout is not", () => {
+    // The one GPT Sol's finding 7 is really about: delete the checkout, clone
+    // it again at the same path, and every field above still matches while the
+    // tree has never had setup run in it. The .git inode is what changed.
+    const v = setupVerdict(status({ checkoutInode: "12345" }), { ...here, checkoutInode: "67890" });
+    expect(v.kind).toBe("wrong-checkout");
+    if (v.kind !== "wrong-checkout") throw new Error("unreachable");
+    expect(v.field).toBe("inode");
+    expect(v.why).toContain("re-cloned");
+    expect(describeVerdict(v)).toContain("gjd-remote setup");
+  });
+
+  it("does not invent an inode mismatch when either side never recorded one", () => {
+    // A status written before this field existed, or a checkout with no .git to
+    // stat, is not evidence of a re-clone. Only two inodes that disagree are.
+    expect(setupVerdict(status(), { ...here, checkoutInode: "12345" }).kind).toBe("success");
+    expect(setupVerdict(status({ checkoutInode: "12345" }), here).kind).toBe("success");
+  });
+
+  it("reports the wrong checkout before it reports a stale attempt", () => {
+    // "This file is about another tree" beats every observation you could make
+    // about the run that wrote it, including which run it was.
+    const v = setupVerdict(status(), { ...here, slug: "someone/else", attempt: OTHER_ATTEMPT });
+    expect(v.kind).toBe("wrong-checkout");
+  });
+
   it("a failed attempt for an old config still reports config-changed", () => {
     // Which is right: re-running setup is the answer either way, and the
     // failure it is being asked about was a failure at a different question.
     const v = setupVerdict(status({ outcome: "failed", exitCode: 1, checkOutcome: "none" }), {
       attempt: null,
       configSha256: OTHER_SHA,
+      slug: SLUG,
+      dir: DIR,
     });
     expect(v.kind).toBe("config-changed");
   });
@@ -373,16 +447,45 @@ sys.stdout.flush()
 time.sleep(120)
 `;
 
+/**
+ * `flock -u 9` — releases the lock on an INHERITED descriptor, which is the
+ * whole of GPT Sol's finding 6: the lock lives on the open file description, so
+ * anything holding a copy of fd 9 can drop it for everybody.
+ *
+ * Python rather than `flock -u`, and invoked by absolute path, because the
+ * setup command's environment is `env -i PATH=SETUP_PATH` — on this Mac there
+ * is no flock on that PATH at all, and a `flock -u 9` that failed with
+ * "command not found" would leave the lock held and pass this test for exactly
+ * the wrong reason.
+ */
+const FLOCK_UNLOCK = `#!/usr/bin/env python3
+import fcntl, sys
+fcntl.flock(int(sys.argv[1]), fcntl.LOCK_UN)
+sys.stderr.write("unlocked fd %s\\n" % sys.argv[1])
+`;
+
 function have(program: string): boolean {
   return spawnSync("sh", ["-c", `command -v ${program} >/dev/null 2>&1`]).status === 0;
 }
 
+/** The absolute path to a program, for the commands that run under `env -i`
+ *  with only SETUP_PATH and cannot look one up. */
+function whichAbs(program: string): string {
+  const r = spawnSync("sh", ["-c", `command -v ${program}`], { encoding: "utf8" });
+  return (r.stdout ?? "").trim();
+}
+
 const HAVE_REAL_FLOCK = have("flock");
 const HAVE_PYTHON = have("python3");
+const HAVE_GIT = have("git");
+const PYTHON3 = HAVE_PYTHON ? whichAbs("python3") : "";
 
 let jobRoot: string;
 let shimDir: string | null = null;
 let runPath: string;
+/** The python that drops fd 9's lock, written once and named by the setup
+ *  commands that try to release the lock out from under the job. */
+let unlockPath: string;
 
 beforeAll(() => {
   jobRoot = mkdtempSync(join(root, "jobs-"));
@@ -394,6 +497,9 @@ beforeAll(() => {
     chmodSync(f, 0o755);
   }
   runPath = shimDir ? `${shimDir}:${process.env.PATH ?? ""}` : (process.env.PATH ?? "");
+  unlockPath = join(jobRoot, "unlock9.py");
+  writeFileSync(unlockPath, FLOCK_UNLOCK);
+  chmodSync(unlockPath, 0o755);
 });
 
 type Job = ReturnType<typeof buildJob>;
@@ -478,10 +584,37 @@ describe("setupJobScript, run for real", () => {
     expect(readFileSync(job.paths.logPath, "utf8")).toContain("setup-ran-and-printed");
     expect(r.stdout).toContain("setup-ran-and-printed");
     // The verdict the CLI would reach.
-    expect(setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256 }).kind).toBe("success");
+    expect(setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir }).kind).toBe("success");
     // And the temp file is gone, not left beside the real one.
     expect(existsSync(job.paths.tmpPath)).toBe(false);
   });
+
+  it.skipIf((!HAVE_REAL_FLOCK && !HAVE_PYTHON) || !HAVE_GIT)(
+    "records WHICH checkout it set up, not just where it was",
+    () => {
+      // GPT Sol's finding 7, the half that lives on the box. Delete the
+      // checkout, clone it again at the same path, and the slug, the directory
+      // and the config hash all still match a success that was about a tree
+      // which no longer exists. The `.git` inode is the one thing a re-clone
+      // cannot reproduce, so the job records it while it is standing in the
+      // tree it is setting up.
+      const job = buildJob({ name: "inode", command: "echo set-up-fine" });
+      const init = spawnSync("git", ["init", "-q", job.dir], { encoding: "utf8" });
+      expect(init.status, init.stderr).toBe(0);
+      runJob(job);
+      const s = readStatus(job);
+      expect(s.outcome).toBe("success");
+      const inode = s.checkoutInode;
+      if (inode === undefined) throw new Error("the job recorded no checkoutInode");
+      expect(inode).toBe(String(statSync(join(job.dir, ".git")).ino));
+      expect(s.checkoutRoot).toBe(realpathSync(job.dir));
+
+      const asked = { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir };
+      expect(setupVerdict(s, { ...asked, checkoutInode: inode }).kind).toBe("success");
+      // What Stage 3's fresh clone must not be able to skip.
+      expect(setupVerdict(s, { ...asked, checkoutInode: "0" }).kind).toBe("wrong-checkout");
+    },
+  );
 
   it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("records the setup command's own exit code", () => {
     const job = buildJob({ name: "exit3", command: "echo starting-anyway; exit 3" });
@@ -490,7 +623,7 @@ describe("setupJobScript, run for real", () => {
     expect(s.outcome).toBe("failed");
     expect(s.exitCode).toBe(3);
     expect(s.checkOutcome).toBe("none");
-    const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256 });
+    const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir });
     expect(v.kind).toBe("failed");
     if (v.kind !== "failed") throw new Error("unreachable");
     expect(v.exitCode).toBe(3);
@@ -508,7 +641,7 @@ describe("setupJobScript, run for real", () => {
     expect(s.checkOutcome).toBe("failed");
     expect(s.outcome).toBe("failed");
     expect(readFileSync(job.paths.logPath, "utf8")).toContain("check-ran-and-printed");
-    const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256 });
+    const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir });
     if (v.kind !== "failed") throw new Error(`expected failed, got ${v.kind}`);
     expect(v.checkFailed).toBe(true);
   });
@@ -619,7 +752,7 @@ describe("setupJobScript, run for real", () => {
       expect(r.stderr).toContain("no status written");
       expect(r.stderr).toContain("cannot enter");
       expect(existsSync(job.paths.statusPath)).toBe(false);
-      expect(setupVerdict(undefined, { attempt: job.attempt, configSha256: job.configSha256 }).kind).toBe("never-run");
+      expect(setupVerdict(undefined, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir }).kind).toBe("never-run");
     } finally {
       chmodSync(inner, 0o755);
     }
@@ -703,6 +836,95 @@ describe("setupJobScript, run for real", () => {
     expect(second.status).toBe(0);
   });
 
+  it.skipIf(!HAVE_PYTHON)("does not let the setup command release the lock it is running under", async () => {
+    // GPT Sol's finding 6. The lock is an open file description, so ANY process
+    // holding a copy of fd 9 can drop it for everybody — including the repo's
+    // own setup command, which the job runs as a child and which therefore
+    // inherited the descriptor. One `flock -u 9` in a repo's setup script (or a
+    // `tee` that outlives it) and a second `gjd-remote setup --force` runs `npm
+    // ci` in the same tree at the same time, which is the half-installed
+    // checkout the lock exists to prevent.
+    //
+    // So the command is given no fd 9 at all, and this test asks the command
+    // itself what it can see and then asks an OUTSIDE observer whether the lock
+    // is still held — because "the unlock failed" and "the unlock never ran"
+    // look identical from inside.
+    const job = buildJob({
+      name: "unlock",
+      // Every marker is SPLIT ACROSS printf's format and its argument, because
+      // the job echoes the command before running it: a token that appears in
+      // the command text arrives on stdout whether the command ran or not, and
+      // this test would then wait for its own echo and assert on it.
+      command:
+        `if [ -e /dev/fd/9 ]; then printf 'fd9-%s\\n' OPEN; else printf 'fd9-%s\\n' CLOSED; fi; ` +
+        `${PYTHON3} ${unlockPath} 9; printf 'unlock-%s\\n' tried; sleep 20`,
+    });
+    const pane = spawn("bash", [job.jobPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, PATH: runPath },
+      detached: true,
+    });
+    holders.push(pane);
+
+    let seen = "";
+    try {
+      await new Promise<void>((resolve, reject) => {
+        pane.stdout?.on("data", (d: Buffer) => {
+          seen += d.toString();
+          if (seen.includes("unlock-tried")) resolve();
+        });
+        pane.on("exit", (code) => reject(new Error(`the pane exited before it tried the unlock (${code}): ${seen}`)));
+        setTimeout(() => reject(new Error(`the unlock was never tried: ${seen}`)), 20_000);
+      });
+
+      // The command could not even see the descriptor, and the unlocker said so
+      // out loud. Without this second half the test would also pass on a python
+      // that never started.
+      expect(seen).toContain("fd9-CLOSED");
+      expect(seen).not.toContain("fd9-OPEN");
+      expect(seen).toContain("Bad file descriptor");
+      expect(seen).not.toContain("unlocked fd 9");
+
+      // And the lock is still held, from outside, while the command runs.
+      const tryPath = join(job.work, "trylock.py");
+      writeFileSync(tryPath, FLOCK_TRY);
+      const observer = spawnSync("python3", [tryPath, job.paths.lockPath], { encoding: "utf8" });
+      expect(observer.stderr).toBe("");
+      expect(observer.status, "the setup command released the setup lock").toBe(1);
+    } finally {
+      if (pane.pid !== undefined) {
+        try {
+          process.kill(-pane.pid, "SIGKILL");
+        } catch {
+          // Already gone; the assertions above say whether that mattered.
+        }
+      }
+    }
+  });
+
+  it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("records the command's exit code even when the log cannot be written", () => {
+    // GPT Sol's finding 8. `pipefail` returns the RIGHTMOST non-zero status, so
+    // when the command fails and `tee` fails too, the status file gets tee's
+    // exit code and the reader is told the repo's setup exited 1 when it
+    // exited 3. Two different failures, and only one of them is the repo's.
+    const work = mkdtempSync(join(jobRoot, "teefail-"));
+    const paths = setupPaths({ work, slug: SLUG, attempt: ATTEMPT });
+    mkdirSync(paths.setupDir, { recursive: true });
+    // A directory where the log file should be: `tee -a` cannot open it, and
+    // fails on every step for the whole run.
+    mkdirSync(paths.logPath);
+    const job = buildJob({ name: "teefail", work, command: "exit 3" });
+    runJob(job);
+    const s = readStatus(job);
+    expect(s.exitCode).toBe(3);
+    expect(s.toolFailure).toBe("log");
+    // A run whose log went nowhere is not a success, whatever the command said.
+    expect(s.outcome).toBe("failed");
+    const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir });
+    expect(v.kind).toBe("failed");
+    expect(v.why).toContain("log");
+  });
+
   it.skipIf(HAVE_REAL_FLOCK)("says so, distinctly, when the box has no flock at all", () => {
     // Without this clause a missing flock would come out of `flock -n 9` as
     // 'command not found' ⇒ non-zero ⇒ "another setup holds the lock", which is
@@ -747,7 +969,7 @@ describe("setupJobScript, run for real", () => {
     const s = readStatus(job);
     expect(s.outcome).toBe("started");
     expect(s.finishedAt).toBeUndefined();
-    const v = setupVerdict(s, { attempt: null, configSha256: job.configSha256 });
+    const v = setupVerdict(s, { attempt: null, configSha256: job.configSha256, slug: SLUG, dir: job.dir });
     expect(v.kind).toBe("in-progress");
     expect(describeVerdict(v)).toContain("gjd-remote ls");
   });
@@ -769,7 +991,7 @@ describe("setupJobScript, run for real", () => {
       // And the earlier verdict survived rather than being half-overwritten.
       const s = readStatus(job);
       expect(s.outcome).toBe("started");
-      expect(setupVerdict(s, { attempt: null, configSha256: job.configSha256 }).kind).toBe("in-progress");
+      expect(setupVerdict(s, { attempt: null, configSha256: job.configSha256, slug: SLUG, dir: job.dir }).kind).toBe("in-progress");
     } finally {
       chmodSync(paths.setupDir, 0o755);
     }

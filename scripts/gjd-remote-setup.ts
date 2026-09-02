@@ -166,6 +166,18 @@ export type SetupOutcome = "started" | "success" | "failed";
  *  run. */
 export type CheckOutcome = "success" | "failed" | "none";
 
+/**
+ * A failure of the JOB's own machinery, as opposed to a failure of the repo's
+ * setup command.
+ *
+ * `log` means `tee` could not write the log file, so the record of what
+ * happened is incomplete. That is not a success even when the command exited 0:
+ * `success` has to mean somebody can go and read what was done, and here nobody
+ * can. Kept separate from `exitCode` because they answer different questions,
+ * and folding them together is exactly what `pipefail` did.
+ */
+export type ToolFailure = "log";
+
 export type SetupStatus = {
   v: 1;
   slug: string;
@@ -184,10 +196,26 @@ export type SetupStatus = {
   outcome: SetupOutcome;
   exitCode?: number;
   checkOutcome?: CheckOutcome;
+  /** Set when the job's own machinery failed. Never present on a `success`. */
+  toolFailure?: ToolFailure;
+  /**
+   * The inode of the checkout's `.git`, as the box saw it while setting up.
+   *
+   * The one thing a re-clone at the same path cannot reproduce, and therefore
+   * the only field that can tell "this tree was set up" from "a tree that used
+   * to be here was set up". Absent when the directory is not a git checkout,
+   * and absent from every status written before this field existed — a reader
+   * treats that as "no comparison", never as a mismatch.
+   */
+  checkoutInode?: string;
+  /** `git rev-parse --show-toplevel` with symlinks resolved, when the box could
+   *  read one. `dir` is what was asked for; this is what was found. */
+  checkoutRoot?: string;
 };
 
 const OUTCOMES: readonly SetupOutcome[] = ["started", "success", "failed"];
 const CHECK_OUTCOMES: readonly CheckOutcome[] = ["success", "failed", "none"];
+const TOOL_FAILURES: readonly ToolFailure[] = ["log"];
 
 const REQUIRED_STRINGS = ["slug", "dir", "attempt", "configSha256", "command", "startedAt"] as const;
 const KNOWN_KEYS = new Set<string>([
@@ -197,6 +225,9 @@ const KNOWN_KEYS = new Set<string>([
   "finishedAt",
   "exitCode",
   "checkOutcome",
+  "toolFailure",
+  "checkoutInode",
+  "checkoutRoot",
 ]);
 
 type ParseResult = { ok: true; status: SetupStatus } | { ok: false; why: string };
@@ -276,12 +307,15 @@ export function parseSetupStatus(text: string): ParseResult {
     );
   }
 
-  const common: CommonStatus = { v: 1, slug, dir, attempt, configSha256, command, startedAt };
+  const identity = parseIdentity(o);
+  if (typeof identity === "string") return no(identity);
+
+  const common: CommonStatus = { v: 1, slug, dir, attempt, configSha256, command, startedAt, ...identity };
 
   if (settled === "started") {
     // A live attempt carries none of the finishing fields. One that does was
     // written by something that stopped halfway through a thought.
-    for (const key of ["finishedAt", "exitCode", "checkOutcome"] as const) {
+    for (const key of ["finishedAt", "exitCode", "checkOutcome", "toolFailure"] as const) {
       if (key in o) return no(`the status file says it is still running but also has a '${key}'`);
     }
     return { ok: true, status: { ...common, outcome: "started" } };
@@ -290,7 +324,31 @@ export function parseSetupStatus(text: string): ParseResult {
 }
 
 /** The fields every status carries, whatever it went on to say. */
-type CommonStatus = Omit<SetupStatus, "outcome" | "finishedAt" | "exitCode" | "checkOutcome">;
+type CommonStatus = Omit<SetupStatus, "outcome" | "finishedAt" | "exitCode" | "checkOutcome" | "toolFailure">;
+
+/** Which checkout the status is about, or the sentence saying the file cannot
+ *  be trusted about it. Both fields are optional — absent means "the box could
+ *  not tell", which the verdict reads as no comparison. Present and malformed
+ *  is a refusal: a field that is there and wrong is worse than one that is
+ *  missing, because something will compare it. */
+function parseIdentity(o: Record<string, unknown>): Pick<SetupStatus, "checkoutInode" | "checkoutRoot"> | string {
+  const got: { checkoutInode?: string; checkoutRoot?: string } = {};
+  if ("checkoutInode" in o) {
+    const v = nonEmpty(o.checkoutInode);
+    if (v === undefined || !/^[0-9]+$/.test(v)) {
+      return `the status file's checkoutInode is ${JSON.stringify(o.checkoutInode)}, which is not an inode number`;
+    }
+    got.checkoutInode = v;
+  }
+  if ("checkoutRoot" in o) {
+    const v = nonEmpty(o.checkoutRoot);
+    if (v === undefined || !v.startsWith("/")) {
+      return `the status file's checkoutRoot is ${JSON.stringify(o.checkoutRoot)}, which is not an absolute path`;
+    }
+    got.checkoutRoot = v;
+  }
+  return got;
+}
 
 /**
  * The six strings every status must have, or the sentence naming the first one
@@ -343,14 +401,29 @@ function parseFinished(
     return no(`the status file says '${settled}' but its checkOutcome is ${JSON.stringify(o.checkOutcome)}`);
   }
 
+  let toolFailure: ToolFailure | undefined;
+  if ("toolFailure" in o) {
+    toolFailure = oneOf(TOOL_FAILURES, o.toolFailure);
+    if (toolFailure === undefined) {
+      return no(`the status file says '${settled}' but its toolFailure is ${JSON.stringify(o.toolFailure)}`);
+    }
+  }
+
   if (settled === "success" && exitCode !== 0) {
     return no(`the status file claims success and an exit code of ${exitCode}, which cannot both be true`);
   }
   if (settled === "success" && check === "failed") {
     return no("the status file claims success and a failed check, which cannot both be true");
   }
+  if (settled === "success" && toolFailure !== undefined) {
+    // The job forces `failed` when its own machinery broke, so a file saying
+    // both was not written by the job — and 'success' with no readable log is
+    // the friendlier half of a contradiction, which is never the half to take.
+    return no(`the status file claims success and a '${toolFailure}' tool failure, which cannot both be true`);
+  }
 
-  return { ok: true, status: { ...common, finishedAt, outcome: settled, exitCode, checkOutcome: check } };
+  const done = { ...common, finishedAt, outcome: settled, exitCode, checkOutcome: check };
+  return { ok: true, status: toolFailure === undefined ? done : { ...done, toolFailure } };
 }
 
 // ---------------------------------------------------------------- the verdict
@@ -363,6 +436,16 @@ function parseFinished(
  */
 export type SetupVerdict =
   | { kind: "never-run"; why: string; remedy: string }
+  | {
+      kind: "wrong-checkout";
+      why: string;
+      remedy: string;
+      /** Which of the three bindings disagreed. */
+      field: "slug" | "dir" | "inode";
+      /** What the status file says, and what the caller asked about. */
+      found: string;
+      wanted: string;
+    }
   | { kind: "stale-attempt"; why: string; remedy: string; found: string }
   | { kind: "in-progress"; why: string; remedy: string; attempt: string; startedAt: string }
   | { kind: "config-changed"; why: string; remedy: string }
@@ -379,17 +462,93 @@ export type SetupVerdict =
  * does not care which run made it so, so it passes `null`. An optional field
  * would let the first caller forget, and forgetting means reading a previous
  * run's success as this one's.
+ *
+ * `slug` and `dir` are here because attempt and config hash between them never
+ * say WHICH TREE the success was about — GPT Sol's finding 7. The status file
+ * is per-slug and lives on the box, so one written for another directory, or
+ * for a checkout that has since been deleted and cloned again at the same path,
+ * would otherwise read as a success for a tree nothing has ever set up.
  */
-export type SetupExpectation = { attempt: string | null; configSha256: string };
+export type SetupExpectation = {
+  attempt: string | null;
+  configSha256: string;
+  /** The repo being asked about. */
+  slug: string;
+  /** The checkout on the box being asked about. */
+  dir: string;
+  /**
+   * The `.git` inode of that checkout, if the caller looked it up on the box.
+   *
+   * Optional because not every caller can cheaply look, and because a status
+   * written before the field existed carries none either. Compared only when
+   * both sides have one: a missing inode is "no comparison", not a mismatch.
+   */
+  checkoutInode?: string;
+};
 
 const RUN_SETUP = "gjd-remote setup   # set this repo up on the box";
 
 /**
+ * Is the status file about the checkout we are asking about at all, and if not,
+ * which of the three bindings gave it away.
+ *
+ * Slug, then directory, then the `.git` inode — widest first, so the sentence
+ * the reader gets names the biggest thing that is wrong. The inode is last
+ * because it is the subtlest: everything else can match while the tree has been
+ * deleted and cloned again, which is a checkout that has never had setup run in
+ * it wearing a success.
+ */
+function wrongCheckout(status: SetupStatus, expected: SetupExpectation): SetupVerdict | undefined {
+  const mismatch = (field: "slug" | "dir" | "inode", found: string, wanted: string, why: string): SetupVerdict => ({
+    kind: "wrong-checkout",
+    field,
+    found,
+    wanted,
+    why,
+    remedy: RUN_SETUP,
+  });
+
+  if (status.slug !== expected.slug) {
+    return mismatch(
+      "slug",
+      status.slug,
+      expected.slug,
+      `the setup status on the box is about ${status.slug}, not ${expected.slug} — whatever it proved, it did not prove this repo`,
+    );
+  }
+  if (status.dir !== expected.dir) {
+    return mismatch(
+      "dir",
+      status.dir,
+      expected.dir,
+      `the setup status on the box is about the checkout at ${status.dir}, not ${expected.dir} — nothing has set this one up`,
+    );
+  }
+  const found = status.checkoutInode;
+  const wanted = expected.checkoutInode;
+  if (found !== undefined && wanted !== undefined && found !== wanted) {
+    return mismatch(
+      "inode",
+      found,
+      wanted,
+      `the checkout at ${expected.dir} has been re-cloned since that setup ran (its .git was ${found}, and is now ${wanted}) — ` +
+        "the tree that success was about no longer exists",
+    );
+  }
+  return undefined;
+}
+
+/**
  * The whole decision, in order, and the order is the design.
  *
- * `stale-attempt` comes first because it is the most specific thing that can be
- * said: a file about another run tells you nothing about yours, and "it is
- * about run Y" beats every observation you could make about run Y's contents.
+ * `wrong-checkout` comes first of all, because every later clause is a
+ * statement about the tree the file names, and they are only worth making once
+ * that is the tree in front of us.
+ *
+ * `stale-attempt` comes next because it is the most specific thing that can be
+ * said about the run: a file about another run tells you nothing about yours,
+ * and "it is about run Y" beats every observation you could make about run Y's
+ * contents.
  *
  * `in-progress` comes before `config-changed` because it is the more actionable
  * sentence. A run holding the lock right now will refuse a second one anyway,
@@ -404,6 +563,9 @@ export function setupVerdict(status: SetupStatus | undefined, expected: SetupExp
       remedy: RUN_SETUP,
     };
   }
+
+  const elsewhere = wrongCheckout(status, expected);
+  if (elsewhere !== undefined) return elsewhere;
 
   if (expected.attempt !== null && status.attempt !== expected.attempt) {
     return {
@@ -441,15 +603,15 @@ export function setupVerdict(status: SetupStatus | undefined, expected: SetupExp
   if (status.outcome === "failed") {
     const checkFailed = status.checkOutcome === "failed";
     const exitCode = status.exitCode ?? 0;
-    return {
-      kind: "failed",
-      exitCode,
-      checkFailed,
-      why: checkFailed
-        ? `setup ran on attempt ${status.attempt} but the repo's check failed`
-        : `setup failed on attempt ${status.attempt}, exit ${exitCode}`,
-      remedy: RUN_SETUP,
-    };
+    // The log failure is said first when there was one, because "exit 0 and
+    // failed" is otherwise a sentence nobody can act on.
+    const why =
+      status.toolFailure === "log"
+        ? `setup ran on attempt ${status.attempt} (exit ${exitCode}) but its log could not be written, so there is no record of what it did`
+        : checkFailed
+          ? `setup ran on attempt ${status.attempt} but the repo's check failed`
+          : `setup failed on attempt ${status.attempt}, exit ${exitCode}`;
+    return { kind: "failed", exitCode, checkFailed, why, remedy: RUN_SETUP };
   }
   if (status.outcome === "success") {
     return {
@@ -576,14 +738,18 @@ function requireOneLine(what: string, command: string): void {
  *  4. **The `started` status, written before the command runs**, so a job that
  *     is killed mid-`npm ci` leaves `started` rather than nothing. `never-run`
  *     and "it was running when the box rebooted" must not look the same.
- *  5. **The command, under `env -i`, with no stdin.** No profile is sourced and
- *     nothing of tmux's environment leaks in, so what runs on the box is what
- *     the config asked for and not what happened to be exported. `</dev/null`
- *     because a setup that stops to ask a question in a pane nobody is watching
- *     is a setup that hangs for ever.
- *  6. **`set -o pipefail` inside a subshell around the `tee`.** Without it the
- *     pipeline's status is `tee`'s, and `tee` succeeds at writing a log of a
- *     failure — the exact shape of
+ *  5. **The command, under `env -i`, with no stdin and no fd 9.** No profile is
+ *     sourced and nothing of tmux's environment leaks in, so what runs on the
+ *     box is what the config asked for and not what happened to be exported.
+ *     `</dev/null` because a setup that stops to ask a question in a pane
+ *     nobody is watching is a setup that hangs for ever. `9>&-` because the
+ *     lock is an open file description and a child holding a copy of it can
+ *     release it for everybody — see `run_step`.
+ *  6. **Both halves of the pipeline's status, read separately.** Not
+ *     `pipefail`, which reports the rightmost failure: when the command fails
+ *     and `tee` fails too, the status file would record `tee`'s exit code as
+ *     the repo's. The command's code is the exit code; a broken log is
+ *     `toolFailure: "log"` and forces `failed`. Near neighbour of
  *     docs/postmortems/260831f-the-match-that-still-failed.md.
  *  7. **The final status, atomically**: written to a temp file beside it and
  *     renamed, so a reader never sees half of one.
@@ -623,29 +789,53 @@ export function setupJobScript(o: SetupJobOptions): string {
     `"command":${JSON.stringify(o.command)}`,
   ].join(",");
 
-  // The one line GPT Sol's finding 4 asks for. `env -i` is safe on this box
-  // because node is apt's, from NodeSource, and there is no nvm to lose — see
-  // SETUP_PATH.
+  // `env -i` is safe on this box because node is apt's, from NodeSource, and
+  // there is no nvm to lose — see SETUP_PATH.
+  //
+  // Two things here are load-bearing, and both are GPT Sol's findings:
+  //
+  //  - **`9>&-` on BOTH halves of the pipeline** (finding 6). The lock lives on
+  //    the open file description, so ANY process holding a copy of fd 9 can
+  //    release it for everybody. The repo's setup command is a child of this
+  //    shell and inherited it; one `flock -u 9` in a repo's setup script — or a
+  //    `tee` that outlives the run — and a second `gjd-remote setup` runs `npm
+  //    ci` in the same tree at the same time, which is the half-installed
+  //    checkout the lock exists to prevent. The supervising shell keeps its
+  //    own fd 9, so the lock is still held for the whole job.
+  //  - **`PIPESTATUS` rather than `set -o pipefail`** (finding 8). pipefail
+  //    reports the RIGHTMOST non-zero status, so a run where the command exits
+  //    3 and `tee` also fails is recorded as exit 1 — tee's. Two different
+  //    failures, and only one of them is the repo's. Read separately, the
+  //    command's code goes in the status file and a broken log becomes
+  //    `toolFailure: "log"`.
+  //
+  // A function rather than a subshell, because PIPESTATUS is only readable in
+  // the shell that ran the pipeline.
   const runStep = [
     `run_step() {`,
-    `  ( set -o pipefail`,
-    `    env -i HOME=${shq(o.home)} PATH=${shq(SETUP_PATH)} USER=${shq(o.user)} LANG=C.UTF-8 TERM=dumb \\`,
-    `      bash -c "$1" </dev/null 2>&1 | tee -a "$log" )`,
+    `  env -i HOME=${shq(o.home)} PATH=${shq(SETUP_PATH)} USER=${shq(o.user)} LANG=C.UTF-8 TERM=dumb \\`,
+    `    bash -c "$1" </dev/null 2>&1 9>&- | tee -a "$log" 9>&-`,
+    `  step_status=("\${PIPESTATUS[@]}")`,
+    `  step_code=\${step_status[0]}`,
+    `  if [ "\${step_status[1]}" -ne 0 ]; then log_failed=1; fi`,
+    `  return "$step_code"`,
     `}`,
   ].join("\n");
 
+  // Every `tee` gets `9>&-` for the same reason run_step's does: a tee left
+  // running with a copy of fd 9 holds the lock past the work.
   const checkBlock =
     o.check === undefined
       ? [
           `# The repo defined no check, so 'none' it stays. Not a pass: see CheckOutcome.`,
-          `printf 'gjd-remote setup: this repo defines no check command\\n' | tee -a "$log"`,
+          `printf 'gjd-remote setup: this repo defines no check command\\n' | tee -a "$log" 9>&-`,
         ].join("\n")
       : [
           `if [ "$code" -eq 0 ]; then`,
-          `  printf '\\ngjd-remote setup: checking with %s\\n' ${shq(o.check)} | tee -a "$log"`,
+          `  printf '\\ngjd-remote setup: checking with %s\\n' ${shq(o.check)} | tee -a "$log" 9>&-`,
           `  if run_step ${shq(o.check)}; then chk=success; else chk=failed; fi`,
           `else`,
-          `  printf '\\ngjd-remote setup: setup failed, so the check was not run\\n' | tee -a "$log"`,
+          `  printf '\\ngjd-remote setup: setup failed, so the check was not run\\n' | tee -a "$log" 9>&-`,
           `fi`,
         ].join("\n");
 
@@ -700,12 +890,46 @@ cd "$dir" || {
 
 base=${shq(base)}
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+log_failed=0
+
+# WHICH CHECKOUT THIS IS, not just where it was — GPT Sol's finding 7. A tree
+# deleted and cloned again at the same path matches on slug, on dir and on the
+# config hash, while never having had setup run in it. The '.git' inode is the
+# one thing the re-clone cannot reproduce, and it is read here, standing in the
+# tree being set up.
+#
+# Both fields are best-effort: a directory that is not a git checkout has no
+# identity to record, and the reader treats a missing one as "no comparison"
+# rather than as a mismatch. What it must never do is record a wrong one.
+checkout_inode=
+checkout_root=
+if [ -e .git ]; then
+  if stat --version >/dev/null 2>&1; then
+    checkout_inode=$(stat -c %i .git 2>/dev/null || true)  # GNU coreutils, the box
+  else
+    checkout_inode=$(stat -f %i .git 2>/dev/null || true)  # BSD stat, a Mac
+  fi
+fi
+if command -v git >/dev/null 2>&1; then
+  top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$top" ]; then checkout_root=$(cd "$top" 2>/dev/null && pwd -P || true); fi
+fi
+# The JSON is built by printf, so a value that could end the string early is
+# DROPPED rather than escaped: an inode that is not digits, or a path outside a
+# conservative allowlist (which loses one with a space in it, and that is the
+# right way round). Losing the field costs a comparison; getting it wrong costs
+# a status file nothing can parse.
+case "$checkout_inode" in "" | *[!0-9]*) checkout_inode= ;; esac
+case "$checkout_root" in "" | *[!A-Za-z0-9/._-]*) checkout_root= ;; esac
+ident=
+if [ -n "$checkout_inode" ]; then ident=$ident$(printf ',"checkoutInode":"%s"' "$checkout_inode"); fi
+if [ -n "$checkout_root" ]; then ident=$ident$(printf ',"checkoutRoot":"%s"' "$checkout_root"); fi
 
 # Temp file then rename, both under ${o.setupDir}, so a reader never sees half a
 # status — and so a crash between the two leaves the previous verdict intact
 # rather than a truncated one.
 write_status() {
-  if printf '{%s,"startedAt":"%s",%s}\\n' "$base" "$started" "$1" > "$tmp" && mv -f "$tmp" "$status"; then
+  if printf '{%s%s,"startedAt":"%s",%s}\\n' "$base" "$ident" "$started" "$1" > "$tmp" && mv -f "$tmp" "$status"; then
     return 0
   fi
   rm -f "$tmp" 2>/dev/null
@@ -717,8 +941,8 @@ write_status '"outcome":"started"' || exit ${SETUP_EXIT.unusable}
 
 ${runStep}
 
-printf 'gjd-remote setup: %s in %s (attempt %s)\\n' ${shq(slug)} "$dir" ${shq(o.attempt)} | tee -a "$log"
-printf 'gjd-remote setup: running %s\\n' ${shq(o.command)} | tee -a "$log"
+printf 'gjd-remote setup: %s in %s (attempt %s)\\n' ${shq(slug)} "$dir" ${shq(o.attempt)} | tee -a "$log" 9>&-
+printf 'gjd-remote setup: running %s\\n' ${shq(o.command)} | tee -a "$log" 9>&-
 
 chk=none
 run_step ${shq(o.command)}
@@ -726,10 +950,18 @@ code=$?
 
 ${checkBlock}
 
-if [ "$code" -eq 0 ] && [ "$chk" != failed ]; then outcome=success; else outcome=failed; fi
+# A run whose log went nowhere is failed whatever the command said: 'success'
+# means somebody can go and read what happened, and here nobody can.
+tool=
+if [ "$log_failed" -ne 0 ]; then
+  tool=',"toolFailure":"log"'
+  printf 'gjd-remote setup: the log %s could not be written — recording this attempt as failed\\n' "$log" >&2
+fi
+
+if [ "$code" -eq 0 ] && [ "$chk" != failed ] && [ "$log_failed" -eq 0 ]; then outcome=success; else outcome=failed; fi
 fin=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-write_status "$(printf '"outcome":"%s","exitCode":%d,"checkOutcome":"%s","finishedAt":"%s"' \\
-  "$outcome" "$code" "$chk" "$fin")"
+write_status "$(printf '"outcome":"%s","exitCode":%d,"checkOutcome":"%s","finishedAt":"%s"%s' \\
+  "$outcome" "$code" "$chk" "$fin" "$tool")"
 
 printf '\\ngjd-remote setup: %s — %s exited %s, check %s\\n' \\
   "$outcome" ${shq(slug)} "$code" "$chk"
