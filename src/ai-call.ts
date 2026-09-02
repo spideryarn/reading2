@@ -411,6 +411,29 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
+  /* **`gjd-remote push-env`'s key-name classifier** — the cheapest call in the
+     app, and the only one whose whole input is a list of variable *names*
+     (scripts/gjd-remote-envpolicy.ts).
+
+     **No `order`, deliberately.** The three Anthropic pins above exist to keep
+     repeat calls landing on one cached prefix; there is nothing cached here.
+     One call, a few dozen short names, thrown away afterwards. Copying a pin
+     onto it would be the `dictation` mistake with a different model: a
+     preference that buys nothing and reads as though it bought something.
+
+     **`require_parameters` is kept**, and it is not a pin — it means "only
+     upstreams that support the parameters actually sent". The request asks for
+     `response_format: {type: "json_object"}`, and an upstream that quietly
+     dropped it answers prose. `parseProposal` fails closed on that, so nothing
+     unsafe happens; what happens instead is that every key comes back
+     unclassified with no explanation, which reads like the model having a bad
+     day rather than like a routing decision. Same reasoning as `pdf`, one
+     notch weaker, because here a wrong answer costs a nicety rather than a
+     feature. */
+  "env-proposal": {
+    path: "/v1/chat/completions",
+    provider: { require_parameters: true },
+  },
 };
 
 /**

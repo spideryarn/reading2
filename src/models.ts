@@ -428,7 +428,29 @@ export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
  */
 export type EvalAiJob = "eval";
 
-export type AiJob = Task | NonTaskAiJob | EvalAiJob;
+/**
+ * **A model call made by a developer tool**, rather than for a reader or to
+ * measure something.
+ *
+ * One member: `env-proposal`, which is `gjd-remote push-env` asking a cheap
+ * model to sort a repo's `.env.local` **key names** — never a value — into
+ * "safe on a shared box" and "absolutely not", so the checklist it then shows
+ * starts somewhere better than blank. See
+ * [`scripts/gjd-remote-envpolicy.ts`](../scripts/gjd-remote-envpolicy.ts).
+ *
+ * Its own category, and not a fourth `NonTaskAiJob`, for the reason `EvalAiJob`
+ * gives about itself: those three have one fixed model each and are listed on
+ * the profile page's model inventory, which is a page about the product. A
+ * command Greg runs from a terminal is not part of that inventory and would be
+ * a confusing row on it.
+ *
+ * It still spends real money and it still needs a row, which is the whole
+ * reason it is in `AiJob` at all rather than being a call that happens to work.
+ * `scope_kind` is `cli` — see [`src/cli-ledger.ts`](cli-ledger.ts).
+ */
+export type ToolAiJob = "env-proposal";
+
+export type AiJob = Task | NonTaskAiJob | EvalAiJob | ToolAiJob;
 
 /**
  * **Which tier each task is on — and the file's actual decision, rather than its
@@ -605,6 +627,10 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
      `evals/declared-spend.ts` do not consult this table at all: they say which
      wire they actually used, because they are the thing that knows. */
   eval: "chat",
+  /* `gjd-remote push-env`'s key-name classifier. chat/completions, because that
+     is the only wire QUICK_MODEL_OPENROUTER is served on — the same fact the
+     throw at the bottom of this file is about. */
+  "env-proposal": "chat",
 };
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];

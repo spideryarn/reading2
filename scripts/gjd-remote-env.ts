@@ -42,6 +42,28 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * passwordless sudo, so "on the box" means "reachable by all of them".
  */
 /**
+ * **The two names that may never travel, whoever asks.**
+ *
+ * The reasoning is in the docblock above — each of these can destroy
+ * infrastructure, and the box is shared by autonomous agents running as one
+ * user with passwordless sudo. Written down as a value, rather than left as
+ * prose plus an absence from `ALLOWLIST`, because Spideryarn's allowlist is not
+ * the only consumer any more: `gjd-remote push-env` from a repo with no typed
+ * allowlist builds its checklist from whatever is in that repo's `.env.local`,
+ * and needs to know which rows can never be ticked
+ * (scripts/gjd-remote-envpolicy.ts). An absence cannot be imported.
+ *
+ * A hard guard, not a default: `applyGuards` re-checks it after the user has
+ * made their selection, so a tick on one of these is refused by name rather
+ * than merely discouraged in the UI. Greg's product call, 2026-09-02, recorded
+ * in docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md.
+ */
+export const FORBIDDEN_NAMES: readonly string[] = [
+  "HETZNER_CLOUD_API_TOKEN",
+  "SUPABASE_ACCESS_TOKEN",
+];
+
+/**
  * Allowlisted keys whose VALUE must point at the throwaway container, not just
  * whose name is on the list above.
  *
