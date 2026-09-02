@@ -566,7 +566,14 @@ function copiedFromPrimary(t: IgnoredTriage, root: string, primary: Originals, p
   }
   const verdict = comparedWithPrimary(root, primary.root, p);
   if (verdict.kind === "same") t.verified.push(`${p} is byte-for-byte the primary's copy — ${COPIED_FROM_PRIMARY[p]}`);
-  else if (verdict.kind === "differs") t.unexplained.push(`${p} — DIFFERS from the primary's copy, so what was changed here exists nowhere else`);
+  else if (verdict.kind === "differs") {
+    /* Which side moved is not knowable from here: an edit made in this worktree
+       and an edit made in the primary since the copy was taken look identical.
+       Only the first loses anything, so the message must not assert the first —
+       an agent told "what was changed here exists nowhere else" about a primary
+       that drifted goes looking for a change it never made. */
+    t.unexplained.push(`${p} — DIFFERS from the primary's copy. One of the two moved since the copy was taken; if it was this one, the change exists nowhere else`);
+  }
   else if (verdict.kind === "only-here") t.unexplained.push(`${p} — the primary has no copy of this`);
   else t.unexplained.push(`${p} — could not be compared with the primary's copy: ${verdict.why}`);
 }
