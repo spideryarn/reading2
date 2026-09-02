@@ -23,14 +23,17 @@
  *     2  comment mark   only when this block has comments
  *     3  chat           every block on hover; always when the block has chats
  *
- * **A visitor has two**, and the third is not there rather than dead: opening a
- * conversation costs a model call, which is not theirs to spend, so
- * `onChatAbout` is optional and the button exists only where the callback does.
- * The middle slot never draws for them either, for a different reason — the
- * marks in it are the reader's own, and a visitor has none. The callback *is* the capability, the
+ * **A visitor's gutter is the permalink and nothing else** — one element in the
+ * flex column, not three with two of them blank, because none of these is a
+ * placeholder. The third is absent rather than dead: opening a conversation
+ * costs a model call, which is not theirs to spend, so `onChatAbout` is
+ * optional and the button exists only where the callback does. The second never
+ * draws for them either, for a different reason — the marks in it are the
+ * reader's own, and a visitor has none. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the
- * press was swallowed in App, which is a button that can only fail.
+ * press was swallowed in App, which is a button that can only fail. GPT Sol's
+ * review of the built code caught this paragraph claiming two.
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C1.
  *
  * **Two of them are fixed and the middle one is not**, which is the honest

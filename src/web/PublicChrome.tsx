@@ -43,12 +43,19 @@
  * `anAccountWouldHelp` in visitor.ts. An offer that would not have worked is
  * worse than no offer.
  */
+import { useState } from "react";
 import { Lock } from "lucide-react";
 
 import {
+  CONTINUE_SIGNED_OUT,
   MAKE_AN_ACCOUNT,
   NOT_SHARED,
+  REAUTH_REQUIRED,
+  REAUTH_REQUIRED_HEADING,
+  SESSION_UNCONFIRMED,
+  SESSION_UNCONFIRMED_CHIP,
   SHARED_WITH_YOU,
+  SIGN_IN_AGAIN,
   VIEW_ONLY,
 } from "../messages.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -65,11 +72,31 @@ import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.
  * it is what "reading"/"outline" and the mode name are already drawn with, so
  * this reads as one more fact about the page instead of a new kind of thing.
  */
-export function ViewOnlyChip() {
+export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boolean }) {
   return (
-    <span className="mode on" title={SHARED_WITH_YOU}>
+    <span
+      className="mode on"
+      title={sessionUnconfirmed ? SESSION_UNCONFIRMED : SHARED_WITH_YOU}
+    >
       <Lock size={11} className="tw:mr-1 tw:inline tw:align-[-1px]" />
       {VIEW_ONLY}
+      {/* **The half of the unconfirmed-session state that has to survive a
+          narrow window.** `SharedNotice` below carries the sentence and the
+          action, and at iPad-portrait and below it is hidden whenever a mode
+          band is open (styles.css § a narrow window) — so at that width, with a
+          band open, this chip is the only thing left saying why the page has
+          gone read-only, and *the action is not reachable at all*. That is a
+          stated trade-off rather than an oversight: closing the band brings the
+          notice and its button straight back, and the alternative — a third
+          piece of chrome that survives the band — is the collision the split
+          between these two components exists to avoid.
+
+          Visible text rather than only the `title`, for the reason this file's
+          header gives at length: a tooltip is unreachable by touch and by
+          keyboard, which is most of the readers who will see this width. */}
+      {sessionUnconfirmed && (
+        <span className="tw:text-ink-faint"> · {SESSION_UNCONFIRMED_CHIP}</span>
+      )}
     </span>
   );
 }
@@ -81,7 +108,22 @@ export function ViewOnlyChip() {
  * Not dismissible and not a toast: it is what this page *is*, and a control to
  * make it go away would say otherwise.
  */
-export function SharedNotice({ signedIn }: { signedIn: boolean }) {
+export function SharedNotice({
+  signedIn,
+  sessionUnconfirmed,
+}: {
+  signedIn: boolean;
+  /**
+   * **The owned route answered 401 and the public one answered 200.**
+   *
+   * Which is to say: this reader's browser still holds a session, we could not
+   * get the server to agree it is anybody's, and the article is world-readable
+   * regardless. The two facts are independent, so the second one is honoured —
+   * the piece stays on screen — and the first is *said*, which is the whole of
+   * finding C3. The action is below.
+   */
+  sessionUnconfirmed: boolean;
+}) {
   return (
     /* **`shared-notice` is a hook for one rule and not styling.** In the reading
        view this box sits between the masthead and the controls bar, and at
@@ -98,6 +140,18 @@ export function SharedNotice({ signedIn }: { signedIn: boolean }) {
        sticky and stays. That split is why there are two of these at all. */
     <div className="shared-notice tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0">{SHARED_WITH_YOU}</p>
+      {/* **Beside the statement, not instead of it.** Both sentences are true,
+          and the reader arrived for the article rather than for news about
+          their session — so the piece is described first and the session
+          second. `signedIn` is `true` in this state by construction (the owned
+          route is only asked when there is a session), so the `SignUp` block
+          below stays hidden: nobody is offered an account they are holding. */}
+      {sessionUnconfirmed && (
+        <p className="tw:mt-2 tw:mb-0">
+          {SESSION_UNCONFIRMED}{" "}
+          <ClearDeadSessionButton label={CONTINUE_SIGNED_OUT} />
+        </p>
+      )}
       {/* **What an account actually gets them**, and it is not this article.
           The offer used to promise chat, a glossary and a shelf entry *for this
           piece* — none of which an account provides until stage 3 lets a second
@@ -173,6 +227,105 @@ export function SignUp({ reason }: { reason: string }) {
       </Link>{" "}
       {reason}.
     </p>
+  );
+}
+
+/**
+ * **Drop the session this browser is holding, and come back to this address.**
+ *
+ * The whole action, and it is the same two lines behind both labels — which is
+ * why there is one component and a `label` prop rather than two buttons.
+ *
+ *  - **`scope: "local"`.** Checked against the installed `@supabase/auth-js`
+ *    (2.112.4): it removes the stored session even when the revocation call
+ *    answers 401, 403 or 404, which is precisely the case we are in. A global
+ *    sign-out would also be wrong on the merits — we do not know that anything
+ *    is wrong with the *account*, only that this tab cannot prove who it is.
+ *  - **The `catch`, and the reload outside it.** A dead session is exactly the
+ *    case where a network call may fail, and a throw here would leave the
+ *    reader pressing a button that does nothing. The reload is the part that
+ *    has to happen; the sign-out is the part that makes it land somewhere new.
+ *  - **A reload rather than a re-render**, for `AccountSection`'s reason: it is
+ *    the one thing guaranteed to abort every in-flight fetch and drop every
+ *    piece of state React is still holding for a reader who has gone.
+ *  - **A dynamic import**, so this file's module graph does not reach the
+ *    Supabase client. `App.tsx` has already loaded it by the time anybody can
+ *    press this, so it costs nothing at run time; what it buys is that
+ *    `PublicChrome` can still be rendered on its own by a test — or by anything
+ *    else on the visitor path — without a configured project URL.
+ *
+ * **What it deliberately is not** is an automatic sign-out. A 401 after one
+ * refresh is not proof the session is gone (src/web/lib/api.ts says so at the
+ * point where it stops retrying), so this is the reader's press or nothing.
+ */
+function ClearDeadSessionButton({ label }: { label: string }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const { supabase } = await import("./lib/supabase.js");
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      /* Offline, or the auth host is unreachable. The stored session may well
+         still be there, and that is survivable: the reload re-asks both routes
+         and the reader lands on whichever of these two states is true then. */
+    }
+    location.reload();
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void go()}
+      disabled={busy}
+      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight tw:underline tw:disabled:opacity-60"
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * **The other row of the C3 table, as a whole page**: the owned route said 401
+ * and the public route said 404, so we know neither whose this is nor whether
+ * anyone may read it.
+ *
+ * Its own branch in `ArticlePage` rather than the existing `error` one, which is
+ * a corner logo and a `<pre>` with nothing to press — and this is the one state
+ * in the app where the reader can actually fix it. Not a link to `/login`
+ * either: `App.tsx`'s login route bounces a reader the browser still thinks is
+ * signed in straight back to the shelf, which is how this ended up needing a
+ * state of its own.
+ *
+ * Shaped like `NotSharedPage` below on purpose — same logo, same measure, same
+ * heading weight — because from the reader's side these are two answers to the
+ * same question, and a different-looking page would suggest a different kind of
+ * problem.
+ */
+export function ReauthRequiredPage() {
+  /* **Its own tab title, and it took a browser pass to find out why.** This
+     borrowed `not-shared` at first, on the reasoning that the tab must not
+     confirm an article exists. But *"Not shared"* is itself a claim about the
+     document, and this is the one state where we cannot make one — and
+     `useDocumentTitle` mirrors the title into an `aria-live` region, so a screen
+     reader was announcing it over a page that says something else.
+     page-title.ts § reauth-required. */
+  useDocumentTitle(pageTitle({ kind: "reauth-required" }));
+  return (
+    <>
+      <HomeLogo />
+      <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
+        <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+          {REAUTH_REQUIRED_HEADING}
+        </h1>
+        <p className="tw:m-0 tw:mb-4 tw:text-sm tw:text-ink-faint">{REAUTH_REQUIRED}</p>
+        {/* **The same two lines as *Continue signed out*, under a label that is
+            true here and false there.** Signed out at an address nobody has
+            shared, the reload reaches `LandingPage` — which draws the sign-in
+            controls itself and leaves `/read/:slug` in the address bar, so
+            signing in lands the reader back on this piece (auth-return.ts). */}
+        <ClearDeadSessionButton label={SIGN_IN_AGAIN} />
+      </main>
+    </>
   );
 }
 

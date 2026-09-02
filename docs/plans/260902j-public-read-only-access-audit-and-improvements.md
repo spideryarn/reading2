@@ -414,6 +414,68 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   Hierarchy as a dead button, about one run in two. The press is now asserted on `aria-checked`,
   which is React state and lands with the click, and the URL is polled to a deadline. Three clean
   runs, and both assertions mutation-tested.
+- 2026-09-02 — **stage 1b built: C3.** `findArticle` carries a third answer now. A 401 sets
+  `sessionUnconfirmed` and the public route is asked anyway, so the two answers meet on one line:
+  401 + public 200 is the shared article with the notice, 401 + public 404 is
+  `{ kind: "reauth-required" }`, and 404 is what it always was. Owner capabilities mount in neither
+  401 case for free — `ArticlePage` mounts `OwnedArticle` only on `kind: "owned"`, so the private
+  hooks are not skipped for this reader, they do not exist.
+
+  The notice went into the read-only chrome that was already there rather than beside it. The
+  sentence and the action are a second paragraph inside `SharedNotice`; the chip in the controls bar
+  gains *· sign-in unconfirmed*. That is the split
+  [PublicChrome.tsx](../../src/web/PublicChrome.tsx) already had, and it decides the honest answer at
+  a narrow width: with a mode band open the notice is hidden (the 2026-08-29 collision rule) and the
+  chip survives, so **the fact reaches the reader and the action does not** — measured at 820px,
+  chip at `(168, 4.7, 174, 34)` against the corner logo's `(0,0,136,44)`, no overlap. Closing the
+  band brings both back; that is written down at the chip rather than papered over.
+
+  Both actions are `signOut({ scope: "local" })` and a reload, one component with a `label` prop —
+  and the browser pass proved the labels are the honest way round: pressing *Sign in again* on an
+  unshared address really does clear the stored session and land on `LandingPage`, sign-in controls
+  drawn, `/read/:slug` still in the address bar.
+
+  **And the browser pass found something the green tests could not.** The new page borrowed the
+  `not-shared` tab title, on the reasoning that a tab must not confirm an article exists — but *Not
+  shared* is itself a claim about the document, and this is the one state where we cannot make one.
+  Worse, `useDocumentTitle` mirrors the title into an `aria-live` node on `document.body`, so a
+  screen reader was being told *"Not shared"* over a page whose heading says something else. The
+  jsdom assertion read `host.textContent` and never saw it. `page-title.ts` has a
+  `reauth-required` variant now, and the test asserts on `document.title` and `document.body` as
+  well as on the mounted tree.
+- 2026-09-02 — **Sol's review of stage 1a's code**
+  ([-stage1a-review-sol.md](260902j-public-read-only-stage1a-review-sol.md)) returned **BLOCKED** on
+  two, both real and both now fixed and mutation-tested. It is the review the house workflow weights
+  highest, and it earned that here: neither blocker existed until the code did.
+
+  **`BAND_SAYS` could pass over a band that drew nothing** — the exact claim its own comment made.
+  Two independent reasons, and each alone was a false pass. Read from the whole page, Outline's gist
+  is satisfied by the gist columns, which that mode opens anyway. Read as raw `textContent`, it is
+  satisfied by `OutlinePanel`'s five `aria-hidden` measuring copies of the very rows in question.
+  The table now carries a **selector** for the band that must be open, asserted both ways — the old
+  test was the *absence of `.mode-close`*, a proxy that a band without a close button and a mode
+  that grew a band it should not have would both have satisfied — and the string must be readable
+  *inside that band*, from a copy with `aria-hidden` subtrees stripped. Deleting Outline's visible
+  list is red in both sweeps now.
+
+  **And chasing that turned up why nobody had noticed: the fixture's tree was one node.** No
+  children, so no structure, so Outline had drawn an empty band in every run this file has ever had.
+  The tree has a child now — which promptly hit a second thing the thin fixture had been hiding,
+  `CSS.escape`, which jsdom does not have and `Reader` calls on any render that has sections in it.
+  Polyfilled in the file, with the reason.
+
+  **Neither sweep enforced this file's own "no POST at all" rule.** `outsidePublic()` filters on the
+  path, so a `POST /api/public/…` from any band satisfied it, and the one test that checked the
+  other half only ever opened the default mode. Both sweeps assert the method now; mutating
+  `publicFetch` to POST is red.
+
+  Sol also cleared what it cleared for checkable reasons: the remaining `if (!owner) return;` in
+  `onSelect` is right (selection is reading behaviour, not an offered control), the gutter's CSS has
+  no positional selectors and `has-marks` cannot match for a visitor, and the dock fix is sound —
+  with one limit it named, that the first press of the already-selected Plain button is
+  observationally identical to a no-op. Two overclaims fixed with it: the gutter header said a
+  visitor has two slots when it has one, and the owner's control asserted `> 0` where one button on
+  one paragraph would have satisfied "beside every paragraph"; it counts against the permalinks now.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the
