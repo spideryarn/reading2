@@ -47,7 +47,7 @@ import {
 const SLUG = "spideryarn/reading2";
 /** The checkout the fixture status is about. */
 const DIR = "/home/greg/code/spideryarn2";
-const ATTEMPT = "3f1c0b6e-0a4d-4a1e-9f77-2c8b5a0d1e42";
+const ATTEMPT = "9c2e7d41-5b1f-4c8a-a3e6-0d7f2b9e4c15";
 const OTHER_ATTEMPT = "11111111-2222-3333-4444-555555555555";
 const SHA = "a".repeat(64);
 const OTHER_SHA = "b".repeat(64);
