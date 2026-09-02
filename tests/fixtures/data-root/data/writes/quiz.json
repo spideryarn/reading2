@@ -1,0 +1,175 @@
+{
+  "version": "quiz/1",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "sourceHash": "1ee2ebde490b347e.9fa0a24e110d45f7.1118017b0bf914f6",
+  "batchId": "spya-eg2gk9",
+  "questions": [
+    {
+      "id": "spya-ktuzjb",
+      "question": "What prediction does Paul Graham make about writing ability in a couple of decades?",
+      "referenceAnswer": "He predicts that there won't be many people left who can write well.",
+      "evidence": [
+        {
+          "blockId": "spya-tphbr6",
+          "quote": "in a couple decades there won't be many people who can write",
+          "start": 104
+        }
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "id": "spya-b09w29",
+      "question": "What does the author say is the fundamental reason so many people have trouble writing?",
+      "referenceAnswer": "Because writing well requires clear thinking, and thinking clearly is hard.",
+      "evidence": [
+        {
+          "blockId": "spya-ts48cj",
+          "quote": "The reason so many people have trouble writing is that it's fundamentally difficult. To write well you have to think clearly, and thinking clearly is hard.",
+          "start": 0
+        }
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "id": "spya-gvd3t8",
+      "question": "What does Leslie Lamport's quote, cited in the article, claim about the relationship between writing and thinking?",
+      "referenceAnswer": "Lamport says that if you're thinking without writing, you only think you're thinking - implying that real thinking requires writing.",
+      "evidence": [
+        {
+          "blockId": "spya-arj7ry",
+          "quote": "If you're thinking without writing, you only think you're thinking.",
+          "start": 0
+        }
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "id": "spya-hryzhq",
+      "question": "The author raises the analogy of blacksmiths disappearing due to technology. Why does he ultimately reject the idea that the disappearance of writing skill is similarly unproblematic?",
+      "referenceAnswer": "Because writing is not just a technical skill like blacksmithing - it is a form of thinking itself, so losing the ability to write means losing a kind of thinking that can only be done through writing.",
+      "evidence": [
+        {
+          "blockId": "spya-z79mew",
+          "quote": "There aren't many blacksmiths left, and it doesn't seem to be a problem.",
+          "start": 93
+        },
+        {
+          "blockId": "spya-z7zzwv",
+          "quote": "Yes, it's bad. The reason is something I mentioned earlier: writing is thinking. In fact there's a kind of thinking that can only be done by writing.",
+          "start": 0
+        }
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "id": "spya-qa88qb",
+      "question": "Why does the author find it striking that eminent professors have resorted to plagiarism?",
+      "referenceAnswer": "Because what they stole was usually mundane boilerplate that anyone even halfway decent at writing could produce with no effort, revealing that they weren't even halfway decent at writing themselves.",
+      "evidence": [
+        {
+          "blockId": "spya-xdmpa0",
+          "quote": "The stuff they steal is usually the most mundane boilerplate — the sort of thing that anyone who was even halfway decent at writing could turn out with no effort at all. Which means they're not even halfway decent at writing.",
+          "start": 301
+        }
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "id": "spya-a3bc0k",
+      "question": "Before AI, what options did people have if they couldn't write well themselves, according to the article?",
+      "referenceAnswer": "They could pay someone else to write for them (like JFK) or plagiarize (like MLK), but otherwise had to learn to write themselves since there was no other escape from the pressure to produce writing.",
+      "evidence": [
+        {
+          "blockId": "spya-zzw20p",
+          "quote": "You could pay someone to write for you, like JFK, or plagiarize, like MLK, but if you couldn't buy or steal words, you had to write them yourself.",
+          "start": 102
+        }
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "id": "spya-zpd34k",
+      "question": "Why does the author argue that a world divided into 'writes' and 'write-nots' is more dangerous than it sounds?",
+      "referenceAnswer": "Because since writing is a form of thinking, this divide is really a division between 'thinks' and 'think-nots' - people who can think clearly and those who cannot.",
+      "evidence": [
+        {
+          "blockId": "spya-xk7vyy",
+          "quote": "So a world divided into writes and write-nots is more dangerous than it sounds. It will be a world of thinks and think-nots.",
+          "start": 0
+        }
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "id": "spya-zhn5zs",
+      "question": "Why did nearly everyone who was expected to write have to actually learn how to write, before AI existed?",
+      "referenceAnswer": "Because there was no convenient escape valve for the pressure to write - if you couldn't pay someone else to write for you or plagiarize, you had no choice but to write the words yourself, which forced people to develop the skill.",
+      "evidence": [
+        {
+          "blockId": "spya-zzw20p",
+          "quote": "Till recently there was no convenient escape valve for the pressure created by these opposing forces. You could pay someone to write for you, like JFK, or plagiarize, like MLK, but if you couldn't buy or steal words, you had to write them yourself. And as a result nearly everyone who was expected to write had to learn how.",
+          "start": 0
+        }
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "id": "spya-w0s8sk",
+      "question": "According to the author, why will the middle ground of 'ok writers' disappear entirely rather than just shrink?",
+      "referenceAnswer": "Because AI has removed almost all pressure to write since people can simply have AI do it for them in school and work, eliminating the incentive that used to push people to become at least competent writers; only those who genuinely like writing will remain skilled.",
+      "evidence": [
+        {
+          "blockId": "spya-gm3xu0",
+          "quote": "Not anymore. AI has blown this world open. Almost all pressure to write has dissipated. You can have AI do it for you, both in school and at work.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-hg7u0a",
+          "quote": "the middle ground between those who are good at writing and those who can't write at all will disappear. Instead of good writers, ok writers, and people who can't write, there will just be good writers and people who can't write.",
+          "start": 134
+        }
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "id": "spya-jbdfxh",
+      "question": "How does the author use the historical shift from physically demanding jobs to modern exercise habits to frame his prediction about writing's future?",
+      "referenceAnswer": "He compares it to how preindustrial jobs made people strong by necessity, but now strength requires deliberate effort (working out); similarly, writing and clear thinking will become something only those who choose to develop will have, rather than something everyone acquires through necessity.",
+      "evidence": [
+        {
+          "blockId": "spya-rqzp97",
+          "quote": "In preindustrial times most people's jobs made them strong. Now if you want to be strong, you work out. So there are still strong people, but only those who choose to be.",
+          "start": 37
+        },
+        {
+          "blockId": "spya-smzw4j",
+          "quote": "It will be the same with writing. There will still be smart people, but only those who choose to be.",
+          "start": 0
+        }
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "generatedAt": "2026-09-02T12:38:27.133Z",
+  "elapsedMs": 27055
+}
