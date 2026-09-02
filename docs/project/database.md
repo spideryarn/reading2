@@ -23,8 +23,11 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
 
 ## Which store is live, and the one refusal that matters
 
-`SPIDERYARN_STORE` still **defaults to `files`**, so a fresh checkout runs on disk and nothing
-changes for anyone who has not opted in. But [`src/store/index.ts`](../../src/store/index.ts)
+`SPIDERYARN_STORE` still **defaults to `files`** for a CLI script, a test, or anything else that
+imports [`src/store/live.ts`](../../src/store/live.ts) directly. `npm run dev` is the one exception,
+since 2026-09-02: `package.json`'s `dev` script itself sets `postgres` unless something already set
+the variable, so a fresh checkout's dev server reads Postgres without anyone opting in. But
+[`src/store/index.ts`](../../src/store/index.ts)
 **refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
 filesystem store has **no owner column**, so it has no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
@@ -203,9 +206,12 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
-**Reads now come out of Postgres when you ask them to.** `SPIDERYARN_STORE=postgres npm run dev`
-serves every article, the library, the metadata page and the reader's comments from the database
-instead of from disk; `files` remains the default. The work, and what is still missing, is in
+**Reads now come out of Postgres when you ask them to — and, since 2026-09-02, without asking.**
+`npm run dev` serves every article, the library, the metadata page and the reader's comments from
+the database instead of from disk; `SPIDERYARN_STORE=files npm run dev` is the escape hatch back to
+disk, and `files` remains the default for everything that is not `npm run dev` — `vite preview`
+included, which still wants `SPIDERYARN_STORE=postgres` said out loud. The work,
+and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
 **Writes go straight into Postgres now — no disk in between.** Since 2026-09-01 every pipeline stage
@@ -1101,10 +1107,11 @@ What to know before touching any of it:
   `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
   that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
   outage.
-- **A laptop with `SPIDERYARN_STORE` unset checkpoints nothing.** `fsStoreSession` has no `articles`
-  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines do the
-  same. Articles come out identical and a *second* attempt after a killed one pays again. That is a
-  decision, written down at `nullCheckpointStore` in
+- **A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.** `fsStoreSession` has no `articles`
+  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines default
+  to `files` and do the same, since none of them go through `npm run dev`'s `package.json`-level
+  `postgres` default. Articles come out identical and a *second* attempt after a killed
+  one pays again. That is a decision, written down at `nullCheckpointStore` in
   [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
   does.
 

@@ -174,10 +174,12 @@ export function unopenable(expected: readonly string[], readable: readonly strin
  * news.
  *
  * **This is the trap the whole command falls into if nobody says anything.**
- * `SPIDERYARN_STORE` defaults to `files` ([src/store/index.ts](../src/store/index.ts)),
- * so a dev server started on a machine that has never set it serves article
- * reads off `data/` — and every row this seed writes to Postgres is invisible in
- * the browser while the seed reports three articles loaded. A check that agrees
+ * `SPIDERYARN_STORE` defaults to `files` for this script itself
+ * ([src/store/live.ts](../src/store/live.ts)) — unlike `npm run dev`, which since
+ * 2026-09-02 defaults to `postgres` on its own. A dev server that reads `files`
+ * anyway (set explicitly, or started some other way) serves article reads off
+ * `data/` — and every row this seed writes to Postgres is invisible in the
+ * browser while the seed reports three articles loaded. A check that agrees
  * with the bug, one level up.
  *
  * **The caller exits non-zero on a `false` here**, and that was a change of mind:
@@ -188,11 +190,14 @@ export function unopenable(expected: readonly string[], readable: readonly strin
  * reporting completion over that is the failure this file exists to prevent. The
  * caller fails **after** the durable work, so a re-run costs a second.
  *
- * It cannot be fixed from in here either. The value belongs in `.env.local`,
- * which `gjd-remote push-env` **rebuilds** from the laptop's copy
- * ([scripts/gjd-remote-env.ts](gjd-remote-env.ts)), so a line written on the box
- * would be destroyed by the next push and would have looked fine in between —
- * the same reason `setup-local.ts` only warns about `SPIDERYARN_OWNER_ID`.
+ * It cannot be fixed from in here either. **And it must not be fixed in
+ * `.env.local`**, which is what this advised until 2026-09-02: that file is
+ * applied *over* `process.env` ([src/env.ts](../src/env.ts)), so a value there
+ * beats the ~30 tests that set `SPIDERYARN_STORE` themselves to test the other
+ * store. Following the old wording turned 40 test files and 146 tests red, and
+ * `src/env.ts` suppresses its own "shadowed" warning under `NODE_ENV=test`, so
+ * it did it in silence. The remedy is `npm run dev`, which sets the variable
+ * itself; `.env.local` now carries a comment saying why the line is absent.
  */
 export function storeVerdict(store: string | undefined): { ok: boolean; lines: string[] } {
   if (store === "postgres") {
@@ -201,11 +206,14 @@ export function storeVerdict(store: string | undefined): { ok: boolean; lines: s
   return {
     ok: false,
     lines: [
-      `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset, which means \"files\""}.`,
-      "  The dev server will serve articles off data/ and these rows will be invisible in the",
-      "  browser — the seed will have worked and the shelf will look empty. Put",
-      "  SPIDERYARN_STORE=postgres in .env.local on the LAPTOP: push-env rebuilds the box's copy",
-      "  from that one, so a line added here is destroyed by the next push.",
+      `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset in this script's own environment"}.`,
+      "  A dev server started as a bare `vite`, or with SPIDERYARN_STORE=files, serves articles",
+      "  off data/ instead — the seed will have worked and the shelf will look empty.",
+      "  Start it with `npm run dev`, which sets SPIDERYARN_STORE=postgres itself.",
+      "  DO NOT put SPIDERYARN_STORE=postgres in .env.local. That file is applied over",
+      "  process.env (src/env.ts), so it overrides every test that sets the store itself:",
+      "  it turned 40 test files and 146 tests red on 2026-09-02, silently, because",
+      "  src/env.ts suppresses its shadowing warning under NODE_ENV=test.",
     ],
   };
 }

@@ -65,6 +65,96 @@ export type ClaimRefusal =
 
 export type ClaimOutcome = { kind: "claimed"; job: Job } | ClaimRefusal;
 
+/**
+ * **Everything about an enqueue request that is not the reader's business**, and
+ * so is not on `Job`.
+ *
+ * `workKey` was a bare second argument until 2026-09-02; the other two arrived
+ * with the per-article queue and they travel together, because each of them is
+ * a fact known at exactly one moment — when the request is turned into a job —
+ * and recoverable from nothing afterwards.
+ */
+export interface EnqueueTicket {
+  /**
+   * **What makes two requests the same work.**
+   *
+   * Passed in rather than living on `Job` for two reasons. It is not the
+   * reader's business, so it would have to be stripped by `publicJob` alongside
+   * `ownerId` and `profile`; and it must be **immutable**, where `job.steps` is
+   * not — statuses move as the job runs — so a key derived from the record on
+   * each comparison could answer differently at the end of a job than at the
+   * start. Computed once by the caller and then only ever read back.
+   */
+  workKey: string;
+  /**
+   * **The slug was minted for this request**, rather than adopted from an
+   * article that already exists — so this job is the one holding the name.
+   *
+   * Narrower than "the request carried a URL", which is what a draft of this
+   * called it: `enqueue` fills `url` from `meta.json` for a late step, so a
+   * request naming an article on the shelf carries one exactly as a paste does.
+   * The fact is known only at slug allocation and every attempt to recover it
+   * later is a guess — src/db/schema.ts § `reserves_name`.
+   */
+  reservesName: boolean;
+  /**
+   * `urlKey(url)` (src/ingest.ts), when the request arrived with an address.
+   *
+   * Absent for an upload and for a request that named an article without one.
+   * Only meaningful alongside `reservesName`: it is what stops two simultaneous
+   * pastes of one URL minting two articles.
+   */
+  urlKey?: string;
+}
+
+/**
+ * What `enqueueOrGet` did, and therefore what the caller must do next.
+ *
+ * **A union rather than more booleans**, and the reason is the bug it replaces.
+ * It used to be `{job, created, sameWork}`, which is four states for three real
+ * outcomes and leaves the caller to work out which combination means what. With
+ * a line per article there are now *three* different ways an insert can be
+ * refused, and they want three different repairs — hand the job back, rename,
+ * or adopt somebody else's name. A caller that forgets one of them is a reader
+ * paying for a second model call, so forgetting one is a compile error instead.
+ *
+ * **The store decides which of these it is by re-reading, never by reading the
+ * constraint name off the error.** One insert can violate two of the indexes at
+ * once and Postgres promises nothing about which of them it reports; read as
+ * the wrong one, the caller renames and pays twice. GPT Sol, 2026-09-02.
+ */
+export type EnqueueOutcome =
+  /** The row went in. This is the job, `queued`. */
+  | { kind: "created"; job: Job }
+  /**
+   * Somebody is already doing exactly this — same owner, same article, same
+   * work key, and not stopping. **Hand this job back**; a double-click on
+   * *Find quotes* costs one model call.
+   */
+  | { kind: "sameWork"; job: Job }
+  /**
+   * Another active job is **claiming this name** (globally — `articles.slug` is
+   * the URL contract, so two owners can build toward one). **Allocate the next
+   * slug and try again.** Includes a job that is stopping but not yet over: its
+   * claimant is still inside it, so the name is not free.
+   */
+  | { kind: "nameTaken"; job: Job }
+  /**
+   * Another active job of this owner's is already minting an article for **this
+   * address**. **Adopt `job.slug`** rather than minting a second name — which is
+   * what slug allocation would have done had it been able to see the other
+   * request. Two simultaneous pastes of one URL, which no index caught before
+   * `jobs_active_source`.
+   *
+   * **`job.slug` can be the slug you already asked for**, when the holder is on
+   * this article and the work differs. Adopting it then means asking again with
+   * `reservesName: false` — the request is naming an article that is being made
+   * rather than claiming a name — and *not* re-sending the same ticket, which
+   * would take this answer for ever. Slug allocation does that already: it
+   * hands back an adopted slug for a URL something is holding.
+   */
+  | { kind: "sourceTaken"; job: Job };
+
 /** What a step's result changes about the job, beyond the steps themselves. */
 export interface StepOutcome {
   /** Extraction is the step that learns the article's real title. */
@@ -136,28 +226,20 @@ export interface JobStore {
   get(id: string, owner: OwnerId): Promise<Job | undefined>;
 
   /**
-   * Insert, **or hand back the job already doing this exact work.**
+   * Insert, **or say which of three things is already in the way.**
    *
    * Atomic, because two instances each scanning their own memory each find
-   * nothing and each start paying for the same article. `jobs_active_slug` is
-   * the conflict: it reserves the slug *and* de-duplicates, and the caller
-   * compares `workKey` on the row that comes back to tell those two apart.
+   * nothing and each start paying for the same article. The insert is the thing
+   * that decides — the unique indexes in src/db/schema.ts § `jobs` arbitrate —
+   * and the store then **re-reads and classifies**, because one insert can
+   * violate two of those indexes at once and the constraint name Postgres
+   * happens to report is not an answer. See `EnqueueOutcome`.
    *
-   * `created: false, sameWork: false` means the slug is taken by *different*
-   * work — the caller allocates the next suffix and tries again.
-   *
-   * **`workKey` is passed in rather than living on `Job`**, for two reasons.
-   * It is not the reader's business, so it would have to be stripped by
-   * `publicJob` alongside `ownerId` and `profile`; and it must be **immutable**,
-   * where `job.steps` is not — statuses move as the job runs — so a key derived
-   * from the record on each comparison could answer differently at the end of a
-   * job than at the start. Computed once by the caller, from the same inputs
-   * `sameWork` compares, and then only ever read back.
+   * **A second, different job for one article is created, not refused.** That is
+   * the whole of the per-article queue: it goes in as `queued` and `claim` is
+   * what makes it wait its turn.
    */
-  enqueueOrGet(
-    job: Job,
-    workKey: string,
-  ): Promise<{ job: Job; created: boolean; sameWork: boolean }>;
+  enqueueOrGet(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome>;
 
   /**
    * Take this job for **one** step, or say why not.
@@ -165,6 +247,25 @@ export interface JobStore {
    * Refuses rather than waits, always: a claim that blocked would hold a
    * serverless invocation open doing nothing, and the caller has a perfectly
    * good thing to do with `busy`, which is ask again shortly.
+   *
+   * **The article's line is enforced here and nowhere else.** A job may claim
+   * only when no *older* active row exists for the same slug, ordered by
+   * `(created_at, id)`; otherwise `busy`, *another job on this article is ahead
+   * of it*. Called a deterministic order rather than FIFO on purpose — Postgres
+   * is given the application's millisecond timestamp and `id` is random, so two
+   * requests inside one millisecond order by luck. What the rule has to
+   * guarantee is that the set of predecessors is the same for every claimant and
+   * never empties out of order, which `(created_at, id)` does; two requests for
+   * one article that close together are a double-click, and `enqueueOrGet`
+   * collapses those into one job before the order can matter.
+   *
+   * **A predecessor that is stopping still blocks.** Stop on a *queued* job
+   * settles it terminal at once, so it leaves the line by itself; Stop on a
+   * *running* one leaves it `running` with `cancelling` set until its claimant
+   * releases or its lease lapses, and `jobs_one_running_per_slug` still covers
+   * that row. Skipping it would buy the successor nothing but a unique
+   * violation. The successor unblocks when the cancellation becomes terminal,
+   * not when Stop is pressed. GPT Sol, 2026-09-02.
    *
    * **`maxRunning` is passed in, exactly as `leaseMs` is, and for the same
    * reason.** How many jobs may run at once is a policy the caller owns
@@ -260,21 +361,21 @@ export interface JobStore {
    */
   settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]>;
 
-  /**
-   * The job queued or running for this slug, if there is one.
+  /*
+   * **`activeForSlug` was here, and it is deleted rather than replaced.**
    *
-   * Slug allocation needs it — `freeSlug` has to know that a slug is spoken for
-   * by a job that has not written a `meta.json` yet, or two articles whose URLs
-   * end in the same segment, added a minute apart, both take the bare name.
+   * *The job queued or running for this slug, if there is one* — a question
+   * that could only ever have one answer, and now cannot: an article holds a
+   * line. Both implementations picked arbitrarily, Postgres with `.limit(1)` and
+   * no ordering, the filesystem in `Map` insertion order. It had **no production
+   * callers** by the time it went; slug allocation asks `slugAlreadyHolding`
+   * and `inFlightSlugForUrlKey` instead, which are about a URL rather than a
+   * name.
    *
-   * **Not the same question as `enqueueOrGet`'s conflict**, though they read
-   * the same row. That one is *may I have this slug*, answered by inserting;
-   * this is *who has it*, answered by looking — and the difference is that a
-   * lookup is allowed to be stale by the time the caller acts on it. Which is
-   * why the insert is still the thing that decides, and this is only what stops
-   * the caller offering a name it can already see is taken.
+   * Inventing a second ambiguous singular lookup to replace an unused one would
+   * be adding the problem back. A caller that needs one row asks a
+   * purpose-specific question — GPT Sol, 2026-09-02.
    */
-  activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined>;
 
   /**
    * Stop, and **decide in one statement which kind of stop this is**.

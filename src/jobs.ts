@@ -75,10 +75,12 @@ import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
+import { slugIsTaken } from "./store/slug-is-taken.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
+  articleExists,
   contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
@@ -91,7 +93,6 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
-import { ARTICLE_IS_BUSY } from "./job-state.js";
 import { INTERRUPTED, type FailureKind } from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
@@ -230,8 +231,9 @@ export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
  * **What the number is actually rationing is spend and provider rate limits**,
  * not CPU or connections — there is no spend cap anywhere in this repo, and the
  * label and summary fan-outs each multiply by N. It is not rationing
- * correctness: two jobs never run on one article, which is `jobs_active_slug`'s
- * job and not this one.
+ * correctness: two jobs never *run* on one article, which is the article's own
+ * line — the predecessor rule in `claim` and `jobs_one_running_per_slug` behind
+ * it (src/store/jobs.ts) — and not this one.
  *
  * Read at call time rather than frozen at import, so a test can move it and a
  * deployment can set it without a rebuild — the rule src/store/data-root.ts
@@ -785,7 +787,9 @@ export function jobSpendFields(
      an ingest cost. The conditional that makes a total correct lives in
      `totalRows` and nowhere else, which is why this adds its three answers
      rather than summing columns itself:
-     docs/project/ai-gateway.md, and the `upstream_inference_nanos` trap. */
+     docs/project/ai-gateway.md, and the `byok_upstream_nanos` trap — which was
+     spelt `upstream_inference_nanos` until 2026-09-02, and the rename is the
+     point: the old name did not say that adding it is conditional. */
   const { credits, upstream, computed, unpriced } = totalRows(rows);
   const nanos = credits + upstream + computed;
   return {
@@ -1960,39 +1964,6 @@ export interface EnqueueRequest {
 }
 
 /**
- * **The refusal that knows which job it is about.**
- *
- * `enqueue` has the blocking job in its hand at the moment it decides to refuse
- * — it is what `enqueueOrGet` handed back — and until 2026-09-01 it threw that
- * away and answered with a sentence. So the reader was told to stop something
- * the interface never showed them.
- *
- * **The identity comes from here and from nowhere else.** The obvious
- * alternative is for the client to look up "the active job on this slug" in the
- * list it already polls, and that is a guess: `listJobs` mutates, logs and
- * sometimes re-reads since stage 3, its answer can be a poll behind, and the
- * slug the request named is not always the slug the conflict fired on. This
- * object is the atomic conflict result. GPT Sol, 2026-09-01.
- *
- * `status` is a field rather than a `throw Object.assign(...)` so that
- * `instanceof` is available in src/routes.ts — the generic handler adds the
- * structured body for this class and for nothing else, which is what stops the
- * widened error shape becoming a hole every other route can leak through.
- *
- * The job carried here is the **server-side** record, complete with `ownerId`
- * and `profile`. It is narrowed by `publicJob` on the way out, the same call
- * `GET /api/jobs` makes, so the 409 can carry nothing the same reader's next
- * poll would not have handed them anyway.
- */
-export class JobConflict extends Error {
-  readonly status = 409;
-  constructor(readonly blocking: Job) {
-    super(ARTICLE_IS_BUSY);
-    this.name = "JobConflict";
-  }
-}
-
-/**
  * Queue a job and return it immediately, before any of it has run.
  *
  * Returning early is the point — the caller is an HTTP handler and the work
@@ -2016,15 +1987,88 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      depending on what happened to be on disk when each of them asked. */
   const workKey = workKeyFor(names, forced, request.profile, request.upload, request.url);
 
+  /**
+   * **A slug-named request must target an article this reader owns.**
+   *
+   * `POST /api/jobs` validates the shape of a slug and nothing else, so without
+   * this line owner B can queue `{slug, steps:["ideas"]}` against owner A's
+   * article. Under Postgres that job fails closed the moment anything claims it
+   * — `lockOrCreateArticle` cannot find or insert A's globally unique slug and
+   * throws `PublishRefused` — but **nothing ever claims it**: B has gone, and A
+   * cannot drive a job that is not A's. So the row that would remove itself in
+   * milliseconds sits at the head of A's line for ever, because the predecessor
+   * rule in `claim` is global on the slug while every list and every Stop is
+   * owner-scoped.
+   *
+   * **A URL or an upload is exempt**, because it is *claiming* a name rather
+   * than naming one, and `jobs_reserved_slug` is what governs that.
+   *
+   * **404, not 403**, and that is docs/project/auth.md § *whose data is it*: a
+   * 403 would confirm that the article exists. Nothing distinguishes "somebody
+   * else has it" from "nobody has it" on the wire.
+   *
+   * **A slug nobody has at all is allowed through.** It is not a cross-owner
+   * blocker — `articles.slug` carries a random short id nobody can guess, so no
+   * other reader can ever come to want this name — and the job blocks only
+   * itself. Refusing it would be a second, unrelated rule about what a slug may
+   * name.
+   *
+   * **The filesystem store cannot be asked this and does not need to be.** It
+   * has no owner column, so it has no second reader, and a store with no second
+   * reader cannot express "somebody who is not the owner"
+   * (docs/project/database.md) — `articleExists` there is a path read that
+   * answers for everybody. `src/store/index.ts` refuses to boot on it in
+   * production, so there is no B to keep out.
+   *
+   * **It costs one indexed query, and `urlForSlug` in the loop below makes the
+   * same one.** Left as two rather than threaded together, because they answer
+   * different questions — *is this mine* and *what address is under it* — and
+   * `urlForSlug`'s `undefined` means both "no article" and "an article with no
+   * URL", which is exactly the conflation this check must not inherit.
+   * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1f.
+   */
+  if (STORE === "postgres" && !request.url && !request.upload) {
+    if (!(await articleExists(request.slug)) && (await slugIsTaken(request.slug))) {
+      /* The same sentence `GET /api/article/:slug` answers with for a slug
+         that is not yours (src/routes.ts), so the two cannot be told apart. */
+      throw Object.assign(new Error("No such article."), { status: 404 });
+    }
+  }
+
+  /**
+   * **The name, and whether asking for it claims it.**
+   *
+   * `reservesName` is `allocation.kind === "minted"` and nothing else — see
+   * `SlugAllocation` for why it is carried rather than re-derived. A request
+   * that arrived with neither a URL nor an upload is *naming* an article, which
+   * is an adoption: it reserves nothing, so several such jobs can queue up
+   * behind one another on one article, which is the whole of what Greg asked
+   * for.
+   *
+   * It is a `let` because two of `enqueueOrGet`'s four answers move it — see
+   * the loop.
+   */
+  let allocation: SlugAllocation = request.url
+    ? await freeSlug(request.slug, request.url)
+    : request.upload
+      ? { kind: "minted", slug: slugWithShortId(request.slug) }
+      : { kind: "adopted", slug: request.slug };
+
+  /* **`request.url`, not the URL read off disk below**, for the reason
+     `workKey` gives: it has to be a property of the *request*. Uploads have
+     none, which is what keeps them out of `jobs_active_source` — and that is
+     right, because two uploads of one file are two documents. */
+  const source = request.url === undefined ? undefined : urlKey(request.url);
+
   /* **The loop is the deduplication, and the insert is what decides.**
    *
    * This used to be: look for an active job on this slug, compare it with
    * `sameWork`, and insert if nothing matched — with a long comment explaining
    * why there must be no `await` between the look and the insert. That comment
    * is gone with the code, because the look and the insert are now one
-   * statement: `enqueueOrGet` inserts and lets `jobs_active_slug` refuse, and
-   * the row that comes back is either the job already doing this work or the
-   * job holding the name for something else.
+   * statement: `enqueueOrGet` inserts and lets the queue's four unique indexes
+   * refuse (src/db/schema.ts § `jobs`), and it re-reads to say *which* of them
+   * was in the way — the same work, the same name, or the same address.
    *
    * Which is the difference between narrower and closed. Two instances each
    * scanning their own memory each found nothing and each started paying for
@@ -2032,10 +2076,11 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * process could have stopped it.
    *
    * **20 tries**, and since every minted slug ends in a random short id
-   * (src/ingest.ts § `slugWithShortId`) a second pass now means one of two
-   * things: the slug we adopted for this URL has a job on it doing different
-   * work, which is answered with a 409 below; or a one-in-771-million id
-   * collision. Twenty of those in a row is not a collision, it is a fault.
+   * (src/ingest.ts § `slugWithShortId`) a second pass means one of two things:
+   * a genuine race with another request for this same address, which resolves
+   * on the next turn because both of its repairs change the question; or a
+   * one-in-771-million id collision. Twenty of those in a row is not a
+   * collision, it is a fault.
    *
    * **An upload gets a minted slug outright.** There is no address to compare,
    * so there is nothing that could make two uploads one article —
@@ -2048,13 +2093,8 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * — and the short id makes that a mint rather than a search. `freeUploadSlug`
    * and `slugIsSpokenFor` were the search, and both are gone with it.
    */
-  let slug = request.url
-    ? await freeSlug(request.slug, request.url)
-    : request.upload
-      ? slugWithShortId(request.slug)
-      : request.slug;
-
   for (let tries = 0; ; tries++) {
+    const slug = allocation.slug;
     if (tries >= 20) {
       throw Object.assign(new Error(`Too many articles already called "${request.slug}".`), {
         status: 409,
@@ -2081,67 +2121,106 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       ...(request.profile ? { profile: request.profile } : {}),
     };
 
-    const { job, created, sameWork } = await store.enqueueOrGet(wanted, workKey);
+    const outcome = await store.enqueueOrGet(wanted, {
+      workKey,
+      reservesName: allocation.kind === "minted",
+      ...(source !== undefined && { urlKey: source }),
+    });
 
-    if (!created) {
+    /**
+     * **Four answers, four repairs, and the compiler counts them.**
+     *
+     * A second, *different* job for one article is no longer refused: it is
+     * `created`, `queued`, and `claim` is what makes it wait its turn. That is
+     * the whole of the per-article queue, and it is why `JobConflict` no longer
+     * exists — there is nothing left for it to be thrown about.
+     * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g.
+     */
+    if (outcome.kind === "sameWork") {
       /* Already in hand: hand back the job doing it rather than starting a
          second one over the same files. A double-click on Add is all it takes.
 
-         **Only for identical work.** Matching on the slug alone would let a
-         queued `{steps:["arc"]}` swallow a refresh that arrived a second later
-         — the caller gets a job id, watches it succeed, and the refresh never
-         happened. */
-      if (sameWork) {
-        /* **And give it a pump**, because the job we are handing back may have
-           nobody driving it. That is not a rare state: a job left `queued` by a
-           dev-server restart is exactly what `sweepStopped` produces, and
-           asking for it again is exactly what a reader does next. Without this
-           they get a job id back and watch a card that never moves.
+         **And give it a pump**, because the job we are handing back may have
+         nobody driving it. That is not a rare state: a job left `queued` by a
+         dev-server restart is exactly what `sweepStopped` produces, and asking
+         for it again is exactly what a reader does next. Without this they get
+         a job id back and watch a card that never moves.
 
-           Two pumps for one job is harmless — the second is told `busy`, backs
-           off, and takes the next step when the first releases — which is the
-           same arrangement as a pump plus an open browser tab, and the whole
-           reason the claim exists. */
-        pump(job.id, owner);
-        return job;
-      }
+         Two pumps for one job is harmless — the second is told `busy`, backs
+         off, and takes the next step when the first releases — which is the
+         same arrangement as a pump plus an open browser tab, and the whole
+         reason the claim exists. */
+      pump(outcome.job.id, owner);
+      return outcome.job;
+    }
 
+    if (outcome.kind === "sourceTaken") {
       /**
-       * The slug is taken by **different** work, and what to do about that
-       * depends entirely on whether this request is *asking for* an article or
-       * *naming* one.
+       * **Two pastes of one URL at the same instant.** Both callers asked
+       * `slugAlreadyHolding`, both saw nothing, and both minted a random name;
+       * every other key in the schema contains the slug, so nothing else would
+       * have caught it and the reader would have got two articles for one
+       * address and paid for both.
        *
-       * **A URL or an upload is asking for one.** Re-allocating is right, and
-       * asking `freeSlug` again rather than appending a counter is right too:
-       * the racing job is in the store now, so the lookup sees it this time and
-       * either adopts its slug (same URL) or mints a fresh one. A counter would
-       * have to guess, and could land on a finished article's slug.
+       * **Ask `freeSlug` again**, exactly as `nameTaken` below does, rather
+       * than writing the answer in by hand. The holder is in the store now, so
+       * the lookup sees it — `inFlightSlugForUrlKey` matches on the address —
+       * and adopts its slug, which is what allocation would have returned had
+       * it been able to see the other request.
        *
-       * **Anything else is naming one**, and moving it is the worst thing this
-       * function could do. `{slug: "paper", steps: ["summary"]}` means *summarise
-       * paper*. If `paper` has a glossary job running, the old code appended a
-       * counter and made it a summary job for `paper-2` — a different article,
-       * already on the shelf, which it would then summarise perfectly
-       * successfully. GPT Sol found it; the plan had said 409 and the code had
-       * not. So: 409, in the reader's words.
+       * **The hand-written version was `{ kind: "adopted", slug: outcome.job.slug }`,
+       * and the bug in it was the `adopted`, not the slug.** An adoption
+       * reserves nothing, so it sits *outside* `jobs_active_source` — and it was
+       * being written on the strength of a holder we had only been told about.
+       * If that holder failed, or the reader stopped it, between the refusal and
+       * this line, a third request would see no article and no active holder,
+       * mint and reserve a second slug, and this one would land on the dead
+       * holder's. Two active jobs, one owner, one URL, two slugs, and both able
+       * to publish. Re-asking is the whole fix: it revalidates before inserting,
+       * so a holder that has gone gets a freshly minted **reserved** slug
+       * instead. GPT Sol, reviewing the built stage 1, finding 3;
+       * tests/one-article-for-one-address.test.ts.
+       *
+       * The loop still cannot ask the same question twice. If the holder is
+       * there, the answer is an adoption and the next insert is outside the
+       * source index altogether; if it has gone, the answer is a fresh random
+       * mint. Only a request carrying a URL can be told `sourceTaken` — the
+       * ticket's `urlKey` comes from `request.url` and nothing else — so the
+       * other branch is unreachable, and it adopts rather than throwing because
+       * an unreachable branch that stops the reader is worse than one that
+       * queues them behind the holder.
        */
-      if (!request.url && !request.upload) {
-        throw new JobConflict(job);
-      }
-      const next = request.url
+      allocation = request.url
         ? await freeSlug(request.slug, request.url)
-        : slugWithShortId(request.slug);
-      /* **No progress is not something to retry twenty times.** `freeSlug` will
-         keep handing back the same name when the held slug is legitimately this
-         URL's — which is exactly what happens to a filesystem job that survived
-         a restart without its work key. Spinning to the retry budget and then
-         409ing hides that behind a generic message; saying it once does not. */
-      if (next === slug) {
-        throw new JobConflict(job);
-      }
-      slug = next;
+        : { kind: "adopted", slug: outcome.job.slug };
       continue;
     }
+
+    if (outcome.kind === "nameTaken") {
+      /**
+       * Another active job is claiming this name. Only a *minted* request can
+       * be told this — an adoption reserves nothing — so there is always a URL
+       * or an upload here to reallocate with.
+       *
+       * Asking `freeSlug` again rather than appending a counter is the point:
+       * the racing job is in the store now, so the lookup sees it this time and
+       * either adopts its slug (same URL, and then this request queues behind
+       * it on one article) or mints a fresh one. A counter would have to guess,
+       * and could land on a finished article's slug — which is how a request to
+       * summarise `paper` once became a summary of `paper-2`, produced
+       * perfectly successfully under the wrong article.
+       *
+       * Every path out of here changes something: a mint is a fresh random id,
+       * and an adoption stops reserving. So the loop cannot ask the same
+       * question twice, and `tries` is a fault budget rather than a ladder.
+       */
+      allocation = request.url
+        ? await freeSlug(request.slug, request.url)
+        : { kind: "minted", slug: slugWithShortId(request.slug) };
+      continue;
+    }
+
+    const job = outcome.job;
 
     /* The step list and the forced list, because "why did this job cost two
        model calls" and "why did it finish in a second" are both answered here
@@ -2248,7 +2327,8 @@ export function sameWork(
    * `freeSlug` derives a slug from the last path segment, so `a.example/news`
    * and `b.example/news` both want `news`. Added at the same moment, both see
    * the slug free, both build a job whose every *other* work parameter is
-   * identical — and the second one loses the `jobs_active_slug` conflict, is
+   * identical — and the second one loses the de-duplication conflict
+   * (`jobs_active_work` since 2026-09-02, `jobs_active_slug` before it), is
    * told this is the same work, and is handed the first URL's job. The reader
    * watches it succeed and their article was never fetched. GPT Sol found it in
    * the built queue; `freeSlug`'s own docstring has warned about this pair of
@@ -2268,6 +2348,27 @@ export function sameWork(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
   );
 }
+
+/**
+ * **A slug, and which of the two things happened to get it.**
+ *
+ * *Minted* means this request claimed a new name; *adopted* means it named an
+ * article that already exists, or one another request of this reader's is
+ * already making. `EnqueueTicket.reservesName` (src/store/jobs.ts) is exactly
+ * `kind === "minted"`, and two of the queue's four unique indexes turn on it.
+ *
+ * **A union rather than a bare string plus a boolean beside it**, because the
+ * fact is known at the moment of allocation and *nowhere else*. Every attempt
+ * to recover it afterwards — from `url`, from `upload`, from the shape of the
+ * slug string — is a guess, and a wrong one: `enqueue` fills a late step's
+ * `url` from `meta.json`, so `{slug, steps:["ideas"]}` on an article that has
+ * sat on the shelf for a month carries a URL exactly as a fresh paste does. The
+ * type makes losing the fact a compile error. GPT Sol, 2026-09-02, and
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1b.
+ */
+export type SlugAllocation =
+  | { kind: "minted"; slug: string }
+  | { kind: "adopted"; slug: string };
 
 /**
  * **The slug this URL should use: the one it already has, or a fresh one.**
@@ -2322,13 +2423,20 @@ export function sameWork(
  * filesystem, a network or a queue, which is
  * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
  * one line those tests do not cover.
+ *
+ * ## It says which of the two it did, and that is not decoration
+ *
+ * See `SlugAllocation`. The two branches below are the *only* place in the
+ * codebase that knows whether a name was claimed or adopted, and
+ * `jobs_reserved_slug` and `jobs_active_source` both turn on that fact.
  */
 export async function freeSlug(
   slug: string,
   url: string,
   alreadyHolding: (urlKey: string) => Promise<string | undefined> = slugAlreadyHolding,
-): Promise<string> {
-  return (await alreadyHolding(urlKey(url))) ?? slugWithShortId(slug);
+): Promise<SlugAllocation> {
+  const held = await alreadyHolding(urlKey(url));
+  return held === undefined ? { kind: "minted", slug: slugWithShortId(slug) } : { kind: "adopted", slug: held };
 }
 
 /**
@@ -2355,9 +2463,10 @@ async function slugAlreadyHolding(key: string): Promise<string | undefined> {
  * records per reader. Adding a store method for it would mean the same
  * `urlKey` comparison in two adapters, and `urlKey` is not SQL.
  *
- * `queued` and `running` are the two statuses `jobs_active_slug` reserves a
- * slug for (src/store/pg-jobs.ts § `ACTIVE`); a cancelled or failed job is not
- * holding anything.
+ * `queued` and `running` are the two statuses a job holds a slug in
+ * (`ACTIVE`, src/store/pg-jobs.ts, and every one of the queue's partial unique
+ * indexes is over exactly those two); a cancelled or failed job is not holding
+ * anything.
  */
 async function inFlightSlugForUrlKey(key: string): Promise<string | undefined> {
   for (const job of await store.list(currentOwnerId())) {

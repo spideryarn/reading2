@@ -302,9 +302,11 @@ describe("the schema keeps the promises the plan makes", () => {
         c.query(
           `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
            values ($1,$2,$3,'[]'::jsonb,'running','w',gen_random_uuid(), now() + interval '1 minute')`,
-          /* A slug each. `jobs_active_slug` still reserves one per article, so
-             two running rows on one slug would be refused by *that* index and
-             this would pass while saying nothing about the cap. */
+          /* A slug each. `jobs_one_running_per_slug` allows one *running* row
+             per article, so two on one slug would be refused by *that* index and
+             this would pass while saying nothing about the cap. (It said
+             `jobs_active_slug` until 2026-09-02; the index changed, the reason
+             the slugs differ did not.) */
           [id, OWNER, id],
         );
       await running("spya-aaaaaa");
@@ -379,7 +381,20 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("one article cannot have two jobs in flight", async () => {
+  /**
+   * **This case used to be its own opposite**, and it is worth saying why.
+   *
+   * It was *"one article cannot have two jobs in flight"*, asserting
+   * `jobs_active_slug` — unique on `(owner_id, slug)` over `queued` and
+   * `running` — which did three jobs at once and so refused a second, *different*
+   * request for one article at enqueue. Greg asked for that to become a line
+   * rather than a refusal (2026-09-02), so the index became four narrower ones
+   * and the behaviour this asserted became the behaviour that must not happen.
+   *
+   * Different work on one article now goes in. What still cannot: the same work
+   * twice.
+   */
+  dbIt("one article takes a line of different jobs, but not the same one twice", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const queued = (id: string, work: string) =>
@@ -389,17 +404,182 @@ describe("the schema keeps the promises the plan makes", () => {
           [id, OWNER, work],
         );
       await queued("spya-dddddd", "w1");
-      /* Both halves of what this index is for, in one assertion each.
-         Same work is the de-duplication: two instances each accept one Add
-         click and only one row survives, so the model call is paid for once.
-         Different work is the slug reservation: two uploads both called
-         `paper.pdf` cannot each choose `paper` and have the second publish into
-         the first's article. */
-      await expectViolation(c, /jobs_active_slug/, () => queued("spya-eeeeee", "w1"));
-      await expectViolation(c, /jobs_active_slug/, () => queued("spya-ffffff", "w2"));
-      // A finished job is history and does not hold the slug.
+
+      /* De-duplication: two instances each accept one Add click and only one row
+         survives, so the model call is paid for once. */
+      await expectViolation(c, /jobs_active_work/, () => queued("spya-eeeeee", "w1"));
+
+      /* And *different* work appends. This is the line: run Ideas while Glossary
+         is going and it waits its turn rather than being refused. */
+      await queued("spya-ffffff", "w2");
+
+      // A finished job is history and de-duplicates nothing.
       await c.query("update spideryarn.jobs set status = 'done' where id = 'spya-dddddd'");
       await queued("spya-gggggg", "w1");
+    });
+  });
+
+  /**
+   * **De-duplication lets go of a stopped job; the running mutex does not.**
+   *
+   * `jobs_active_work` excludes `cancelling` rows so that a request cannot
+   * collapse onto a job the reader has just stopped and vanish into it. The
+   * mutex and the name reservation keep covering that row until it is terminal,
+   * because its claimant is still inside the article. Two predicates that differ
+   * by one word, and a "tidy-up" that made them agree would break one of them
+   * silently — GPT Sol, 2026-09-02.
+   */
+  dbIt("a stopped job stops de-duplicating before it stops holding the article", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      await c.query(
+        `insert into spideryarn.jobs
+           (id, owner_id, slug, steps, status, work_key, cancelling,
+            attempt_id, lease_expires_at, reserves_name)
+         values ('spya-dddddd',$1,'paper','[]'::jsonb,'running','w1',true,
+                 gen_random_uuid(), now() + interval '10 minutes', true)`,
+        [OWNER],
+      );
+
+      // The same work goes in, because that job is about to end.
+      await c.query(
+        `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key)
+         values ('spya-eeeeee',$1,'paper','[]'::jsonb,'queued','w1')`,
+        [OWNER],
+      );
+      // Its name is still spoken for, and so is the article itself.
+      await expectViolation(c, /jobs_reserved_slug/, () =>
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, reserves_name)
+           values ('spya-ffffff',$1,'paper','[]'::jsonb,'queued','w3',true)`,
+          [OWNER],
+        ),
+      );
+    });
+  });
+
+  /**
+   * **The article mutex and the name reservation are global on `slug`**, and
+   * that is a different scope from de-duplication on purpose.
+   *
+   * `articles.slug` is globally unique because it is the URL contract
+   * (`/read/<slug>`), so two owners can build toward one name. Whose request it
+   * is decides de-duplication; nothing about whose request it is decides who
+   * gets the article. Between 2026-08-30 and 2026-09-02 nothing enforced this
+   * at all: `jobs_only_one_running` had gone and `jobs_active_slug` was
+   * owner-scoped.
+   */
+  dbIt("two owners cannot run, or claim the name of, one article at once", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const other = "22222222-2222-2222-2222-222222222222";
+      await c.query(
+        `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
+         values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
+                 'schema-test-two@example.invalid','x',now(),now())
+         on conflict (id) do nothing`,
+        [other],
+      );
+      const running = (id: string, owner: string) =>
+        c.query(
+          `insert into spideryarn.jobs
+             (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
+           values ($1,$2,'paper','[]'::jsonb,'running','w-'||$1,
+                   gen_random_uuid(), now() + interval '10 minutes')`,
+          [id, owner],
+        );
+      await running("spya-dddddd", OWNER);
+      await expectViolation(c, /jobs_one_running_per_slug/, () => running("spya-eeeeee", other));
+
+      const reserving = (id: string, owner: string) =>
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, reserves_name)
+           values ($1,$2,'letter','[]'::jsonb,'queued','w-'||$1,true)`,
+          [id, owner],
+        );
+      await reserving("spya-ffffff", OWNER);
+      await expectViolation(c, /jobs_reserved_slug/, () => reserving("spya-gggggg", other));
+    });
+  });
+
+  /**
+   * **One active mint per address**, which is the race no other index catches.
+   *
+   * Two pastes of one URL at the same instant both look, both find nothing, and
+   * both mint a slug ending in a random short id — so every key that contains
+   * the slug lets them through and the reader gets two articles for one address.
+   * Only `url_key` connects them.
+   *
+   * The three rows that must *not* collide are the interesting half: a null
+   * address (an upload, and two uploads of one file are two documents), a
+   * non-reserving row (a late step that happens to carry the article's URL), and
+   * another owner's (Greg, 2026-08-26: reuse the source, add a per-user
+   * article).
+   */
+  dbIt("one owner cannot have two active jobs minting an article for one address", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const other = "22222222-2222-2222-2222-222222222222";
+      await c.query(
+        `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
+         values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
+                 'schema-test-two@example.invalid','x',now(),now())
+         on conflict (id) do nothing`,
+        [other],
+      );
+      const mint = (id: string, slug: string, owner: string, key: string | null, reserves = true) =>
+        c.query(
+          `insert into spideryarn.jobs
+             (id, owner_id, slug, steps, status, work_key, reserves_name, url_key)
+           values ($1,$2,$3,'[]'::jsonb,'queued','w-'||$1,$4,$5)`,
+          [id, owner, slug, reserves, key],
+        );
+      await mint("spya-dddddd", "paper-a3f9k1", OWNER, "example.test/p");
+      await expectViolation(c, /jobs_active_source/, () =>
+        mint("spya-eeeeee", "paper-x7d2m4", OWNER, "example.test/p"),
+      );
+
+      // Two uploads carry no address, and a null equals nothing in an index.
+      await mint("spya-ffffff", "one-k2m4n6", OWNER, null);
+      await mint("spya-gggggg", "two-p8r0s2", OWNER, null);
+      // A job that is not claiming a name is outside the index entirely.
+      await mint("spya-hhhhhh", "paper-a3f9k1", OWNER, "example.test/p", false);
+      // And it is one person's request, not a fact about the address.
+      await mint("spya-jjjjjj", "paper-q5t7v9", other, "example.test/p");
+    });
+  });
+
+  /**
+   * **`cancelling` belongs to a running job and to nothing else.**
+   *
+   * Stop on a queued job settles it terminal in the same statement; every
+   * transition out of `running` clears the flag. So a queued row carrying it is
+   * a state the cancellation API cannot produce — and one nothing could clear:
+   * it would sit outside `jobs_active_work`, so no request would ever
+   * de-duplicate onto it, while still blocking its article's line as a
+   * predecessor for ever. GPT Sol raised it as a suggestion, 2026-09-02, and it
+   * was taken because the alternative is a comment asking every future
+   * transition to remember.
+   */
+  dbIt("only a running job may be stopping", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      for (const status of ["queued", "done", "error", "cancelled"]) {
+        await expectViolation(c, /jobs_cancelling_is_running/, () =>
+          c.query(
+            `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, cancelling)
+             values ('spya-dddddd',$1,'paper','[]'::jsonb,$2,'w1',true)`,
+            [OWNER, status],
+          ),
+        );
+      }
+      await c.query(
+        `insert into spideryarn.jobs
+           (id, owner_id, slug, steps, status, work_key, cancelling, attempt_id, lease_expires_at)
+         values ('spya-dddddd',$1,'paper','[]'::jsonb,'running','w1',true,
+                 gen_random_uuid(), now() + interval '10 minutes')`,
+        [OWNER],
+      );
     });
   });
 

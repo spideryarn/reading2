@@ -39,20 +39,19 @@
  * (see `stopped` and `postFailed` in useGlossary.ts, useSummaries.ts, and the
  * hook inside Tweets.tsx).
  *
- * ## The job in the way
+ * ## The job in the way, which there is no longer
  *
- * A third thing on screen, since 2026-09-01. `POST /api/jobs` answers 409 when
- * the article already has an active job doing different work, and that job's
- * steps are — by definition — not this panel's, so `job` above can never be it
- * and `useStepJob`'s filter throws it away. The reader was told to *"stop it
- * first"* with nothing on screen to stop.
+ * A `blocking` job was drawn here from 2026-09-01 to 2026-09-02: `POST
+ * /api/jobs` answered 409 when the article already had an active job doing
+ * different work, and that job's steps were by definition not this panel's, so
+ * the reader was told to *"stop it first"* with nothing on screen to stop. The
+ * band was the fix.
  *
- * So `blocking` is drawn by the **same** `Band` as `job`, in `displayJob`'s
- * words, with the same Stop. What differs is one string: the label to use when
- * the job is between two steps, where this panel's `runningLabel` would say
- * "Finding…" about an ingest.
- *
- * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
+ * The refusal is gone — a second, different job on one article is queued now
+ * and shows in this panel's own band as *Waiting to continue.* — so the second
+ * band went with it, along with `WORKING_ON_THIS_ARTICLE`, the label it borrowed
+ * between two steps.
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g.
  *
  * ## Styling
  *
@@ -94,7 +93,6 @@ import {
   DRIVER_STALLED,
   elapsedLabel,
   WAITING_TO_CONTINUE,
-  WORKING_ON_THIS_ARTICLE,
 } from "../job-state.js";
 import type { Job, JobStep, StepName } from "../types.js";
 import { useNow } from "./useNow.js";
@@ -102,7 +100,6 @@ import { useNow } from "./useNow.js";
 export function JobProgress({
   job,
   failed,
-  blocking,
   stalled,
   onRun,
   onCancel,
@@ -116,15 +113,6 @@ export function JobProgress({
   /** A message to show under the button, or null. Never a boolean — see above. */
   failed: string | null;
   /**
-   * The job that **refused** this run, or null — see § The job in the way.
-   *
-   * Required rather than optional, so that adding it was one compiler error per
-   * surface rather than a feature quietly wired into two panels out of seven. A
-   * `null` here is a decision; a missing prop would have been an oversight
-   * nothing could see.
-   */
-  blocking: Job | null;
-  /**
    * Whether this tab can see the job on screen and cannot move it.
    *
    * **Stage 5 shipped this on the shelf card and not here, and that was wrong.**
@@ -137,9 +125,9 @@ export function JobProgress({
    *
    * It comes from `useStepJob`, which already holds the queue subscription
    * (src/web/useStepJob.ts § `stalled`), so nothing about transport health had
-   * to be put on `Job` or on `displayJob`. Required rather than optional for
-   * the same reason `blocking` is: one compiler error per surface beats a
-   * warning quietly wired into two panels out of eight.
+   * to be put on `Job` or on `displayJob`. **Required rather than optional**:
+   * one compiler error per surface beats a warning quietly wired into two
+   * panels out of eight.
    */
   stalled: boolean;
   onRun(): Promise<void>;
@@ -170,13 +158,8 @@ export function JobProgress({
    * the exact cost `useNow`'s own header describes paying by accident. This
    * passed `86_400_000` and called it "one timer that never fires" until
    * 2026-09-01; it fired, once a day, per band. `useNow` takes `null` now.
-   *
-   * **A blocker counts as a job on screen.** It is somebody else's work and it
-   * is the thing the reader is waiting on, so its clock has to tick for exactly
-   * the same reason. Parenthesised because `??` binding tighter than `?:` is
-   * something a reader should not have to look up to check this line.
    */
-  const now = useNow((job ?? blocking) ? 1000 : null);
+  const now = useNow(job ? 1000 : null);
 
   if (job) {
     return (
@@ -208,32 +191,6 @@ export function JobProgress({
         {label}
       </Button>
       {failed && <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed}</p>}
-      {/* **The job in the way.**
-       *
-       * `POST /api/jobs` answers 409 when the article already has an active job
-       * doing different work, and that job is by definition one whose steps do
-       * **not** include this panel's — so `useStepJob`'s own filter can never
-       * surface it and the refusal above used to be the whole of what the
-       * reader got: told to stop something with nothing on screen to stop.
-       *
-       * The button stays. Pressing it again while the blocker runs is refused
-       * again, which costs nothing, and the moment the blocker ends it is the
-       * thing the reader wants. Hiding it would make the band look broken.
-       *
-       * Ruled off rather than styled differently, because it is the same
-       * information in the same words as any other running job — what it needs
-       * to say is *this is not yours*, and one line does that. */}
-      {blocking && (
-        <div className="tw:mt-2 tw:border-l-2 tw:border-rule tw:pl-2">
-          <Band
-            job={blocking}
-            now={now}
-            stalled={stalled}
-            fallbackLabel={WORKING_ON_THIS_ARTICLE}
-            onCancel={onCancel}
-          />
-        </div>
-      )}
     </>
   );
 }
@@ -242,13 +199,11 @@ export function JobProgress({
  * One running job, drawn.
  *
  * Extracted 2026-09-01 so that the job this panel started and the job that
- * **refused** it are the same three rows in the same words — the states are
- * `displayJob`'s either way, and a second copy here is how a band and a card
- * came to disagree once already (tests/interrupted-job-card.test.tsx).
- *
- * The two differ in one thing only: what to call the step when the job is
- * between two of them. This panel's own `runningLabel` is right for its own job
- * and a confident lie about somebody else's.
+ * **refused** it were the same three rows in the same words. There is no
+ * refusal any more and so only one caller (§ The job in the way, above), but it
+ * stays a function: the states are `displayJob`'s, and inlining them here is how
+ * a band and a card came to disagree once already
+ * (tests/interrupted-job-card.test.tsx).
  */
 function Band({
   job,
@@ -262,7 +217,7 @@ function Band({
   now: number;
   /** See `stalled` on `JobProgress`. The one thing here the job does not know. */
   stalled: boolean;
-  /** Whose `detail` to show when no step is running. None, for a blocker. */
+  /** Whose `detail` to show when no step is running. */
   fallbackStep?: JobStep | undefined;
   fallbackLabel: string;
   onCancel(id: string): void;

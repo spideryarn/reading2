@@ -306,8 +306,47 @@ and answered.
   > make `npm run dev` use Postgres by default, or refuse multiple files-mode servers over one
   > checkout. Keep the process-global fix as a cheap hot-reload repair if files mode remains usable.
 
-  **Left for Greg**, because both options change how every agent on this box works and neither is a
-  bug fix. Not slipped in under a postmortem.
+  **Was left for Greg**, because both options change how every agent on this box works and neither
+  is a bug fix. Not slipped in under a postmortem.
+
+  **Decided 2026-09-02: the first one.** *"We want to move towards using the database instead of
+  files, so probably it does make sense for `npm run dev` to use Postgres by default"* — Greg. So
+  `npm run dev` and `dev:pretty` now carry `SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres}`, and
+  the default dev server gets the database's fence rather than a module-scope Map. Three things
+  worth knowing about the shape of it:
+
+  - **A soft default, not a hard set** — `${SPIDERYARN_STORE:-postgres}`, so a value that is
+    already set survives. A hard set would silently discard the value somebody typed, which is the
+    exact failure class this repo keeps writing postmortems about, and
+    [`src/store/live.ts`](../../src/store/live.ts) already refuses to guess a misspelling for the
+    same reason.
+
+    **But the escape hatch is `.env.local`, not the command line**, and that is worth stating
+    because the obvious test agrees with the wrong answer. [`src/env.ts`](../../src/env.ts) makes
+    `.env.local` beat the inherited environment deliberately, and `.env.example` ships a
+    `SPIDERYARN_STORE=postgres` line — so on any checkout that copied the template,
+    `SPIDERYARN_STORE=files npm run dev` runs Postgres anyway. It works on this box only because
+    this box's `.env.local` happens to have no such line, which is exactly how the first version of
+    this note came to claim more than it could deliver. GPT Sol caught it.
+  - **`src/store/live.ts` is untouched: unset still means `files`.** The CLI stages, the seeding
+    scripts, the evals and the test suite are all where they were — and so is `vite preview`, which
+    has no npm script and so still wants `SPIDERYARN_STORE=postgres` typed. Only `npm run dev` and
+    `dev:pretty` moved. Flipping the default itself is a much larger job — ~112 test files never set
+    the variable and about twenty of them write fixtures into `data/<slug>/` and read them back
+    through the API — and it belongs to
+    [260831b-finish-the-database-move.md](260831b-finish-the-database-move.md).
+  - **A stopped database now stops the dev server at boot.** `assertStoreReachable` in
+    `vite.config.ts` runs one `select 1` before the API is mounted, because the env checks only
+    read *settings*: with every variable present and the containers down, the old behaviour was a
+    clean boot and a raw connection error on the first request — the thing that file's own comment
+    calls its anti-goal, and which the new default would have made routine.
+
+  **Still open, and still Greg's**: whether `SPIDERYARN_STORE=postgres` also goes into this box's
+  `.env.local` and into `scripts/gjd-remote-env.ts` provisioning. That would move the CLI too, and
+  because [`src/env.ts`](../../src/env.ts) makes `.env.local` beat the inherited environment it
+  would also override the escape hatch above. It changes the store under every agent mid-task in
+  this shared checkout, and it needs a decision about the 22 article slugs in `data/` that would
+  go dark locally.
 - **An expired lease does not prove nobody is still spending**, under either adapter. Abort is
   cooperative and `walkClaim` explicitly handles a step that ignores its signal, so after an expiry
   the job can be terminalised, the reader can press Retry, and the new job's calls overlap the old

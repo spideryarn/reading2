@@ -237,6 +237,11 @@ describe("documentation links", () => {
       // is a citation, not a link — an absolute path is never a repo link, so
       // there is nothing here for this test to be right about.
       .filter((l) => !/^<?\//.test(l.target))
+      // The same citation, written relative: `vite.config.ts:55`. A trailing
+      // `:<line>` is what makes it a citation rather than a link — no repo path
+      // ends in one — so this exempts the citation without exempting the file.
+      // Narrow on purpose: `foo.md#anchor` and plain `foo.ts` are still checked.
+      .filter((l) => !/:\d+$/.test(l.target))
       .map((l) => `${l.from} → ${l.target}`);
     expect(broken).toEqual([]);
   });

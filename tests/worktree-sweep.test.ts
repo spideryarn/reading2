@@ -18,7 +18,17 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { classifyAll, classifyOne, MIN_IDLE_HOURS, removeOne, type SweepFacts } from "../scripts/worktree-sweep.js";
+import { blockers, type CheckFacts } from "../scripts/worktree-check.js";
+import {
+  classifyAll,
+  classifyOne,
+  gatherAll,
+  MIN_IDLE_HOURS,
+  removeOne,
+  type SweepFacts,
+  type Verdict,
+} from "../scripts/worktree-sweep.js";
+import { listWorktrees } from "../scripts/worktree-admin.js";
 
 let root: string;
 let origin: string;
@@ -60,6 +70,24 @@ function freshWorktree(name: string): string {
   return wt;
 }
 
+/**
+ * The sweep must surface **every** blocker `worktree:check` found, and it must
+ * not paraphrase them.
+ *
+ * Asserted against `blockers()` rather than against the message text, on
+ * purpose: those strings belong to worktree-check.ts and get reworded by whoever
+ * owns it — one was reworded the same afternoon this landed. A test that pins
+ * the prose would go red at that, reporting a defect that is not there, and the
+ * contract worth holding is the relay, not the wording.
+ */
+function expectRelaysEveryBlocker(row: { facts: SweepFacts; verdict: Verdict }): void {
+  if (row.verdict.kind !== "keep") throw new Error(`expected a keep, got ${row.verdict.kind}`);
+  if ("error" in row.facts.check) throw new Error("expected readable facts");
+  const expected = blockers(row.facts.check).map((b) => b.why);
+  expect(expected.length).toBeGreaterThan(0);
+  expect(row.verdict.reasons).toEqual(expect.arrayContaining(expected));
+}
+
 function rowFor(rows: ReturnType<typeof classifyAll>, branch: string) {
   const row = rows.find((r) => r.facts.branch === branch);
   if (row === undefined) throw new Error(`no row for ${branch}`);
@@ -80,8 +108,7 @@ describe("classifyAll, against real worktrees", () => {
     expect(row.verdict.reasons.join(" ")).toContain(`${MIN_IDLE_HOURS}h floor`);
     /* And it is the ONLY thing keeping it — the trap the guard exists for. */
     expect(row.verdict.reasons).toHaveLength(1);
-    expect(row.facts.merged).toBe(true);
-    expect(row.facts.dirty).toEqual([]);
+    expect(row.facts.check).not.toHaveProperty("error");
   });
 
   it("reports a worktree as removable once it is landed, clean and idle", () => {
@@ -100,7 +127,7 @@ describe("classifyAll, against real worktrees", () => {
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain("not merged into origin/dev");
+    expectRelaysEveryBlocker(row);
   });
 
   it("counts an untracked file as work, so a scratch file is not swept away", () => {
@@ -111,7 +138,7 @@ describe("classifyAll, against real worktrees", () => {
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain("uncommitted change");
+    expectRelaysEveryBlocker(row);
   });
 
   it("dates a fast-forwarded worktree by the merge, not by the old commit it landed on", () => {
@@ -137,6 +164,19 @@ describe("classifyAll, against real worktrees", () => {
 });
 
 describe("classifyOne, on facts alone", () => {
+  const clean: CheckFacts = {
+    linked: true,
+    branch: "worktree-x",
+    inProgress: [],
+    dirty: [],
+    hidden: [],
+    unexplained: [],
+    notes: [],
+    verified: [],
+    disposable: 0,
+    trunk: { kind: "landed" },
+  };
+
   const base = (over: Partial<SweepFacts>): SweepFacts => ({
     branch: "worktree-x",
     entry: {
@@ -150,44 +190,84 @@ describe("classifyOne, on facts alone", () => {
       main: false,
       present: true,
     },
-    dirty: [],
-    merged: true,
     lastActivity: 0,
     current: false,
+    check: clean,
     ...over,
   });
 
-  it("refuses to call anything removable when the trunk could not be fetched", () => {
-    const v = classifyOne(base({}), { now: 999 * HOUR, trunkFetched: false });
-    expect(v.kind).toBe("keep");
-    if (v.kind !== "keep") throw new Error("unreachable");
-    expect(v.reasons.join(" ")).toContain("refusing rather than assuming");
+  it("says UNJUDGEABLE, never removable, when the tree could not be read", () => {
+    const v = classifyOne(base({ check: { error: "EACCES walking data/" } }), { now: 999 * HOUR });
+    expect(v.kind).toBe("unjudgeable");
+    if (v.kind !== "unjudgeable") throw new Error("unreachable");
+    expect(v.why).toContain("EACCES");
   });
 
   it("keeps the worktree you are standing in, however landed", () => {
-    const v = classifyOne(base({ current: true }), { now: 999 * HOUR, trunkFetched: true });
+    const v = classifyOne(base({ current: true }), { now: 999 * HOUR });
     expect(v.kind).toBe("keep");
     if (v.kind !== "keep") throw new Error("unreachable");
     expect(v.reasons.join(" ")).toContain("standing in it");
   });
 
-  it("treats an unanswerable merged check as a keep, not as merged", () => {
-    const v = classifyOne(base({ merged: null }), { now: 999 * HOUR, trunkFetched: true });
+  it("treats an unknown trunk standing as a keep, not as landed", () => {
+    const v = classifyOne(base({ check: { ...clean, trunk: { kind: "unknown", why: "fetch failed" } } }), {
+      now: 999 * HOUR,
+    });
     expect(v.kind).toBe("keep");
   });
 
-  it("calls a registration with no directory a ghost, trunk or no trunk", () => {
-    const v = classifyOne(base({ entry: { ...base({}).entry, present: false } }), { now: 0, trunkFetched: false });
+  it("blocks on gitignored strays that git status cannot see — the whole point", () => {
+    /* `dirty` is empty and the trunk is landed: every signal the old sweep had
+       says removable. Only the ignored-state check disagrees. */
+    const stray: CheckFacts = { ...clean, unexplained: ["data/some-article/"] };
+    const v = classifyOne(base({ check: stray }), { now: 999 * HOUR });
+    expect(v.kind).toBe("keep");
+    if (v.kind !== "keep") throw new Error("unreachable");
+    /* Whatever worktree-check calls it — the point is that the sweep says the
+       thing the check said, and would have said nothing on its own. */
+    expect(v.reasons).toEqual(blockers(stray).map((b) => b.why));
+  });
+
+  it("calls a registration with no directory a ghost, even when nothing could be read", () => {
+    const v = classifyOne(base({ entry: { ...base({}).entry, present: false }, check: { error: "gone" } }), { now: 0 });
     expect(v.kind).toBe("ghost");
   });
 
   it("gives every reason at once rather than the first", () => {
-    const v = classifyOne(base({ dirty: ["M x"], merged: false, lastActivity: 999 * HOUR }), {
-      now: 999 * HOUR,
-      trunkFetched: true,
-    });
+    const v = classifyOne(
+      base({ check: { ...clean, dirty: ["M x"], trunk: { kind: "ahead", commits: ["abc one"] } }, lastActivity: 999 * HOUR }),
+      { now: 999 * HOUR },
+    );
     if (v.kind !== "keep") throw new Error("unreachable");
-    expect(v.reasons).toHaveLength(3);
+    expect(v.reasons.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("gatherAll", () => {
+  it("does not let one tree's failure cost the others their answers", () => {
+    const wtA = freshWorktree("survivor-a");
+    freshWorktree("thrower");
+    const entries = listWorktrees(primary);
+
+    const facts = gatherAll(primary, entries, { kind: "sha", sha: "HEAD" }, (root) => {
+      if (root.includes("thrower")) throw new Error("EACCES walking data/");
+      return { linked: true, branch: "x", inProgress: [], dirty: [], hidden: [], unexplained: [], notes: [], verified: [], disposable: 0, trunk: { kind: "landed" } };
+    });
+
+    const thrower = facts.find((f) => f.branch === "worktree-thrower");
+    const survivor = facts.find((f) => f.branch === "worktree-survivor-a");
+    expect(thrower?.check).toEqual({ error: expect.stringContaining("EACCES") });
+    expect(survivor?.check).not.toHaveProperty("error");
+    expect(existsSync(wtA)).toBe(true);
+  });
+
+  it("marks every tree unjudgeable when the one central fetch failed", () => {
+    freshWorktree("no-trunk");
+    const facts = gatherAll(primary, listWorktrees(primary), { kind: "failed", why: "offline" });
+    const row = facts.find((f) => f.branch === "worktree-no-trunk");
+    expect(row?.check).toEqual({ error: "offline" });
+    expect(classifyOne(row!, { now: now() + 999 * HOUR }).kind).toBe("unjudgeable");
   });
 });
 
@@ -213,7 +293,7 @@ describe("removeOne", () => {
     const out = removeOne(primary, "worktree-changed-its-mind", { now: now() + 999 * HOUR });
 
     expect(out.ok).toBe(false);
-    expect(out.steps.join(" ")).toContain("uncommitted change");
+    expect(out.steps.length).toBeGreaterThan(1);
     expect(existsSync(wt)).toBe(true);
   });
 
@@ -224,7 +304,7 @@ describe("removeOne", () => {
     const out = removeOne(primary, "worktree-unlanded", { now: now() + 999 * HOUR });
 
     expect(out.ok).toBe(false);
-    expect(out.steps.join(" ")).toContain("not merged into origin/dev");
+    expect(out.steps.length).toBeGreaterThan(1);
     expect(existsSync(wt)).toBe(true);
   });
 

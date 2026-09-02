@@ -25,8 +25,10 @@
  *
  * This file is types and one pure function. The file-backed adapter is
  * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
- * which exists but which nothing in production imports yet — see the header of
- * src/store/revisions.ts.
+ * which src/store/pg-session.ts imports and which a claimed job runs on
+ * wherever `SPIDERYARN_STORE=postgres` — see the header of
+ * src/store/revisions.ts. (It said "nothing in production imports yet" until
+ * 2026-09-02, which stopped being true at commit c42c940.)
  *
  * ## The key is `(step, kind)`, not `kind`
  *
@@ -925,8 +927,8 @@ export interface ArtifactStore {
    * write with, and it should end up being literally the same value.
    *
    * **This is not a lock, and must not be read as one.** It does not stop a
-   * second runner starting — that is the queue's job, and in Postgres
-   * `jobs_active_slug`'s and the counted cap in `claim`. What it stops is one
+   * second runner starting — that is the queue's job, and in Postgres the
+   * article's line and the counted cap, both inside `claim`. What it stops is one
    * runner's `finishStep` speaking for another runner's attempt.
    */
   beginStep(slug: string, step: StepName): Promise<string>;
