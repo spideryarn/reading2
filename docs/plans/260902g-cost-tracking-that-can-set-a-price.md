@@ -333,8 +333,17 @@ guard watched to fail first.
   `wire = 'realtime'` *is* "a browser reported this", so it would carry one value. An additive
   migration on the day a sideband exists is cheaper than a column nothing distinguishes.
 
-**Outstanding, and not mine to clear — the same peer collision as 1b, twice over.** The migration
-has been applied nowhere, and the reason changed under it on 2026-09-02. First `npm run db:migrate`
+**This is a laptop problem, not a shipping one.** The `.sql`, its snapshot and its journal entry are
+on `dev`, and `npm run deploy` applies every pending migration to the remote and **refuses to ship
+while any is still pending** — `--skip-migrations` included
+([deployment.md § Deploying](../project/deployment.md#deploying)). So production gets this at the
+next deploy without anybody doing anything, and the one way it could go wrong announces itself: if a
+later-stamped migration ever reached the remote first, the preflight would refuse out loud rather
+than skip in silence. Deploying `dev` as a whole cannot hit that, because drizzle reads its watermark
+once and then applies every pending entry in journal order in the same run.
+
+**Outstanding on the shared box, and not mine to clear — the same peer collision as 1b, twice over.**
+The migration has been applied nowhere, and the reason changed under it on 2026-09-02. First `npm run db:migrate`
 refused on one orphan ledger row, `1788351034981`, which was `0052_per_article_job_queue` applied to
 the shared local Postgres from a worktree whose journal entry had not been pushed. That cleared when
 `0052` landed. What refuses now is worse and is the defect
