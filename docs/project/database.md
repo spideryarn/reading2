@@ -658,6 +658,41 @@ repair is written up at the top of
 [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
 still in the folder as a named exception today.
 
+### Two facts about a fork repair, both learned the hard way on 2026-09-02
+
+Written down because both were reverse-engineered under pressure, by two agents independently, on
+the day four migrations forked three ways across five worktrees.
+
+**A snapshot's `id` is inert, so a repair should keep it.** `preparePgMigrationSnapshot` mints it
+with `crypto.randomUUID()`; nothing anywhere derives or validates it from the snapshot's contents.
+Its only readers are the next snapshot's `prevId` and a zod string check. So when you rebuild a
+snapshot's contents and repoint its `prevId`, **keep the existing `id`** — every migration already
+chained onto it then keeps resolving instead of dangling, including ones nobody has told you about.
+Minting a fresh id turns one repair into a cascade. Settled from drizzle-kit's own source rather
+than assumed, because "the id is inert" is exactly the kind of claim that is true until some tool
+hashes it.
+
+**`db:chain` and `tests/migration-snapshots.test.ts` check structure only — neither can see a stale
+snapshot.** [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts)'s own header
+says so, and it is the trap that makes a repair *look* finished: repointing `prevId` without
+rebuilding contents passes both gates, and then the next `db:generate` in some third worktree diffs
+against a picture that never had the other branch's tables in it, re-emits their DDL, and
+`db:migrate` fails on `already exists` — landing on whoever generated, not on whoever repaired.
+
+The check that proves **contents** is:
+
+```bash
+npm run db:generate -- --allow-empty     # then answer: no schema changes
+```
+
+That is drizzle asserting the snapshot equals what it would serialise from
+[`src/db/schema.ts`](../../src/db/schema.ts) today, which is the actual claim a repair makes. Run it
+before declaring a chain repaired; green on the structural gates alone means nothing.
+
+**And rebuild from a tree that is exactly the trunk.** A rebuild takes its contents from the current
+`schema.ts`, so doing it from a tree carrying unlanded schema work bakes those objects into a
+snapshot dated before they exist — a third costume for the same fault.
+
 ### Repairing a fork: what the losing migration is decides everything
 
 The journal half of the conflict is easy — take the trunk's file whole:
@@ -668,6 +703,21 @@ git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json
 
 A file write rather than a `git checkout`, so it stays inside
 [AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share)'s rules.
+
+**That line assumes your side is the one being rebuilt**, so its entry comes back on the regenerate.
+When **both** sides survive — the row below where both are already applied — taking the trunk's file
+whole deletes your own entry instead, and you get a migration with no journal row. Keep both, in
+`when` order.
+
+> **Resolving the journal is not resolving the fork, and this is the trap the section is named for.**
+> Git conflicts on `_journal.json` because both sides appended a line. It does *not* conflict on the
+> snapshots, because each side wrote a **new file** and git merges two new files without a word. So
+> the conflict you can see is the half that does not matter, and the half that does arrives silently.
+> On 2026-09-02 that produced exactly the fork below: the journal was resolved carefully, the
+> filenames were checked for collisions, and `0052_per_article_job_queue` and
+> `20260902141103_byok_upstream_nanos` went to `dev` as two children of `0051`. It was caught by a
+> code review, not by anything that ran. **After any merge that touches `drizzle/`, run
+> `npm run db:chain`** — it takes a second and it is the whole of the check.
 
 The snapshot half cannot be merged. Snapshots are a linear chain and drizzle has no notion of two
 parents — Alembic and Django both model migrations as a DAG and can write an explicit merge node;
@@ -685,7 +735,45 @@ going, in every row:
 | unpublished, purely generated | delete its `.sql`, its snapshot and its journal entry, then `npm run db:generate` again. The simple case, and the common one. |
 | unpublished, hand-edited or `--custom` | **keep the original SQL.** Regenerate only the schema part and re-apply the custom part by hand — a backfill, a grant, a function, `NOT VALID`, RLS. An ordinary `generate` may say "no schema changes" and hand you no replacement at all. |
 | already applied to the shared local Postgres | preserve it and regenerate the *other* side, or reset. **Greg's call** — `npm run db:reset` empties the database and puts nothing back. |
+| **both** sides applied, and they touch **disjoint tables** | neither is the loser. Hand-merge the snapshot — § below. |
 | **applied to production** | **never delete, re-stamp or regenerate it.** Published migrations are immutable; the repair is a new forward migration. |
+
+#### When both are applied and disjoint, merge the snapshot rather than rebuilding one
+
+The common case for two agents: each added a table or some indexes, they never touched the same one,
+and both are already in the shared database, so neither may be deleted and neither may be re-stamped.
+
+Then the repair is one object. Diff the two children against their shared parent and check they
+differ in **disjoint** `tables[…]` entries and in nothing else — not `enums`, `schemas`, `sequences`,
+`policies`, `views`, `roles` or `_meta`. If that holds, the later child's snapshot with the earlier
+child's table object dropped into it *is* the correct post-both state, assembled out of drizzle's own
+serialisations rather than written by hand. Repoint `prevId` at the earlier child's `id`, and leave
+the journal, both `.sql` files and the database untouched.
+
+**Keep the rebuilt snapshot's own `id`.** Only `prevId` moves. The `id` is minted with
+`crypto.randomUUID()` in `preparePgMigrationSnapshot` and nothing anywhere derives or validates it
+from the contents — its only readers are the next snapshot's `prevId` and a zod string check. So
+re-minting it buys nothing and costs everything downstream: any migration already chained onto the
+old value dangles, and `drizzle-kit check` groups by `prevId` alone and **will not tell you**. Only
+[`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) resolves links, and only for
+migrations that are in the tree — a peer's unpushed child is invisible to every check you can run.
+There was one on 2026-09-02, and preserving the id is what kept it resolving.
+
+**Green structural checks prove nothing about the contents.** `npm run db:chain` and
+`tests/migration-snapshots.test.ts` are structure only, and `migration-snapshots.ts`'s own header
+says a stale-but-structurally-perfect snapshot passes both. The check that proves the merge is:
+
+```bash
+npm run db:generate -- --allow-empty     # must answer: no schema changes
+```
+
+That is drizzle saying the snapshot equals what it would serialise from `src/db/schema.ts` today,
+which is the actual claim — that no future generate re-emits either migration's DDL. If it writes a
+migration instead, read the `.sql`: it names exactly what the merge missed.
+
+**Do it from a tree that is exactly the trunk.** A rebuilt snapshot takes its contents from the
+current `src/db/schema.ts`, so a tree carrying unlanded schema work bakes those objects into a
+snapshot dated before they exist — the same fault one turn further on, and much harder to see.
 
 Two more things that bite. `drizzle-kit generate` asks whether a thing was **renamed or dropped and
 recreated**, and answering differently the second time produces different and possibly destructive
@@ -695,6 +783,54 @@ concurrently, so the inversion check above stays load-bearing.
 
 A `db:migrate` that prints a `⚠ drizzle/meta/ is not a well-formed chain` warning is telling you
 this happened; the migration it is about to run is unaffected.
+
+### That rename question needs a terminal, and without one you get silence
+
+**The rename prompt above is interactive, and an agent has no TTY.** When
+`drizzle-kit generate` wants to ask it and cannot, it prints
+
+```
+Error: Interactive prompts require a TTY terminal
+```
+
+and then **exits 0 having written nothing**. `npm run db:generate` catches the
+empty folder and says so — that wrapper exists for the forked-chain case and it
+covers this one too — but the underlying failure is
+[silent success](../reusable/silent-success.md) in its purest form: the schema
+says one thing, `drizzle/` says another, and the obvious conclusion is *nobody has
+run the generator yet*. It cost several hours on 2026-09-02, with a destructive
+change sitting uncommitted and three agents all reaching that conclusion
+independently.
+
+**The prompt only appears when a column is added and another dropped in the same
+diff** — drizzle cannot tell a rename from a replacement, so it asks. Add and
+drop in two separate migrations and it never comes up, which is the way out if
+you would rather not fight it.
+
+To answer it without a terminal, give it one:
+
+```bash
+(sleep 8; printf '\r'; sleep 30) | script -qec "npx drizzle-kit generate --name your_name" /dev/null
+```
+
+Three things about that line, each of which took a go to find:
+
+- **`\r`, not `\n`.** The prompt reads the TTY in raw mode, where Return is a
+  carriage return. A newline leaves it sitting on the question until the timeout.
+- **The first `sleep` waits for the prompt to be drawn**, and the second keeps
+  stdin open while drizzle writes the files. Close stdin early and `script` kills
+  the shell mid-write — the run looks exactly like the failure it is working
+  around.
+- **It accepts whatever option is highlighted**, which is the first one:
+  `+ <column> create column`. That is the answer you want when the new column is
+  a different fact rather than the old one renamed — `route_kind` → `url` on
+  2026-09-02 was a replacement, and treating it as a rename would have kept ten
+  route names in a column validated as web addresses. **If you want the other
+  option, this recipe is not enough** — send arrow keys, or do it from a real
+  terminal.
+
+Answer it the same way every time you regenerate, for the reason the paragraph
+above gives.
 
 ### What no lock can cover
 

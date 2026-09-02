@@ -8,10 +8,10 @@ them off doing the wrong thing.
 The messages themselves live in one file — [`src/messages.ts`](../../src/messages.ts) — and
 nowhere else.
 
-**Its sibling is [website-text.md](website-text.md)**, and the split is the reader's situation rather
-than the subject: this file is what somebody is told when something goes wrong *while they are doing
-something*; that one is what somebody is told when they come looking — the landing page, the privacy
-policy, and the address they write to.
+**Its siblings are [website-text.md](website-text.md) and [privacy.md](privacy.md)**, and the split
+is the reader's situation rather than the subject: this file is what somebody is told when something
+goes wrong *while they are doing something*; those are what somebody is told when they come
+looking — the landing page, the address they write to, and what we do with their data.
 
 ## Who is reading this
 

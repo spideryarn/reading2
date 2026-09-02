@@ -6,7 +6,7 @@
  * store/process and why, and what models & third-parties/subprocessors etc …
  * brief/concise, and written very plainly, with some high-level, important
  * protections for us as you see fit (but without filling it with legalese)."*
- * docs/project/website-text.md is the doc, and holds the decisions behind the
+ * docs/project/privacy.md is the doc, and holds the decisions behind the
  * wording — including the four Greg made when asked.
  *
  * ## Prose in JSX, and not a markdown file
@@ -34,7 +34,7 @@
  * client's import graph is asserted closed (tests/client-imports.test.ts).
  *
  * The rest — the regions, the retention windows, who the subprocessors are — is
- * prose that a person has to re-read, and docs/project/website-text.md lists
+ * prose that a person has to re-read, and docs/project/privacy.md lists
  * what to go and look at when any of it moves. Two claims in the first draft
  * were already false when written, and the comments beside them say which.
  */
@@ -161,17 +161,9 @@ export function PrivacyPage() {
             model, how many tokens, what it cost. That record does not contain what was said.
           </li>
           <li className="tw:mb-2">
-            {/* **Two different consents, and the first draft merged them.**
-                The tick-box gates the diagnostics blob and nothing else — a
-                CHECK constraint enforces it (src/db/schema.ts §
-                `feedback_diagnostics_consented`), and that comment says out
-                loud why the screenshot is deliberately not covered: pasting a
-                picture in *is* the consent for that picture. GPT Sol found the
-                page saying otherwise. */}
-            <strong className="tw:text-foreground">Bug reports</strong> — what you type into the
-            Feedback box, plus your email address. A screenshot is included only if you paste, drop
-            or choose one, and it contains whatever was on your screen. Browser diagnostics — recent
-            errors, what your browser is — are included only if you tick “send extra diagnostics”.
+            <strong className="tw:text-foreground">Bug reports</strong> — what you write in the
+            Feedback box, and what comes with it. That has a section of its own below, because it
+            is the one place you hand us something we did not already have.
           </li>
           <li>
             <strong className="tw:text-foreground">Ordinary server logs</strong> — the method and
@@ -311,6 +303,44 @@ export function PrivacyPage() {
 
           **This section is the one to rewrite first when account deletion is
           built.** docs/project/website-text.md § What is pinned by a test. */}
+      {/* **Greg asked for this section by name**, 2026-09-02: *"Add a minimal
+          note to the /privacy page to have a section on what we store if they
+          provide Feedback (with/out the optional extra diagnostics)."*
+
+          It is a section rather than a longer bullet because the Feedback box
+          is the one place in the app where a reader hands us something we did
+          not already have, and because two of the four facts in it are ones a
+          reader would be annoyed to discover afterwards: the address goes up
+          whole, and the tick-box does not cover the screenshot.
+
+          docs/project/privacy.md § What a bug report carries is the reasoning,
+          and src/db/schema.ts is where the two consents are actually enforced —
+          one by a CHECK, one by the fact that you have to paste a picture for
+          there to be one. */}
+      <Section title="If you send us a bug report">
+        <p>
+          The Feedback button sends us what you write, your email address, the build you were
+          running and the address of the page you were on — the whole address, including anything
+          after the <code>?</code>, so if you were searching for something, that search text comes
+          with it. It goes to our database and to Sentry, and the point of saying so here is that
+          you can leave the box until you are on a page you don’t mind us seeing.
+        </p>
+        <p>
+          Two things are optional, and they are optional in different ways.{" "}
+          <strong className="tw:text-foreground">A screenshot</strong> is included only if you paste,
+          drop or choose one — the act of adding it is the whole of the choice, and it will contain
+          whatever else was on your screen at the time.{" "}
+          <strong className="tw:text-foreground">Browser diagnostics</strong> — recent errors, what
+          your browser is, what the page was doing — are included only if you tick “send extra
+          diagnostics”. If you leave that unticked, they are never collected in the first place, and
+          our database refuses to store them.
+        </p>
+        <p>
+          What a bug report never carries is the text of the article you were reading, or your notes
+          on it. The diagnostics name paragraphs by their id, not by their words.
+        </p>
+      </Section>
+
       <Section title="Deleting things">
         <p>
           The <strong className="tw:text-foreground">Delete</strong> button on your shelf is really
@@ -350,7 +380,7 @@ export function PrivacyPage() {
           consumer privacy policy is not a transfer mechanism), and an Article 9
           condition for the special-category material a reader may upload
           despite being asked not to. Both are in
-          docs/project/website-text.md as open. */}
+          docs/project/privacy.md as open. */}
       <Section title="What you can ask for">
         <p>
           We hold this because you asked us to run Spideryarn for you, and because we need a working
@@ -395,7 +425,7 @@ export function PrivacyPage() {
           protection on their own: there is no terms page and nothing anybody
           agrees to. What they cover is what would actually happen — somebody
           putting medical records into an alpha, somebody adding an article they
-          have no right to. docs/project/website-text.md § What protects us. */}
+          have no right to. docs/project/privacy.md § What protects us. */}
       <Section title="Some things to be clear about">
         <p>
           <strong className="tw:text-foreground">This is alpha software.</strong> It changes weekly,

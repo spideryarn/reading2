@@ -388,6 +388,44 @@ export class NotTheLiveAttempt extends Error {
   }
 }
 
+/**
+ * The claim is still live, and the draft it was writing into is not its own.
+ *
+ * **The other half of a fence that used to raise one error for two events**, and
+ * the difference is the whole of
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md:
+ * `NotTheLiveAttempt` means somebody else owns this job, so walking away is
+ * right; this means *nobody* else owns it — the row is still `running`, still
+ * leased to this attempt — and the only thing that moved is
+ * `jobs.draft_revision_id`. Walking away from that leaves the job wedged until
+ * the lease lapses, with `claim` unable to take a `running` row and `Stop`
+ * setting a `cancelling` flag no claimant is left to read.
+ *
+ * **Nothing in `src/` writes the pointer to null behind a live claim**, so when
+ * this is raised the cause is almost always the foreign key: `draft_revision_id`
+ * is `on delete set null` (src/db/schema.ts), and anything that deletes the
+ * draft revision — a fixture reset, a hand-run script, a future *start this
+ * article again* — takes the pointer out of the job row silently.
+ *
+ * `status: 409` so it passes src/store/db-errors.ts untouched, the way the doc
+ * at the head of that file asks a new refusal to. The message names two ids we
+ * minted and nothing else.
+ */
+export class JobDraftGone extends Error {
+  readonly status = 409;
+  constructor(
+    readonly jobId: string,
+    readonly expected: string,
+    readonly found: string | null,
+  ) {
+    super(
+      `Job ${jobId} still holds its claim but no longer points at revision ${expected} ` +
+        `(it points at ${found ?? "no draft at all"}) — the draft was taken away underneath it.`,
+    );
+    this.name = "JobDraftGone";
+  }
+}
+
 /* ---------------------------------------------------------------- helpers -- */
 
 /** The article row, locked for the length of the transaction. */
@@ -986,19 +1024,47 @@ export async function openOrBeginJobDraft(opts: {
  * transaction with `finishStepRun`, so in the ordinary case the fence is taken
  * twice — deliberately, because "the write is safe because the call after it
  * checks" is a guarantee that lasts until somebody calls the write on its own.
+ *
+ * **Two conditions, two errors, and that is the fix for 260902f.** The `where`
+ * used to carry `liveAttempt AND draft_revision_id = $revision` and raise one
+ * `NotTheLiveAttempt` for either, so a claimant whose draft had been deleted out
+ * from under it was told *somebody else owns this job* — and src/jobs.ts
+ * believed it, walked away, and left a `running` row nothing could take, cancel
+ * or finish before the lease. The two halves are told apart here, where the row
+ * is already in hand, rather than guessed at by the caller. See `JobDraftGone`.
  */
 export async function requireLiveJobOwnsDraft(
   tx: Tx,
   job: { id: string; attemptId: string },
   revisionId: string,
 ): Promise<void> {
+  const draft = await liveJobDraft(tx, job);
+  if (draft !== revisionId) throw new JobDraftGone(job.id, revisionId, draft);
+}
+
+/**
+ * The draft this live claim points at — or throw, because the claim is not live.
+ *
+ * The read half of `requireLiveJobOwnsDraft`, exported because
+ * src/store/pg-session.ts needs the same answer without the throw: an ending
+ * that has to tidy a step run can only do so while the job still owns the draft
+ * that step run is in, and the whole point of `JobDraftGone` is that it may not.
+ *
+ * Locked `for update` on the same terms the fence has always taken it, so a
+ * caller that reads here and writes next is one critical section.
+ */
+export async function liveJobDraft(
+  tx: Tx,
+  job: { id: string; attemptId: string },
+): Promise<string | null> {
   const [live] = await tx
-    .select({ id: jobs.id })
+    .select({ draftRevisionId: jobs.draftRevisionId })
     .from(jobs)
-    .where(and(liveAttempt(job.id, job.attemptId), eq(jobs.draftRevisionId, revisionId)))
+    .where(liveAttempt(job.id, job.attemptId))
     .for("update")
     .limit(1);
   if (!live) throw new NotTheLiveAttempt(job.id);
+  return live.draftRevisionId;
 }
 
 /**

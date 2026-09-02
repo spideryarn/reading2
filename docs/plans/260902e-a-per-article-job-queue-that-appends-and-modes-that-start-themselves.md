@@ -5,9 +5,14 @@
 `reserves_name`/`url_key` columns, the draining migration, the predecessor rule in `claim`, and
 `EnqueueOutcome`), 1B everything above it (slug allocation's discriminated return, `enqueue`'s four
 repairs, the ownership check, and the deletion of the 409 and every surface that rendered it).
-**Stage 2 is not built.** Worktree `article-job-queue`, branch `worktree-article-job-queue`. What the
+**Stage 2 is built**, 2026-09-02. Worktree `article-job-queue`, branch `worktree-article-job-queue`. What the
 review changed is in [§ What the review changed](#what-the-review-changed); the four blockers are
-answered in § 1d, § 1f, § 1g and § 2b.
+answered in § 1d, § 1f, § 1g and § 2b. The **code** built from stage 2 then went back for its own
+review, which came back NO-SHIP —
+[260902e-stage2-code-review-sol.md](260902e-stage2-code-review-sol.md) — and all three findings are
+answered at the head of § Stage 2 and in § 2b and § 2e: a
+retained press that let Back start a paid job, a failed GET the reader could not get out of, and two
+paid paths held by no test.
 
 **Two things stage 1 decided that the plan left open**, both recorded here rather than only in the
 code:
@@ -485,7 +490,81 @@ as they are; the load-bearing prose claims that become false are in `src/db/sche
 `src/jobs.ts`, `src/routes.ts`, `docs/project/ingest-queue.md`, `docs/project/testing.md`,
 `docs/project/supabase-local.md`, `scripts/db-reown.ts` and `scripts/migration-reconciliations.ts`.
 
-## Stage 2 — a mode starts itself when you click it
+## Stage 2 — a mode starts itself when you click it — **BUILT**
+
+Built 2026-09-02. What arrived, and the three places the plan met the code and had to give:
+
+| what | where |
+| --- | --- |
+| the activation token (§ 2b) | [`src/web/activation.ts`](../../src/web/activation.ts) |
+| the one-attempt guard (§ 2a) | `beginAutoAttempt` in [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) |
+| the rule itself, once, for all five | [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts) |
+| `starting`, and the first-poll reconciliation (§ 2c) | [`src/web/useStepJob.ts`](../../src/web/useStepJob.ts) |
+| `ensure` / `regenerate` | `useIdeas`, `useQuotes`, `useTimeline`, `useSketch` — `useGlossary.find` was already unforced |
+| minting, and only here | `DockModes`' `onClick` and the Sketch chip's `onClick` |
+| *Using your profile* (§ 2d) | `automatic` on `UseProfile`, [`WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx) |
+| the tests (§ 2e) | `tests/modes-that-start-themselves.test.tsx`, `tests/first-poll-completion.test.tsx`, and new cases in `step-job-force` and `public-network-trace` |
+
+**A press belongs to the band that was on screen, and dies with it.** § 2b asked for this to be
+decided rather than discovered. It was decided the *other* way when stage 2 was built — a token
+whose panel unmounted before its GET settled was kept, so that Ideas → Quotes in under a second ran
+both — and the second review found what that buys:
+
+> Click Ideas while its GET is held. Click Quotes; Ideas unmounts. Quotes starts. Arrive back at
+> Ideas **without clicking**. Ideas starts, from the token the first press left behind. … The later
+> Back step is still what causes the paid request.
+>
+> — GPT Sol, 2026-09-02, [the stage 2 review](260902e-stage2-code-review-sol.md), finding 1
+
+That breaks decision 4 above, which is Greg's and is not negotiable: **only clicking a mode in the
+bar auto-runs it.** The three bounds the old note offered — one attempt per `(slug, step)`, the
+session epoch, the tab's life — cap what it can cost and none of them ties the spending to the
+navigation that authorised it.
+
+So the token gained a fifth field, `owner`: the first mount of that panel to see it claims it, and
+no other mount can ever spend it. A later arrival finds a press owned by a mount that is gone,
+retires it, and spends nothing. **Ownership is claimed rather than released on unmount**, because
+`<StrictMode>` runs setup / cleanup / setup and a retiring cleanup would retire the press on mount
+— the feature would never fire in development. The cost, chosen: a press whose GET is still in
+flight when the reader navigates away is dropped, so rapid Ideas → Quotes runs only Quotes. That is
+a failure to spend, which is the safe direction. `activation.ts` § A press belongs to the band that
+was on screen; `modes-that-start-themselves.test.tsx` § drops a press whose band left the screen.
+
+**A failed read is not an answer, and pressing again is the way out.** Sol's second finding: after
+the artefact GET failed, the press was retired and `useAutoRun` exited, and pressing the same Dock
+mode again minted a fresh nonce, called the same setter, remounted nothing, and was consumed against
+the still-`"error"` status. Ideas, Quotes and Timeline draw no button in their error state, so the
+reader was stuck — which contradicts the nonce's stated purpose. Now `error` keeps the press and
+asks the panel to **read again**, once per press; if the second read comes back empty the run
+starts. `owner` is what makes keeping it safe. `useAutoRun.ts` § A failed read is not an answer.
+
+**The session epoch is checked at consumption, not at mint.** The reader can sign out between the
+press and the GET settling, and `jobEngine.epoch()` is the only thing that knows. The token is
+dropped either way.
+
+**`automatic` is narrowed in the five hooks rather than in the five panels** — `auto && (job !== null
+|| starting)` — so that the sentence stops being true of the screen the moment the run lands or
+fails, and five panels cannot each get the narrowing slightly differently.
+
+**Two stale claims were corrected while passing through**, both about the CLIs, both named in
+§ What we are not doing: `useStepJob` said a `npm run glossary` run "shows up here as progress" and
+`JobProgress` said the same. Those command lines write no job record, so nothing about them reaches
+the queue. Nothing claims otherwise now.
+
+**§ 2f, the browser pass, is done** — 2026-09-02, Playwright against system Chrome on the box, signed
+in, `SPIDERYARN_STORE=postgres`. All six checks passed: one click on Ideas started a job with no
+second click; **clicking Glossary while Ideas was still running gave a second job reading "Waiting to
+continue." with a Stop button**, which is Greg's original complaint answered end to end; a pasted
+`?mode=quotes` URL fired nothing and offered its button, which then worked; three Back presses fired
+nothing for any of the five; and a second click on a mode whose artefact existed spent nothing.
+
+The test evidence beside it is `public-network-trace.test.tsx` § *starts the job when the owner
+presses a mode nobody has run*, which drives the real `App`, bar and hooks and watches one
+`POST /api/jobs` come out, with its negative twin a line below. Stronger than the plan expected from
+a test — and the browser pass is what found the two things it could not: a job that loses its draft
+pointer wedges the article's whole line for the length of the lease, and a peer's fixture reset can
+null an article's revision pointer under a running job.
+[260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md](../postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md).
 
 **Done looks like:** clicking Quotes on an article that has never had quotes runs it, with no second
 click; a pasted `?mode=quotes` link does not; clicking it again after a failure does not; the button
@@ -544,14 +623,19 @@ shows the empty state and its button.
   raced a failed GET can never try again without leaving the mode;
 - it is **consumed atomically**, so React `<StrictMode>`'s double-invoked effect cannot spend it
   twice;
-- it retires when the GET settles as `ready`, `none` **or** `error` — not only on `none`, or an
-  errored GET leaves a live token to fire against the next thing that mounts;
-- clicking Ideas then Quotes quickly must not let the second overwrite and lose the first's intent.
+- it retires when the GET settles with an **answer** — `ready` or `none`. A GET that *failed* is not
+  an answer: the press is kept and the panel reads again (§ above). The plan said `error` should
+  retire it too, which was the right defence against the wrong thing — what a kept press could do
+  was fire against the next thing that mounted, and `owner` stops that structurally;
+- clicking Ideas then Quotes quickly must not let the second overwrite and lose the first's intent;
+- **it can only ever be spent by the mount that was on screen when it was made** — `owner`, added
+  after the second review. See § above.
 
 **And one thing to decide rather than discover**: whether a started attempt keeps going after its
-panel unmounts. It should — the job is server-side and the reader can come back to it — but the
-alternative produces the previous review's *"clicked, but never started"* race, so it is written
-down here rather than left to whichever `useEffect` cleanup happens to run.
+panel unmounts. A *started* job does — it is server-side and the reader can come back to it. An
+**unspent press** does not, and that is the decision the second review reversed: it dies with the
+mount that was on screen when it was made. See § A press belongs to the band that was on screen
+above.
 
 **Only for owners.** The five hooks and `DiagramPanel` mount under `OwnedReader` and never for a
 visitor; that is the capability seam, and `tests/visitor-gaps.test.ts` and
@@ -604,11 +688,34 @@ Sol's corrections to the shapes, each of which is a way a green test would have 
 - **Visitor cases go in `public-network-trace.test.tsx`** for all five targets, and include a
   signed-in non-owner, not only a signed-out reader.
 
+Added after the second review, which found three of these missing (finding 3, and the two bugs
+above):
+
+- **arriving back at a band after an unmounted press posts nothing**, and a *press* on the way back
+  posts exactly one — the pair that pins the `owner` rule from both sides;
+- **press, fail the GET, press again** — the reader gets a second read, and a job when it comes back
+  empty;
+- **positive controls for Timeline and Sketch**, the two paid paths nothing held. Timeline goes in
+  the focused suite, through the real bar. Sketch cannot: its gesture is the chip inside
+  `DiagramPanel`, so its control is in `public-network-trace.test.tsx`, driving the real app, with
+  the arriving twin beside it;
+- **the store on its own** — two direct assertions on `consumeActivation` and `claimActivation`.
+  Every page-level test has both synchronous gates behind it, so none of them can see atomic
+  consumption alone. Sol was right that the StrictMode mutation note claimed more than it showed;
+  all three mutations were run and written into the note (each gate alone: green; both deferred:
+  red).
+
 ### 2f. A real browser, in a subagent
 
 Tests going green is not evidence a reader can see it —
 [browser-testing.md](../project/browser-testing.md). Click each of the five on a fresh article and
 watch the artefact arrive.
+
+**Done, and it earned its place.** Every one of the six checks passed, so it confirmed rather than
+corrected the feature — and it still found the two faults underneath that nothing in the suite could
+reach, both of which needed a real job spending real time against a real database to appear at all.
+That is the argument for this section, made by the one run: the tests proved the rule and the browser
+proved the machine.
 
 ## What we are not doing
 

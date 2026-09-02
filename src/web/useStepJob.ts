@@ -49,7 +49,7 @@
  * shared place reaches every caller, and a fix that lands in one of four copies
  * reaches one.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { driverStalled } from "../job-state.js";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
@@ -100,11 +100,18 @@ export interface StepJob {
    * The job writing this article's artefact, if one is. Null otherwise.
    *
    * Found in the polled list rather than remembered from the click, which is
-   * what makes a run started somewhere else — another tab, `npm run glossary` —
-   * show up here as progress rather than as a button that appears to do
-   * nothing. `enqueue` hands back the job already in flight for an identical
-   * request (src/jobs.ts), so pressing the button twice cannot start a second
-   * one.
+   * what makes a run started in **another tab** show up here as progress rather
+   * than as a button that appears to do nothing. `enqueue` hands back the job
+   * already in flight for an identical request (src/jobs.ts), so pressing the
+   * button twice cannot start a second one.
+   *
+   * **Not a CLI run.** This said "another tab, `npm run glossary`" until
+   * 2026-09-02, and the second half was never true: those command lines call
+   * the generators directly and write no job record, so nothing about them ever
+   * reaches this list. They are outside the queue, which means a panel that
+   * sees an artefact absent can start a paid call beside one. That is a
+   * developer's own foot rather than a reader's; what changes here is that
+   * nothing claims otherwise.
    */
   job: Job | null;
   /**
@@ -136,6 +143,20 @@ export interface StepJob {
    * can therefore spin indefinitely without the warning."*
    */
   stalled: boolean;
+  /**
+   * **The POST has gone and the queue has not seen the job yet.**
+   *
+   * A state the surfaces did not have, and its absence was visible: between the
+   * press and the job appearing in the poll, `job` is null and `JobProgress`
+   * draws its ordinary run button again. So a reader who pressed once was
+   * offered the button a second time before anything had happened — and after
+   * an automatic run, offered it before they had pressed anything at all.
+   *
+   * It is not "a job is queued": that is `job`, off the record. This is the
+   * gap between the two, owned by the mount that made the request, and it ends
+   * the moment the id `start` returned turns up in a list.
+   */
+  starting: boolean;
   /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
   start(run?: StepRun): Promise<void>;
   cancel(id: string): void;
@@ -160,15 +181,28 @@ function writesStep(job: Job, step: StepName): boolean {
  *   **The cost, said out loud:** subscribing puts the shared engine on its idle
  *   cadence, so sitting in one of these modes is one small request every eight
  *   seconds while the tab is visible. What it buys is that a run started in
- *   another tab or from the CLI shows up here as progress rather than as a
- *   button that appears to do nothing. Closing the band stops the idle poll
+ *   another tab shows up here as progress rather than as a button that appears
+ *   to do nothing — and **not** a CLI run, which writes no job record at all:
+ *   see `job` above. Closing the band stops the idle poll
  *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
  *   is actually running.
  */
 export function useStepJob(slug: string, step: StepName, onFinished: () => void): StepJob {
+  /**
+   * Ids this mount has already announced through `onFinished`.
+   *
+   * Read by the reconciliation below, which has to tell *the engine never told
+   * anybody about this one* from *the engine has just told me*. A ref rather
+   * than state because it is written from inside an effect and read from
+   * another effect in the same commit — see the reconciliation for why the
+   * order is what makes it work.
+   */
+  const announced = useRef<Set<string>>(new Set());
   const announce = useCallback(
     (job: Job) => {
-      if (job.slug === slug && writesStep(job, step)) onFinished();
+      if (job.slug !== slug || !writesStep(job, step)) return;
+      announced.current.add(job.id);
+      onFinished();
     },
     [slug, step, onFinished],
   );
@@ -271,6 +305,58 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
        spinner until the next press. */
     setPostFailure(null);
   }, [job]);
+
+  /**
+   * **The id the last `start` returned, until the queue has accounted for it.**
+   *
+   * A ref rather than state because nothing renders it: it exists so the effect
+   * below can ask *has the job I just made turned up yet*, and a render for
+   * that question would be a render for nothing.
+   */
+  const startedId = useRef<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  /**
+   * **A job that was already `done` on the first poll is otherwise never
+   * announced, and the panel waits for ever.**
+   *
+   * `recordCompletions` (src/web/jobEngine.ts) treats the engine's first job
+   * list as a baseline rather than as news, and it is right to: opening the app
+   * does not make every job that ever succeeded finish again. But the engine
+   * polls whether or not anything is mounted, so *this* sequence is real and
+   * happens on a fast step:
+   *
+   *  1. the panel's GET 404s — `status: "none"`;
+   *  2. the panel posts, and the job finishes;
+   *  3. the engine's **first** list of the session carries it as `done`;
+   *  4. nothing is announced, `load` is never called again, and the panel shows
+   *     *nobody has done this yet* over an artefact that exists.
+   *
+   * The reader's only move from there is to ask for it again, which is the loop
+   * this whole feature is supposed to have closed. GPT Sol, 2026-09-02, and it
+   * is invisible unless you read the poller's seeding rule against the panel's
+   * state machine.
+   *
+   * So: **the exact id `start` returned**, reconciled once. Not "any historical
+   * completion", which would turn every job on the shelf into news and refetch
+   * once per record — the thing the baseline rule exists to prevent.
+   *
+   * `announced` is what keeps a job that finishes normally from being reloaded
+   * twice. `useJobs`'s drain effect is registered before this one — it is
+   * called first, at the top of this hook — so by the time this runs, the
+   * engine has already had its say about the same list.
+   */
+  useEffect(() => {
+    const id = startedId.current;
+    if (id === null) return;
+    const seen = queue.jobs.find((j) => j.id === id);
+    if (!seen) return;
+    /* It exists, so the request is no longer merely in flight. */
+    setStarting(false);
+    startedId.current = null;
+    if (seen.status === "queued" || seen.status === "running") return;
+    if (seen.status === "done" && !announced.current.has(id)) onFinished();
+  }, [queue.jobs, onFinished]);
   const stopped = useMemo(() => {
     const mine = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
     if (!mine) return null;
@@ -282,6 +368,9 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
   const start = useCallback(
     async ({ force = false, useProfile = true }: StepRun = {}) => {
       setWatchedId(null);
+      /* Before the `await`, so the button is gone for the whole of the round
+         trip rather than from whenever it comes back. */
+      setStarting(true);
       const started = await queue.run({
         slug,
         steps: [step],
@@ -294,7 +383,15 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */
       setPostFailure(started === null ? { reason: queue.lastFailure() } : null);
-      if (started) setWatchedId(started.id);
+      if (started) {
+        setWatchedId(started.id);
+        startedId.current = started.id;
+        return;
+      }
+      /* Nothing was made, so there is nothing to wait for and the button is the
+         right thing to show — with the reason under it. */
+      startedId.current = null;
+      setStarting(false);
     },
     [queue, slug, step],
   );
@@ -345,6 +442,9 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
     job,
     failed,
     stalled,
+    /* Never both. Once the job is on the record it is the thing to draw, and a
+       spinner over a spinner is a state nobody can read. */
+    starting: starting && job === null,
     start,
     /* `void`, because the interface promises nothing to await: every surface
        fires this from a click and the outcome arrives through the polled list. */

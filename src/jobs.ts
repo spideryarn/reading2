@@ -65,7 +65,13 @@ import { pgJobStore } from "./store/pg-jobs.js";
    500. Imported from the module that defines it rather than through
    src/store/revisions.js, which does not re-export it. See `walkClaim`. */
 import { PublishRefused } from "./store/pg-revisions.js";
-import { mintAttempt, StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
+import {
+  DraftGoneError,
+  mintAttempt,
+  StaleAttemptError,
+  type JobEnding,
+  type JobStore,
+} from "./store/jobs.js";
 import { STORE } from "./store/live.js";
 import { failureKindOf, jobWorthRetrying } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
@@ -679,6 +685,14 @@ async function runStep(
        be refused anyway. It propagates, and `advanceJob` turns it into `busy`,
        exactly as it always did when `note` threw it. */
     if (err instanceof StaleAttemptError) throw err;
+    /* **And the mirror of it, which is not a step failure either.** The claim is
+       still ours and the draft went away, so the step's artefacts had nowhere to
+       land — but there is nobody to hand the job to and the walk has to end it
+       rather than record a verdict on a draft that no longer exists.
+       `settleJob` cannot write into that revision, so recording it here would
+       fail a second time inside the recovery. The walk's outer catch ends the
+       job through `endAsStorageFailure`. See `DraftGoneError`. */
+    if (err instanceof DraftGoneError) throw err;
     const message = (err as Error).message;
     /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
        above, and any step that honours the signal by throwing. The reader
@@ -852,14 +866,28 @@ async function endJob(
  * asks again. Three places reach it — the session that would not open, the
  * settlement of that failure, and the walk's own outer catch — and they said the
  * same four lines three times until 2026-09-01.
+ *
+ * **`errorType`, because this line used to say nothing about why.** It wrote a
+ * job id and a slug and dropped the exception on the floor, so the four things
+ * the fence tests all arrived in the log as one sentence — and an incident whose
+ * whole question was *which of them was it* cost an hour of reading code that
+ * the log could have answered. The class name only: `StaleAttemptError`'s
+ * message is safe, but this is the one line every future refusal on this path
+ * will also print, and a message here is a message nothing keeps in bounds.
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md,
+ * and src/store/db-errors.ts for the rule.
  */
 async function lostTheClaim(
   job: Job,
   owner: OwnerId,
   jlog: Log,
   where: string,
+  err: unknown,
 ): Promise<Advanced | null> {
-  jlog.warn({ jobId: job.id }, `lost the claim ${where} — ${job.slug}`);
+  jlog.warn(
+    { jobId: job.id, errorType: err instanceof Error ? err.name : typeof err },
+    `lost the claim ${where} — ${job.slug}`,
+  );
   const now = await store.get(job.id, owner);
   return now ? { job: now, ran: null, busy: true, done: false } : null;
 }
@@ -867,8 +895,8 @@ async function lostTheClaim(
 /**
  * **One rule for a claim that could not reach the store, wherever it met it.**
  *
- * Two doors lead here and both are the same event: the claim held a job, the
- * database would not do the thing that was asked of it, and nothing else is
+ * Three doors lead here and all three are the same event: the claim held a job,
+ * the store would not do the thing that was asked of it, and nothing else is
  * going to record an ending. The job is marked failed in memory and then ended
  * through the session — which, under Postgres, is the transaction that fails the
  * draft, clears `jobs.draft_revision_id` and moves the row to `error` together.
@@ -877,7 +905,7 @@ async function lostTheClaim(
  * names, so the draft would be immortal. GPT Sol, 2026-09-01,
  * docs/plans/260901d-stage3-code-review-sol.md § Shortest path to SHIP 2.
  *
- * The two doors:
+ * The three doors:
  *
  * - **The publication**, when every step skipped — `walkClaim`'s final
  *   `endJob(...done)`, which has no `runStep` around it to record its failure.
@@ -885,9 +913,16 @@ async function lostTheClaim(
  *   before a single step has run. That opening is new: the decorator
  *   `pgStoreSession` replaced wrapped a *filesystem* session and could not fail
  *   during construction.
+ * - **The draft going away under a live claim** (`DraftGoneError`), added
+ *   2026-09-02. The odd one out only in that the store was reachable throughout
+ *   — everything else about it is the same: the artefacts had nowhere to land,
+ *   the job is ours to end, and no other code path will end it. Until this door
+ *   existed the walk answered `busy` and the row sat `running` behind a live
+ *   lease for 760 seconds with the whole article's queue behind it.
+ *   docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
  *
  * It was written for the first and reached one transaction earlier by the
- * second, so it is one function rather than two that will drift.
+ * second, so it is one function rather than three that will drift.
  *
  * ## The message, and the kind
  *
@@ -913,6 +948,33 @@ async function lostTheClaim(
  * only one of them says why. Note the direction this must not be tightened in —
  * src/job-failure.ts § *Which way to be wrong*.
  */
+type StorageFailureDoor = "publish" | "open-session" | "lost-draft";
+
+/**
+ * What the log says, per door — a **total** map, so a fourth door cannot be
+ * added without a line here. It was a ternary while there were two of them, and
+ * a ternary is what silently gives the third door the second one's sentence.
+ */
+const DOOR_LINES: Record<StorageFailureDoor, string> = {
+  publish: "could not publish a claim where every step skipped",
+  "open-session": "could not open the draft this claim writes into",
+  "lost-draft": "the draft this claim was writing into went away underneath it",
+};
+
+/**
+ * The same, for the reader's card. A function rather than a second `Record` at
+ * module scope because the sentences are declared further down this file, and a
+ * `const` object up here would read them before they exist.
+ */
+function doorSentence(door: StorageFailureDoor): string {
+  const sentences: Record<StorageFailureDoor, string> = {
+    publish: COULD_NOT_PUBLISH,
+    "open-session": COULD_NOT_OPEN,
+    "lost-draft": DRAFT_WENT_AWAY,
+  };
+  return sentences[door];
+}
+
 async function endAsStorageFailure(args: {
   readonly job: Job;
   readonly attempt: string;
@@ -921,7 +983,7 @@ async function endAsStorageFailure(args: {
   readonly startedMs: number;
   readonly session: StoreSession;
   /** Which door this came through — the log line, and the opening sentence. */
-  readonly door: "publish" | "open-session";
+  readonly door: StorageFailureDoor;
 }): Promise<Job> {
   const { job, attempt, err, jlog, startedMs, session, door } = args;
   captureFailure(err, { slug: job.slug, jobId: job.id, phase: door });
@@ -937,18 +999,14 @@ async function endAsStorageFailure(args: {
      all — which makes the rule stricter here, not looser. */
   jlog.error(
     { errorType: err instanceof Error ? err.name : typeof err },
-    door === "publish"
-      ? `could not publish a claim where every step skipped — ${job.slug}`
-      : `could not open the draft this claim writes into — ${job.slug}`,
+    `${DOOR_LINES[door]} — ${job.slug}`,
   );
   job.status = "error";
   /* Before the sentence, because the sentence's last clause is read back off
      the field this writes. See `RETRY_IS_SAFE`. */
   recordFailureKind(job, failureKindOf(err) ?? "retry");
   job.error =
-    err instanceof PublishRefused
-      ? err.message
-      : endingSentence(job, door === "publish" ? COULD_NOT_PUBLISH : COULD_NOT_OPEN);
+    err instanceof PublishRefused ? err.message : endingSentence(job, doorSentence(door));
   job.finishedAt = new Date().toISOString();
   delete job.cancelling;
   return await endJob(job, attempt, endingFrom(job, "error"), jlog, startedMs, session);
@@ -1339,6 +1397,24 @@ const COULD_NOT_OPEN =
   "this run happened. Nothing was published and your library is unchanged.";
 
 /**
+ * The third door: the work ran and the place it was going to be written
+ * **disappeared while it ran**.
+ *
+ * Not the same sentence as `COULD_NOT_OPEN` — that one says *none of this run
+ * happened*, and here most of it did, at a model's expense. The reader is being
+ * told that a completed run has nothing to show for itself, which is a different
+ * and more annoying thing than a run that never started, and the card has to say
+ * so or the Retry button looks like it is offering to redo nothing.
+ *
+ * It does not say *why* the draft went away, because we do not know: nothing in
+ * `src/` deletes one under a live claim, so the cause is outside this process.
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
+ */
+const DRAFT_WENT_AWAY =
+  "This run finished its work, but the draft it was writing into was removed before it could " +
+  "be saved, so none of it was kept. Nothing was published and your library is unchanged.";
+
+/**
  * The last clause of both, and **it is not unconditional.**
  *
  * It was, until 2026-09-01: every non-`PublishRefused` failure on this path was
@@ -1625,7 +1701,7 @@ async function walkClaim(
   } catch (err) {
     if (err instanceof StaleAttemptError) {
       standDown();
-      return await lostTheClaim(job, owner, jlog, "opening");
+      return await lostTheClaim(job, owner, jlog, "opening", err);
     }
     /**
      * **The recovery needs a session, and asking for one again is how it gets
@@ -1666,7 +1742,7 @@ async function walkClaim(
     } catch (settling) {
       if (settling instanceof StaleAttemptError) {
         standDown();
-        return await lostTheClaim(job, owner, jlog, "while recording an open that failed");
+        return await lostTheClaim(job, owner, jlog, "while recording an open that failed", settling);
       }
       /* **The original goes out, not this one.** What failed here is a
          consequence of what failed above, and the first is the one somebody
@@ -1941,7 +2017,54 @@ async function walkClaim(
        failure and not ours to record: the row says somebody else owns this job,
        so any write we made would be refused anyway. Report it the way a losing
        claimant is reported, and let the client ask again. */
-    if (err instanceof StaleAttemptError) return await lostTheClaim(job, owner, jlog, "mid-step");
+    if (err instanceof StaleAttemptError) return await lostTheClaim(job, owner, jlog, "mid-step", err);
+    /**
+     * **The claim went nowhere, and the draft under it did.**
+     *
+     * The other half of the fence, and until 2026-09-02 it arrived here wearing
+     * the name above: `requireLiveJobOwnsDraft` raised one error for *"somebody
+     * else owns this job"* and *"my job no longer points at my draft"*, so this
+     * line answered `busy` about a row that was still `running`, still leased to
+     * this attempt, and reachable by nobody. `claim` only takes `queued`, Stop
+     * only sets a flag a claimant reads, and stage 1 of 260902e holds every
+     * other job on the article behind the oldest active one — so a wedge here
+     * froze the article's whole line for the 760 seconds of `LEASE_MS`.
+     * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
+     *
+     * So it is ended rather than abandoned, through the same recovery the two
+     * other doors onto a store that would not take the work already use: the
+     * draft is failed, the pointer cleared, and the row moves to `error` with a
+     * retryable kind, in one fenced transaction. The reader gets a card with a
+     * Retry button in a second instead of a frozen article for twelve minutes.
+     *
+     * **`ran` is null**, though a step really did run: nothing it produced was
+     * kept, and reporting it as a completed step would put a step on the card
+     * whose output nobody can read.
+     */
+    if (err instanceof DraftGoneError) {
+      try {
+        const after = await endAsStorageFailure({
+          job,
+          attempt,
+          err,
+          jlog,
+          startedMs,
+          session,
+          door: "lost-draft",
+        });
+        return { job: after, ran: null, busy: false, done: true };
+      } catch (settling) {
+        /* The recovery is fenced on the same attempt, so the one thing that can
+           refuse it is the claim having *since* moved — which is the case the
+           line above this one is for, arriving a moment late. Anything else
+           goes out: a job whose ending could not be recorded is not a job to
+           report as ended, and the lease is what covers it. */
+        if (settling instanceof StaleAttemptError) {
+          return await lostTheClaim(job, owner, jlog, "while ending a claim whose draft went away", settling);
+        }
+        throw settling;
+      }
+    }
     throw err;
   } finally {
     standDown();

@@ -58,6 +58,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 
 import {
+  JobDraftGone,
   NotTheLiveAttempt,
   StepRunNotHeld,
   beginRevision,
@@ -235,9 +236,16 @@ when("who may finish a step", () => {
   });
 
   it("refuses a live job that holds the token but owns a different draft", async () => {
+    /* **`JobDraftGone`, and the name is the point.** This is the same refusal as
+       the one above and a different event: there the job had moved on, here it
+       is still ours and only the draft pointer went. src/jobs.ts recovers from
+       them in opposite directions — walk away, or end the job — and while both
+       arrived as `NotTheLiveAttempt` it could only do one, which is
+       docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md. */
     await withClaimedJob(null, async (tx, job) => {
       await stepRow(tx, "running", job.attemptId);
-      await expect(finish(tx, job)).rejects.toThrow(NotTheLiveAttempt);
+      await expect(finish(tx, job)).rejects.toThrow(JobDraftGone);
+      await expect(finish(tx, job)).rejects.not.toThrow(NotTheLiveAttempt);
     });
   });
 
@@ -417,10 +425,12 @@ when("who may begin a step", () => {
     /* The condition easiest to leave out, and the one with no other guard
        behind it: a token can be perfectly current and still belong to a job
        pointed somewhere else, and a step run written into somebody else's draft
-       is a fault nothing downstream could untangle. */
+       is a fault nothing downstream could untangle.
+
+       **Its own error since 2026-09-02.** See the matching case above `finish`. */
     await withClaimedJob(null, async (tx, job) => {
       await expect(beginStepRun({ revisionId, stepName: "hierarchy", job }, tx)).rejects.toThrow(
-        NotTheLiveAttempt,
+        JobDraftGone,
       );
     });
   });

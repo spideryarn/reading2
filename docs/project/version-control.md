@@ -788,6 +788,14 @@ could tell.
   `git show HEAD:<path>` says what is committed; a bare `git diff` in a tree with a stale index
   shows a peer's *already-committed* work as though it were their uncommitted edit, and "restoring"
   it is a silent revert.
+- **Counting a diff is not reading it.** On 2026-09-02 an agent cleared four files for a blocked peer
+  to overwrite, having checked each one by *how many lines differed* from what it had pushed. Three
+  were genuinely its own stale drafts. The fourth was `docs/project/admin.md`, which also held forty
+  lines documenting a *different* agent's spend column — unpushed, and its code still untracked. A
+  line count tells you two files differ; it never tells you whose lines they are, and the files most
+  likely to be a mix are exactly the ones several people have reason to edit. The doc that describes
+  a shared page is the archetype. Nothing was lost, because the peer refused to run a
+  `git checkout --` on a peer's say-so; that refusal is the rule below working, not caution.
 
 ## The thing that fails silently
 
@@ -798,6 +806,20 @@ by a deploy, not by a test ([deployment.md](deployment.md)).
 
 `git status` before you commit, and read the untracked list rather than skimming past it. If
 something you import is in it, it is yours to add.
+
+**And the variant where the import is not yours at all.** The recipe's trailing `--` pathspec commits
+a named file *from the working tree*, so naming a file a peer is halfway through commits their half
+too — which the recipe above says is usually fine, with one exception, and this is the exception. On
+2026-09-02 a two-line change to `pgAdminStore` in `src/store/pg-admin.ts` carried sixty-three lines
+of somebody else's in-progress spend column, without the module those lines import or the fields they
+write. `npm run typecheck` failed on the tip and anything reaching the store layer died at load; one
+peer lost thirty-two tests in four suites that had nothing to do with either feature.
+
+So: before naming a file in a pathspec, `git diff HEAD -- <file>` and read it. If what comes back is
+bigger than what you meant to write, the surplus is somebody's and the question is whether it stands
+alone. The repair is to back their hunks out, not to finish their feature from a tree where you
+cannot see whether it is finished — every line of it is still in *their* working tree and returns
+whole when they commit.
 
 ## What is deliberately not in git
 

@@ -39,7 +39,15 @@ function account(id: string, email: string | null, over: Partial<AccountRow> = {
 }
 
 /** Nothing counted anywhere. Each test adds only what it is about. */
-const NOTHING: UserCounts = { shelf: [], uploads: [], questions: [], chats: [], searches: [] };
+const NOTHING: UserCounts = {
+  shelf: [],
+  uploads: [],
+  questions: [],
+  chats: [],
+  searches: [],
+  spend: new Map(),
+  spendMonth: "2026-08",
+};
 
 describe("joining accounts to their counts", () => {
   it("gives each owner their own numbers and nobody else's", () => {
@@ -56,6 +64,14 @@ describe("joining accounts to their counts", () => {
       questions: [{ owner: ALICE, n: 13 }, { owner: BOB, n: 24 }],
       chats: [{ owner: ALICE, n: 15 }, { owner: BOB, n: 26 }],
       searches: [{ owner: ALICE, n: 17 }, { owner: BOB, n: 28 }],
+      /* Money is the sixth aggregate and merges by owner id like the other
+         five, so it belongs in the "nobody gets anybody else's numbers" test
+         rather than in one of its own. */
+      spend: new Map([
+        [ALICE, { nanos: 19_000_000, calls: 19, unpricedCalls: 2 }],
+        [BOB, { nanos: 30_000_000, calls: 30, unpricedCalls: 0 }],
+      ]),
+      spendMonth: "2026-08",
     });
 
     const alice = users.find((u) => u.id === ALICE);
@@ -63,10 +79,12 @@ describe("joining accounts to their counts", () => {
     expect(alice).toMatchObject({
       articles: 3, archived: 1, opens: 40, uploads: 11, questions: 13, chats: 15, searches: 17,
       lastReadAt: "2026-08-25T09:00:00.000Z",
+      spendNanos: 19_000_000, spendCalls: 19, spendUnpricedCalls: 2, spendMonth: "2026-08",
     });
     expect(bob).toMatchObject({
       articles: 7, archived: 2, opens: 5, uploads: 22, questions: 24, chats: 26, searches: 28,
       lastReadAt: "2026-08-26T09:00:00.000Z",
+      spendNanos: 30_000_000, spendCalls: 30, spendUnpricedCalls: 0, spendMonth: "2026-08",
     });
   });
 
@@ -78,6 +96,13 @@ describe("joining accounts to their counts", () => {
     expect(alone).toMatchObject({
       articles: 0, archived: 0, uploads: 0, questions: 0, chats: 0, searches: 0, opens: 0,
     });
+    /* Money is the same rule, and the reason it is spelled out separately is
+       that its zero means something a count's does not: `spendCalls: 0` is
+       "this account made no model calls", which the column draws as an em dash
+       rather than as `$0.0000`. A missing field here would have made those two
+       states indistinguishable. */
+    expect(alone).toMatchObject({ spendNanos: 0, spendCalls: 0, spendUnpricedCalls: 0 });
+    expect(alone?.spendMonth).toBe("2026-08");
     /* And the dates that genuinely have no answer stay *absent*, because
        `exactOptionalPropertyTypes` makes absent the only spelling of "no
        value" and the column draws that as an em dash with a reason on it. */

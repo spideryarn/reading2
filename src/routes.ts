@@ -251,6 +251,7 @@ import {
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
+import { isWebUrl } from "./urls.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -317,7 +318,6 @@ import type {
   Comment,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
   Job,
@@ -347,7 +347,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
 import {
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
-  FEEDBACK_ROUTE_KINDS,
+  MAX_FEEDBACK_URL_CHARS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   /* A value, and the same number the panel's textarea counts against — one
@@ -5068,7 +5068,7 @@ const FEEDBACK_FIELDS = [
      old bundles are certainly gone. */
   ...LEGACY_ANSWER_FIELDS,
   "consented",
-  "routeKind",
+  "url",
   "slug",
   "buildCommit",
   "diagnostics",
@@ -5240,19 +5240,32 @@ function requestVercelId(req: IncomingMessage): string | null {
  * where they were.
  */
 function feedbackWhere(sent: Record<string, unknown>): {
-  routeKind: FeedbackRouteKind;
+  url: string | null;
   slug: string | null;
   buildCommit: string | null;
 } {
-  const { routeKind, slug, buildCommit } = sent;
-  if (
-    typeof routeKind !== "string" ||
-    !(FEEDBACK_ROUTE_KINDS as readonly string[]).includes(routeKind)
-  ) {
-    /* The list, not the value. `unknown` is in it on purpose, so a page added
-       later is still reportable — a report that cannot be filed because the
-       reader was on a new page is the worst way to lose the one that mattered. */
-    throw httpError(400, "routeKind is not one of ours [fb-route]");
+  const { url, slug, buildCommit } = sent;
+  /* **Two questions, and `isWebUrl` answers only one of them.** It answers
+     *is this an `http(s)` address* — the same allowlist that decides whether
+     model output may become an `href` (src/urls.ts), reused here because the
+     admin inbox renders this value and a `javascript:` string in an `href` is
+     the whole of that bug. The length cap is the second question and it is
+     ours: the CHECK in src/db/schema.ts is the same 2048, and a value that
+     passed here and failed there would be a 500 on a valid report.
+
+     What this deliberately does **not** ask is whether the address is one of
+     ours. A reader can only pollute their own report by lying about where they
+     were, and an origin check is a list that goes stale on every preview
+     deployment. src/types.ts § MAX_FEEDBACK_URL_CHARS. */
+  /* **Absent is allowed; wrong is not.** A bundle loaded before 2026-09-02
+     sends `routeKind` and no `url`, and refusing it would lose a report at the
+     one endpoint where the mismatch may be the bug being reported — the same
+     call `LEGACY_ANSWER_FIELDS` makes above. A value that is *present* and not
+     a web address is still a 400, because that can only be a client we wrote
+     getting it wrong. */
+  const absent = url === undefined || url === null;
+  if (!absent && (typeof url !== "string" || !isWebUrl(url) || url.length > MAX_FEEDBACK_URL_CHARS)) {
+    throw httpError(400, "url is not a web address we can store [fb-url]");
   }
   if (slug !== undefined && slug !== null && !isSlug(slug)) {
     throw httpError(400, "slug is not a slug [fb-slug]");
@@ -5265,7 +5278,7 @@ function feedbackWhere(sent: Record<string, unknown>): {
     throw httpError(400, "buildCommit is not a build stamp [fb-build]");
   }
   return {
-    routeKind: routeKind as FeedbackRouteKind,
+    url: absent ? null : (url as string),
     slug: typeof slug === "string" ? slug : null,
     buildCommit: typeof buildCommit === "string" ? buildCommit : null,
   };
@@ -5461,7 +5474,7 @@ async function fileFeedback(
       reportKind: report.kind,
       chars: report.body.length,
       consented: report.consented,
-      routeKind: report.routeKind,
+      url: report.url,
       slug: report.slug,
       screenshotBytes: screenshot === null ? null : screenshot.bytes.length,
       diagnosticsVersion: report.diagnostics?.version ?? null,

@@ -218,6 +218,43 @@ export class StaleAttemptError extends Error {
   }
 }
 
+/**
+ * **The claim is still ours and the draft under it is not.** Not a lost claim.
+ *
+ * `StaleAttemptError` says *somebody else owns this job now*, and src/jobs.ts
+ * answers `busy` to it — correctly, because any write this claimant made would
+ * be refused. This says the opposite: the row is still `running`, still leased
+ * to this attempt, and nobody is going to take it. Only
+ * `jobs.draft_revision_id` moved, which under Postgres is what the foreign key
+ * does — `on delete set null` — when the draft revision is deleted underneath a
+ * live claim.
+ *
+ * Answering `busy` to it is the wedge in
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md:
+ * the job stays `running` behind a live lease, `claim` cannot take it because it
+ * only takes `queued`, `requestCancel` sets a flag no claimant is left to read,
+ * and every other job on the article queues behind it for the length of
+ * `LEASE_MS`. src/jobs.ts ends it as a storage failure instead, which fails the
+ * draft, clears the pointer and gives the reader a Retry button.
+ *
+ * **The store's own vocabulary, not the database's.** src/store/pg-session.ts
+ * translates `JobDraftGone` (src/store/pg-revisions.ts) into this at the seam,
+ * the way it has always translated `NotTheLiveAttempt` into `StaleAttemptError`
+ * — src/jobs.ts knows this file's names and no others. The filesystem session
+ * has no such fence and so never raises it.
+ *
+ * `status: 409` so it crosses `guardDbStore` intact through door 1 of
+ * src/store/db-errors.ts, rather than joining that file's class allowlist, which
+ * its own header asks a new refusal not to do.
+ */
+export class DraftGoneError extends Error {
+  readonly status = 409;
+  constructor(readonly jobId: string) {
+    super(`Job ${jobId} still holds its claim, but the draft it was writing into is gone.`);
+    this.name = "DraftGoneError";
+  }
+}
+
 export interface JobStore {
   /** This owner's jobs, newest first. */
   list(owner: OwnerId): Promise<Job[]>;

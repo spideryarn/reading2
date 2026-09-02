@@ -3268,7 +3268,32 @@ export const feedback = spideryarn.table(
      * answers, and only one of them is a bug in the collector.
      */
     consented: boolean("consented").notNull(),
-    routeKind: text("route_kind").notNull(),
+    /**
+     * **The address the reader was at, whole** — `route_kind`, a closed
+     * vocabulary of ten route names, until 2026-09-02.
+     *
+     * The vocabulary existed to keep the address bar out of this table, and it
+     * was Greg's call to reverse that: *"I think it's fine (and even
+     * advantageous) to store the url with the Feedback"*. What it cost was a
+     * migration for every new page, and a 500 on a valid report whenever its
+     * four hand-mirrored copies drifted. `isWebUrl` at the seam
+     * (src/urls.ts) and the length CHECK below are what replace it, and this
+     * column is `text` because a URL has no vocabulary to close.
+     *
+     * The whole address reaches Sentry too, deliberately — see
+     * docs/project/privacy.md § What a bug report carries, which is where the
+     * reader is told so.
+     *
+     * **Nullable, and that is the stale-tab case rather than laziness.** A
+     * reader whose bundle was loaded before this deploy posts `routeKind` and
+     * no `url` at all, and this is the one endpoint where a client and a server
+     * disagreeing is likely to be the very thing they are trying to report. So
+     * an old report is filed with `null` here rather than refused — the same
+     * call `LEGACY_ANSWER_FIELDS` in src/routes.ts makes one field over. `null`
+     * means *an old client*, and it stops meaning anything once those bundles
+     * are gone.
+     */
+    url: text("url"),
     /** The article they were on, where there was one. No FK — see the header. */
     slug: text("slug"),
     /** `__SPIDERYARN_BUILD_COMMIT__`, so a report names a deploy and its source maps. */
@@ -3334,30 +3359,46 @@ export const feedback = spideryarn.table(
     /** The same CHECK every other minted id is held to — `mintId()`, one regex. */
     check("feedback_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     /**
-     * **The two closed vocabularies, written out by hand** — like
-     * `comments_status` and `checkpoints_namespace` above, and unlike the
-     * temptation.
+     * **The closed vocabulary, written out by hand** — like `comments_status`
+     * and `checkpoints_namespace` above, and unlike the temptation.
      *
-     * `FEEDBACK_ROUTE_KINDS` and `FEEDBACK_ENVIRONMENTS` in src/types.ts are the
-     * same lists, and building these constraints *from* those arrays was tried
-     * and reverted: it would make this file import src/types.ts at **runtime**,
-     * and src/store/public-slug.ts imports this one — so the public read path's
+     * `FEEDBACK_ENVIRONMENTS` in src/types.ts is the same list, and building
+     * this constraint *from* that array was tried and reverted: it would make
+     * this file import src/types.ts at **runtime**, and
+     * src/store/public-slug.ts imports this one — so the public read path's
      * import graph would grow a node, which tests/public-imports.test.ts calls a
      * regression whatever the node is.
      *
-     * So the lists are in two places, and the drift is caught **behaviourally**
+     * So the list is in two places, and the drift is caught **behaviourally**
      * instead: tests/feedback-store.test.ts files a report under every value of
-     * each union and watches the database take it. A value added to a union and
+     * the union and watches the database take it. A value added to the union and
      * not to the CHECK below goes red there, at the insert, which is where it
      * would have hurt.
+     *
+     * **There were two of these until 2026-09-02.** `feedback_route_kind` held
+     * ten route names, and it is gone with the column — see `url` above for why,
+     * and note the shape of the argument, because it applies to the next
+     * constraint somebody is tempted to write: a vocabulary that has to be
+     * widened by migration every time the product grows a page is a vocabulary
+     * whose escape hatch gets used, and an escape hatch in use is worse data
+     * than no constraint.
      */
-    check(
-      "feedback_route_kind",
-      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
-    ),
     check(
       "feedback_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /**
+     * **Non-empty and capped**, which is the whole of what this column
+     * promises. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same 2048, and
+     * it is written out here for the runtime-import reason above.
+     *
+     * That the value is an `http(s)` address is `isWebUrl`'s job at the route,
+     * not this constraint's: a URL grammar in SQL would be a second, worse
+     * parser, and the one place that decides what a web URL is already exists.
+     */
+    check(
+      "feedback_url_shape",
+      sql`${t.url} is null or (length(btrim(${t.url})) > 0 and length(${t.url}) <= 2048)`,
     ),
     /**
      * Non-empty when present, and **capped**.
