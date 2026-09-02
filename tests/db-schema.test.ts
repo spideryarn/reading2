@@ -366,7 +366,7 @@ describe("the schema keeps the promises the plan makes", () => {
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
-                            'jobs_ingest_event_fk')
+                            'jobs_ingest_event_fk','realtime_sessions_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -387,6 +387,11 @@ describe("the schema keeps the promises the plan makes", () => {
         "jobs_ingest_event_fk",
         "jobs_owner_fk",
         "reader_profiles_owner_fk",
+        /* drizzle/20260902150952. The parent of every realtime `ai_calls` row —
+           and the reason RESTRICT here is doubly load-bearing: `ai_calls`
+           references this table with RESTRICT too, so the record of what a live
+           conversation cost cannot be deleted from either end by accident. */
+        "realtime_sessions_owner_fk",
         "uploads_owner_fk",
       ]);
     });

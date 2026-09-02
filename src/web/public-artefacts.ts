@@ -5,12 +5,12 @@
  *
  * ## Why this exists at all, which is the interesting half
  *
- * Until slice 1b the answer came from a **second request**:
- * `GET /api/public/metadata/:slug`, fetched immediately after the article,
- * purely so a marked mode could pick between two true sentences. Its failure
- * was swallowed to `null`, and `null` needed a fifth `VisitorGap` member and a
- * sentence of its own so that a lost request would not be rendered as a claim
- * about somebody's article.
+ * Until slice 1b the answer came from a **second request** to a public metadata
+ * endpoint, fetched immediately after the article, purely so a marked mode
+ * could pick between two true sentences. Its failure was swallowed to `null`,
+ * and `null` needed a fifth `VisitorGap` member and a sentence of its own so
+ * that a lost request would not be rendered as a claim about somebody's
+ * article.
  *
  * The four artefacts ride on the article payload now, so the payload answers
  * the question it used to ask: **a key that is present exists, and a key that
@@ -18,10 +18,11 @@
  * and the state that hedged it goes with them.
  * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
  *
- * **`GET /api/public/metadata/:slug` itself stays.** It is tested, it is in the
- * route inventory, and it is the honest small answer to *what does this article
- * have* for a later consumer — stage 2's link-preview function among them. What
- * was won here was never the route; it was the request.
+ * **The endpoint went too, on 2026-09-02.** This comment used to say it stayed,
+ * for stage 2's link preview among others — which was never true: the preview
+ * function calls `loadHead`, and for eight days nothing called the route at all
+ * except a deployment checker, which now reads the article's own `meta.title`.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster B.
  *
  * ## `in`, not truthiness, and not length
  *

@@ -50,10 +50,13 @@
  *                                  { threadId, edit: messageId, question, at? }
  *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
  *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
- *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret,
- *                                            the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
+ *                                            id, the thread as seed items, and the tail
  *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
  *                                          → { thread }, one exchange appended
+ *   POST   /api/live/:sessionId/connected  → the data channel opened
+ *   POST   /api/live/:sessionId/usage      { kind, providerEventId, … } → one ledger row
+ *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
@@ -194,6 +197,7 @@ import {
   adminStore,
   commentStore,
   feedbackStore,
+  realtimeSessionStore,
   sourceStore,
   visibilityStore,
 } from "./store/index.js";
@@ -233,12 +237,17 @@ import { isSpideryarnId } from "./ids.js";
    OPENAI_API_KEY in the app. Nothing here touches that key — this file asks for
    a session and gets back a short-lived secret for the browser. */
 import {
+  acceptRealtimeUsage,
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
+  LIVE_TRANSCRIBER,
   type LiveToken,
   liveSeedItems,
   liveSession,
   mintLiveToken,
+  parseRealtimeUsage,
+  realtimeCloseReason,
+  REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
@@ -306,6 +315,7 @@ import type {
   ChatThread,
   Comment,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
@@ -335,6 +345,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   FEEDBACK_ENVIRONMENTS,
+  FEEDBACK_KINDS,
   FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
@@ -385,8 +396,10 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - three answers at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per UTF-16
- *   unit `JSON.stringify` can produce for a control character;
+ * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
+ *   UTF-16 unit `JSON.stringify` can produce for a control character — times
+ *   three, because a stale client still sends the old three answers and folding
+ *   them into one `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -2891,11 +2904,164 @@ async function liveChatToken(
   });
 
   const minted = await mintLiveToken(session);
+
+  /* **The journal row goes in before the token comes out, and the order is the
+     whole rule.**
+
+     OpenAI mints the secret, we write the session, and only then does the token
+     reach the browser. If the insert throws, this function throws with it and
+     the reader is told the session could not start — because a usable token with
+     no journal row is money that will be spent on a wire this server cannot see,
+     with nothing anywhere that could later say a conversation had even happened.
+     GPT Sol set the sequence out in exactly these three steps; the token is
+     genuinely wasted when this fails, and that is the cheaper of the two
+     outcomes.
+
+     It also means an issued session that reports nothing shows up as a session
+     that reported nothing, which is the one failure a browser-reported meter
+     actually has — the reader shuts the laptop and the last turns never arrive.
+     Without a row there is no gap to see, only an absence.
+     docs/reusable/silent-success.md. */
+  const sessionId = randomUUID();
+  const issuedAt = new Date();
+  await realtimeSessionStore.issue({
+    id: sessionId,
+    ownerId: currentOwnerId(),
+    articleSlug: slug,
+    threadId,
+    /* **What OpenAI created, not what we asked for.** They agree only when the
+       request was honoured, and `mintLiveToken` reads the created session
+       precisely so that this column can be an answer rather than a hope — which
+       matters here more than usual, because the price is looked up by this
+       string. A row that named a model the session was not on would be priced
+       against the wrong rate card for ever. */
+    model: minted.model,
+    transcriptionModel: LIVE_TRANSCRIBER,
+    issuedAt: issuedAt.toISOString(),
+    /* **The server's own deadline, stored on the row.** Not the token's expiry,
+       which admits one connection and is about ten minutes, while a conversation
+       may run for twenty — see `REPORT_WINDOW_MS` in src/live.ts for why using
+       the wrong clock would have dropped the reports that matter most. Stored
+       rather than recomputed, so a session issued under today's rule keeps it
+       when the rule changes. */
+    acceptsUntil: new Date(issuedAt.getTime() + REPORT_WINDOW_MS).toISOString(),
+    connectedAt: null,
+    closedAt: null,
+    closeReason: null,
+  });
+
   return {
     ...minted,
+    sessionId,
     seed: liveSeedItems(thread?.messages ?? []),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
+}
+
+/**
+ * **The data channel opened** — `POST /api/live/:sessionId/connected`.
+ *
+ * The smallest endpoint in this file, and it exists because *a minted token is
+ * not a conversation*. A reader can press the button, think better of it, and
+ * never open the channel. A denominator built on issued sessions would then
+ * quietly understate what a real conversation costs by however many of those
+ * there are, and nothing would look wrong.
+ *
+ * GPT Sol offered two ways out — name the denominator honestly, or add this
+ * event — and preferred this one, because "issued" and "connected" are both
+ * facts worth having rather than one fact worth relabelling.
+ *
+ * Best-effort by nature: it fires once, on a channel that has just become
+ * usable, and nothing retries it. So `close` and the first usage report both
+ * backfill `connected_at` as well, and all three keep the earliest time.
+ */
+async function liveConnected(sessionId: string): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  /* **Looked up for this owner, and 404 if it is not theirs.** The session id
+     travels through the browser, so a lookup that did not carry the owner would
+     answer for any session whose id somebody had. 404 rather than 403 is this
+     repo's rule for a thing you may not see — docs/project/auth.md § Whose data
+     is it. */
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  await realtimeSessionStore.markConnected(sessionId, owner, new Date().toISOString());
+  return { ok: true };
+}
+
+/**
+ * **One paid event from a live conversation** — `POST /api/live/:sessionId/usage`.
+ *
+ * This is the seam: an authenticated request carrying a browser's account of
+ * what a turn cost becomes a row in the ledger. Everything about the request
+ * that can be got wrong is got wrong in `parseRealtimeUsage` and
+ * `acceptRealtimeUsage`, which are named, pure and tested without HTTP —
+ * `tests/realtime-usage.test.ts`. This function does only the three things they
+ * cannot: find the session **for the authenticated owner**, price nothing
+ * itself, and write.
+ *
+ * ## What the endpoint refuses to take from the caller
+ *
+ * A dollar amount, a model, an owner, an article. All four come from the session
+ * row this server wrote when it minted the token. A client that could name its
+ * own model could name the cheap one; a client that could name its own cost
+ * could name zero. docs/plans/realtime-voice-cost-tracking.md.
+ *
+ * ## Why a lost report is worse than a wrong one
+ *
+ * Nobody has an incentive to under-report their own token count and there is no
+ * per-reader cap to duck under — docs/project/security-map.md is explicit that a
+ * signed-in reader is not one of the untrusted parties. What will actually
+ * happen is that a tab closes mid-conversation. That is why the browser posts
+ * every turn as it happens rather than one total at the end (Stage 2B), and why
+ * a retry of a report that was already accepted has to be harmless: the row's id
+ * is derived from the event, so a repeat lands on `on conflict do nothing`.
+ */
+async function liveUsage(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+
+  const receivedAt = new Date();
+  const row = acceptRealtimeUsage({
+    session,
+    usage: parseRealtimeUsage(body),
+    receivedAt,
+  });
+  await costStore.record(row);
+  /* **A report is also evidence the channel opened**, and the `connected` event
+     above is the one thing here that nothing retries. Kept earliest-wins in the
+     store, so this weaker inference never overwrites the real moment. */
+  await realtimeSessionStore.markConnected(sessionId, owner, receivedAt.toISOString());
+  return { ok: true };
+}
+
+/**
+ * **The conversation ended** — `POST /api/live/:sessionId/close`.
+ *
+ * Best-effort, and it has to be treated that way by everything downstream: a
+ * closed laptop sends nothing, so a session with no `closed_at` is the ordinary
+ * case rather than an error, and **nothing may read its absence as a session
+ * still running**. The value of the field is in the sessions that do close — it
+ * is what makes "issued, never connected" and "connected, ended, reported
+ * nothing" different rows rather than one shrug.
+ *
+ * The reason is the browser's own word for it and is stored as free text with a
+ * length bound: the list belongs to `useLiveConversation.ts`, and a server-side
+ * union that lagged it would refuse a true report about how a conversation
+ * ended. `realtimeCloseReason` in src/live.ts is the bound.
+ */
+async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  const { reason } = (body ?? {}) as Record<string, unknown>;
+  await realtimeSessionStore.close(
+    sessionId,
+    owner,
+    new Date().toISOString(),
+    realtimeCloseReason(reason),
+  );
+  return { ok: true };
 }
 
 /**
@@ -2932,6 +3098,17 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
 
 /** What the browser is given to open one live session. See `liveChatToken`. */
 interface LiveTicket extends LiveToken {
+  /**
+   * **The id of this server's own journal row for the conversation**, and the
+   * thing every later report is addressed to.
+   *
+   * Not the OpenAI session id, which the browser also learns and which this
+   * server never sees. Ours, minted here, so the three acceptance endpoints can
+   * find the row that says whose money it is, which article it was about, which
+   * model was created and how long reports are accepted for — none of which the
+   * browser is trusted to state. src/live.ts § `RealtimeUsage`.
+   */
+  sessionId: string;
   /** The thread so far, windowed and with our block ids taken out. */
   seed: { role: "user" | "assistant"; text: string }[];
   /** The row the first spoken append must claim, or `null` for an empty thread. */
@@ -4874,6 +5051,14 @@ async function transcribeDictation(
  */
 const FEEDBACK_FIELDS = [
   "id",
+  "body",
+  "kind",
+  /* **The old three-box vocabulary, still accepted on purpose.** A reader whose
+     tab was loaded before the deploy posts these, and this is the one endpoint
+     where a client and a server disagreeing is likely to be the very thing the
+     reader is trying to report — so they are folded into `body` rather than
+     refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
+     old bundles are certainly gone. */
   "steps",
   "expected",
   "actual",
@@ -4908,7 +5093,7 @@ const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
 const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
 
 /**
- * One of the three answers, trimmed — or `null` for a box the reader left empty.
+ * What the reader wrote, trimmed — or `null` for an empty box.
  *
  * **No part of the answer reaches a thrown message**, and that is the rule this
  * whole function exists to keep rather than a nicety: an `httpError` message is
@@ -4930,6 +5115,64 @@ function feedbackAnswer(value: unknown, field: string): string | null {
     );
   }
   return trimmed;
+}
+
+/**
+ * **What the reader wrote**, from either shape of request body.
+ *
+ * The current dialog sends one `body`. A dialog loaded before 2026-09-02 sends
+ * `steps`, `expected` and `actual`, and those are glued here under the same
+ * headings the migration used, so a report from a stale tab is stored as the
+ * same text it would have been stored as the day before.
+ *
+ * Accepting both is deliberate and is GPT Sol's finding: `FEEDBACK_FIELDS`
+ * refuses an unknown key outright, so without this a reader with an open tab is
+ * told *"a report has a field this endpoint does not take"* at the exact moment
+ * they are trying to tell us something is broken. Refusing a body that carries
+ * **both** shapes is the other half — that is not an old client, it is a caller
+ * making something up, and there would be no right answer about which to keep.
+ */
+function feedbackBody(sent: Record<string, unknown>): string {
+  const written = feedbackAnswer(sent.body, "body");
+  const steps = feedbackAnswer(sent.steps, "steps");
+  const expected = feedbackAnswer(sent.expected, "expected");
+  const actual = feedbackAnswer(sent.actual, "actual");
+  const legacy = [
+    steps === null ? null : `Steps to reproduce:\n${steps}`,
+    expected === null ? null : `What you expected to see:\n${expected}`,
+    actual === null ? null : `What you saw instead:\n${actual}`,
+  ].filter((part): part is string => part !== null);
+  if (written !== null && legacy.length > 0) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+  const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
+  /* The database says the same thing — `body` is `not null` — and this is the
+     half that gets to explain itself. A `kind` on its own is not a report: it is
+     the row a mis-wired toggle would file. */
+  if (body === null) {
+    throw httpError(400, "A report needs something written in it. [fb-empty]");
+  }
+  return body;
+}
+
+/**
+ * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
+ * than a missing one.
+ *
+ * Greg asked for the toggle to start unset — *"don't default to Problem. Default
+ * to null/unknown"* — so an absent field is valid and an unrecognised one is
+ * not. A value outside the vocabulary is a client and a server that disagree,
+ * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
+ * refusal for every other writer.
+ */
+function feedbackKind(value: unknown): FeedbackKind | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
+    /* The list is ours and the value is not the reader's prose — but it is still
+       a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  return value as FeedbackKind;
 }
 
 /**
@@ -5069,14 +5312,17 @@ function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
  * and the Vercel id from this request's own headers. See each of them.
  */
 function parseFeedback(
-  body: unknown,
+  /* `raw` rather than `body`, which is now a *field* of the report — the request
+     body and the reader's words are two different things and were briefly one
+     name. */
+  raw: unknown,
   req: IncomingMessage,
   user: VerifiedUser,
 ): { report: NewFeedback; screenshot: FeedbackScreenshot | null } {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fb-type]");
   }
-  const sent = body as Record<string, unknown>;
+  const sent = raw as Record<string, unknown>;
   for (const key of Object.keys(sent)) {
     if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
       /* **Fixed prose. Not the key, not forty characters of it.**
@@ -5105,14 +5351,8 @@ function parseFeedback(
   const consented = sent.consented;
   const where = feedbackWhere(sent);
 
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
-  /* The database says the same thing (`feedback_says_something`); this is the
-     half that gets to explain itself. */
-  if (steps === null && expected === null && actual === null) {
-    throw httpError(400, "A report needs at least one of the three answers. [fb-empty]");
-  }
+  const body = feedbackBody(sent);
+  const kind = feedbackKind(sent.kind);
 
   if (
     sent.diagnostics !== undefined &&
@@ -5141,9 +5381,8 @@ function parseFeedback(
          `VerifiedUser` — the one type only `requireUser` can make — and this is
          a snapshot of the address it verified, taken at submit time. */
       reporterEmail: user.email,
-      steps,
-      expected,
-      actual,
+      body,
+      kind,
       consented,
       ...where,
       environment: feedbackEnvironment(),
@@ -5204,7 +5443,10 @@ async function fileFeedback(
     {
       id: report.id,
       kind: answer.kind,
-      chars: (report.steps?.length ?? 0) + (report.expected?.length ?? 0) + (report.actual?.length ?? 0),
+      /* The reader's own answer, next to the store's. Two different `kind`s in
+         one line would be a log nobody can read, so this one says whose it is. */
+      reportKind: report.kind,
+      chars: report.body.length,
       consented: report.consented,
       routeKind: report.routeKind,
       slug: report.slug,
@@ -5878,6 +6120,24 @@ export async function serveAuthenticatedApi(
   const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(path);
   const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(path);
   const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(path);
+  /* **Live conversation's three accounting endpoints, and they are NOT under
+     `/api/chat/`.**
+
+     The two above are: a ticket needs the thread to seed from, and a spoken
+     exchange is appended to it. These three are about the *session* — what it
+     spent, when its channel opened, when it ended — and a session outlives the
+     thread it started in, may be reported against after the reader has moved on,
+     and is addressed by a uuid this server minted rather than by a slug and a
+     thread id. Routing them under a conversation would have made every report
+     carry two identifiers that nothing checks against each other, which is two
+     more ways for a report to be about the wrong thing.
+
+     `[\w-]+` rather than the slug class the rest of this file uses: these ids
+     are uuids from `randomUUID`, so a dot or a percent-escape in one is not a
+     spelling to accept, it is a request to look at. */
+  const liveSessionConnected = /^\/api\/live\/([\w-]+)\/connected$/.exec(path);
+  const liveSessionUsage = /^\/api\/live\/([\w-]+)\/usage$/.exec(path);
+  const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Referee mode's criteria. Two patterns and the same split as the two above:
@@ -6430,6 +6690,24 @@ export async function serveAuthenticatedApi(
     if (chatLive && req.method === "POST") {
       const [slug, id] = [slugPart(chatLive, 1), part(chatLive, 2)];
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+      return;
+    }
+    if (liveSessionConnected && req.method === "POST") {
+      send(res, 200, await liveConnected(part(liveSessionConnected, 1)));
+      return;
+    }
+    if (liveSessionUsage && req.method === "POST") {
+      /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
+         helper puts an article on rows the *collector* writes — the calls made
+         inside this request. This request makes no model call at all: it reports
+         one that happened on a wire this server never touched, and the row is
+         built and written directly. The article comes off the session row, which
+         is a more durable answer than the ambient scope anyway. */
+      send(res, 200, await liveUsage(part(liveSessionUsage, 1), await readBody(req)));
+      return;
+    }
+    if (liveSessionClose && req.method === "POST") {
+      send(res, 200, await liveClose(part(liveSessionClose, 1), await readBody(req)));
       return;
     }
     if (chatSpoken && req.method === "POST") {

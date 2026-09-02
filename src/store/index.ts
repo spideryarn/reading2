@@ -67,6 +67,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   ReaderStore,
+  RealtimeSessionStore,
   RefereeClaimsStore,
   RefereeCriteriaStore,
   SearchStore,
@@ -91,6 +92,8 @@ import {
   fsShelfStore,
 } from "./fs.js";
 import { notMigrated, STORE } from "./live.js";
+import { fsRealtimeSessionStore } from "./realtime-sessions-fs.js";
+import { pgRealtimeSessionStore } from "./realtime-sessions-pg.js";
 import { pgAdminStore } from "./pg-admin.js";
 import { pgArticleReader } from "./pg.js";
 import { pgChatStore } from "./pg-chat.js";
@@ -545,3 +548,28 @@ export const feedbackStore: FeedbackStore =
  * reversed docs/plans/260827q-ai-cost-tracking.md's own recommendation.
  */
 export { costStore } from "./ai-calls.js";
+
+/* --------------------------------------------------- live conversation -- */
+
+/**
+ * **The journal of live conversations** — issued, connected, closed.
+ *
+ * Selected the way `chatStore` and the rest are, with two real implementations
+ * and a flag: `guarded()` is not used only because that helper is shaped for the
+ * seams above it. There is nothing about a session journal a file cannot hold,
+ * so this is deliberately **not** one of the filesystem *refusals* three
+ * sections up — `AdminStore`, `VisibilityStore` and `FeedbackStore` refuse
+ * because there is genuinely no user list, no visibility column and no feedback
+ * table on a filesystem, and refusing here would only turn off a working feature
+ * on every default checkout.
+ *
+ * The row it writes is what makes a live conversation *visible* even when it
+ * reports nothing at all — see `realtimeSessions` in ../db/schema.ts, and
+ * docs/project/live-conversation.md. Postgres is where this belongs and where
+ * production reads it; the filesystem adapter exists so the laptop default keeps
+ * working.
+ */
+export const realtimeSessionStore: RealtimeSessionStore =
+  STORE === "postgres"
+    ? guardDbStore("realtime-sessions", pgRealtimeSessionStore)
+    : fsRealtimeSessionStore;

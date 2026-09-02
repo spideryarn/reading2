@@ -44,7 +44,6 @@ import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
-import { TheOriginal } from "./SourceLink.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
@@ -491,10 +490,10 @@ type ArticleAccess =
        * payload above rather than fetched.
        *
        * It used to be `PublicArtefacts | null`, filled by a **second** request
-       * to `GET /api/public/metadata/:slug` whose failure was swallowed to
-       * `null` — and `null` needed a `VisitorGap` member and a sentence of its
-       * own so that a lost request would not be rendered as a claim about
-       * somebody's article. There is no second request now, so there is no
+       * to a public metadata endpoint, since deleted, whose failure was
+       * swallowed to `null` — and `null` needed a `VisitorGap` member and a
+       * sentence of its own so that a lost request would not be rendered as a
+       * claim about somebody's article. There is no second request now, so no
        * `null`: either this payload arrived or the reader is looking at
        * *this document isn't shared*. public-artefacts.ts.
        */
@@ -555,14 +554,6 @@ const LOADING: ArticleAccess = { kind: "loading" };
  * the server half is built the same way round: `servePublicApi` is handed
  * `{res, path, method}` and never the request, so it cannot read a header even
  * by accident. docs/reusable/silent-success.md.
- *
- * ## One `try`, and the metadata request outside it
- *
- * The article is the page. The artefact flags are a detail on top of it, so a
- * metadata request that fails must not take the article down with it — it
- * degrades to `null`, which `visitorGap` reads as *"not on shared links yet"*,
- * which is unconditionally true in this slice whatever the flags would have
- * said.
  */
 function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
   /**
@@ -695,13 +686,19 @@ async function findArticle(
     }
   }
 
-  /* **One request, and it used to be two.** A second `GET /api/public/metadata/:slug`
-     stood here purely to learn which artefacts existed, with its failure
-     swallowed to `null`. The artefacts are in this payload now, so the payload
-     answers that — and the endpoint itself stays, tested and in the route
-     inventory, for stage 2's link preview. The win was the request, never the
-     route. docs/plans/260827ai-public-read-only-access.md § The second request
-     disappears. */
+  /* **One request, and it used to be two.** A second GET, for a public metadata
+     endpoint, stood here purely to learn which artefacts existed, with its
+     failure swallowed to `null`. The artefacts are in this payload now, so the
+     payload answers that.
+
+     A comment here said the endpoint itself stayed *"for stage 2's link
+     preview"*, and it was false when it was written: the preview function calls
+     `loadHead`. The route was deleted on 2026-09-02 with nothing but a
+     deployment checker on it.
+     docs/plans/260827ai-public-read-only-access.md § The second request
+     disappears, and
+     docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+     § Cluster B. */
   const read = await loadPublicArticle(slug);
   /* **Both answers, and this is the line where they meet.** *Nobody shared it*
      is a complete answer to a reader we could identify; to one we could not it
@@ -1562,16 +1559,6 @@ function Reader({
   const comments = owner?.comments.comments ?? NO_COMMENTS;
   const commentError = owner?.comments.error ?? null;
   /**
-   * A failed *view the original*, held here rather than beside the button.
-   *
-   * Component state and not a URL parameter, deliberately: it is a transient
-   * report about a request that just failed, not a place the reader is, and
-   * `?…=` is for the second of those (docs/project/url-state.md). It is also the
-   * one thing in this bar that a **reload** should clear.
-   */
-  const [sourceError, setSourceError] = useState<string | null>(null);
-
-  /**
    * The floating chat, and the passage it is about.
    *
    * **One id, not two.** `?thread=` says which conversation is open and `mode`
@@ -2182,23 +2169,6 @@ function Reader({
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
         {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* **The way to the original, first in the bar.**
-            Greg asked for it in the top bar, 2026-08-31; SourceLink.tsx says
-            why the masthead's existing link on the title is not an answer, and
-            what the three states are.
-
-            First rather than last, which was the obvious place for a fact about
-            the article rather than a control over the view. On a phone this bar
-            scrolls sideways and nothing in it shrinks, so a rightmost icon can
-            start past the edge of the screen — reachable only by scrolling a bar
-            most readers will not know scrolls. GPT Sol measured it, 2026-08-31.
-            Nothing that must be findable goes at that end. */}
-        <TheOriginal
-          meta={article.meta}
-          slug={slug}
-          owner={!!owner}
-          onError={setSourceError}
-        />
         {/* Leftmost of the *view* controls, because the rail it names is
             leftmost — and before the mode/contents split, because it is the one
             control that survives both. See `spineToggle` above. */}
@@ -2342,22 +2312,6 @@ function Reader({
         {commentError && (
           <span className="cmt-transport-error" title={commentError}>
             comments: {commentError}
-          </span>
-        )}
-        {/* A failed source download, said here rather than beside the button it
-            came from. The bar is a fixed-height row that scrolls sideways and
-            does not shrink its children, so a sentence next to the icon would
-            push the granularity pills off the screen — SourceLink.tsx § onError.
-            Shaped exactly on the line above it: a short label, the whole message
-            in the tooltip. */}
-        {sourceError && (
-          /* `role="alert"`, for the reason SourceLink.tsx gives beside its own
-             arm: the blank tab closing and a label appearing here are both
-             silent to a screen reader, so without this the press had no
-             outcome at all. The whole message is in the tooltip, which is
-             where a pointer reader finds it — hence `title` as well. */
-          <span role="alert" className="cmt-transport-error" title={sourceError}>
-            original: couldn't open it
           </span>
         )}
         <span className="provenance" title={article.tree.generator}>

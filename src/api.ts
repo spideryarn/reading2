@@ -85,6 +85,7 @@ import type {
   ThreadFound,
   Tree,
   TweetThread,
+  Visibility,
 } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -1147,6 +1148,16 @@ export function describeArticle(input: {
   shelf?: ShelfState;
   /** Which optional stages have produced something. Absent means none of them. */
   has?: Partial<LibraryEntry["has"]>;
+  /**
+   * Whether anyone with the link can read it — **passed in, like `shelf`,
+   * because only one of the two stores can answer.**
+   *
+   * The filesystem store has no visibility column, so it passes nothing and
+   * every card off it is unshared, which is the truth: sharing there is refused
+   * with a 501 (src/store/index.ts). Postgres reads the column the query
+   * already selected.
+   */
+  visibility?: Visibility;
 }): LibraryEntry {
   const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
@@ -1179,6 +1190,13 @@ export function describeArticle(input: {
     sections: scalars.sectionCount,
     comments: input.comments,
     ...(scalars.rootGist ? { gist: scalars.rootGist } : {}),
+    /* **Only when it is public.** Spelling the private case out would put a
+       `"private"` on every card that the filesystem store cannot produce, and
+       tests/store-parity.test.ts compares whole entries — see
+       `LibraryEntry.visibility` in src/types.ts. The shelf reads it as
+       `=== "public"`, so an absence and a private article are the same
+       question answered the same way. */
+    ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
     ...(input.fixture ? { fixture: true as const } : {}),
   };
 }

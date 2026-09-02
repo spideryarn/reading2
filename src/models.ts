@@ -428,7 +428,32 @@ export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
  */
 export type EvalAiJob = "eval";
 
-export type AiJob = Task | NonTaskAiJob | EvalAiJob;
+/**
+ * **Talking to the article out loud** — and its own category rather than a
+ * fourth `NonTaskAiJob`, for two reasons that are both about this file rather
+ * than about the feature.
+ *
+ * 1. **A live session buys two models on two rate cards**, not one. The realtime
+ *    model answers and a separate transcriber writes down what the reader said,
+ *    billed per audio *minute* rather than per token (src/live.ts §
+ *    `LIVE_TRANSCRIBER`). `NON_TASK_MODELS` is a list of one-model-per-job rows
+ *    that the profile page renders, and a job with two models in it would either
+ *    appear twice under one name or lose one of them.
+ * 2. **Their ids cannot be named here.** `LIVE_MODEL` and `LIVE_TRANSCRIBER`
+ *    live in src/live.ts, which imports src/converse.ts, which imports this
+ *    file — so an import would close a cycle, and `npm run cycles` is a gate.
+ *    Copying the two strings across would be the second copy of a fact that
+ *    CLAUDE.md is explicit about, and this file has already been bitten by
+ *    exactly that (see `TASK_WIRE`'s note about the duplicate in `modelsInUse`).
+ *
+ * So the *bill* knows the job by name — which is all `AiJob` is for — and the
+ * two model ids stay where they are chosen. `displayName` falls back to the raw
+ * id for them, which is the documented honest answer for a model this file has
+ * no better name for.
+ */
+export type LiveAiJob = "live_conversation";
+
+export type AiJob = Task | NonTaskAiJob | EvalAiJob | LiveAiJob;
 
 /**
  * **Which tier each task is on — and the file's actual decision, rather than its
@@ -512,13 +537,32 @@ function openRouterIdForTier(tier: Tier): string {
  *
  * Was a two-member union (`"anthropic" | "openrouter"`) until 2026-08-27, when
  * the seven pipeline stages moved off the Anthropic SDK's own endpoint and onto
- * OpenRouter's Anthropic-compatible one. One member is not a mistake: it is the
- * decision, written where a future reader will trip over it. See
- * docs/plans/260827q-ai-cost-tracking.md and src/messages-stream.ts.
+ * OpenRouter's Anthropic-compatible one. It was then a **one**-member union, and
+ * that was not a mistake either: it was the decision, written where a future
+ * reader would trip over it. See docs/plans/260827q-ai-cost-tracking.md and
+ * src/messages-stream.ts.
+ *
+ * **`"openai"` arrived on 2026-09-02, and it is the first genuine exception.**
+ * Live conversation talks to OpenAI's Realtime API directly, because OpenRouter
+ * has no realtime API at all — checked 2026-08-31, its two audio endpoints are
+ * batch speech and batch transcription, and there is no duplex speech-to-speech
+ * to route to. So the choice was OpenAI directly or no live mode, and the
+ * sentence this docstring used to open with ("who serves every model call in
+ * this app — all of them") stopped being true the day that shipped.
+ *
+ * Widening it here is not a licence: `src/live.ts` is still the only file in
+ * `src/` allowed to name OpenAI, and `tests/no-undeclared-spend.test.ts` is what
+ * keeps that so. This union exists so the *ledger* can say which bill a row
+ * lands on — see `ProviderAccount` in src/ai-spend.ts, which is the same
+ * distinction one layer down.
  */
-export type Provider = "openrouter";
+export type Provider = "openrouter" | "openai";
 
-/** The one gateway. Every paid call in this app goes through it. */
+/**
+ * The one gateway. Every paid call in this app goes through it **except live
+ * conversation's realtime session**, which has nowhere to be routed — see
+ * `Provider` above and docs/project/ai-gateway.md.
+ */
 export const GATEWAY: Provider = "openrouter";
 
 /**
@@ -542,8 +586,20 @@ export const GATEWAY: Provider = "openrouter";
  * and a different response. Folding it into `"chat"` would have made the one
  * field that says *what this request looks like* say something untrue about the
  * only call in the app that does not carry messages at all.
+ *
+ * **`"realtime"` is the fourth, and it is the one that is not a request at
+ * all.** Live conversation is a WebRTC session the *browser* holds open to
+ * OpenAI: there is no request body this server sent and no response body it
+ * received, and the usage arrives afterwards as events the tab forwards back
+ * (docs/project/live-conversation.md). Every other wire's row is written by the
+ * gateway that made the call; a realtime row is written by an acceptance
+ * endpoint from a report. That is a large enough difference to deserve its own
+ * value, and the `wire` column is exactly the field a reader should look at
+ * before summing anything across it — a realtime `reported_input_tokens` counts
+ * the whole conversation so far, rebilled every turn, which is not what any
+ * other wire means by the name.
  */
-export type Wire = "messages" | "chat" | "embeddings";
+export type Wire = "messages" | "chat" | "embeddings" | "realtime";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -605,6 +661,11 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
      `evals/declared-spend.ts` do not consult this table at all: they say which
      wire they actually used, because they are the thing that knows. */
   eval: "chat",
+  /* Both halves of a live session — the realtime model that answers and the
+     transcriber that writes down what the reader said — arrive on the one
+     WebRTC data channel, so they share a wire and are told apart by
+     `requested_model` and by `ai_calls.event_kind`. See `Wire` above. */
+  live_conversation: "realtime",
 };
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];

@@ -60,6 +60,7 @@ import type {
   Comment,
   FeedbackDiagnostics,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
@@ -1327,6 +1328,85 @@ export interface CostStore {
   size(): Promise<number | null>;
 }
 
+/* ------------------------------------------------- live conversation -- */
+
+/**
+ * **One live conversation this server issued a token for.**
+ *
+ * The parent every realtime `ai_calls` row hangs off, and — more importantly —
+ * the only thing that can say a session reported **nothing**. See
+ * `realtimeSessions` in [../db/schema.ts](../db/schema.ts) for why a row exists
+ * before any money is known to have been spent.
+ *
+ * Timestamps are ISO strings on this side of the seam, like `AiCallRow`'s, so
+ * that the two adapters cannot disagree about a `Date` and neither of them can
+ * hand a caller a mutable one.
+ */
+export interface RealtimeSession {
+  /** Ours, minted before OpenAI is asked for anything. */
+  id: string;
+  ownerId: string;
+  /**
+   * The article, by slug — the historical fact a later delete cannot revoke.
+   * The Postgres adapter resolves the id beside it; the filesystem one has no
+   * ids to resolve, which is why the slug is what crosses this seam.
+   */
+  articleSlug: string | null;
+  threadId: string | null;
+  /** The realtime model as OpenAI created it, not as we asked. */
+  model: string;
+  transcriptionModel: string | null;
+  issuedAt: string;
+  /** The last instant a usage report is accepted. Server-owned; not the token's expiry. */
+  acceptsUntil: string;
+  connectedAt: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+}
+
+/**
+ * **The journal of live conversations** — issued, connected, closed.
+ *
+ * Deliberately four narrow methods rather than a general upsert. Every one of
+ * them is a fact arriving at a known moment, and there is no operation here that
+ * rewrites what a session was: `markConnected` and `close` set a timestamp that
+ * was null, and a second call must not move it. A general `update` would make
+ * "the browser said it connected twice" a silent overwrite of the first, more
+ * truthful, time.
+ *
+ * **Every read takes the owner.** Not because a reader is untrusted —
+ * docs/project/security-map.md says plainly that they are not — but because the
+ * session id travels through the browser and comes back on a request, and a
+ * lookup that did not carry the owner would answer for *any* session whose id
+ * somebody had. That is the same discipline `ownedSlug` enforces on articles,
+ * and the reason it exists is that `articles.slug` is globally unique and the
+ * unfiltered lookup reads exactly like a working one.
+ */
+export interface RealtimeSessionStore {
+  /**
+   * Write the session row. **Called after OpenAI has minted the client secret
+   * and before the token reaches the browser** — if this throws, the token is
+   * never released, because a usable token with no journal row is spend nothing
+   * can ever see.
+   */
+  issue(session: RealtimeSession): Promise<void>;
+  /** One session, or `null` — for this owner only. */
+  find(id: string, ownerId: string): Promise<RealtimeSession | null>;
+  /**
+   * The data channel opened. **Idempotent, and it keeps the earliest time**: a
+   * usage report backfills this too, in case the connected event was lost, and
+   * a later backfill must not overwrite the moment the channel really opened.
+   */
+  markConnected(id: string, ownerId: string, at: string): Promise<void>;
+  /**
+   * The conversation ended, as far as the browser could tell. **Best-effort by
+   * nature** — a closed laptop says nothing — so a session with no `closedAt`
+   * is the ordinary case rather than an error, and nothing downstream may treat
+   * its absence as a session still running.
+   */
+  close(id: string, ownerId: string, at: string, reason: string | null): Promise<void>;
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -1339,6 +1419,7 @@ export interface CostStore {
 export type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
 } from "../types.js";
 
@@ -1373,12 +1454,19 @@ export interface NewFeedback {
    * owner.
    */
   reporterEmail: string;
-  /** *Steps to reproduce.* Length-capped at `MAX_FEEDBACK_ANSWER_CHARS`. */
-  steps: string | null;
-  /** *What you expected to see.* */
-  expected: string | null;
-  /** *What you saw instead.* */
-  actual: string | null;
+  /**
+   * **What the reader wrote**, in one box. Length-capped at
+   * `MAX_FEEDBACK_ANSWER_CHARS`, non-empty, and `not null` — a report with
+   * nothing in it is not a report, and that is the column's type rather than a
+   * rule somebody remembers.
+   */
+  body: string;
+  /**
+   * *A problem* or *a suggestion*, or **null for a reader who did not say**.
+   * Greg asked for the toggle to start unset, so absence is an answer here
+   * rather than a missing one — src/types.ts § `FEEDBACK_KINDS`.
+   */
+  kind: FeedbackKind | null;
   /**
    * Whether the reader ticked *Send extra diagnostics*. Recorded as its own
    * fact rather than inferred from `diagnostics` being present: "they said yes

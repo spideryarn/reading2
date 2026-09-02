@@ -106,6 +106,23 @@ function toRow(r: Row): AiCallRow {
     webSearches: r.webSearches,
     serviceTier: r.serviceTier,
     inferenceGeo: r.inferenceGeo,
+    realtimeSessionId: r.realtimeSessionId,
+    providerEventId: r.providerEventId,
+    /* Cast, like `wire` and `outcome` above and for the same reason: the column
+       is `text` and the CHECK `ai_calls_realtime_event_kind` is what makes the
+       narrower type true. A row that got past that constraint is a database
+       somebody changed by hand, and pretending otherwise here would only move
+       where it surfaced. */
+    eventKind: r.eventKind as AiCallRow["eventKind"],
+    providerStatus: r.providerStatus,
+    inputTextTokens: r.inputTextTokens,
+    inputAudioTokens: r.inputAudioTokens,
+    inputImageTokens: r.inputImageTokens,
+    cachedTextTokens: r.cachedTextTokens,
+    cachedAudioTokens: r.cachedAudioTokens,
+    outputTextTokens: r.outputTextTokens,
+    outputAudioTokens: r.outputAudioTokens,
+    transcriptionSeconds: r.transcriptionSeconds,
   };
 }
 
@@ -177,11 +194,31 @@ export const pgCostStore: CostStore = {
         webSearches: row.webSearches,
         serviceTier: row.serviceTier,
         inferenceGeo: row.inferenceGeo,
+        realtimeSessionId: row.realtimeSessionId,
+        providerEventId: row.providerEventId,
+        eventKind: row.eventKind,
+        providerStatus: row.providerStatus,
+        inputTextTokens: row.inputTextTokens,
+        inputAudioTokens: row.inputAudioTokens,
+        inputImageTokens: row.inputImageTokens,
+        cachedTextTokens: row.cachedTextTokens,
+        cachedAudioTokens: row.cachedAudioTokens,
+        outputTextTokens: row.outputTextTokens,
+        outputAudioTokens: row.outputAudioTokens,
+        transcriptionSeconds: row.transcriptionSeconds,
       })
       /* **The same call must not produce two rows.** The id is minted before the
          request goes out, so a retry of the *insert* — not of the call — has a
          key to collide on, and a ledger that double-counts is wrong in the
-         direction that looks like the thing you were measuring. */
+         direction that looks like the thing you were measuring.
+
+         **This is also what makes a re-posted realtime report harmless**, which
+         is not an accident: `acceptRealtimeUsage` derives the row's id from
+         `(session, event kind, provider event id)` precisely so that a browser
+         retrying a turn it never saw acknowledged lands on this conflict rather
+         than on the `ai_calls_realtime_event` unique index. Landing on the index
+         instead would raise, which is the right outcome for a genuine
+         disagreement and the wrong one for the ordinary lost acknowledgement. */
       .onConflictDoNothing({ target: aiCalls.id });
   },
 

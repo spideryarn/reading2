@@ -37,8 +37,7 @@
  * ## What may be logged from this file
  *
  * **Lengths, never text.** The id, the counts, the route, the slug, how many
- * characters were written — never `steps`, `expected`, `actual`, and never the
- * reporter's email. This whole feature is a deliberate exception to
+ * characters were written — never `body`, and never the reporter's email. This whole feature is a deliberate exception to
  * src/monitoring-scrub.ts's rule about a reader's words leaving the machine, and
  * the exception is the *Sentry* channel the reader consented to, not the log
  * this file writes. docs/project/logging.md.
@@ -53,6 +52,7 @@ import { currentOwnerId } from "../owner.js";
 import type {
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
 } from "../types.js";
 import {
@@ -89,9 +89,8 @@ const FEEDBACK_LOCK_NAMESPACE = 4919;
 const REPORT_COLUMNS = {
   id: feedbackTable.id,
   reporterEmail: feedbackTable.reporterEmail,
-  steps: feedbackTable.steps,
-  expected: feedbackTable.expected,
-  actual: feedbackTable.actual,
+  body: feedbackTable.body,
+  kind: feedbackTable.kind,
   consented: feedbackTable.consented,
   routeKind: feedbackTable.routeKind,
   slug: feedbackTable.slug,
@@ -118,9 +117,9 @@ const REPORT_COLUMNS = {
 interface ReportRow {
   id: string;
   reporterEmail: string;
-  steps: string | null;
-  expected: string | null;
-  actual: string | null;
+  body: string;
+  /** `text` in the database, a closed union or null in TypeScript — see `toReport`. */
+  kind: string | null;
   consented: boolean;
   /** `text` in the database, a closed union in TypeScript — see `toReport`. */
   routeKind: string;
@@ -140,19 +139,19 @@ interface ReportRow {
 /**
  * A row as a report.
  *
- * The two casts are honest rather than hopeful: `route_kind` and `environment`
- * are `text` columns with CHECK constraints built from the **same** arrays the
- * TypeScript unions are derived from (src/db/schema.ts § `inList`), so a value
- * outside the union cannot be in the column.
+ * The three casts are honest rather than hopeful: `route_kind`, `environment` and
+ * `kind` are `text` columns with CHECK constraints holding the **same** values
+ * the TypeScript unions do (src/db/schema.ts), so a value outside the union
+ * cannot be in the column. `kind` is checked for null first, because null is a
+ * member of its domain and not of its union.
  */
 function toReport(row: ReportRow): FeedbackReport {
   const version = row.diagnosticsVersion;
   return {
     id: row.id,
     reporterEmail: row.reporterEmail,
-    steps: row.steps,
-    expected: row.expected,
-    actual: row.actual,
+    body: row.body,
+    kind: row.kind === null ? null : (row.kind as FeedbackKind),
     consented: row.consented,
     routeKind: row.routeKind as FeedbackRouteKind,
     slug: row.slug,
@@ -173,7 +172,7 @@ function toReport(row: ReportRow): FeedbackReport {
 
 /** How much the reader wrote. The one number this file logs about their words. */
 function charsIn(input: NewFeedback): number {
-  return (input.steps?.length ?? 0) + (input.expected?.length ?? 0) + (input.actual?.length ?? 0);
+  return input.body.length;
 }
 
 export const pgFeedbackStore: FeedbackStore = {
@@ -277,9 +276,8 @@ export const pgFeedbackStore: FeedbackStore = {
           id: input.id,
           ownerId,
           reporterEmail: input.reporterEmail,
-          steps: input.steps,
-          expected: input.expected,
-          actual: input.actual,
+          body: input.body,
+          kind: input.kind,
           consented: input.consented,
           routeKind: input.routeKind,
           slug: input.slug,

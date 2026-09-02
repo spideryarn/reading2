@@ -302,6 +302,77 @@ that is the outstanding verification for this stage, and it is the only part of 
 
 ### Stage 2A — the server-owned journal and the acceptance seam
 
+**✅ Built, 2026-09-02; one step outstanding.** `spideryarn.realtime_sessions` and thirteen nullable
+realtime columns on `ai_calls`
+([the migration](../../drizzle/20260902150952_realtime_sessions_and_usage.sql)); the session row
+written between minting the secret and returning the token; `connected` / `usage` / `close` under
+`/api/live/:sessionId/`; `parseRealtimeUsage` and `acceptRealtimeUsage` in
+[`src/live.ts`](../../src/live.ts), pure and tested without HTTP; `REALTIME_PRICES` and
+`TRANSCRIPTION_PRICES` in [`src/pricing.ts`](../../src/pricing.ts), effective-dated; `Wire`,
+`Provider`, `ProviderAccount`, `AiJob`, `AI_JOB_WIRE` and `ChatJob` all widened. 63 new tests, each
+guard watched to fail first.
+
+**Four decisions taken in the build that the plan left open, and one thing left out:**
+
+- **`AiJob` gains `live_conversation` as its own category, not a fourth `NonTaskAiJob`.** Those three
+  each have one fixed model that the profile page lists; a live session buys two on two rate cards,
+  and their ids live in `src/live.ts`, which imports `src/converse.ts`, which imports
+  `src/models.ts` — so naming them there would close an import cycle and `npm run cycles` is a gate.
+- **`ai_calls.duration_ms` loses its `NOT NULL`**, narrowed straight back by
+  `ai_calls_duration_known_off_realtime`. A transcription event has no matching start event, and both
+  alternatives were invisible lies: a `0` reads as an instant call, and the session's wall-clock is
+  the length of a conversation rather than of a call.
+- **A report carrying image tokens is refused**, not priced. `liveSession` configures no image input
+  and there is no image rate; inventing one is what `src/pricing.ts` spends four paragraphs
+  forbidding.
+- **The session journal gets both store adapters, not a filesystem refusal.** `AdminStore`,
+  `VisibilityStore` and `FeedbackStore` refuse on files because there is genuinely nothing on a
+  filesystem to hold them; a session journal is a file quite happily, and refusing would have turned
+  off a working feature on every default checkout — including the suite that covers the ticket route.
+- **No `usageSource` column.** The design proposed `"client_report" | "sideband"`; today
+  `wire = 'realtime'` *is* "a browser reported this", so it would carry one value. An additive
+  migration on the day a sideband exists is cheaper than a column nothing distinguishes.
+
+**This is a laptop problem, not a shipping one.** The `.sql`, its snapshot and its journal entry are
+on `dev`, and `npm run deploy` applies every pending migration to the remote and **refuses to ship
+while any is still pending** — `--skip-migrations` included
+([deployment.md § Deploying](../project/deployment.md#deploying)). So production gets this at the
+next deploy without anybody doing anything, and the one way it could go wrong announces itself: if a
+later-stamped migration ever reached the remote first, the preflight would refuse out loud rather
+than skip in silence. Deploying `dev` as a whole cannot hit that, because drizzle reads its watermark
+once and then applies every pending entry in journal order in the same run.
+
+**Outstanding on the shared box, and not mine to clear — the same peer collision as 1b, twice over.**
+The migration has been applied nowhere, and the reason changed under it on 2026-09-02. First `npm run db:migrate`
+refused on one orphan ledger row, `1788351034981`, which was `0052_per_article_job_queue` applied to
+the shared local Postgres from a worktree whose journal entry had not been pushed. That cleared when
+`0052` landed. What refuses now is worse and is the defect
+[database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger)
+exists to catch:
+
+```
+✗ 1 migration(s) can never be applied: the newest ledger row is stamped 1788365753441,
+  and drizzle only applies entries stamped after it —
+  20260902150952_realtime_sessions_and_usage (1788361792046)
+✗ 2 ledger row(s) belong to no migration in this journal: 1788365729661, 1788365753441
+```
+
+Both orphan rows are stamped **later** than this migration, so even once they are accounted for,
+drizzle's single-watermark loop would skip `20260902150952` for ever in silence. **The remedy is not
+to delete this file and regenerate**, tempting as the table in database.md makes it look, until
+somebody has worked out what those two rows did — they are the feedback/privacy work applied under
+numbers that have since been regenerated, and a regeneration now merely chases their stamps. Whoever
+clears them should then check that this entry still clears the new watermark before running
+`npm run db:migrate`.
+
+Until it runs, `tests/store-realtime-sessions.test.ts` skips its Postgres half loudly
+(*"spideryarn.realtime_sessions is not there — run npm run db:migrate"*) and the filesystem half of
+the same parity suite runs; `tests/store-ai-calls.test.ts`, `tests/db-schema.test.ts` and
+`tests/db-schema-drift.test.ts` fail on the missing realtime columns. **Run `npm run db:migrate` and
+then
+`npx vitest run tests/store-realtime-sessions.test.ts tests/store-ai-calls.test.ts tests/db-schema.test.ts tests/db-schema-drift.test.ts`**
+— that is the whole of what is unverified here. Everything that does not need a database passes.
+
 Sol split Stage 2 in two, **at the server/client contract** — deliberately not between responses and
 transcription, because that would ship a meter known to omit a cost source.
 

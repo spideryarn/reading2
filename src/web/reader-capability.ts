@@ -91,8 +91,9 @@ export type ReaderCapability =
        * piece have one* rather than *give me the list*, and they ask it about
        * `arc` too, which is not in the set above because it has ridden inside
        * the article payload since slice 1a. Derived rather than fetched:
-       * `GET /api/public/metadata/:slug` used to answer this and the second
-       * request is gone. public-artefacts.ts.
+       * a public metadata endpoint used to answer this; the second request went
+       * in slice 1b and the endpoint itself on 2026-09-02.
+       * public-artefacts.ts.
        *
        * **Not nullable any more.** It was `PublicArtefacts | null`, where
        * `null` meant that second request had failed — which is the state slice
