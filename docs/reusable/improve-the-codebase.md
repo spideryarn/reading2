@@ -16,6 +16,19 @@ and how to choose**; that one covers stages, briefs, reviews and commits.
 Long-term better: easier to understand, more reliable, easier to change six months from now. That is
 almost always **fewer moving parts, not more** — the best finding deletes something.
 
+"Easier to change" has a concrete test. Greg, 2026-09-02:
+
+> it should be easier (and more confident) for a future agent to find all the relevant places it
+> needs to edit, and when it edits them for it to be clearer whether there are implications
+> elsewhere that need to be taken into account.
+
+So put every finding to that question: **what would the next editor have had to find, and what
+would have told them?** Signposting in the docs, static analysis that surfaces callers and
+inconsistencies, boundaries that shrink the set of places, tests that go red at the site you
+missed — these are four answers to the one question, and a finding is worth more the cheaper and
+more mechanical its answer is. A type the compiler checks beats a test, which beats a doc that
+says "also update".
+
 So bias hard towards simplicity, and be suspicious of your own enthusiasm. Two tests to put to every
 abstraction you are about to propose, including your own:
 
@@ -90,6 +103,11 @@ lands in whichever the author happened to know about.
 where you hesitated because you couldn't tell which of two paths was live, what you were afraid to
 touch. That is first-hand evidence and nobody else has it.
 
+**Replay the last few real changes.** For each recent commit, ask what told the author about each
+file it touched. "They happened to know" is a finding, and so is a pair of files that change
+together commit after commit yet never import each other. Fix it with the cheapest of the four
+answers above; a signpost is the fallback, not the first choice.
+
 ### Size is a symptom, not the disease
 
 Measure — run whatever static analysis the project has, count lines and complexity — but hold the
@@ -155,6 +173,10 @@ these:**
 - **A scope line** — directories swept, directories excluded, and what the method is blind to. A
   grep over `src/` silently omits the deploy scripts, and nobody notices an absence. Static sweeps
   find no races, no ordering bugs, nothing that exists only at runtime.
+  **A finding that something is unused is an absence, so it is only as good as the sweep behind
+  it** — name the directories, and re-run it before the deletion rather than trusting the one in the
+  audit. This paragraph already warned about the deploy scripts and four audits still called a route
+  callerless; `scripts/` was where its only caller was.
 - **An evidence state on every finding** — *reproduced*, *proved from the code*, or *hypothesis* —
   kept separate from its tier. The words blur under pressure, and a confident hypothesis otherwise
   gets scored like a reproduction. Nothing counts as a correctness win below a reachable call path.

@@ -46,7 +46,11 @@ const HIDES_MASTHEAD = ".reader:has(.mode-band) .masthead { display: none; }";
 
 describe("a visitor's notice, in the strip the band takes over", () => {
   it("carries the class the stylesheet reaches it by", () => {
-    const html = renderToStaticMarkup(<SharedNotice signedIn={false} />);
+    /* The ordinary notice: a session we could confirm, or none at all. The
+       unconfirmed arm adds a second paragraph inside this same box, so it is
+       covered by the same rule and needs no assertion of its own here.
+       src/web/PublicChrome.tsx § SharedNotice. */
+    const html = renderToStaticMarkup(<SharedNotice signedIn={false} sessionUnconfirmed={false} />);
     /* The class, not a substring of some Tailwind utility: `shared-notice`
        appears in `tw:` names nowhere, but asserting the attribute boundary is
        what stops that from becoming true later. */

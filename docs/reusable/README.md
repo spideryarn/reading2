@@ -19,7 +19,7 @@ inventing a process.
 | [third-party-library-selection.md](third-party-library-selection.md) | picking a dependency — favour long-lived, heavily-documented ones, then write the decision down |
 | [rename-or-move.md](rename-or-move.md) | `git mv`, then every reference — a rename is never one edit |
 | [find-previous-work.md](find-previous-work.md) | finding what was done before — the commit, the plan, the conversation — most durable source first, in a Sonnet subagent |
-| [get-ready-to-deploy.md](get-ready-to-deploy.md) | the sweep before shipping — commit, pull, resolve, check, fix, commit, deploy, in that order and for a reason |
+| [get-ready-to-deploy.md](get-ready-to-deploy.md) | the sweep that gets a shared tree to `dev` — commit, look, pull, check, fix, commit, push, in that order and for a reason; also what the three-hourly loop runs |
 | [git-commit-changes.md](git-commit-changes.md) | sweeping up an uncommitted tree — batch it, oldest first, and commit only what you can vouch for |
 | [git-resolve-merge-conflicts.md](git-resolve-merge-conflicts.md) | a merge, rebase or pull left conflict markers — read both sides' history, propose before editing |
 | [generate-mermaid-diagram.md](generate-mermaid-diagram.md) | authoring `.mermaid` files and rendering them to SVG, plus the house style |
@@ -30,6 +30,7 @@ inventing a process.
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |
+| [long-waits.md](long-waits.md) | waiting hours rather than minutes — which mechanism survives what, and the two that outlive the session |
 
 ## Traps, before you meet them
 

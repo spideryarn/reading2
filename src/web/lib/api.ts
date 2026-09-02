@@ -197,13 +197,20 @@ export class HttpError extends Error {
   /**
    * **What the server sent beside `error`**, or `{}` when it sent nothing.
    *
-   * Added 2026-09-01 for the 409 that `POST /api/jobs` answers when the article
-   * already has a job in flight: the message alone told the reader to stop
-   * something the interface never showed them, so the refusal now carries the
-   * blocking job. Before this, `readJson` kept the sentence and dropped every
-   * other field, which made a structured refusal unusable however carefully the
-   * server wrote one. GPT Sol named it in the stage 1 review as the thing stage
-   * 6 would need.
+   * Added 2026-09-01 for a 409 `POST /api/jobs` no longer answers — the article
+   * already had a job in flight, and the refusal carried the blocking job so the
+   * reader was not told to stop something the interface never showed them. That
+   * refusal went on 2026-09-02, when a second job on one article started queuing
+   * instead (docs/project/ingest-queue.md), and **this field stayed**: it
+   * belongs to the error type rather than to that case, and what it fixed is
+   * general — `readJson` kept the sentence and dropped every other field, which
+   * made *any* structured refusal unusable however carefully the server wrote
+   * one. Nothing on the server puts a field beside `error` today.
+   *
+   * **Whatever brings one back must match one declared class and read one
+   * declared field**, never spread an error's own enumerable properties: a
+   * Drizzle failure's message carries bound parameters and a provider's carries
+   * its own words (docs/project/copy.md rule 4).
    *
    * **A second parsing path was the alternative and is worse.** A caller could
    * read `Response.status`, decide it is the interesting one, and parse the body

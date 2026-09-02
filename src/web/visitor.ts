@@ -88,8 +88,16 @@ function artefactGap(has: keyof PublicArtefacts, available: PublicArtefacts): Vi
  *
  * One table, so that the tweet thread on its own page and the three modes in
  * the reading view cannot end up calling the same thing two names.
+ *
+ * **Exported since 2026-09-02**, because the visitor's own metadata page had
+ * written four of these out by hand and left `quotes` off — so a shared article
+ * with quotes told its reader nothing about them, under a heading that says
+ * *what has been built for it*. GPT Sol found it while reviewing the owner's
+ * inventory (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
+ * `PublicPages.tsx` now walks this record instead, so a sixth artefact appears
+ * there whether or not anybody remembers the page.
  */
-const NOUN: Record<keyof PublicArtefacts, string> = {
+export const NOUN: Record<keyof PublicArtefacts, string> = {
   arc: "an arc through the argument",
   glossary: "a glossary",
   ideas: "a list of ideas",
@@ -163,6 +171,20 @@ const COSTS: Partial<Record<Mode, string>> = {
    * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
    */
   timeline: "Timeline",
+  /**
+   * **Referee is `timeline`'s case, and it arrived here the slow way.**
+   *
+   * It reached the fall-through until 2026-09-02, which is fail-closed and so
+   * gave the right *policy* — but the fall-through has only the mode id to hand
+   * `ownersOnly`, and that wants a product noun. A visitor pressing the button
+   * was told "referee is for whoever added this article", lower-case, in the
+   * band and in the dock tooltip.
+   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
+   *
+   * It spends: the reader's own criteria go to the model along with the piece.
+   * docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+   */
+  referee: "Referee",
 };
 
 /**
@@ -215,7 +237,15 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
   /* Not reachable today — `Mode` is closed and every member is in one of the
      tables above. It is here rather than as a non-null assertion because a mode
      added later must fail closed: a visitor sees a boundary they can read
-     rather than a band that renders nothing. */
+     rather than a band that renders nothing.
+
+     **The claim above was untrue for two days and nothing said so**: `referee`
+     landed here from 2026-08-31, and the cost of falling through is that this
+     line has only the mode id to give `ownersOnly`, which wants the word on the
+     button. The visitor read "referee is for whoever added this article".
+     tests/visitor-gaps.test.ts now sweeps `MODES` and fails if any live mode's
+     sentence carries its own id, so the next one to arrive here is caught by
+     the wording rather than by somebody re-reading this comment. */
   return { kind: "owners-only", feature: mode };
 }
 

@@ -50,10 +50,13 @@
  *                                  { threadId, edit: messageId, question, at? }
  *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
  *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
- *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret,
- *                                            the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
+ *                                            id, the thread as seed items, and the tail
  *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
  *                                          → { thread }, one exchange appended
+ *   POST   /api/live/:sessionId/connected  → the data channel opened
+ *   POST   /api/live/:sessionId/usage      { kind, providerEventId, … } → one ledger row
+ *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
@@ -194,6 +197,7 @@ import {
   adminStore,
   commentStore,
   feedbackStore,
+  realtimeSessionStore,
   sourceStore,
   visibilityStore,
 } from "./store/index.js";
@@ -226,19 +230,24 @@ import { markAnswerStream } from "./quiz-mark.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { isSpideryarnId } from "./ids.js";
+import { isSpideryarnId, isUuid } from "./ids.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
    all. src/live.ts holds the whole of it, including the only use of
    OPENAI_API_KEY in the app. Nothing here touches that key — this file asks for
    a session and gets back a short-lived secret for the browser. */
 import {
+  acceptRealtimeUsage,
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
+  LIVE_TRANSCRIBER,
   type LiveToken,
   liveSeedItems,
   liveSession,
   mintLiveToken,
+  parseRealtimeUsage,
+  realtimeCloseReason,
+  REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
@@ -249,14 +258,15 @@ import {
   enqueue,
   forgetJob,
   getJob,
-  JobConflict,
   listJobs,
   retryJob,
 } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
+import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -306,6 +316,7 @@ import type {
   ChatThread,
   Comment,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
@@ -335,6 +346,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   FEEDBACK_ENVIRONMENTS,
+  FEEDBACK_KINDS,
   FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
@@ -385,8 +397,10 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - three answers at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per UTF-16
- *   unit `JSON.stringify` can produce for a control character;
+ * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
+ *   UTF-16 unit `JSON.stringify` can produce for a control character — times
+ *   three, because a stale client still sends the old three answers and folding
+ *   them into one `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -2891,11 +2905,164 @@ async function liveChatToken(
   });
 
   const minted = await mintLiveToken(session);
+
+  /* **The journal row goes in before the token comes out, and the order is the
+     whole rule.**
+
+     OpenAI mints the secret, we write the session, and only then does the token
+     reach the browser. If the insert throws, this function throws with it and
+     the reader is told the session could not start — because a usable token with
+     no journal row is money that will be spent on a wire this server cannot see,
+     with nothing anywhere that could later say a conversation had even happened.
+     GPT Sol set the sequence out in exactly these three steps; the token is
+     genuinely wasted when this fails, and that is the cheaper of the two
+     outcomes.
+
+     It also means an issued session that reports nothing shows up as a session
+     that reported nothing, which is the one failure a browser-reported meter
+     actually has — the reader shuts the laptop and the last turns never arrive.
+     Without a row there is no gap to see, only an absence.
+     docs/reusable/silent-success.md. */
+  const sessionId = randomUUID();
+  const issuedAt = new Date();
+  await realtimeSessionStore.issue({
+    id: sessionId,
+    ownerId: currentOwnerId(),
+    articleSlug: slug,
+    threadId,
+    /* **What OpenAI created, not what we asked for.** They agree only when the
+       request was honoured, and `mintLiveToken` reads the created session
+       precisely so that this column can be an answer rather than a hope — which
+       matters here more than usual, because the price is looked up by this
+       string. A row that named a model the session was not on would be priced
+       against the wrong rate card for ever. */
+    model: minted.model,
+    transcriptionModel: LIVE_TRANSCRIBER,
+    issuedAt: issuedAt.toISOString(),
+    /* **The server's own deadline, stored on the row.** Not the token's expiry,
+       which admits one connection and is about ten minutes, while a conversation
+       may run for twenty — see `REPORT_WINDOW_MS` in src/live.ts for why using
+       the wrong clock would have dropped the reports that matter most. Stored
+       rather than recomputed, so a session issued under today's rule keeps it
+       when the rule changes. */
+    acceptsUntil: new Date(issuedAt.getTime() + REPORT_WINDOW_MS).toISOString(),
+    connectedAt: null,
+    closedAt: null,
+    closeReason: null,
+  });
+
   return {
     ...minted,
+    sessionId,
     seed: liveSeedItems(thread?.messages ?? []),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
+}
+
+/**
+ * **The data channel opened** — `POST /api/live/:sessionId/connected`.
+ *
+ * The smallest endpoint in this file, and it exists because *a minted token is
+ * not a conversation*. A reader can press the button, think better of it, and
+ * never open the channel. A denominator built on issued sessions would then
+ * quietly understate what a real conversation costs by however many of those
+ * there are, and nothing would look wrong.
+ *
+ * GPT Sol offered two ways out — name the denominator honestly, or add this
+ * event — and preferred this one, because "issued" and "connected" are both
+ * facts worth having rather than one fact worth relabelling.
+ *
+ * Best-effort by nature: it fires once, on a channel that has just become
+ * usable, and nothing retries it. So `close` and the first usage report both
+ * backfill `connected_at` as well, and all three keep the earliest time.
+ */
+async function liveConnected(sessionId: string): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  /* **Looked up for this owner, and 404 if it is not theirs.** The session id
+     travels through the browser, so a lookup that did not carry the owner would
+     answer for any session whose id somebody had. 404 rather than 403 is this
+     repo's rule for a thing you may not see — docs/project/auth.md § Whose data
+     is it. */
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  await realtimeSessionStore.markConnected(sessionId, owner, new Date().toISOString());
+  return { ok: true };
+}
+
+/**
+ * **One paid event from a live conversation** — `POST /api/live/:sessionId/usage`.
+ *
+ * This is the seam: an authenticated request carrying a browser's account of
+ * what a turn cost becomes a row in the ledger. Everything about the request
+ * that can be got wrong is got wrong in `parseRealtimeUsage` and
+ * `acceptRealtimeUsage`, which are named, pure and tested without HTTP —
+ * `tests/realtime-usage.test.ts`. This function does only the three things they
+ * cannot: find the session **for the authenticated owner**, price nothing
+ * itself, and write.
+ *
+ * ## What the endpoint refuses to take from the caller
+ *
+ * A dollar amount, a model, an owner, an article. All four come from the session
+ * row this server wrote when it minted the token. A client that could name its
+ * own model could name the cheap one; a client that could name its own cost
+ * could name zero. docs/plans/realtime-voice-cost-tracking.md.
+ *
+ * ## Why a lost report is worse than a wrong one
+ *
+ * Nobody has an incentive to under-report their own token count and there is no
+ * per-reader cap to duck under — docs/project/security-map.md is explicit that a
+ * signed-in reader is not one of the untrusted parties. What will actually
+ * happen is that a tab closes mid-conversation. That is why the browser posts
+ * every turn as it happens rather than one total at the end (Stage 2B), and why
+ * a retry of a report that was already accepted has to be harmless: the row's id
+ * is derived from the event, so a repeat lands on `on conflict do nothing`.
+ */
+async function liveUsage(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+
+  const receivedAt = new Date();
+  const row = acceptRealtimeUsage({
+    session,
+    usage: parseRealtimeUsage(body),
+    receivedAt,
+  });
+  await costStore.record(row);
+  /* **A report is also evidence the channel opened**, and the `connected` event
+     above is the one thing here that nothing retries. Kept earliest-wins in the
+     store, so this weaker inference never overwrites the real moment. */
+  await realtimeSessionStore.markConnected(sessionId, owner, receivedAt.toISOString());
+  return { ok: true };
+}
+
+/**
+ * **The conversation ended** — `POST /api/live/:sessionId/close`.
+ *
+ * Best-effort, and it has to be treated that way by everything downstream: a
+ * closed laptop sends nothing, so a session with no `closed_at` is the ordinary
+ * case rather than an error, and **nothing may read its absence as a session
+ * still running**. The value of the field is in the sessions that do close — it
+ * is what makes "issued, never connected" and "connected, ended, reported
+ * nothing" different rows rather than one shrug.
+ *
+ * The reason is the browser's own word for it and is stored as free text with a
+ * length bound: the list belongs to `useLiveConversation.ts`, and a server-side
+ * union that lagged it would refuse a true report about how a conversation
+ * ended. `realtimeCloseReason` in src/live.ts is the bound.
+ */
+async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  const { reason } = (body ?? {}) as Record<string, unknown>;
+  await realtimeSessionStore.close(
+    sessionId,
+    owner,
+    new Date().toISOString(),
+    realtimeCloseReason(reason),
+  );
+  return { ok: true };
 }
 
 /**
@@ -2932,6 +3099,17 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
 
 /** What the browser is given to open one live session. See `liveChatToken`. */
 interface LiveTicket extends LiveToken {
+  /**
+   * **The id of this server's own journal row for the conversation**, and the
+   * thing every later report is addressed to.
+   *
+   * Not the OpenAI session id, which the browser also learns and which this
+   * server never sees. Ours, minted here, so the three acceptance endpoints can
+   * find the row that says whose money it is, which article it was about, which
+   * model was created and how long reports are accepted for — none of which the
+   * browser is trusted to state. src/live.ts § `RealtimeUsage`.
+   */
+  sessionId: string;
   /** The thread so far, windowed and with our block ids taken out. */
   seed: { role: "user" | "assistant"; text: string }[];
   /** The row the first spoken append must claim, or `null` for an empty thread. */
@@ -4290,7 +4468,7 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  * article that claim produced and hands back its job. Only a claim with nothing
  * to show for it is an error.
  */
-async function queueAnUpload(uploadId: string): Promise<Job> {
+async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
   const owner = currentOwnerId();
   const record = await readUpload(uploadId, owner);
   if (!record) throw httpError(404, "No such upload");
@@ -4300,8 +4478,38 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
     /* `taken`. If the first claim got as far as a job, that job is the answer —
        this is the same request arriving twice, not a conflict. */
-    const already = record.slug ? await jobForSlug(record.slug) : null;
-    if (already) return already;
+    const already = await jobForUpload(uploadId);
+    if (already) return { kind: "job", job: already };
+    /**
+     * **And when the job has gone, the upload record still knows.**
+     *
+     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+     * quiz are three more rows on one article — so fifty is a fortnight of
+     * ordinary use rather than a year of it. After that the upload is still
+     * `claimed`, the article is still on the shelf, and this answered *"That
+     * upload is already being turned into an article"* about an article the
+     * reader had finished reading. GPT Sol, reviewing the built stage 1,
+     * finding 5.
+     *
+     * **Answered from the record rather than by keeping the job alive**, and
+     * that is the choice worth writing down. Sparing an upload's job from
+     * retention only covers the ingests that never completed: a *successful*
+     * import's job is trimmed like any other success, and that is the case a
+     * reader actually comes back to. What is durable here is the **article**,
+     * and the upload record has named it since the moment `enqueue` returned —
+     * uploads are swept on their grant, never trimmed by count, so the record
+     * outlives the job by design.
+     *
+     * Re-read rather than reusing `record` above: `noteSlug` lands after
+     * `enqueue` returns, so a second request arriving in that window would
+     * otherwise read a record from before the slug was written.
+     */
+    const fresh = await readUpload(uploadId, owner);
+    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+    /* A claim with nothing at all to show for it: `enqueue` threw between the
+       claim and `noteSlug`. The reader chooses the file again, which is cheap
+       and correct. */
     throw httpError(409, "That upload is already being turned into an article.");
   }
 
@@ -4310,21 +4518,61 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
   });
-  /* **Immediately, and this line is what makes the paragraph above true.** The
-     record's slug used to be written only by the acquisition step, on success —
-     so a reload of `/add/upload/<id>` while the job was still queued behind
-     another one found a claimed upload with no slug, could not find its job,
-     and answered 409. Every reload, for ever, if acquisition never began. The
-     doc claimed the recovery worked while the field it recovers through was
-     never set. GPT Sol, 2026-08-27. */
+  /* **Immediately**, so that `GET /api/uploads/:id` can say which article this
+     file became rather than only which one it might.
+
+     It used to be written by the acquisition step, on success — so a reload of
+     `/add/upload/<id>` while the job was still queued behind another one found
+     a claimed upload with no slug, could not find its job, and answered 409.
+     Every reload, for ever, if acquisition never began. GPT Sol, 2026-08-27.
+     The recovery no longer goes through this field — `jobForUpload` matches the
+     upload id — but the record still had a hole in it, and the reader's own
+     `/add/upload/<id>` page reads the slug from here. */
   await noteSlug(uploadId, job.slug);
-  return job;
+  return { kind: "job", job };
 }
 
-/** The job currently working on this article, if there is one. For the repeat-claim case above. */
-async function jobForSlug(slug: string): Promise<Job | null> {
+/**
+ * What `POST /api/jobs { uploadId }` resolves to.
+ *
+ * Two answers rather than one, because after retention there is a true thing to
+ * say that is not a job: *this file is already that article*. The alternative
+ * was to invent a job record to say it with, which is a lie about what the
+ * store holds, or to keep answering 409, which is a lie about what happened.
+ *
+ * `article` rather than `slug` on the wire, so the two bodies cannot be
+ * confused: a `publicJob` carries a `slug` of its own.
+ */
+type UploadOutcome = { kind: "job"; job: Job } | { kind: "article"; slug: string };
+
+/**
+ * The job this upload became, whatever state it is in. For the repeat-claim
+ * case above.
+ *
+ * **It matches the upload id, which is the thing it actually means.** It asked
+ * `j.slug === record.slug` until 2026-09-02, over **every** status, and that
+ * was two guesses at once. An article holds a *line* of jobs now, so a reload
+ * of `/add/upload/<id>` could be handed whichever mode job on that article
+ * happened to sort first — a glossary run, presented to the reader as their
+ * import. And it depended on `noteSlug` having landed, where the upload id is
+ * on the job record from the moment `enqueue` returns.
+ *
+ * **Every status, deliberately.** The reader reloading `/add/upload/<id>` after
+ * their ingest has finished — or failed — must be shown *that* job, not a 409,
+ * and narrowing this to the active statuses would take that away again a minute
+ * after each import ends.
+ *
+ * It is not the *whole* of the recovery, though it was described that way until
+ * 2026-09-02: finished jobs are trimmed to fifty per reader, so this eventually
+ * finds nothing however wide its statuses are. `queueAnUpload` above falls back
+ * to the upload record for that.
+ *
+ * Newest first, because `listJobs` is (src/jobs.ts) and a retry of an upload
+ * ingest is the more recent of the two rows.
+ */
+async function jobForUpload(uploadId: string): Promise<Job | null> {
   const all = await listJobs();
-  return all.find((j) => j.slug === slug) ?? null;
+  return all.find((j) => j.upload?.id === uploadId) ?? null;
 }
 
 /**
@@ -4802,11 +5050,23 @@ async function transcribeDictation(
  * field at all in which to write a content type or a filename for the
  * screenshot.
  */
+/**
+ * The three fields the dialog sent before 2026-09-02, named once so that the
+ * allowlist and the shape check cannot disagree about what "the old shape" is.
+ */
+const LEGACY_ANSWER_FIELDS = ["steps", "expected", "actual"] as const;
+
 const FEEDBACK_FIELDS = [
   "id",
-  "steps",
-  "expected",
-  "actual",
+  "body",
+  "kind",
+  /* **The old three-box vocabulary, still accepted on purpose.** A reader whose
+     tab was loaded before the deploy posts these, and this is the one endpoint
+     where a client and a server disagreeing is likely to be the very thing the
+     reader is trying to report — so they are folded into `body` rather than
+     refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
+     old bundles are certainly gone. */
+  ...LEGACY_ANSWER_FIELDS,
   "consented",
   "routeKind",
   "slug",
@@ -4838,7 +5098,7 @@ const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
 const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
 
 /**
- * One of the three answers, trimmed — or `null` for a box the reader left empty.
+ * What the reader wrote, trimmed — or `null` for an empty box.
  *
  * **No part of the answer reaches a thrown message**, and that is the rule this
  * whole function exists to keep rather than a nicety: an `httpError` message is
@@ -4860,6 +5120,72 @@ function feedbackAnswer(value: unknown, field: string): string | null {
     );
   }
   return trimmed;
+}
+
+/**
+ * **What the reader wrote**, from either shape of request body.
+ *
+ * The current dialog sends one `body`. A dialog loaded before 2026-09-02 sends
+ * `steps`, `expected` and `actual`, and those are glued here under the same
+ * headings the migration used, so a report from a stale tab is stored as the
+ * same text it would have been stored as the day before.
+ *
+ * Accepting both is deliberate and is GPT Sol's finding: `FEEDBACK_FIELDS`
+ * refuses an unknown key outright, so without this a reader with an open tab is
+ * told *"a report has a field this endpoint does not take"* at the exact moment
+ * they are trying to tell us something is broken. Refusing a body that carries
+ * **both** shapes is the other half — that is not an old client, it is a caller
+ * making something up, and there would be no right answer about which to keep.
+ */
+function feedbackBody(sent: Record<string, unknown>): string {
+  /* **Which shape this is, decided on the keys and before any value is looked
+     at.** The first version asked whether each field held text, so
+     `{body: null, steps: "…"}` — both vocabularies, one of them empty — was
+     read as a well-formed old client rather than as the muddle it is. A shape
+     is a set of keys. GPT Sol's code review, 2026-09-02. */
+  const hasBody = Object.hasOwn(sent, "body");
+  const hasLegacy = LEGACY_ANSWER_FIELDS.some((key) => Object.hasOwn(sent, key));
+  if (hasBody && hasLegacy) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+
+  const written = feedbackAnswer(sent.body, "body");
+  const steps = feedbackAnswer(sent.steps, "steps");
+  const expected = feedbackAnswer(sent.expected, "expected");
+  const actual = feedbackAnswer(sent.actual, "actual");
+  const legacy = [
+    steps === null ? null : `Steps to reproduce:\n${steps}`,
+    expected === null ? null : `What you expected to see:\n${expected}`,
+    actual === null ? null : `What you saw instead:\n${actual}`,
+  ].filter((part): part is string => part !== null);
+  const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
+  /* The database says the same thing — `body` is `not null` — and this is the
+     half that gets to explain itself. A `kind` on its own is not a report: it is
+     the row a mis-wired toggle would file. */
+  if (body === null) {
+    throw httpError(400, "A report needs something written in it. [fb-empty]");
+  }
+  return body;
+}
+
+/**
+ * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
+ * than a missing one.
+ *
+ * Greg asked for the toggle to start unset — *"don't default to Problem. Default
+ * to null/unknown"* — so an absent field is valid and an unrecognised one is
+ * not. A value outside the vocabulary is a client and a server that disagree,
+ * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
+ * refusal for every other writer.
+ */
+function feedbackKind(value: unknown): FeedbackKind | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
+    /* The list is ours and the value is not the reader's prose — but it is still
+       a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  return value as FeedbackKind;
 }
 
 /**
@@ -4999,14 +5325,17 @@ function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
  * and the Vercel id from this request's own headers. See each of them.
  */
 function parseFeedback(
-  body: unknown,
+  /* `raw` rather than `body`, which is now a *field* of the report — the request
+     body and the reader's words are two different things and were briefly one
+     name. */
+  raw: unknown,
   req: IncomingMessage,
   user: VerifiedUser,
 ): { report: NewFeedback; screenshot: FeedbackScreenshot | null } {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fb-type]");
   }
-  const sent = body as Record<string, unknown>;
+  const sent = raw as Record<string, unknown>;
   for (const key of Object.keys(sent)) {
     if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
       /* **Fixed prose. Not the key, not forty characters of it.**
@@ -5035,14 +5364,8 @@ function parseFeedback(
   const consented = sent.consented;
   const where = feedbackWhere(sent);
 
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
-  /* The database says the same thing (`feedback_says_something`); this is the
-     half that gets to explain itself. */
-  if (steps === null && expected === null && actual === null) {
-    throw httpError(400, "A report needs at least one of the three answers. [fb-empty]");
-  }
+  const body = feedbackBody(sent);
+  const kind = feedbackKind(sent.kind);
 
   if (
     sent.diagnostics !== undefined &&
@@ -5071,9 +5394,8 @@ function parseFeedback(
          `VerifiedUser` — the one type only `requireUser` can make — and this is
          a snapshot of the address it verified, taken at submit time. */
       reporterEmail: user.email,
-      steps,
-      expected,
-      actual,
+      body,
+      kind,
       consented,
       ...where,
       environment: feedbackEnvironment(),
@@ -5134,7 +5456,10 @@ async function fileFeedback(
     {
       id: report.id,
       kind: answer.kind,
-      chars: (report.steps?.length ?? 0) + (report.expected?.length ?? 0) + (report.actual?.length ?? 0),
+      /* The reader's own answer, next to the store's. Two different `kind`s in
+         one line would be a log nobody can read, so this one says whose it is. */
+      reportKind: report.kind,
+      chars: report.body.length,
       consented: report.consented,
       routeKind: report.routeKind,
       slug: report.slug,
@@ -5201,37 +5526,6 @@ async function fileFeedback(
  */
 function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: number }).status === "number";
-}
-
-/**
- * The structured fields an error is allowed to put beside `error`.
- *
- * **One class, one field, and no generic spread** — which is the whole of what
- * stops this becoming a hole. The handler above answers every throw in the API,
- * including a Drizzle failure whose `Error.message` carries bound parameters
- * (src/store/db-errors.ts) and a provider's own words (docs/project/copy.md
- * rule 4). Copying an error's own enumerable properties onto the wire would
- * have made every one of those a candidate; matching `JobConflict` and reading
- * its declared `Job` cannot.
- *
- * And the payload is narrowed by `publicJob`, the same call `GET /api/jobs`
- * makes, so this 409 carries nothing the same reader's next poll would not have
- * handed them a second later. The blocking row is always theirs:
- * `jobs_active_slug` is `(owner_id, slug)` in src/db/schema.ts and the
- * filesystem adapter filters on `ownerId` before it compares anything.
- *
- * **`instanceof` here, where `statusOf` in src/web/lib/api.ts deliberately
- * duck-types.** That one is defensive because a test can mock `lib/api.js` and
- * put a second copy of `HttpError` in the graph; nothing mocks `src/jobs.js` at
- * this seam, both files are server modules in one bundle, and being strict is
- * the point — a duck-typed check would let any object with a `blocking`
- * property onto the wire. `tests/blocking-job-409.test.ts` drives the real
- * import graph, so the identity is a fact rather than an assumption.
- *
- * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
- */
-function structuredDetail(err: unknown): Record<string, unknown> {
-  return err instanceof JobConflict ? { blocking: publicJob(err.blocking) } : {};
 }
 
 function logRequest(
@@ -5425,6 +5719,26 @@ async function serveApi(
       return true;
     }
 
+    /**
+     * **The Stripe webhook — the second thing on this server that runs before
+     * the gate, and the only one that is handed the request.**
+     *
+     * Stripe has no session and never will, so this cannot sit behind
+     * `requireUser`. An **exact** path rather than a namespace, unlike the
+     * public branch above: nothing else under `/api/webhooks/` should become
+     * reachable because somebody added a second provider without re-reading
+     * src/billing/webhook.ts.
+     *
+     * Inside the `try` for the reason the comment below gives at length, and
+     * before anything else touches `req`, because the signature is over the
+     * bytes as they arrived — something that had already consumed the stream
+     * would leave nothing to verify.
+     */
+    if (path === WEBHOOK_PATH) {
+      await serveStripeWebhook(req, res, method);
+      return true;
+    }
+
     /* **The gate, and it is inside the `try` — that is the whole of this
        comment's content.** An earlier plan put it just after the `/api/` prefix
        check, eighty-five lines above, on the theory that this `try` would turn
@@ -5506,7 +5820,20 @@ async function serveApi(
        src/monitoring.ts decides what may be *said* about the error. This line
        only decides whether to say anything. */
     if (status >= 500) captureFailure(err, { method, path, status });
-    send(res, status, { error: (err as Error).message, ...structuredDetail(err) });
+    /* **The message and nothing else, and it must stay that way.** A
+       `structuredDetail(err)` used to be spread in beside it, carrying the
+       blocking `Job` out of a `JobConflict`; the per-article queue removed the
+       refusal, so it went with it
+       (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g).
+
+       Whatever brings a structured field back, it must match **one declared
+       class and read one declared field** — never copy an error's own
+       enumerable properties. This handler answers every throw in the API,
+       including a Drizzle failure whose `Error.message` carries bound
+       parameters (src/store/db-errors.ts) and a provider's own words
+       (docs/project/copy.md rule 4), and a generic spread would put every one
+       of those on the wire. */
+    send(res, status, { error: (err as Error).message });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);
@@ -5638,6 +5965,23 @@ export async function serveAuthenticatedApi(
      `/api/admin/users/anything` is a 404 rather than a quiet match — and behind
      the namespace check either way. docs/project/admin.md. */
   const adminUsers = path === "/api/admin/users";
+  /* The second admin route, and the only one that returns a reader's own
+     sentences. Exact on `path` for the same reason as the one above.
+     docs/plans/260902l-admin-feedback-page.md. */
+  const adminFeedback = path === "/api/admin/feedback";
+  /* **One report, and it takes two segments** — `feedback`'s primary key is
+     `(owner_id, id)` because the id is minted by a browser, so an address with
+     only the id in it can name two different people's reports. GPT Sol,
+     2026-09-02; src/store/pg-admin-feedback.ts has the whole argument.
+
+     The patterns are id *shapes*; `isUuid` and `isSpideryarnId` are the *rules*,
+     applied in the handler before the store sees either value — the division
+     every other id route here uses, and the reason a pattern that merely looks
+     strict is not treated as validation. */
+  const adminFeedbackOne = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/.exec(path);
+  const adminFeedbackShot = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/.exec(
+    path,
+  );
   const library = path === "/api/library";
   /* Before the `:slug` pattern below, and it has to be: `search` is a valid
      slug shape, so the two patterns overlap and the specific one must win.
@@ -5806,6 +6150,24 @@ export async function serveAuthenticatedApi(
   const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(path);
   const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(path);
   const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(path);
+  /* **Live conversation's three accounting endpoints, and they are NOT under
+     `/api/chat/`.**
+
+     The two above are: a ticket needs the thread to seed from, and a spoken
+     exchange is appended to it. These three are about the *session* — what it
+     spent, when its channel opened, when it ended — and a session outlives the
+     thread it started in, may be reported against after the reader has moved on,
+     and is addressed by a uuid this server minted rather than by a slug and a
+     thread id. Routing them under a conversation would have made every report
+     carry two identifiers that nothing checks against each other, which is two
+     more ways for a report to be about the wrong thing.
+
+     `[\w-]+` rather than the slug class the rest of this file uses: these ids
+     are uuids from `randomUUID`, so a dot or a percent-escape in one is not a
+     spelling to accept, it is a request to look at. */
+  const liveSessionConnected = /^\/api\/live\/([\w-]+)\/connected$/.exec(path);
+  const liveSessionUsage = /^\/api\/live\/([\w-]+)\/usage$/.exec(path);
+  const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Referee mode's criteria. Two patterns and the same split as the two above:
@@ -5878,6 +6240,79 @@ export async function serveAuthenticatedApi(
          response states it. GPT Sol, 2026-08-27. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+      return;
+    }
+
+    if (adminFeedback && req.method === "GET") {
+      /* `private, no-store`, and here it is not belt and braces the way it is on
+         the users list. That one carries counts; this one carries what other
+         people wrote to us in confidence, and a cache — ours, a proxy's, a
+         browser's back-forward store — is a second copy of it that nobody
+         decided to make. */
+      res.setHeader("Cache-Control", "private, no-store");
+      /* Absent means the default. A `?limit=` that is not a number is the
+         default too rather than a 400: the store clamps into
+         [1, ADMIN_FEEDBACK_MAX] whatever arrives, so there is no value here
+         that can do harm, and a refusal would be ceremony on a page only one
+         person can open. */
+      const asked = Number(query.get("limit"));
+      /* **A malformed cursor is a 400, and that one is not ceremony.** Silently
+         starting from the top instead would hand back page 1 while the reader
+         pressed *Load older* — a page that looks like it worked and quietly
+         skipped everything in between, which is the shape docs/reusable/silent-success.md
+         is about. */
+      const cursor = decodeFeedbackCursor(query.get("before"));
+      if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
+      send(
+        res,
+        200,
+        await adminStore.listFeedbackAcrossOwners(
+          Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
+          cursor,
+        ),
+      );
+      return;
+    }
+
+    if (adminFeedbackOne && req.method === "GET") {
+      const [, owner = "", id = ""] = adminFeedbackOne;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
+      return;
+    }
+
+    if (adminFeedbackShot && req.method === "GET") {
+      const [, owner = "", id = ""] = adminFeedbackShot;
+      /* The shapes in the pattern are not the rules. These are, and they run
+         before the store does — src/ids.ts, and docs/project/block-ids.md on
+         why a regex that looks strict enough is how range checks go quietly
+         wrong. Both halves, because both are half of the key. */
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(owner, id);
+      /* No such report and a report with no screenshot are one answer, and the
+         store says so — see its docstring. Distinguishing them here would tell
+         the caller a thing it may do nothing with. */
+      if (!bytes) throw httpError(404, "That report has no screenshot.");
+
+      res.statusCode = 200;
+      /* **A literal, and it is correct by construction rather than by trust.**
+         src/feedback-image.ts does not *check* an uploaded screenshot, it
+         rebuilds one: the stored bytes are a PNG signature and a chunk stream
+         this app wrote, with every ancillary chunk — text, EXIF, colour
+         profiles — dropped. So there is no stored content type to get wrong,
+         and nothing to sniff. */
+      res.setHeader("Content-Type", CONTENT_TYPE.png);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      /* The bytes being written, not a stored count — the same rule the PDF
+         route follows, and the one that stays true when the two disagree. */
+      res.setHeader("Content-Length", String(bytes.byteLength));
+      res.end(Buffer.from(bytes));
       return;
     }
 
@@ -6360,13 +6795,32 @@ export async function serveAuthenticatedApi(
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
       return;
     }
+    if (liveSessionConnected && req.method === "POST") {
+      send(res, 200, await liveConnected(part(liveSessionConnected, 1)));
+      return;
+    }
+    if (liveSessionUsage && req.method === "POST") {
+      /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
+         helper puts an article on rows the *collector* writes — the calls made
+         inside this request. This request makes no model call at all: it reports
+         one that happened on a wire this server never touched, and the row is
+         built and written directly. The article comes off the session row, which
+         is a more durable answer than the ambient scope anyway. */
+      send(res, 200, await liveUsage(part(liveSessionUsage, 1), await readBody(req)));
+      return;
+    }
+    if (liveSessionClose && req.method === "POST") {
+      send(res, 200, await liveClose(part(liveSessionClose, 1), await readBody(req)));
+      return;
+    }
     if (chatSpoken && req.method === "POST") {
       /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today — no row is
-         written for realtime audio at all, and `npm run cost` says so by name
-         (scripts/ai-cost.ts § `liveConversationGap`) — but this is the only
-         request in a live conversation that knows which article it belongs to,
-         so it is where a meter would attach. */
+         session this server can see.** It buys nothing today: the realtime rows
+         are written by `/api/live/:sessionId/usage` above, which takes its
+         article off the session row rather than off the ambient scope. Kept
+         because this request makes model calls of its own the moment anything
+         here does, and because it is the only request in a live conversation
+         that knows which article it belongs to. */
       const [slug, id] = [slugPart(chatSpoken, 1), part(chatSpoken, 2)];
       const spokenBody = await readBody(req);
       send(
@@ -6594,7 +7048,16 @@ export async function serveAuthenticatedApi(
       if (request.uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
            forward: an upload is always the default ingest. */
-        send(res, 202, publicJob(await queueAnUpload(request.uploadId)));
+        const outcome = await queueAnUpload(request.uploadId);
+        /* **200, not 202**: nothing has been accepted, because there is nothing
+           left to do. The file became this article a while ago and its job
+           record has since been trimmed — `queueAnUpload` for why the record
+           rather than the job is what answers. */
+        if (outcome.kind === "article") {
+          send(res, 200, { article: outcome.slug });
+          return;
+        }
+        send(res, 202, publicJob(outcome.job));
         return;
       }
       /* **Not for the `{ url }` shape**, and that is a correctness fix rather

@@ -44,8 +44,10 @@
  *   Not merely projected away: the public blocks query never selects it, which
  *   is the stronger version of the same rule.
  * - **The comment count**, `purpose`, `profile`, `archivedAt`, `dir` and the
- *   whole of `stages`. `PublicMetadata` says which artefacts exist and nothing
- *   whatever about how they were made.
+ *   whole of `stages`. The visitor's metadata page says which artefacts exist
+ *   and nothing whatever about how they were made, and it says it from the
+ *   article payload — `PublicArtefacts` below, derived by
+ *   src/web/public-artefacts.ts.
  *
  * See docs/plans/260827ai-public-read-only-access.md § The payload for the table these
  * came from, and § What a public visitor gets for the product decisions behind
@@ -327,31 +329,21 @@ export interface PublicTweets {
 }
 
 /**
- * Which artefacts exist for this article — and **nothing about how they were
- * made**.
+ * **Re-exported, not declared here, and it moved on 2026-09-02.**
  *
- * The owner's metadata page answers a different question: which pipeline stage
- * ran, when, into which column, over how many bytes, and whether we would write
- * it again today. None of that is a visitor's business and most of it is
- * internal paths and timings. This is the replacement Sol asked for: a handful
- * of booleans.
+ * The five booleans are still exactly what a visitor's page is keyed on and
+ * every importer still reaches them through this file. What changed is that a
+ * *second* reader appeared on the owner's side of the line:
+ * `ArticleSharing.available` in src/types.ts carries the same five, so that the
+ * confirmation dialog can list what a shared link will actually carry
+ * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
  *
- * A visitor pressing **Glossary** on an article with none gets *"nobody has
- * built a glossary for this piece yet"* — a real screen rather than a gap, and
- * this is the field that decides it. docs/project/copy.md owns the sentence.
+ * The declaration goes to the deeper module rather than `types.ts` importing
+ * back from here, and this line keeps the address every existing importer
+ * already uses. Not because the tooling refuses the back-import — it does not,
+ * and the first version of this note said it did — but because of the property
+ * in this file's own header: it imports `types.ts` and nothing else, so the two
+ * type modules run one way, and they should keep doing so.
  */
-export interface PublicArtefacts {
-  arc: boolean;
-  tweets: boolean;
-  glossary: boolean;
-  ideas: boolean;
-  quotes: boolean;
-}
+export type { PublicArtefacts } from "./types.js";
 
-/** What `GET /api/public/metadata/:slug` returns. */
-export interface PublicMetadata {
-  slug: string;
-  /** The same title `PublicArticle.meta` carries, by the same rule. */
-  title: string;
-  available: PublicArtefacts;
-}

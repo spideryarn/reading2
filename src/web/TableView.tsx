@@ -137,8 +137,16 @@ interface Props {
   openChat: string | null;
   /** A chat mark was clicked. */
   onOpenChat(id: string): void;
-  /** The reader pressed the chat button beside a paragraph. */
-  onChatAbout(blockId: BlockId): void;
+  /**
+   * The reader pressed the chat button beside a paragraph — **and passing
+   * nothing is how the gutter is told there is no such button.**
+   *
+   * Optional because opening a conversation costs a model call, which a visitor
+   * cannot buy. BlockGutter.tsx has the reasoning; it is `onRenamed`'s pattern
+   * on Masthead.tsx, and the `| undefined` there is why this one is written out
+   * too rather than as the `?(…)` shorthand.
+   */
+  onChatAbout?: ((blockId: BlockId) => void) | undefined;
   /**
    * Every glossary term this article has, so every one can be underlined.
    *
@@ -948,9 +956,10 @@ export function TableView({
                 }
               >
                 {/* The reader's own column: the address of this paragraph, the
-                    marks they have made on it, and the door into chat that has
-                    always been here. BlockGutter.tsx has the rule it follows and
-                    the three slots it is. */}
+                    marks they have made on it, and — for a reader who can spend
+                    — the door into chat that has always been here.
+                    BlockGutter.tsx has the rule it follows and the slots it
+                    is. */}
                 <BlockGutter
                   id={block.id}
                   comments={cmtsByBlock.get(block.id)}

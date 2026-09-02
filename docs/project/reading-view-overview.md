@@ -111,6 +111,9 @@ of compression, down the page for position and across for detail. Read that firs
   one guard that is also the idempotency.
 - **[copy.md](copy.md)** — the words a reader sees when something fails, why they all live in one
   file, and the bracketed code at the end of every message.
+- **[website-text.md](website-text.md)** — the pages that are about Spideryarn rather than about an
+  article: the privacy policy and what in it is pinned by a test, the landing page, and the one
+  address a reader writes to.
 
 ## Where the code is
 

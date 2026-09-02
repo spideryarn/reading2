@@ -54,6 +54,12 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
   are courtesies, why the check is on the prefix rather than the route, and what the page
   deliberately does not show.
+- **[billing.md](billing.md)** — money, and the two things it is really about here. Card details
+  never reach this server at all (hosted Checkout and Portal, opaque ids only), and the ingest
+  quota is an **abuse boundary against model spend** rather than an invoice — so the interesting
+  part is what stops a script firing twenty concurrent requests at a free account, which turns out
+  to be one `insert … on conflict do nothing` in front of a `for update`. Also where test and live
+  mode are kept apart, in three places, all keyed on the credential's own prefix.
 - **[deployment.md § Who can reach it](deployment.md#who-can-reach-it)** — the app is readable by
   anybody with the address, deliberately, and it was an accident first: Vercel's protection setting
   reports itself as enabled while serving the world.
@@ -112,6 +118,14 @@ was checked against the source rather than taken on trust:
   the wrong person's data. Compare `src/owner.ts`, where the environment variable deliberately
   "does not get a vote" inside a request, which closed a real historical hole and is pinned by
   `tests/owner-isolation.test.ts`.
+
+  **A scope has to be open for that to be true, and until 2026-09-02 one was not on the HTML
+  page.** The tripwire needs `runInRequest`, and `handleApi` opens it for `/api/public/` only;
+  `/read/:slug` was served beside it, where `currentOwnerId()` finds no box and returns the
+  *environment* owner instead of throwing. Both doors are wrapped now, both in `src/vercel.ts` —
+  there rather than in `src/public/page.ts`, which would pull `src/owner.ts` into the import graph
+  `tests/public-imports.test.ts` keeps closed. `tests/public-page-request-scope.test.ts` is the
+  page's half.
 - **Hand-built allowlist DTOs**, below.
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
@@ -122,6 +136,35 @@ owners-only unconditionally, because all three of its pictures POST for embeddin
 two of four did until the free one, Tree, was cut on 2026-08-30;
 the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
 behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
+
+### The owner is shown the inventory before they publish
+
+The Access & Sharing confirmation lists **what a shared link carries, what would go out if it were
+built, and what stays** — the third bucket being the honest one, because building a glossary later
+on an already-shared article publishes it and asks nobody. The list is *derived*, not written:
+[`src/web/shared-inventory.ts`](../../src/web/shared-inventory.ts) sweeps `MODES` through
+`visitorGap`, the same function the reading view's dimmed buttons come from, so a mode added next
+month appears on the withheld side whether or not its author opens the file. Only the rows that are
+not modes at all are prose — the text, the pictures and the provenance; the owner's comments,
+lookups, profile, rename, uploaded file and the cost of it all; and the **arc and the tweet thread**,
+which cross like an artefact but have no mode to be swept. `tests/shared-inventory.test.ts` holds
+them to `PublicArticle`'s key set with a total record, so a new field on the wire fails to compile
+until somebody decides which line covers it.
+
+**A row that is not swept is a row that can be forgotten, and one was.** `available.arc` was
+computed, sent and read by nothing for the first day, so an article with no arc listed nothing under
+*not built yet* — and the comment beside the tweets line said tweets were "the one artefact with no
+mode of its own", which is the mistake written out and still not seen. GPT Sol's review found it.
+The tests that missed it compared all-flags-false against all-flags-true, which agrees with a
+function that ignores a flag entirely; the ones there now turn on **one flag at a time**.
+
+**`StageState.done` is the wrong signal, and this is the trap.** It is
+`status === "done" && isCurrent(step)`, so a **stale** artefact reports `done: false` — while
+`publicArticle` carries it, because the projection reads the column and never asks whether it is
+current. An inventory built on `done` tells an owner nobody has built a glossary while every visitor
+is reading one. So `ArticleSharing.available` carries presence directly, computed by
+`shareableArtefacts` in [`src/store/pg.ts`](../../src/store/pg.ts) from the revision row.
+[260902n](../plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
 
 ### The allowlist has two failure directions, and only one of them is loud
 

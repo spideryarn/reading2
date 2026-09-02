@@ -413,7 +413,16 @@ Three things worth carrying to whatever is built next:
   good reason (rounded corners on a segmented control) and it quietly turned into a machine for
   deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar
   and no sign anything was missing. `flex: none` on anything whose overflow is hidden, and
-  `overflow-x: auto` on the bar around it.
+  `overflow-x: auto` on the bar around it — **at every width, not inside a media query**, which is
+  the second half of the same lesson: that fallback lived in the 731px query until 2026-09-02, so
+  the one width band where the bar had started overflowing again had no floor under it.
+- **When what has to fit is the content, a media query is the wrong tool.** The bottom bar dropped
+  its labels at `max-width: 1100px`, a number measured against six modes. At thirteen the spelled-out
+  row wants 1416px, so two thirds of a laptop screen showed every label *and* ran the last buttons
+  off the edge. It is measured now — [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), styles.css
+  § the bar's fit ladder, and
+  [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
+  A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
   say a transform on that bar computed to identity and could not be used. That was wrong, and it was
   wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS

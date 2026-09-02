@@ -353,23 +353,139 @@ free, which was checked in the code before running rather than assumed.
       landed → delay an hour or two and re-check until it has (see Principles). The rest of
       this stage is code and can be written and unit-tested meanwhile — only the first paid run
       waits on the gate.
-- [ ] `evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts` (including incremental
-      result persistence); `npm run eval:cost`. Production-path calls run under normal
-      `collectSpend`; `declared-spend` only if any arm later bypasses the gateway.
-- [ ] Drive the fixture through ingest via the design the feasibility stage chose, under a fresh
-      run-prefixed slug. Read the ledger back (`CostStore.read` window + in-memory filter);
-      capture reports via `onDone` so a thrown stage still reports; name an owner or no row is
-      written.
-- [ ] Per step, report: cost (BYOK-aware), calls, input/output/cache-read/cache-write/reasoning
-      tokens, gateway outcome **and** stage outcome, ledger wall-clock envelope *plus*
-      runner-measured elapsed time.
-- [ ] Record comparability metadata per run: commit, fixture hash, block/gistable counts,
-      requested and answered model, upstream, effort, service tier, geo, cache counters.
-- [ ] Assert cold: every step expected to pay must have non-zero spend; flag unexpected call
-      counts (duplicate execution would show here — report, don't hide).
-- [ ] Unit-test the pure parts (ledger aggregation, BYOK totalling, report formatting) with
-      fixture rows before the paid path runs.
-- [ ] Run on the short HTML fixture (expected well under $0.50 total). Commit runner + result.
+- [x] **Built 2026-09-02, in four files.** `evals/cost/run.ts` drives and prints;
+      [`harness.ts`](../../evals/cost/harness.ts) holds the three mechanisms;
+      [`report.ts`](../../evals/cost/report.ts) is the arithmetic and has no IO;
+      [`fixtures.ts`](../../evals/cost/fixtures.ts) is the committed corpus manifest. Same
+      pure/impure split as `evals/hierarchy-structure/{score,run}.ts`. `npm run eval:cost` sets
+      `SPIDERYARN_STORE=postgres` — the flag is read at module load, so the runner can only
+      *assert* it. Production-path calls run under normal `collectSpend`; `declared-spend` is not
+      used and should not be.
+- [x] Drives the fixture through ingest under a fresh run-tagged slug **and URL**, with
+      `advanceJobWith(id, { session: claimSession, steps })` — the whole production registry with
+      `scopeKind: "eval"` overlaid and stage 1 replaced. Incremental persistence: `run.json` is
+      rewritten after every draw and **before** the job runs, so a crash leaves a cleanup
+      manifest. Reads the ledger back with **`costStore.forJob(jobId)`**, which supersedes the
+      "read a window and filter in memory" line in References above.
+- [x] Per step and **per `AiJob`** — there is no `labels` step, so the hierarchy/labels split
+      exists only in the second cut. Cost (BYOK-aware), calls, every token counter, gateway
+      outcome *and* stage outcome, ledger wall-clock envelope *and* runner-measured elapsed.
+- [x] Comparability metadata: commit (plus whether the tree was dirty), fixture sha256 hashed at
+      run time against the manifest, observed block count against the manifest's, requested and
+      answered model, upstream, service tier, effort. **Hierarchy's effort is read through
+      `structureRequest`** rather than restated — the constant is module-private and has already
+      moved once. Labels' is module-private with no exported reader; `commit` is what pins it.
+- [x] Cold assertion, with `scope-leak`, `no-spend`, `unpriced` and `ledger-short` fatal and
+      duplicate execution, gateway failures, call-count mismatches and unexpected paid steps
+      reported rather than hidden. **A fatal finding stops the run**, so the next draw cannot
+      spend measuring the same wrong thing.
+- [x] Unit tests: `tests/cost-eval.test.ts`, 61 of them, no database and no network. Includes the
+      dry pass's **control arm** as a test — the same stubbed step without the overlay records
+      `job_step`, which is Product spend.
+- [x] **Reviewed by GPT Sol, 2026-09-02: five P1s and three P2s, all fixed.** The review is
+      `scratchpad/cost-runner-review-sol.md`; each finding was re-verified against the code before
+      it was implemented. What changed, because four of them are traps the next harness would fall
+      into too:
+      1. **A stale fixture warned and spent anyway.** Every selected fixture is now hashed
+         *before any job exists* (`verifyFixtures`); per-draw checking would let the first two
+         articles be paid for before the third was found to have changed.
+      2. **"Cold" never established that labels ran.** Both the structure call and every label
+         batch carry `stepName: "hierarchy"`, so one priced row satisfied the step check even if
+         the whole fan-out was skipped or lost. There is now an **`AiJob`-level** cold assertion
+         (`mustPayJobs`) requiring `hierarchy` *and* `labels`. The first version's own tests hid
+         this by giving label rows a `stepName` production cannot produce.
+      3. **An open dev tab could steal the job.** `src/web/jobEngine.ts` drives every queued job
+         of the owner it is signed in as, and `VERCEL=1` silences only this process's pump — so a
+         browser winning a claim mid-job would run the remaining paid step through the
+         **production** registry, into Product. There is now a dedicated **eval owner**
+         (`EVAL_OWNER_ID` in [`src/owner.ts`](../../src/owner.ts), a third entry in
+         `SEEDED_ACCOUNTS`), and the runner refuses to start unless its owner is distinct from
+         `environmentOwnerId` and seeded.
+      4. **The ledger could be short while every check passed.** Sink write failures are
+         swallowed and a Postgres `forJob` reports `unreadable: 0` for a row that was never
+         inserted. `AdvanceParts.onStepSpend` — an **observer**, added to
+         [`src/jobs.ts`](../../src/jobs.ts) and the only production change this stage makes —
+         hands the runner each step collector's counts, and calls-made is reconciled against
+         rows-kept. An unpriced required step is now fatal too (`--allow-unpriced` overrides).
+      5. **A non-zero bill is not a cold provider cache.** Compatible modes in one job share a
+         cached article prefix, so the second one reads warm and still shows spend. The runner
+         now refuses more than **one on-demand mode per job**; `--batched-modes` records that as a
+         separate, labelled `scenario` which must not be aggregated with per-mode numbers.
+      P2s: each `advanceJobWith` is wrapped in an outer attribution carrying the job id and slug
+      (a future purchase in `commit` falls to the *outer* eval collector, which is eval-scoped but
+      job-less, so `forJob` would never see it); the result directory carries the `runTag` and
+      checkpoints are written by temp-file rename; and a dirty tree now records a
+      `srcPatchSha256` over `src` and `evals` rather than being merely flagged — refusing a dirty
+      tree would make the eval unrunnable on a checkout several agents share.
+- [ ] **Not run against a model, and cannot be.** The `ai_calls` table still has
+      `upstream_inference_nanos`, so every insert and select fails and `costStore.forJob` is
+      unexercised — see the blocker above. Free end-to-end passes with `--steps
+      fetch,extract,blocks` did run: all three fixtures through the fixture ingress, 19 and 186
+      blocks matching the manifest exactly, cleanup returning the article and job counts to where
+      they started, and `onStepSpend` reporting a call count for every step. Each gate was watched
+      refusing: the local-target check, the stale fixture (no job created), two on-demand modes,
+      and a fabricated phantom call producing a fatal `ledger-short` that stopped the run.
+- [x] **Code review, GPT Sol: *"not ready for the first paid run — no P0s, five P1 correctness
+      gaps"*** ([prompt](260902g-estimate-article-ingestion-and-mode-generation-costs-code-review-prompt.md),
+      [review](260902g-estimate-article-ingestion-and-mode-generation-costs-code-review-sol.md)).
+      All eight findings checked against the code before implementing; seven right as stated. Three
+      of the five would have produced a **plausible wrong number** rather than an error, which is
+      the whole reason a code review outranks a plan review here:
+      - **A stale fixture warned and spent anyway** — hashed after the job was created. Now every
+        selected fixture is hashed *before any job exists* and a mismatch aborts the run.
+      - **"Cold" never established that labels ran.** Label rows carry `stepName: "hierarchy"`, so
+        one priced structure row satisfied the check even if every label call vanished — and **the
+        unit test hid it**, giving label rows a `stepName` production cannot produce. There is now
+        an `AiJob`-level assertion and a real-shape test, watched red first.
+      - **An open dev tab could steal the job** ([`src/web/jobEngine.ts`](../../src/web/jobEngine.ts)
+        drives every queued job it can see for its owner), running the rest of it through the
+        *production* registry and writing `job_step` rows into Product. The dedicated eval owner is
+        therefore **required isolation, not a nicety**: `EVAL_OWNER_ID` in
+        [`src/owner.ts`](../../src/owner.ts), a third entry in
+        [`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts), and the runner refuses to
+        start unless its owner differs from `environmentOwnerId`.
+      - **The ledger can come back short while every check passes** — sink write failures are
+        swallowed and a Postgres read cannot report a row that was never inserted.
+      - **A non-zero bill is not a cold provider cache.** One on-demand mode per job is now
+        enforced; batched modes are a separate labelled scenario.
+- [x] **One production change, and it is an observer**: `AdvanceParts.onStepSpend` in
+      [`src/jobs.ts`](../../src/jobs.ts) — handed each step's `SpendReport`, return value ignored,
+      `undefined` in production. Nothing outside that file could otherwise learn how many calls a
+      step made, and "calls made" against "rows kept" is the only thing that can notice a lost row.
+      **Sol's proposed mechanism was wrong and was not taken**: `writeFailures` is a lower bound,
+      because `collectSpend` calls `onDone` before it drains `box.writes`, so a late-rejecting
+      write is never counted. The comparison is call counts, and both ends say so.
+- [x] **The bug only running caught.** After wiring the eval owner, the gate passed and the
+      isolation did not exist: the entrypoint still said `runAsOwner(environmentOwnerId(), main)`,
+      so articles were still created under the environment owner. Read back from
+      `articles.owner_id`, not inferred. Nothing but running it would have found this, which is
+      [silent-success.md](../reusable/silent-success.md) in one line.
+- [x] **First paid run, 2026-09-02: it spent $0.0333 and the ledger kept neither row.** The
+      pipeline worked perfectly — 19 blocks, 13 sections, 561 words, published, cleaned up — and
+      `spideryarn.ai_calls` was missing columns [`src/db/schema.ts`](../../src/db/schema.ts) had
+      already declared, so both inserts failed `42703` into a warning log and the read afterwards
+      threw over the top of the cleanup. **Every gate passed**, because not one of them asked
+      whether the thing the run produces works.
+      - Fixed by `assertLedgerUsable` in [`harness.ts`](../../evals/cost/harness.ts), run last
+        before any money: one read against the ledger, refusing the run if it throws. A read probe
+        is enough for this class — the failing selects and failing inserts name the same table —
+        and it does not replace the calls-made-against-rows-kept reconciliation, which is the
+        expensive gate for the cases a read cannot see.
+      - A refused run is now **a sentence, not a stack trace**: the entrypoint catches, prints the
+        message alone and exits 1. A `StoreFailure` arrives under forty lines of driver frames, and
+        the person reading is deciding what to do next.
+      - Watched red both ways: live against the broken database, and in
+        `tests/cost-eval.test.ts` against a no-op gate.
+      - **This is `silent-success.md` with a receipt.** The run reported `job done`, `status: done`,
+        and a published revision. Only `aiCostStatus: "unavailable"` and two warning lines said the
+        money had vanished, and nothing was watching either.
+- [ ] **Blocked again, and worse than before.** `npm run db:migrate` now reports **three** ledger
+      rows belonging to no migration and **two migrations that can never be applied** — they are
+      stamped earlier than the newest ledger row, and drizzle only applies entries after it. So
+      `ai_calls` is short the realtime columns, and on this box **every paid call by anybody is
+      currently recorded nowhere**. Not this plan's to untangle: working out what three unknown
+      rows did is the job of whoever wrote them.
+- [ ] Re-run on the short HTML fixture once the ledger holds rows again. Commit the result.
 
 ### Stage: All modes, all three articles, with repeats where variance lives
 

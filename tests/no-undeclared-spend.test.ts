@@ -183,15 +183,27 @@ const ALLOWED: Readonly<Record<string, string>> = {
      no duplex speech-to-speech to route to. The choice was OpenAI directly or
      no live mode.
 
-     They are listed here rather than in DECLARATIONS because a `Declaration`
-     cannot currently be written for this call: `ProviderAccount` is
-     `"openrouter" | "anthropic"` and `Wire` is `"messages" | "chat" |
-     "embeddings"`, so there is nowhere to say "OpenAI, over realtime". Widening
-     both is part of metering this properly, and metering it is not built —
-     src/live.ts § What this does not do says so out loud, and this spike must
-     not be shipped to readers before it is. docs/plans/260831g-live-conversation.md. */
+     **Reclassified on 2026-09-02, not retired.** They used to be listed here
+     because a `Declaration` could not be *typed*: `ProviderAccount` was
+     `"openrouter" | "anthropic"` and `Wire` was `"messages" | "chat" |
+     "embeddings"`, so there was nowhere to say "OpenAI, over realtime". All
+     three unions are wider now and the ledger can hold a realtime row — but they
+     stay here rather than moving to DECLARATIONS, and the reason is the shape of
+     the call rather than the shape of the types.
+
+     A `Declaration` is a request this process makes and reads a response body
+     for; `declaredFetch` is what makes one safe, by refusing to run outside a
+     declaration. Live conversation is not that. The browser opens WebRTC
+     straight to OpenAI and this server never touches the wire, so there is no
+     request here to route through a declared transport and no response body to
+     meter. What arrives instead is a *report*, through the acceptance endpoints
+     in src/routes.ts — a sanctioned provider bypass whose **accounting comes
+     through a different seam**, which is precisely what GPT Sol said not to
+     collapse: *"Nor can every direct-provider allowlist entry disappear... That
+     remains a sanctioned provider bypass whose accounting arrives through a
+     different seam."* docs/plans/260831g-live-conversation.md. */
   "src/live.ts":
-    "Live conversation mode's session builder — the one file allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is also why it is not yet metered.",
+    "Live conversation mode's session builder and its meter — the one file in src/ allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is why the accounting arrives afterwards as a report the endpoints in src/routes.ts accept, journal and price rather than through a seam.",
   "scripts/live-spike.ts":
     "The spike's local-only server. Names the credential to warn when it is missing; the call itself goes through src/live.ts.",
   "evals/live/hallucination-on-noise.mts":

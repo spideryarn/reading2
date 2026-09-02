@@ -17,15 +17,15 @@
 
 import { spawnSync } from "node:child_process";
 import {
-  chmodSync, closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync,
-  writeSync,
+  chmodSync, closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync,
+  writeFileSync, writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
-  parseArgs, readAnswerForConsole, runCodex, shouldFallBack,
+  parseArgs, readAnswerForConsole, reviewProfileDefined, runCodex, shouldFallBack,
 } from "../scripts/run-codex.js";
 
 /**
@@ -92,6 +92,13 @@ describe("parseArgs", () => {
     expect(() => parseArgs([])).toThrow(/--prompt or --prompt-file/);
     expect(() => parseArgs(["--prompt", "x", "--sandbox", "yolo"])).toThrow(/--sandbox must be one of/);
   });
+
+  it("defaults to the review profile, so a reviewer can run a test", () => {
+    // Under plain read-only, fifteen reviews in a row never ran one: vitest needs
+    // node_modules/.vite-temp and tsx needs /tmp. Measured 2026-09-02; see the doc.
+    expect(parseArgs(["--prompt", "x"]).sandbox).toBe("review");
+    expect(parseArgs(["--prompt", "x", "--sandbox", "read-only"]).sandbox).toBe("read-only");
+  });
 });
 
 describe("buildCodexArgs", () => {
@@ -108,6 +115,38 @@ describe("buildCodexArgs", () => {
   it("puts the prompt last, after `--`, so a leading dash stays a prompt", () => {
     expect(argv.at(-1)).toBe("-p");
     expect(argv.at(-2)).toBe("--");
+  });
+
+  it("selects the review profile by name and never alongside --sandbox", () => {
+    // The config reference says not to combine default_permissions with sandbox_mode, and
+    // approval_policy=never is as load-bearing for a profile as for a mode.
+    const review = buildCodexArgs({
+      model: "m", effort: "high", sandbox: "review", repoDir: ".", outFile: "/tmp/o", prompt: "p",
+    }).join(" ");
+    expect(review).toContain("-c default_permissions=review");
+    expect(review).not.toContain("--sandbox");
+    expect(review).toContain("-c approval_policy=never");
+    expect(argv.join(" ")).toContain("--sandbox read-only");
+    expect(argv.join(" ")).not.toContain("default_permissions");
+  });
+});
+
+describe("reviewProfileDefined", () => {
+  // Codex's own failure for a missing profile is exit 1 with `default_permissions requires a
+  // [permissions] table` in a log the caller has been told not to read.
+  it("wants the table header in the repo's own .codex/config.toml", () => {
+    const dir = mkdtempSync(join(tmpdir(), "review-profile-"));
+    expect(reviewProfileDefined(dir)).toBe(false);
+    mkdirSync(join(dir, ".codex"));
+    writeFileSync(join(dir, ".codex/config.toml"), '[permissions.other.filesystem]\n"/" = "read"\n');
+    expect(reviewProfileDefined(dir)).toBe(false);
+    writeFileSync(join(dir, ".codex/config.toml"), '[permissions.review.filesystem]\n"/" = "read"\n');
+    expect(reviewProfileDefined(dir)).toBe(true);
+    rmSync(dir, { recursive: true });
+  });
+
+  it("is satisfied by this repo", () => {
+    expect(reviewProfileDefined(".")).toBe(true);
   });
 });
 
@@ -399,6 +438,10 @@ describe("shouldFallBack", () => {
     // The old rule was "no log, so fall back on any failure", which is backwards: no evidence is a
     // reason not to spend the second credential. --stream is for a human, who can re-run it.
     expect(shouldFallBack(clean, spent, { streamed: true, sandbox: "read-only" })).toBe(false);
+  });
+
+  it("treats the review profile as read-only: the tree is untouched, so a retry is safe", () => {
+    expect(shouldFallBack(clean, spent, { streamed: false, sandbox: "review" })).toBe(true);
   });
 
   it("never repeats a write-capable run, whatever the log says", () => {

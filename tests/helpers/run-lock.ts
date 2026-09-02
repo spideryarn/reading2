@@ -9,16 +9,28 @@
  * It used to be racing on a global slot: `jobs_only_one_running` was a unique
  * index on the constant `(true)`, so one row in the whole `spideryarn.jobs`
  * table could be `running`, scoped to no owner, slug or process. That index went
- * on 2026-08-30, replaced by a counted cap. The race did not go with it. What is
- * left is `jobs_active_slug` — one job in flight per article — and, bigger,
- * cause (2) below: these suites share fixed fixture slugs and a fixed owner, so
- * two copies of one file are reading and deleting the same rows.
+ * on 2026-08-30, replaced by a counted cap. The race did not go with it, and the
+ * cap is still counted across the whole table — so any file holding a `running`
+ * row can still make another file's cap case answer `busy`.
+ *
+ * `jobs_active_slug` — one job in flight per article — went on 2026-09-02, when
+ * an article gained a line. `jobs_one_running_per_slug` is what is left of it,
+ * and it covers `running` rows only: two *queued* jobs on one fixture slug no
+ * longer collide at all. So the per-article half of this is now enforced by
+ * `./running-slot.ts` looking before it inserts rather than by a constraint
+ * refusing afterwards.
+ *
+ * Bigger than either is cause (2) below: these suites share fixed fixture slugs
+ * and a fixed owner, so two copies of one file are reading and deleting the same
+ * rows.
  *
  * Vitest runs test *files* concurrently, in separate forks. Before this helper
  * there were two answers to that in the repo and neither covered the case:
  *
- * - `tests/helpers/running-slot.ts` waits on the constraint itself. That needs
- *   no agreement from anybody, which is its whole point, but it is **unfair**:
+ * - `tests/helpers/running-slot.ts` waits on the article's own line — is
+ *   anything queued or running for this slug — and retries whichever unique
+ *   index refuses it if somebody lands in between. That needs no agreement from
+ *   anybody, which is its whole point, but it is **unfair**:
  *   it polls, so under enough contention one loser starves. Its budget is 40 ×
  *   500ms, and a starved caller fails at 20s with an error about a wedged row.
  *   The 20,468ms / 20,438ms / 20,589ms failures on 2026-08-29 were that budget
@@ -51,8 +63,11 @@
  * 1. **Two jobs at once.** `duplicate key … jobs_active_slug`, and `claim`
  *    answering `busy` where the test wanted `claimed`. The measurement above was
  *    taken while `jobs_only_one_running` still existed, so its
- *    `duplicate key … jobs_only_one_running` failures are the dropped index's
- *    and would not recur; the other two would.
+ *    `duplicate key … jobs_only_one_running` failures are that dropped index's
+ *    and would not recur. `jobs_active_slug` has since gone the same way, so its
+ *    duplicate keys would not recur either — but the `busy` would, from the
+ *    counted cap and from an article's order rule, and those are the ones that
+ *    matter. Two files each holding a `running` row is still two files racing.
  * 2. **Fixed fixture identity.** Most of these files use a constant slug —
  *    `articles_slug_unique` on `test-artefacts-pg` — and a constant owner, so
  *    two copies of one file share rows: one copy's cleanup deletes the other's

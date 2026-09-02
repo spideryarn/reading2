@@ -94,7 +94,7 @@
  *
  * Door 1 is the one to use. A refusal a *route* answers with a number should
  * carry that number as `readonly status`, the way `PublishRefused`,
- * `NotTheLiveAttempt`, `StepRunNotHeld`, `NoStoredDocument` and `JobConflict`
+ * `NotTheLiveAttempt`, `StepRunNotHeld` and `NoStoredDocument`
  * already do — then it passes here without this file learning its name, and
  * both store adapters give the reader the same answer.
  *
@@ -220,10 +220,17 @@ function chainOf(err: unknown, depth = 0): unknown[] {
  * escape as a 500 where it should have been an ordinary `busy`. (That index was
  * dropped on 2026-08-30; the reading mistake it taught did not go with it.)
  *
- * By **name**, never by code alone: `jobs` carries several unique indexes and
- * they all raise 23505 while meaning completely different things — "this slug
- * already has a job in flight" is not "this draft is already claimed". Catching
+ * By **name**, never by code alone: `jobs` carries five unique indexes and they
+ * all raise 23505 while meaning completely different things — "somebody is
+ * already claiming this name" is not "this draft is already claimed". Catching
  * the code would turn each into whichever one the call site expected.
+ *
+ * **And a name is not always an answer either.** `enqueueOrGet` deliberately
+ * does *not* branch on one: a single insert can violate two of the queue's
+ * indexes at once, and Postgres promises nothing about which of them it reports
+ * — so it re-reads the rows and classifies from the data
+ * (src/store/pg-jobs.ts § `tryEnqueue`). Reading a name is safe where only one
+ * index could have fired; it is a guess where several could.
  */
 /**
  * Did a `FOR UPDATE NOWAIT` find the row already locked?

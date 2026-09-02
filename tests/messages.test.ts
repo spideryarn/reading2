@@ -19,6 +19,7 @@ import {
   type FailureKind,
   providerHttpFailure,
   authProviderRefused,
+  ingestQuotaReached,
   type ReaderFacingFailure,
   saidNothing,
   tookTooLong,
@@ -62,6 +63,10 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
   saidNothing(null),
   saidNothing("content_filter"),
   saidNothing("length"),
+  /* Both branches: the free tier has no reset date and the paid tier does, and
+     they are different sentences with different codes. */
+  ingestQuotaReached({ limit: 3 }),
+  ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
 ];
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];

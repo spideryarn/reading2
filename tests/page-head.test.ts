@@ -42,8 +42,13 @@ import {
   composeShell,
   MANAGED_HEAD_END,
   MANAGED_HEAD_START,
-  PUBLIC_ORIGIN,
 } from "../src/public/page-head.js";
+/* `PUBLIC_ORIGIN` is in src/urls.ts, not in page-head.ts, since 2026-09-02 —
+   the export bundle needs the same origin and a store file cannot import a page
+   renderer for it. The assertion below is still about what `composeShell`
+   publishes; it just names the constant where the constant now lives. */
+import { isSlug } from "../src/ingest.js";
+import { PUBLIC_ORIGIN, articleUrl } from "../src/urls.js";
 /* From the shared leaf rather than from page-head.js, because the leaf is the
    only definition there now is — see src/title-text.ts. `composeShell` calls
    this same function, so comparing it against `pageTitle()` below is a
@@ -258,6 +263,37 @@ describe("the address we publish for this page", () => {
     expect(metaContent(d, 'meta[property="og:url"]')).toBe(
       "https://www.spideryarn.com/read/a%22b%2Fc",
     );
+  });
+
+  it("is safe from the dot-segment attack because isSlug is, not because articleUrl is", () => {
+    /* **The one input percent-encoding does not answer.** `encodeURIComponent`
+       leaves a dot alone, so a slug of `..` composes to `/read/..` — which a
+       browser resolves to the library, a link quietly naming the wrong page.
+       Encoding the dots is no fix: the URL standard counts `%2e` as a dot
+       segment too, which is asserted below so nobody re-adds that guard.
+
+       What actually holds the line is the slug's own shape, so that is what
+       this pins. If `isSlug` is ever widened to admit a dot, this goes red —
+       which is the point, because the widening and the broken link would
+       otherwise be in two different files a month apart. */
+    for (const dots of ["..", ".", "...", ""]) {
+      expect(isSlug(dots), `isSlug should refuse ${JSON.stringify(dots)}`).toBe(false);
+    }
+
+    // And the escape that looks like it would work, watched not working.
+    expect(new URL(articleUrl("..")).pathname).toBe("/");
+    expect(new URL("https://www.spideryarn.com/read/%2E%2E").pathname).toBe("/");
+  });
+
+  it("keeps every other awkward slug inside its own path segment", () => {
+    /* One assertion for the whole adversarial table rather than a test each:
+       none of these may leave the segment, and none may reach the origin. */
+    for (const slug of ['a"b', "a/b", "..%2f..", "a\\b", "a\nb", "a\u0000b", "//evil.com", "a%b"]) {
+      const url = new URL(articleUrl(slug));
+      expect(url.origin).toBe(PUBLIC_ORIGIN);
+      expect(url.pathname.split("/").length).toBe(3);
+      expect(decodeURIComponent(url.pathname.slice("/read/".length))).toBe(slug);
+    }
   });
 
   it("publishes a clean canonical and refuses one carrying a query", () => {

@@ -305,9 +305,12 @@ export const RECONCILIATIONS: Reconciliation[] = [
          while this script recorded 0032 as applied. So the probe describes the
          shape instead: a unique index on `jobs`, predicated on `status`, whose
          key cannot tell two jobs apart — every key column is either an
-         expression (attnum 0) or `status` itself. `jobs_active_slug` is unique
-         over (owner_id, slug) with a `running` predicate and is correctly not
-         matched, because owner_id distinguishes rows. GPT Sol, § 1. */
+         expression (attnum 0) or `status` itself. `jobs_one_running_per_slug`
+         is unique on (slug) with a `running` predicate and is correctly not
+         matched, because the slug distinguishes rows: it is the *article*
+         mutex, not a global cap. (This named `jobs_active_slug` until
+         2026-09-02, when that index was replaced — the reasoning is the same
+         and the example had to move with it.) GPT Sol, § 1. */
       {
         what: "no other unique index still enforces one running job across the whole table",
         sql:

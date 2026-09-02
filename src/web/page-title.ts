@@ -63,6 +63,20 @@ import { DEFAULT_MODE, type Mode } from "./params.js";
 import type { AdminPage, ArticleView } from "./router.js";
 
 /**
+ * What each admin page calls itself in the tab.
+ *
+ * A `Record` keyed by the union rather than a chain of ternaries: a page added
+ * to `AdminPage` and not to this map is a compile error, which is the only
+ * version of this that cannot quietly title a new page "Admin · Spideryarn".
+ * The index has no name of its own — `""` is dropped by `pageTitle`'s join.
+ */
+const ADMIN_PAGE_TITLE: Record<AdminPage, string> = {
+  home: "",
+  users: "Users",
+  feedback: "Feedback",
+};
+
+/**
  * **The rules themselves live in src/title-text.ts**, and are re-exported here
  * so that every existing caller of this module — nine components and
  * tests/page-title.test.ts — keeps importing them from the place it always did.
@@ -128,8 +142,27 @@ export type TitleSpec =
    * confirms an article exists.
    */
   | { kind: "not-shared" }
+  /**
+   * **The page for a reader we could not identify at all** —
+   * `ReauthRequiredPage` in PublicChrome.tsx: the owned route answered 401 and
+   * the public one answered 404.
+   *
+   * Its own variant rather than borrowing `not-shared`, which is what it did for
+   * one afternoon on 2026-09-02 and which a browser pass caught. Two things were
+   * wrong with that. The tab said *Not shared*, which is a claim about the
+   * document — and the whole point of this state is that a 401 leaves us unable
+   * to make one. And the title is read aloud: `useDocumentTitle` mirrors it into
+   * the `aria-live` announcer below, so a screen reader was told *"Not shared"*
+   * over a page whose heading says we could not confirm the sign-in.
+   *
+   * It names the action instead, which is a fact about the reader's session and
+   * about nothing else.
+   */
+  | { kind: "reauth-required" }
   | { kind: "profile" }
   | { kind: "design" }
+  /** What we do with a reader's data — PrivacyPage.tsx. */
+  | { kind: "privacy" }
   /** The administrator's pages. `page` is which one — see router.ts. */
   | { kind: "admin"; page: AdminPage }
   /**
@@ -190,17 +223,28 @@ function segments(spec: TitleSpec): string[] {
     case "not-shared":
       return ["Not shared", APP_NAME];
 
+    /* The words on the page's own button, so the tab, the heading and what a
+       screen reader announces are one thing. It says nothing about the article
+       because there is nothing we can honestly say. */
+    case "reauth-required":
+      return ["Sign in again", APP_NAME];
+
     case "profile":
       return ["Profile", APP_NAME];
 
     case "design":
       return ["Design reference", APP_NAME];
 
+    /* "Privacy" and not "Privacy policy": the page's own heading is the longer
+       phrase, and a tab has less room than a heading. */
+    case "privacy":
+      return ["Privacy", APP_NAME];
+
     /* Most specific part first, like every other page: "Users · Admin ·
        Spideryarn" rather than the other way round, so the tab is legible when
        it is squeezed to four characters. */
     case "admin":
-      return [spec.page === "users" ? "Users" : "", "Admin", APP_NAME];
+      return [ADMIN_PAGE_TITLE[spec.page], "Admin", APP_NAME];
 
     /* **The second page whose own name leads, and the second to carry the
        strapline** — see the `library` case above for the rule and the reason.
@@ -245,8 +289,9 @@ function segments(spec: TitleSpec): string[] {
  * `og:url` rather than a marker of its own: it is already there, already
  * asserted in tests/page-head.test.ts, and adding a second element that means
  * the same thing is a second place for the two to disagree. Its value is
- * `PUBLIC_ORIGIN + "/read/" + encodeURIComponent(slug)`, so the slug is the last
- * segment, decoded.
+ * `articleUrl(slug)` (src/urls.ts), so the slug is the last segment, decoded —
+ * that function is the only place the path is spelled, and this is the reader of
+ * what it writes.
  *
  * Read at module load and never again. The server writes this once, into the
  * document that arrived; React never updates it, so a value read later would be

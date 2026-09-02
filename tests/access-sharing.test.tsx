@@ -22,7 +22,7 @@
  *     is not evidence a field was honoured.
  */
 import { act, createElement } from "react";
-import type { ArticleSharing } from "../src/types.js";
+import type { ArticleSharing, PublicArtefacts } from "../src/types.js";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,7 +37,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   googleSignInAvailable: false,
 }));
 
-const { AccessSharing } = await import("../src/web/AccessSharing.js");
+const { AccessSharing, asArticleSharing } = await import("../src/web/AccessSharing.js");
 
 const SLUG = "a-piece";
 
@@ -63,11 +63,27 @@ function release(): void {
   for (const go of waiting) go();
 }
 
-const PRIVATE: ArticleSharing = { visibility: "private", publicAt: null, personalised: [] };
+/* An article with a glossary and quotes and nothing else, so that the inventory
+   under the switch has something in all three of its lists. */
+const AVAILABLE: PublicArtefacts = {
+  arc: false,
+  tweets: false,
+  glossary: true,
+  ideas: false,
+  quotes: true,
+};
+
+const PRIVATE: ArticleSharing = {
+  visibility: "private",
+  publicAt: null,
+  personalised: [],
+  available: AVAILABLE,
+};
 const SHARED: ArticleSharing = {
   visibility: "public",
   publicAt: "2026-08-28T09:00:00.000Z",
   personalised: [],
+  available: AVAILABLE,
 };
 
 function json(body: unknown, status = 200): Response {
@@ -315,6 +331,111 @@ describe("what the dialog says about the reader's profile", () => {
     expect(text).not.toContain("and your");
     // The half that survives in every state: the leak is what was left out.
     expect(text).toContain("leave out");
+  });
+});
+
+/**
+ * **The inventory under the switch** — what a shared link carries, what would go
+ * out if it existed, and what stays.
+ *
+ * `sharedInventory` is swept exhaustively in tests/shared-inventory.test.ts;
+ * what is checked here is only that this card draws it, and the one thing that
+ * card must never do — invent it.
+ */
+describe("the list of what goes out", () => {
+  async function openDialog(sharing: ArticleSharing | undefined): Promise<void> {
+    await mount(sharing);
+    press("Share with anyone");
+  }
+
+  it("names the artefacts this piece actually has, before the owner presses Share", async () => {
+    await openDialog(PRIVATE);
+    const text = host.textContent ?? "";
+
+    expect(text).toContain("Anyone with the link gets these");
+    /* The fixture has a glossary and quotes and nothing else, so the same
+       dialog has to put those two on one side and the four missing ones on the
+       other. A list that named everything, or nothing, would pass an assertion
+       that only looked at one side. */
+    expect(text).toContain("Not built yet");
+    expect(text).toContain("These stay with you");
+    expect(text).toContain("Building one later, while the article is still shared, publishes it");
+  });
+
+  it("shows it on the card of an article that is already shared", async () => {
+    /* The owner who comes back to check what is out there needs the same list
+       as the owner who is about to publish. It was in the confirmation only,
+       for one draft. */
+    await mount(SHARED);
+    expect(host.textContent).toContain("Anyone with the link gets these");
+  });
+
+  /**
+   * **A body without the flags is still a body**, and the card keeps everything
+   * that does not depend on them.
+   *
+   * This is the regression that made the field optional, 2026-09-02. Requiring
+   * `available` had `asArticleSharing` reject the whole body over one field, so
+   * an owner who could perfectly well be told who can read their article got
+   * *"we could not check"* and nothing else. Through the parser, not just the
+   * component, because the parser is where that bug lived and a prop-level test
+   * stays green over it.
+   */
+  it("still reads the visibility when the store said nothing about the artefacts", async () => {
+    const parsed = asArticleSharing({ visibility: "private", publicAt: null, personalised: [] });
+    expect(parsed).toEqual({ visibility: "private", publicAt: null, personalised: [] });
+    expect(parsed && "available" in parsed).toBe(false);
+
+    await mount(parsed);
+    const text = host.textContent ?? "";
+
+    expect(text).toContain("Only you can read this");
+    expect(text).not.toContain("We could not check");
+    // And no list, rather than a list of five invented falses.
+    expect(text).not.toContain("Anyone with the link gets these");
+  });
+
+  /**
+   * **…but it does not offer to publish.**
+   *
+   * GPT Sol, 2026-09-02: keeping the card usable was right, and letting an owner
+   * go through the confirmation while the inventory is silently missing defeats
+   * the feature at exactly the moment it is failing. The asymmetry is the point
+   * — see the next case.
+   */
+  it.each([
+    ["said nothing at all", undefined],
+    ["sent flags it could not read", { glossary: "yes" }],
+  ])("refuses to offer sharing when the store %s", async (_name, available) => {
+    /* **Through `asArticleSharing`, not as a prop.** The prop is typed
+       `PublicArtefacts`, so a malformed one is already a compile error and a
+       prop-level test would be checking TypeScript. The parser is the only
+       place a real body's garbage can arrive, and dropping the field there is
+       what has to reach the card. GPT Sol, 2026-09-02. */
+    const parsed = asArticleSharing({
+      visibility: "private",
+      publicAt: null,
+      personalised: [],
+      ...(available ? { available } : {}),
+    });
+    expect(parsed && "available" in parsed).toBe(false);
+
+    await mount(parsed);
+    const text = host.textContent ?? "";
+
+    expect(text).toContain("We could not work out what a shared link would carry");
+    expect(text).not.toContain("Share with anyone who has the link");
+    expect(text).not.toContain("Anyone with the link gets these");
+  });
+
+  /* **Unsharing is never blocked.** Taking an article back is the safe
+     direction, and a card that could not do it would strand an owner over a
+     field with nothing to do with visibility. */
+  it("still lets an owner stop sharing without the inventory", async () => {
+    const { available: _dropped, ...noFlags } = SHARED;
+    await mount(noFlags);
+    expect(host.textContent).toContain("Stop sharing");
+    expect(host.textContent).not.toContain("Anyone with the link gets these");
   });
 });
 

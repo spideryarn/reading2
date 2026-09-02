@@ -151,7 +151,7 @@ async function queueJob(): Promise<Job> {
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, `all-skipped-log-${wanted.id}`);
+  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `all-skipped-log-${wanted.id}`, reservesName: false });
   MADE.push(job.id);
   return job;
 }
