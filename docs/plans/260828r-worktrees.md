@@ -137,7 +137,7 @@ What exists now:
 
 | | |
 |---|---|
-| [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — see step 1 below. Used by the deploy gate; step 4's database lease is the next caller. |
+| [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — see step 1 below. Used by the deploy gate, and by nothing else: step 4's database lease was going to be its next caller and is not being built, because a better lock for that job was already in `db:migrate`. See step 4. |
 | [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | `forceRemoveThrowawayWorktree` (both `--force` flags, exit code returned), plus a `--porcelain -z` parser and `ghosts()` for step 5's `doctor`. |
 | [`scripts/deploy.ts`](../../scripts/deploy.ts) | Uses both. Teardown failures are now `record()`ed instead of swallowed. |
 | [`src/monitoring.ts`](../../src/monitoring.ts), [`src/web/monitoring.ts`](../../src/web/monitoring.ts) | Sentry now needs a deployment as well as a DSN. Unrelated to worktrees; found because the plan copies `.env.local` into every worktree. |
@@ -956,6 +956,23 @@ Two additions make that survivable:
 - **A migration lease.** A lock file wrapping `db:migrate`, `db:reset` and any DB-backed test run, so
   two agents cannot migrate one database at once, and a schema change cannot land underneath another
   worktree's test run.
+
+  **Half of this was already built when the plan was written, better, and somewhere else.**
+  `db:migrate` has taken a Postgres advisory lock — `MIGRATION_LOCK_KEY` in
+  [`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts), `pg_try_advisory_lock` in
+  [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) — since before worktrees, held across the
+  preflight as well as the migrate. So migrator-against-migrator is done, and building the file-lock
+  version would have put a weaker primitive next to a better one. **Do not build it.** What is
+  genuinely open is migrate against a running test suite, and `db:reset`, which takes nothing;
+  [260902c § 6](260902c-concurrent-migrations-across-worktrees.md#6-locking-moves-to-its-own-plan)
+  hands that to a plan of its own, with the seam (`globalSetup`, not `pgReady`) and the reason
+  `db:reset` cannot be covered by a lock it kills.
+
+  **The duplicate-migration-number refusal proposed alongside it is also dropped**, and for a
+  sharper reason: it is neither necessary nor sufficient. The migrator reads journal tags, so it
+  would happily run two `0052`s; and two worktrees minting a tidy `0052` and `0053` still fork the
+  snapshot chain, which is the failure that actually matters. What replaced it is in
+  [260902c](260902c-concurrent-migrations-across-worktrees.md), and it is built.
 - **A `test:db` that fails closed.** About a dozen Postgres suites currently *skip themselves
   silently* when the database is down — a misconfigured worktree would report green while testing
   nothing. `test:db` must fail when the database is absent or the migration head is not what the

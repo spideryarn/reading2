@@ -45,9 +45,22 @@ done.
 `MIGRATION_LOCK_KEY` in [`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts), taken as
 `pg_try_advisory_lock` in [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) and held across the
 preflight as well as the migrate. So migrator-against-migrator is safe. What is not covered is
-migrate against a running test suite, and `db:reset`, which takes nothing. That, and what concurrent
-`drizzle-kit generate` does to the snapshot chain, is
-[260902c-concurrent-migrations-across-worktrees.md](../plans/260902c-concurrent-migrations-across-worktrees.md).
+migrate against a running test suite, and `db:reset`, which takes nothing —
+[260902c](../plans/260902c-concurrent-migrations-across-worktrees.md#6-locking-moves-to-its-own-plan)
+hands that to a plan of its own and it is not written yet.
+
+**What two worktrees do to `drizzle/meta/` is closed, as of 2026-09-02.** Both generating from one
+trunk fork the snapshot chain, and the next `drizzle-kit generate` refuses on it and **exits 0
+having written nothing**. Migrations now carry timestamp prefixes, `npm run check` gates
+`drizzle-kit check`, `npm test` walks the chain, and `npm run db:generate` requires that success
+produced output. The repair depends on whether the losing migration is published, hand-edited, or
+merely generated —
+[database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) is the
+runbook.
+
+**The limit no lock can lift**: a non-additive migration — a dropped column — applied by one
+worktree breaks the running dev server of every other worktree at once. One shared database, one
+schema; the advisory lock serialises the writers and cannot do anything about that.
 
 ## Starting one
 

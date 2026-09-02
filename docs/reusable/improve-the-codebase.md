@@ -95,6 +95,36 @@ said had been deliberately reverted. Review is not a substitute: a reviewer chec
 wrote, not the greps you didn't run. Assume any line numbers in the audit are already stale, and
 locate everything by content.
 
+**And the proposed fix is a claim too — verify it separately.** A finding can be entirely true while
+the fix beside it is wrong, and that is the easier mistake to miss, because the evidence you just
+checked was for the finding. The first run of this doc found three identical copies of a query, none
+of them tested — true — and proposed a test pinning the three together. Grepping the genre then
+found a fourth relative that was **already extracted, already exported and already tested**: the
+copies had a home built for them and nobody had moved them. The planned test would have been
+machinery whose only job was to protect duplication. Before you build a fix, ask what already exists
+that it duplicates.
+
+**Restate a subagent's claim only as narrowly as it was proved.** In that same run the sweep
+reported that *each* of the three copies called itself "the third copy". Only one did. That went
+unchecked into a docstring, a test header, a commit message and this doc — a generalisation from a
+same-shaped sample, which is the failure
+[written-down-is-not-checked.md](written-down-is-not-checked.md) is about, committed while citing
+it. Quantifiers are where a report is most often wrong and least often checked: when a finding says
+*each*, *every*, *all three*, go and count.
+
+**Say what you did not look at.** Write the scope into the doc — the directories the sweeps covered
+and, more importantly, the ones they didn't. A grep over `src/` silently excludes the deploy scripts
+and the operational code, and nobody notices an absence. Note too what the method cannot see at all:
+static sweeps do not find races, ordering bugs or anything that only exists at runtime, so a map
+built only from greps and complexity scores is systematically blind in one direction.
+
+**Mark each finding with how you know it**, and keep that separate from its tier: *reproduced*,
+*proved from the code*, or *hypothesis*. They are different things and the words blur under
+pressure — a hypothesis that sounds confident gets scored like a reproduction. Nothing gets
+correctness value without a reachable call path or a reproduction, and **the first stage addresses
+the highest confirmed tier unless risk explicitly vetoes it** — otherwise the cheap, comfortable
+cluster wins on convenience and a live defect waits.
+
 Tiers that have worked, and a good default:
 
 - **Tier 0 — live defects you tripped over on the way.** Not cleanup. Do these first, red test
@@ -135,8 +165,13 @@ already correct, so there is no red test to write first. The substitute:
 - **Characterise before you change.** Write tests against the *current* behaviour, then prove they
   can fail — break the code on purpose and watch them go red. A test that has never failed is not
   covering the thing you are about to move.
-- **Pin the invariant, not the scaffolding.** Assert what any correct implementation must satisfy,
-  not the way today's code happens to achieve it, or the test dies with the code it was describing.
+- **Pin the invariant, not the scaffolding — and not the vocabulary.** Assert what any correct
+  implementation must satisfy, not the way today's code happens to achieve it. The commonest way to
+  get this wrong is to assert that some *words* appear: the first run of this doc tested a SQL join
+  with "does the string contain `current_revision_id`, and does it say `inner join`", and the
+  reviewer passed all of it with a query that had no `where` clause at all and joined a table to
+  itself. Both words were there; neither meant anything. Assert the whole relationship, and the
+  bound parameters.
 - **If the behaviour you are about to pin looks wrong, that is a Tier 0 finding, not a spec.**
   Characterisation enshrines defects otherwise — a broken reply once got stored as a legitimate
   answer, and there was a test blessing it. Stop and file it.
