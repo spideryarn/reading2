@@ -328,20 +328,26 @@ export function snapshotProblems(
   }
 
   /* 7 */
-  let previous: Snapshot | null = null;
+  let last: Snapshot | null = null;
   for (const s of snapshots) {
-    if (previous && s.prevId !== null && previous.id !== null && s.prevId !== previous.id) {
-      const excused = exceptions.breaks.some(
-        (b) => b.after === previous!.file && b.afterId === previous!.id && b.before === s.file && b.beforePrevId === s.prevId,
-      );
-      if (!excused) {
-        problems.push(
-          `drizzle/meta/${s.file} claims ${s.prevId} as its parent, and the snapshot before it ` +
-            `(${previous.file}) is ${previous.id} — the chain is broken here`,
-        );
-      }
-    }
-    previous = s;
+    /* Bound rather than used through `last!`: the narrowing on a `let` does not
+       survive into the closure below, and an assertion that is merely true
+       today is how a refactor gets to be wrong quietly. */
+    const previous = last;
+    last = s;
+    if (!previous || s.prevId === null || previous.id === null || s.prevId === previous.id) continue;
+    const excused = exceptions.breaks.some(
+      (b) =>
+        b.after === previous.file &&
+        b.afterId === previous.id &&
+        b.before === s.file &&
+        b.beforePrevId === s.prevId,
+    );
+    if (excused) continue;
+    problems.push(
+      `drizzle/meta/${s.file} claims ${s.prevId} as its parent, and the snapshot before it ` +
+        `(${previous.file}) is ${previous.id} — the chain is broken here`,
+    );
   }
 
   /* 8 */

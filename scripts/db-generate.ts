@@ -39,6 +39,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readJournal, type JournalEntry } from "./migration-ledger.js";
+import { HISTORICAL, readSnapshots, snapshotProblems } from "./migration-snapshots.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FOLDER = path.join(ROOT, "drizzle");
@@ -97,14 +98,31 @@ function readFolder(): FolderState {
  * would call that a success.
  */
 function postcondition(before: FolderState, after: FolderState): string[] {
-  const problems: string[] = [];
+  /**
+   * **The whole folder first, and before the `--allow-empty` shortcut.**
+   *
+   * This asks whether `drizzle/meta/` is still a chain — the ordering, the
+   * terminal snapshot, duplicate ids, a snapshot nothing names. It runs even
+   * when nothing was written, and that is the point: a forked chain makes
+   * `generate` refuse and exit 0 *without* printing "No schema changes", which
+   * is indistinguishable at this level from an honest no-op. Returning early on
+   * `--allow-empty` would have let the flag hide the exact failure this file
+   * exists to catch — which is what the first version of it did. Verified by
+   * forking `drizzle/meta/` for a minute on 2026-09-02: with the early return,
+   * `db:generate -- --allow-empty` printed a green ✓ over a red `Error:`;
+   * without it, exit 1 naming the fork four ways.
+   */
+  const problems: string[] = [
+    ...snapshotProblems(after.entries, readSnapshots(FOLDER), HISTORICAL),
+  ];
 
   const known = new Set(before.entries.map((e) => e.tag));
   const fresh = after.entries.filter((e) => !known.has(e.tag));
 
   if (fresh.length === 0) {
-    if (allowEmpty) return [];
+    if (allowEmpty) return problems;
     return [
+      ...problems,
       "drizzle-kit generate exited 0 and wrote no migration.",
       "",
       "  If you expected one, the usual cause is a forked snapshot chain — two",

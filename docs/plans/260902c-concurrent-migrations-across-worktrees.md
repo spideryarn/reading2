@@ -193,6 +193,14 @@ building found:**
   `tests/migration-journal.test.ts`. That one is only ever called from a test; this one also runs in
   the preflight, and a preflight whose "green" silently means "two known holes" is not auditable.
 
+**And one hole was written and then found in the wrapper itself**, which is worth recording because
+it is this plan's own subject turned on its author. The first `db:generate` returned early on
+`--allow-empty` when nothing had been written — and a forked chain makes `generate` refuse and exit 0
+*without* printing "No schema changes", which at that level is indistinguishable from an honest
+no-op. So the flag printed a green ✓ over a red `Error:`. The fix is that the folder-wide check runs
+first and unconditionally; verified by forking `drizzle/meta/` for a minute and watching it go from
+✓ to exit 1 naming the fork four ways.
+
 **Both halves of the central claim were reproduced before anything was built** (a copy of `drizzle/`
 with a second snapshot claiming `0051`'s parent): `check` names both files and exits 1, `generate`
 prints the same red `Error:` and exits **0**, writing nothing. And the timestamp prefix was run for
