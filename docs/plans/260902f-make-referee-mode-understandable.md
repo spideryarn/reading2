@@ -551,6 +551,87 @@ this worktree's `ADMIN_EMAIL` still says `greg@gregdetre.com`. Checked live: the
 paragraphs and both heights, the Candidates button and note, and that hovering the rank numeral opens
 nothing. The `404 POST /api/jobs/…/advance` noise is the one already recorded above and is not this.
 
+### Stage 6 — the review of stage 5, acted on
+
+[260902f-…-stage5-review-sol.md](260902f-make-referee-mode-understandable-stage5-review-sol.md) —
+*ship with changes*, three findings, all closed. Its six adjudications are recorded there and needed
+no work; the two that were **refusals** rather than approvals are worth repeating, because they are
+the shape of what stage 6 is not: no generic paraphrase detector, and *"cheap to check and easy to
+dismiss"* stays out of Mirror's footnote.
+
+**1. Nothing proved that each overflow message reached the caller it was written for.** Stage 5 split
+the message and then tested the split by calling `parseHits` directly with each `AskKind`, which
+proves the parser branches and nothing else. Measured, not argued: removing `"editable"` from
+[`src/search.ts`](../../src/search.ts)'s one call site left the whole suite green, and so did adding
+it to any of the three Referee callers.
+
+[`tests/overflow-message-reaches-its-caller.test.ts`](../../tests/overflow-message-reaches-its-caller.test.ts)
+now drives the **four public entry points** over stubbed SSE — an object that opens and never closes,
+`finish_reason: "length"`, a clean `[DONE]`, which is what the token ceiling looks like from here —
+and asserts the exact sentence and the exact code each ends with. One new file rather than four cases
+in four run files, because the property is the *contrast* between the callers and it is only legible
+with them side by side; the SSE helper is duplicated the way every other streaming test in this repo
+duplicates it. The parser-level cases moved there from
+[`referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) unchanged — that file is about
+tooltips. And the truncated-stream case in
+[`search-stream.test.ts`](../../tests/search-stream.test.ts), which asserted `toBeDefined()` over a
+module where every failure is defined, now asserts `ANSWER_OVERFLOWED.message`.
+
+| Mutation | Caught by |
+|---|---|
+| drop `"editable"` at `search.ts:906` | the Search case, and `search-stream`'s truncated case |
+| add `"editable"` to `runCriterionStream`'s `parseHits` | the criterion case |
+| add `"editable"` to `runClaimsStream`'s `parseHits` | the claims case |
+| add `"editable"` to `mirrorStream`'s `parseHits` | the Mirror case |
+| strip *"terms drawn from the paper … to a search engine"* from Candidates' visible note | the new disclosure case in `referee-candidates-press` — and **not** by the case beside it, which is the review's point |
+
+The Candidates disclosure had the same weakness in miniature: the existing case required *"model"*,
+*"search"* and *"may run"*, all three of which survive a note that has stopped saying **where the
+search terms come from and who receives them**. That sentence is the disclosure — the search engine
+is a *different* third party from the model, reached at a *different* time — so it is now asserted in
+`.cnd-start-note` itself, deliberately not in the `ControlTip` that says the same thing, because a
+card is not read by anybody in a hurry.
+
+**2. Mirror's jump card said its heading again** — *"Scrolls the paper to the passage this remark is
+about"* under *Go to this passage*. Its first paragraph is now the provenance fact the label cannot
+carry: **the passage is where the referee anchored their own comment**, and Mirror chose the remark,
+never the passage. The second paragraph is unchanged.
+
+**Whether the generic check should cover short headings: no, and it was measured rather than
+reasoned.** `restates` in `referee-tooltips.test.tsx` ignores any label under three content words,
+and *Go to this passage* reduces to one — `go`, `to` and `this` are all stopwords.
+
+| floor | the old Mirror card | honest copy under *Try again* / *For / against* |
+|---|---|---|
+| 3 (today) | passes | passes |
+| 2 | **still** passes — the head is one content word, not two | *Try again* now fails |
+| 1 | caught | both fail, **and so does the honest rewrite** that replaced it |
+
+So no floor both catches this and keeps the honest cards: at two it is not caught at all, and at one
+the check fires on any card that uses the noun its control is named after. The floor stays, the table
+is in the test file beside it, and the card gets an explicit assertion — which is exactly the
+adjudication ("keep the present copying heuristic as a floor and add explicit assertions for
+important cards"). The assertion pins the two halves of the provenance *and* refuses the sentence it
+replaced by name, since a rewrite that says the provenance and then adds the heading back would
+otherwise pass.
+
+**3. Two docs contradicted the button.** [referee-mode.md](../project/referee-mode.md) said the fit
+brief "arrives unprompted" and `CANDIDATES_OPENING`'s docstring in
+[`src/referee-candidates.ts`](../../src/referee-candidates.ts) called it automatic; both now say the
+press creates the thread and sends the opening ask, and both keep the old behaviour in the past tense
+with the reason the button exists. **A sweep found no third**: every other mention — `CandidatesPanel`,
+`referee-candidates-press`, this plan and its reviews, the original 260831an plan — is either already
+past-tense or is about the brief's *content* rather than its trigger.
+
+Two doc edits that were not asked for and are the same work: the control table in
+[referee-mode.md](../project/referee-mode.md) gained the jump card's row, and § the message split now
+says the split is proved at the four entry points rather than at the parser.
+
+**Suite after**: the referee, search and message files all green (32 referee files, 529 tests). The
+four stable baseline failures are unchanged — `doc-links`, `pdf-bundle-trace`,
+`store-artefact-manifest`, `store-roundtrip` — and `doc-links`'s 48 broken links are every one of them
+from another agent's `260902g-…` plan doc, none from anything touched here.
+
 ## The card's words
 
 **Superseded twice; kept as the record of what was proposed.** Stage 3 dropped the red-and-green

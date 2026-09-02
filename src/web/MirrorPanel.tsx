@@ -399,16 +399,24 @@ function Remark({
            2026-09-02, which is precisely the anti-pattern Tooltip.tsx's own
            docstring argues against: a second's wait, unstyleable, truncated at
            the OS's idea of a line, and **not there at all on a touch device**.
-           The card also has room for the half a `title` had no space for — that
-           the words on the button are the referee's own, quoted back, rather
-           than anything the model wrote. */
+           The card also has room for the half a `title` had no space for — the
+           **provenance** of both the destination and the label: the passage is
+           where the referee anchored their own comment, and the words on the
+           button are that comment's, quoted back.
+
+           **The first paragraph used to be the heading again** — *"Scrolls the
+           paper to the passage this remark is about"* under *Go to this
+           passage* — which is the one thing a card may not be
+           (docs/project/tooltips.md). The generic restatement check in
+           tests/referee-tooltips.test.tsx missed it because the heading is four
+           short words; a cross-family review found it by reading, 2026-09-02. */
         <Tooltip
           placement="left"
           className="tip-soon"
           content={
             <ControlTip
               head="Go to this passage"
-              what="Scrolls the paper to the passage this remark is about."
+              what="The passage is where you anchored the comment this remark is about. Mirror chose the remark, never the passage — it is not given the paper to pick one from."
               how={
                 comment
                   ? "The words on this button are your own comment's, quoted back — the model wrote only the line at the foot of the row."

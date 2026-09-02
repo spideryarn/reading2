@@ -47,9 +47,13 @@ window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a 
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the fit brief arrives
-unprompted, then scope the search in the composer and names arrive with the shortlist above the
-transcript. It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** as of 2026-09-01 — open the sub-mode, press **Build the reviewer
+brief**, and that press creates the thread and sends the opening ask; then scope the search in the
+composer and names arrive with the shortlist above the transcript. **The brief used to arrive
+unprompted**, on a `useEffect` the first time the sub-mode was opened, and that is why the button
+exists: the other three chips are inert, so a first-time referee clicking through the radiogroup paid
+for a model call and sent paper-derived terms to a search engine without having asked for either
+(2026-09-02). It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -606,6 +610,7 @@ Where the cards are, and the one thing each says that the label cannot:
 | Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine |
 | Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
+| Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |
 | Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
 | [`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx)'s criterion picker | switching criterion clears the position you pressed — the highest-value sentence in the mode |
 
@@ -668,6 +673,13 @@ under one code and is right to:
 `parseHits` takes an `AskKind` to choose, defaulting to the one that promises least, so a sub-mode
 added later cannot inherit advice about a control it does not have.
 
+**Which caller gets which sentence is proved at the four public entry points**, not at the parser:
+[`tests/overflow-message-reaches-its-caller.test.ts`](../../tests/overflow-message-reaches-its-caller.test.ts)
+drives `findPassagesStream`, `runCriterionStream`, `runClaimsStream` and `mirrorStream` over a
+cut-off answer and asserts the exact sentence and code each one ends with. Testing the parser alone
+proved only that it branches: removing `"editable"` from Search's one call site, or adding it to a
+Referee caller, left the whole suite green until 2026-09-02.
+
 **What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
 text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
 evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
@@ -680,6 +692,14 @@ repetition — the exact failure the review found in four cards — so it now co
 against each other and against the label. It also reaches Claims, Candidates and `PlaceOnCriterion`,
 which it did not import at all until 2026-09-02: deleting any of their cards left the whole suite
 green.
+
+**It is a floor and not a reader.** It ignores any label under three content words, and Mirror's jump
+card lived in exactly that gap: *"Scrolls the paper to the passage this remark is about"* under *Go
+to this passage*, which reduces to the single word *passage*. Lowering the floor was measured and
+rejected — at two the card is still missed, and at one the check fires on any honest sentence that
+uses the noun its control is named after, the replacement copy included. Important cards get an
+explicit assertion instead, which is what the jump card now has. That card's first paragraph is now
+its **provenance**: the passage is where the referee anchored their own comment.
 
 ### The two gaps a card could not close
 
