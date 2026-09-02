@@ -155,6 +155,10 @@ these:**
 - **A scope line** — directories swept, directories excluded, and what the method is blind to. A
   grep over `src/` silently omits the deploy scripts, and nobody notices an absence. Static sweeps
   find no races, no ordering bugs, nothing that exists only at runtime.
+  **A finding that something is unused is an absence, so it is only as good as the sweep behind
+  it** — name the directories, and re-run it before the deletion rather than trusting the one in the
+  audit. This paragraph already warned about the deploy scripts and four audits still called a route
+  callerless; `scripts/` was where its only caller was.
 - **An evidence state on every finding** — *reproduced*, *proved from the code*, or *hypothesis* —
   kept separate from its tier. The words blur under pressure, and a confident hypothesis otherwise
   gets scored like a reproduction. Nothing counts as a correctness win below a reachable call path.
