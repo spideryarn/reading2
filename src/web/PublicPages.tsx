@@ -10,9 +10,10 @@
  * correct-looking page that the capability seam exists to prevent.
  *
  * So: a different, smaller metadata page, and a plain notice where the tweet
- * thread would be. Both draw from what the visitor already has —
- * `GET /api/public/article/:slug` and `GET /api/public/metadata/:slug` — and
- * neither fetches anything of its own.
+ * thread would be. Both draw from what the visitor already has — the one
+ * `GET /api/public/article/:slug` the reading view made — and neither fetches
+ * anything of its own. There was a second public route until 2026-09-02; this
+ * page never called it either.
  */
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
@@ -26,7 +27,7 @@ import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
-import { markedModes, notBuiltGap, type VisitorGap } from "./visitor.js";
+import { markedModes, notBuiltGap, NOUN, type VisitorGap } from "./visitor.js";
 import { ThreadCounts, ThreadPosts } from "./Tweets.js";
 
 /**
@@ -64,8 +65,8 @@ const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
  * The owner's metadata page answers *which stage ran, when, into which column,
  * over how many bytes, and would we write it again today* — internal paths,
  * column names and run times, none of it a visitor's business and most of it
- * about our pipeline rather than about the piece. `PublicMetadata` replaces the
- * lot with five booleans, and this page is those five booleans plus what is
+ * about our pipeline rather than about the piece. `PublicArtefacts` replaces
+ * the lot with five booleans, and this page is those five booleans plus what is
  * already in the article payload. src/public-types.ts.
  */
 export function PublicMetadataPage({
@@ -133,7 +134,7 @@ export function PublicMetadataPage({
           {/* **Only what exists, never how it was made.** No paths, no
               timestamps, no byte counts, no generator versions — that is the
               whole difference between this page and the owner's, and the reason
-              `PublicMetadata` is five booleans rather than a projection of
+              `PublicArtefacts` is five booleans rather than a projection of
               `ArticleMetadata`. */}
           {/* **No "we could not check" arm any more**, and its absence is the
               slice. These five used to come from a second request whose failure
@@ -141,11 +142,19 @@ export function PublicMetadataPage({
               this page is already drawing, so either it arrived or the reader is
               looking at *this document isn't shared*.
               src/web/public-artefacts.ts. */}
+          {/* **Walked, not written out**, since 2026-09-02. Four of the five
+              were listed here by hand and `quotes` was missing — so a visitor
+              reading a shared article that has quotes was told nothing about
+              them, under a heading promising what has been built. Nothing was
+              wrong with the flag; the list simply did not mention it. `NOUN`
+              (src/web/visitor.ts) is the same table the reading view's gap
+              sentences come from, so the two cannot call one artefact by two
+              names, and a sixth appears here without anybody remembering to
+              come back. */}
           <ul className="tw:m-0 tw:list-none tw:p-0 tw:text-sm tw:text-ink-faint">
-            <Artefact name="An arc through the argument" has={available.arc} />
-            <Artefact name="A glossary" has={available.glossary} />
-            <Artefact name="A list of ideas" has={available.ideas} />
-            <Artefact name="A tweet thread" has={available.tweets} />
+            {(Object.keys(NOUN) as (keyof typeof NOUN)[]).map((key) => (
+              <Artefact key={key} name={sentenceCase(NOUN[key])} has={available[key]} />
+            ))}
           </ul>
         </section>
 
@@ -159,6 +168,16 @@ export function PublicMetadataPage({
       <VisitorDock slug={slug} view="metadata" available={available} signedIn={signedIn} />
     </>
   );
+}
+
+/**
+ * `NOUN` is written for the middle of a sentence — *"nobody has built **a
+ * glossary** for this piece yet"* — and this list wants it at the start of a
+ * line. One capital, rather than a second table of the same five nouns with
+ * different capitals, which is the shape that let `quotes` go missing.
+ */
+function sentenceCase(noun: string): string {
+  return noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
 function Artefact({ name, has }: { name: string; has: boolean }) {
@@ -186,6 +205,7 @@ export function VisitorPage({
   gap,
   available,
   signedIn,
+  sessionUnconfirmed,
 }: {
   slug: string;
   article: Article;
@@ -206,6 +226,8 @@ export function VisitorPage({
   available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /** For the notice at the foot — reader-capability.ts § sessionUnconfirmed. */
+  sessionUnconfirmed: boolean;
 }) {
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
   return (
@@ -216,6 +238,33 @@ export function VisitorPage({
           {article.meta.title}
         </h1>
         <VisitorNotice gap={gap} signedIn={signedIn} />
+        {/* **The read-only chrome, which this page went without until
+            2026-09-02** — and it was the only one of the four visitor pages
+            missing it (`PublicMetadataPage` above, and the thread arm below).
+            A comment here called that deliberate, on the grounds that
+            `VisitorNotice` is about the artefact rather than about the page.
+            Both of those are true and the conclusion did not follow: a reader
+            whose session could not be confirmed lost the fact *and* the
+            *Continue signed out* button by clicking Tweets on a piece that has
+            no thread — the default state of most articles. `VisitorArticle`
+            states the opposite guarantee in as many words (App.tsx §
+            `sessionUnconfirmed`: the explanation goes to all three views
+            precisely because the other two are one click away), so the comment
+            was claiming a gap was a decision. GPT Sol, reviewing stage 1b.
+
+            **Below the sentence above it, not beside the title**, which is where
+            the metadata page puts it. Two reasons, and the second is the one
+            that decided it. The thread arm below puts it at the foot too, so the
+            two halves of `/read/:slug/tweets` differ by whether there is a
+            thread rather than by where the chrome sits. And stacked the other
+            way — *we couldn't confirm you're signed in* directly above *nobody
+            has built a tweet thread* — the page invites the reader to read the
+            second as a consequence of the first, which is the one thing it must
+            not say. `SharedNotice`'s own ordering rule, one level up: the thing
+            the reader came for first, the news about their session second. */}
+        <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
+          <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
+        </div>
       </main>
       <VisitorDock slug={slug} view={view} available={available} signedIn={signedIn} />
     </>
@@ -257,9 +306,9 @@ export function VisitorTweetsPage({
   signedIn: boolean;
   /**
    * For the notice at the foot of the page — reader-capability.ts §
-   * sessionUnconfirmed. The no-thread arm below draws `VisitorNotice` instead,
-   * which is about this artefact rather than about this page, so it does not
-   * take it.
+   * sessionUnconfirmed. **Both arms take it**: the no-thread one draws
+   * `VisitorNotice` about the artefact *and* this about the page, for the reason
+   * written where it lands in `VisitorPage`.
    */
   sessionUnconfirmed: boolean;
 }) {
@@ -274,6 +323,7 @@ export function VisitorTweetsPage({
         gap={notBuiltGap("tweets")}
         available={available}
         signedIn={signedIn}
+        sessionUnconfirmed={sessionUnconfirmed}
       />
     );
   }

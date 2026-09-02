@@ -95,6 +95,13 @@ const ALICE: AdminUser = {
   searches: 7,
   opens: 99,
   lastReadAt: "2026-08-27T09:00:00.000Z",
+  spendNanos: 1_234_500_000,
+  spendCalls: 42,
+  /* Some of Alice's calls reported no cost, because that is the ordinary state
+     of this ledger rather than an edge case, and the column has to draw the
+     marker that says so. */
+  spendUnpricedCalls: 7,
+  spendMonth: "2026-08",
 };
 
 const BOB: AdminUser = {
@@ -109,6 +116,10 @@ const BOB: AdminUser = {
   chats: 0,
   searches: 0,
   opens: 0,
+  spendNanos: 0,
+  spendCalls: 0,
+  spendUnpricedCalls: 0,
+  spendMonth: "2026-08",
 };
 
 const jsonOk = (body: unknown) =>

@@ -52,15 +52,18 @@ import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import type {
+  AdminFeedbackDetail,
+  AdminFeedbackPage,
   Article,
   ArticleMetadata,
   ChatAnchor,
   ChatMessage,
   ChatThread,
   Comment,
+  FeedbackCursor,
   FeedbackDiagnostics,
   FeedbackEnvironment,
-  FeedbackRouteKind,
+  FeedbackKind,
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
@@ -1140,7 +1143,57 @@ export interface AdminStore {
    * about the default order.
    */
   listUsersAcrossOwners(): Promise<AdminUser[]>;
+  /**
+   * **Every reader's bug reports, newest first** — `/admin/feedback`.
+   * docs/plans/260902l-admin-feedback-page.md.
+   *
+   * The one method in this file that returns a reader's own sentences, and the
+   * one place the admin rule *"counts and dates, never a sentence"* has an
+   * exception. What makes it legitimate is consent and nothing else: the reader
+   * typed that report into a box labelled with what happens to them.
+   * docs/project/feedback.md § The one rule is the boundary; it does not move
+   * because a second page found it convenient.
+   *
+   * **Newest first is promised here**, unlike the users list, and that is not
+   * an inconsistency. The users page sorts eleven columns and a store opinion
+   * would be a second one; this is an inbox with one order, and `limit` is
+   * meaningless without saying which end it cuts.
+   *
+   * `limit` is capped by the implementation. This is the only table in the app
+   * an ordinary account holder can add rows to.
+   */
+  listFeedbackAcrossOwners(limit: number, cursor: FeedbackCursor | null): Promise<AdminFeedbackPage>;
+  /**
+   * **One report in full**, including the diagnostics blob the list leaves out
+   * — `GET /api/admin/feedback/:ownerId/:id`.
+   *
+   * Keyed on the **pair**, like everything that addresses a report here: the id
+   * is minted by a browser, `feedback`'s primary key is `(owner_id, id)`, and a
+   * lookup on the id alone can hand back somebody else's report. GPT Sol caught
+   * that in the first draft, 2026-09-02.
+   */
+  readFeedbackAcrossOwners(ownerId: string, id: string): Promise<AdminFeedbackDetail | null>;
+  /**
+   * **One report's screenshot bytes, whoever filed it** — for
+   * `GET /api/admin/feedback/:ownerId/:id/screenshot`.
+   *
+   * Keyed on the **pair**, like `readFeedbackAcrossOwners` above and for the
+   * same reason.
+   *
+   * `null` for a report that has none *and* for a pair that is not a report:
+   * both are a 404 from the route, and distinguishing them would buy the caller
+   * nothing it is allowed to do anything with.
+   *
+   * **Why this is not `FeedbackStore.read`.** That one is owner-scoped on
+   * purpose — another reader's id is simply not found, the same rule as
+   * `ownedSlug` — and relaxing it would relax it for the reader's own dialog
+   * too. The cross-owner read is a different method, on the contract whose name
+   * already says what it does, reached from one gated route.
+   */
+  readFeedbackScreenshotAcrossOwners(ownerId: string, id: string): Promise<Uint8Array | null>;
 }
+
+
 
 /* --------------------------------------------- the document it came from -- */
 
@@ -1327,6 +1380,85 @@ export interface CostStore {
   size(): Promise<number | null>;
 }
 
+/* ------------------------------------------------- live conversation -- */
+
+/**
+ * **One live conversation this server issued a token for.**
+ *
+ * The parent every realtime `ai_calls` row hangs off, and — more importantly —
+ * the only thing that can say a session reported **nothing**. See
+ * `realtimeSessions` in [../db/schema.ts](../db/schema.ts) for why a row exists
+ * before any money is known to have been spent.
+ *
+ * Timestamps are ISO strings on this side of the seam, like `AiCallRow`'s, so
+ * that the two adapters cannot disagree about a `Date` and neither of them can
+ * hand a caller a mutable one.
+ */
+export interface RealtimeSession {
+  /** Ours, minted before OpenAI is asked for anything. */
+  id: string;
+  ownerId: string;
+  /**
+   * The article, by slug — the historical fact a later delete cannot revoke.
+   * The Postgres adapter resolves the id beside it; the filesystem one has no
+   * ids to resolve, which is why the slug is what crosses this seam.
+   */
+  articleSlug: string | null;
+  threadId: string | null;
+  /** The realtime model as OpenAI created it, not as we asked. */
+  model: string;
+  transcriptionModel: string | null;
+  issuedAt: string;
+  /** The last instant a usage report is accepted. Server-owned; not the token's expiry. */
+  acceptsUntil: string;
+  connectedAt: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+}
+
+/**
+ * **The journal of live conversations** — issued, connected, closed.
+ *
+ * Deliberately four narrow methods rather than a general upsert. Every one of
+ * them is a fact arriving at a known moment, and there is no operation here that
+ * rewrites what a session was: `markConnected` and `close` set a timestamp that
+ * was null, and a second call must not move it. A general `update` would make
+ * "the browser said it connected twice" a silent overwrite of the first, more
+ * truthful, time.
+ *
+ * **Every read takes the owner.** Not because a reader is untrusted —
+ * docs/project/security-map.md says plainly that they are not — but because the
+ * session id travels through the browser and comes back on a request, and a
+ * lookup that did not carry the owner would answer for *any* session whose id
+ * somebody had. That is the same discipline `ownedSlug` enforces on articles,
+ * and the reason it exists is that `articles.slug` is globally unique and the
+ * unfiltered lookup reads exactly like a working one.
+ */
+export interface RealtimeSessionStore {
+  /**
+   * Write the session row. **Called after OpenAI has minted the client secret
+   * and before the token reaches the browser** — if this throws, the token is
+   * never released, because a usable token with no journal row is spend nothing
+   * can ever see.
+   */
+  issue(session: RealtimeSession): Promise<void>;
+  /** One session, or `null` — for this owner only. */
+  find(id: string, ownerId: string): Promise<RealtimeSession | null>;
+  /**
+   * The data channel opened. **Idempotent, and it keeps the earliest time**: a
+   * usage report backfills this too, in case the connected event was lost, and
+   * a later backfill must not overwrite the moment the channel really opened.
+   */
+  markConnected(id: string, ownerId: string, at: string): Promise<void>;
+  /**
+   * The conversation ended, as far as the browser could tell. **Best-effort by
+   * nature** — a closed laptop says nothing — so a session with no `closedAt`
+   * is the ordinary case rather than an error, and nothing downstream may treat
+   * its absence as a session still running.
+   */
+  close(id: string, ownerId: string, at: string, reason: string | null): Promise<void>;
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -1339,7 +1471,7 @@ export interface CostStore {
 export type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
-  FeedbackRouteKind,
+  FeedbackKind,
 } from "../types.js";
 
 /**
@@ -1373,12 +1505,19 @@ export interface NewFeedback {
    * owner.
    */
   reporterEmail: string;
-  /** *Steps to reproduce.* Length-capped at `MAX_FEEDBACK_ANSWER_CHARS`. */
-  steps: string | null;
-  /** *What you expected to see.* */
-  expected: string | null;
-  /** *What you saw instead.* */
-  actual: string | null;
+  /**
+   * **What the reader wrote**, in one box. Length-capped at
+   * `MAX_FEEDBACK_ANSWER_CHARS`, non-empty, and `not null` — a report with
+   * nothing in it is not a report, and that is the column's type rather than a
+   * rule somebody remembers.
+   */
+  body: string;
+  /**
+   * *A problem* or *a suggestion*, or **null for a reader who did not say**.
+   * Greg asked for the toggle to start unset, so absence is an answer here
+   * rather than a missing one — src/types.ts § `FEEDBACK_KINDS`.
+   */
+  kind: FeedbackKind | null;
   /**
    * Whether the reader ticked *Send extra diagnostics*. Recorded as its own
    * fact rather than inferred from `diagnostics` being present: "they said yes
@@ -1386,7 +1525,14 @@ export interface NewFeedback {
    * only one of them is a bug in the collector.
    */
   consented: boolean;
-  routeKind: FeedbackRouteKind;
+  /**
+   * **The address they were at, whole.** `routeKind`, a name from a closed
+   * list, until 2026-09-02 — src/db/schema.ts § `url` has why it changed.
+   * Validated by the route with `isWebUrl` and capped at
+   * `MAX_FEEDBACK_URL_CHARS`. `null` from a bundle loaded before the change —
+   * src/db/schema.ts says why an old report is filed rather than refused.
+   */
+  url: string | null;
   /** The article they were on, where there was one. Validated by the route. */
   slug: string | null;
   /** `__SPIDERYARN_BUILD_COMMIT__` — the string the release and the source maps went up under. */

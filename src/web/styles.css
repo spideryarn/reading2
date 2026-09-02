@@ -615,34 +615,6 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   border-color: var(--highlight);
 }
 
-/* **The way to the original** — SourceLink.tsx § TheOriginal, first in the bar.
-   One rule for both arms, because an `<a>` to a URL and a `<button>` that
-   fetches an uploaded file are the same affordance to the reader and must not
-   look like two. Shaped on `.mode-close` above for the same reason it is shaped
-   on `.linky`: everything in this row has to line up with the pills. */
-.controls .source-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  font: inherit;
-  width: 1.725rem;
-  height: 1.725rem;
-  padding: 0;
-  margin-right: 0.15rem;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-}
-.controls .source-link:hover {
-  color: var(--highlight);
-  border-color: var(--highlight);
-}
-
 .mode {
   font-size: 0.68rem;
   letter-spacing: 0.09em;
@@ -3160,11 +3132,70 @@ td.text.has-hit[data-hues="8"] {
      The two side terms are the notch, which this bar meets in landscape for the
      same reason the spine meets it in portrait: it is `position: fixed` and
      spans the whole screen, so `left: 0` is inside the cut-out. */
-  padding: 0 calc(0.4rem + var(--safe-right)) var(--safe-bottom) calc(0.4rem + var(--safe-left));
+  /* **No right-hand term**, since 2026-09-02: the bar's trailing gutter is a
+     real child (`.dock-tail`) rather than padding. § the bar's fit ladder
+     measures the row by asking whether it overflows, and Chrome leaves a flex
+     container's trailing *padding* out of its scrollable overflow — so a gutter
+     spelled that way is invisible to the measurement, and the last button was
+     free to sit in it. That is six pixels on a laptop and `--safe-right` on a
+     phone held landscape, which is the cutout. GPT Sol, on the built code. */
+  padding: 0 0 var(--safe-bottom) calc(0.4rem + var(--safe-left));
   background: var(--surface-raised);
   border-top: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
   font-size: 0.78rem;
+}
+
+/* **The floor under § the bar's fit ladder, at every width.** Past its last
+   rung the row still does not fit — a phone in portrait cannot give fifteen
+   buttons a pressable width — and this is what makes that an honest overflow
+   you can scroll rather than a silent clip. Greg chose it, 2026-08-28:
+   *"maybe also row scrolls sideways if it doesn't fit horizontally"*.
+
+   **Unconditional since 2026-09-02**, on GPT Sol's finding. It lived in § a
+   narrow window, written when 731px was the only width at which the row could
+   overflow; that stopped being true the moment the ladder started deciding by
+   measurement, and the next few modes would have found a bar that clipped
+   silently at 800px with the safety net two hundred pixels below. It costs
+   nothing while the row fits.
+
+   No visible scrollbar: a 15px trough across the bottom bar of every window
+   would be chrome about chrome. The row is scrolled by dragging, by a trackpad,
+   or by tabbing — focus scrolls a hidden button into view on its own. */
+.dock {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.dock::-webkit-scrollbar { display: none; }
+
+/* `.dock-gap` is `flex: 1` and would collapse to nothing in a scrolling row,
+   which is exactly right — the buttons close up and the row scrolls. Every
+   other child holds its width.
+
+   **`flex-shrink: 0`, not `flex: none`**, since 2026-08-28. `none` is
+   `0 0 auto`, and the `0` that mattered here is the *shrink* — the silent
+   deletion machine `.dock-modes` warns about at length (§ the modes segment).
+   Pinning `flex-grow` to `0` as well was incidental, and it silently outranked
+   § a coarse pointer's attempt to let the buttons share the bar (this selector
+   is (0,2,0) against that rule's (0,1,0)), leaving fifteen icons huddled at the
+   left end of a phone. Nothing may shrink; growing into space that is already
+   there costs the guarantee nothing. */
+.dock > *:not(.dock-gap) { flex-shrink: 0; }
+
+/* The bar's trailing gutter, as content rather than as padding — see the
+   `padding` above for why it had to move.
+
+   It is also the ladder's **font-metric probe**, which is the second job one
+   element happened to be able to do. `useDockFit`'s `ResizeObserver` watches
+   this as well as the bar, and this box is `rem`-sized and rung-independent: a
+   reader who changes their browser's default font size resizes it (every label
+   changed width too), while switching rung never touches it. So it notices what
+   the bar's own `100vw` box cannot, and it cannot start the feedback loop that
+   observing the buttons would. */
+.dock-tail {
+  flex: none;
+  width: calc(0.4rem + var(--safe-right));
 }
 
 /* The reader must be able to scroll to the true end of the article. Without
@@ -5463,8 +5494,10 @@ td.text.has-hit[data-hues="8"] {
      against a `scrollWidth` of 245, so five of the six modes could not be
      pressed at all. Greg had noticed the symptom on a phone — "I couldn't see
      the radio-group properly" — and it is the same failure the note beside the
-     `max-width: 1100px` query at the end of this file predicted and only half
-     fixed, because the half it fixed is the half a laptop can see.
+     § the bar's fit ladder predicted and only half fixed, because the half it
+     fixed is the half a laptop can see — and the pixel breakpoint that fixed it
+     then went stale as the modes multiplied, which is why that section measures
+     now rather than guessing.
 
      `flex: none` turns a silent deletion into an honest overflow of the bar,
      which § a narrow window then makes scrollable. This is not a narrow-window
@@ -5509,6 +5542,74 @@ td.text.has-hit[data-hues="8"] {
   outline: 2px solid var(--highlight);
   outline-offset: -2px;
 }
+
+
+/* ------------------------------------------------- § the bar's fit ladder ----
+   What the bar drops when the row will not fit — and **which rung it is on is
+   measured by the browser, not decided by a width in this file**. `useDockFit`
+   in src/web/dock-fit.ts asks `.dock` whether it overflows, steps down this
+   list until it does not, and puts the class here.
+
+   **There was a pixel breakpoint here and it went stale, which is the whole
+   reason this is JavaScript.** `@media (max-width: 1100px)` did rung 1's job,
+   and the 1100 was chosen against a measured 1046 when there were six modes.
+   At thirteen the spelled-out row wants 1416px, so every window from 1101px to
+   1416px showed its labels *and* ran the last buttons off the right-hand edge —
+   which is where Greg found it, at two thirds of a laptop screen, 2026-09-02.
+   The failure is the one `.dock-modes` warns about above: nothing overflows
+   visibly, nothing scrolls, and a button that is not drawn cannot be pressed.
+   Mode fourteen now moves the threshold by itself.
+
+   **The label gives way, never the button**, and that argument is unchanged:
+   every button says its name in a hover tooltip and in an explicit `aria-label`
+   (Dock.tsx), so losing the text costs a sighted reader a hover and costs a
+   screen-reader user nothing — where a dropped button costs both of them the
+   mode. `keepLabel` in Dock.tsx keeps exactly one word on every rung, and it is
+   the way *out*.
+
+   Rung 0 is the bar spelled out and has no class. Below the last rung the row
+   overflows honestly and § a narrow window scrolls it, which is the floor under
+   this ladder rather than another rung: a phone in portrait cannot give fifteen
+   buttons a pressable width, and Greg chose scrolling over shrinking further
+   (§ a coarse pointer). */
+
+/* Rung 1 — the modes go to glyphs and the other three keep their words.
+   Square-ish once the text is gone, so thirteen icons read as one segmented
+   control rather than as loose glyphs.
+
+   **Two selectors because the bar has two shapes.** On the reading view the
+   modes are one `.dock-modes` segment; on the metadata and tweets pages they
+   are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
+   that only knew the segment did nothing on those pages, so the ladder skipped
+   past it to rung 2 and took every label. GPT Sol found it in the design. */
+.dock.dock-fit-1 .dock-modes .dock-btn-label,
+.dock.dock-fit-1 .dock-mode .dock-btn-label { display: none; }
+.dock.dock-fit-1 .dock-modes .dock-btn,
+.dock.dock-fit-1 .dock-mode { padding-inline: 0.6rem; }
+
+/* Rung 2 — every button in the bar, not just the modes. Tighter than rung 1 by
+   0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
+   brought the row to 401px against 390 of bar, and closing an 11px gap exactly
+   would have reopened it the moment the Comments count reached three digits.
+
+   These selectors are shorter than rung 1's and come after them, which is what
+   Biome's `noDescendingSpecificity` warns about. It cannot bite: a bar wears
+   one rung class at a time, so the two blocks can never both match. */
+/* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
+.dock.dock-fit-2 .dock-btn-label { display: none; }
+.dock.dock-fit-2 .dock-btn { padding-inline: 0.45rem; }
+/* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
+
+/* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
+
+   **Last, and it ties on specificity with the rules above deliberately**, so
+   source order is what makes it win. That is why the mode-link selector above
+   is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
+   .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
+   (0,4,0), and Plain lost its word on the metadata page at rung 1 while keeping
+   it at rung 2. Caught in a browser pass, 2026-09-02. */
+.dock.dock-fit-1 .dock-btn-label.always,
+.dock.dock-fit-2 .dock-btn-label.always { display: inline; }
 
 
 /* --------------------------------------------------------- § search mode ----
@@ -9718,40 +9819,6 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .diag-card-link-anchor .diag-card-linkterms { font-style: italic; }
 
 
-/* The modes segment, when the window is too narrow to spell them out.
- *
- * **A bar that silently eats its own buttons.** `.dock-modes` is
- * `overflow: hidden` for a good reason — it clips the selected button's fill to
- * the frame's rounded corners — and that rule quietly turned into a different
- * one as modes were added: below about 1046px the row no longer fits, and the
- * end of it is simply not drawn. At ~909px "Chat" reads "Cha" and its last 13
- * pixels are not hit-testable; at ~636px three whole buttons are outside the
- * clip and cannot be pressed at all. Nothing overflows visibly, nothing scrolls,
- * and there is no sign that anything is missing. Found in a browser pass on
- * 2026-08-27, after Ideas made it six.
- *
- * The label gives way rather than the button, because the label is the part
- * that is said twice: every mode button carries its name in a hover tooltip and
- * in an explicit `aria-label`. So a narrow window costs a sighted reader a hover
- * and costs a screen-reader user nothing, where a dropped button costs both of
- * them the mode.
- *
- * **1100px rather than the measured 1046**, so the labels go before the clip
- * arrives rather than at the moment it does — the failure this prevents is
- * invisible, so the margin is worth more than the two hundred pixels of text.
- *
- * This does not make the bar right at every width; it makes it *honest* at
- * every width. Whether twelve buttons in one row is the design is Greg's
- * call — see docs/plans/260826ac-ideas-mode.md § Questions. */
-@media (max-width: 1100px) {
-  .dock-modes .dock-btn-label { display: none; }
-  /* Except one — see `keepLabel` in Dock.tsx for which and why. */
-  .dock-modes .dock-btn-label.always { display: inline; }
-  /* Square-ish once the text is gone, so twelve icons read as one segmented
-     control rather than as twelve loose glyphs. */
-  .dock-modes .dock-btn { padding-inline: 0.6rem; }
-}
-
 /* The words behind a vocabulary link, in the footer card — see DetailCard.
    These edges are a lexical heuristic, and a curve with no way to ask why looks
    exactly as authoritative as one a model had reasoned about. Quiet type, but
@@ -10681,48 +10748,22 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   }
   h1 { font-size: 1.25rem; }
 
-  .dock {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-  }
-  .dock::-webkit-scrollbar { display: none; }
-  /* `.dock-gap` is `flex: 1` and would collapse to nothing in a scrolling row,
-     which is exactly right — the buttons close up and the row scrolls. Every
-     other child holds its width.
+  /* **The scrolling floor is not here any more** — it is on `.dock` itself, at
+     every width. It was written into this query when 731px was the only place
+     the row could overflow; § the bar's fit ladder is now what decides that,
+     and its last rung can overflow at any width once enough modes arrive.
+     A floor that only exists on a phone is not a floor. */
 
-     **`flex-shrink: 0`, not `flex: none`**, since 2026-08-28. `none` is
-     `0 0 auto`, and the `0` that mattered here is the *shrink* — the deletion
-     machine this rule was written to stop. Pinning `flex-grow` to `0` as well
-     was incidental, and it silently outranked § a coarse pointer's attempt to
-     let the buttons share the bar (this selector is (0,2,0) against that
-     rule's (0,1,0)), leaving fifteen icons huddled at the left end of a phone.
-     Nothing may shrink; growing into space that is already there costs the
-     guarantee nothing. */
-  .dock > *:not(.dock-gap) { flex-shrink: 0; }
+  /* **The labels are not dropped here any more.** Every button losing its text,
+     and the 0.45rem that goes with it, is rung 2 of § the bar's fit ladder —
+     measured rather than keyed to this width, because at thirteen modes the row
+     stops fitting a long way above 731px and did so silently. This query used to
+     carry a second copy of those three rules, and a second copy is a thing
+     nothing keeps in step: the modes' half was keyed to 1100px and went stale
+     while this half looked fine.
 
-  /* Every dock button drops its label, not just the twelve modes. The modes
-     have done this below 1100px since Ideas made them six (§ the modes segment);
-     at 390px the other three have to follow or fifteen buttons cannot share
-     390px.
-     Same argument as there: each carries its name in a tooltip and in an
-     explicit `aria-label`, so this costs a sighted reader a hover and costs a
-     screen-reader user nothing. */
-  .dock .dock-btn-label { display: none; }
-  /* Except one — see `keepLabel` in Dock.tsx. The row already scrolls sideways
-     at this width (§ a coarse pointer does the arithmetic), and this button is
-     leftmost, so the word costs the reader nothing they can see: what it buys is
-     that the way out of a mode is legible without hovering eleven glyphs. */
-  .dock .dock-btn-label.always { display: inline; }
-  /* Fifteen icons in 390px, which no longer fit — see § a coarse pointer for
-     the arithmetic and for why the row scrolls rather than shrinking further.
-     0.45rem rather than the 0.6rem the 1100px query uses,
-     and the extra 0.15 is not cosmetic — measured at thirteen icons, 0.55rem
-     brought the row to 401px against 390 of bar, and closing an 11px gap exactly
-     would have reopened it the moment the Questions count reached three digits.
-     The row overflows outright at fifteen and scrolls, which is the safety net
-     § a coarse pointer put there for exactly this. */
-  .dock .dock-btn { padding-inline: 0.45rem; }
+     What stays here is what is genuinely about a small screen rather than about
+     the row's width — the gutters, and the scrolling above. */
   .dock {
     padding-left: calc(0.2rem + var(--safe-left));
     padding-right: calc(0.2rem + var(--safe-right));
@@ -12612,6 +12653,97 @@ table.only-prose thead { display: none; }
 }
 .fb-input:focus-visible { outline: 1px solid var(--highlight); outline-offset: -1px; }
 .fb-over { font-size: 0.72rem; color: var(--highlight); }
+
+/* One box now, so it gets the height the three used to have between them.
+   docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md. */
+.fb-body { min-height: 7.5rem; }
+
+/* **The thanks, and it is the first thing in the panel.** Warmer than the
+   intro under it — `--ink` rather than `--ink-soft` — because a sentence in the
+   same grey as the instructions reads as more instructions. */
+.fb-thanks {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+/* Problem / Suggestion. Two toggles that behave as one choice, and neither is
+   pressed to begin with — FeedbackDialog.tsx says why they are not radios. */
+.fb-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* A `<legend>` inside a flex `<fieldset>` is not a flex item in every engine, so
+   it is taken out of the flow and set inline instead — the label reads as part of
+   the row rather than floating above it. */
+.fb-kind-legend {
+  float: left;
+  padding: 0 0.4rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.9;
+}
+.fb-kind-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.fb-kind-button:hover { color: var(--ink); border-color: var(--ink-faint); }
+.fb-kind-button:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+/* The pressed one is the state, so it is the attribute that carries the look —
+   one source of truth for "chosen", shared by the screen reader and the eye. */
+.fb-kind-button[aria-pressed="true"] {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: color-mix(in oklch, var(--highlight) 12%, transparent);
+}
+
+/* The microphone and the hints link share a line under the box. */
+.fb-under-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.fb-help-toggle {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.fb-help-toggle:hover { color: var(--highlight); }
+.fb-help-toggle:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+.fb-help {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.fb-help p { margin: 0; }
 
 .fb-shot { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-shot-label { font-size: 0.78rem; font-weight: 600; }

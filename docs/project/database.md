@@ -658,6 +658,41 @@ repair is written up at the top of
 [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
 still in the folder as a named exception today.
 
+### Two facts about a fork repair, both learned the hard way on 2026-09-02
+
+Written down because both were reverse-engineered under pressure, by two agents independently, on
+the day four migrations forked three ways across five worktrees.
+
+**A snapshot's `id` is inert, so a repair should keep it.** `preparePgMigrationSnapshot` mints it
+with `crypto.randomUUID()`; nothing anywhere derives or validates it from the snapshot's contents.
+Its only readers are the next snapshot's `prevId` and a zod string check. So when you rebuild a
+snapshot's contents and repoint its `prevId`, **keep the existing `id`** — every migration already
+chained onto it then keeps resolving instead of dangling, including ones nobody has told you about.
+Minting a fresh id turns one repair into a cascade. Settled from drizzle-kit's own source rather
+than assumed, because "the id is inert" is exactly the kind of claim that is true until some tool
+hashes it.
+
+**`db:chain` and `tests/migration-snapshots.test.ts` check structure only — neither can see a stale
+snapshot.** [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts)'s own header
+says so, and it is the trap that makes a repair *look* finished: repointing `prevId` without
+rebuilding contents passes both gates, and then the next `db:generate` in some third worktree diffs
+against a picture that never had the other branch's tables in it, re-emits their DDL, and
+`db:migrate` fails on `already exists` — landing on whoever generated, not on whoever repaired.
+
+The check that proves **contents** is:
+
+```bash
+npm run db:generate -- --allow-empty     # then answer: no schema changes
+```
+
+That is drizzle asserting the snapshot equals what it would serialise from
+[`src/db/schema.ts`](../../src/db/schema.ts) today, which is the actual claim a repair makes. Run it
+before declaring a chain repaired; green on the structural gates alone means nothing.
+
+**And rebuild from a tree that is exactly the trunk.** A rebuild takes its contents from the current
+`schema.ts`, so doing it from a tree carrying unlanded schema work bakes those objects into a
+snapshot dated before they exist — a third costume for the same fault.
+
 ### Repairing a fork: what the losing migration is decides everything
 
 The journal half of the conflict is easy — take the trunk's file whole:
@@ -748,6 +783,54 @@ concurrently, so the inversion check above stays load-bearing.
 
 A `db:migrate` that prints a `⚠ drizzle/meta/ is not a well-formed chain` warning is telling you
 this happened; the migration it is about to run is unaffected.
+
+### That rename question needs a terminal, and without one you get silence
+
+**The rename prompt above is interactive, and an agent has no TTY.** When
+`drizzle-kit generate` wants to ask it and cannot, it prints
+
+```
+Error: Interactive prompts require a TTY terminal
+```
+
+and then **exits 0 having written nothing**. `npm run db:generate` catches the
+empty folder and says so — that wrapper exists for the forked-chain case and it
+covers this one too — but the underlying failure is
+[silent success](../reusable/silent-success.md) in its purest form: the schema
+says one thing, `drizzle/` says another, and the obvious conclusion is *nobody has
+run the generator yet*. It cost several hours on 2026-09-02, with a destructive
+change sitting uncommitted and three agents all reaching that conclusion
+independently.
+
+**The prompt only appears when a column is added and another dropped in the same
+diff** — drizzle cannot tell a rename from a replacement, so it asks. Add and
+drop in two separate migrations and it never comes up, which is the way out if
+you would rather not fight it.
+
+To answer it without a terminal, give it one:
+
+```bash
+(sleep 8; printf '\r'; sleep 30) | script -qec "npx drizzle-kit generate --name your_name" /dev/null
+```
+
+Three things about that line, each of which took a go to find:
+
+- **`\r`, not `\n`.** The prompt reads the TTY in raw mode, where Return is a
+  carriage return. A newline leaves it sitting on the question until the timeout.
+- **The first `sleep` waits for the prompt to be drawn**, and the second keeps
+  stdin open while drizzle writes the files. Close stdin early and `script` kills
+  the shell mid-write — the run looks exactly like the failure it is working
+  around.
+- **It accepts whatever option is highlighted**, which is the first one:
+  `+ <column> create column`. That is the answer you want when the new column is
+  a different fact rather than the old one renamed — `route_kind` → `url` on
+  2026-09-02 was a replacement, and treating it as a rename would have kept ten
+  route names in a column validated as web addresses. **If you want the other
+  option, this recipe is not enough** — send arrow keys, or do it from a real
+  terminal.
+
+Answer it the same way every time you regenerate, for the reason the paragraph
+above gives.
 
 ### What no lock can cover
 

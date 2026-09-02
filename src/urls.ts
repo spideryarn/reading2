@@ -44,6 +44,75 @@ export function isWebUrl(value: string): boolean {
 }
 
 /**
+ * **The production origin, written down rather than taken from the request.**
+ *
+ * Everything built on this is published metadata: an `og:url` a link preview
+ * records as the article's address, a link inside an export a reader keeps for
+ * years. Building it from the `Host` header — or from `X-Forwarded-Host`, which
+ * is the version that looks more careful — hands that choice to whoever sent the
+ * request. A stranger can send any `Host` they like to an edge function, and the
+ * reply would then contain their domain, attributed to us, in a field whose
+ * entire purpose is to be believed.
+ *
+ * So it is a constant. This is exactly the kind of line somebody later
+ * "improves" into a header read so that preview deployments unfurl with their
+ * own hostname; the cost of that convenience is above, and a preview
+ * deployment's link previews are not worth it.
+ *
+ * **It lives here, not beside its first caller.** It began in
+ * [`src/public/page-head.ts`](public/page-head.ts), which was its only user; the
+ * export bundle wanted the same string on 2026-09-02 and a second copy of a
+ * hostname is the kind of drift nothing catches until a domain moves. This file
+ * is where URL facts live and it imports nothing, so both a server renderer and
+ * the store can reach it.
+ */
+export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
+
+/**
+ * **Where this article lives on Spideryarn** — the link back, from anywhere.
+ *
+ * One function rather than the same template written at each site, because
+ * `og:url` is *parsed* back out by the client
+ * ([`src/web/page-title.ts`](web/page-title.ts) § `serverComposedHead`, which
+ * reads the last path segment), and a second spelling of the path is how the
+ * writer and the reader come to disagree about where the slug is.
+ *
+ * `encodeURIComponent`, so a slug is one path segment whatever is in it: it is
+ * a database column, not a checked identifier, and a `/` in one would otherwise
+ * silently produce an address naming a different article. That is the whole of
+ * the escaping — `"`, `%`, a backslash, a newline and every control character
+ * come out percent-encoded, so nothing here can leave the path segment or reach
+ * the origin.
+ *
+ * ## It takes an `isSlug` value, and `.` is why that is a contract rather than a hope
+ *
+ * `encodeURIComponent` leaves a dot alone, so a slug of `..` would compose to
+ * `…/read/..` — which a browser resolves to the library, and `.` to a dead end.
+ * A link that quietly names the wrong page is worse than one that fails.
+ *
+ * **And it cannot be escaped away.** The obvious fix is to percent-encode the
+ * dots, and it does nothing: the URL standard counts `%2e` as a dot segment
+ * exactly as it counts `.`, so `new URL("https://x/read/%2E%2E").pathname` is
+ * `/` too. That guard was written here, looked right, and was deleted the same
+ * afternoon when the test refused to go green — docs/reusable/silent-success.md
+ * is the general case.
+ *
+ * So this is a precondition instead: **the slug must satisfy `isSlug`**
+ * ([`src/ingest.ts`](ingest.ts), `^[a-z0-9][a-z0-9-]*$`), which admits no dot
+ * and no empty string, and which every minted slug already satisfies. Not
+ * asserted here, for two reasons: this file imports nothing on purpose (see the
+ * top), and a throw inside `og:url` composition would trade a bad link for a
+ * blank page. `tests/page-head.test.ts` pins the guarantee where it actually
+ * lives. GPT Sol found the hole, 2026-09-02.
+ *
+ * Not escaped for HTML — the caller does that once at the markup boundary, for
+ * the reason `safePublicCanonical` gives below.
+ */
+export function articleUrl(slug: string): string {
+  return `${PUBLIC_ORIGIN}/read/${encodeURIComponent(slug)}`;
+}
+
+/**
  * **The article's own address, or nothing — for a `<link rel="canonical">`.**
  *
  * Stricter than `isWebUrl` above, and every extra rule is about the fact that

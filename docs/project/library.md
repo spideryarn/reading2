@@ -515,6 +515,26 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
+### The Shared badge
+
+An article anyone with the link can read wears a small globe and the word **Shared**, on the meta
+line of the card and in the title cell of the table — one component,
+[`SharedBadge`](../../src/web/ShelfEntry.tsx), because a marker added to one of the shelf's two
+renderers looks finished from wherever you were standing. Hovering it gives the owner's own sentence
+from the sharing card, `SHARING_ON` in [`src/messages.ts`](../../src/messages.ts).
+
+**A private article gets nothing at all.** The shelf is almost entirely private, so a chip on every
+card would be decoration, and it would cost the shared one the only thing it has. `LibraryEntry`
+carries `visibility` only when it is `"public"` for the same reason — and because the filesystem
+store has no visibility column to answer with at all ([database.md](database.md)).
+
+**A badge, not a filter.** There is deliberately no way to sort or narrow the shelf by this until
+there is enough shared material for it to be worth anything — Greg's decision on
+[260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).
+The visitor's side of the same fact is `ViewOnlyChip` in
+[`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx), and it says something else: *you may
+not change this*, where this says *anyone with the link can read this*.
+
 ### Where the numbers on it come from, and why nobody derives them twice
 
 Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by

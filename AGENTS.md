@@ -26,13 +26,15 @@ listed here; the names under each are files in `docs/project/`.
 
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
-  <br>↳ `open-questions.md` · `original-version/` (the larger app this is an offshoot of)
+  <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
+  `original-version/` (the larger app this is an offshoot of)
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
-  `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
-  `database.md` · `sql.md` (columns over JSON, keys over good intentions) ·
+  `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
+  `prompt-caching.md` · `database.md` ·
+  `sql.md` (columns over JSON, keys over good intentions) ·
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
@@ -52,14 +54,17 @@ listed here; the names under each are files in `docs/project/`.
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
-  `copy.md` (reader-facing failure messages)
+  `copy.md` (reader-facing failure messages) ·
+  `website-text.md` (the landing page, the contact address) ·
+  `privacy.md` (what we do with a reader's data, and the page that says so)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
   <br>↳ `colour-scales.md` · `icons.md`
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
-  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners)
+  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
+  `billing.md` (what a slot is, and what stops a script taking twenty)
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
@@ -136,6 +141,8 @@ the other docs and to the code. Not descriptions of code, which the code already
 - **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
   anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
   after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
+  **Signposting is not a rule**, so adding a new doc's line under its entry point, or tweaking a
+  pointer's wording, needs no approval — just do it. Greg, 2026-09-02.
 - **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
   somewhere that shouted. Rename on sight and fix the links.
 - **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
@@ -165,9 +172,10 @@ The rules are here; the reasons are behind the links. Several exist because of a
 and the write-up is worth reading once.
 
 **This is an alpha, and speed wins.** There are no real users yet, so we optimise for how fast we
-can move. It is not the end of the world if something is briefly broken. What we are not trading
-away is design: write code that will still be good to work with in six months. It loosens nothing
-in **Real data belongs to the reader** below.
+can move. It is not the end of the world if something is briefly broken — a database migration that
+lands before the code that matches it, and breaks production for the minutes in between, is fine.
+What we are not trading away is design: write code that will still be good to work with in six
+months. It loosens nothing in **Real data belongs to the reader** below.
 
 **Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
 doc, in a commit message.
@@ -185,6 +193,18 @@ actually reaches is not always the one on its command line, and both mistakes pr
 `✓ migrations applied` —
 [database.md § `DATABASE_URL=… npm run db:migrate` does not do what it looks like](docs/project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
 
+**Work in a worktree, not in this checkout.** Before your first edit, check where you are: if
+`git rev-parse --git-dir` and `git rev-parse --git-common-dir` print the same path, this is the
+shared primary. Call the `EnterWorktree` tool (or launch with `claude --worktree <name>`), run
+`npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
+[worktrees.md](docs/project/worktrees.md). A doc edit or a one-line fix may stay here; anything
+that touches code moves. Run the job itself the way
+[engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
+the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
+`dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
+`data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
+nothing else has a copy of.
+
 ### Working in a tree several agents share
 
 - **Check which machine you are on.** `/home/greg/` is probably the Hetzner box, `/Users/greg/` is
@@ -193,20 +213,12 @@ actually reaches is not always the one on its command line, and both mistakes pr
   to make it so now, going forwards, or both —
   [hetzner-remote-server-box.md § A change to the box is a change to a file](docs/project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
   On the Mac, more caution: a different OS, and not disposable — spike it first where that is safe.
-- **Use a worktree for anything non-trivial.** `claude --worktree <name>`, then
-  `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
-  [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in
-  your files and most of the sharing below stops applying to you. A one-line fix or a doc edit can
-  stay in the shared tree. Run the job itself the way
-  [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
-  the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
-  `dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
-  `data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
-  nothing else has a copy of.
-- **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
-  against one local Supabase and one dev server. Files change under you, tests go red for reasons
-  that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
-  don't try to fence yourself off.
+- **Other agents will get in your way; be tolerant.** Every tree shares one local Supabase and one
+  dev server, and anyone still in the primary shares its files too. Files change under you, tests go
+  red for reasons that are not yours, the database is not how you left it. Absorb it, do your best,
+  and carry on — don't try to fence yourself off. If you are in the primary, accept that other
+  agents may be editing there too, and that committing some of their changes along with yours is not
+  the end of the world.
 - **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
   production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
   deploy to real readers, and **nothing mechanical stops you**:
@@ -327,7 +339,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   add the complexity or the optimisation later, once something shows it is needed. When a choice
   would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan
   and in chat — so Greg decides it rather than inherits it.
-  [vision.md § Simpler first](docs/project/vision.md#simpler-first).
+  [vision.md § Simpler first](docs/project/vision.md#simpler-first). **Ask the other way round
+  too:** when a small product tweak — dropping a case, changing a default — would take a lot of the
+  engineering out, ask Greg before you build the hard version. Often that's the route we'll prefer.
 - **Let the types catch it.** Make a wrong state something the compiler refuses, not something a
   test finds later: a discriminated union rather than a bag of optionals, a `never` check where a
   `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`

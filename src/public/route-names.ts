@@ -70,8 +70,14 @@ function publicRoute(name: string): PublicRouteName {
  * ones would be unswept and the suite would stay green. The inventory is the
  * fix, and adding a route to it is now the only way to add a route at all:
  * `routes.ts` refuses to load if a name here has no reader attached.
+ *
+ * **One entry since 2026-09-02, and that is deliberate rather than unfinished.**
+ * `metadata` was deleted with its reader, its DTO and its type: the client had
+ * read the artefact booleans off the article payload since 2026-08-28, and the
+ * only thing still calling the route was a deployment checker, which now reads
+ * `meta.title` off the article instead.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster B.
  */
 export const PUBLIC_ROUTE_NAMES: readonly PublicRouteName[] = [
   publicRoute("article"),
-  publicRoute("metadata"),
 ];

@@ -18,7 +18,7 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
-import { DEV_OWNER_EMAIL, DEV_OWNER_ID } from "../src/owner.js";
+import { DEV_OWNER_EMAIL, DEV_OWNER_ID, EVAL_OWNER_EMAIL, EVAL_OWNER_ID } from "../src/owner.js";
 
 /**
  * Where the seeded administrator's password lives.
@@ -294,12 +294,18 @@ export interface SeededAccount {
 }
 
 /**
- * The two local accounts, and the reason there are two.
+ * The three local accounts, and the reason there are three.
  *
  * They are different people and merging them would be a real change:
  *
  * - **The owner** is what rows written *outside* a request belong to — the CLI,
  *   the pipeline, `db:import`. src/owner.ts.
+ * - **The eval owner** is what `npm run eval:cost` puts its throwaway articles
+ *   under. Separate from the owner above because an open dev tab drives every
+ *   queued job of the owner it is signed in as (`src/web/jobEngine.ts`), and a
+ *   browser winning a claim on an eval job would run a paid step through the
+ *   production registry and bill it to Product. `src/owner.ts § EVAL_OWNER_ID`
+ *   has the whole argument.
  * - **The administrator** is who signs in. `/api/admin/*` gates on a uuid rather
  *   than an email address (src/admin.ts explains why at length), so signing up
  *   through the email form gets the right address on a random id and is refused
@@ -320,6 +326,21 @@ export const SEEDED_ACCOUNTS: readonly SeededAccount[] = [
     mismatchAdvice:
       "Rows already written point at one id or the other, so do not just delete it.\n" +
       "  Set SPIDERYARN_OWNER_ID to the id above and leave the account alone.",
+    renamableFrom: [],
+  },
+  {
+    id: EVAL_OWNER_ID,
+    email: EVAL_OWNER_EMAIL,
+    /* Nothing ever signs in as it — that is the entire point. A password would
+       be a credential existing for no reason, and worse: an eval owner somebody
+       *could* sign in as is an eval owner whose jobs a browser tab could drive,
+       which is the failure this account exists to prevent. */
+    signsIn: false,
+    why: "the owner npm run eval:cost puts its throwaway articles under, so no dev tab drives them",
+    mismatchAdvice:
+      "The eval creates and deletes its own articles under this id and nothing else uses it.\n" +
+      "  If it holds somebody else's account, change EVAL_OWNER_ID in src/owner.ts rather than\n" +
+      "  pointing the eval at an id a browser might be signed in as.",
     renamableFrom: [],
   },
   {

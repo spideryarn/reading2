@@ -39,6 +39,7 @@
  */
 import Stripe from "stripe";
 
+
 /**
  * The Stripe API version every call is made against.
  *
@@ -146,6 +147,22 @@ export function stripeClient(): Stripe {
     /* Named so a support request, and Stripe's own dashboard log, say which
        application made the call rather than "unknown Node app". */
     appInfo: { name: "Spideryarn", url: "https://spideryarn.com" },
+    /**
+     * **Ten seconds, not the SDK's eighty.**
+     *
+     * `syncSubscriptionFromStripe` holds a pooled database connection across
+     * its Stripe call, deliberately (see that file). `DATABASE_POOL_MAX`
+     * defaults to 5, so five degraded calls at the default timeout would hold
+     * every connection in the pool for well over a minute and stall everything
+     * else on the instance — a webhook slowdown becoming an outage. GPT Sol,
+     * 2026-09-02.
+     *
+     * Ten seconds is far beyond a healthy Stripe round trip and short enough
+     * that a bad one fails while somebody is still watching. `maxNetworkRetries`
+     * stays at the SDK default of one, so the worst case is bounded at roughly
+     * twice this.
+     */
+    timeout: 10_000,
   });
   cached = { key, client };
   return client;
@@ -169,26 +186,6 @@ export function assertLivemode(livemode: boolean, what: string): void {
         `${expected ? "live" : "test"}-mode Stripe objects`,
     );
   }
-}
-
-/**
- * The price the paid tier is sold at.
- *
- * A `price_…` id, created by `scripts/stripe-setup.ts` and pasted into the
- * environment. Not a secret — it appears in Checkout — so it travels on the
- * `gjd-remote push-env` allowlist with the rest of the configuration.
- *
- * @throws {StripeConfigError} when unset, because a checkout with no price is
- * a 503, not an empty basket.
- */
-export function readerPriceId(): string {
-  const id = process.env.STRIPE_PRICE_READER?.trim();
-  if (!id) {
-    throw new StripeConfigError(
-      "STRIPE_PRICE_READER is not set — run `npx tsx scripts/stripe-setup.ts` and put the price id in .env.local",
-    );
-  }
-  return id;
 }
 
 /** Reset the memoised client. Tests only; the key is read from the env. */

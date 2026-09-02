@@ -1,8 +1,9 @@
 # Talking into a text box
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on five boxes today — both profile boxes, the chat composer, the comment follow-up, and
-the quiz answer box ([quiz.md](quiz.md)) — and adding it to a sixth is three lines.
+box. It is on six boxes today — both profile boxes, the chat composer, the comment follow-up, the
+quiz answer box ([quiz.md](quiz.md)) and the Feedback dialog ([feedback.md](feedback.md)) — and
+adding it to a seventh is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -208,7 +209,19 @@ list from the client: a box adopting a microphone should not have to know how to
 vocabulary, and a vocabulary accepted from a caller is a string that caller chooses landing in a
 model prompt, for no gain, since the server has the glossary already.
 
-If the box is inside a form, guard the submit on `dictate.readOnly`.
+If the box is inside a form, guard the submit on `dictate.readOnly` — **and on
+`dictate.dictation.armed` as well**, which is not the same thing and is the guard everybody forgets.
+`readOnly` is `transcribing` alone, the two seconds *after* the reader presses stop; `armed` is the
+microphone actually being on. Guard only the first and ⌘+Enter mid-sentence sends the rough live
+guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol found it in the
+Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
+example.
+
+**And if the box lives in a component that stays mounted when it disappears** — a dialog whose
+parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
+`useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
+effect on the open flag fixes it, calling `dictation.toggle` (not the field wrapper's `toggle`,
+which puts the focus back into a box that is no longer on screen).
 
 ## The audio leaves the machine now
 

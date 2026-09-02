@@ -2,29 +2,61 @@
 
 ## Goal, context
 
-Introduce payments: a freemium model with one paid tier, processed by Stripe.
+Introduce payments: a freemium model with two paid tiers, processed by Stripe.
 
-- **Free**: sign in and ingest **3 articles, lifetime** — enough to play with the product.
-- **Paid ("Reader", name TBC)**: **$10/month for 100 article ingests per billing period.**
-- Reading is never gated. Greg, 2026-09-02:
+| | ingests | USD | GBP | EUR |
+|---|---|---|---|---|
+| **Free** | 3, lifetime | — | — | — |
+| **Reader** | 20 / month | $10 | £8 | €9 |
+| **Researcher** | 150 / month | $50 | £40 | €45 |
 
-  > To be clear: if a user has hit their quota, they should still be able to read their existing
-  > and Public-readable articles, just not incur extra spend.
+Reading is never gated. Greg, 2026-09-02:
 
-Pricing is deliberately finger-in-the-air. Greg, 2026-09-02:
+> To be clear: if a user has hit their quota, they should still be able to read their existing
+> and Public-readable articles, just not incur extra spend.
+
+**The Reader quota was 100 until measurement arrived.** The original figure was explicitly a guess.
+Greg, 2026-09-02:
 
 > Right now I have no idea of the costs involved for uploading an article … I was thinking
 > something like $10 a month allows you to upload 100 articles. In practice, that might actually
 > mean that we're working at a loss depending on how much it costs to upload an article, but I'm
 > assuming that most people won't max it out.
 
+Then a number came back, and the guess turned out to be off by enough to matter — at ~£1 an
+article, 100 ingests for $10 loses about £90 a month per user who uses it. Greg, same day:
+
+> it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
+> (which we can always increase later)
+
+…and a second tier for people who read for a living:
+
+> let's also add a $50 (and appropriate GBP) tier for 150 articles per month
+
+**And then the tiers moved into the database entirely**, Greg's call the same evening:
+
+> instead of adding them as environment variables, could we add them to the database, so that it's
+> easier to modify (e.g. for agents, in UI, etc)
+
+He was offered ids-only, ids-and-quotas, or the whole table, with the costs of each stated, and
+took the whole table. So `billing_tiers` and `billing_tier_prices` are the source of truth, Stripe
+follows them, and **raising a quota is one `UPDATE`** — no deploy, no Stripe call, no migration.
+What that cost is the compile-time tier union and the invariant tests over constants; those moved
+into the schema as CHECKs, where they hold for every writer. The currency reasoning and the recipe
+are in [billing.md](../project/billing.md#adding-a-tier-or-a-currency).
+
 Cost-tracking and cost-estimating are **out of scope** — other agents are working on those. This
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota
 enforcement at the ingest choke points.
 
-**Status (2026-09-02)**: reviewed twice before building — GPT Sol on the plan (verdict: rework —
-[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)), then **Fable against the
-code**, which is the review that changed the design. Sol's hardening was sound but written in
+**Status (2026-09-02)**: reviewed three times before building — GPT Sol on the plan (verdict:
+rework — [review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)), **Fable against
+the code**, and then **Sol again on the quota mechanism alone**
+([review](260902i-quota-admission-design-review-sol.md),
+[prompt](260902i-quota-admission-design-review-prompt.md)) — that last one found a quota bypass and
+three lifecycle races in the design Fable's review had produced, and its findings are in *Quota
+accounting* below. Each round was cheap and each found something the one before could not; the
+pattern is worth copying rather than the specific findings. Sol's hardening was sound but written in
 mechanisms this repo does not use, and one of its rules could not be implemented as stated. Both
 sets of findings are folded in below and marked where they landed. Every product question is
 decided — nothing is waiting on Greg. The first stage is built (✅); the build is in the worktree
@@ -50,6 +82,109 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 4. **Two pieces of Checkout hardening dropped as over-built** — see the Checkout stage.
 5. **The files-store hole**, which neither earlier review saw: see *Billing is a Postgres feature*
    below. It was the one unplanned thing that would have cost an afternoon.
+
+### Where the build stands
+
+*Last updated 2026-09-02 17:45. The date is in the text rather than the heading so that links to
+this section survive it being updated — an earlier dated heading broke `billing.md`'s link on the
+first edit, which is what `tests/doc-links.test.ts` is for.*
+
+**Verdict: important work left.** Everything that can be built without the database is built,
+reviewed twice and committed. What remains is the half a reader can see — admission wired into
+the ingest route, settlement wired into the publish transaction, the checkout and portal routes,
+and `/profile` — plus the Postgres suite, which has never actually run.
+
+**151 billing tests pass, including the Postgres suite** — which spent most of the day skipping and
+now runs. The migration is applied locally, `tests/billing-quota-race.test.ts` executes all 13 of
+its cases through the real code, and `tests/db-schema.test.ts` is green on all three new foreign
+keys.
+
+Two things about that suite are worth keeping, because both nearly cost the guarantee:
+
+- **It skipped for a reason that had nothing to do with the database.** The file never called
+  `loadEnvLocal()`, so `pgReady` found no `DATABASE_URL` and reported 13 skipped against a database
+  that was up and migrated. A skip is indistinguishable from a deliberate one, which is why it
+  survived hours of being looked at; `REQUIRE_POSTGRES=1` is what said so, and is what that flag is
+  for.
+- **It can fail.** Remove the `for update` from the admission read and *"admits exactly three of
+  twenty for a free account"* goes red. The lock is demonstrated to be load-bearing rather than
+  asserted to be.
+
+**Reviewed as built** ([review](260902i-stripe-code-review-sol.md)): GPT Sol's verdict on the code
+was *"I would not ship the quota path yet"*, and it found six real defects — a release that could
+free a slot a job was spending, a settlement that updated without checking, an entitlement read
+outside its own lock, a subscription picker that could drop a paying reader to free, a usage count
+that defaulted to zero, and a subscription list that fetched one page while claiming to fetch all.
+All fixed. It also found **eleven comments that claimed more than the code did**, which is the
+finding worth remembering: this file's own rules say a confidently wrong comment is worse than
+none, and a dozen had accumulated in a day.
+
+
+
+Worktree `stripe-payments`, branch `worktree-stripe-payments`.
+
+**What exists**, all of it on `dev` or about to be:
+
+| | |
+|---|---|
+| Stripe objects | Product, $10/mo price, Customer Portal configuration, created in test mode by [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) and idempotent by `lookup_key`. A Checkout Session and a Portal session were both minted by hand to prove the account works end to end. |
+| [`src/billing/stripe.ts`](../../src/billing/stripe.ts) | The only place a client is constructed. Pinned API version, mode guards, 10-second timeout. |
+| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | What each tier allows. `Entitlement` is a discriminated union, so a period start without an end is a state the compiler refuses. |
+| [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription, where the Basil period-move trap lives. Refuses everything unrecognised, towards free. |
+| [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification over the exact bytes, its own raw-body reader, fail-closed on an unset secret, and the route itself at an exact pre-auth path. |
+| [`src/billing/sync.ts`](../../src/billing/sync.ts) | Ask Stripe, write it down, under the customer's row lock. **Never executed.** |
+| [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock, and the anchor row created before it. **Never executed against a database.** |
+| schema + 2 migrations | `billing_accounts`, `ingest_events`, `jobs.ingest_event_id` with a composite FK. **Generated, never applied.** |
+| `pay-` copy | Three messages, registered in `CODE_KINDS` so none arrives with a Retry button that cannot work. |
+| [billing.md](../project/billing.md) | The evergreen doc, under [security-map.md](../project/security-map.md). |
+
+**What is still unbuilt**: the wiring. `reserveIngest` has no caller in `POST /api/jobs` and
+`settleReservation` has none in `settleIn`, so the quota is enforced nowhere yet — everything above
+is machinery with tests, waiting to be connected. `syncSubscriptionFromStripe` has likewise never
+been executed: the webhook route is tested with an injected sync, and the real one wants a
+controlled-interleaving test against two connections before it is trusted.
+
+**One statement in the schema migration is not ours**, and it is written down here so nobody
+rediscovers it: `src/db/schema.ts` on `dev` admits `'privacy'` in `feedback_route_kind` and no
+migration carried it, so the first `db:generate` since picked it up. Keeping it was deliberate —
+trimming would leave the snapshot asserting a constraint the database denies, which is the content
+hole that cost this box an hour. The half it does *not* close: `FEEDBACK_ROUTE_KINDS` in
+`src/types.ts` still lacks `'privacy'` and there is no such route, so the column now admits a value
+the client cannot send. Harmless in that direction; the mirror of it would be a 500 on the endpoint
+people use to report 500s. Whoever ships the `/privacy` page should add it to that array in the
+same change — and `tests/feedback-store.test.ts` cannot see either half, because it iterates the
+`types.ts` list.
+**Next**, in order:
+
+1. `npm run db:migrate`, then **run `tests/billing-quota-race.test.ts`** — the first time the
+   mechanism is exercised through the real code rather than the standalone spike. Do not skip
+   past this because the spike passed; they are different things.
+2. The settlement tests Sol asked for and nobody has written: reserve a slot, attach it to a real
+   job, and assert that `done` publishes *and* charges in one commit, that `error` and cancel
+   release, that an injected settlement failure rolls back the publication, and that a cancel
+   racing a final publication settles exactly once.
+3. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
+   `ingestEventId` threaded through `EnqueueRequest` → `enqueue()` → the job INSERT. Retries go
+   through admission like anything else.
+4. Checkout and portal routes — **and the customer→owner mapping must be durable before a
+   Checkout Session exists**, not written by the browser's return callback, which is not reliable
+   (Sol, and the webhook's "unmapped" case assumes it).
+5. `/profile`, browser check, admin columns.
+6. Comp subscriptions, then go-live.
+
+### The coordination problem this work kept hitting
+
+Not part of this plan, and worth someone's attention. Three separate sessions blocked
+`npm run db:migrate` for everybody today by applying a migration to the shared local Postgres and
+not pushing it — the guard fails closed on a ledger row belonging to no migration in the journal,
+which is correct and which nobody can clear but the owner. Add the forked snapshot chain that
+arrived the same afternoon and roughly two hours went on it across four sessions.
+
+The rule that would have prevented all of it is one line — *push a migration in the same breath as
+applying it* — and there is nowhere in the docs that says so. The deeper fix is a database per
+worktree, which [worktrees.md](../project/worktrees.md) shows is harder than it looks because of
+the `auth.users` foreign keys, and which
+[260902c](260902c-concurrent-migrations-across-worktrees.md) already owns.
 
 ## Picking this up
 
@@ -224,34 +359,58 @@ began. Documented in `docs/project/billing.md` rather than left to be discovered
   mutable slug is never its identity. One ledger, every environment — soft-archive is today's
   deletion story but hard deletes exist in maintenance/tests, and one mechanism beats two
   conditional ones.
-- **Durable `counts_as_ingest` provenance on jobs**, set only by the authenticated new-ingest
-  route. `Job.url` cannot carry this — re-runs recover the URL too (`src/jobs.ts` ~`:2068`,
-  checked). A **boolean**, not the nullable-timestamptz the schema's house style prefers for
-  "since when": the fact here is genuinely boolean, and `jobs.created_at` already says when.
-  **Three edits, not one** — the field goes on `EnqueueRequest` (`src/jobs.ts` ~`:1902`), is
-  threaded through `enqueue()` onto the job row, and is copied from the old job by `retryJob`
-  (~`:2558`), which builds a fresh request rather than reusing the old one.
-- **Two callers are deliberately outside the gate.** `POST /api/jobs/:id/retry` is a different
-  route and does not re-admit: the work was admitted once, and charging twice for one article
-  because the first attempt crashed is the wrong answer. CLI and script callers of `enqueue()`
-  never set the flag, so pipeline work and seeding are free. Both are properties to assert in
-  tests, not incidental.
-- **The ledger insert joins the same Postgres transaction** that publishes the revision and
-  finishes the job — `settleIn()` in `pg-session.ts` (~`:423`–`:471`), the `ending.status ===
-  "done"` branch, which is the single place a successful ingest is published and is already
-  wrapped in `db.transaction(…)` by both its callers. After-completion inserts have a crash gap;
-  before-publication inserts charge failures.
-- **Admission is serialised per owner at the route**, not inside the job store: take
-  `for update` on the owner's `billing_accounts` row, count successful events **plus active
-  quota-marked jobs**, then call `enqueue()` while still holding it. Failed/cancelled jobs stop
-  occupying a reservation but never become a success event. This replaces the earlier draft's
-  "small acknowledged race", which Sol correctly called a scripted bypass — N concurrent enqueues
-  against a zero success-count all pass a count-only check — and it replaces Sol's own
-  "insert in the same transaction", which `enqueueOrGet` cannot honour (see the status note).
-- **A stuck job pins a reservation, and that is the safe direction.** A job wedged `queued` or
-  `running` counts against the owner until it settles, so the failure is a *false block* rather
-  than free ingests. The lease machinery already reaps these; the admission count does not
-  second-guess it. Noted rather than solved.
+- **The reservation is written first and settled last.** A row is inserted at admission
+  (`reserved_at`), and gets exactly one of `succeeded_at` or `released_at` when the job ends. So
+  the ledger is both the record of what was charged *and* the mechanism that stops a burst: an
+  unsettled reservation counts against its owner, so a second concurrent request sees the first
+  one whether or not it has reached `enqueue()` yet.
+- **Provenance is `jobs.ingest_event_id`, written by the job's own INSERT.** No boolean on the
+  job, and no `job_id` on the ledger. Sol's third review, 2026-09-02, showed the reverse
+  direction — reserve, enqueue, then `update … set job_id` — is broken three ways: a job that
+  *published before* the follow-up update was never charged (the local pump starts immediately,
+  and an all-cached job finishes in milliseconds); a crash in that gap left a runnable job nobody
+  paid for; and two duplicate Adds that `enqueueOrGet` deduplicates into one job pointed two
+  reservations at it, so one publication settled both. Writing the id in the job's own INSERT is
+  atomic without needing a transaction, which is what makes it fit `enqueueOrGet` as it is.
+  `jobs_ingest_event_unique` (partial, on non-null) makes "one job per slot" a constraint rather
+  than an intention. A **null** id means "spends no quota": CLI work, a step re-run, seeding —
+  they settle nothing, and there was never a flag to forget.
+- **Settlement joins the transaction that ends the job** — `settleIn()` in `pg-session.ts`
+  (~`:423`–`:471`), *both* branches, not just `done`. Sol's finding: releasing from anywhere else
+  loses a race the code deliberately allows. A Stop during the last step may still finish as
+  `done`; if `/cancel` released the reservation from outside, the publication would then find it
+  released and charge nothing. Success and release in the same transaction as the terminal
+  transition means whichever one wins the job fence is the one whose settlement lands.
+- **Admission is serialised per owner at the route**, not inside the job store: `insert … on
+  conflict do nothing` the owner's `billing_accounts` row, `for update` it, count, insert the
+  reservation, commit — then call `enqueue()` outside. **The anchor row is created before it is
+  locked**, because a free reader has no billing row and
+  [a `for update` that matches nothing locks nothing](../postmortems/260901f-a-for-update-that-locks-nothing.md)
+  — which would leave the boundary decorative in exactly the case it exists for. Measured with two
+  real connections on 2026-09-02: the second transaction blocks for as long as the first holds the
+  row, then reads its committed value. `tests/billing-quota-race.test.ts` keeps that measurement.
+  This replaces Sol's own earlier "insert the job in the same transaction", which `enqueueOrGet`
+  cannot honour, and which would deadlock the pool at `DATABASE_POOL_MAX` (5) anyway.
+- **Nothing that opens its own transaction or touches the network may be called between the lock
+  and the commit.** That is the rule that keeps the pool argument true, and it is the one a later
+  change is most likely to break.
+- **An unsettled reservation never expires**, and an earlier draft of this plan gave it six hours.
+  Sol showed that was a plain bypass, not a safety valve: hold 100 jobs queued for six hours,
+  reserve 100 more, and 200 can succeed in one period — repeatable in cohorts, and *easier* the
+  more contended the queue is. So a leaked reservation costs its owner one slot for ever, which is
+  a support conversation; the bypass would have cost unbounded model spend. A reconciliation that
+  frees only reservations *provably* without a job is possible later, because `ingest_event_id`
+  makes "without a job" a query rather than a guess.
+- **Retry is an ordinary admission.** `POST /api/jobs/:id/retry` mints a *fresh* reservation, and
+  the failed attempt's was released when it failed — so a failure costs nothing and the eventual
+  success costs exactly one. No lineage column, no reactivating a released row. An earlier draft
+  exempted retries entirely; Sol was right that a retry which can incur spend must go through the
+  gate.
+
+**Known limit, stated rather than solved**: because a failure releases its slot, a caller who can
+reliably make expensive ingests *fail* can repeat for ever. That is true of every design we
+considered — the quota counts successes because that is the product rule — and the answer when it
+matters is a daily attempt cap, not a change here.
 - **Period arithmetic is half-open on database time**: `succeeded_at >= start AND < end`. If the
   stored period does not contain `now`, resync from Stripe once synchronously; if there is still
   no current period (or Stripe is down), **fail closed with 503** rather than allow spend — a

@@ -70,9 +70,11 @@ import {
 } from "../src/store/contracts.js";
 import {
   FEEDBACK_ENVIRONMENTS,
-  FEEDBACK_ROUTE_KINDS,
-  MAX_FEEDBACK_ANSWER_CHARS,
-  type FeedbackRouteKind,
+  FEEDBACK_KINDS,
+  MAX_FEEDBACK_BODY_CHARS,
+  MAX_FEEDBACK_URL_CHARS,
+  type FeedbackEnvironment,
+  type FeedbackKind,
 } from "../src/types.js";
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -141,11 +143,10 @@ const when = reachable ? describe : describe.skip;
 function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
   return {
     reporterEmail: "reporter@example.invalid",
-    steps: "Open an article and press the button",
-    expected: "A dialog",
-    actual: "Nothing at all",
+    body: "Open an article and press the button, and nothing at all happens",
+    kind: "problem",
     consented: false,
-    routeKind: "read",
+    url: "https://www.spideryarn.com/read/a-piece?q=footnotes",
     slug: "some-article",
     buildCommit: "abc1234",
     environment: "development",
@@ -263,12 +264,11 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     /* Field by field rather than a shape check: every one of these is a column
        somebody will read months later, and a store that dropped one would pass
        "it came back". */
-    expect(stored?.steps).toBe("Open an article and press the button");
-    expect(stored?.expected).toBe("A dialog");
-    expect(stored?.actual).toBe("Nothing at all");
+    expect(stored?.body).toBe("Open an article and press the button, and nothing at all happens");
+    expect(stored?.kind).toBe("problem");
     expect(stored?.reporterEmail).toBe("reporter@example.invalid");
     expect(stored?.consented).toBe(true);
-    expect(stored?.routeKind).toBe("read");
+    expect(stored?.url).toBe("https://www.spideryarn.com/read/a-piece?q=footnotes");
     expect(stored?.slug).toBe("some-article");
     expect(stored?.buildCommit).toBe("abc1234");
     expect(stored?.environment).toBe("development");
@@ -289,10 +289,10 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   it("files one report when the same id arrives twice", async () => {
     const id = mintId();
     const first = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id, actual: "the first telling" })),
+      pgFeedbackStore.submit(report({ id, body: "the first telling" })),
     );
     const second = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id, actual: "a different telling" })),
+      pgFeedbackStore.submit(report({ id, body: "a different telling" })),
     );
 
     expect(first.kind).toBe("created");
@@ -301,7 +301,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
        in its text must not overwrite what the reader first sent, and reporting
        the *new* text back would hide that it had been ignored. */
     if (second.kind !== "duplicate") throw new Error("unreachable");
-    expect(second.report.actual).toBe("the first telling");
+    expect(second.report.body).toBe("the first telling");
     /* And the row count, because "returns duplicate" and "wrote nothing" are
        two claims and only one of them is about the database. */
     expect(await rowsFor(ALICE)).toBe(1);
@@ -350,22 +350,22 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   it("keeps one reader's reports away from another, id for id", async () => {
     const id = mintId();
     const mine = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id, actual: "what Alice saw" })),
+      pgFeedbackStore.submit(report({ id, body: "what Alice saw" })),
     );
     /* **The same id, a different owner.** The key is composite, so this is a
        second report and not a duplicate — a single-column unique index would
        hand Bob a 409 about a report he cannot see, and a global primary key
        would make one reader's minted id able to block another's. */
     const theirs = await runAsOwner(BOB, () =>
-      pgFeedbackStore.submit(report({ id, actual: "what Bob saw" })),
+      pgFeedbackStore.submit(report({ id, body: "what Bob saw" })),
     );
     expect([mine.kind, theirs.kind]).toEqual(["created", "created"]);
     expect(await rowsFor(ALICE, id)).toBe(1);
     expect(await rowsFor(BOB, id)).toBe(1);
 
     /* Each reads their own, by the same id. */
-    expect((await runAsOwner(ALICE, () => pgFeedbackStore.read(id)))?.actual).toBe("what Alice saw");
-    expect((await runAsOwner(BOB, () => pgFeedbackStore.read(id)))?.actual).toBe("what Bob saw");
+    expect((await runAsOwner(ALICE, () => pgFeedbackStore.read(id)))?.body).toBe("what Alice saw");
+    expect((await runAsOwner(BOB, () => pgFeedbackStore.read(id)))?.body).toBe("what Bob saw");
 
     /* And a report Bob does not have is simply not found — the same rule as
        `ownedSlug`: 404 rather than a 403 that confirms it exists. */
@@ -447,7 +447,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     const id = mintId();
     const answers = await Promise.all(
       Array.from({ length: POOL_MAX }, (_unused, i) =>
-        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, actual: `telling ${i}` }))),
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, body: `telling ${i}` }))),
       ),
     );
     const kinds = answers.map((one) => one.kind).sort();
@@ -475,10 +475,12 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   });
 
   /**
-   * **The two closed vocabularies, and the cap, checked against the database
+   * **The closed vocabulary, and the caps, checked against the database
    * rather than against themselves.**
    *
-   * `FEEDBACK_ROUTE_KINDS`, `FEEDBACK_ENVIRONMENTS` and
+   * There were two vocabularies until 2026-09-02, when `route_kind` became a
+   * URL and stopped being one — src/db/schema.ts § `url`.
+   * `FEEDBACK_ENVIRONMENTS` and
    * `MAX_FEEDBACK_ANSWER_CHARS` live in src/types.ts, where the dialog and the
    * route read them, and the CHECK constraints in src/db/schema.ts write the
    * same values out by hand — because building them from these arrays would make
@@ -490,14 +492,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
    * union and not to the CHECK goes red here, at the insert, which is where it
    * would have hurt. Written after that trade was made, not before.
    */
-  it("takes every route kind and every environment the types allow", async () => {
-    for (const routeKind of FEEDBACK_ROUTE_KINDS) {
-      const filed = await runAsOwner(ALICE, () =>
-        pgFeedbackStore.submit(report({ id: mintId(), routeKind })),
-      );
-      expect([routeKind, filed.kind]).toEqual([routeKind, "created"]);
-      await clear();
-    }
+  it("takes every environment the types allow", async () => {
     for (const environment of FEEDBACK_ENVIRONMENTS) {
       const filed = await runAsOwner(ALICE, () =>
         pgFeedbackStore.submit(report({ id: mintId(), environment })),
@@ -512,17 +507,59 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
       await violation(() =>
         runAsOwner(ALICE, () =>
           pgFeedbackStore.submit(
-            report({ id: mintId(), routeKind: "somewhere-else" as FeedbackRouteKind }),
+            report({ id: mintId(), environment: "somewhere-else" as FeedbackEnvironment }),
           ),
         ),
       ),
-    ).toBe("feedback_route_kind");
+    ).toBe("feedback_environment");
   });
 
-  it("takes an answer of exactly the cap, and refuses one character more", async () => {
-    const atTheCap = "x".repeat(MAX_FEEDBACK_ANSWER_CHARS);
+  /**
+   * **The cap on the address, from the database's side.**
+   *
+   * `route_kind` was a closed vocabulary until 2026-09-02, and the loop above
+   * used to walk it. There is nothing to walk now — a URL has no vocabulary —
+   * so what is left to hold is the pair of things `feedback_url_shape` really
+   * promises: `null` is allowed (a bundle older than the change), and 2048 is
+   * the ceiling. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same number,
+   * and this is the test that notices when the two stop agreeing.
+   */
+  it("takes an address of exactly the cap, refuses one more, and allows none at all", async () => {
+    const pad = (n: number) => `https://www.spideryarn.com/read/a?q=${"x".repeat(n)}`;
+    const exact = pad(MAX_FEEDBACK_URL_CHARS - pad(0).length);
+    expect(exact).toHaveLength(MAX_FEEDBACK_URL_CHARS);
+
     const filed = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id: mintId(), steps: atTheCap })),
+      pgFeedbackStore.submit(report({ id: mintId(), url: exact })),
+    );
+    expect(filed.kind).toBe("created");
+    await clear();
+
+    expect(
+      await violation(() =>
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), url: `${exact}x` }))),
+      ),
+    ).toBe("feedback_url_shape");
+    await clear();
+
+    /* `null` is a real answer rather than a hole: src/db/schema.ts § `url`
+       files an old client's report instead of refusing it. */
+    const old = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: mintId(), url: null })),
+    );
+    expect(old.kind).toBe("created");
+  });
+
+  it("takes a body of exactly the database's cap, and refuses one character more", async () => {
+    /* **`MAX_FEEDBACK_BODY_CHARS`, not `MAX_FEEDBACK_ANSWER_CHARS`, and the gap
+       between them is the point.** The reader meets the smaller one, in the
+       route and in the dialog. The column has to admit the larger, because the
+       migration that made one box out of three glued three separately-capped
+       answers together — a 4,000 CHECK would have made a row that was legal when
+       it was filed illegal afterwards. */
+    const atTheCap = "x".repeat(MAX_FEEDBACK_BODY_CHARS);
+    const filed = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: mintId(), body: atTheCap })),
     );
     expect(filed.kind).toBe("created");
     /* One over, and the database is what says no — a paste of an entire article
@@ -531,9 +568,31 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
        that TypeScript. */
     expect(
       await violation(() =>
-        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), steps: `${atTheCap}x` }))),
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), body: `${atTheCap}x` }))),
       ),
-    ).toBe("feedback_steps_shape");
+    ).toBe("feedback_body_shape");
+  });
+
+  it("files a report under every kind there is, and under none", async () => {
+    /* The same shape as the route-kind loop above, and for the same reason: the
+       CHECK in src/db/schema.ts writes the vocabulary out by hand, so this is
+       what stops the two lists drifting apart. Null is in the domain and not in
+       the list — Greg asked for the toggle to start unset, so "they did not say"
+       is an answer this table has to take. */
+    for (const kind of [...FEEDBACK_KINDS, null]) {
+      const filed = await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submit(report({ id: mintId(), kind })),
+      );
+      expect([kind, filed.kind]).toEqual([kind, "created"]);
+      await clear();
+    }
+    expect(
+      await violation(() =>
+        runAsOwner(ALICE, () =>
+          pgFeedbackStore.submit(report({ id: mintId(), kind: "grumble" as FeedbackKind })),
+        ),
+      ),
+    ).toBe("feedback_kind");
   });
 
   it("refuses diagnostics the reader did not consent to", async () => {
@@ -561,11 +620,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
        by somebody adding a helpful field to a log line. docs/project/logging.md. */
     const id = mintId();
     const SECRET = "thaumaturgical";
-    const words = {
-      steps: `A ${SECRET} account of what I did`,
-      expected: `Something ${SECRET}`,
-      actual: `Nothing ${SECRET} at all`,
-    };
+    const words = { body: `A ${SECRET} account of what I did, and what I saw instead` };
     const logged = await logLinesWhile(async () => {
       await runAsOwner(ALICE, () =>
         pgFeedbackStore.submit(
@@ -583,7 +638,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(logged).not.toContain(SECRET);
     /* The length is the useful part, and it is what is there instead: how much
        somebody wrote is a fact about the app, what they wrote is theirs. */
-    const chars = words.steps.length + words.expected.length + words.actual.length;
+    const chars = words.body.length;
     expect(logged).toContain(`"chars":${chars}`);
   });
 });

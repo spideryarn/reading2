@@ -470,22 +470,27 @@ when("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
-   * **The metadata endpoint is 404 before publication too**, and until 2026-08-28
-   * nothing said so.
+   * **The deleted metadata endpoint is 404 whatever the article's visibility
+   * is** — and it is 404 for the *other* reason, which is the assertion.
    *
-   * The suite only ever asked for metadata *after* the article was public, so
-   * `loadMetadata` losing its visibility clause would have been invisible here —
-   * and it was invisible in the SQL test as well, because that test exercised a
-   * helper the real query did not use. Two checks, one blind spot, and the
-   * article endpoint's own 404 covering for both. GPT Sol's finding 3.
+   * There was a second public route until 2026-09-02
+   * (docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+   * § Cluster B). A deletion is the one edit that can quietly open the hole the
+   * closed room exists to prevent: a path the dispatcher no longer matches has
+   * to end *inside* `/api/public/`, and the way it would fail is by falling
+   * through to the authenticated gate and answering 401, which reads as *sign
+   * in and you may see it*. So the sentence is read, not just the status —
+   * `No public API route` rather than `No article artefacts`.
+   *
+   * Over HTTP against the real dispatcher, because that is the only place the
+   * fallthrough could happen; tests/public-dispatch.test.ts makes the same
+   * claim without a database.
    */
-  it("and its metadata is 404 as well, not just its prose", async () => {
+  it("and the deleted metadata path 404s from inside the closed room, not at the gate", async () => {
     expect((await articleRow())?.visibility).toBe("private");
     const r = await call("GET", `/api/public/metadata/${SLUG}`);
     expect(r.status).toBe(404);
-    /* The same sentence the article endpoint gives, so a visitor cannot tell
-       "not shared" from "no such article" by comparing the two. */
-    expect(r.body.error).toMatch(/No article artefacts/);
+    expect(r.body.error).toMatch(/No public API route/);
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
@@ -496,8 +501,8 @@ when("sharing one article", { timeout: 60_000 }, () => {
    * Called directly rather than over HTTP because the route is a later slice.
    * That is exactly why it is worth asserting now: a reader function with no
    * caller is where a missing visibility clause sits undisturbed until the day
-   * something calls it. The other two reads each had a version of that problem
-   * — `loadMetadata`'s SQL test exercised a helper the real query did not use.
+   * something calls it. The article read had a version of that problem too: its
+   * SQL test exercised a helper that one of the reads did not actually use.
    */
   it("and its head is 404 as well, so a preview cannot name it", async () => {
     expect((await articleRow())?.visibility).toBe("private");
@@ -694,20 +699,22 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(body.tweets?.limit).toBe(280);
   });
 
-  it("shows the metadata page which artefacts exist, and nothing about the pipeline", async () => {
+  /**
+   * **And the deleted metadata path is still 404 for an article that *is*
+   * shared** — which is the control on the case above.
+   *
+   * There the article was private, so a 404 could have been the visibility
+   * predicate doing the work; here the same fixture is public and its own
+   * article route answers 200 two cases up. The only thing that can refuse this
+   * path now is that no route matches it, and the error sentence says which.
+   * The artefacts this route used to list are asserted off the article payload
+   * in the case above it.
+   */
+  it("and the deleted metadata path 404s for a shared article too, by route and not by predicate", async () => {
     const r = await call("GET", `/api/public/metadata/${SLUG}`);
-    expect(r.status).toBe(200);
-    expect(r.body).toEqual({
-      slug: SLUG,
-      title: EXTRACTED_TITLE,
-      available: {
-        arc: false,
-        tweets: true,
-        glossary: true,
-        ideas: true,
-        quotes: false,
-      },
-    });
+    expect(r.status).toBe(404);
+    expect(r.body.error).toMatch(/No public API route/);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
   /* --------------------------------------------- anonymous equivalence -- */
@@ -800,11 +807,12 @@ when("sharing one article", { timeout: 60_000 }, () => {
    * 2026-08-28 nothing could.
    *
    * A real hole in 1a rather than a nicety. The Access & Sharing card had
-   * nothing owner-facing to read, so it was asking
-   * `GET /api/public/metadata/:slug` anonymously — the only non-mutating
-   * question available to it — and that endpoint **cannot tell private from
-   * absent**, because both are 404 by design. The card was drawing "we could
-   * not check" because it could not honestly draw anything else.
+   * nothing owner-facing to read, so it was asking the public metadata endpoint
+   * anonymously — the only non-mutating question available to it — and that
+   * endpoint **could not tell private from absent**, because both are 404 by
+   * design. The card was drawing "we could not check" because it could not
+   * honestly draw anything else. (That endpoint was deleted on 2026-09-02; this
+   * field is what replaced its misuse.)
    *
    * Asserted through `handleApi` as the owner, at the moment the article is
    * public, so it is the round trip the card makes rather than a store call.
@@ -826,6 +834,22 @@ when("sharing one article", { timeout: 60_000 }, () => {
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
       personalised: ["tweets", "glossary", "ideas"],
+      /**
+       * **What a shared link would carry, against a real Postgres** — and the
+       * only place that claim is checked end to end.
+       *
+       * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
+       * row, and the fixture plants three artefacts and not the other two — so
+       * this asymmetry is the assertion. A unit test cannot make it: the whole
+       * question is whether the columns the projection publishes are the
+       * columns this field reports, and only a row answers that.
+       *
+       * The owner's sharing dialog lists these five
+       * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md),
+       * and the two `false`s are the half that matters — an inventory that said
+       * *arc* here would name a rung of Outline this article does not have.
+       */
+      available: { arc: false, tweets: true, glossary: true, ideas: true, quotes: false },
     });
   });
 
@@ -1433,14 +1457,20 @@ when("sharing one article", { timeout: 60_000 }, () => {
 });
 
 /**
- * **A public article with a tree and no blocks**, which is the one state the
- * head read refuses and the two other reads disagree about.
+ * **A public article with a tree and no blocks**, which both public reads
+ * refuse — by two different mechanisms, which is why both are asserted.
  *
- * `loadArticle` refuses it; `loadMetadata` only checks the tree and serves it.
- * So a revision in this state passes the metadata bar and is a page React
- * cannot draw — and a head that answered 200 would put a title and a
- * description on a link to a blank screen, which is worse than no preview
- * because a preview is a claim.
+ * `loadArticle` refuses it after fetching the block rows and finding none;
+ * `loadHead` never fetches them, so it asks Postgres in SQL (`has_blocks`). A
+ * head that answered 200 would put a title and a description on a link to a
+ * blank screen, which is worse than no preview because a preview is a claim.
+ *
+ * **There was a third read that only checked the tree and served this
+ * article**, and until 2026-09-02 the disagreement was written down here rather
+ * than fixed. It went with its route
+ * (docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+ * § Cluster B), so the two reads left agree, and this fixture is now what says
+ * so rather than what documents the gap.
  *
  * **It needs its own fixture, and that is the point.** The main fixture above
  * has blocks, so deleting `hasBlocks` from the guard leaves every assertion in
@@ -1497,14 +1527,16 @@ when("a public article whose revision has no blocks", { timeout: 60_000 }, () =>
   });
 
   /**
-   * **And `loadMetadata` serves it**, which is not a bug to fix here — it is
-   * the disagreement written down. The metadata page is a page about what
-   * exists; a head is a claim about something readable.
+   * **And the article read refuses it too**, by the other mechanism.
+   *
+   * This is the half that used to be a disagreement: a third read checked only
+   * the tree and served this article, and the case here asserted that it did.
+   * With that read gone, what is worth pinning is that the two survivors agree
+   * — and that they are not simply the same check twice, since one counts rows
+   * it fetched and the other asks in SQL.
    */
-  it("while the metadata read, which checks only the tree, still answers", async () => {
-    await expect(pgPublicReader.loadMetadata(BONELESS_SLUG)).resolves.toMatchObject({
-      slug: BONELESS_SLUG,
-    });
+  it("and by the article read as well, which counts the blocks it fetched", async () => {
+    await expect(pgPublicReader.loadArticle(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
   });
 });
 

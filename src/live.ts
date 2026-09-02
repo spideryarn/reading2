@@ -22,9 +22,10 @@
  * second or more of added latency on every turn and no native barge-in.
  *
  * So the choice was between a live mode that talks to OpenAI directly and no
- * live mode. This file is the whole of the exception, it is listed by name in
- * `tests/no-undeclared-spend.test.ts`, and **it is not yet metered** — see
- * `## What this does not do` at the foot of the file.
+ * live mode. This file is the whole of the exception, and it is listed by name
+ * in `tests/no-undeclared-spend.test.ts` — **still a sanctioned provider bypass,
+ * now one whose accounting arrives through a different seam.** See
+ * `## What this does not do` at the foot of the file for what is left.
  *
  * ## Where the money actually goes, which is not through here
  *
@@ -35,17 +36,34 @@
  * Vercel function would need a long-lived socket, which a serverless function
  * does not have (docs/project/deployment.md).
  *
- * It is also the thing that makes metering hard, and the reason `metered` is
- * false. A session's cost is knowable only from OpenAI's own usage records
- * after the fact, or from the `response.done` events the *browser* sees. Both
- * are real options; neither is written.
+ * It is also what makes metering hard. A session's cost is knowable only from
+ * OpenAI's own usage records after the fact, or from the `response.done` events
+ * the *browser* sees. The second was chosen — Greg, 2026-08-31: *"we'll just use
+ * the browser to report itself for now (documenting this as untrustworthy, but
+ * good enough for an Alpha version)"* — and the **server half of it is the
+ * bottom of this file**: a session journal written when the token is minted, a
+ * usage DTO the browser may post against it, validation, and pricing this server
+ * owns. The browser half that actually posts the events is not built yet
+ * (Stage 2B of docs/plans/260902g-cost-tracking-that-can-set-a-price.md), so
+ * every issued session currently shows as a session that reported nothing —
+ * which is the honest state and the whole reason the journal exists.
  */
+
+import { createHash } from "node:crypto";
 
 import type { Block, ChatMessage, Meta, MicPlacement } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
 import { webLinks } from "./urls.js";
+/* **Type-only, both of them, and it has to stay that way.** `src/store/contracts.ts`
+   and `src/ai-spend.ts` sit at the far end of import graphs this file is already
+   inside — a value import from either would close a cycle, and `npm run cycles`
+   is a gate rather than advice. A `type` import is erased and adds no edge:
+   exactly the discipline src/ai-spend.ts states about its own `AiJob` import. */
+import type { AiCallRow, RealtimeEventKind } from "./ai-spend.js";
+import type { RealtimeSession } from "./store/contracts.js";
+import { priceRealtimeResponse, priceRealtimeTranscription } from "./pricing.js";
 
 /**
  * **The model, and it is a 2.1 for a reason that will expire.**
@@ -578,11 +596,23 @@ export async function mintLiveToken(
  * ordinary chat rows — see `withSpokenTurn` in src/chat.ts and
  * docs/project/live-conversation.md.
  *
- * - **Nothing is metered.** No row is written for a live session, so `npm run
- *   cost` cannot see this spend at all — see the header for why the usual seam
- *   cannot reach it. The two ways out are OpenAI's usage API after the fact, or
- *   forwarding the `response.done` events the browser already receives, which
- *   carry token counts. Neither is written.
+ * - **The report comes from the tab, and a session that reports nothing is a
+ *   visible row rather than an absence.** The browser posts every turn as it
+ *   happens (src/web/live/meter.ts, Stage 2B, 2026-09-02) and this server
+ *   validates, prices and journals it — but the numbers are the browser's, so
+ *   an issued session that never reports still shows as one, which is the point
+ *   of writing the session row before the token is released.
+ * - **The last turn can vanish, and always will be able to.** A reader ends a
+ *   conversation by shutting the laptop, and an event that has not been posted
+ *   when the tab dies is gone — there is no durable outbox. The aggregate is
+ *   biased low by a probably-small unknown amount. GPT Sol: *"Add the durable
+ *   outbox before usage affects an allowance, an invoice, or a promise made to
+ *   users."*
+ * - **Nothing reconciles it.** The figures are our arithmetic over counts a
+ *   browser sent us — `cost_source: "computed"`, which is what that value has
+ *   always meant here — and there is no OpenAI admin key to check them against.
+ *   Azure's mirror of these docs calls the realtime usage object estimation
+ *   rather than a billing source, which is the same claim.
  * - **Nothing caps a session *here*.** The browser ends its own after five
  *   minutes of quiet or twenty in total (`IDLE_CAP_MS` in
  *   src/web/live/useLiveConversation.ts), which bounds the damage from a
@@ -593,3 +623,614 @@ export async function mintLiveToken(
  *   the session, so hanging up and starting again pays full price for the
  *   article a second time.
  */
+
+/* ==========================================================================
+ * The meter — accepting what the browser says a session spent
+ * ========================================================================== */
+
+/**
+ * **How long this server accepts usage reports for one session**, and it is
+ * emphatically not `TOKEN_SECONDS`.
+ *
+ * Those are two different clocks and confusing them is the mistake that would
+ * silently drop the reports that matter most. `TOKEN_SECONDS` is the ephemeral
+ * client secret's life — ten minutes to *open* one connection — while a
+ * conversation that has started is not cut off when it passes. The browser ends
+ * its own after twenty minutes (`SESSION_CAP_MS` in
+ * src/web/live/useLiveConversation.ts), so a session's last turn can be nineteen
+ * minutes after a token that expired at ten. Accepting on the token's clock
+ * would have discarded the second half of every long conversation — the
+ * expensive ones — and the ledger would have looked healthy while
+ * systematically under-counting in exactly the direction that flatters us.
+ *
+ * The number is duplicated from the browser's hook on purpose, because it is not
+ * the same fact: that one is *when a tab stops talking*, this one is *what this
+ * server will believe*. They are allowed to differ, and the tolerance below is
+ * what covers the difference. GPT Sol asked for the distinction by name.
+ */
+export const REPORT_WINDOW_MS = 20 * 60_000;
+
+/**
+ * The slack on top, for the ordinary reasons a true report is late: a retry
+ * after a dropped network, a `pagehide` beacon that queued behind a page load, a
+ * laptop whose clock is a couple of minutes out.
+ *
+ * Generous rather than tight, because the two failures are not symmetric. Too
+ * tight and a real turn is refused and its money vanishes from the ledger, which
+ * is invisible. Too loose and a stale report is accepted, which costs a row that
+ * is a few minutes late — and `created_at` records when it actually arrived, so
+ * even then nothing is lost.
+ */
+export const REPORT_TOLERANCE_MS = 5 * 60_000;
+
+/**
+ * **The two ceilings a single turn is checked against**, and they are the
+ * model's own limits rather than a guess about typical use.
+ *
+ * Deliberately **not** a cumulative tokens-per-minute rule, which is the obvious
+ * thing to reach for and is wrong here: the Realtime API rebills the whole
+ * conversation context on every turn
+ * (docs/research/realtime-voice-cost-tracking-web.md § 6), so cumulative input
+ * legitimately outgrows wall-clock by a large factor, and a rate ceiling would
+ * start refusing true reports precisely as a conversation got long — which is
+ * precisely when it got expensive. GPT Sol named this as the check not to write.
+ *
+ * What a *per-turn* bound catches is the thing a rate ceiling cannot: a number
+ * that could not have come from this model at all.
+ */
+export const REALTIME_CONTEXT_TOKENS = 128_000;
+/** `max_output_tokens` as this app leaves it — the session default. */
+export const REALTIME_MAX_OUTPUT_TOKENS = 32_000;
+
+/** The four statuses a realtime response ends on. OpenAI's own vocabulary. */
+export const REALTIME_STATUSES = ["completed", "cancelled", "failed", "incomplete"] as const;
+export type RealtimeStatus = (typeof REALTIME_STATUSES)[number];
+
+/**
+ * **Four provider statuses onto three ledger outcomes, and the map is lossy on
+ * purpose.**
+ *
+ * `outcome` means "how did the call end" across every wire in this app, and
+ * widening it to hold realtime's vocabulary would put four values on nine
+ * thousand rows that can never take them. So the map is here, the raw status is
+ * kept verbatim in `ai_calls.provider_status`, and nothing is lost — that column
+ * is where a realtime-specific question gets a realtime-specific answer.
+ *
+ * The two judgment calls, written down because neither is obvious:
+ *
+ * - **`cancelled` and `incomplete` both become `aborted`.** A cancelled response
+ *   is the reader talking over the model, which is a normal and frequent event
+ *   in a spoken conversation rather than a fault; `incomplete` is a turn that hit
+ *   `max_output_tokens` or a content filter. Neither is an error and neither
+ *   finished, which is what `aborted` says.
+ * - **A non-`ok` realtime row's cost is NOT a lower bound**, unlike every other
+ *   row in the table — see `outcome`'s comment in src/db/schema.ts. OpenAI
+ *   reports the usage it billed on the terminal event whatever the status, so a
+ *   cancelled turn's figure is complete even though its answer was not. Somebody
+ *   writing "exclude the aborted rows, their cost is unreliable" would be
+ *   throwing away money that is known exactly.
+ */
+export const REALTIME_OUTCOME: Readonly<Record<RealtimeStatus, "ok" | "error" | "aborted">> = {
+  completed: "ok",
+  failed: "error",
+  cancelled: "aborted",
+  incomplete: "aborted",
+};
+
+/**
+ * **What the browser is allowed to say about one paid event** — a discriminated
+ * union, because the two halves of a live conversation are billed in different
+ * units and a single shape could only express one of them.
+ *
+ * The model that answers is billed per token, split by modality. The model that
+ * writes down what the reader said — `gpt-live-transcribe` — is billed **per
+ * audio minute**, $0.017 of it. A DTO with token counts and an optional
+ * `audioSeconds` beside them would have compiled, and the first version that
+ * forgot to read the optional field would have priced half the feature at zero
+ * with nothing going red. GPT Sol asked for the union by name.
+ *
+ * ## What is deliberately not on here
+ *
+ * **No dollar amount, ever.** The server prices this, from a table it owns and
+ * an effective date it chooses (`REALTIME_PRICES` in src/pricing.ts). A
+ * client-supplied cost is a client-supplied invoice.
+ *
+ * **No model, no owner, no article.** All three come from the session row this
+ * server wrote when it minted the token. A report that could name its own model
+ * could name the cheap one.
+ */
+export type RealtimeUsage =
+  | {
+      kind: "response";
+      /** OpenAI's `response.id`. One third of the idempotency key. */
+      providerEventId: string;
+      status: RealtimeStatus;
+      /**
+       * Event time of `response.created`, or `null` when the browser did not see
+       * it. Not the moment the report was posted — that is `created_at`, and
+       * keeping the two apart is what lets a late report be recognised as late
+       * rather than as a call that happened when it was reported.
+       */
+      startedAt: string | null;
+      /** Event time of `response.done`. */
+      finishedAt: string;
+      /** `usage.input_tokens` — the whole conversation so far, rebilled this turn. */
+      inputTokens: number;
+      outputTokens: number;
+      inputTextTokens: number;
+      inputAudioTokens: number;
+      inputImageTokens: number;
+      /** `input_token_details.cached_tokens`, the parent of the two below. */
+      cachedTokens: number;
+      cachedTextTokens: number;
+      cachedAudioTokens: number;
+      outputTextTokens: number;
+      outputAudioTokens: number;
+    }
+  | {
+      kind: "transcription";
+      /** The transcribed item's id. */
+      providerEventId: string;
+      /**
+       * When the audio started arriving, if the browser saw it. Usually null:
+       * the completed event has no matching start event, which is the reason
+       * `ai_calls.duration_ms` had to become nullable.
+       */
+      startedAt: string | null;
+      /** Event time of `…input_audio_transcription.completed`. */
+      finishedAt: string;
+      /** Seconds of the reader's audio. The only thing this half is billed on. */
+      audioSeconds: number;
+    };
+
+/**
+ * A 400 with a sentence, shaped like `httpError` in src/routes.ts — which cannot
+ * be imported here, because that file imports this one.
+ *
+ * **400 rather than 500 or 422**, and it matters for Stage 2B: a report the
+ * server refuses is a report the browser must stop retrying. A 5xx would put a
+ * malformed event into a retry queue that can never drain.
+ */
+function badReport(message: string): Error {
+  return Object.assign(new Error(`${message} [live-report]`), { status: 400 });
+}
+
+/** A non-negative count that is really an integer, or a refusal naming the field. */
+function count(value: unknown, field: string, ceiling: number): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw badReport(`${field} must be a whole number of tokens, and it is not`);
+  }
+  /* **Refused, not clamped.** A clamp turns an impossible number into a
+     plausible one and removes the evidence that it was ever wrong.
+     docs/reusable/silent-success.md. */
+  if (value > ceiling) throw badReport(`${field} is ${value}, which this model cannot produce`);
+  return value;
+}
+
+/** An id off the wire: present, a string, and bounded. */
+function eventIdOf(value: unknown): string {
+  if (typeof value !== "string" || value === "" || value.length > 200) {
+    throw badReport("the report needs a provider event id, and it must be a short string");
+  }
+  return value;
+}
+
+/** An ISO instant, or a refusal. Bounded, so a long string never reaches `Date.parse`. */
+function instant(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length > 40 || Number.isNaN(Date.parse(value))) {
+    throw badReport(`${field} must be an ISO timestamp`);
+  }
+  return new Date(value).toISOString();
+}
+
+function optionalInstant(value: unknown, field: string): string | null {
+  return value === undefined || value === null ? null : instant(value, field);
+}
+
+/**
+ * **Read one usage report off the wire**, or refuse it with a sentence.
+ *
+ * Separate from `acceptRealtimeUsage` below because the two ask different
+ * questions and only one of them needs a session row: this one asks *is this a
+ * well-formed report at all*, and can be exercised with nothing but a literal.
+ * The next one asks *is this report true of that session*.
+ */
+export function parseRealtimeUsage(body: unknown): RealtimeUsage {
+  const b = (body ?? {}) as Record<string, unknown>;
+
+  if (b.kind === "transcription") {
+    const audioSeconds = b.audioSeconds;
+    if (typeof audioSeconds !== "number" || !Number.isFinite(audioSeconds) || audioSeconds < 0) {
+      throw badReport("audioSeconds must be a non-negative number of seconds");
+    }
+    return {
+      kind: "transcription",
+      providerEventId: eventIdOf(b.providerEventId),
+      startedAt: optionalInstant(b.startedAt, "startedAt"),
+      finishedAt: instant(b.finishedAt, "finishedAt"),
+      audioSeconds,
+    };
+  }
+
+  if (b.kind !== "response") {
+    throw badReport("kind must be either 'response' or 'transcription'");
+  }
+
+  const status = b.status;
+  if (typeof status !== "string" || !REALTIME_STATUSES.includes(status as RealtimeStatus)) {
+    throw badReport(`status must be one of: ${REALTIME_STATUSES.join(", ")}`);
+  }
+
+  /* **Each detail is bounded by its own parent**, not by one shared ceiling, so
+     the refusal names the field that is actually wrong. The parents are bounded
+     by the model's own limits above. */
+  const inputTokens = count(b.inputTokens, "inputTokens", REALTIME_CONTEXT_TOKENS);
+  const outputTokens = count(b.outputTokens, "outputTokens", REALTIME_MAX_OUTPUT_TOKENS);
+  const inputTextTokens = count(b.inputTextTokens, "inputTextTokens", inputTokens);
+  const inputAudioTokens = count(b.inputAudioTokens, "inputAudioTokens", inputTokens);
+  const inputImageTokens = count(b.inputImageTokens, "inputImageTokens", inputTokens);
+  const cachedTokens = count(b.cachedTokens, "cachedTokens", inputTokens);
+  const cachedTextTokens = count(b.cachedTextTokens, "cachedTextTokens", cachedTokens);
+  const cachedAudioTokens = count(b.cachedAudioTokens, "cachedAudioTokens", cachedTokens);
+  const outputTextTokens = count(b.outputTextTokens, "outputTextTokens", outputTokens);
+  const outputAudioTokens = count(b.outputAudioTokens, "outputAudioTokens", outputTokens);
+
+  /* **The parts must not exceed the whole, checked as a sum** rather than one at
+     a time: three details each inside the parent can still add to twice it, and
+     that is the shape a fabricated report takes.
+
+     `<=` rather than `===`, because OpenAI's own responses sometimes arrive with
+     the nested breakdown absent or partial (openai/openai-agents-js#538), and
+     refusing a true-but-incomplete report to be pedantic about arithmetic would
+     lose real money. The splits are then a lower bound on the total, which is
+     visible on the row rather than hidden. */
+  if (inputTextTokens + inputAudioTokens + inputImageTokens > inputTokens) {
+    throw badReport("the input token details add up to more than inputTokens");
+  }
+  if (cachedTextTokens + cachedAudioTokens > cachedTokens) {
+    throw badReport("the cached token details add up to more than cachedTokens");
+  }
+  if (outputTextTokens + outputAudioTokens > outputTokens) {
+    throw badReport("the output token details add up to more than outputTokens");
+  }
+  /* **No image rate exists, so an image token cannot be priced.** `liveSession`
+     above configures no image input, so this can only fire if the session
+     builder changed or the report is wrong — and in both cases the honest answer
+     is to refuse rather than to invent a rate or quietly price images as text.
+     src/pricing.ts: a model with no price is an error and not a zero, and the
+     same is true of a modality. */
+  if (inputImageTokens > 0) {
+    throw badReport(
+      "this report carries image tokens, and a live session sends no images — there is no price for them",
+    );
+  }
+
+  return {
+    kind: "response",
+    providerEventId: eventIdOf(b.providerEventId),
+    status: status as RealtimeStatus,
+    startedAt: optionalInstant(b.startedAt, "startedAt"),
+    finishedAt: instant(b.finishedAt, "finishedAt"),
+    inputTokens,
+    outputTokens,
+    inputTextTokens,
+    inputAudioTokens,
+    inputImageTokens,
+    cachedTokens,
+    cachedTextTokens,
+    cachedAudioTokens,
+    outputTextTokens,
+    outputAudioTokens,
+  };
+}
+
+/**
+ * **The row's id, derived from the report rather than minted.**
+ *
+ * A browser posts each turn as it happens and retries whatever it did not see
+ * acknowledged, so a request that succeeded and whose `200` was lost is the
+ * ordinary case rather than the pathological one. Deriving the primary key from
+ * `(session, kind, provider event id)` makes that retry collide on
+ * `ai_calls.id`, where `on conflict do nothing` already absorbs it — rather than
+ * on the `ai_calls_realtime_event` unique index, which would raise. The index is
+ * still there, and it is the braces to this belt: it holds even if this
+ * derivation changes, and it holds for anything writing that table which is not
+ * this function.
+ *
+ * A **version-8** UUID, which is the one RFC 9562 reserves for exactly this —
+ * "custom", meaning the bits are whatever the application put there. Not v4,
+ * which would claim a randomness these bits do not have, and not v5, which would
+ * claim a namespace-and-name scheme this is only shaped like.
+ */
+export function realtimeRowId(
+  sessionId: string,
+  kind: RealtimeEventKind,
+  providerEventId: string,
+): string {
+  /* A NUL between the parts, so `("a", "b-c")` and `("a-b", "c")` cannot hash to
+     one id. A separator that can appear inside either part is not a separator,
+     and both of these are strings from elsewhere. */
+  const digest = createHash("sha256")
+    .update([sessionId, kind, providerEventId].join("\u0000"))
+    .digest();
+  const bytes = digest.subarray(0, 16);
+  /* Version 8 in the high nibble of byte 6, and the RFC 4122 variant in byte 8.
+     Without these the string is a 32-hex-digit value that Postgres's `uuid` type
+     accepts and that no reader can classify — the point of stamping it is that
+     somebody looking at the id can tell it was derived rather than rolled. */
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x80;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join("-");
+}
+
+/** What `acceptRealtimeUsage` needs besides the report itself. */
+export interface RealtimeAcceptance {
+  /** The server's own row for this conversation. Owner, article and model come from here. */
+  session: RealtimeSession;
+  /** The report, already parsed by `parseRealtimeUsage`. */
+  usage: RealtimeUsage;
+  /** When this server received it — the receipt time, kept apart from the event time. */
+  receivedAt: Date;
+}
+
+/**
+ * **Turn a browser's report into a ledger row** — check it against the session,
+ * price it from our own table, and project it.
+ *
+ * Pure: no store, no clock, no network. That is the point of it being a named
+ * function rather than code inside the route. The endpoint is the *trust
+ * boundary* — it is where an authenticated request becomes an accounting fact —
+ * and GPT Sol's review was explicit that this does not mean the parsing, pricing
+ * and persistence should become anonymous inline code in an already-large route
+ * dispatcher. Everything below can be exercised with a literal and a `Date`.
+ *
+ * The caller does the two things this cannot: it looks the session up **for the
+ * authenticated owner**, so a session id that leaked cannot be reported against
+ * by somebody else, and it hands the row to `costStore.record`.
+ *
+ * Rejecting rather than clamping, throughout. A clamped number is a plausible
+ * number with the evidence removed, and this ledger exists to be believed.
+ */
+export function acceptRealtimeUsage(opts: RealtimeAcceptance): AiCallRow {
+  const { session, usage, receivedAt } = opts;
+  const issuedAt = Date.parse(session.issuedAt);
+  const acceptsUntil = Date.parse(session.acceptsUntil);
+
+  /* **The server's own deadline, not the client secret's.** See
+     `REPORT_WINDOW_MS`: these are different clocks, and the token's is the wrong
+     one. The tolerance sits on top of a deadline the session row already
+     carries, so a session issued under an older rule keeps that rule rather than
+     silently acquiring today's. */
+  if (receivedAt.getTime() > acceptsUntil + REPORT_TOLERANCE_MS) {
+    throw badReport("this session stopped accepting usage reports");
+  }
+
+  const finishedAt = Date.parse(usage.finishedAt);
+  /* An event cannot have happened before the token that made it possible was
+     minted, and it cannot have happened meaningfully after it was reported.
+     Both bounds carry the tolerance, because a laptop's clock is not ours. */
+  if (finishedAt < issuedAt - REPORT_TOLERANCE_MS) {
+    throw badReport("this event is dated before the session that would have made it");
+  }
+  if (finishedAt > receivedAt.getTime() + REPORT_TOLERANCE_MS) {
+    throw badReport("this event is dated in the future");
+  }
+  const startedAt = usage.startedAt === null ? null : Date.parse(usage.startedAt);
+  if (startedAt !== null && startedAt > finishedAt) {
+    throw badReport("this event finished before it started");
+  }
+
+  const money =
+    usage.kind === "response"
+      ? priceResponseRow(session, usage, new Date(finishedAt))
+      : priceTranscriptionRow(session, usage, receivedAt, issuedAt, new Date(finishedAt));
+
+  const common = {
+    id: realtimeRowId(session.id, usage.kind, usage.providerEventId),
+    /* **The session is the run.** `run_id` groups the calls one piece of work
+       made, and for a live conversation that piece of work is the conversation.
+       It is also already a uuid we minted, rather than anything off the wire. */
+    runId: session.id,
+    generationId: null,
+    scopeKind: "request" as const,
+    ownerId: session.ownerId,
+    articleSlug: session.articleSlug,
+    jobId: null,
+    stepName: null,
+    wire: "realtime" as const,
+    job: "live_conversation" as const,
+    /* **Null, and not a fingerprint taken now.** The key that paid is the one
+       that minted this session, minutes ago, and this process cannot prove the
+       key it holds at report time is that one. A fingerprint here would be a
+       precise claim about the wrong moment, which is worse than an absence
+       because somebody would reconcile against it. The session row is the right
+       home for it and does not carry one yet. */
+    credentialFingerprint: null,
+    /* **The event time, not the receipt time.** `created_at` defaults to now and
+       is the receipt; keeping both apart is what lets a report that crossed a
+       billing period boundary be counted in the period it belongs to. A late
+       client report is exactly the case the Stripe work was warned about. */
+    startedAt: new Date(startedAt ?? finishedAt).toISOString(),
+    finishedAt: new Date(finishedAt).toISOString(),
+    /* **Null when the start was not observed** — never `0`, which reads as an
+       instant call and drags any latency figure down, and never the session's
+       own wall-clock, which is the duration of a conversation rather than of a
+       call. When this is null, `started_at` above is the event's own time and is
+       a lower bound: subtracting the two timestamps gives a spurious zero, so
+       read this field instead of doing that. */
+    durationMs: startedAt === null ? null : finishedAt - startedAt,
+    creditsUsedNanos: null,
+    byokUpstreamNanos: null,
+    isByok: null,
+    /* **A third account, and the one outside the OpenRouter spend cap** — see
+       `ProviderAccount` in src/ai-spend.ts. */
+    providerAccount: "openai" as const,
+    /* The data channel never says which model answered a turn. The session's
+       created model is the best answer there is and it is already in
+       `requestedModel`; copying it here would claim a confirmation we do not
+       have, which is exactly what this column exists to carry. */
+    answeredModel: null,
+    upstream: null,
+    /* Realtime has no cache *write* charge: the session's cache is built as a
+       side effect of the conversation rather than bought. Null rather than zero,
+       because "not a concept on this wire" is not "none of them". */
+    cacheWriteTokens: null,
+    cacheWrite5mTokens: null,
+    cacheWrite1hTokens: null,
+    reasoningTokens: null,
+    webSearches: null,
+    serviceTier: null,
+    inferenceGeo: null,
+    realtimeSessionId: session.id,
+    providerEventId: usage.providerEventId,
+    eventKind: usage.kind,
+  };
+
+  if (usage.kind === "transcription") {
+    return {
+      ...common,
+      requestedModel: session.transcriptionModel ?? LIVE_TRANSCRIBER,
+      outcome: "ok",
+      /* The event this comes from is `…transcription.completed`, so there is no
+         other status to record. Written rather than left null, so the column
+         means the same thing on both kinds of realtime row. */
+      providerStatus: "completed",
+      ...money,
+      reportedInputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      inputTextTokens: null,
+      inputAudioTokens: null,
+      inputImageTokens: null,
+      cachedTextTokens: null,
+      cachedAudioTokens: null,
+      outputTextTokens: null,
+      outputAudioTokens: null,
+      transcriptionSeconds: usage.audioSeconds,
+    };
+  }
+
+  return {
+    ...common,
+    requestedModel: session.model,
+    outcome: REALTIME_OUTCOME[usage.status],
+    providerStatus: usage.status,
+    ...money,
+    /* The totals stay on the columns every other wire uses; the splits say what
+       they were made of. `reported_`, because a realtime input count is the
+       whole conversation rebilled — see `Wire` in src/models.ts. */
+    reportedInputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cachedTokens,
+    inputTextTokens: usage.inputTextTokens,
+    inputAudioTokens: usage.inputAudioTokens,
+    inputImageTokens: usage.inputImageTokens,
+    cachedTextTokens: usage.cachedTextTokens,
+    cachedAudioTokens: usage.cachedAudioTokens,
+    outputTextTokens: usage.outputTextTokens,
+    outputAudioTokens: usage.outputAudioTokens,
+    transcriptionSeconds: null,
+  };
+}
+
+/** The three money columns, however they turned out. `computed`, or honestly `none`. */
+type RealtimeMoney = Pick<AiCallRow, "costSource" | "computedCostNanos" | "priceVersion">;
+
+/**
+ * An unpriceable row, said honestly.
+ *
+ * **Not a zero.** A model this table has no row for is a table somebody has to
+ * extend, and a `0` would make that indistinguishable from a free call — the
+ * failure src/pricing.ts's header spends four paragraphs on. `npm run cost`
+ * counts these and says the total is short by an unknown amount.
+ */
+const UNPRICED_REALTIME: RealtimeMoney = {
+  costSource: "none",
+  computedCostNanos: null,
+  priceVersion: null,
+};
+
+function priceResponseRow(
+  session: RealtimeSession,
+  usage: Extract<RealtimeUsage, { kind: "response" }>,
+  at: Date,
+): RealtimeMoney {
+  /* **Fresh means uncached, and the subtraction happens here rather than in
+     src/pricing.ts.** That file is arithmetic and must not be the place a
+     negative gets clamped away; by this line `parseRealtimeUsage` has already
+     checked each detail against its parent, so neither of these can go below
+     zero. */
+  const priced = priceRealtimeResponse(
+    session.model,
+    {
+      freshTextTokens: usage.inputTextTokens - usage.cachedTextTokens,
+      freshAudioTokens: usage.inputAudioTokens - usage.cachedAudioTokens,
+      cachedTextTokens: usage.cachedTextTokens,
+      cachedAudioTokens: usage.cachedAudioTokens,
+      outputTextTokens: usage.outputTextTokens,
+      outputAudioTokens: usage.outputAudioTokens,
+    },
+    at,
+  );
+  if (!priced) return UNPRICED_REALTIME;
+  return {
+    /* **`computed`, never `provider`.** Nobody settled this figure: it is our
+       arithmetic over a table we typed in, applied to counts a browser sent us.
+       Azure's mirror of these docs says the realtime usage object is "for usage
+       visibility and estimation only, not for billing reconciliation", which
+       maps exactly onto what `computed` already means in this ledger. */
+    costSource: "computed",
+    computedCostNanos: priced.totalNanos,
+    priceVersion: priced.priceVersion,
+  };
+}
+
+function priceTranscriptionRow(
+  session: RealtimeSession,
+  usage: Extract<RealtimeUsage, { kind: "transcription" }>,
+  receivedAt: Date,
+  issuedAt: number,
+  at: Date,
+): RealtimeMoney {
+  /* **Bounded by the session's own wall-clock**, which is the one check a server
+     can make on a duration it did not observe: a conversation that started four
+     minutes ago cannot contain forty minutes of audio. Generous — the whole
+     session plus the tolerance — because the job is to refuse the impossible,
+     not to second-guess the plausible. Deliberately not a tokens-per-minute
+     rule; `REALTIME_CONTEXT_TOKENS` says why that one is wrong for realtime. */
+  const wallClockSeconds = (receivedAt.getTime() - issuedAt + REPORT_TOLERANCE_MS) / 1000;
+  if (usage.audioSeconds > wallClockSeconds) {
+    throw badReport("this transcription claims more audio than the session has been open for");
+  }
+  const model = session.transcriptionModel ?? LIVE_TRANSCRIBER;
+  const priced = priceRealtimeTranscription(model, usage.audioSeconds, at);
+  if (!priced) return UNPRICED_REALTIME;
+  return {
+    costSource: "computed",
+    computedCostNanos: priced.totalNanos,
+    priceVersion: priced.priceVersion,
+  };
+}
+
+/**
+ * A close reason off the wire, bounded — or `null`.
+ *
+ * Free text with a length limit rather than a closed union, because the list of
+ * reasons belongs to `useLiveConversation.ts` and a server-side union that
+ * lagged it would refuse a true report about how a conversation ended. The
+ * length bound is the actual defence, and it matches the CHECK on the column.
+ */
+export function realtimeCloseReason(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 64) {
+    throw badReport("closeReason must be a short string");
+  }
+  return value;
+}

@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
-import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
+import type { PublicArticle, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
 import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
@@ -315,20 +315,6 @@ const ARTICLE: PublicArticle = {
  */
 const THREAD: PublicTweets = { limit: 280, tweets: [{ text: PUBLIC_TWEET, chars: 24 }] };
 
-const METADATA: PublicMetadata = {
-  slug: SLUG,
-  title: "A piece",
-  /* Asymmetric on purpose: a visitor pressing Glossary must get a different
-     sentence from one pressing Quotes, and a fixture that answered the same to
-     every question could not tell that apart. */
-  available: {
-    arc: false,
-    tweets: false,
-    glossary: true,
-    ideas: false,
-    quotes: false,
-  },
-};
 
 /**
  * The same article as its **owner** is served it.
@@ -402,7 +388,6 @@ function json(body: unknown, status = 200): Response {
  */
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return publicArticle();
-  if (url === `/api/public/metadata/${SLUG}`) return json(METADATA);
   if (url === `/api/article/${SLUG}`) return owned();
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
@@ -674,6 +659,28 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
  * The whole of `BAND_SAYS`' verdict for one mode, so the two sweeps ask it the
  * same way and cannot drift into asking it differently.
  */
+/**
+ * **How long a thirteen-mode sweep is allowed to take**, stated rather than
+ * inherited from Vitest's 5-second default.
+ *
+ * The three sweeps below each mount thirteen pages or press thirteen buttons,
+ * and most of what they spend is **deliberate waiting**: six settle turns per
+ * mode, plus `modeAfterPress` polling for the throttled `?mode=` write. Measured
+ * 2026-09-02 on a box at load average 80: 3.6s, 3.7s and 3.8s — all three
+ * within a quarter of the default, so a load spike fails one at random.
+ *
+ * That failure is not contained. A timeout inside `act()` leaves the React root
+ * mid-render, and every test after it in the file renders an empty `host` — one
+ * spike produced **twenty** further failures, none of them about the code. The
+ * budget is generous because the cost of being wrong is one slow run, and the
+ * cost of the default being wrong is a suite that looks broken.
+ *
+ * **Not a licence to be slow**: a sweep that starts genuinely fetching or
+ * looping would blow this too. It is the difference between a test that waits
+ * and a test that hangs.
+ */
+const SWEEP_MS = 30_000;
+
 function expectBandFor(mode: Mode, when: string): void {
   const { where, says } = BAND_SAYS[mode];
   expect(!!host.querySelector(".mode-band"), `${when}: a band open`).toBe(where !== null);
@@ -695,14 +702,17 @@ describe("a signed-out browser on a shared document", () => {
        absence is checked in the owner control below. */
     expect(host.textContent).toContain("View only");
     /**
-     * **One request, and it used to be two.** `GET /api/public/metadata/:slug`
-     * was fetched immediately after the article, purely so a marked mode could
-     * pick between two true sentences, with its failure swallowed to `null`.
-     * The artefacts ride on the article payload since slice 1b, so the payload
-     * answers that question and the request is gone. The endpoint itself stays
-     * — it is still in the route inventory and still tested — which is why this
-     * asserts the exact list rather than a prefix.
-     * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
+     * **One request, and it used to be two.** A second GET, for a public
+     * metadata endpoint, was made immediately after the article, purely so a
+     * marked mode could pick between two true sentences, with its failure
+     * swallowed to `null`. The artefacts ride on the article payload since
+     * slice 1b, so the payload answers that question and the request is gone;
+     * the endpoint itself was deleted on 2026-09-02. The exact list rather than
+     * a prefix, because *one* request is the claim.
+     * docs/plans/260827ai-public-read-only-access.md § The second request
+     * disappears, and
+     * docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+     * § Cluster B.
      */
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
@@ -744,7 +754,7 @@ describe("a signed-out browser on a shared document", () => {
       expectBandFor(mode, mode);
       await remount();
     }
-  });
+  }, SWEEP_MS);
 
   /**
    * **The four sentences, rendered rather than unit-tested.**
@@ -1136,7 +1146,7 @@ describe("a signed-out browser on a shared document", () => {
        per-press check that the mode changed: one assertion, at the end, that
        thirteen presses reached thirteen modes. */
     expect([...pressed].sort()).toEqual([...MODES].sort());
-  });
+  }, SWEEP_MS);
 
   /**
    * **The five modes that start themselves for an owner start nothing here.**
@@ -1463,6 +1473,79 @@ describe("a signed-in reader who does not own it", () => {
     const probe = trace.find((r) => r.url === `/api/article/${SLUG}`);
     expect(probe?.auth).toMatch(/^Bearer /);
   });
+
+  /**
+   * **And they press the modes, which nothing in this file made them do.**
+   *
+   * The exhaustive button sweep is in the signed-out describe above, and the
+   * parity block here only ever loads a page and hovers a link — so *signed in
+   * and not the owner*, pressing a mode, was a state no assertion covered. GPT
+   * Sol's mutation for it: inside `Reader`'s `onMode`, issue a private request
+   * or a POST when `signedIn` is true and `owner` is null. The signed-out sweep
+   * never takes that branch and the parity tests never click, so it survived
+   * both. Run against this test it is red on the first press.
+   *
+   * It is a live shape rather than a contrived one: `signedIn` and
+   * `sessionUnconfirmed` legitimately cross the visitor seam now, for copy, so
+   * there is real code branching on exactly this pair.
+   *
+   * Same helpers as the signed-out sweep, deliberately — a second `modeRadios`
+   * or a second `BAND_SAYS` lookup here would be a copy that could drift, and
+   * the whole claim is that the two readers behave identically.
+   */
+  it("stays inside the public namespace when the modes are pressed", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await open();
+    /* Clears the two requests a signed-in reader legitimately makes that a
+       stranger does not — the owned probe and the job engine's one
+       reconciliation. Pinned as *exactly* those two by the parity test above;
+       here they are simply out of the way before anything is pressed. */
+    trace.length = 0;
+
+    const buttons = modeRadios();
+    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+
+    const pressed: string[] = [];
+    for (const button of buttons) {
+      const label = button.getAttribute("aria-label");
+      const before = modeInUrl();
+      await act(async () => button.click());
+      await settle();
+
+      /* **`/api/jobs` filtered rather than forbidden**, and only here. The
+         engine reschedules itself every `IDLE_MS` for as long as a session
+         lasts (src/web/jobEngine.ts), so a sweep of thirteen presses is long
+         enough to catch one — a flaky failure that says nothing about the
+         press. It is the reader's own queue and carries nothing about this
+         article. Every *other* private path, and every non-GET including one to
+         `/api/jobs`, is still caught below. */
+      const extra = outsidePublic().filter((r) => r.url !== "/api/jobs");
+      expect(extra, `after pressing ${label}`).toEqual([]);
+      expect(trace.filter((r) => r.method !== "GET"), `after pressing ${label}`).toEqual([]);
+      /* And the public reads still carry no token, which is the half a path
+         list cannot show — the same claim the test above makes on page load,
+         made again after a transition. */
+      expect(
+        trace.filter((r) => r.url.startsWith("/api/public/") && r.auth !== null),
+        `after pressing ${label}`,
+      ).toEqual([]);
+
+      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+        "true",
+      );
+      const mode = await modeAfterPress(before);
+      expect(MODES, `pressing ${label} selected ${mode}`).toContain(mode);
+      pressed.push(mode);
+      /* The same table the signed-out sweep is judged against: a visitor with
+         an account sees the same bands, and the only sentence that differs is
+         the ask, which `does not offer an account to a reader who has one`
+         covers. */
+      expectBandFor(mode as Mode, `after pressing ${label}`);
+    }
+
+    expect([...pressed].sort()).toEqual([...MODES].sort());
+  }, SWEEP_MS);
 });
 
 /**
@@ -1508,6 +1591,68 @@ describe("when the reader's own session cannot be confirmed", () => {
        three hooks the capability seam exists to keep out, and the record-open
        POST. They are the same three the owner control at the foot of this file
        asserts are present. */
+    const urls = outsidePublic().map((r) => r.url);
+    expect(urls.some((u) => u.startsWith("/api/comments/"))).toBe(false);
+    expect(urls.some((u) => u.startsWith("/api/chat/"))).toBe(false);
+    expect(urls.some((u) => u.startsWith("/api/glossary/"))).toBe(false);
+    expect(trace.filter((r) => r.method === "POST")).toEqual([]);
+  });
+
+  /**
+   * **And on the other two views, which the case above never opened.**
+   *
+   * The reading view, the metadata page and the tweets page are one click from
+   * each other, and `VisitorArticle` says in as many words that the explanation
+   * goes to all three *because* they are (App.tsx § `sessionUnconfirmed`). The
+   * C3 tests only ever opened the first, so that guarantee was prose: the
+   * no-thread tweets arm dropped both the fact and the action, and nothing went
+   * red. GPT Sol's review of stage 1b.
+   *
+   * **Three rows and not two**, because `/tweets` is two different pages. With a
+   * thread it draws the thread and the notice under it; without one it draws the
+   * *nobody has built a tweet thread* stand-in — a different component, and the
+   * one that was missing the chrome. An article with no thread is the default
+   * fixture and an ordinary state, not an edge.
+   *
+   * The fourth column is what the page itself must be showing, so a row cannot
+   * pass by rendering an error page that happens to carry the notice.
+   */
+  it.each([
+    ["the metadata page", "/metadata", ARTICLE, "What has been built for it"],
+    [
+      "the tweets page, when there is a thread",
+      "/tweets",
+      { ...ARTICLE, tweets: THREAD },
+      PUBLIC_TWEET,
+    ],
+    [
+      "the tweets page, when there is none",
+      "/tweets",
+      ARTICLE,
+      "Nobody has built a tweet thread for this piece yet",
+    ],
+  ])("says it on %s too", async (_name, view, payload, canary) => {
+    session.user = { id: "somebody", email: "somebody@example.com" };
+    owned = () => json({ error: "no" }, 401);
+    served = payload;
+    await open("", view);
+
+    // The page is the one this row is about, before anything is claimed about it.
+    expect(host.textContent, "the view must have rendered").toContain(canary);
+    /* **Not `View only`**, which is the `ViewOnlyChip` in the *reading view's*
+       controls bar and is drawn on none of these three (PublicChrome.tsx). What
+       carries the same fact here is `SharedNotice`'s first sentence, so that is
+       what is asserted. */
+    expect(host.textContent).toContain("shared this article with you");
+    /* The two halves of C3: the fact, and the one action that gets the reader
+       off this footing. Neither may depend on which view they wandered to. */
+    expect(host.textContent).toContain("couldn't confirm that you're signed in");
+    expect(buttonNamed("Continue signed out")).not.toBeNull();
+    // Not the other label: the article is shared, so signing in is not what the reload does.
+    expect(buttonNamed("Sign in again")).toBeNull();
+
+    /* And still nothing owner-only, which is the standing claim these pages
+       exist to keep true — `Metadata` and `Tweets` are unreachable from here. */
     const urls = outsidePublic().map((r) => r.url);
     expect(urls.some((u) => u.startsWith("/api/comments/"))).toBe(false);
     expect(urls.some((u) => u.startsWith("/api/chat/"))).toBe(false);

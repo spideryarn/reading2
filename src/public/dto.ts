@@ -69,14 +69,12 @@ import type {
 } from "../types.js";
 import type {
   PublicArticle,
-  PublicArtefacts,
   PublicBlock,
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
   PublicQuotes,
   PublicMeta,
-  PublicMetadata,
   PublicTweets,
 } from "../public-types.js";
 import { publicSourceUrl } from "../urls.js";
@@ -471,30 +469,3 @@ export function publicArticle(row: {
   };
 }
 
-/**
- * `GET /api/public/metadata/:slug`, assembled.
- *
- * A handful of booleans and a title. The owner's metadata page answers *which stage
- * ran, when, into which column, over how many bytes, and would we write it
- * again today*; none of that is a visitor's business, and `stages` in
- * particular is internal paths and column names. Sol asked for this shape by
- * name and the plan's payload table says the same.
- */
-export function publicMetadata(row: {
-  slug: string;
-  title: string | null;
-  headingTitle: string | null;
-  available: PublicArtefacts;
-}): PublicMetadata {
-  return {
-    slug: row.slug,
-    title: row.title ?? row.headingTitle ?? row.slug,
-    available: {
-      arc: row.available.arc,
-      tweets: row.available.tweets,
-      glossary: row.available.glossary,
-      ideas: row.available.ideas,
-      quotes: row.available.quotes,
-    },
-  };
-}

@@ -144,18 +144,16 @@ export interface FeedbackMirrorInput {
 }
 
 /**
- * The three answers, as the one string Sentry's feedback UI shows.
+ * What the reader wrote, as the string Sentry's feedback UI shows.
  *
- * Assembled from named fields with our own headings — a reader who left a box
- * empty gets no heading for it rather than a heading over nothing. The three
- * stay separate *columns* in Postgres; this is the only place they are glued.
+ * It used to glue three answers under three headings we wrote. There is one box
+ * now (docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md),
+ * so this is the reader's own words in their own order and **nothing is added
+ * to them** — the kind is a tag, where it can be filtered on, rather than a
+ * heading pushed into a person's sentence.
  */
 function message(report: FeedbackReport): string {
-  const parts: string[] = [];
-  if (report.steps) parts.push(`Steps to reproduce:\n${report.steps}`);
-  if (report.expected) parts.push(`What you expected to see:\n${report.expected}`);
-  if (report.actual) parts.push(`What you saw instead:\n${report.actual}`);
-  return parts.join("\n\n");
+  return report.body;
 }
 
 /**
@@ -177,8 +175,16 @@ function tagsFor(
   screenshot: FeedbackScreenshot | null,
 ): Partial<Record<Exclude<FeedbackTagKey, "report_id">, FeedbackTagValue>> {
   return {
-    route_kind: report.routeKind,
+    /* `?? ""` rather than dropping the tag: a tag that is sometimes absent is
+       a Sentry search that silently misses rows, and an empty string is a
+       visible "we did not get one" — a report from a bundle older than
+       2026-09-02. src/db/schema.ts § `url`. */
+    url: report.url ?? "",
     consented: report.consented,
+    /* Absent rather than empty when the reader did not say. A tag whose value is
+       `""` is a tag Sentry will happily group by, and "reports that say nothing
+       about their kind" is a filter on the tag *missing*. */
+    ...(report.kind !== null && { kind: report.kind }),
     has_screenshot: screenshot !== null,
     ...(report.slug !== null && { slug: report.slug }),
     ...(report.buildCommit !== null && { build_commit: report.buildCommit }),

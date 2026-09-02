@@ -112,6 +112,23 @@ describe("the ledger a test writes to", () => {
       webSearches: null,
       serviceTier: null,
       inferenceGeo: null,
+      /* **The realtime block, null because this is a chat-wire row.** Spelled out
+         rather than spread from a helper, so that a field arriving on `AiCallRow`
+         makes this fixture fail to compile and somebody decides what it means for
+         an ordinary call — which is how these twelve got here.
+         drizzle/20260902150952_realtime_sessions_and_usage.sql. */
+      realtimeSessionId: null,
+      providerEventId: null,
+      eventKind: null,
+      providerStatus: null,
+      inputTextTokens: null,
+      inputAudioTokens: null,
+      inputImageTokens: null,
+      cachedTextTokens: null,
+      cachedAudioTokens: null,
+      outputTextTokens: null,
+      outputAudioTokens: null,
+      transcriptionSeconds: null,
     });
     const text = await readFile(process.env.SPIDERYARN_LEDGER as string, "utf8");
     expect(text).toContain("0000000c05ce");

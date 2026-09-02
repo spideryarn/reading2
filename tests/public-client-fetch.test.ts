@@ -17,7 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicArticle } from "../src/public-types.js";
 import { PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
-import { loadPublicArticle, loadPublicMetadata, publicFetch } from "../src/web/public-api.js";
+import { loadPublicArticle, publicFetch } from "../src/web/public-api.js";
 
 /** Every request this file's calls made, exactly as `fetch` saw it. */
 const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -138,7 +138,6 @@ describe("reading a public endpoint", () => {
     next = () => new Response(JSON.stringify({ error: "no" }), { status: 404 });
 
     await expect(loadPublicArticle("a-piece")).resolves.toEqual({ kind: "not-shared" });
-    await expect(loadPublicMetadata("a-piece")).resolves.toEqual({ kind: "not-shared" });
   });
 
   /**
@@ -166,17 +165,17 @@ describe("reading a public endpoint", () => {
    * **The loaders, not just `publicFetch`.**
    *
    * The credentials and header assertions above call `publicFetch` directly, so
-   * they say nothing about whether `loadPublicArticle` and `loadPublicMetadata`
-   * actually go through it. Swap either for a bare `fetch(path)` and every one
-   * of them stays green while the real client sends cookies. GPT Sol named that
-   * mutation by file and line, 2026-08-28.
+   * they say nothing about whether `loadPublicArticle` actually goes through
+   * it. Swap it for a bare `fetch(path)` and every one of them stays green
+   * while the real client sends cookies. GPT Sol named that mutation by file
+   * and line, 2026-08-28.
    *
-   * These are the two functions the app calls, so this is the assertion that
-   * describes production.
+   * `it.each` over a list of one since `loadPublicMetadata` was deleted with
+   * its route on 2026-09-02 — kept as a list because the next public loader
+   * has to join it rather than be remembered.
    */
   it.each([
     ["the article", () => loadPublicArticle("a-piece")],
-    ["the metadata", () => loadPublicMetadata("a-piece")],
   ])("sends no credentials and no Authorization when loading %s", async (_name, load) => {
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
     await load();
@@ -189,8 +188,8 @@ describe("reading a public endpoint", () => {
 
   it("encodes the slug into the path", async () => {
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
-    await loadPublicMetadata("a b/c");
-    expect(calls[0]?.url).toBe("/api/public/metadata/a%20b%2Fc");
+    await loadPublicArticle("a b/c");
+    expect(calls[0]?.url).toBe("/api/public/article/a%20b%2Fc");
   });
 });
 
@@ -241,11 +240,10 @@ describe("the client and the server agree about the paths", () => {
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
     calls.length = 0;
     await loadPublicArticle("a-piece");
-    await loadPublicMetadata("a-piece");
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     for (const call of calls) expect(spelled).toContain(call.url);
-    // And the two loaders do not both ask for the same thing.
-    expect(new Set(calls.map((c) => c.url)).size).toBe(2);
+    // And no loader asks for the same thing twice.
+    expect(new Set(calls.map((c) => c.url)).size).toBe(calls.length);
   });
 });

@@ -1738,6 +1738,34 @@ export const jobs = spideryarn.table(
      */
     urlKey: text("url_key"),
 
+    /**
+     * **The quota slot this job is spending, or null if it is spending none.**
+     *
+     * Set by the authenticated new-ingest route and written by *this row's own
+     * INSERT*, which is the entire point: the job and its provenance become
+     * true in one statement, so there is no moment where a job exists and
+     * nothing knows to charge for it. Every other shape was broken — see
+     * `ingest_events` § *Provenance lives on the job*.
+     *
+     * Null for everything that must not be charged: pipeline work from the CLI,
+     * a re-run of one step on an article already ingested, seeding. Those
+     * settle nothing, because there is nothing to settle, and no flag anywhere
+     * had to be remembered to make that true.
+     *
+     * **A foreign key, and composite on purpose** — see
+     * `jobs_ingest_event_fk` in the custom migration. An earlier version of
+     * this comment said a foreign key would be wrong because jobs are
+     * reader-deletable and "a cascade in either direction would be wrong". That
+     * was simply mistaken: the default is `NO ACTION`, nothing cascades, and
+     * deleting a job never touches the reservation it was spending. GPT Sol,
+     * 2026-09-02.
+     *
+     * It references `(id, owner_id)` rather than `id` alone, so a job cannot
+     * spend **another owner's** reservation — a property no amount of
+     * application code can promise as cheaply.
+     */
+    ingestEventId: uuid("ingest_event_id"),
+
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -1929,6 +1957,22 @@ export const jobs = spideryarn.table(
     index("jobs_slug_order")
       .on(t.slug, t.createdAt, t.id)
       .where(sql`${t.status} in ('queued','running')`),
+    /**
+     * **One job per quota slot, enforced rather than intended.**
+     *
+     * A slot buys one ingest. Without this, two jobs carrying one
+     * `ingest_event_id` would each be able to settle it, and the failure is
+     * silent in the direction that costs money: the second publication finds
+     * the row already `succeeded_at` and charges nothing. Unique rather than a
+     * plain index so that the mistake is a constraint violation at the insert,
+     * where somebody is looking.
+     *
+     * Partial, because null means "spends no quota" and there are a great many
+     * of those — every CLI run and every step re-run.
+     */
+    uniqueIndex("jobs_ingest_event_unique")
+      .on(t.ingestEventId)
+      .where(sql`${t.ingestEventId} is not null`),
   ],
 );
 
@@ -2103,6 +2147,128 @@ export const rawSources = spideryarn.table(
   ],
 );
 
+/* --------------------------------------------------- realtime sessions -- */
+
+/**
+ * **One row per live conversation this server issued a token for** — the parent
+ * a live session's `ai_calls` rows hang off, and the only thing that can say a
+ * session reported *nothing*.
+ *
+ * ## Why a session row exists at all, when the money is on `ai_calls`
+ *
+ * Because live conversation is metered from the **browser**. The audio is a
+ * WebRTC connection from the reader's tab straight to OpenAI (src/live.ts says
+ * why at length), so this process never sees a byte of it and never receives a
+ * response body to read a token count out of. What arrives instead is a report,
+ * posted back by the tab as each turn finishes.
+ *
+ * A report that never arrives is the ordinary case, not an attack: the reader
+ * ends a conversation by shutting the laptop. Without this table that session is
+ * simply **absent** — no row, no gap, and a total that looks healthy while being
+ * short by an unknown amount. That is
+ * docs/reusable/silent-success.md exactly, and it is the same move
+ * `unscopedCalls()` already makes for calls with no collector open.
+ *
+ * So the row is written **when the client secret is minted**, in this order:
+ * OpenAI mints the secret, we insert here, and only then does the token reach
+ * the browser. If the insert fails the token is never released — a usable token
+ * with no journal row is spend nothing can ever see.
+ *
+ * ## Issued is not connected, and the column names say so
+ *
+ * `issued_at` is a token handed out. It is **not** a conversation: a reader can
+ * press the button, change their mind, and never open the data channel. A
+ * denominator built on issued sessions would understate the cost of a real
+ * conversation by however many of those there are. `connected_at` is the
+ * separate, cheap, authenticated event the browser posts when the channel opens
+ * — and a usage report backfills it too, because the event can itself be lost.
+ *
+ * ## `accepts_until` is stored, not computed
+ *
+ * The window a report is accepted in is a **server-owned** deadline, and it is
+ * emphatically not the ephemeral client secret's expiry — that admits the
+ * browser to one connection and is about ten minutes (`TOKEN_SECONDS` in
+ * src/live.ts), while a conversation may run for twenty. Using the wrong clock
+ * would silently drop the reports from the longest, most expensive sessions,
+ * which are precisely the ones this whole job exists to measure.
+ *
+ * It is a column rather than `issued_at + a constant` because the constant will
+ * change — the browser's own cap is a number in a React hook — and a stored
+ * deadline means an old row keeps the rule it was issued under instead of
+ * silently acquiring today's.
+ *
+ * **Rows are never deleted**, like `ai_calls`: `on delete restrict` on the
+ * owner, so removing an account is a decision somebody has to take deliberately
+ * rather than something that quietly erases billing history.
+ */
+export const realtimeSessions = spideryarn.table(
+  "realtime_sessions",
+  {
+    /**
+     * Ours, minted before OpenAI is asked for anything, so the id exists even
+     * for a session that fails to start — the same reasoning as `ai_calls.id`.
+     */
+    id: uuid("id").primaryKey(),
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * `on delete set null` and a slug beside it, exactly as `ai_calls` does:
+     * the id is the convenience and the slug is the historical fact a later
+     * delete cannot revoke.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    articleSlug: text("article_slug"),
+    /**
+     * Which conversation this was spoken into. Text rather than a foreign key,
+     * for the reason `ai_calls.job_id` gives: a thread the reader deletes must
+     * not be able to take a billing row's context with it.
+     */
+    threadId: text("thread_id"),
+    /**
+     * The realtime model **as OpenAI created it**, not as we asked. They agree
+     * only when the request was honoured, and `mintLiveToken` reads the created
+     * session precisely so this column can be the answer rather than the
+     * question.
+     */
+    model: text("model").notNull(),
+    /** `gpt-live-transcribe` — a second model on a second rate card. src/live.ts. */
+    transcriptionModel: text("transcription_model"),
+    /** When the client secret was minted. A token handed out, not a conversation. */
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    /** The last instant a usage report for this session is accepted. See above. */
+    acceptsUntil: timestamp("accepts_until", { withTimezone: true }).notNull(),
+    /** When the data channel actually opened, or null if it never did. */
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    /** When the browser said it was over. Best-effort: a closed tab says nothing. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    /**
+     * Why it ended, in the browser's own vocabulary — `hung_up`, `idle`,
+     * `session_cap`, `error`. Free text with a length bound rather than a CHECK,
+     * because the list belongs to a React hook this stage may not edit and a
+     * constraint that lags it would refuse a true report.
+     */
+    closeReason: text("close_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** "What has this reader been talking to, and when" — the per-owner question. */
+    index("realtime_sessions_owner_issued").on(t.ownerId, t.issuedAt.desc()),
+    /**
+     * **The deadline must be after the issue**, or the session was born unable
+     * to accept a single report and nobody would find out until the reports
+     * started bouncing. A constraint rather than a comment, per
+     * docs/project/sql.md: it holds for the migration that backfills this
+     * column in three months as well as for the one caller today.
+     */
+    check("realtime_sessions_window", sql`${t.acceptsUntil} > ${t.issuedAt}`),
+    /** A channel cannot have opened before the token that admits it was minted. */
+    check(
+      "realtime_sessions_connected_after_issue",
+      sql`${t.connectedAt} is null or ${t.connectedAt} >= ${t.issuedAt}`,
+    ),
+    check("realtime_sessions_close_reason_len", sql`length(${t.closeReason}) <= 64`),
+  ],
+);
+
 /* ------------------------------------------------------------- ai calls -- */
 
 /**
@@ -2192,17 +2358,50 @@ export const aiCalls = spideryarn.table(
     credentialFingerprint: text("credential_fingerprint"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
-    durationMs: integer("duration_ms").notNull(),
-    /** `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound. */
+    /**
+     * **Nullable since 2026-09-02, and only a realtime row may be null.**
+     *
+     * The two gateways time their own request, so every row they write has a
+     * duration. A live session's input transcription does not: it arrives as one
+     * `…input_audio_transcription.completed` event with no matching start, so
+     * there is nothing to subtract from. Both alternatives were worse than a
+     * null, and both would have been *invisible* — a `0` reads as an instant
+     * call and skews any latency figure downwards, and the session's own
+     * wall-clock is the length of a conversation rather than of a call, which is
+     * the substitution GPT Sol's review named explicitly. src/ai-spend.ts §
+     * `AiCallRow.durationMs`.
+     */
+    durationMs: integer("duration_ms"),
+    /**
+     * `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound —
+     * **except on a realtime row, where it is not.**
+     *
+     * The Realtime API reports the usage it billed on the terminal event
+     * whatever the status, so a `cancelled` or `incomplete` response's figure is
+     * complete even though its answer was not. OpenAI's four statuses are mapped
+     * onto these three by `realtimeOutcome` in src/live.ts and kept verbatim in
+     * `provider_status` below, because the map loses information on purpose and
+     * that is the column where it is not lost.
+     */
     outcome: text("outcome").notNull(),
     /**
-     * **Which bill this call lands on** — `openrouter` or `anthropic`.
+     * **Which bill this call lands on** — `openrouter`, `anthropic` or `openai`.
      *
      * Not derivable from `credential_fingerprint`, which identifies a key
-     * without saying whose. Money leaves this project from two accounts and
+     * without saying whose. Money leaves this project from three accounts and
      * `npm run cost --reconcile` can only read one of them, so the row has to
      * say which side of that line it is on or the reconciliation is comparing
      * our total against somebody else's subtotal.
+     *
+     * `openai` is live conversation, added 2026-09-02 — and it is the one
+     * **outside the account-level spend cap** set in OpenRouter, which is the
+     * safety net the other two sit behind. The allowed list is a CHECK in SQL
+     * (`ai_calls_provider_account_known`, first written in
+     * drizzle/0023_ai_calls_cost_provenance.sql and widened in
+     * drizzle/20260902150952_realtime_sessions_and_usage.sql), not a Drizzle
+     * enum, so widening `ProviderAccount` in TypeScript is *not* enough on its
+     * own — that is exactly how the third value nearly shipped with every
+     * insert failing.
      */
     providerAccount: text("provider_account").notNull(),
     /**
@@ -2291,6 +2490,79 @@ export const aiCalls = spideryarn.table(
     webSearches: integer("web_searches"),
     serviceTier: text("service_tier"),
     inferenceGeo: text("inference_geo"),
+
+    /* ----------------------------------------------- live conversation -- */
+
+    /**
+     * **The realtime block — null on every row that is not a live conversation.**
+     *
+     * Explicit nullable columns rather than one JSON blob, per
+     * docs/project/sql.md, and this is **not** a new pattern in this table: it
+     * already carries `cache_write_5m_tokens` and `cache_write_1h_tokens` (the
+     * Messages wire only), `service_tier` and `inference_geo` (Anthropic's own
+     * fields) and `web_searches` (the chat wire only), each null on most rows.
+     * A sibling table was the tempting alternative and that precedent settled
+     * it — this follows the table's existing design rather than putting a second
+     * shape beside it.
+     *
+     * **Why not the totals alone.** Audio input on `gpt-realtime-2.1` is $32 per
+     * million tokens against $4 for text, and audio output $64 against $24. A
+     * row holding only `reported_input_tokens` and `output_tokens` can be handed
+     * a price once, by whoever wrote it, and can never be repriced or audited
+     * afterwards. The splits are the whole point.
+     *
+     * Which session this call belongs to, and the thing that lets a `left join`
+     * find sessions that reported nothing at all.
+     */
+    realtimeSessionId: uuid("realtime_session_id").references(() => realtimeSessions.id, {
+      /* Billing history outlives everything, like `owner_id`. A session row is
+         never deleted, so this only ever refuses a mistake. */
+      onDelete: "restrict",
+    }),
+    /** OpenAI's `response.id`, or the transcribed item's id. Half the idempotency key. */
+    providerEventId: text("provider_event_id"),
+    /** `response` or `transcription` — which rate card, and the rest of the key. */
+    eventKind: text("event_kind"),
+    /** `completed`, `cancelled`, `failed`, `incomplete` — kept verbatim. See `outcome`. */
+    providerStatus: text("provider_status"),
+    /** Inside `reported_input_tokens`, never added to it. $4/Mtok. */
+    inputTextTokens: integer("input_text_tokens"),
+    /** Inside `reported_input_tokens`. **$32/Mtok** — the expensive half of a conversation. */
+    inputAudioTokens: integer("input_audio_tokens"),
+    /**
+     * Always zero today: `liveSession` in src/live.ts configures no image input.
+     * Stored so that the day it stops being zero is a visible fact rather than a
+     * silently mispriced row — there is no image rate in `REALTIME_PRICES` and
+     * `acceptRealtimeUsage` refuses a report carrying one.
+     */
+    inputImageTokens: integer("input_image_tokens"),
+    /**
+     * `cached_tokens_details` — the text/audio split of `cache_read_tokens`,
+     * which carries the parent total.
+     *
+     * Cached audio is $0.40/Mtok against $32 uncached, eighty times cheaper, so
+     * a single cached total cannot be priced. This is the same argument that
+     * produced `cache_write_5m_tokens` and `cache_write_1h_tokens` above.
+     */
+    cachedTextTokens: integer("cached_text_tokens"),
+    cachedAudioTokens: integer("cached_audio_tokens"),
+    /** Inside `output_tokens`. $24/Mtok. */
+    outputTextTokens: integer("output_text_tokens"),
+    /** Inside `output_tokens`. **$64/Mtok** — the most expensive number in this table. */
+    outputAudioTokens: integer("output_audio_tokens"),
+    /**
+     * **Seconds of audio transcribed**, for the half of live conversation that
+     * is not billed per token at all.
+     *
+     * `gpt-live-transcribe` is $0.017 per audio *minute*. A token-only row shape
+     * could not price it, which is why the usage DTO is a discriminated union —
+     * token detail **or** seconds — rather than one bag of optional counts.
+     *
+     * `double precision`, not an integer: the event reports a duration in
+     * milliseconds and rounding every turn up or down to a whole second would
+     * accumulate a real error over a twenty-minute conversation of short turns.
+     */
+    transcriptionSeconds: doublePrecision("transcription_seconds"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -2305,6 +2577,82 @@ export const aiCalls = spideryarn.table(
      * wrong.
      */
     index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc()),
+    /**
+     * **The same report must not become two rows.**
+     *
+     * The browser posts each turn as it happens and retries what it did not see
+     * acknowledged, so a dropped response — a request that succeeded and whose
+     * `200` never arrived — is the ordinary case rather than the pathological
+     * one. Double-counting is the direction that looks exactly like the thing
+     * being measured, which is what makes it worth a constraint rather than a
+     * check in TypeScript.
+     *
+     * `acceptRealtimeUsage` also derives the row's **primary key** from these
+     * same three components, so the ordinary retry collides on `ai_calls.id`
+     * and the existing `on conflict do nothing` absorbs it. This index is the
+     * belt to that pair of braces: it holds even if the derivation is changed,
+     * and it holds for anything writing this table that is not that function.
+     *
+     * Partial, because every non-realtime row has all three columns null and
+     * `null` is not equal to `null` in a unique index — but a partial index says
+     * what it means instead of relying on that, and it stays small.
+     */
+    uniqueIndex("ai_calls_realtime_event")
+      .on(t.realtimeSessionId, t.providerEventId, t.eventKind)
+      .where(sql`${t.realtimeSessionId} is not null`),
+    /**
+     * **A realtime row is fully identified or it is not a realtime row.**
+     *
+     * The three parts of the idempotency key arrive or refuse together. Without
+     * this a report missing its `response.id` would insert happily, sit outside
+     * the unique index above because one of its columns is null, and be counted
+     * again on the next retry — the exact failure the index exists to stop,
+     * walking in through the gap the index cannot cover.
+     */
+    check(
+      "ai_calls_realtime_identified",
+      sql`(${t.realtimeSessionId} is null and ${t.providerEventId} is null and ${t.eventKind} is null)
+          or (${t.realtimeSessionId} is not null and ${t.providerEventId} is not null and ${t.eventKind} is not null)`,
+    ),
+    check("ai_calls_realtime_event_kind", sql`${t.eventKind} is null or ${t.eventKind} in ('response','transcription')`),
+    /**
+     * **The modality columns belong to the realtime wire and nowhere else.**
+     *
+     * A `input_audio_tokens` on a chat-wire row would be a number nobody can
+     * price — there is no audio rate for `claude-sonnet-5` — and, worse, it
+     * would be summed by the first person to write `SUM(input_audio_tokens)`
+     * for a voice-minutes figure. This is the same shape as
+     * `ai_calls_byok_upstream_only` from the migration before it: the column's
+     * name carries a condition, and the database is what keeps the condition
+     * true. docs/project/sql.md § Get the database to do the work.
+     */
+    check(
+      "ai_calls_realtime_columns_need_realtime_wire",
+      sql`${t.wire} = 'realtime' or (
+            ${t.realtimeSessionId} is null
+            and ${t.providerStatus} is null
+            and ${t.inputTextTokens} is null
+            and ${t.inputAudioTokens} is null
+            and ${t.inputImageTokens} is null
+            and ${t.cachedTextTokens} is null
+            and ${t.cachedAudioTokens} is null
+            and ${t.outputTextTokens} is null
+            and ${t.outputAudioTokens} is null
+            and ${t.transcriptionSeconds} is null
+          )`,
+    ),
+    /**
+     * **`duration_ms` may only be null on a realtime row**, which is the whole
+     * of the licence the `NOT NULL` was dropped for.
+     *
+     * Dropping a `NOT NULL` widens what every *other* writer may do too, and the
+     * two gateways always know how long their own request took. Without this,
+     * the day one of them stops passing a duration is a day nothing goes red.
+     */
+    check(
+      "ai_calls_duration_known_off_realtime",
+      sql`${t.durationMs} is not null or ${t.wire} = 'realtime'`,
+    ),
   ],
 );
 
@@ -2830,14 +3178,28 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  * outbox is more machinery than an alpha feedback button is worth, and
  * `mirrored_at is null` is the query that finds anything stranded.
  *
- * ## Three answers, three columns
+ * ## One answer, and it used to be three
  *
- * *Steps to reproduce*, *what you expected*, *what you saw* are three `text`
- * columns and not one blob, so "how many reports mention scrolling" is a query
- * rather than a regex over prose — docs/project/sql.md. All three are nullable
- * (a reader may leave one blank) and all three are non-empty when present, the
- * same rule and the same reason as `comments_body_nonempty`: empty and absent
- * must not be two spellings of one fact.
+ * *Steps to reproduce*, *what you expected*, *what you saw* were three `text`
+ * columns, on the argument that "how many reports mention scrolling" should be a
+ * query rather than a regex over prose — docs/project/sql.md. They are gone, and
+ * the argument for splitting them turned out to be worth less than what it cost
+ * at the other end. Greg, 2026-09-02:
+ *
+ * > It has three input boxes. I worry that will be intimidating/off-putting to
+ * > users, so let's combine them into one.
+ *
+ * Three boxes is a form, and a form is a thing you fill in once you have decided
+ * to file a bug. The reader this feature exists for is the one who was merely
+ * annoyed — docs/reusable/silent-success.md is why: most of what goes wrong in
+ * this app never throws, so the reader is the only instrument that detects it,
+ * and an instrument you have to fill in a form to use is an instrument nobody
+ * uses.
+ *
+ * So there is one `body`, and `kind` beside it. The three old columns were
+ * **backfilled into `body` with their headings kept and then dropped** — Greg's
+ * call, over keeping them as dead nullable columns:
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
  *
  * ## What is deliberately NOT here
  *
@@ -2879,12 +3241,26 @@ export const feedback = spideryarn.table(
      * reader had when they wrote to us. Never a value the browser supplied.
      */
     reporterEmail: text("reporter_email").notNull(),
-    /** *Steps to reproduce.* */
-    steps: text("steps"),
-    /** *What you expected to see.* */
-    expected: text("expected"),
-    /** *What you saw instead.* */
-    actual: text("actual"),
+    /**
+     * **What the reader wrote**, in one box, in their own order.
+     *
+     * `not null`, which is the whole of the old `feedback_says_something`: a
+     * report with nothing in it is not a report, and that is now the column's
+     * type rather than a constraint beside it. Reports filed before 2026-09-02
+     * carry the three old answers glued together with their headings, so the
+     * backfill is what made this possible — see the migration.
+     */
+    body: text("body").notNull(),
+    /**
+     * *A problem* or *a suggestion* — `FEEDBACK_KINDS` in src/types.ts.
+     *
+     * **Nullable, and starting unset is the design.** Greg, 2026-09-02: *"don't
+     * default to Problem. Default to null/unknown."* So null means the reader
+     * did not say, which is also true of every report filed before the toggle
+     * existed, and the two are the same fact rather than two that have to be
+     * told apart.
+     */
+    kind: text("kind"),
     /**
      * Whether the reader ticked *Send extra diagnostics*, recorded as its own
      * fact rather than inferred from `diagnostics` being present: "they said yes
@@ -2892,7 +3268,32 @@ export const feedback = spideryarn.table(
      * answers, and only one of them is a bug in the collector.
      */
     consented: boolean("consented").notNull(),
-    routeKind: text("route_kind").notNull(),
+    /**
+     * **The address the reader was at, whole** — `route_kind`, a closed
+     * vocabulary of ten route names, until 2026-09-02.
+     *
+     * The vocabulary existed to keep the address bar out of this table, and it
+     * was Greg's call to reverse that: *"I think it's fine (and even
+     * advantageous) to store the url with the Feedback"*. What it cost was a
+     * migration for every new page, and a 500 on a valid report whenever its
+     * four hand-mirrored copies drifted. `isWebUrl` at the seam
+     * (src/urls.ts) and the length CHECK below are what replace it, and this
+     * column is `text` because a URL has no vocabulary to close.
+     *
+     * The whole address reaches Sentry too, deliberately — see
+     * docs/project/privacy.md § What a bug report carries, which is where the
+     * reader is told so.
+     *
+     * **Nullable, and that is the stale-tab case rather than laziness.** A
+     * reader whose bundle was loaded before this deploy posts `routeKind` and
+     * no `url` at all, and this is the one endpoint where a client and a server
+     * disagreeing is likely to be the very thing they are trying to report. So
+     * an old report is filed with `null` here rather than refused — the same
+     * call `LEGACY_ANSWER_FIELDS` in src/routes.ts makes one field over. `null`
+     * means *an old client*, and it stops meaning anything once those bundles
+     * are gone.
+     */
+    url: text("url"),
     /** The article they were on, where there was one. No FK — see the header. */
     slug: text("slug"),
     /** `__SPIDERYARN_BUILD_COMMIT__`, so a report names a deploy and its source maps. */
@@ -2958,33 +3359,49 @@ export const feedback = spideryarn.table(
     /** The same CHECK every other minted id is held to — `mintId()`, one regex. */
     check("feedback_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     /**
-     * **The two closed vocabularies, written out by hand** — like
-     * `comments_status` and `checkpoints_namespace` above, and unlike the
-     * temptation.
+     * **The closed vocabulary, written out by hand** — like `comments_status`
+     * and `checkpoints_namespace` above, and unlike the temptation.
      *
-     * `FEEDBACK_ROUTE_KINDS` and `FEEDBACK_ENVIRONMENTS` in src/types.ts are the
-     * same lists, and building these constraints *from* those arrays was tried
-     * and reverted: it would make this file import src/types.ts at **runtime**,
-     * and src/store/public-slug.ts imports this one — so the public read path's
+     * `FEEDBACK_ENVIRONMENTS` in src/types.ts is the same list, and building
+     * this constraint *from* that array was tried and reverted: it would make
+     * this file import src/types.ts at **runtime**, and
+     * src/store/public-slug.ts imports this one — so the public read path's
      * import graph would grow a node, which tests/public-imports.test.ts calls a
      * regression whatever the node is.
      *
-     * So the lists are in two places, and the drift is caught **behaviourally**
+     * So the list is in two places, and the drift is caught **behaviourally**
      * instead: tests/feedback-store.test.ts files a report under every value of
-     * each union and watches the database take it. A value added to a union and
+     * the union and watches the database take it. A value added to the union and
      * not to the CHECK below goes red there, at the insert, which is where it
      * would have hurt.
+     *
+     * **There were two of these until 2026-09-02.** `feedback_route_kind` held
+     * ten route names, and it is gone with the column — see `url` above for why,
+     * and note the shape of the argument, because it applies to the next
+     * constraint somebody is tempted to write: a vocabulary that has to be
+     * widened by migration every time the product grows a page is a vocabulary
+     * whose escape hatch gets used, and an escape hatch in use is worse data
+     * than no constraint.
      */
-    check(
-      "feedback_route_kind",
-      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
-    ),
     check(
       "feedback_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
     /**
-     * Non-empty when present, and **capped**, on all three answers.
+     * **Non-empty and capped**, which is the whole of what this column
+     * promises. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same 2048, and
+     * it is written out here for the runtime-import reason above.
+     *
+     * That the value is an `http(s)` address is `isWebUrl`'s job at the route,
+     * not this constraint's: a URL grammar in SQL would be a second, worse
+     * parser, and the one place that decides what a web URL is already exists.
+     */
+    check(
+      "feedback_url_shape",
+      sql`${t.url} is null or (length(btrim(${t.url})) > 0 and length(${t.url}) <= 2048)`,
+    ),
+    /**
+     * Non-empty when present, and **capped**.
      *
      * The cap is the one that matters: it is what stops one paste of an entire
      * article becoming an attachment on its way to Sentry. In the database as
@@ -2996,27 +3413,28 @@ export const feedback = spideryarn.table(
      * here rather than imported for the reason the vocabularies above are — and
      * pinned to that constant behaviourally by tests/feedback-store.test.ts,
      * which writes exactly the cap and exactly one character more.
+     *
+     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`, and it is deliberately not 4,000.**
+     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS` — the route
+     * refuses more and the dialog says so — but the backfill glued three
+     * separately-capped answers under their headings, and three full ones come
+     * to exactly this. A 4,000 CHECK would either fail the migration on a row
+     * that was legal when it was filed, or force it to truncate, which throws
+     * away something a reader wrote. GPT Sol's review of the plan, 2026-09-02.
      */
     check(
-      "feedback_steps_shape",
-      sql`${t.steps} is null or (length(btrim(${t.steps})) > 0 and length(${t.steps}) <= 4000)`,
-    ),
-    check(
-      "feedback_expected_shape",
-      sql`${t.expected} is null or (length(btrim(${t.expected})) > 0 and length(${t.expected}) <= 4000)`,
-    ),
-    check(
-      "feedback_actual_shape",
-      sql`${t.actual} is null or (length(btrim(${t.actual})) > 0 and length(${t.actual}) <= 4000)`,
+      "feedback_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 12072`,
     ),
     /**
-     * **A report with nothing in it is not a report.** The dialog refuses one
-     * too; this is the half that holds for every other writer.
+     * The third closed vocabulary, written out by hand for the reason the two
+     * above are. `FEEDBACK_KINDS` in src/types.ts is the same list, and
+     * tests/feedback-store.test.ts files a report under every value of it.
+     *
+     * **Null is a member of the domain and not of the list**: it means the
+     * reader did not say, which is what the toggle starts as.
      */
-    check(
-      "feedback_says_something",
-      sql`${t.steps} is not null or ${t.expected} is not null or ${t.actual} is not null`,
-    ),
+    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion')`),
     check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
     /**
      * **Diagnostics cannot exist without consent.** The tick-box is the whole
@@ -3159,5 +3577,353 @@ export const checkpoints = spideryarn.table(
     check("checkpoints_key_format", sql`${t.key} ~ '^[a-z0-9][a-z0-9_-]{0,127}$'`),
     /** The sweep's only query. */
     index("checkpoints_last_used_at").on(t.lastUsedAt),
+  ],
+);
+
+/* --------------------------------------------------------------- billing -- */
+
+/**
+ * **What we sell — as rows, so it can be changed without a deploy.**
+ *
+ * Greg's call, 2026-09-02, asked for after the tiers had already been built as
+ * constants: *"instead of adding them as environment variables, could we add
+ * them to the database, so that it's easier to modify (e.g. for agents, in UI,
+ * etc)"*. He was offered ids-only, ids-and-quotas, or the whole table, and took
+ * the whole table with the costs stated.
+ *
+ * **This table is the source of truth and Stripe follows it.** Edit a row (or
+ * insert one), run `npx tsx scripts/stripe-setup.ts --apply`, and the script
+ * creates or replaces the Stripe product and price to match and writes
+ * `stripe_price_id` back. Nothing is ever pasted into an environment file, on
+ * any machine — which is the whole point, and why `STRIPE_PRICE_READER` and its
+ * siblings are gone.
+ *
+ * ## What that bought, and what it cost
+ *
+ * `PaidTier` used to be a TypeScript union of two literals, so the compiler
+ * refused an unknown tier and `tests/billing-tiers.test.ts` could check the
+ * invariants over constants. Tier ids are now strings from a database and none
+ * of that is available. The invariants did not go away; they moved **into the
+ * schema**, where they hold for every writer including a hand-typed `UPDATE` at
+ * midnight, which is what docs/project/sql.md § *Get the database to do the
+ * work* asks for. See the CHECKs below.
+ *
+ * The one invariant a CHECK cannot express — a dearer tier must not allow fewer
+ * ingests, which is a statement about *pairs* of rows — is asserted in
+ * `tests/billing-tiers.test.ts` against the seeded rows instead.
+ *
+ * ## Sold, not merely defined
+ *
+ * `stripe_price_id` is null until the setup script has run. A tier with no
+ * price cannot be sold and is not offered — `entitlementForRow` will never
+ * match a subscription to it, because matching happens by price id.
+ */
+export const billingTiers = spideryarn.table(
+  "billing_tiers",
+  {
+    /**
+     * Internal id — `reader`, `researcher`. Appears in logs and in
+     * `billing_accounts` reporting, never to a customer.
+     *
+     * The primary key rather than a surrogate uuid: it is a short stable name
+     * chosen by a person, it is what a human editing this table will type, and
+     * a second key would only add a number to remember.
+     */
+    id: text("id").primaryKey(),
+    /** Customer-visible, on the Stripe product and the Checkout page. */
+    productName: text("product_name").notNull(),
+    description: text("description").notNull(),
+    /** New article ingests allowed per billing period. */
+    ingestsPerPeriod: integer("ingests_per_period").notNull(),
+    /**
+     * The stable handle Stripe indexes, and what makes the setup script
+     * idempotent. **Never change one on a tier that has been sold**: it is how
+     * a re-run finds the price it made last time rather than minting a second
+     * one that nobody notices until two customers are on different prices.
+     */
+    lookupKey: text("lookup_key").notNull(),
+    /** Written back by the setup script. Null means "not yet created in Stripe". */
+    stripePriceId: text("stripe_price_id"),
+    /** Which side of Stripe's test/live divide the price above came from. */
+    livemode: boolean("livemode"),
+    /**
+     * Off the pricing page without deleting the row.
+     *
+     * Deleting a tier somebody is subscribed to would orphan their
+     * entitlement; this is how a tier stops being *offered* while existing
+     * subscribers keep working, which is the ordinary way tiers retire.
+     */
+    active: boolean("active").notNull().default(true),
+    /** Cheapest first on the pricing page. Nothing else reads it. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /* A tier that allows nothing is not a tier, and a negative one would make
+       every account instantly over its limit. */
+    check("billing_tiers_ingests_positive", sql`${t.ingestsPerPeriod} > 0`),
+    /* The id is typed by a person and reaches logs and URLs. Same shape as the
+       slug rules elsewhere: lower-case, no spaces, no surprises. */
+    check("billing_tiers_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_-]{1,30}$'`),
+    /* Two tiers sharing a lookup key would fight over one Stripe price on
+       every run of the setup script. */
+    unique("billing_tiers_lookup_key").on(t.lookupKey),
+    /* And two tiers sharing a price id would make `price_id → tier` ambiguous,
+       which is the lookup entitlement is decided by. */
+    unique("billing_tiers_price_id").on(t.stripePriceId),
+  ],
+);
+
+/**
+ * **What a tier costs, one row per currency.**
+ *
+ * A child table rather than `amount_usd`/`amount_gbp`/`amount_eur` columns, and
+ * the reason is the request this whole change came from: adding a currency has
+ * to be something a person or an agent can *do*, and with columns it is a
+ * migration. Here it is an insert.
+ *
+ * docs/project/sql.md prefers columns over JSON, and this is neither — it is
+ * the ordinary relational answer to a repeating group, which is what a set of
+ * per-currency amounts is.
+ *
+ * **Amounts are chosen, never converted at run time.** A customer seeing €8.62
+ * knows they are being shown somebody else's price. The seeded numbers were set
+ * at roughly GBP/USD 1.35 and EUR/USD 1.16 and rounded up to whole units,
+ * landing 4–8% above spot — headroom on purpose, because Stripe prices are
+ * immutable and one set at spot goes underwater on the next move.
+ */
+export const billingTierPrices = spideryarn.table(
+  "billing_tier_prices",
+  {
+    tierId: text("tier_id")
+      .notNull()
+      .references(() => billingTiers.id, { onDelete: "cascade" }),
+    /** ISO 4217, lower case, as Stripe spells it. */
+    currency: text("currency").notNull(),
+    /** In the smallest unit — cents, pence, cents. */
+    unitAmount: integer("unit_amount").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tierId, t.currency] }),
+    /* Free is the absence of a subscription, not a zero-priced one. */
+    check("billing_tier_prices_amount_positive", sql`${t.unitAmount} > 0`),
+    /* Stripe's currency codes are three lower-case letters. A `USD` here would
+       be accepted by us and rejected by Stripe, one run of the setup script
+       later and a long way from the row somebody typed. */
+    check("billing_tier_prices_currency_format", sql`${t.currency} ~ '^[a-z]{3}$'`),
+  ],
+);
+
+/**
+ * **One row per owner, and every owner gets one** — the anchor the ingest quota
+ * serialises on, whether or not anybody has ever paid.
+ *
+ * docs/project/billing.md, and
+ * docs/plans/260902i-stripe-payments-and-subscription-tiers.md.
+ *
+ * ## Why a free reader has a row here
+ *
+ * It reads like waste — a table of subscriptions holding rows for people with
+ * no subscription — and it is the whole reason the quota cannot be bypassed.
+ * Admission takes `select … for update` on this row so that concurrent requests
+ * for one owner are counted one at a time, and **a row lock is taken on rows
+ * the statement returns, so a `for update` that matches nothing locks nothing**
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md). The free tier
+ * is exactly where the boundary matters, so exactly there the row must exist.
+ * Admission creates it with `on conflict do nothing` and then locks it, which
+ * is that postmortem's prescribed shape; measured on 2026-09-02, a second
+ * transaction blocks for as long as the first holds it and then reads the
+ * first's committed value.
+ *
+ * It is also where a comp subscription will live — a journalist given a free
+ * month has no Stripe subscription at all, so there is nowhere else to put it.
+ *
+ * ## What is stored, and what is deliberately not
+ *
+ * Opaque Stripe ids and the few fields entitlement is derived from. **No card
+ * data, ever** — hosted Checkout and the hosted Customer Portal mean none of it
+ * reaches this server, which is what keeps us in Stripe's lightest PCI scope.
+ * `status` is raw Stripe text rather than an enum or a CHECK: entitlement comes
+ * from an allowlist in src/billing/tiers.ts, so a status Stripe invents next
+ * year falls to the free tier instead of failing an insert inside a webhook.
+ */
+export const billingAccounts = spideryarn.table(
+  "billing_accounts",
+  {
+    /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").primaryKey(),
+    /**
+     * The Stripe customer, once one exists. Nullable because admission creates
+     * this row long before anybody visits Checkout, and **unique** because two
+     * owners sharing a customer would cross two people's billing — Postgres
+     * allows many nulls under a unique constraint, which is exactly the
+     * behaviour wanted here.
+     */
+    stripeCustomerId: text("stripe_customer_id").unique(),
+    /** The current subscription, if any. Unique for the same reason. */
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    /** Which price it is on — the key into the tier map. */
+    priceId: text("price_id"),
+    /** Raw Stripe status. See the header: an allowlist decides, not this column. */
+    status: text("status"),
+    /**
+     * The billing period, **read from the subscription item rather than the
+     * subscription** — Stripe's Basil release (2025-03-31) removed these from
+     * the Subscription object. Half-open `[start, end)` everywhere that reads
+     * them. src/billing/stripe.ts pins the API version that keeps this true.
+     */
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    /** Cancelled, but paid up until the period ends — still entitled until then. */
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    /**
+     * Which side of Stripe's test/live divide this row came from.
+     *
+     * Stored rather than inferred so that a row written by a misconfigured
+     * deployment can be *seen* afterwards. A production deployment on a test
+     * key would write `false` here while granting real quota, and this column
+     * is the only thing that would say so — src/billing/stripe.ts refuses such
+     * a key, and this is the record of what happened if it ever did not.
+     */
+    livemode: boolean("livemode"),
+    /** When Stripe was last asked. Diagnostic; entitlement never reads it. */
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /* A period that ends before it starts would make every half-open count
+       empty, which reads as "no ingests used" rather than as an error. */
+    check(
+      "billing_accounts_period_order",
+      sql`${t.currentPeriodStart} is null or ${t.currentPeriodEnd} is null or ${t.currentPeriodStart} < ${t.currentPeriodEnd}`,
+    ),
+    /* A subscription belongs to a customer. A row with the second and not the
+       first could only come from a bug, and it would leave the customer→owner
+       mapping — the authoritative one — unreachable from the subscription. */
+    check(
+      "billing_accounts_subscription_needs_customer",
+      sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
+    ),
+  ],
+);
+
+/**
+ * **Every new ingest an owner is charged for, reserved before it runs and
+ * settled when it ends.** One row per *attempt to spend* — not per article, and
+ * not per job.
+ *
+ * ## Why this is not a count of jobs, or of articles
+ *
+ * Jobs are reader-deletable (`DELETE /api/jobs/:id`), so a quota derived from
+ * job rows is erasable by the person being counted — which is the one thing an
+ * abuse boundary may not be. Articles answer a different question again: they
+ * can be archived, and deleting one does not refund the slot. Nothing deletes
+ * from this table.
+ *
+ * ## The three timestamps, and why they are not one status column
+ *
+ * **Written in the future tense on purpose: none of this is wired up yet.** The
+ * functions exist in `src/store/pg-billing.ts` and nothing calls them, so what
+ * follows is the contract they are built to, not something the app does today.
+ *
+ * `reserved_at` is set at admission, inside the transaction holding the owner's
+ * `billing_accounts` lock — that write is what makes a second concurrent
+ * request see the first one. `succeeded_at` is to be set in the *same* Postgres
+ * transaction that publishes the revision (src/store/pg-session.ts `settleIn`,
+ * the `done` branch), so that there is no window in which an ingest has
+ * succeeded and not been counted, and none in which a failure has been charged.
+ * `released_at` likewise, from the branch that ends a failed or cancelled job.
+ *
+ * Nullable timestamps rather than a status enum because a nullable timestamp
+ * says more than a boolean (docs/project/sql.md): each of these is genuinely an
+ * event with a moment, they can be read independently, and there is no second
+ * column to disagree with the first. The CHECK below rules out the one
+ * combination that is not a state.
+ *
+ * ## Usage, and why an unsettled reservation never expires
+ *
+ * An owner's usage is successes inside the period **plus** every reservation
+ * that has not settled:
+ *
+ *     succeeded_at >= start and succeeded_at < end        -- charged
+ *     succeeded_at is null and released_at is null        -- in flight
+ *
+ * **There is deliberately no age limit on the second clause**, and an earlier
+ * draft of this table had a six-hour one. GPT Sol's review, 2026-09-02, showed
+ * it was a straightforward bypass rather than a safety valve: with a limit of
+ * 100, hold 100 jobs queued for six hours, reserve 100 more, and all 200 can
+ * then succeed inside one period — repeatable in cohorts, and *easier* the more
+ * contended the job queue is, because contention is what ages the queue. Any
+ * expiry rule has to be able to prove the reservation never produced a job, and
+ * the honest v1 answer is not to have one: a leaked reservation costs its owner
+ * one slot, which is a support conversation, and the bypass costs unbounded
+ * model spend, which is the thing this table exists to stop.
+ *
+ * The leak needs the process to die between the reservation committing and
+ * `enqueue()` returning — every other path releases it. A reconciliation that
+ * frees only reservations *provably* without a job is possible later, because
+ * `jobs.ingest_event_id` makes "without a job" a query rather than a guess.
+ *
+ * ## Provenance lives on the job, not here
+ *
+ * The link is `jobs.ingest_event_id`, written by the same INSERT that creates
+ * the job, and this table has no `job_id` column. That direction is the whole
+ * safety argument, and the other way round was broken three ways: a job that
+ * published before a follow-up `update … set job_id` landed was never charged;
+ * a crash in that gap left a runnable job nobody paid for; and two duplicate
+ * Adds that `enqueueOrGet` deduplicates into one job would have pointed two
+ * reservations at it, so one publication settled both.
+ *
+ * A job with a null `ingest_event_id` — pipeline work from the CLI, a re-run of
+ * one step, seeding — settles nothing and is therefore free. That is the entire
+ * provenance mechanism: no flag to set, and none to forget.
+ */
+export const ingestEvents = spideryarn.table(
+  "ingest_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** `auth.users(id)`. FK in the custom migration. */
+    ownerId: uuid("owner_id").notNull(),
+    reservedAt: timestamp("reserved_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set inside the publish transaction. Null until the ingest succeeds. */
+    succeededAt: timestamp("succeeded_at", { withTimezone: true }),
+    /** Set when the job failed, was cancelled, or never became a job at all. */
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * What the article was called at the time — **diagnostic only**. A slug is
+     * mutable, so it could never be this row's identity; it is here so that a
+     * support conversation about "which article was that" has an answer.
+     */
+    slug: text("slug"),
+  },
+  (t) => [
+    /* A reservation settles once, and only one way. `num_nonnulls` rather than
+       a pair of `is null` disjunctions because it says the rule rather than
+       encoding it — GPT Sol, 2026-09-02. In the database rather than in
+       TypeScript because three separate code paths write these columns, and a
+       rule that lives in one of them is not a rule. */
+    check("ingest_events_settled_once", sql`num_nonnulls(${t.succeededAt}, ${t.releasedAt}) <= 1`),
+    /* Neither terminal moment can precede the reservation it settles. Cheap,
+       and it is the constraint that would catch a clock or a code path writing
+       one of these from somewhere unexpected. */
+    check(
+      "ingest_events_settled_after_reserved",
+      sql`(${t.succeededAt} is null or ${t.succeededAt} >= ${t.reservedAt})
+          and (${t.releasedAt} is null or ${t.releasedAt} >= ${t.reservedAt})`,
+    ),
+    /* The admission query, which runs on the critical path of every ingest. */
+    index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),
+    /**
+     * **Redundant as a uniqueness claim, and not here for that.** `id` is
+     * already the primary key, so `(id, owner_id)` cannot repeat. It exists so
+     * that `jobs.ingest_event_id` can carry a *composite* foreign key against
+     * `(id, owner_id)` — Postgres requires a unique constraint on exactly the
+     * referenced columns — which is what makes "a job cannot spend another
+     * owner's reservation" a thing the database refuses rather than a thing the
+     * application remembers. GPT Sol, 2026-09-02.
+     */
+    unique("ingest_events_id_owner").on(t.id, t.ownerId),
   ],
 );

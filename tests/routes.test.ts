@@ -17,6 +17,7 @@ import { beginAnswer, createComment, loadComments, patchComment } from "../src/c
 import { loadShelf } from "../src/shelf.js";
 import { beginRun, deleteRun, loadRuns } from "../src/searches.js";
 import { mintId } from "../src/ids.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { originalUrl } from "../src/vercel.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -1488,6 +1489,75 @@ describe("the admin gate", () => {
     const r = await call("GET", "/api/admin/users");
     expect(r.status).toBe(501);
     expect(r.body.error).toMatch(/Postgres/);
+  });
+
+  /* **The feedback routes, named rather than left to the prefix.** The case
+     above already proves an unwritten admin endpoint is refused, so these are
+     not testing the gate again — they are making the gate's guarantee say these
+     two addresses out loud, which is what stops a later refactor moving one of
+     them out from under it without a test going red.
+     docs/plans/260902l-admin-feedback-page.md. */
+  it("refuses a non-administrator the feedback list, and hands back no reports", async () => {
+    const r = await call("GET", "/api/admin/feedback", undefined, asSomebodyElse);
+    expect(r.status).toBe(403);
+    /* Not an empty list — this page shows other people's words, so "refused"
+       and "nothing to show" must not be one answer. */
+    expect(r.body).not.toHaveProperty("reports");
+  });
+
+  it("refuses a non-administrator a screenshot", async () => {
+    const r = await call(
+      "GET",
+      `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/spya-k3m9qt/screenshot`,
+      undefined,
+      asSomebodyElse,
+    );
+    expect(r.status).toBe(403);
+  });
+
+  it("lets the administrator reach the feedback list, where the store refuses instead", async () => {
+    const r = await call("GET", "/api/admin/feedback");
+    expect(r.status).toBe(501);
+    expect(r.body.error).toMatch(/Postgres/);
+  });
+
+  it("refuses either half of the key when it is the wrong shape", async () => {
+    /* **The address carries two segments because a report is `(owner_id, id)`**
+       — the id is minted by a browser, so it is unique within an owner and not
+       globally. GPT Sol, 2026-09-02; src/store/pg-admin-feedback.ts.
+
+       The patterns' `[\w-]+` is a *shape*; `isUuid` and `isSpideryarnId` are
+       the rules. A 400 rather than a 501 is what proves they run before the
+       store, and that the pattern is not being trusted as the check. */
+    for (const path of [
+      `/api/admin/feedback/not-a-uuid/spya-k3m9qt/screenshot`,
+      `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/not-an-id/screenshot`,
+      `/api/admin/feedback/not-a-uuid/spya-k3m9qt`,
+      `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/not-an-id`,
+    ]) {
+      const r = await call("GET", path);
+      expect(r.status, path).toBe(400);
+    }
+  });
+
+  it("refuses a malformed page cursor rather than quietly starting from the top", async () => {
+    /* Reading a bad `?before=` as "no cursor" would hand back page 1 while the
+       reader pressed *Load older* — a request that looks like it worked and
+       silently skipped everything in between.
+       docs/reusable/silent-success.md. */
+    const r = await call("GET", "/api/admin/feedback?before=nonsense");
+    expect(r.status).toBe(400);
+  });
+
+  it("does not match a report path with anything extra on the end", async () => {
+    /* Exact, anchored, two segments. `/…/screenshot/anything` is a 404 rather
+       than a quiet match — the same rule `/api/admin/users/anything` follows,
+       and the reason both are exact rather than `startsWith`. */
+    const r = await call(
+      "GET",
+      `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/spya-k3m9qt/screenshot/extra`,
+    );
+    expect(r.status).toBe(404);
   });
 
   it("is still the same path after production's rewrite", async () => {
