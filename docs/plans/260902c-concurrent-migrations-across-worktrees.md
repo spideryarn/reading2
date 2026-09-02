@@ -12,10 +12,20 @@ Greg, 2026-09-02, which is the whole brief:
 
 ## The short answer to his question
 
-Yes, you can usually just run them both, and **the number was never the thing that breaks**. Two
-worktrees can mint a tidy `0052` and `0053` and still fail; they can mint two `0052`s and be fine.
-Refusing duplicate numbers is neither necessary nor sufficient, which is why the parent plan's
-proposal is being dropped rather than built.
+Yes — **the database will run both**, because the migrator reads journal tags and two distinct tags
+carrying the same number are two distinct migrations to it. Two worktrees can also mint a tidy `0052`
+and `0053` and still fail. So refusing duplicate numbers is not sufficient, and the parent plan's
+proposal is dropped.
+
+But it is not wholly irrelevant either, and the first draft of this plan overstated that. Under the
+current index layout the snapshot file is named from the **prefix alone**, so two `0052`s want one
+`0052_snapshot.json` and the repository cannot hold both. Put precisely:
+
+> Duplicate SQL-number prefixes are not a database invariant, but they are a metadata filename
+> collision under drizzle's index layout.
+
+Which is an argument for [stage 5](#5-migrationsprefix-timestamp-reduction-not-prevention) — change
+the layout — rather than for a refusal.
 
 There are three real failure modes, and they are in different files.
 
@@ -79,11 +89,15 @@ re-emits the winner's DDL as a new migration, and `db:migrate` fails on `already
 emits bare `ADD COLUMN`/`CREATE TABLE`, no `IF NOT EXISTS`) one migration later, in whichever
 worktree generates next. Deleting the loser's snapshot as debris is the same bug mirrored.
 
-**There is no journal-resolution script that can be correct.** Sorting the merged entries by `when`
+**No resolver that edits only `_journal.json` can be correct.** Sorting the merged entries by `when`
 and renumbering `idx` fixes the journal and leaves the chain forked — it would make a forked chain
 *pass* the tests, which is worse than the conflict it removes. Snapshots are a linear chain and
-drizzle has no notion of merging them. The only correct resolution is for the loser to regenerate on
-top of the merged schema.
+drizzle has no notion of merging them.
+
+*An earlier draft said "no journal-resolution script can be correct" and "the loser regenerates" full
+stop. Both were too strong — a resolver that reconstructs the snapshot and the SQL from the merged
+schema is correct, and regeneration is one such resolver but not a universally safe one. See
+[stage 4](#4-the-regeneration-runbook-classified-by-what-the-migration-is).*
 
 ## Failure 3 — the shared database. **Half closed.**
 
@@ -105,99 +119,153 @@ What it does not cover, and worktrees make common:
   only against each other.
 - **`db:reset`**, which is bare `supabase db reset` and takes nothing.
 
+## What GPT Sol found, 2026-09-02, and why the stages below are not the ones first written
+
+The first version of this plan had four stages and **each of them was materially wrong**. Sol's
+review is in [260902c-concurrent-migrations-review-sol.md](260902c-concurrent-migrations-review-sol.md);
+every blocking claim in it was checked here before being accepted, and one number in it was wrong.
+The three that change the design:
+
+**1. The proposed snapshot invariant is false on this repository right now.** Checked:
+
+```
+journal entries                     52
+snapshot files                      50
+entries with no snapshot            0003_reader_state_owner_fks, 0029_assets
+chain break (prev id != next prevId)  0021 → 0022
+npx drizzle-kit check                 "Everything's fine 🐶🔥", exit 0
+```
+
+So "every journal entry has a snapshot linked to the previous one" would go red on the real tree the
+moment it was written — and `drizzle-kit check` is green on all of it, so it catches a *fork* and not
+a *hole*. A validator needs the historical exceptions written down explicitly.
+
+**2. Snapshots are named `<prefix>_snapshot.json`, not `<tag>_snapshot.json`.** This plan said `tag`.
+The consequence is not cosmetic: two migrations sharing a numeric prefix share one snapshot *file*,
+so the repository cannot hold both. That partly rehabilitates the parent plan's instinct — duplicate
+numbers are not a database problem, but under the index layout they are a **metadata filename
+collision**, which is a different and real thing.
+
+**3. "Regenerate on the trunk's last snapshot and the DDL is right" is already known to be false
+here**, and it is written down in a migration. [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql):
+
+> `drizzle-kit generate` wrote three more statements than this and all three were wrong.
+> `0029_assets.sql` is hand-written and has no `meta/0029_snapshot.json`, so the newest snapshot
+> drizzle could diff against was 0028 — which predates the assets column and the widened step CHECK.
+> It therefore re-emitted both, and applying them failed on
+> `column "assets" of relation "article_revisions" already exists`.
+
+This repo has already lived the exact failure that unconditional regeneration would cause. The fix
+recorded there — keep the generated snapshot so the next generate diffs against reality — is the
+precedent stage 2 has to follow.
+
 ## What we are going to do
 
-In priority order. Stage 1 is the only one that closes a silent failure.
+Reordered on Sol's recommendation: **snapshot safety before the prefix change**, because timestamps
+reduce one collision shape and detect no corruption at all.
 
-### 1. A snapshot-chain check, beside the journal checks
+### 1. `drizzle-kit check` becomes a gate
 
-A clause in `journalProblems` (so `db:migrate`'s preflight sees it) plus tests in
-`tests/migration-journal.test.ts`: walk the journal in order and assert each entry has a
-`<tag>_snapshot.json` whose `prevId` is the previous entry's snapshot `id`, and that no snapshot in
-`meta/` is unnamed by the journal. Pure, no database — a fact about the repository, so it goes red on
-the branch rather than on whoever migrates next.
+It exits 1 on a forked chain, it is green on this tree today, and only
+[`scripts/deploy.ts:444`](../../scripts/deploy.ts) runs it. Put it in
+[`scripts/check.ts`](../../scripts/check.ts) so a fork is caught on the branch rather than at the
+deploy. One line, no new machinery, and it is the cheapest thing here.
 
-**Proving it** — fork the chain in a fixture folder (two snapshots, one `prevId`), and separately
-delete the last snapshot. Both must go red, and the real `drizzle/` must stay green. A check nobody
-has watched fail is not evidence.
+**It does not cover the holes** — it is green with `0003` and `0029` missing. That is stage 2.
 
-### 2. The runbook: the loser regenerates
+### 2. A snapshot validator, with the historical exceptions written down
 
-Into [worktrees.md](../project/worktrees.md), pointed at from
-[database.md § A watermark is not a ledger](../project/database.md). For a worktree that merges `dev`
-and hits the `_journal.json` conflict:
+In `journalProblems` (so `db:migrate`'s preflight sees it) plus `tests/migration-journal.test.ts`.
+Not the naive walk this plan first proposed. It must check:
 
-1. Take the trunk's journal wholesale —
-   `git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json`. A file write, not
-   a `git checkout`, so it stays inside the house rules.
-2. Delete your own `.sql` and `_snapshot.json`, keeping a copy if you hand-edited the SQL.
-3. Finish the merge, then `npm run db:generate -- --name <same name>`. It diffs the merged
-   `schema.ts` against the trunk's last snapshot, so the DDL is right, the chain is linear, and the
-   fresh `when` is later than everything — which is what actually makes an inversion impossible.
-4. Re-apply any hand edits, run the file tests.
+- every non-underscore entry under `meta/` is parsed, because drizzle does — not just `*_snapshot.json`
+- snapshot prefixes and `id`s are unique, and no two snapshots share a `prevId`
+- every physical snapshot maps to exactly one journal prefix, and journal prefixes do not collide
+- snapshot filenames in lexical order follow the journal's order for those entries
+- after the historical exceptions, each snapshot links to the preceding physical one
+- the lexically last snapshot is the intended terminal one
 
-Plus the case where the loser had *already applied* its migration to the shared database before
-merging: its ledger row is now `unknown` with `pending > 0`, so the preflight refuses (the case the
-`allowHistoricalExtras` comment describes). The row is not on `KNOWN_ORPHANS` and the DDL is already
-in the schema, so a regenerated migration fails on `already exists`. For a local database the boring
-fix is `npm run db:reset && npm run db:migrate` under the lock — **and the runbook must name its
-cost**, which is everyone's local articles. It is `db:reset`, so it is Greg's call under
-[AGENTS.md](../../AGENTS.md).
+**The three exceptions are named constants with the reason attached**, in the shape of the existing
+`GRANDFATHERED` inversion list — which is already the repo's pattern for exactly this, and already
+has a test pinning it so it cannot quietly grow.
 
-### 3. `migrations.prefix: "timestamp"`
+**What this still cannot prove**: that a snapshot's *contents* match the SQL or `schema.ts`. A stale
+but structurally perfect snapshot passes. That is stage 3's job.
 
-One line in [`drizzle.config.ts`](../../drizzle.config.ts). Filenames become `YYYYMMDDhhmmss_name`
-and stop colliding between worktrees, which is the 2026-08-31 accident made impossible rather than
-test-caught.
+**Proving it** — fixtures that go red for a fork, a missing snapshot, a duplicate `id`, a self-loop
+masked by duplicate ids, and a renamed old snapshot that becomes lexically last. The real `drizzle/`
+must stay green. Sol listed those cases because the naive walk passes every one of them.
 
-Mixing with the existing 52 index-prefixed files is safe: `migrate()` reads the journal only
-(`${folder}/${tag}.sql` per entry, never lists the folder), `hashMigrationFiles` keys by tag, and
-drizzle-kit's own `snapshots.sort()` stays right because `0051_` sorts before `2026…_`. `idx` is
-still `last.idx + 1` under any prefix, so `journalProblems`' contiguity check keeps working.
+### 3. Wrap `db:generate` so success means output
 
-**One real dependent**: [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts)
-sorts `.sql` filenames (line 40–42) and asserts `/^\d{4}_.*\.sql$/` (line 106). It must read journal
-order and drop the `\d{4}`, or it goes red the first time a timestamp-named migration touches
-`revision_step_runs_step`.
+The root failure is that `drizzle-kit generate` can exit 0 having written nothing — on a forked
+chain, and on the other no-output paths. A wrapper that requires a new journal entry, a new `.sql`
+**and** a new snapshot, or an explicitly acknowledged no-op, closes the whole class rather than the
+one case we found. This is the stage that would have caught `0029`.
 
-**What this does not fix, stated plainly**: `drizzle/meta/_journal.json` still conflicts on every
-concurrent migration, because both sides append to one array. The prefix change kills the filename
-collision, not the conflict. Stage 2 is what makes the conflict cheap.
+### 4. The regeneration runbook, classified by what the migration is
 
-### 4. Shared/exclusive lock across migrate, reset and test runs
+"The loser regenerates" was too broad. Regeneration is lossy or forbidden depending on the migration:
 
-DB-backed suites take `pg_advisory_lock_shared(K)` on a session that outlives the file; `db:migrate`
-and `db:reset` take it exclusive, **waiting** with a `lock_timeout` and a "waiting for N test runs"
-line rather than refusing, because a suite takes a minute. Hook the shared side into
-`tests/helpers/pg-ready.ts`, which 67 files already call — noting `pgReady` closes its pool unless
-`keepPool`, so the lock needs a connection that outlives it.
+| | |
+|---|---|
+| unpublished, purely generated | regenerate — the simple case, and the common one |
+| unpublished, hand-edited or custom-only | **keep the original SQL unconditionally**; regenerate only the schema part and re-apply the custom part by hand. Ordinary `generate` may say "no schema changes" and produce no replacement at all |
+| applied only to the shared local Postgres | preserve it and regenerate the other side, or reset — **Greg's call**, per [AGENTS.md](../../AGENTS.md) |
+| **applied to production** | **never delete, restamp or regenerate.** Published migrations are immutable; the repair is a new forward migration |
 
-**One constant, exported once and imported by both sides**, never two literals — the seam is the
-thing that breaks. Advisory lock rather than `scripts/lockfile.ts` because it lives in the resource
-it protects (a lock file inside a worktree protects nothing), it releases when the session dies so
-the SIGKILL-then-`rm` cost disappears rather than being tolerated, and it is already this repo's
-mechanism twice over.
+Also: drizzle asks whether a thing was renamed or dropped-and-recreated, and answering differently on
+the regenerate produces different and possibly destructive SQL. And "keep a copy if you hand-edited
+it" is too weak — always retain the original path for comparison.
 
-**Two things this must not claim.** A single exclusive lock per migrator is the majority pattern
-(Rails since 5.2, Flyway by default; Django needs a third-party package). The **shared/exclusive
-split is ours** — no migration tool ships it — so it is sound use of the primitive and not an
-industry standard, and the plan should not imply otherwise. And these are **session**-scoped locks,
-which is why [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)'s existing rule — a direct or
-session connection, never the transaction pooler on 6543 — becomes load-bearing rather than
-incidental: Rails through PgBouncer in transaction mode is the textbook case of an advisory lock
-whose unlock lands on a different backend.
+The journal conflict itself is still resolved by taking the trunk's file wholesale
+(`git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json` — a file write, not a
+`git checkout`, so it stays inside the house rules).
 
-`db:reset` is the wrinkle: `supabase db reset` kills connections, so the wrapper's own lock dies
-mid-reset. Acceptable — the wrapper still waits until no shared holders remain before it starts.
+### 5. `migrations.prefix: "timestamp"` — **reduction, not prevention**
 
-**Proving it** — hold `pg_advisory_lock(K)` in `psql` for 25 s and start a DB suite: it must wait,
-not skip. Hold the shared lock and run `db:migrate`: it must wait. Change the key on one side only:
-everything passes and the protection is gone, which is the test that matters.
+Drizzle's timestamp is `slice(0, 14)` of the ISO string — `YYYYMMDDhhmmss`, **one-second
+resolution**. Two agents generating in the same second still write the same
+`<timestamp>_snapshot.json`, and different migration *names* only separate the `.sql` files, because
+the snapshot uses the prefix alone. So this greatly reduces collisions and does not eliminate them,
+and the plan must not say otherwise.
 
-### 5. Optional: `drizzle-kit check` in `scripts/check.ts`
+Mixing with the existing index-prefixed files is otherwise sound: `0051_` sorts before `2026…_`,
+lexical order stays chronological through year 9999, and the migrator reads journal order rather than
+directory order. **The dangerous case is a rename** — drizzle picks the lexically last snapshot as
+its diff base, so a renamed old snapshot can become "latest" while the metadata still looks valid.
+Stage 2's "lexically last snapshot is the intended terminal one" check is what catches that.
 
-It exits 1 on a forked chain. Today only `deploy.ts` runs it. Cheap, and only worth it if stage 1
-turns out not to cover everything.
+One dependent, and the repo sweep for it was right: `tests/db-step-constraint.test.ts` sorts `.sql`
+filenames and asserts `/^\d{4}_.*\.sql$/`. It must read journal order and drop the `\d{4}`.
+
+### 6. Locking moves to its own plan
+
+The shared/exclusive lock across migrate, reset and test runs is a separate piece of work and is
+**not** a prerequisite for the above. What this plan hands it, so the thinking is not lost:
+
+- **The seam is `globalSetup`, not `pgReady`.** One shared lock per Vitest invocation, released by
+  global teardown: one session per `npm test` rather than per file, it covers the suites that
+  hand-roll their readiness probes, and it changes no callers. Checked — `pgReady` has 67 caller
+  files (Sol said 65), but `blocks-baseline`, `checkpoints-durable-resume`, `glossary-ideas-baseline`,
+  `public-visibility-pg` and `store-checkpoints` reference it **zero** times, so the `pgReady` seam
+  would have missed real database activity in silence. The count was wrong and the finding was right.
+- **Wait with a deadline, and no cycles**: a test holding the shared lock must never wait on a
+  migration subprocess needing exclusive. Start at 120 s, matching the repo's measured run-lock
+  budget; `lock_timeout` applies to advisory acquisition; time out loudly.
+- **Session locks need a direct or session-pooled connection**, which is why
+  [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)'s existing refusal of the transaction pooler
+  on 6543 becomes load-bearing rather than incidental.
+- **`db:reset` stays a manual stop-the-world operation** needing Greg's approval, and **must not
+  claim lock protection**. `supabase db reset` kills the lock holder, which leaves an unprotected
+  window in which a test run or another migration can enter, plus a gap between reset and migrate,
+  plus tests that probe an empty schema, skip, and report green. Only a coordinator that survives the
+  reset and holds across reset-migrate-reseed would fix that, and there is no reason to build one yet.
+
+### 7. Not doing: refusing duplicate numbers
+
+Still dropped, but the reasoning is now narrower than this plan first claimed — see Sol's finding 6,
+recorded under [Corrections](#corrections-this-plan-makes-to-what-was-believed).
 
 ## What a lease cannot do
 
@@ -276,12 +344,43 @@ smaller.
 
 ## Corrections this plan makes to what was believed
 
-- The parent plan's step 4 lease **exists already** and is a Postgres advisory lock, not something to
-  build on `scripts/lockfile.ts`.
-- The duplicate-number refusal it proposes targets the wrong invariant.
-- "Timestamp prefixes make order inversions structurally impossible" — **this author's claim, and it
-  is wrong.** Journal order is array order, and after a merge that is whatever the resolver wrote.
-  Timestamp prefixes make *filename collisions* impossible. What makes an inversion impossible is
-  the loser regenerating, because a fresh `when` is later than everything.
-- "The silent-failure class is closed" — closed on the ledger side, open on the snapshot chain, and
-  the open one exits 0.
+Kept in the order they were made, because the sequence is the point: three of these are corrections
+*of corrections*, and each round was confidently stated.
+
+**About the parent plan:**
+
+- Its step 4 lease **exists already**, as a Postgres advisory lock in `db-migrate.ts` rather than
+  something to build on `scripts/lockfile.ts`. The weaker primitive was about to be built next to the
+  better one.
+- Its duplicate-number refusal is not sufficient — but **not irrelevant either**, which this plan's
+  first draft got wrong in the other direction. Under the index layout a duplicate number is a
+  snapshot *filename* collision.
+
+**About this author's own claims, in order:**
+
+- "There is no duplicate-migration-number refusal" — understated. `journalProblems` and
+  `reconcileLedger` already enforce better invariants than a number check.
+- "The silent-failure class is closed" — closed on the ledger side, **open on the snapshot chain**,
+  and the open one exits 0. Found by Fable.
+- "Timestamp prefixes make order inversions structurally impossible" — wrong. Journal order is array
+  order, and after a merge that is whatever the resolver wrote.
+- "…what makes an inversion impossible is the loser regenerating, because a fresh `when` is later
+  than everything" — **also wrong**, and this was the correction to the previous line. `when` is
+  `Date.now()`, so it is later than everything only if the clock is not behind and no later-stamped
+  branch merges concurrently. Regeneration makes inversions *loud*, via the existing check. Nothing
+  here makes them impossible.
+- "There is no journal-resolution script that can be correct" — too strong. No resolver that edits
+  **only the journal** can be; one that reconstructs the snapshot and SQL from the merged schema can.
+- "The loser regenerates" — too broad. Lossy for hand-edited or custom-only SQL, and **forbidden for
+  anything applied to production**, where the repair is a new forward migration.
+- The proposed stage-1 invariant — **would have failed on the real tree the day it was written**,
+  because two snapshots are missing and the chain already breaks at `0021 → 0022`.
+- `<tag>_snapshot.json` — it is `<prefix>_snapshot.json`.
+- The proposed proof for the lock was **backwards**: "change the key on one side and everything
+  passes" proves the protection test is missing, not that the protection works. Under that mutation
+  an overlap assertion must fail. That is [silent-success.md](../reusable/silent-success.md) applied
+  to a proof this plan wrote while quoting silent-success.md.
+
+**About Sol's review**, since it is not infallible either: it says `pgReady` has 65 caller files.
+It has 67. The finding that number was supporting — that five DB-backed suites reference `pgReady`
+zero times, so the seam would miss them — is correct, and was the reason to move the seam.
