@@ -31,6 +31,7 @@
  *   npx tsx scripts/run-codex.ts --prompt "Summarise how src/extract.ts works"
  *   npx tsx scripts/run-codex.ts --sandbox workspace-write --prompt-file /tmp/task.md -o /tmp/a.md
  *
+ * The default sandbox is `review`: the tree read-only, the test caches writable — see SANDBOXES.
  * See docs/reusable/codex-cli-as-subagent.md for models, auth, and the read-only/write switch.
  */
 
@@ -49,7 +50,32 @@ const DEFAULT_MODEL = 'gpt-5.6-sol';
 /** minimal|low|medium|high|xhigh. `xhigh` for a hard review, `low` for mechanical work. */
 const DEFAULT_EFFORT = 'high';
 const DEFAULT_TIMEOUT_MINUTES = 30;
-const SANDBOXES = ['read-only', 'workspace-write', 'danger-full-access'];
+/**
+ * `review` is the default: the tree is read-only exactly as under `read-only`, but `/tmp` and the
+ * caches under `node_modules` are writable, so the reviewer can run one test file or a tsx script
+ * and reproduce a finding rather than reason about it. Under plain `read-only`, measured on
+ * 2026-09-02, vitest died on `node_modules/.vite-temp` and tsx on its IPC pipe, and fifteen
+ * reviews in a row had never run a test. The profile is codex's own mechanism — a named
+ * `[permissions.<name>]` table with per-path rules — and lives in the repo's `.codex/config.toml`,
+ * so a repo without one gets a clear refusal here rather than codex's `default_permissions
+ * requires a [permissions] table`. `read-only` stays selectable for such a repo.
+ */
+const SANDBOXES = ['review', 'read-only', 'workspace-write', 'danger-full-access'];
+const REVIEW_PROFILE = 'review';
+/** Whether a sandbox can edit the working tree — which decides whether a run may be retried. */
+export function writesTree(sandbox: string): boolean {
+  return sandbox !== 'read-only' && sandbox !== 'review';
+}
+/**
+ * The repo's `.codex/config.toml` has to define the profile, or codex exits 1 before the model
+ * says a word. A textual check rather than a TOML parse: the only question is whether the table
+ * header is there, and a wrong rule inside it is codex's error to report, with its own wording.
+ */
+export function reviewProfileDefined(repoDir: string): boolean {
+  const path = join(resolve(repoDir), '.codex', 'config.toml');
+  if (!existsSync(path)) return false;
+  return /^\s*\[permissions\.review(\.|\])/m.test(readFileSync(path, 'utf8'));
+}
 /**
  * Which credential to spend, and in what order.
  *
@@ -131,7 +157,7 @@ function fail(msg: string): never {
 
 export function parseArgs(argv: string[]): Args {
   const out: Args = {
-    model: DEFAULT_MODEL, sandbox: 'read-only', effort: DEFAULT_EFFORT, auth: DEFAULT_AUTH,
+    model: DEFAULT_MODEL, sandbox: REVIEW_PROFILE, effort: DEFAULT_EFFORT, auth: DEFAULT_AUTH,
     repoDir: process.cwd(),
     timeoutMinutes: DEFAULT_TIMEOUT_MINUTES, stream: false, print: false, quiet: false,
     maxPrintChars: DEFAULT_MAX_PRINT_CHARS, dryRun: false, passEnv: [],
@@ -209,7 +235,12 @@ export function buildCodexArgs(o: {
     // verified on codex 0.146.0, where a read-only run happily created a file. `never` makes the
     // sandbox authoritative: a blocked operation just returns its failure to the model.
     '-c', 'approval_policy=never',
-    '--sandbox', o.sandbox,
+    // A named permissions profile and `--sandbox` are two ways of saying the same thing, and the
+    // config reference says not to combine them. The profile is resolved from the `--cd` repo's
+    // own `.codex/config.toml`; main() has checked it is there.
+    ...(o.sandbox === REVIEW_PROFILE
+      ? ['-c', `default_permissions=${REVIEW_PROFILE}`]
+      : ['--sandbox', o.sandbox]),
     '--cd', resolve(o.repoDir),
     '--skip-git-repo-check',
     '-o', o.outFile,
@@ -508,7 +539,7 @@ export function shouldFallBack(
   log: string, opts: { streamed: boolean; sandbox: string },
 ): boolean {
   if (run.spawnError || run.timedOut || run.overflowed) return false;
-  if (opts.streamed || opts.sandbox !== 'read-only') return false;
+  if (opts.streamed || writesTree(opts.sandbox)) return false;
   return isCredentialFailure(log);
 }
 
@@ -533,7 +564,7 @@ function accountNote(args: Args, run: RunResult, plan: boolean[], attempt: numbe
 }
 
 function heldFallbackNote(args: Args, plan: boolean[], attempt: number, log: string): string {
-  if (plan.length < 2 || attempt !== 0 || args.sandbox === 'read-only') return '';
+  if (plan.length < 2 || attempt !== 0 || !writesTree(args.sandbox)) return '';
   // And only when the other credential would actually have helped. A write run that failed on a
   // bad prompt gets told about a fallback that has nothing to do with it — noise in the one place
   // somebody is reading carefully.
@@ -671,6 +702,10 @@ async function main(): Promise<void> {
   catch (e) { fail((e as Error).message); }
 
   const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
+  if (args.sandbox === REVIEW_PROFILE && !reviewProfileDefined(args.repoDir)) {
+    fail(`--sandbox review needs a [permissions.review] table in ${join(resolve(args.repoDir), '.codex/config.toml')}`
+      + ' — see docs/reusable/codex-cli-as-subagent.md § The review profile, or pass --sandbox read-only.');
+  }
   // Fresh temp dir per run, so a run's -o file can never be a previous run's leftover.
   const tmpDir = mkdtempSync(join(tmpdir(), 'run-codex-'));
   const plan = authPlan(args.auth, Boolean(process.env[CODEX_SECRET]));
