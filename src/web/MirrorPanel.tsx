@@ -347,33 +347,25 @@ function Remark({
     <li className="mir-remark" data-kind={remark.kind}>
       <p className="mir-head">
         <span className="mir-kind">{KIND_LABEL[remark.kind]}</span>
-        {/* **The card is on top of the word, never instead of it.** This file's
-            header says the distinction may not be a tooltip, and that stands:
-            the word is rendered, readable and on every row, and it is what a
-            referee in a hurry gets. What the card adds is the trial itself —
-            which trial, how big the effect was, and the line the note under the
-            list ends on, which is that none of it says whether *this* remark is
-            right. `EVIDENCE_NOTE` is imported into the card rather than
-            rewritten, so the row and the footnote cannot drift. */}
-        <Tooltip
-          placement="left"
-          className="tip-soon"
-          content={
-            <ControlTip
-              head={remark.trialTested ? TESTED : UNTESTED}
-              what={
-                remark.trialTested
-                  ? "A randomised trial tested feedback of this shape on real reviewers."
-                  : "No trial has tested feedback of this shape; it is here because it is cheap to check and easy to dismiss."
-              }
-              how={EVIDENCE_NOTE}
-            />
-          }
-        >
-          <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
-            {remark.trialTested ? TESTED : UNTESTED}
-          </span>
-        </Tooltip>
+        {/* **This badge carried a card, and the card is gone**, 2026-09-02. Its
+            first paragraph restated the badge — *"A randomised trial tested
+            feedback of this shape"* under a label reading *A kind tested in a
+            trial* — and its second was `EVIDENCE_NOTE`, which is printed in full,
+            visibly, under this very list. A hover card that repeats the two
+            things already on screen is not an explanation; it is a third copy
+            that only a mouse can reach. A cross-family review named it and it is
+            right.
+
+            What pays for the removal is that the words themselves changed in the
+            same piece of work: *"Tested in a trial"* became *"A kind tested in a
+            trial"*, which is where the misreading actually lived. The label is
+            on every row, and `EVIDENCE_NOTE` under the list says which kinds,
+            which trial, and that none of it says whether *this* remark is right.
+            This file's header — the distinction may not be a tooltip — is the
+            rule that was being bent. */}
+        <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
+          {remark.trialTested ? TESTED : UNTESTED}
+        </span>
       </p>
 
       {remark.kind === "coverage" ? (

@@ -95,7 +95,13 @@ describe("parseHits", () => {
     // it stops. It is the most likely real failure here, because the answer's
     // size grows with the hit count and nothing else — so it gets its own
     // sentence rather than being reported as a missing object.
-    expect(() => parseHits('{"hits":[{"blockId":"spya-k3m9qt","quo')).toThrow(/\[ai-overflowed\]/);
+    //
+    // **The code is matched by prefix**, because there are two of them:
+    // `[ai-overflowed]` for Search, whose reader can narrow the ask, and
+    // `[ai-overflowed-no-ask]` for the three Referee callers who cannot
+    // (src/search.ts § `AskKind`). What is being pinned here is the branch —
+    // cut off, not unreadable — which both share.
+    expect(() => parseHits('{"hits":[{"blockId":"spya-k3m9qt","quo')).toThrow(/\[ai-overflowed/);
   });
 
   /**
@@ -112,7 +118,7 @@ describe("parseHits", () => {
   it("says cut off, not malformed, once a complete hit has already streamed", () => {
     const partial =
       '{"hits":[{"blockId":"spya-k3m9qt","quote":"mind is software","confidence":90,"reasoning":"r1"},{"blockId":"spya-p7';
-    expect(() => parseHits(partial)).toThrow(/\[ai-overflowed\]/);
+    expect(() => parseHits(partial)).toThrow(/\[ai-overflowed/);
   });
 
   /**

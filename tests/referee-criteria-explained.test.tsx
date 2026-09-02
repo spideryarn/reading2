@@ -29,11 +29,13 @@
  * ## The rank numeral needs words that are not in a card
  *
  * The big number leading each result reads like a severity score and is not one.
- * There is a card on it, and the card is hover-only — the numeral is a `<span>`
- * inside the jump button, so it takes no focus, and a `tabIndex` there would put
- * a tab stop inside a button. Stage 2 recorded that and named the fix: a visible
- * line above the list. So the line is asserted as a literal, and as *not* being
- * printed before any run has returned anything.
+ * It carried a card, and that card was hover-only and could not be otherwise —
+ * the numeral is a `<span>` inside the jump button, so it takes no focus, and a
+ * `tabIndex` there would put a tab stop inside a button. Stage 2 recorded that
+ * and named the fix: a visible line above the list. So the line is asserted as a
+ * literal, as *not* being printed before any run has returned anything, and as
+ * being visible rather than merely present — and the card that used to say the
+ * same thing to whoever had a mouse is asserted gone, 2026-09-02.
  *
  * Harness: `CriteriaBand` over a stubbed API, from
  * tests/referee-criteria-panel.test.tsx.
@@ -160,9 +162,54 @@ async function flush(times = 6): Promise<void> {
   }
 }
 
-/** The panel's text, whitespace flattened, so wrapping cannot matter. */
+/**
+ * **The panel's text as a sighted reader gets it** — whitespace flattened, so
+ * wrapping cannot matter, and every element that is on the page but not on the
+ * screen skipped.
+ *
+ * `textContent` was what this used, and a cross-family review pointed out on
+ * 2026-09-02 that it cannot tell a visible sentence from a hidden one: the whole
+ * point of the rank line is that it reaches a keyboard and a touch reader, and
+ * `.sr-only` or `hidden` on it would leave every assertion below green while the
+ * sentence disappeared. This panel already renders an `.sr-only` copy of each
+ * result's ordered facts (`valenceLabel` in CriteriaPanel.tsx), so the two kinds
+ * of text really do live side by side here.
+ *
+ * jsdom does no layout and loads no stylesheet, so this cannot see a rule in
+ * styles.css that hides something — `hidesTheRankLine` below is that half.
+ */
 function text(): string {
-  return (host.textContent ?? "").replace(/\s+/g, " ").trim();
+  const parts: string[] = [];
+  const walk = (node: Node): void => {
+    if (node.nodeType === 3) {
+      parts.push(node.nodeValue ?? "");
+      return;
+    }
+    if (node instanceof HTMLElement) {
+      if (node.hidden || node.getAttribute("aria-hidden") === "true") return;
+      if (node.classList.contains("sr-only")) return;
+      if (node.style.display === "none" || node.style.visibility === "hidden") return;
+    }
+    for (const child of node.childNodes) walk(child);
+  };
+  walk(host);
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * **The stylesheet with its comments taken out**, which is the whole of what the
+ * two assertions below are allowed to read.
+ *
+ * A `toContain` over the raw file cannot tell a rule from a sentence about a
+ * rule, and this file has both: the rule below it carries a four-line comment
+ * arguing for `aria-disabled` over `:disabled`, and every selector named in that
+ * argument would satisfy a search of the raw text. So the argument is stripped
+ * and the rules are what is searched. A cross-family review raised this on
+ * 2026-09-02; the comment as it stands does not in fact contain either literal,
+ * but a test that is right by luck about the wording of a comment is not right.
+ */
+function rules(): string {
+  return readFileSync("src/web/styles.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 function run(): HTMLButtonElement {
@@ -219,11 +266,13 @@ describe("the run button, while the criterion is incomplete", () => {
   });
 
   it("keeps the dead look on the attribute the markup now uses", () => {
-    const css = readFileSync("src/web/styles.css", "utf8");
+    const css = rules();
     /* The pair: `aria-disabled` in the markup and `:disabled` in the stylesheet
        is a button that looks live and does nothing, which is worse than either
-       of the two states this replaced. */
-    expect(css).toContain('.crit-run[aria-disabled="true"]');
+       of the two states this replaced. Comments stripped — see `rules`. */
+    expect(css, "the rule that greys the dead button has gone").toContain(
+      '.crit-run[aria-disabled="true"]',
+    );
     expect(css, "the old rule is still there and now matches nothing").not.toContain(
       ".crit-run:disabled",
     );
@@ -253,5 +302,46 @@ describe("what the big number on a result is", () => {
       text(),
       "a referee with no results yet is told about a number they cannot see",
     ).not.toContain("The number beside a passage");
+  });
+
+  /**
+   * **And the stylesheet may not take it away again**, which is the half
+   * `text()` cannot see: jsdom loads no CSS, so a `display: none` on
+   * `.crit-how` would leave every assertion above green and the sentence
+   * invisible in every browser.
+   */
+  it("is not hidden by a rule in the stylesheet", () => {
+    expect(rules(), "a rule in styles.css hides the line this test says is visible").not.toMatch(
+      /\.crit-how[^{}]*\{[^}]*(display:\s*none|visibility:\s*hidden|font-size:\s*0(?![.\d]))/,
+    );
+  });
+
+  /**
+   * **The numeral's own card is gone, and this is what keeps it gone.**
+   *
+   * It was hover-only and could not be otherwise — a `<span>` inside a button
+   * takes no focus — so once the visible line above existed the card was a
+   * second copy for the one group that already had the first. A cross-family
+   * review called it redundant on 2026-09-02.
+   *
+   * Hovering it must open nothing. The card, if it came back, would be portalled
+   * to the end of `<body>` rather than into `host`, so it is looked for in the
+   * document — tests/referee-tooltips.test.tsx § `cardFor`.
+   */
+  it("says it once, in the visible line, and not again in a hover card", async () => {
+    saved = [withResult()];
+    mount();
+    await flush();
+    const rank = host.querySelector(".crit-rank");
+    expect(rank, "the rank numeral is not drawn").not.toBeNull();
+    expect((rank as Element).hasAttribute("title"), "it fell back to a title").toBe(false);
+    (rank as Element).dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(
+      document.querySelectorAll('[role="tooltip"]'),
+      "the hover-only duplicate of the visible line is back",
+    ).toHaveLength(0);
   });
 });

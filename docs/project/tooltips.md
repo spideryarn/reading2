@@ -122,6 +122,14 @@ paragraphs, with one rule that is the whole reason it is worth a hover.
 > promise.
 
 A second paragraph that restates the first is the failure mode, and it is easy to write by accident.
+So is a first paragraph that restates the label, and so is a card that repeats a sentence already
+printed, visibly, on the same screen — a hover that costs a reader a second to discover they knew it
+already is worse than no card. Four cards in Referee mode did one of those three and were rewritten
+or removed on 2026-09-02, after a cross-family review;
+[`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) now checks the two
+paragraphs against each other and against the label rather than checking that the card is long.
+**It catches copying and not paraphrase**, which is written down there rather than left to be
+discovered.
 
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for

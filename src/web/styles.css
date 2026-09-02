@@ -6504,9 +6504,9 @@ td.text.has-hit[data-hues="8"] {
    subordinate, which is the wrong way round.
 
    **The width the copy is written against is this band's**, so the type is the
-   panel's small size and the list is unbulleted — four rows of two words and a
-   dash read as a table at this width, and a bullet column would cost a
-   character of every line. */
+   panel's small size. `.ref-how-list` was here and went with the four sub-mode
+   lines it styled, 2026-09-02 — those lines repeated the four chip cards
+   directly above the card. */
 .ref-how-card {
   margin: 0.45rem 0.35rem 0.2rem;
   padding: 0.45rem 0.55rem 0.55rem;
@@ -6541,22 +6541,10 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
 }
 .ref-how-p b { color: var(--ink); font-weight: 600; }
-.ref-how-list {
-  margin: 0.35rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-.ref-how-list b { color: var(--ink); font-weight: 600; }
 
 /* In the mode header beside the title, where `.gloss-head h2` has `flex: 1` and
    pushes it to the right edge. Text rather than an icon: a `?` in a circle is
-   the affordance nobody presses, and the card it opens is four sentences that
+   the affordance nobody presses, and the card it opens is two paragraphs that
    change what the rest of the band means. */
 .ref-how-btn {
   flex: none;

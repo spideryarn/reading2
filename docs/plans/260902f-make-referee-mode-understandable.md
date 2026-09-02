@@ -413,7 +413,149 @@ stylesheet rule, and says so rather than claiming a measurement it did not make.
 A Playwright pass on a real paper through all four sub-modes, fixing what it finds; the remaining doc
 updates ([tooltips.md](../project/tooltips.md)); final cross-family review.
 
+### Stage 5 — the cross-family review of stages 2 and 3, acted on
+
+[260902f-…-stage23-review-sol.md](260902f-make-referee-mode-understandable-stage23-review-sol.md) —
+*ship with changes*, and it would not ship until findings 1–4 were fixed. All seven are done. Where
+this departs from what the review asked, it says so and why.
+
+**1. Candidates' cost wording was false in both directions**, and this took the honest-labelling
+route rather than suppressing tools. The button said *"Find reviewers — one model call and a web
+search"*. It does not find reviewers: `CANDIDATES_OPENING` asks for the fit brief and ends *"No names
+yet"*. And the count was wrong twice — web search is offered on every round and the model decides, so
+it may run **zero** times, while each tool round is a fresh provider request, up to
+`MAX_TOOL_ROUNDS + 1` ([`converse.ts`](../../src/converse.ts)). It now says **"Build the reviewer
+brief"**, with a visible note that pressing it starts an AI turn and **may** run a web search that
+would send terms drawn from the paper to a search engine. The third-party warning is unchanged in
+strength.
+
+*Why not suppress search and multi-round tools for the opening turn*, which would have made the
+one-call claim true: it means a per-turn tool policy threaded from this button through `useChat`, the
+chat route and into `converse` — a **client** deciding what the **server** may call, in the one place
+where "what did this cost" has to stay answerable from the server alone. The words were what was
+wrong. The stale *"the one automatic turn"* docstring on `CandidatesBand` went with them.
+
+**2. The card — kept, and cut, which is not what the review asked.** Sol wanted the card, its header
+button and its storage machinery deleted. Greg asked for a dismissible *"how Referee mode works"*
+card by name, so it stays; a reviewer does not overturn a product decision. But the substance of the
+finding was right and a browser pass measured it. The four sub-mode lines are gone — they repeated
+the four chip `ControlTip`s that stage 2 had added directly above the card, which is an artefact of
+the order the two stages landed in rather than a writing mistake. What stayed is the two things
+nothing else on screen says: the refusal, and what the colours mean (scale-neutral, as stage 3 left
+it). Measured in Chrome at 1280×900 on an article with no criteria, reading
+`getBoundingClientRect().height` out of the live DOM:
+
+| | height |
+|---|---|
+| the card, before | **409.5px** |
+| the card, after | **203.1px** |
+| the empty-state Criteria composer under it | 269.9px |
+| the whole empty Criteria panel (`.crit`) | 277.9px |
+
+`RefereeCard.tsx`'s own docstring says a card longer than the panel underneath it has failed; it was
+failing by 140px and now clears the bar by 67. The numbers are in that docstring, with what they were
+measured against. `.ref-how-list` went from the stylesheet with the lines it styled.
+
+**3. Two Criteria cards still named red-to-green** — `KIND_HOW.diverging` and the colour swatch's
+card — which `?refscale=br` makes exactly wrong. Both are scale-neutral now, in `TheKey`'s spirit: they
+say the shape of the rule and leave the two colours to the key, which is drawn from whichever scale is
+on. Derived-from-the-scale wording was the other option and was not taken: the key is already the
+place that cannot drift, and a second copy of the mapping is a second thing to keep in step.
+
+**4. `ANSWER_OVERFLOWED` split, and the first attempt at the split was wrong.** Sol is right that
+conditioning the clause on *"where you asked a question of your own"* still misses, because a
+criterion **is** the referee's own question and an errored one offers *Try again* and nothing else.
+The first version of this fix gave both halves the same `[ai-overflowed]` code, on the reasoning that
+it is one failure — and `tests/messages.test.ts` refused it, because **two sentences under one code
+makes the code useless for the one job it has**. That rule is right and `MARK_CUT_OFF` is the
+precedent: same diagnosis, a caller who cannot take the advice, its own code. So:
+
+- `ANSWER_OVERFLOWED` keeps `[ai-overflowed]` and the narrowing advice, and goes to **Search** — the
+  one caller whose reader typed the ask. It keeps the code because that is the one already quoted.
+- `ANSWER_OVERFLOWED_FIXED_ASK`, `[ai-overflowed-no-ask]`, is the retry and nothing else, and is what
+  the mode's three callers get.
+
+`parseHits` takes an `AskKind` and **defaults to the one that promises least**, so a sub-mode added
+later cannot inherit advice about a control it does not have. The test that greped for `where you`
+and blessed the mismatch is gone; what replaces it checks the split and the two codes.
+
+**5. Five cards that restated their own label.** Criteria's *Try again* (its first line was the
+`aria-label` again; it now says what the failure did to the run) and Claims' tick (its first line
+paraphrased the label; it now says what the passages **are** — the model's pick, not a verified
+linkage) were rewritten. Three were **removed**:
+
+- **The rank numeral's**, as the review asked: hover-only, unreachable by keyboard, and stage 3 had
+  already added the visible line that says the same thing to everybody.
+- **Both Mirror evidence badges**, which is a removal rather than a rewrite and is the one place
+  this went further than it had to. Everything non-duplicative in that card is thin: the first
+  paragraph restated the badge, the second *was* `EVIDENCE_NOTE`, and that note is printed in full,
+  visibly, under the same list. `MirrorPanel.tsx`'s own header says the distinction may not be a
+  tooltip. **One fact was lost with it** — that an untested kind is here because it is cheap to check
+  and easy to dismiss — and it was not moved into the visible footnote, because lengthening visible
+  copy is the opposite of what this stage is for. Easy to put back if Greg wants it.
+
+**6. Docs**: [referee-mode.md](../project/referee-mode.md) — the control table, the label list (now
+four), the two deleted cards, the message split, the card's two paragraphs and its measurement — and
+two paragraphs in [tooltips.md](../project/tooltips.md), because the rule the four cards broke is
+that file's. **[url-state.md](../project/url-state.md) is deliberately untouched**: it is rule-bearing,
+it is owed two edits already, and those go to Greg together.
+
+**7. The tests that left real regressions green.** Every one named is fixed, and every fix was run
+against the mutation it is supposed to catch:
+
+| Mutation | Now caught by |
+|---|---|
+| delete Claims' tick card | `referee-tooltips` — Claims was never imported before |
+| point Candidates' card at the wrong control | `referee-tooltips` — nor was Candidates |
+| gut `PlaceOnCriterion`'s "switching clears it" card | `referee-tooltips` — nor was that |
+| put Mirror's badge card back | `referee-tooltips` |
+| make a card's second paragraph the first one again | `referee-tooltips` — the old check was `body.length > 80` |
+| restore the conditional narrowing clause | `referee-tooltips` |
+| collapse the split so Search shares the referee's message | `referee-tooltips` |
+| put the false cost words back on the Candidates button | `referee-candidates-press`, `referee-tooltips` |
+| put the rank numeral's card back | `referee-criteria-explained` |
+| hide the rank line with `.sr-only` rather than deleting it | `referee-criteria-explained` — it read `textContent` |
+| delete `.crit-run[aria-disabled="true"]` from the stylesheet | `referee-criteria-explained` |
+
+Two of the review's specifics in finding 7 are **not** as stated, and it is worth writing down
+which:
+
+- **The stylesheet comment does not contain the selector.** Sol says the Criteria stylesheet test
+  passes with the real rule deleted because `.crit-run[aria-disabled="true"]` also appears in the
+  comment at `styles.css:6643`. It does not — that comment names `aria-disabled` and `:disabled` in
+  prose, and deleting the rule reddens the test today, which is what the mutation above shows. The
+  underlying point stands anyway: a `toContain` over a file that holds both rules and arguments about
+  rules cannot tell them apart, so the test now strips comments before it looks. A test that is right
+  by luck about the wording of a comment is not right.
+- **The `body.length > 80` replacement catches copying, not paraphrase.** *"Draws this claim's
+  passages in the article"* under a label reading *Mark these passages in the paper* shares one
+  content word in three and would pass. Nothing mechanical reads for meaning, and the test says so
+  rather than implying otherwise. What actually closes the hole is coverage: the three panels the
+  file never imported.
+
+`referee-candidates-press.test.tsx` now claims only what it measures. It counts requests at **this
+app's own HTTP boundary** — one client POST per press — and says out loud that this is not the same
+fact as one model call, and that how many provider requests a turn makes, and whether a web search
+runs, is decided inside `converse.ts` and is invisible from there.
+
+**Suite after: 4 files / 4 tests red** — `doc-links`, `pdf-bundle-trace`, `store-artefact-manifest`,
+`store-roundtrip` — the same baseline stages 2 and 3 ended on. Nothing that was green went red. A
+handful of Postgres-backed files flake run-to-run on this shared box and were re-run in isolation to
+confirm they are not this work.
+
+**Browser evidence**: a dev server started on **5276** *after* the edits
+(docs/postmortems/260902a-a-dev-server-that-ignored-its-own-source.md), Playwright against system
+Chrome, signed in by hand — `scripts/browser-sign-in.ts` refuses on this box right now, because
+another agent's in-flight work has renamed the seeded admin to `dev-admin@spideryarn.local` while
+this worktree's `ADMIN_EMAIL` still says `greg@gregdetre.com`. Checked live: the card's two
+paragraphs and both heights, the Candidates button and note, and that hovering the rank numeral opens
+nothing. The `404 POST /api/jobs/…/advance` noise is the one already recorded above and is not this.
+
 ## The card's words
+
+**Superseded twice; kept as the record of what was proposed.** Stage 3 dropped the red-and-green
+naming (`?refscale=br` makes it false), and stage 5 cut the four sub-mode lines entirely. The words
+that are actually on screen are in [`RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
 
 Corrected per Sol's finding 8 — the first draft said marks appear when a criterion runs (they do not;
 `?crits=` starts empty and the tick is what paints), and said "every row is a door into the prose"

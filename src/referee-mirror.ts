@@ -1503,8 +1503,10 @@ export async function* mirrorStream({
     model,
     /* Room for six remarks, each a quoted phrase and two sentences, with slack.
        A ceiling too low truncates the JSON mid-object, and a truncated object
-       is not a short list — `parseHits` reports it as `ANSWER_OVERFLOWED`,
-       which is the honest answer but not one anybody wants to see. */
+       is not a short list — `parseHits` reports it as
+       `ANSWER_OVERFLOWED_FIXED_ASK`, which is the honest answer but not one
+       anybody wants to see. (The `FIXED_ASK` half because Mirror has no scoping
+       control: src/search.ts § `AskKind`.) */
     max_tokens: 2000,
     /* No tools. Nothing on the web can say whether this referee's sentence is
        vague, and a call that goes looking is a call spending their money to

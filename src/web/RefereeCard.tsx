@@ -6,7 +6,7 @@
  * half of that which is per-control: thirty controls that now say what they do
  * when you hover them. This is the other half, and a tooltip cannot be it — a
  * card only opens on a control you already suspected, and the thing a
- * first-time referee does not know is what the four chips are *for* and what the
+ * first-time referee does not know is what the mode refuses to do and what the
  * colours in the paper are saying.
  * docs/plans/260902f-make-referee-mode-understandable.md § Stage 3.
  *
@@ -32,24 +32,44 @@
  * past it should reach the panel underneath. The close button is a real button
  * with a real name; so is the one that brings it back.
  *
- * ## The words
+ * ## The words: two things, and nothing else on screen says either
  *
- * They are the plan's, and they have been corrected once already — the first
- * draft said marks appear when a criterion runs (the tick is what paints) and
- * that every row is a door into the prose (Mirror's coverage row deliberately
- * has none). Two rules they are written under, and both are load-bearing:
+ * - **The refusal**, because it is the whole design. *Nothing here scores the
+ *   paper or drafts your review* — the mode's first rule, and the reason it
+ *   exists in this shape at all.
+ * - **What the colours mean.** docs/project/colour-scales.md forbids colour
+ *   being the only carrier of a good/bad judgement, and the panel's own key
+ *   (`TheKey` in CriteriaPanel.tsx) states the mapping where the judgements are.
+ *   This says it once more, in prose, for the referee who met the paper before
+ *   the panel. It states the *shape* of the rule and never names red and green:
+ *   `?refscale=br` paints the same two directions blue and red.
  *
- * - **The first sentence is the refusal**, because it is the whole design.
- *   *Nothing here scores the paper or drafts your review* — the mode's first
- *   rule, and the reason it exists in this shape at all.
- * - **The colour paragraph is not decoration.** docs/project/colour-scales.md
- *   forbids colour being the only carrier of a good/bad judgement, and the
- *   panel's own key (`TheKey` in CriteriaPanel.tsx) states the mapping where the
- *   judgements are. This says it once more, in prose, for the referee who met
- *   the paper before the panel.
+ * ## What was cut, and the measurement that cut it
  *
- * Short on purpose: a card longer on screen than the panel underneath it has
- * failed at the thing it is for.
+ * The card shipped with a **four-line list of the sub-modes** as well, and a
+ * cross-family review, 2026-09-02, called the whole card a net loss on the cold
+ * screen. It was right about the substance, and the reason is an artefact of the
+ * order the two stages landed in: stage 2 put a `ControlTip` on each of the four
+ * sub-mode chips, three feet above this card, so by the time this was written
+ * every one of those four lines had a second copy that opens on the chip it is
+ * about. The list went; the two things above stayed, because nothing else on the
+ * screen says either of them.
+ *
+ * **Short on purpose: a card longer on screen than the panel underneath it has
+ * failed at the thing it is for** — and this one had, by 140px. Measured in
+ * Chrome at 1280×900 on an article with no criteria written yet,
+ * `?mode=referee&referee=criteria`, reading `getBoundingClientRect().height` out
+ * of the live DOM rather than off a screenshot:
+ *
+ * | | height |
+ * |---|---|
+ * | the card, with the four sub-mode lines | **409.5px** |
+ * | the card, without them | **203.1px** |
+ * | the Criteria composer under it, empty state (form + *"Nothing yet…"*) | 269.9px |
+ * | the whole empty Criteria panel (`.crit`) | 277.9px |
+ *
+ * So it went from half again the height of the tool it explains to three
+ * quarters of it. The rule it broke is the one written in the line above.
  */
 import { useState } from "react";
 import { X } from "lucide-react";
@@ -129,24 +149,11 @@ export function RefereeHowCard({ onClose }: { onClose(): void }) {
         hands you a verdict makes you lenient, and the research has measured it.
       </p>
 
-      <ul className="ref-how-list">
-        <li>
-          <b>Criteria</b> — write what you have been asked to judge against. A criterion marks its
-          passages while its tick is on, and a new run turns its tick on for you.
-        </li>
-        <li>
-          <b>Claims</b> — what the paper says it shows, and where it takes each claim up. Whether a
-          passage carries the claim is your call, not the model's.
-        </li>
-        <li>
-          <b>Mirror</b> — the model reads your own comments, never the paper, and flags ones an
-          author could not act on.
-        </li>
-        <li>
-          <b>Candidates</b> — for editors: who could review this, each name with a link a web
-          search returned.
-        </li>
-      </ul>
+      {/* **The four sub-mode lines were here, and they are gone**, 2026-09-02:
+          stage 2 had already put a `ControlTip` on each of the four chips
+          directly above this card, so each line was a second copy of a card that
+          opens on the chip it is about. A card that repeats what is three feet
+          above it is what made this one taller than the panel it explains. */}
 
       {/* **The plan's wording named red and green, and stage 1 made that false
           half the time.** `?refscale=br` paints the same two directions blue and
@@ -158,10 +165,10 @@ export function RefereeHowCard({ onClose }: { onClose(): void }) {
           rows. */}
       <p className="ref-how-p">
         <b>What the colours mean.</b> On a for/against criterion, colour is direction rather than
-        identity: one end of the scale counts against, the other counts for, and the panel and the
-        paper use the same one. The panel prints the key, and each mark in the paper carries − or +
-        as well, so the colour is never the only thing saying it. Every other colour just says{" "}
-        <i>which</i> of your criteria or claims made a mark; it carries no judgement.
+        identity: one end of the scale counts against, the other counts for, in the panel and the
+        paper alike. The panel prints the key, and each mark carries − or + as well. Every other
+        colour just says <i>which</i> of your criteria or claims made a mark, and carries no
+        judgement.
       </p>
     </div>
   );
