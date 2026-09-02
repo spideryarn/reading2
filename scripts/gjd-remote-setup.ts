@@ -37,6 +37,7 @@
  * docs/reusable/silent-success.md.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { SETUP_SCRIPT } from "./gjd-remote-config.js";
 import { REPO_UNKNOWN, isRepoValue } from "./gjd-remote-repo.js";
 
 /**
@@ -142,12 +143,17 @@ export function setupPaths(o: { work: string; slug: string; attempt: string }): 
 }
 
 /**
- * The hash that says "set up the way this repo asks for TODAY".
+ * The hash that says "set up the way this repo asks for TODAY", from the two
+ * command STRINGS alone.
  *
- * Both commands, in one unambiguous encoding, because a repo that changed only
- * its `check` is a repo whose last success proved something different. JSON
- * rather than joining with newlines: the encoding has to be one-to-one, and a
- * separator that could appear in a value is not.
+ * **Superseded by `setupFingerprint` in scripts/gjd-remote-flow.ts**, which is
+ * what the status file's `configSha256` should carry — GPT Sol's Stage 3
+ * finding 2. Hashing the commands cannot see a changed `.gjd-remote/setup`
+ * behind the constant command `./.gjd-remote/setup`, nor a changed
+ * `package.json` body behind the constant `npm ci && npm run setup`; so a repo
+ * whose setup script was rewritten under it kept its old success. It is kept
+ * here until the last caller moves over, and its `v: 1` canonical form is why
+ * the replacement's is `v: 2`.
  */
 export function setupConfigSha256(command: string, check: string | undefined): string {
   const canonical = JSON.stringify({ v: 1, setup: command, check: check ?? null });
@@ -175,8 +181,14 @@ export type CheckOutcome = "success" | "failed" | "none";
  * `success` has to mean somebody can go and read what was done, and here nobody
  * can. Kept separate from `exitCode` because they answer different questions,
  * and folding them together is exactly what `pipefail` did.
+ *
+ * `config-changed` means the job, standing in the checkout and holding the
+ * lock, found the files it was about to run no longer matching the fingerprint
+ * the laptop asked for — see `fingerprintCheck` in `setupJobScript`. Nothing
+ * ran. It is a `failed` outcome rather than nothing at all because a job that
+ * refuses silently is a job whose pane vanishes with no verdict in it.
  */
-export type ToolFailure = "log";
+export type ToolFailure = "log" | "config-changed";
 
 export type SetupStatus = {
   v: 1;
@@ -204,8 +216,12 @@ export type SetupStatus = {
    * The one thing a re-clone at the same path cannot reproduce, and therefore
    * the only field that can tell "this tree was set up" from "a tree that used
    * to be here was set up". Absent when the directory is not a git checkout,
-   * and absent from every status written before this field existed — a reader
-   * treats that as "no comparison", never as a mismatch.
+   * and absent from every status written before this field existed.
+   *
+   * **A status with no inode is not evidence about a checkout that has one.**
+   * `wrongCheckout` refuses it rather than skipping the comparison, so an old
+   * status file means one more `gjd-remote setup` — which is the cheap half of
+   * that trade.
    */
   checkoutInode?: string;
   /** `git rev-parse --show-toplevel` with symlinks resolved, when the box could
@@ -215,7 +231,7 @@ export type SetupStatus = {
 
 const OUTCOMES: readonly SetupOutcome[] = ["started", "success", "failed"];
 const CHECK_OUTCOMES: readonly CheckOutcome[] = ["success", "failed", "none"];
-const TOOL_FAILURES: readonly ToolFailure[] = ["log"];
+const TOOL_FAILURES: readonly ToolFailure[] = ["log", "config-changed"];
 
 const REQUIRED_STRINGS = ["slug", "dir", "attempt", "configSha256", "command", "startedAt"] as const;
 const KNOWN_KEYS = new Set<string>([
@@ -479,9 +495,11 @@ export type SetupExpectation = {
   /**
    * The `.git` inode of that checkout, if the caller looked it up on the box.
    *
-   * Optional because not every caller can cheaply look, and because a status
-   * written before the field existed carries none either. Compared only when
-   * both sides have one: a missing inode is "no comparison", not a mismatch.
+   * Optional because not every caller can cheaply look — `gjd-remote doctor`
+   * on a box that cannot `stat`, say. When the CALLER has none there is no
+   * comparison to make and none is made; when the caller has one and the
+   * STATUS has none, the status is refused as unbound (Sol's Stage 3 finding
+   * 3), because it is a verdict about no particular tree.
    */
   checkoutInode?: string;
 };
@@ -497,6 +515,10 @@ const RUN_SETUP = "gjd-remote setup   # set this repo up on the box";
  * because it is the subtlest: everything else can match while the tree has been
  * deleted and cloned again, which is a checkout that has never had setup run in
  * it wearing a success.
+ *
+ * The inode clause has two ways to fire, and the second is the one that was
+ * missing: two inodes that disagree, and a status with NO inode being asked
+ * about a checkout that has one.
  */
 function wrongCheckout(status: SetupStatus, expected: SetupExpectation): SetupVerdict | undefined {
   const mismatch = (field: "slug" | "dir" | "inode", found: string, wanted: string, why: string): SetupVerdict => ({
@@ -526,7 +548,28 @@ function wrongCheckout(status: SetupStatus, expected: SetupExpectation): SetupVe
   }
   const found = status.checkoutInode;
   const wanted = expected.checkoutInode;
-  if (found !== undefined && wanted !== undefined && found !== wanted) {
+  if (wanted === undefined) {
+    // The caller could not look. Refusing here would mean a box where `ls -di`
+    // fails could never start a session at all, and we would be refusing on our
+    // own blindness rather than on evidence.
+    return undefined;
+  }
+  if (found === undefined) {
+    // GPT Sol's Stage 3 finding 3, and it USED TO FAIL OPEN: the comparison ran
+    // only when both sides had an inode, so a verdict carrying none — one
+    // written before the field existed, one restored from a backup, or the one
+    // a `stuck` archive leaves sitting there after a re-clone — applied to
+    // whatever checkout is at that path now. There IS a checkout in front of us
+    // and this verdict is not about it; it is not about anything.
+    return mismatch(
+      "inode",
+      "(none)",
+      wanted,
+      `the setup status for ${expected.dir} is not bound to any checkout — it records no .git inode, ` +
+        `and the tree there now (.git ${wanted}) may not be the one it was about`,
+    );
+  }
+  if (found !== wanted) {
     return mismatch(
       "inode",
       found,
@@ -606,9 +649,12 @@ export function setupVerdict(status: SetupStatus | undefined, expected: SetupExp
     // The log failure is said first when there was one, because "exit 0 and
     // failed" is otherwise a sentence nobody can act on.
     const why =
-      status.toolFailure === "log"
-        ? `setup ran on attempt ${status.attempt} (exit ${exitCode}) but its log could not be written, so there is no record of what it did`
-        : checkFailed
+      status.toolFailure === "config-changed"
+        ? `setup attempt ${status.attempt} refused to run: the repo's setup files on the box had changed since this run was ` +
+          "asked for, so what would have run is not what was agreed"
+        : status.toolFailure === "log"
+          ? `setup ran on attempt ${status.attempt} (exit ${exitCode}) but its log could not be written, so there is no record of what it did`
+          : checkFailed
           ? `setup ran on attempt ${status.attempt} but the repo's check failed`
           : `setup failed on attempt ${status.attempt}, exit ${exitCode}`;
     return { kind: "failed", exitCode, checkFailed, why, remedy: RUN_SETUP };
@@ -671,6 +717,32 @@ export type SetupJobOptions = {
    * Nothing outside tests/gjd-remote-setup.test.ts passes it.
    */
   afterwards?: string;
+  /**
+   * What the laptop believes the repo's setup FILES say, re-derived by the job
+   * inside the lock before anything runs — GPT Sol's Stage 3 finding 2.
+   *
+   * The laptop reads the config, shows a person what would run, waits for them
+   * to answer, and then starts a job that runs it. Between the reading and the
+   * running, the checkout is a directory anything on the box can write to: a
+   * `git pull` in another pane rewrites `.gjd-remote/setup`, and the job runs
+   * bytes nobody agreed to. The fingerprint the status file carries would then
+   * name a specification the run never had.
+   *
+   * So the job recomputes both file facts standing in the checkout, holding the
+   * lock, and refuses if they have moved. Both are `null` for "there is none",
+   * which is a state the check must distinguish from "there is one and I could
+   * not read it".
+   *
+   * **Optional only until scripts/gjd-remote.ts's `startSetup` passes it.**
+   * A job built without it emits no check, which is the behaviour this exists
+   * to remove — see the plan's Stage 3 notes.
+   */
+  expectFiles?: {
+    /** sha256 of `.gjd-remote/setup`, or null when the file is not there. */
+    scriptSha256: string | null;
+    /** `package.json`'s `scripts.setup`, trimmed, or null when there is none. */
+    packageSetup: string | null;
+  };
 };
 
 /** The default for `afterwards`, named so the test can say what it is
@@ -678,7 +750,7 @@ export type SetupJobOptions = {
 export const SETUP_AFTERWARDS = "exec bash -l";
 
 /**
- * A command that cannot travel in this script.
+ * A command that cannot travel in a generated script.
  *
  * All three are already refused by scripts/gjd-remote-config.ts, and they are
  * checked again here because THIS is the place where being wrong stops being a
@@ -686,11 +758,16 @@ export const SETUP_AFTERWARDS = "exec bash -l";
  * the job echoes the command it is about to run. A guard that only exists in
  * the parser protects only the callers that came through the parser, and
  * `--repo` outside a local checkout is already a path that does not.
+ *
+ * Exported because scripts/gjd-remote-flow.ts embeds commands in generated
+ * shell for the same reasons: `sessionAdmissionScript` runs the caller's `tmux
+ * new-session` line, and the clone transaction has a test hook. A second copy
+ * of a guard is a copy that gets one clause fixed.
  */
-function requireOneLine(what: string, command: string): void {
-  if (command.trim() === "") throw new Error(`setupJobScript: the ${what} command is empty`);
+export function requireOneLineCommand(where: string, what: string, command: string): void {
+  if (command.trim() === "") throw new Error(`${where}: the ${what} command is empty`);
   if (/[\r\n]/.test(command)) {
-    throw new Error(`setupJobScript: the ${what} command must be one line`);
+    throw new Error(`${where}: the ${what} command must be one line`);
   }
   // Everything in C0 except TAB, plus DEL. ESC is the one that matters: this
   // string is printed to the pane, and a command carrying escape sequences
@@ -703,7 +780,7 @@ function requireOneLine(what: string, command: string): void {
     const code = command.charCodeAt(i);
     if ((code >= 0x20 && code !== 0x7f) || code === 0x09) continue;
     throw new Error(
-      `setupJobScript: the ${what} command has a control character (0x${code.toString(16).padStart(2, "0")}) at offset ${i}`,
+      `${where}: the ${what} command has a control character (0x${code.toString(16).padStart(2, "0")}) at offset ${i}`,
     );
   }
 }
@@ -735,39 +812,95 @@ function requireOneLine(what: string, command: string): void {
  *     scripts/gjd-remote.ts, and setup has more reason to hold it: running a
  *     repo's setup command in the wrong tree is worse than starting a shell
  *     there.
- *  4. **The `started` status, written before the command runs**, so a job that
+ *  4. **The setup files, re-derived under the lock**, and compared to what the
+ *     laptop was told they were when it asked. A `git pull` between the config
+ *     read and the job starting would otherwise run bytes nobody agreed to, and
+ *     record a fingerprint naming a specification the run never had. Mismatch
+ *     ⇒ a `failed` status with `toolFailure: "config-changed"`, and nothing is
+ *     run. See `SetupJobOptions.expectFiles`.
+ *  5. **The `started` status, written before the command runs**, so a job that
  *     is killed mid-`npm ci` leaves `started` rather than nothing. `never-run`
  *     and "it was running when the box rebooted" must not look the same.
- *  5. **The command, under `env -i`, with no stdin and no fd 9.** No profile is
+ *  6. **The command, under `env -i`, with no stdin and no fd 9.** No profile is
  *     sourced and nothing of tmux's environment leaks in, so what runs on the
  *     box is what the config asked for and not what happened to be exported.
  *     `</dev/null` because a setup that stops to ask a question in a pane
  *     nobody is watching is a setup that hangs for ever. `9>&-` because the
  *     lock is an open file description and a child holding a copy of it can
  *     release it for everybody — see `run_step`.
- *  6. **Both halves of the pipeline's status, read separately.** Not
+ *  7. **Both halves of the pipeline's status, read separately.** Not
  *     `pipefail`, which reports the rightmost failure: when the command fails
  *     and `tee` fails too, the status file would record `tee`'s exit code as
  *     the repo's. The command's code is the exit code; a broken log is
  *     `toolFailure: "log"` and forces `failed`. Near neighbour of
  *     docs/postmortems/260831f-the-match-that-still-failed.md.
- *  7. **The final status, atomically**: written to a temp file beside it and
+ *  8. **The final status, atomically**: written to a temp file beside it and
  *     renamed, so a reader never sees half of one.
- *  8. **fd 9 closed, THEN `exec bash -l`**, so the pane survives for reading,
+ *  9. **fd 9 closed, THEN `exec bash -l`**, so the pane survives for reading,
  *     exactly as `cmdNewClaude`'s job does, and the lock does not survive with
  *     it. Note that this makes the pane's eventual exit code the login shell's
  *     — which is why the verdict is the file.
  *
  * Every path out of here either writes a status or says on stderr that it did
- * not and why. The three that do not write one exit before the `started` status
- * exists, and each has its own code in `SETUP_EXIT`.
+ * not and why. The three that write none exit before the `started` status
+ * exists, and each has its own code in `SETUP_EXIT`; the fingerprint refusal in
+ * step 4 writes a terminal `failed` status and then exits `unusable`, because a
+ * job that refuses in silence is a pane that vanishes with no verdict in it.
  */
+/**
+ * The bash that re-derives the repo's setup files inside the lock and refuses
+ * if they have moved — see `SetupJobOptions.expectFiles`.
+ *
+ * Written as one block rather than inline so the whole of the refusal is in one
+ * place: it writes a terminal status and exits, and the two must not drift
+ * apart. It runs after `cd "$dir"` and after the lock, which is the only
+ * position where both facts are true — we are in the tree, and nothing else may
+ * be changing it.
+ *
+ * `bad` is deliberately reachable three ways: a file that appeared, a file that
+ * vanished, and a `package.json` that no longer parses. All three mean "not
+ * what was agreed", and none of them may read as agreement.
+ */
+function fingerprintCheckBlock(expect: { scriptSha256: string | null; packageSetup: string | null }): string {
+  // No single quotes in it, so shq wraps it without a thicket of escapes. The
+  // same probe scripts/gjd-remote-flow.ts's boxConfigScript uses, so the two
+  // sides cannot disagree about what "the setup script body" means.
+  const pkgProbe =
+    `const s=JSON.parse(require("fs").readFileSync("package.json","utf8")).scripts;` +
+    `const v=s&&typeof s.setup==="string"?s.setup.trim():"";` +
+    `console.log(v?"yes "+Buffer.from(v,"utf8").toString("base64"):"no")`;
+  return [
+    `# THE FILES, RE-READ UNDER THE LOCK — see SetupJobOptions.expectFiles.`,
+    `want_sha=${shq(expect.scriptSha256 ?? "-")}`,
+    `want_pkg=${shq(expect.packageSetup === null ? "no" : `yes ${Buffer.from(expect.packageSetup, "utf8").toString("base64")}`)}`,
+    `got_sha=-`,
+    `if [ -f ${shq(SETUP_SCRIPT)} ]; then`,
+    `  if command -v sha256sum >/dev/null 2>&1; then got_sha=$(sha256sum ${shq(SETUP_SCRIPT)} | cut -d" " -f1)`,
+    `  elif command -v shasum >/dev/null 2>&1; then got_sha=$(shasum -a 256 ${shq(SETUP_SCRIPT)} | cut -d" " -f1)`,
+    `  else got_sha=unreadable; fi`,
+    `  [ -n "$got_sha" ] || got_sha=unreadable`,
+    `fi`,
+    `got_pkg=no`,
+    `if [ -f package.json ]; then`,
+    `  got_pkg=$(node -e ${shq(pkgProbe)} 2>/dev/null) || got_pkg=bad`,
+    `  [ -n "$got_pkg" ] || got_pkg=bad`,
+    `fi`,
+    `if [ "$got_sha" != "$want_sha" ] || [ "$got_pkg" != "$want_pkg" ]; then`,
+    `  printf 'gjd-remote setup: the setup files in %s are not the ones this run was asked for — nothing was run\\n' "$dir" >&2`,
+    `  fin=$(date -u +%Y-%m-%dT%H:%M:%SZ)`,
+    `  write_status "$(printf '"outcome":"failed","exitCode":0,"checkOutcome":"none","finishedAt":"%s","toolFailure":"config-changed"' "$fin")" || exit ${SETUP_EXIT.unusable}`,
+    `  exit ${SETUP_EXIT.unusable}`,
+    `fi`,
+  ].join("\n");
+}
+
 export function setupJobScript(o: SetupJobOptions): string {
-  requireOneLine("setup", o.command);
-  if (o.check !== undefined) requireOneLine("check", o.check);
+  const guard = (what: string, command: string) => requireOneLineCommand("setupJobScript", what, command);
+  guard("setup", o.command);
+  if (o.check !== undefined) guard("check", o.check);
   // Tool-owned rather than repo-owned, so this is a guard against our own
   // mistakes rather than against the config — but it lands in the same script.
-  if (o.afterwards !== undefined) requireOneLine("afterwards", o.afterwards);
+  if (o.afterwards !== undefined) guard("afterwards", o.afterwards);
   if (!/^[0-9a-f]{64}$/.test(o.configSha256)) {
     throw new Error(`setupJobScript: '${o.configSha256}' is not a sha256`);
   }
@@ -788,6 +921,8 @@ export function setupJobScript(o: SetupJobOptions): string {
     `"configSha256":${JSON.stringify(o.configSha256)}`,
     `"command":${JSON.stringify(o.command)}`,
   ].join(",");
+
+  const fingerprintCheck = o.expectFiles === undefined ? "" : fingerprintCheckBlock(o.expectFiles);
 
   // `env -i` is safe on this box because node is apt's, from NodeSource, and
   // there is no nvm to lose — see SETUP_PATH.
@@ -937,6 +1072,7 @@ write_status() {
   return 1
 }
 
+${fingerprintCheck}
 write_status '"outcome":"started"' || exit ${SETUP_EXIT.unusable}
 
 ${runStep}

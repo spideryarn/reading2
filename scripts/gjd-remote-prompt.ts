@@ -49,9 +49,25 @@ export class NotInteractive extends Error {
   }
 }
 
-/** The user pressed Ctrl-C, or the prompt was aborted, and gave no answer. */
+/**
+ * What `main()` prints for a cancellation nobody described any further. True
+ * for a Ctrl-C at the first question, and only there: once something has been
+ * done, the caller re-throws a `Cancelled` that says what remains.
+ */
+export const CANCELLED_NOTHING_CHANGED = "cancelled, nothing changed";
+
+/**
+ * The user pressed Ctrl-C, or the prompt was aborted, and gave no answer.
+ *
+ * **The message travels**, and `main()` in scripts/gjd-remote.ts prints it —
+ * GPT Sol's Stage 3 finding 4. The single sentence this used to be replaced
+ * with was always "nothing changed", which is false at the second question of
+ * `cloneThenSetUp`: the clone has happened by then and the tree is on the box.
+ * A caller that knows more than the prompt does re-throws with the fuller
+ * sentence, and the exit code stays 130 either way.
+ */
 export class Cancelled extends Error {
-  constructor(message = "cancelled.") {
+  constructor(message = CANCELLED_NOTHING_CHANGED) {
     super(message);
     this.name = "Cancelled";
   }
@@ -174,10 +190,26 @@ export async function confirmOrRefuse(
  *
  * Returns the values of the ticked items, in the order they were given. An
  * empty return is a real answer — "none of them" — not a failure.
+ *
+ * **`disabled` is a row that cannot be ticked at all.** `push-env` has two of
+ * them — a token that can delete the box, and a database URL pointing somewhere
+ * that is not a loopback address — and they are shown rather than hidden,
+ * because a key that quietly is not on the list is a key you go looking for. The
+ * library refuses the space bar on one, skips it when arrowing, and — the part
+ * that matters — excludes it from the `a` shortcut, which is `isSelectable` in
+ * @inquirer/checkbox and is the reason "select all" cannot select these.
+ *
+ * The REASON travels as the `disabled` value rather than as `description`,
+ * because inquirer only draws a description for the highlighted row and a
+ * disabled row can never be highlighted. A `disabled` string is drawn on the row
+ * itself, so the reason is on screen for exactly the rows that need one. Neither
+ * this nor the library's refusal is the guarantee: `applyGuards` in
+ * scripts/gjd-remote-envpolicy.ts re-applies both guards to whatever comes back,
+ * because a checkbox library's `disabled` is presentation.
  */
 export async function checklistOrRefuse<T extends string>(opts: {
   message: string;
-  items: readonly { value: T; label: string; description?: string; checked: boolean }[];
+  items: readonly { value: T; label: string; description?: string; checked: boolean; disabled?: boolean }[];
   io: PromptIo | null;
   instead?: string;
 }): Promise<readonly T[]> {
@@ -189,12 +221,26 @@ export async function checklistOrRefuse<T extends string>(opts: {
     // Built field by field rather than with a conditional spread: a spread
     // launders the key name, so `descriptoin` in there would compile clean and
     // silently drop every reason line. Assigning to a typed local does not.
-    const choice: { value: T; name: string; description?: string; checked: boolean } = {
+    const choice: {
+      value: T;
+      name: string;
+      description?: string;
+      checked: boolean;
+      disabled?: boolean | string;
+    } = {
       value: item.value,
       name: item.label,
-      checked: item.checked,
+      // A disabled row is never ticked, whatever the caller asked for. The
+      // library would draw a ticked-and-disabled row and then return it from
+      // the prompt, which is a row saying "this is going" about a key that is
+      // not.
+      checked: item.checked && item.disabled !== true,
     };
     if (item.description !== undefined) choice.description = item.description;
+    // The description doubles as the disabled reason: see the docblock. `true`
+    // when there is no description, which the library draws as "(disabled)" —
+    // less useful, and still unmistakably not tickable.
+    if (item.disabled === true) choice.disabled = item.description ?? true;
     return choice;
   });
   try {

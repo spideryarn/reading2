@@ -21,7 +21,33 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
+import {
+  type EnvAllowance,
+  type EnvPayload,
+  FORBIDDEN_NAMES,
+  SPIDERYARN_ALLOWANCE,
+  assertPushableName,
+  buildEnvPayload,
+  diffKeys,
+  localityVerdict,
+  parseEnv,
+} from "./gjd-remote-env.js";
+import {
+  type ChecklistItem,
+  type Proposal,
+  type ProposedKey,
+  EnvPolicyError,
+  PROPOSAL_MODEL,
+  applyGuards,
+  defaultProposalCall,
+  extractEnvKeyNames,
+  planChecklist,
+  policyPath,
+  proposeEnvKeys,
+  readPolicy,
+  selectableNames,
+  writePolicy,
+} from "./gjd-remote-envpolicy.js";
 import {
   META,
   METADATA_VERSION,
@@ -92,7 +118,6 @@ import {
   describeVerdict,
   newSetupAttempt,
   parseSetupStatus,
-  setupConfigSha256,
   setupJobScript,
   setupPaths,
   setupSlugFile,
@@ -101,7 +126,6 @@ import {
 } from "./gjd-remote-setup.js";
 import {
   BOX_END,
-  BOX_ERR,
   BOX_OK,
   boxConfigScript,
   parseBoxConfig,
@@ -117,13 +141,28 @@ import {
   foundGateDecision,
   needsTerminalSetupRecord,
   parseBoxRead,
+  parseAdmission,
   parseCheckoutProbe,
   parseCloneTransaction,
+  SETUP_READ_FIELDS,
+  sessionAdmissionScript,
+  setupFingerprint,
   setupGateDecision,
+  setupReadScript,
   setupSpec,
   sha256,
 } from "./gjd-remote-flow.js";
-import { Cancelled, NotInteractive, type PromptIo, confirmOrRefuse, promptIo } from "./gjd-remote-prompt.js";
+import {
+  CANCELLED_NOTHING_CHANGED,
+  Cancelled,
+  NotInteractive,
+  type PromptIo,
+  checklistOrRefuse,
+  confirmOrRefuse,
+  promptIo,
+} from "./gjd-remote-prompt.js";
+import { withLedger } from "../src/cli-ledger.js";
+import { loadEnvLocal } from "../src/env.js";
 import {
   type Here,
   isSessionUuid,
@@ -1188,7 +1227,7 @@ async function resolveTargetForSession(opts: {
   transport?: string | undefined;
   /** `gjd-remote new-claude` / `new-shell` — the command to tell them to re-run. */
   what: string;
-}): Promise<Target> {
+}): Promise<SessionStart> {
   const first = resolveOrExplain({ repo: opts.repo, dir: opts.dir });
   if (first.kind === "target") return sayFoundSetupStatus(first.target);
   if (first.checkout.kind !== "absent") onNotFound(first.id, first.checkout);
@@ -1206,6 +1245,33 @@ async function resolveTargetForSession(opts: {
 }
 
 /**
+ * How a session is allowed to start in a checkout the box already has: the
+ * directory, and the lock-and-status ticket the `tmux new-session` must be run
+ * under.
+ *
+ * `admit: null` means "run the command plainly", and it is the honest answer in
+ * exactly two cases: a `--dir` target, which is an arbitrary path with no repo
+ * and so no setup status to be admitted against, and a status read that failed
+ * — where there is nothing to hold the box to.
+ */
+type SessionStart = { target: Target; admit: AdmissionPlan | null };
+
+/**
+ * What the box must still be saying when the session is actually created.
+ *
+ * The three paths and the bytes, gathered when the gate was decided and handed
+ * to `sessionAdmissionScript` unchanged — see `startUnderAdmission`.
+ */
+type AdmissionPlan = {
+  slug: string;
+  lockPath: string;
+  locksDir: string;
+  statusPath: string;
+  /** The base64 the status read came back with, or null for "there was none". */
+  expect: string | null;
+};
+
+/**
  * What the setup status file says about a checkout that IS on the box, and
  * whether that is a reason not to start.
  *
@@ -1216,22 +1282,23 @@ async function resolveTargetForSession(opts: {
  * Reading the status COSTS ONE SSH, and reading the box's config costs a second
  * — so the second is only paid when there is a status to judge. With no status
  * at all `setupVerdict` answers `never-run` whatever it is handed.
+ *
+ * **The decision it makes here is not the guarantee.** It is true at the moment
+ * of reading, and `tmux new-session` happens some seconds later; the ticket
+ * this returns is what makes it still true then — GPT Sol's Stage 3 finding 1.
  */
-function sayFoundSetupStatus(t: Target): Target {
+function sayFoundSetupStatus(t: Target): SessionStart {
   // A `--dir` nobody verified is an arbitrary path — `-d ~` is a home directory
   // — and there is no repo whose setup status could be asked about.
-  if (t.slug === null || !t.verified) return t;
+  if (t.slug === null || !t.verified) return { target: t, admit: null };
 
   const state = readSetupState(t.slug, t.dir);
   if (!state.ok) {
     // Not fatal: this is a diagnostic about the tree, and a session in a repo
     // that IS on the box is not made wrong by our failing to read a status file.
+    // No ticket either — there are no bytes to hold the box to.
     console.log(yellow(`setup status: ${state.why}`));
-    return t;
-  }
-  if (state.unreadable !== undefined) {
-    console.log(yellow(`setup status: the file on the box is not one — ${state.unreadable}`));
-    return t;
+    return { target: t, admit: null };
   }
 
   // When the box has no setup command at all, the status's own hash stands in:
@@ -1239,20 +1306,127 @@ function sayFoundSetupStatus(t: Target): Target {
   // against. The identity fields are not optional in the same way — those are
   // what say whether this status is about this tree at all.
   const sha = state.status === undefined ? "" : expectedConfigSha(t.dir, state.status.configSha256);
+  // UNREADABLE IS PASSED IN rather than folded into a verdict, and it refuses:
+  // GPT Sol's Stage 3 finding 1. This used to print a yellow line and start the
+  // session anyway. Something wrote that file, and a verdict nobody can parse
+  // is not evidence of readiness — it is evidence that we do not know.
   const gate = foundGateDecision(
     setupVerdict(
       state.status,
       setupExpectation({ attempt: null, configSha256: sha, slug: t.slug, dir: t.dir, inode: state.inode }),
     ),
     state.lock,
+    state.unreadable,
   );
   if (gate.kind === "refuse") die(gate.why);
   if (gate.kind === "warn") console.log(yellow(gate.line));
-  return t;
+
+  const paths = setupReadPaths(t.slug);
+  return {
+    target: t,
+    admit: {
+      slug: t.slug,
+      lockPath: paths.lockPath,
+      locksDir: `${REMOTE_WORK}/${LOCKS_SUBDIR}`,
+      statusPath: paths.statusPath,
+      expect: state.raw,
+    },
+  };
 }
 
-/** The hash of the commands the BOX would run, or `fallback` when there is no
- *  answer to be had — an unreadable config, or a repo with no setup command. */
+/**
+ * Create the session under the setup lock, or say what stopped it — the second
+ * half of GPT Sol's Stage 3 finding 1.
+ *
+ * `sayFoundSetupStatus` decided on bytes it read seconds ago. In between, a
+ * `gjd-remote setup` in another terminal can take the lock and start rewriting
+ * the tree, and no amount of care in the gate closes that window. So the
+ * `tmux new-session` is run BY THE BOX, holding the same lock a setup takes,
+ * against the same bytes we decided on — `sessionAdmissionScript` in
+ * scripts/gjd-remote-flow.ts.
+ *
+ * A `--dir` target has no ticket and runs plainly. That is the escape hatch it
+ * has always been: an arbitrary path is not a repo, and there is no status file
+ * that could be about it.
+ *
+ * **It leaves the lock FILE behind**, because taking a lock means opening the
+ * path: after the first admitted session, a repo's lock state reads `free`
+ * rather than `none`. Nothing anywhere distinguishes those two — only `held`
+ * and `noflock` are ever acted on — so this is a note for whoever adds a third
+ * meaning, not a defect. Observed on the box on 2026-09-02.
+ */
+function startUnderAdmission(plan: AdmissionPlan | null, command: string, name: string): void {
+  if (plan === null) {
+    ssh(command);
+    return;
+  }
+  const r = sshRun(
+    sessionAdmissionScript({
+      lockPath: plan.lockPath,
+      locksDir: plan.locksDir,
+      statusPath: plan.statusPath,
+      expect: plan.expect,
+      command,
+    }),
+  );
+  if (r.status !== 0) {
+    die(
+      `ssh failed while admitting the session (${r.status ?? "on a signal"}): ${lastWords(r.stderr)}\n` +
+        `  I do not know whether '${name}' was created — gjd-remote ls`,
+    );
+  }
+  const got = parseAdmission(r.stdout);
+  if (!got.ok) {
+    // FAILS CLOSED, and the sentence has to as well: the reply is unreadable,
+    // so the command may have run. Saying "nothing started" here would be the
+    // one lie this whole path exists to avoid.
+    die(
+      `the box's answer about starting '${name}' was not one I can read: ${got.why}\n` +
+        `  The session MAY exist — gjd-remote ls   # gjd-remote kill ${name}, if it does`,
+    );
+  }
+  const a = got.admission;
+  if (a.kind === "held") {
+    die(
+      `a setup for ${plan.slug} took the box-side lock just now — nothing was started.\n` +
+        `  Starting a session in a tree mid-install gives an agent a half-built repo.\n` +
+        `  gjd-remote setup --status --repo ${plan.slug}   # wait for it, then try again`,
+    );
+  }
+  if (a.kind === "changed") {
+    die(
+      `${plan.slug}'s setup status changed while I was starting the session — nothing was started.\n` +
+        `  ${sayChangedStatus(a.status, plan)}\n` +
+        `  gjd-remote setup --status --repo ${plan.slug}   # what it says now`,
+    );
+  }
+  if (a.code !== 0) {
+    die(`tmux exited ${a.code} on the box, so '${name}' was not created`);
+  }
+}
+
+/** What the status file says NOW, in one line, for the refusal above. Parsed
+ *  rather than printed: the file is JSON, and what a reader wants from it is
+ *  the verdict. */
+function sayChangedStatus(text: string | undefined, plan: AdmissionPlan): string {
+  if (text === undefined) return `the status file at ${plan.statusPath} is gone`;
+  const parsed = parseSetupStatus(text);
+  if (!parsed.ok) return `and the file there now is not one I can read: ${parsed.why}`;
+  return `it is now about attempt ${parsed.status.attempt}, outcome ${parsed.status.outcome}`;
+}
+
+/**
+ * The fingerprint of the setup the BOX would run today, or `fallback` when
+ * there is no answer to be had — an unreadable config, or a repo with no setup
+ * command.
+ *
+ * `setupFingerprint` over the whole specification, never the two command
+ * STRINGS: GPT Sol's Stage 3 finding 2. `./.gjd-remote/setup` is the same eight
+ * characters whatever the script behind it now contains, so hashing the
+ * commands let a repo whose setup script was rewritten under it keep its old
+ * success. The same function answers here, in `gjd-remote setup`, in `doctor`
+ * and in the job that writes the status, so the four cannot disagree.
+ */
 function expectedConfigSha(dir: string, fallback: string): string {
   const box = readBoxConfig(dir);
   if (!box.ok) {
@@ -1260,7 +1434,7 @@ function expectedConfigSha(dir: string, fallback: string): string {
     return fallback;
   }
   if (box.config.setup.source === "none") return fallback;
-  return setupConfigSha256(box.config.setup.command, box.config.check?.command);
+  return setupFingerprint(box.spec);
 }
 
 /**
@@ -1351,6 +1525,37 @@ async function cloneThenSetUp(
   console.log(green(`✓ cloned ${id.slug}`));
   describeCheckout(after);
 
+  // FROM HERE ON "nothing changed" IS FALSE, and that is GPT Sol's Stage 3
+  // finding 4: `main()`'s one sentence for a Ctrl-C said it anyway, at a
+  // question that is only asked once the tree is on the box. The phase is this
+  // try, rather than a variable somebody has to remember to set, so a prompt
+  // added below inherits the right sentence instead of the old one.
+  try {
+    await setUpTheClone(id, repo, dest, preview, opts);
+  } catch (err) {
+    if (err instanceof Cancelled) {
+      throw new Cancelled(`cancelled: the clone at ${dest} remains; setup and the session were not started`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Read the cloned commit's own config, ask again if it differs from what was
+ * approved, and run setup — the half of `cloneThenSetUp` that happens once the
+ * checkout is a fact on the box.
+ *
+ * Split out for the cancellation phase above and for nothing else: a Ctrl-C
+ * anywhere in here leaves a clone behind, and every path out of it says where
+ * that clone is.
+ */
+async function setUpTheClone(
+  id: Identity,
+  repo: Repo,
+  dest: string,
+  preview: SetupPreview,
+  opts: { attach: boolean; transport?: string | undefined; what: string },
+): Promise<void> {
   // THE CLONED COMMIT'S CONFIG, not the one that was on screen. They differ
   // whenever the laptop's copy is uncommitted or unpushed, which is most of the
   // time while somebody is writing one.
@@ -1408,7 +1613,7 @@ async function cloneThenSetUp(
     slug: id.slug,
     command,
     check,
-    sha: setupConfigSha256(command, check),
+    spec: box.spec,
     attach: opts.attach,
     transport: opts.transport,
     statusHint: `gjd-remote setup --status --repo ${id.slug}   # how did it go?`,
@@ -2128,7 +2333,7 @@ async function cmdNewClaude(
   // and where a checkout whose setup never succeeded says so. Everything above
   // is deliberately in front of it: a bad name or an oversized prompt is a
   // sentence, not a question about cloning.
-  const target = await resolveTargetForSession({
+  const { target, admit } = await resolveTargetForSession({
     repo: opts.repo,
     dir: opts.dir,
     attach: opts.attach,
@@ -2225,10 +2430,16 @@ async function cmdNewClaude(
   // so they survive the rename that `ls` may later perform — a mapping file
   // keyed by name would go stale at exactly that moment.
   // The rest of the `-e` flags are the session's own metadata — see metaFlags().
-  ssh(
+  // UNDER THE SETUP LOCK when the target is a repo the box resolved by origin,
+  // and plainly for a `--dir` — `startUnderAdmission`. The gate that let us get
+  // here read a status file some seconds ago; this is what makes that reading
+  // still true at the moment the session exists.
+  startUnderAdmission(
+    admit,
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
       `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${metaFlags(target, dir, "claude")} ` +
       shq(`bash ${jobPath}`),
+    name,
   );
 
   confirmStarted(name);
@@ -2313,7 +2524,7 @@ async function cmdNewShell(
   // As in cmdNewClaude: an absent checkout is offered a clone and a setup here,
   // and a session is created only on a `success` status. A shell always
   // attaches, so it always watches the setup it started.
-  const target = await resolveTargetForSession({
+  const { target, admit } = await resolveTargetForSession({
     repo: opts.repo,
     dir: opts.dir,
     attach: true,
@@ -2333,10 +2544,15 @@ async function cmdNewShell(
   ssh(`mkdir -p ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
   // As in cmdNewClaude, the `GJD_*` variables are what `ls` reads back — the
   // kind differs, and nothing else does.
-  ssh(
+  // Under the setup lock, exactly as `new-claude` starts its session — see
+  // `startUnderAdmission`. A shell in a tree mid-`npm ci` is the same
+  // half-built repo an agent would get.
+  startUnderAdmission(
+    admit,
     `tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0 ` +
       `${metaFlags(target, dir, "shell")} ` +
       shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
+    name,
   );
   confirmStarted(name);
   // A launch line, written after the session exists, the way cmdNewClaude
@@ -2361,10 +2577,45 @@ async function cmdNewShell(
  * that turns file text into a payload; Stage 4 adds entries to it and changes
  * nothing else here.
  */
-type EnvPolicy = { build: (localText: string) => ReturnType<typeof buildEnvPayload> };
-const ENV_POLICIES: Record<string, EnvPolicy | undefined> = {
-  "spideryarn/reading2": { build: buildEnvPayload },
+type EnvRoute =
+  /** A list written down in this repo, in TypeScript, by a person. No prompt,
+   *  no model, no saved policy — the list IS the decision. */
+  | { kind: "typed"; allowance: EnvAllowance }
+  /** Everything else: names off the file, a proposal, a checklist, and what the
+   *  reader ticked remembered in `~/.config/gjd-remote/repos/`. */
+  | { kind: "checklist" };
+
+const TYPED_ENV_POLICIES: Record<string, EnvAllowance | undefined> = {
+  "spideryarn/reading2": SPIDERYARN_ALLOWANCE,
 };
+
+/**
+ * **Which of the two `push-env` paths this repo takes, and why there are two.**
+ *
+ * A function rather than a bare lookup so this comment has somewhere to live.
+ *
+ * The typed path stays for Spideryarn because its allowlist is not a
+ * convenience: it is a reviewed list of names with reasons written beside each
+ * one, and two of its entries are absences that were argued over
+ * (scripts/gjd-remote-env.ts). Replacing it with "whatever Greg ticked last
+ * time" would throw that away, and a checklist that re-asks the same twenty
+ * keys every time is a checklist people stop reading.
+ *
+ * Every other repo takes the checklist path, because a list of key NAMES is
+ * repo-specific — hellozenno's `DATABASE_URL` is not this one's — and nobody is
+ * going to write a TypeScript entry per repo, which was the objection to the
+ * typed-map design in the first place (the plan, § "The simpler options passed
+ * over").
+ *
+ * What the two paths SHARE is everything that decides safety: the same value
+ * guards (`localityVerdict`, the Supabase-JWT and Stripe-mode checks in
+ * `buildEnvPayload`), the same forbidden names, the same atomic write and the
+ * same readback. The difference is only where the list of names comes from.
+ */
+function envRoute(slug: string): EnvRoute {
+  const typed = TYPED_ENV_POLICIES[slug];
+  return typed === undefined ? { kind: "checklist" } : { kind: "typed", allowance: typed };
+}
 
 /**
  * WHICH file on this laptop, and WHOSE rules apply to it.
@@ -2374,13 +2625,16 @@ const ENV_POLICIES: Record<string, EnvPolicy | undefined> = {
  *  - **No local checkout, no push.** `--repo` can name a repo you are not
  *    standing in, and then there is no `.env.local` to send. Guessing this
  *    checkout's one would send Spideryarn's keys under another repo's name.
- *  - **No policy, no push.** The allowlist in scripts/gjd-remote-env.ts is a
- *    list of key NAMES and it is Spideryarn's; another repo's `DATABASE_URL` is
- *    not this one's. Stage 4 of the plan fills the map in.
  *  - **No symlinks.** What is about to be read is every credential the repo
  *    has, and a symlink is a file whose real location this never looked at.
+ *
+ * "No policy" used to be a third refusal here. It is a route now: a repo with no
+ * typed list is asked about rather than turned away (`envRoute`).
  */
-function envSource(target: Target, file: string | undefined): { local: string; policy: EnvPolicy } {
+function envSource(
+  target: Target,
+  file: string | undefined,
+): { local: string; slug: string; route: EnvRoute } {
   const slug = target.slug;
   if (slug === null || target.localToplevel === null) {
     die(
@@ -2389,15 +2643,6 @@ function envSource(target: Target, file: string | undefined): { local: string; p
           ? `  I could not tell which repo you mean.`
           : `  --repo named ${slug}, but this laptop is not standing in it, so there is no\n` +
             `  .env.local to read. Run it from that checkout.`),
-    );
-  }
-  const policy = ENV_POLICIES[slug];
-  if (!policy) {
-    die(
-      `no env policy for ${slug} yet — see docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md, Stage 4.\n` +
-        `  The allowlist in scripts/gjd-remote-env.ts is Spideryarn's, and it is a list of\n` +
-        `  key NAMES: pushing it for another repo would send whatever that repo happens to\n` +
-        `  call DATABASE_URL. Nothing was read and nothing was sent.`,
     );
   }
 
@@ -2413,7 +2658,7 @@ function envSource(target: Target, file: string | undefined): { local: string; p
     die(`${local} is a symlink, and this will not follow one to find credentials.\n  Pass the real file with --file.`);
   }
   if (!st.isFile()) die(`${local} is not a regular file.`);
-  return { local, policy };
+  return { local, slug, route: envRoute(slug) };
 }
 
 /**
@@ -2438,14 +2683,52 @@ function envSource(target: Target, file: string | undefined): { local: string; p
  * Reports which KEYS changed. Never a value, and never a hash of one: a short
  * value shown as a hash is a value shown.
  */
-function cmdPushEnv(opts: { file?: string | undefined; repo?: string | undefined; dir?: string | undefined }): void {
+type PushEnvOptions = {
+  file?: string | undefined;
+  repo?: string | undefined;
+  dir?: string | undefined;
+  /** Ask the model even when the saved policy already covers every key. */
+  propose: boolean;
+  /** Skip the checklist: every selectable key / no key at all. */
+  all: boolean;
+  none: boolean;
+  /** Record an empty policy when nothing was selected. */
+  save: boolean;
+  /** Skip the final confirmation. `--all` alone still asks. */
+  yes: boolean;
+};
+
+async function cmdPushEnv(opts: PushEnvOptions): Promise<void> {
   // `requireIdentity` — this command carries one repo's credentials, so it may
   // not run without knowing which repo, and a `--dir` must be that repo's
   // checkout rather than any directory on the box.
   const target = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
-  const source = envSource(target, opts.file);
-  const local = source.local;
-  const payload = source.policy.build(readFileSync(local, "utf8"));
+  const { local, slug, route } = envSource(target, opts.file);
+  const text = readFileSync(local, "utf8");
+  if (route.kind === "checklist") return pushEnvByChecklist(target, slug, local, text, opts);
+
+  // The typed path takes no options, and says so rather than ignoring them: a
+  // `--all` that quietly did nothing would read as "everything was sent".
+  const used = (["propose", "all", "none", "save", "yes"] as const).filter((f) => opts[f]);
+  if (used.length) {
+    die(
+      `--${used.join(", --")} ${used.length === 1 ? "is" : "are"} for a repo with no written-down list of keys.\n` +
+        `  ${slug} has one, in scripts/gjd-remote-env.ts, and it is the whole decision — there\n` +
+        `  is nothing here to propose, tick or remember. Nothing was sent.`,
+    );
+  }
+  sendEnvPayload(target, local, buildEnvPayload(text, route.allowance));
+}
+
+/**
+ * The tail both routes share: refuse a file that would silently lose keys, say
+ * what is changing by KEY NAME, write it atomically, and read it back.
+ *
+ * Extracted rather than copied when the checklist route arrived. Two copies of
+ * this would be two atomic-write recipes and two readbacks, and the one that got
+ * a fix would not be the one somebody was running.
+ */
+function sendEnvPayload(target: Target, local: string, payload: EnvPayload): void {
   // Refused, not reported. The allowlist stops the file sending a key it should
   // not; nothing stopped it sending FEWER keys than it appears to — a duplicate
   // takes the later value, an unclosed quote eats every line after it, and a
@@ -2462,8 +2745,8 @@ function cmdPushEnv(opts: { file?: string | undefined; repo?: string | undefined
   }
   if (payload.pushed.size === 0) {
     die(
-      `${local} has none of the allowlisted keys — refusing to write an empty env file.\n` +
-        `  The allowlist is in scripts/gjd-remote-env.ts.`,
+      `none of the keys that were going to be sent are in ${local} — refusing to write an\n` +
+        `  empty env file. The list of names came from ${payload.sourceOfNames}.`,
     );
   }
 
@@ -2483,10 +2766,10 @@ function cmdPushEnv(opts: { file?: string | undefined; repo?: string | undefined
   for (const k of diff.changed) console.log(`  ${bold("~")} ${k}` + dim("  changed"));
   console.log(dim(`  = ${diff.unchanged} unchanged`));
   if (payload.skipped.length) {
-    console.log(dim(`  skipped ${payload.skipped.length} keys not on the allowlist: ${payload.skipped.join(", ")}`));
+    console.log(dim(`  skipped ${payload.skipped.length} keys that are not going: ${payload.skipped.join(", ")}`));
   }
   if (payload.missing.length) {
-    console.log(dim(`  ${payload.missing.length} allowlisted keys absent locally: ${payload.missing.join(", ")}`));
+    console.log(dim(`  ${payload.missing.length} expected keys absent locally: ${payload.missing.join(", ")}`));
   }
 
   const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-env-"));
@@ -2539,6 +2822,290 @@ function cmdPushEnv(opts: { file?: string | undefined; repo?: string | undefined
   if (mode !== `600 ${USER}`) die(`written, but the mode is '${mode}' and should be '600 ${USER}'`);
 
   console.log(green(`✓ ${payload.pushed.size} keys, 0600 ${USER}, read back and verified`));
+}
+
+/**
+ * **`push-env` for a repo with no written-down list: names, a proposal, a
+ * checklist, and what you ticked remembered.**
+ *
+ * The order below is the whole design, and each step is where it is for a
+ * reason.
+ *
+ * 1. **The names come out first**, and the file's text goes nowhere else except
+ *    into `buildEnvPayload` at the very end. Everything between — the model
+ *    call, the rows on screen, the confirmation, the saved policy — is typed
+ *    against names (scripts/gjd-remote-envpolicy.ts).
+ * 2. **A file that would lose keys is refused before the model is asked.** The
+ *    same refusal the typed path makes, moved earlier: asking a paid classifier
+ *    about a name list that is missing entries, then making somebody answer a
+ *    checklist built from it, and only then refusing, spends money and time to
+ *    arrive where we already were.
+ * 3. **The saved policy is read before the model is asked**, because it decides
+ *    whether to ask at all. An unreadable one is a refusal rather than an empty
+ *    approval set: those two are indistinguishable downstream, and the second
+ *    would present every key as new and then overwrite the file it could not
+ *    read.
+ * 4. **The guards are applied twice**, and neither time is the important one on
+ *    its own: greyed out in the checklist so the reader can see them, and
+ *    re-applied to whatever comes back, because a checkbox library's `disabled`
+ *    is presentation and `--all` never went through the library at all.
+ * 5. **The policy is written after the box is written**, so it records what
+ *    actually travelled rather than what was hoped for.
+ */
+async function pushEnvByChecklist(
+  target: Target,
+  slug: string,
+  local: string,
+  text: string,
+  opts: PushEnvOptions,
+): Promise<void> {
+  const { names, problems } = extractEnvKeyNames(text);
+  console.log(bold(`gjd-remote push-env ${slug}`));
+  console.log(dim(`  reading ${local} — ${names.length} key name(s), no values`));
+  if (problems.length) {
+    die(
+      `${local} is not a file I will push — I would silently drop keys out of it:\n` +
+        problems.map((p) => `  ${p}`).join("\n") +
+        `\n  Fix those lines and run this again. Nothing was sent, and no model was asked.` +
+        `\n  (Line numbers only — the contents of a broken line may well be the secret.)`,
+    );
+  }
+  if (names.length === 0) die(`${local} has no keys in it at all, so there is nothing to send.`);
+
+  const file = policyFile(slug);
+  const saved = readPolicy(file, slug);
+  if (saved.kind === "error") {
+    die(
+      `${saved.why}\n` +
+        `  That file records which keys you approved for this repo, so a push cannot go\n` +
+        `  ahead without being able to read it. Fix it or delete it. Nothing was sent.`,
+    );
+  }
+  const approved = saved.kind === "policy" ? new Set(saved.approved) : undefined;
+  console.log(
+    saved.kind === "policy"
+      ? dim(`  policy: ${file}  (${saved.approved.length} approved, saved ${saved.savedAt})`)
+      : dim(`  policy: none yet — would be ${file}`),
+  );
+
+  // THE ONLY PLACE A VALUE IS LOOKED AT, and only a verdict comes back out.
+  // `localityVerdict` is the same call `buildEnvPayload` refuses on, so a row
+  // cannot be tickable here and rejected there, after the reader has answered.
+  const values = parseEnv(text);
+  const valueGuard = (name: string): "ok" | "not-local" => {
+    const value = values.get(name);
+    if (value === undefined) return "ok";
+    return localityVerdict(name, value) === "not-local" ? "not-local" : "ok";
+  };
+  // ONE object, handed to both the drawing and the checking, so the second
+  // application of the guards is the same rule and not a copy of it.
+  const guards = { forbiddenNames: new Set(FORBIDDEN_NAMES), valueGuard };
+  // A key that can never be sent can never be approved either, so it would stay
+  // "not sent before" for the life of the repo — and asking the model about it
+  // is a paid call, every push, for a row that is greyed out on arrival. Found
+  // live on 2026-09-02: the second run of this on gjdutils asked again about
+  // DATABASE_URL_PROD and HETZNER_CLOUD_API_TOKEN, which is every run forever.
+  const blocked = new Set(
+    names.filter((n) => guards.forbiddenNames.has(n) || guards.valueGuard(n) === "not-local"),
+  );
+
+  const proposal = await proposeOrSkip(names, approved, blocked, opts.propose);
+  const items = approvalWins(
+    planChecklist({
+      names,
+      proposal,
+      approved,
+      // Greg's call, 2026-09-02: the model's answer IS the starting state, with
+      // the reason on each row. The plan records GPT Sol's objection to that
+      // and that it was overruled — 260902h, "Open questions for Greg".
+      preTick: "proposal",
+      ...guards,
+    }),
+    approved,
+  );
+
+  const chosen = await chooseEnvKeys(items, opts);
+  const { send, refused } = applyGuards(chosen, items, guards);
+  for (const r of refused) console.log(red(`  ✗ ${r.name}`) + dim(`  ${r.why}`));
+
+  const dest = `${target.dir}/.env.local`;
+  if (send.length === 0) {
+    console.log(yellow("  nothing selected, so nothing was written to the box."));
+    if (opts.save) savePolicy(file, slug, []);
+    else console.log(dim("  --save would record that as an empty policy; without it, nothing is remembered."));
+    return;
+  }
+
+  for (const line of wrapNames(send)) console.log(`    ${line}`);
+  if (!opts.yes) {
+    const ok = await confirmOrRefuse(`send these ${send.length} keys to ${HOST()}:${dest}?`, promptStreams(), {
+      instead: "gjd-remote push-env --all --yes sends every eligible key without asking",
+    });
+    if (!ok) {
+      console.log("nothing was sent.");
+      return;
+    }
+  }
+
+  sendEnvPayload(target, local, buildEnvPayload(text, { names: send, source: `you approved for ${slug}` }));
+  savePolicy(file, slug, send);
+}
+
+/** `policyPath`, with its refusal in the CLI's voice. It throws on a slug that
+ *  cannot be a filename, which is a thing `--repo` can produce. */
+function policyFile(slug: string): string {
+  try {
+    return policyPath(slug);
+  } catch (err) {
+    if (err instanceof EnvPolicyError) die(err.message);
+    throw err;
+  }
+}
+
+/**
+ * Remember what travelled — and treat failing to as a warning, not a failure.
+ *
+ * The keys are already on the box by the time this runs. Dying here would print
+ * a red cross over a push that worked, and the reader would run it again.
+ */
+function savePolicy(file: string, slug: string, approved: readonly string[]): void {
+  try {
+    writePolicy(file, { repo: slug, approved }, new Date());
+    console.log(dim(`  approved keys recorded in ${file}`));
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    console.log(yellow(`  the keys were sent, but the policy was not saved: ${why}`));
+  }
+}
+
+/**
+ * **Ask a cheap model to sort the names — or say why it was not asked.**
+ *
+ * Not asked every time: a repo whose saved policy already covers every name in
+ * the file has nothing new to classify, and a paid call per push is a paid call
+ * for an answer nobody reads. `--propose` forces it, which is how you get a
+ * fresh opinion after editing the policy by hand.
+ *
+ * **`blocked` is what makes "nothing new" reachable at all.** A hard-guarded key
+ * can never be approved, so it is never in the saved policy, so a plain
+ * "approved ∪ names" comparison would call it new on every run until the end of
+ * time — and hellozenno's `.env.local` has one of those in it by construction.
+ *
+ * `loadEnvLocal()` reads THIS repo's `.env.local` for the OpenRouter key, off
+ * the module's own location rather than the cwd — the tool root, never the repo
+ * being pushed. `withLedger("cli", …)` is what makes the call appear in `npm run
+ * cost`; without it the meter finds no collector, warns once and drops the row.
+ *
+ * A failure is one line and no proposal, never a refusal: this is advisory, and
+ * `push-env` going down because a classifier was unavailable would be a nicety
+ * taking the feature with it.
+ */
+async function proposeOrSkip(
+  names: readonly string[],
+  approved: Set<string> | undefined,
+  blocked: ReadonlySet<string>,
+  forced: boolean,
+): Promise<Map<string, ProposedKey> | undefined> {
+  const unseen = names.filter((n) => !blocked.has(n) && approved?.has(n) !== true);
+  const why = forced
+    ? "--propose"
+    : approved === undefined
+      ? "no saved policy for this repo yet"
+      : unseen.length > 0
+        ? `${unseen.length} key(s) this repo has not sent before`
+        : null;
+  if (why === null) {
+    console.log(dim("  no new keys since the saved policy — skipping the model"));
+    return undefined;
+  }
+  // `PROPOSAL_MODEL`, not a model constant of this file's own choosing: the
+  // request body is built in gjd-remote-envpolicy.ts, and a line here naming a
+  // different model would be a lie printed with total confidence. It said
+  // QUICK_MODEL_OPENROUTER for one afternoon while the job ran on the capable
+  // one, which is the whole reason the name is exported.
+  console.log(dim(`  asking ${PROPOSAL_MODEL} about ${names.length} key NAMES (${why})`));
+  loadEnvLocal();
+  let outcome: Proposal | undefined;
+  try {
+    await withLedger("cli", async () => {
+      outcome = await proposeEnvKeys(names, { call: defaultProposalCall });
+    });
+  } catch (err) {
+    if (err instanceof EnvPolicyError) die(err.message);
+    throw err;
+  }
+  // `outcome` is assigned inside the callback, so the compiler cannot see that
+  // it happened; undefined here means the ledger returned without running it,
+  // which would be a bug rather than a model failure — and either way the
+  // honest answer downstream is "no proposal".
+  if (outcome === undefined || !outcome.ok) {
+    console.log(yellow(`  no proposal: ${outcome?.why ?? "the call did not run"} — nothing is pre-ticked from it`));
+    return undefined;
+  }
+  return outcome.proposal;
+}
+
+/**
+ * **A key this repo has sent before stays ticked, even when today's model calls
+ * it a secret.**
+ *
+ * Greg's ticks are the decision and the model is advice, so an approval already
+ * given outranks a fresh opinion — otherwise a classifier that changed its mind
+ * would quietly stop sending a key the box has been running on, and the push
+ * would report success. The model's reason is still shown on the row, so the
+ * disagreement is visible rather than resolved behind the reader's back.
+ *
+ * A DISABLED row is never touched: the two hard guards are not opinions.
+ */
+function approvalWins(items: ChecklistItem[], approved: Set<string> | undefined): ChecklistItem[] {
+  if (approved === undefined) return items;
+  return items.map((item) =>
+    item.disabled || !approved.has(item.name) ? item : { ...item, checked: true },
+  );
+}
+
+/** The checklist, or the flag that stands in for it. `--all` means every
+ *  SELECTABLE row — `selectableNames` rather than a map over the items, so
+ *  "select all" and the guard cannot come to different conclusions. */
+async function chooseEnvKeys(items: ChecklistItem[], opts: PushEnvOptions): Promise<readonly string[]> {
+  if (opts.none) {
+    console.log(dim("  --none: nothing selected"));
+    return [];
+  }
+  if (opts.all) {
+    const all = selectableNames(items);
+    console.log(dim(`  --all: ${all.length} of ${items.length} rows are selectable`));
+    return all;
+  }
+  return checklistOrRefuse({
+    message: "which keys should go on the box?",
+    items: items.map((i) => ({
+      value: i.name,
+      label: i.name,
+      description: i.description,
+      checked: i.checked,
+      disabled: i.disabled,
+    })),
+    io: promptStreams(),
+    instead: "gjd-remote push-env --all (every eligible key), or --none --save to approve nothing",
+  });
+}
+
+/** Names across several lines rather than one very long one. Names only ever —
+ *  this is the list printed above the final confirmation. */
+function wrapNames(names: readonly string[], width = 76): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const name of names) {
+    if (line === "") line = name;
+    else if (line.length + 2 + name.length <= width) line += `, ${name}`;
+    else {
+      lines.push(`${line},`);
+      line = name;
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
 }
 
 // ---------------------------------------------------------------- clone
@@ -2742,11 +3309,20 @@ function ensureRemoteCheckout(
       if (o.stale === "archived") {
         console.log(dim(`  a setup status from the checkout that used to be here was moved aside`));
       }
-      if (o.stale === "stuck") {
-        console.log(yellow(`  there is an old setup status for ${slug} I could not move aside — it is about the tree that WAS here`));
-      }
       return probeCheckout(dest);
     }
+    /* A stale status that could NOT be moved aside used to be a yellow line on
+       the `ok` arm and a clone that carried on. It is its own outcome now
+       (scripts/gjd-remote-flow.ts), because readiness is the status file: a
+       session started in the fresh checkout would be admitted on the evidence
+       of the tree that used to be there. So this refuses, and names the file. */
+    case "stale-stuck":
+      return die(
+        `the clone worked, and I could not move aside the setup status left by the checkout that used to be at ${dest}.\n` +
+          `  ${setupStatusPath(REMOTE_WORK, slug)}\n` +
+          `  That file is about the tree that WAS here, and until it is gone a session started in\n` +
+          `  this one would be admitted on its evidence. Move it or delete it, then run: gjd-remote setup`,
+      );
     case "taken":
       return die(`something appeared at ${dest} on the box while the clone was starting. Nothing was cloned.`);
     case "staging-taken":
@@ -3190,49 +3766,17 @@ function saySetupCommands(cfg: RepoConfig, spec: SetupSpec, where: string): void
 }
 
 /**
- * The lock, the status file, and the checkout's own `.git` inode — in one round
- * trip, framed at both ends.
+ * `setupReadScript` USED TO BE HERE, in its own second copy, and it was deleted
+ * on 2026-09-02. It is `setupReadScript` in scripts/gjd-remote-flow.ts now,
+ * where tests/gjd-remote-flow.test.ts RUNS it — against a real lock file, with
+ * `flock` taken off the PATH, which is the one arrangement where a probe in the
+ * right order and no probe at all give different answers.
  *
- * **`flock` is probed FIRST**, and that is GPT Sol's Stage 2 finding 9. The
- * order used to be the other way round, so a box with no `flock` at all
- * answered `none` — "there is no lock file" — whenever nothing had taken one,
- * and the missing binary stayed invisible until a job died with exit 78 inside
- * a pane that then vanished.
- *
- * **The inode rides along** because the caller needs it for the same verdict
- * and a second round trip to fetch it would be one nobody would keep. It is
- * what tells a re-clone at the same path from the checkout that was there when
- * setup last ran (finding 7).
+ * The copy that lived here used `base64 -w0`, which is GNU-only: the same
+ * script under the test's macOS bash printed nothing and the field came back
+ * empty. One of the two copies was therefore untestable, which is how a second
+ * copy of a wire protocol earns its keep right up until it doesn't.
  */
-function setupReadScript(statusPath: string, lockPath: string, dir: string): string {
-  return [
-    `if ! command -v flock >/dev/null 2>&1; then lock=noflock`,
-    `else`,
-    `  l=${shq(lockPath)}`,
-    // The `-e` test comes before taking the lock so that merely LOOKING does
-    // not create the lock file: `9>>"$l"` would, and "there is a lock file" is
-    // a fact worth keeping true only when something has actually taken one.
-    `  if [ ! -e "$l" ]; then lock=none`,
-    `  elif ( flock -n 9 ) 9>>"$l" 2>/dev/null; then lock=free`,
-    `  else lock=held; fi`,
-    `fi`,
-    `i=-`,
-    `if [ -e ${shq(dir)}/.git ]; then i=$(ls -di ${shq(dir)}/.git 2>/dev/null | awk '{print $1}') || i=-; fi`,
-    `[ -n "$i" ] || i=-`,
-    `s=${shq(statusPath)}`,
-    `st=absent; b=-`,
-    `if [ -e "$s" ]; then`,
-    `  b=$(base64 -w0 < "$s") || { printf '${BOX_ERR} I could not read %s on the box\\n' "$s"; exit 0; }`,
-    `  st=present`,
-    `fi`,
-    `printf '${BOX_OK}\\n'`,
-    `printf 'lock %s\\n' "$lock"`,
-    `printf 'inode %s\\n' "$i"`,
-    `printf 'status %s\\n' "$st"`,
-    `printf 'text %s\\n' "$b"`,
-    `printf '${BOX_END}\\n'`,
-  ].join("\n");
-}
 
 type SetupRead =
   | {
@@ -3242,6 +3786,17 @@ type SetupRead =
       unreadable: string | undefined;
       /** The `.git` inode of the checkout being asked about, when it has one. */
       inode: string | undefined;
+      /**
+       * The status file's own bytes, base64, EXACTLY as the box sent them —
+       * `null` when there is no status file at all.
+       *
+       * Kept because `sessionAdmissionScript` compares this string, byte for
+       * byte, against what the box reads back under the lock a moment later.
+       * Re-encoding the parsed status would compare two ideas of what the file
+       * says rather than the file; and a round trip through anybody's JSON
+       * would make an unreadable file impossible to speak about at all.
+       */
+      raw: string | null;
     }
   | { ok: false; why: string };
 
@@ -3257,7 +3812,7 @@ type SetupRead =
  */
 function readSetupState(slug: string, dir: string): SetupRead {
   const { statusPath, lockPath } = setupReadPaths(slug);
-  const got = boxRead(setupReadScript(statusPath, lockPath, dir), ["lock", "inode", "status", "text"], `the setup status for ${slug}`);
+  const got = boxRead(setupReadScript({ statusPath, lockPath, dir }), [...SETUP_READ_FIELDS], `the setup status for ${slug}`);
   if (!got.ok) return got;
 
   const lockWord = got.fields.get("lock") ?? "";
@@ -3271,14 +3826,19 @@ function readSetupState(slug: string, dir: string): SetupRead {
   const inode = rawInode === "-" ? undefined : rawInode;
 
   const st = got.fields.get("status") ?? "";
-  if (st === "absent") return { ok: true, status: undefined, lock, unreadable: undefined, inode };
+  if (st === "absent") return { ok: true, status: undefined, lock, unreadable: undefined, inode, raw: null };
   if (st !== "present") return { ok: false, why: `the box said the status file is '${st}', which means nothing to me` };
 
-  const decoded = decodeBoxField(got.fields.get("text") ?? "", statusPath);
+  const raw = got.fields.get("text") ?? "";
+  const decoded = decodeBoxField(raw, statusPath);
   if (!decoded.ok) return { ok: false, why: decoded.why };
   const parsed = parseSetupStatus(decoded.text);
-  if (!parsed.ok) return { ok: true, status: undefined, lock, unreadable: parsed.why, inode };
-  return { ok: true, status: parsed.status, lock, unreadable: undefined, inode };
+  // A file that is there and does not parse still HAS bytes, and the admission
+  // compares bytes — so `raw` travels on this arm too. It is what makes "the
+  // status changed while you were being asked" a thing that can be said about
+  // a file nobody could read.
+  if (!parsed.ok) return { ok: true, status: undefined, lock, unreadable: parsed.why, inode, raw };
+  return { ok: true, status: parsed.status, lock, unreadable: undefined, inode, raw };
 }
 
 /**
@@ -3400,7 +3960,9 @@ function cmdSetup(opts: {
   }
   const command = cfg.setup.command;
   const check = cfg.check?.command;
-  const sha = setupConfigSha256(command, check);
+  // The whole specification, hashed once — see `expectedConfigSha`. `spec` is
+  // the box's, because the box's copy is the one that runs.
+  const sha = setupFingerprint(spec);
 
   const state = readSetupState(slug, target.dir);
   if (!state.ok) die(state.why);
@@ -3446,7 +4008,7 @@ function cmdSetup(opts: {
     slug,
     command,
     check,
-    sha,
+    spec,
     attach: opts.attach,
     transport: opts.transport,
     statusHint: `gjd-remote setup --status${opts.repo ? ` --repo ${slug}` : ""}   # how did it go?`,
@@ -3532,13 +4094,23 @@ function runSetup(o: {
   slug: string;
   command: string;
   check: string | undefined;
-  sha: string;
+  /**
+   * The BOX's specification — the copy that will run.
+   *
+   * The specification rather than a hash, because two things have to come out
+   * of it and they must come out of the same one: the `configSha256` the status
+   * file records, and the file facts the job re-derives under the lock before
+   * it runs anything. Handed them separately, a caller could pass a fingerprint
+   * of one config and the files of another, and nothing would ever say so.
+   */
+  spec: SetupSpec;
   attach: boolean;
   transport?: string | undefined;
   /** The line printed under a started-but-unwatched job: how to ask later. */
   statusHint: string;
 }): SetupRun {
   const attempt = newSetupAttempt();
+  const sha = setupFingerprint(o.spec);
   const paths = setupPaths({ work: REMOTE_WORK, slug: o.slug, attempt });
   const name = setupSessionName(o.slug, attempt);
   // The same proof `new-claude` takes before it starts a session: `cd`, not
@@ -3552,7 +4124,7 @@ function runSetup(o: {
     attempt,
     command: o.command,
     ...(o.check === undefined ? {} : { check: o.check }),
-    configSha256: o.sha,
+    configSha256: sha,
     home: `/home/${USER}`,
     user: USER,
     statusPath: paths.statusPath,
@@ -3561,6 +4133,14 @@ function runSetup(o: {
     logPath: paths.logPath,
     setupDir: paths.setupDir,
     locksDir: paths.locksDir,
+    // THE FILES AS THIS LAPTOP SAW THEM, re-derived by the job inside the lock
+    // — GPT Sol's Stage 3 finding 2. Between the config read above and the job
+    // starting, the checkout is a directory anything on the box can write to: a
+    // `git pull` in another pane rewrites `.gjd-remote/setup`, and the job runs
+    // bytes nobody agreed to under a fingerprint naming the ones they did.
+    // Omitting this emits no check at all, silently, which is why it is passed
+    // here rather than defaulted there.
+    expectFiles: { scriptSha256: o.spec.scriptSha256, packageSetup: o.spec.packageSetup },
   });
 
   const jobPath = `${REMOTE_WORK}/jobs/setup-${setupSlugFile(o.slug)}-${attempt}.sh`;
@@ -3582,7 +4162,7 @@ function runSetup(o: {
   // returns when the user detaches or closes it — which is why there is
   // anything to do afterwards at all.
   attachAndReturn(name, o.transport);
-  const seen = reportAfterAttach({ slug: o.slug, name, attempt, sha: o.sha, dir, statusPath: paths.statusPath });
+  const seen = reportAfterAttach({ slug: o.slug, name, attempt, sha, dir, statusPath: paths.statusPath });
   return seen === null ? { kind: "detached", name, attempt } : { kind: "verdict", name, attempt, ...seen };
 }
 
@@ -3872,7 +4452,7 @@ function doctorSetupStatus(id: Identity, dir: string, d: Scoreboard): void {
       }
     }
   }
-  const sha = setupConfigSha256(box.config.setup.command, box.config.check?.command);
+  const sha = setupFingerprint(box.spec);
   const state = readSetupState(id.slug, dir);
   if (!state.ok) {
     d.check("setup status", false, state.why.split("\n")[0] ?? state.why);
@@ -4441,8 +5021,18 @@ ${bold("THE BOX")}
           --force           run it again even though it already succeeded
           --no-attach       start it and stay here
   push-env                send this repo's .env.local to its checkout on the box
+                          Spideryarn's keys come off a list in the code; every
+                          other repo gets a checklist you tick once and this
+                          remembers. See below.
       --file PATH           a different .env.local — the basename must be exactly that
       --dir DIR             a box path, which must be this repo's checkout
+          --propose         ask the model again, even when nothing is new
+          --all             skip the checklist: every key that is not hard-guarded
+          --none            skip it the other way: no keys at all. Only useful with
+                            --save, which then records "nothing approved"
+          --save            with --none, write the empty policy. An ordinary push
+                            saves what it sent without being asked
+          --yes             skip the final confirmation. --all on its own still asks
   ssh [command]           a throwaway connection — no tmux, dies with the terminal
                           with a command, runs it and prints what it said
                           ${dim("gjd-remote ssh 'free -g; uptime'")}
@@ -4450,13 +5040,36 @@ ${bold("THE BOX")}
   forget-key              after a rebuild: accept the machine's new host key
 
 ${bold("WHAT push-env WILL AND WILL NOT SEND")}
-  It BUILDS the file on the box from an allowlist of key names — it does not copy
-  yours across. Anything not on the list is skipped and named in the output, so a
-  new key stays on the laptop until somebody puts it on the list on purpose.
-  ${dim("HETZNER_CLOUD_API_TOKEN")} (can delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the
-  production Supabase project) are deliberately off it. The list, and the reasons,
-  are at the top of ${dim("scripts/gjd-remote-env.ts")}.
-  It reports which KEYS changed. Never a value, and never a hash of one.
+  Whichever repo you are in, it ${bold("BUILDS")} the file on the box from a list of key
+  names — it never copies yours across. Anything not on that list is skipped and
+  named in the output. It reports which KEYS changed, never a value and never a
+  hash of one, and the file it writes is read back and compared before it says so.
+  ${bold("Where the list comes from depends on the repo, and there are two answers.")}
+  ${bold("Spideryarn:")} a reviewed allowlist in ${dim("scripts/gjd-remote-env.ts")}, with the reason for
+  each name beside it. No prompt, no model, no remembered state — the list is the
+  decision, and a key nobody has added to it stays on the laptop.
+  ${bold("Every other repo:")} a checklist. The key NAMES are read out of that repo's
+  .env.local — never the values, which are not read into anything that is printed,
+  logged or sent — and a cheap model is asked to sort the names into local-only,
+  provider key, production secret, infrastructure-destroying, or unknown. Its
+  answer is the ${bold("starting state")} of the checklist, with its reason on each row;
+  you tick and untick, and what you send is written to
+  ${dim("~/.config/gjd-remote/repos/<owner>--<name>.toml")} so the next push starts from
+  what you approved rather than from a fresh guess. The model is asked when there
+  is no saved policy or the file has a key that has never been sent — otherwise it
+  is skipped and says so. ${dim("--propose")} asks anyway. ${dim("--all")} and ${dim("--none")} skip the
+  checklist; there is still a final "send these N keys?" unless you pass ${dim("--yes")}.
+  Off a terminal, with none of those flags, it refuses rather than guessing.
+  ${bold("That model call is Spideryarn's money, wherever you ran it from")}: the key, and the
+  ledger the spend is written to, come from THIS repo's own configuration — the
+  tool's location, never the cwd — so a proposal for hellozenno shows up in
+  ${dim("npm run cost")} here, under the ${dim("env-proposal")} job.
+  ${bold("TWO GUARDS YOU CANNOT TICK PAST")}, on either path. ${dim("HETZNER_CLOUD_API_TOKEN")} (can
+  delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the production Supabase
+  project) are shown greyed out and can never be selected. And any value that is a
+  database URL not pointing at 127.0.0.1 is refused ${bold("whatever it is called")} — by
+  its value, so a production database under a name nothing here has heard of is
+  caught too. Both are re-applied after you choose, not merely drawn that way.
 
 ${bold("SETTING A REPO UP")}
   ${dim("gjd-remote setup")} runs one command — the repo's own — inside its checkout ON THE
@@ -4471,9 +5084,11 @@ ${bold("SETTING A REPO UP")}
   watch; detaching leaves it running, and ${dim("gjd-remote setup --status")} says how it went.
   ${bold("Readiness is the status file, never the checkout's presence")} — a failed setup
   leaves a perfectly ordinary-looking directory behind. The file records which
-  attempt wrote it and a hash of the two commands, so a run whose stream was cut
-  cannot read as this run's success, and a repo whose ${dim("setup =")} line changed since
-  is ${dim("config-changed")} rather than ready. It lives at
+  attempt wrote it and a hash of ${bold("everything that would run")} — the commands, the
+  ${dim(SETUP_SCRIPT)} contents, the package.json setup script — so a run whose stream
+  was cut cannot read as this run's success, and a repo whose setup changed since,
+  ${bold("in the file behind the command as much as in the command")}, is
+  ${dim("config-changed")} rather than ready. It lives at
   ${dim(`${REMOTE_WORK}/setup/<owner>--<name>.json`)}, and ${dim("doctor")} reads it too.
 
 ${bold("HOW clone AUTHENTICATES")}
@@ -4508,8 +5123,13 @@ ${bold("WHERE A SESSION STARTS")}
   a verdict. ${dim("gjd-remote clone")} is still the clone on its own, and runs nothing.
   For a checkout that IS there, the setup status is printed when it is not
   ${dim("success")} — a yellow line, and the session starts anyway, because ${dim("~/code/spideryarn2")}
-  was set up by hand years before this existed. The one refusal is a setup that
-  is running right now, holding the lock.
+  was set up by hand years before this existed. The refusals are a status file
+  nobody can read, a box with no ${dim("flock")}, a status about some other tree, and a
+  setup that is running right now, holding the lock.
+  ${bold("The session itself is created on the box under that setup lock")}, against the
+  same status file the decision was made on: so it cannot start in a tree a
+  setup took over while the question was on screen. A ${dim("--dir")} is the exception,
+  as it is everywhere — an arbitrary path is not a repo and has no status.
 
 ${bold("STARTING LATER")}
   ${dim("--wait 2h")} makes the session NOW and starts Claude in two hours. The units are
@@ -4839,9 +5459,30 @@ async function main(): Promise<void> {
     case "push-env": {
       const { values } = parseArgs({
         args: rest,
-        options: { file: { type: "string" }, repo: { type: "string" }, dir: { type: "string", short: "d" } },
+        options: {
+          file: { type: "string" },
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          propose: { type: "boolean", default: false },
+          all: { type: "boolean", default: false },
+          none: { type: "boolean", default: false },
+          save: { type: "boolean", default: false },
+          yes: { type: "boolean", default: false },
+        },
       });
-      return cmdPushEnv({ file: values.file, repo: values.repo, dir: values.dir });
+      // A contradiction rather than a preference, like `setup --status --force`:
+      // silently letting one win is how somebody thinks they sent everything.
+      if (values.all && values.none) die("--all and --none are opposites; pick one.");
+      return cmdPushEnv({
+        file: values.file,
+        repo: values.repo,
+        dir: values.dir,
+        propose: values.propose,
+        all: values.all,
+        none: values.none,
+        save: values.save,
+        yes: values.yes,
+      });
     }
 
     case "clone": {
@@ -4969,8 +5610,11 @@ async function main(): Promise<void> {
  * command that asks something:
  *
  *  - `Cancelled` — Ctrl-C at a question. 130 is the shell's convention for
- *    "killed by SIGINT", and the message says the thing worth knowing, which is
- *    that the answer was never given so nothing happened.
+ *    "killed by SIGINT", and THE THROWER'S OWN MESSAGE is printed, because
+ *    "nothing changed" is only true at the first question. `cloneThenSetUp`
+ *    re-throws with the clone it left behind named — GPT Sol's Stage 3 finding
+ *    4, where a Ctrl-C at the second question said nothing had happened while a
+ *    fresh checkout sat on the box.
  *  - `NotInteractive` — there was no terminal to ask on. Its message is already
  *    written in the tool's voice and names what to run instead, so it goes
  *    straight to `die` and exit 1.
@@ -4980,7 +5624,7 @@ async function main(): Promise<void> {
  */
 main().catch((err: unknown) => {
   if (err instanceof Cancelled) {
-    console.error(yellow("cancelled, nothing changed"));
+    console.error(yellow(err.message || CANCELLED_NOTHING_CHANGED));
     process.exit(130);
   }
   if (err instanceof NotInteractive) die(err.message);

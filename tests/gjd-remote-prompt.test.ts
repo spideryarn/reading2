@@ -370,6 +370,60 @@ macOnly("answering for real, in a pty", () => {
   }, 60_000);
 
   /**
+   * A ROW THAT CANNOT BE TICKED, which is what the two hard guards look like on
+   * screen: `push-env` shows the key and says why it is never sent, rather than
+   * leaving it off the list, because a key that is quietly absent is a key you
+   * go hunting for.
+   *
+   * Both halves are typed at for real, because they are different code paths in
+   * the library and only one of them is the dangerous one: the space bar refuses
+   * on an active disabled row, and `a` — "select all" — skips it. `a` is the one
+   * that matters, because it is what a reader in a hurry presses.
+   */
+  const GUARDED =
+    `checklistOrRefuse({ message: "Which keys?", io, items: [` +
+    `{ value: "ALPHA", label: "ALPHA", description: "local dev only", checked: false },` +
+    `{ value: "HETZNER_CLOUD_API_TOKEN", label: "HETZNER_CLOUD_API_TOKEN", ` +
+    `description: "never sent: this key can destroy the box", checked: false, disabled: true },` +
+    `{ value: "OMEGA", label: "OMEGA", checked: false }] })`;
+
+  it("'a' ticks every row except the disabled one", async () => {
+    const r = await inPty(GUARDED, "a\r");
+    expect(r, r.log).toMatchObject({ ok: ["ALPHA", "OMEGA"] });
+  }, 60_000);
+
+  it("draws the disabled row with its reason, rather than hiding it", async () => {
+    const r = await inPty(GUARDED, "a\r");
+    expect(r.log).toContain("HETZNER_CLOUD_API_TOKEN");
+    expect(r.log).toContain("never sent: this key can destroy the box");
+  }, 60_000);
+
+  /**
+   * Aimed at the disabled row on purpose. The space bar cannot reach it —
+   * arrowing skips a disabled row, so it never becomes the active one — but
+   * inquirer's number keys jump straight to the nth choice and toggle it, which
+   * is the one input that can name a row without walking to it. It must come
+   * back unticked, and nothing else may be ticked in its place.
+   */
+  it("cannot be toggled by the number key that names it", async () => {
+    const r = await inPty(GUARDED, "2\r");
+    expect(r, r.log).toMatchObject({ ok: [] });
+  }, 60_000);
+
+  /** A caller that asks for a disabled row to start ticked is refused it —
+   *  otherwise the prompt returns a key it has just said is never sent. */
+  it("never returns a disabled row, even one the caller pre-ticked", async () => {
+    const r = await inPty(
+      `checklistOrRefuse({ message: "Which keys?", io, items: [` +
+        `{ value: "ALPHA", label: "ALPHA", checked: true },` +
+        `{ value: "DATABASE_URL_PROD", label: "DATABASE_URL_PROD", description: "never sent: not a loopback address", ` +
+        `checked: true, disabled: true }] })`,
+      "\r",
+    );
+    expect(r, r.log).toMatchObject({ ok: ["ALPHA"] });
+  }, 60_000);
+
+  /**
    * The checklist's own Ctrl-C, which the confirm test above did not cover:
    * they catch separately, so deleting the conversion from one of them leaves
    * the other's test green. An unconverted `ExitPromptError` reaches the CLI as

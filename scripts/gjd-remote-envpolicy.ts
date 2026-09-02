@@ -5,7 +5,7 @@
  * Spideryarn's `.env.local` is governed by the hand-written `ALLOWLIST` in
  * [gjd-remote-env.ts](gjd-remote-env.ts), and that stays. hellozenno has no such
  * list and is not going to get one, so this file is the other half: read the
- * repo's `.env.local`, take the **key names only**, ask a cheap model to sort
+ * repo's `.env.local`, take the **key names only**, ask a model to sort
  * them, show the reader a checklist, and remember what they ticked.
  *
  * > an LLM should look at .env.local environment variable names (but NOT
@@ -42,7 +42,7 @@
  * ## The paid call, and what the CLI must wrap it in
  *
  * `proposeEnvKeys` reaches OpenRouter through `openRouterJson`, the gateway
- * seam, as `AI_JOB_ROUTE`'s `env-proposal` job on `QUICK_MODEL_OPENROUTER`.
+ * seam, as `AI_JOB_ROUTE`'s `env-proposal` job on `PROPOSAL_MODEL`.
  * **This module deliberately opens no ledger.** The caller must:
  *
  * ```ts
@@ -86,7 +86,7 @@ import path from "node:path";
 import { parse as parseToml, TomlError } from "smol-toml";
 import { openRouterJson } from "../src/ai-call.js";
 import type { AiRequestBody, ChatJob, JsonCall } from "../src/ai-call.js";
-import { QUICK_MODEL_OPENROUTER } from "../src/models.js";
+import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { scanEnv } from "./gjd-remote-env.js";
 import { isRepoValue, REPO_UNKNOWN } from "./gjd-remote-repo.js";
 
@@ -163,6 +163,39 @@ export type Proposal =
 /** The job name, once, so the routing table and the caller cannot drift. */
 export const PROPOSAL_JOB: ChatJob = "env-proposal";
 
+/**
+ * **The capable model, and the reason is coverage rather than safety.**
+ *
+ * This started on `QUICK_MODEL_OPENROUTER` — a cheap classification, run once
+ * per repo. The Stage 4 spike measured both on the two real files
+ * (docs/research/260902b-env-key-proposal-spike.md) and moved it:
+ *
+ * - **Safety was never the difference.** Across six runs on both models there
+ *   was not one false positive — no key that ground truth calls a production or
+ *   infrastructure secret ever landed in a pre-tickable class. That is what
+ *   pre-ticking from the proposal needs in order to be safe, and both models
+ *   have it.
+ * - **Coverage was.** The quick model left a quarter of each file `unknown`,
+ *   which is barely a proposal — the reader decides eleven rows on hellozenno
+ *   rather than four. Worse, it twice failed to name a token that can delete
+ *   the box; the capable one named all four such keys on Spideryarn, including
+ *   two GitHub PATs no ground-truth document mentions, off `PAT` in the name.
+ * - **The cost is two cents**, against a tenth of one. Eighteen times more, for
+ *   a command run once per repo and a handful of times a year. That is a saving
+ *   nobody asked for.
+ *
+ * The unknowns that remain are not noise to tune away. They cluster on
+ * connection-string components — `DATABASE_URL`, `SUPABASE_URL` — where the
+ * honest answer from a name alone is "this could be production", and only the
+ * value settles it. That is why `MUST_BE_LOCAL` and the `sk_live_` prefix check
+ * in gjd-remote-env.ts still exist, and why the proposal does not replace them.
+ *
+ * **Its stability is unmeasured** — the spike had budget for one capable run
+ * per repo. Expect a class to change between runs, and do not read that as a
+ * signal about the key.
+ */
+export const PROPOSAL_MODEL = CAPABLE_MODEL_OPENROUTER;
+
 /** How long a reason may be once it reaches a terminal row. Long enough for a
  *  sentence, short enough that it cannot be a payload. */
 export const MAX_REASON_CHARS = 120;
@@ -207,11 +240,34 @@ const SYSTEM_PROMPT = [
  * is deliberate and it is the cheapest half of the leak proof: the test asserts
  * the serialised body, but the type already refuses.
  *
- * `temperature: 0` because this is a lookup, not a piece of writing, and a
- * classifier that answers differently on a re-run makes the saved policy look
- * like it drifted. `response_format` because the reply is parsed, and the
- * routing table's `require_parameters` is what stops an upstream dropping it
- * silently (src/ai-call.ts).
+ * `response_format` because the reply is parsed, and the routing table's
+ * `require_parameters` is what stops an upstream dropping it silently
+ * (src/ai-call.ts).
+ *
+ * ## There is no `temperature`, and that is the whole of a bug worth keeping
+ *
+ * The first version sent `temperature: 0`, reasoning that a classifier which
+ * answers differently on a re-run makes the saved policy look like it drifted.
+ * **Every call it made was a 404.** `require_parameters: true` means "only
+ * upstreams that support the parameters actually sent", and no upstream serving
+ * this model accepts a temperature, so OpenRouter filtered every endpoint away
+ * and answered `No endpoints found that can handle the requested parameters`
+ * with `failed_routing_step: "Filter by Parameters"`. Found by the Stage 4
+ * spike, docs/research/260902b-env-key-proposal-spike.md.
+ *
+ * Two things make it worth a paragraph rather than a deletion. It **failed
+ * silently**: `proposeEnvKeys` turns a `ProviderRefused` into "the model could
+ * not be reached", so the reader saw a blank checklist that looks exactly like
+ * a provider having a bad afternoon, and each attempt still cost a ledger row.
+ * And the determinism it was paying for **was never bought** — the same spike
+ * measured two runs on identical names and 5 of 18 rows changed class, because
+ * every other job in the app sends a temperature to an upstream that quietly
+ * drops it, which is why nothing else here has ever tripped on this.
+ *
+ * So: `require_parameters` turns an unsupported parameter from a silent no-op
+ * into a hard 404. Nothing may be added to this body without checking that the
+ * chosen model's upstreams accept it. `tests/gjd-remote-envpolicy.test.ts` pins
+ * the key set for exactly that reason.
  */
 export function buildProposalRequest(names: readonly string[]): AiRequestBody {
   if (names.length === 0) {
@@ -224,13 +280,12 @@ export function buildProposalRequest(names: readonly string[]): AiRequestBody {
     );
   }
   return {
-    model: QUICK_MODEL_OPENROUTER,
+    model: PROPOSAL_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: names.join("\n") },
     ],
     response_format: { type: "json_object" },
-    temperature: 0,
   };
 }
 
@@ -284,6 +339,18 @@ export function readProposalContent(
  * "Exact subset", not "equal": a model that omits a name is not an error, it is
  * a name with no proposal, which `planChecklist` shows as such. Inventing is
  * the failure; forgetting is a gap, and a gap is visible.
+ *
+ * **That includes `{"keys": []}` for a file full of names**, which GPT Sol's
+ * Stage 3 finding 8 asked about: it is accepted, and it means every row arrives
+ * with "no proposal for this key" and **unticked**. Taken deliberately over the
+ * stricter reading (one decision per name, or no proposal at all), because the
+ * two answers fail in opposite directions and only one of them is safe. Omission
+ * costs the reader a starting state they have to fill in themselves — visible on
+ * every row, and the checklist still works. Requiring completeness would mean a
+ * model that skipped one name of forty threw the other thirty-nine away, and the
+ * pressure would then be to accept partial answers. Under `preTick: "proposal"`
+ * nothing unproposed is ever ticked, so a gap can only ever send FEWER keys than
+ * the reader intended, never more.
  *
  * `reason` is stripped of control characters and truncated before it goes
  * anywhere near a terminal row — a reason is printed inside a checkbox list,
@@ -413,7 +480,25 @@ export type ChecklistItem = {
  * `.env.local`, runs `isLocalDatabaseUrl` (src/db/ssl.ts) over the value itself,
  * and passes back a verdict. This module never sees the string it judged.
  */
-export type ChecklistInput = {
+/**
+ * **The two hard guards themselves**, as data, so the same pair can be handed to
+ * the function that draws the rows and to the function that checks the answer.
+ *
+ * Split out for GPT Sol's Stage 3 finding 5. `applyGuards` used to re-read
+ * `item.disabled`, which is not a re-application of anything: it is the first
+ * application's *output*, and a bug that produced a wrong `disabled` would be
+ * faithfully honoured by the check meant to catch it. Now both callers run the
+ * predicates, and only agreement between two independent runs lets a name
+ * through.
+ */
+export type Guards = {
+  /** Names that may never be sent, whatever anyone ticks. `FORBIDDEN_NAMES`. */
+  forbiddenNames: ReadonlySet<string>;
+  /** The value guard's verdict for one name. See `ChecklistInput`. */
+  valueGuard: (name: string) => "ok" | "not-local";
+};
+
+export type ChecklistInput = Guards & {
   names: readonly string[];
   /** The model's answer, when there was one. Absent ⇒ nothing is pre-ticked
    *  under `"proposal"`, which is the malformed-reply path. */
@@ -422,10 +507,6 @@ export type ChecklistInput = {
   approved: Set<string> | undefined;
   /** Which answer to Greg's open question we are running under. */
   preTick: "proposal" | "approved-only";
-  /** Names that may never be sent, whatever anyone ticks. `FORBIDDEN_NAMES`. */
-  forbiddenNames: ReadonlySet<string>;
-  /** The value guard's verdict for one name. See above. */
-  valueGuard: (name: string) => "ok" | "not-local";
 };
 
 const FORBIDDEN_WHY =
@@ -478,12 +559,23 @@ export type GuardOutcome = {
  * **Re-apply the guards after the reader has chosen** — Sol's review, and the
  * reason it is a separate function rather than a comment.
  *
- * A checkbox library's `disabled` is presentation. `checklistOrRefuse` in
- * scripts/gjd-remote-prompt.ts does not even pass one through today, so the
- * hard-guarded rows are tickable in the terminal right now; that is fine
- * precisely because nothing between here and the wire trusts the tick. A name
- * selected that is not on the checklist at all is refused too, which is the
- * "select all" path and the `--yes` path both landing somewhere safe.
+ * A checkbox library's `disabled` is presentation. The prompt wrapper does pass
+ * one through now (scripts/gjd-remote-prompt.ts), and the library honours it —
+ * but `--all` never goes through the library at all, and a row's `disabled` is
+ * the *output* of `planChecklist`, not an independent fact. So this **runs the
+ * predicates itself** rather than reading `item.disabled`: two independent runs
+ * of the same rule, and a name is sent only if both let it through. That is GPT
+ * Sol's Stage 3 finding 5, and it is why `guards` is a parameter — the version
+ * that trusted `item.disabled` was checking its own homework.
+ *
+ * **A duplicated name is an error, not a resolution.** Two rows called
+ * `DATABASE_URL`, one disabled and one not, used to put the name in `refused`
+ * AND in `send` — the caller then printed a refusal and sent the key. There is
+ * no right answer to pick between them: a checklist with two rows for one key is
+ * a bug in whatever built it, and the safe reading of a bug is to stop.
+ *
+ * A name selected that is not on the checklist at all is refused, which is where
+ * a stale `--all` list or a hand-typed name lands.
  *
  * Returns `send` in checklist order, not in the order the reader clicked, so the
  * confirmation line and the written file are stable between runs.
@@ -491,24 +583,41 @@ export type GuardOutcome = {
 export function applyGuards(
   selected: readonly string[],
   items: readonly ChecklistItem[],
+  guards: Guards,
 ): GuardOutcome {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.name)) {
+      throw new EnvPolicyError(
+        `the checklist has two rows for '${item.name}', so there is no single answer to ` +
+          `"is it allowed?" — nothing has been sent.`,
+      );
+    }
+    seen.add(item.name);
+  }
+
   const wanted = new Set(selected);
-  const known = new Map(items.map((i) => [i.name, i] as const));
   const send: string[] = [];
   const refused: { name: string; why: string }[] = [];
   for (const name of wanted) {
-    const item = known.get(name);
-    if (item === undefined) {
-      refused.push({ name, why: "not on the checklist for this repo" });
-      continue;
-    }
-    if (item.disabled) refused.push({ name, why: item.description });
+    if (!seen.has(name)) refused.push({ name, why: "not on the checklist for this repo" });
   }
   for (const item of items) {
-    if (wanted.has(item.name) && !item.disabled) send.push(item.name);
+    if (!wanted.has(item.name)) continue;
+    const why = blockedBecause(item.name, guards);
+    if (why === undefined) send.push(item.name);
+    else refused.push({ name: item.name, why });
   }
   refused.sort((a, b) => a.name.localeCompare(b.name));
   return { send, refused };
+}
+
+/** The guards, run for real. `undefined` means "nothing forbids this name",
+ *  which is the only thing that gets a key onto the box. */
+function blockedBecause(name: string, guards: Guards): string | undefined {
+  if (guards.forbiddenNames.has(name)) return FORBIDDEN_WHY;
+  if (guards.valueGuard(name) === "not-local") return NOT_LOCAL_WHY;
+  return undefined;
 }
 
 /** Every row a "select all" may tick — the eligible ones, and no others. The

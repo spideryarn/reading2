@@ -122,6 +122,10 @@ Decisions made by the orchestrator, named here so Greg inherits nothing by accid
 - Research written for this plan (Sonnet, 2026-09-02):
   [260902a-tui-prompt-library-for-gjd-remote.md](../research/260902a-tui-prompt-library-for-gjd-remote.md)
   and [260902h-per-repo-config-conventions-for-remote-dev.md](../research/260902h-per-repo-config-conventions-for-remote-dev.md).
+- [260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md) — the Stage 4
+  spike: the classifier run on both repos' real key names, scored against the allowlist. Zero false
+  positives on either model, so pre-ticking is safe; the case for the capable model, against web
+  search, and the `temperature` bug that stops the call reaching any upstream at all.
 - hellozenno: `docs/plans/260831a_remote_box_gjd_remote_setup.md` in that repo.
 - [engineering-manager.md](../reusable/engineering-manager.md), [silent-success.md](../reusable/silent-success.md).
 
@@ -348,25 +352,36 @@ matters.
   `foundGate` into `gjd-remote-setup.ts` to test it would drag `LockState` with it and touch a
   module under Sol review; it is named here as the thing to do when that review lands.
 - [x] Live: `gregdetre/gjdutils` as the throwaway, both from a laptop checkout of it and via
-  `--repo` from `/tmp` — see the Log. **Not proved end to end**: an auto-clone whose *cloned commit*
-  carries a config, because the config only exists uncommitted on this laptop and gjdutils cannot be
-  pushed to. That leaves the "ask again, then run it" arm exercised only by `gjd-remote setup`,
-  which is the same `runSetup` function.
-- [ ] Sol review.
+  `--repo` from `/tmp` — see the Log. The auto-clone's **second question** was proved end to end on
+  2026-09-02 by writing the config into the fresh checkout from the box while the clone was landing,
+  which is the only way to reach it on a repo whose own default branch has no setup command and that
+  we may not push to.
+- [x] Sol review — his Stage 3 findings 1–4 are the table below.
+
+### Stage 3 review — GPT Sol's findings 1–4, folded in
+
+| Finding | What changed | What reddens it |
+|---|---|---|
+| 1 — session admission was not synchronised with setup | `foundGateDecision` refuses on a held lock **whatever the verdict**, on `noflock`, and on a status file that is there and does not parse; and the session itself is created by `sessionAdmissionScript` ON THE BOX, holding the setup lock and re-reading the status under it, so the decision is still true when it is acted on | `foundGateDecision`'s matrix; `sessionAdmissionScript, run for real` — ten tests, including "REFUSES, and runs nothing, while a setup holds the lock" and "when the status changed underneath"; live, below |
+| 2 — the fingerprint omitted execution inputs | `setupSpec` carries the script's sha256 and the `package.json` body **whenever the files exist**, whatever `source` says, and `setupFingerprint` (`v: 2`) is the one hash used by the prompt, the durable status, `--status`, `doctor` and the session gate. `setupJobScript` re-derives both file facts inside the lock and refuses if they moved | `setupJobScript`'s `expectFiles` tests; live, below — the same command `./.gjd-remote/setup` over a changed script now reads `config-changed` |
+| 3 — inode binding failed open | A terminal verdict with no `checkoutInode`, asked about a checkout that has one, is `wrong-checkout`; `ensureRemoteCheckout` treats a `stale-stuck` archive as a refusal rather than a clone that may later read as ready | `wrongCheckout`'s "unbound" case; the `stale-stuck` arm of `parseCloneTransaction` |
+| 4 — the Ctrl-C message was false after cloning | `cloneThenSetUp` catches `Cancelled` around everything that happens after the clone and re-throws one naming the clone that remains; `main()` prints the thrower's message rather than a constant | live, below: exit 130 and `cancelled: the clone at … remains` |
 
 ### Stage 4 — `push-env` for a repo without a policy
 
-Blocked on the pre-ticking answer above; everything else in it is settled.
+The pre-ticking answer is above, and everything else in it was settled before it started.
 
-- [ ] Names-only extraction reusing the existing env parser; the one all-sinks sentinel test.
-- [ ] `env-proposal` `AiJob` across the exhaustive maps; `withLedger("cli")`; async `main()` seam;
+- [x] Names-only extraction reusing the existing env parser; the one all-sinks sentinel test.
+- [x] `env-proposal` `AiJob` across the exhaustive maps; `withLedger("cli")`; async `main()` seam;
   one-attempt-one-row test including malformed response and provider failure. Model output
   validated as an exact subset of the names sent; descriptions stripped of control characters.
-- [ ] Checklist from the wrapper; the two hard guards shown disabled *and* re-applied after
+- [x] Checklist from the wrapper; the two hard guards shown disabled *and* re-applied after
   selection; select-all selects only eligible keys; final "send these N keys?".
-- [ ] Policy saved under `~/.config/gjd-remote/repos/` — `0700` dir, non-symlink temp, rename,
+- [x] Policy saved under `~/.config/gjd-remote/repos/` — `0700` dir, non-symlink temp, rename,
   `chmod 0600`, readback. Red tests: existing `0644` file; a symlink at the path.
-- [ ] Spideryarn keeps its typed allowlist. Docs + help. Sol review.
+- [x] Spideryarn keeps its typed allowlist. Docs + help.
+- [x] GPT Sol's Stage 3 findings 5, 6 and 8 (the env-policy half) — see the Log.
+- [ ] Sol review of Stage 4 itself.
 
 ### Stage 5 — hellozenno end to end, and provisioning
 
@@ -419,6 +434,135 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 
 ## Log
 
+- 2026-09-02 — **GPT Sol's Stage 3 findings 1–4 are wired into the CLI, and all four were proved on
+  the box** against `gregdetre/gjdutils`, cloned and removed again.
+  - **The fingerprint is the whole specification** (finding 2). Every producer in
+    [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) now calls `setupFingerprint(spec)` —
+    the prompt, `runSetup`, `--status`, `doctor` — and `setupConfigSha256` has no caller left there.
+    The status file for a `setup = "echo ok"` run recorded
+    `173d52316dce01fe93547750f8e13fe447911eda242d80238dee6ed331f75567`, which is the `v: 2`
+    fingerprint of that spec and not the `v: 1` hash of its commands (`1d7cc97f4b9c…`) — 64 hex
+    characters, of which the reports print the first twelve. **The proof that matters**: with
+    `setup = "./.gjd-remote/setup"` and a `success` recorded, rewriting the script body alone —
+    the command string is identical to the byte — gives
+    `✗ the last setup was for a different .gjd-remote config (dc1c03ad9d89…, now dc0d9086df4b…)`.
+    The old hash could not see that at all.
+  - **`runSetup` passes `expectFiles`**, so the job re-derives both file facts under the lock. Read
+    off the generated job on the box: `# THE FILES, RE-READ UNDER THE LOCK`, `want_sha='-'`,
+    `want_pkg='no'`, and the refusal that writes a terminal `config-changed` status. A job built
+    without it emits none of those lines and says nothing about it.
+  - **A session is admitted under the setup lock** (finding 1). With a `sleep 45` setup running,
+    `new-shell --repo gregdetre/gjdutils` refused — *"a setup for this repo holds the box-side lock
+    — one is running RIGHT NOW … whatever the last verdict says (in-progress)"* — and the tmux
+    count was unchanged. Once it finished, the same command created the session. The gate is only
+    half of it: the `tmux new-session` is now run by `sessionAdmissionScript` on the box, holding
+    the same lock and comparing the status file byte for byte with what the laptop decided on, so
+    the seconds between the two are no longer a window. `held`, `changed` and a vanished status are
+    ten tests in [`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) that run the
+    real script.
+  - **Ctrl-C after the clone says what remains** (finding 4). Driven on a real pty:
+    `y` at the clone question, Ctrl-C at the second, and the tool printed `cancelled: the clone at
+    /home/greg/code/gjdutils remains; setup and the session were not started` and exited **130**.
+    It used to print "cancelled, nothing changed" over a fresh checkout on the box.
+    - **Reaching that question at all took a race**, and it is worth writing down: gjdutils' own
+      default branch has no setup command, so the flow dies with "cloned, but no setup known"
+      before the second prompt. A loop on the box wrote a `config.toml` into the checkout the
+      instant it appeared — which is exactly the window `expectFiles` exists to close, used here to
+      open a prompt. The first attempt failed because the loop had already timed out; a poller that
+      is not running looks precisely like a race you lost.
+  - **The phase has two arms, not three.** No prompt follows the start of the setup job, so
+    "cancelled while setup was running" is a sentence nothing can currently produce — it would be a
+    clause no fixture could redden, and it is left out until a prompt exists after `runSetup`.
+  - `setupReadScript`'s **second copy in the CLI was deleted**; the tested one in
+    [`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts) is the only one now. The copy
+    that lived in the CLI used GNU-only `base64 -w0`, so it could never have been run by the test
+    that covers the other.
+
+- 2026-09-02 — **Stage 4 is wired up, and `push-env` was run against the box from a repo it had
+  never heard of.** `gregdetre/gjdutils` as the throwaway again, with a `.env.local` of eight
+  obviously-fake values, driven on a real pty by `expect`.
+  - **First run, no policy**: `asking openai/gpt-5.6-luna about 8 key NAMES (no saved policy for
+    this repo yet)`, `Spent: $0.0078 over 1 model call(s)`, then a checklist with the model's
+    reason on every row — `not sent before · shared-provider-key: Paid API key for OpenAI model
+    access.` **`DATABASE_URL_PROD` and `HETZNER_CLOUD_API_TOKEN` were drawn greyed out with their
+    reasons and `a` did not select them**: six of eight went, and the two guards refused nothing
+    by name because they were never selectable in the first place, which is the stronger outcome.
+    Then `✓ 6 keys, 0600 greg, read back and verified`, and the policy written `0600` inside a
+    `0700` directory.
+  - **The second run asked the model again, and that was a bug this found in its own new code.**
+    A hard-guarded key can never be approved, so it is never in the saved policy, so
+    "names not in `approved`" called those two new **on every run for the life of the repo** —
+    a paid call per push, forever, for two rows that arrive greyed out. Fixed by excluding the
+    blocked names from that comparison, and the run after it reads `no new keys since the saved
+    policy — skipping the model` with every row pre-ticked from the file. It would have been
+    invisible in a unit test of the module: the module never sees the blocked set and the CLI's
+    decision is the thing that was wrong.
+  - **A key the model now calls a secret but the policy already approved stays ticked** —
+    `FLASK_SECRET_KEY` came back `production-or-signing-secret` on the second run and was ticked
+    anyway, with the model's words on the row. Greg's ticks are the decision; the model is advice.
+  - **Off a terminal**: `✗ 'which keys should go on the box?' needs a choice, and there is no
+    terminal to ask on.` naming `--all` and `--none --save`. `push-env --all --yes </dev/null`
+    wrote without a prompt (`--all: 6 of 8 rows are selectable`); `--all` alone still asks.
+    `--none` alone changes nothing and says `--save` would record it; `--none --save` wrote
+    `approved = []`. `--all --none` is refused as a contradiction, and the Spideryarn path refuses
+    all five flags by name rather than ignoring them.
+  - `npm run cost` lists the job: `env-proposal  $0.0672  13 call(s)`.
+  - **`buildEnvPayload` takes its allowance as a required argument now**, not a defaulted one:
+    `{ names, source }`, where `source` is the line the banner on the box uses to say which list
+    the file was built from. Defaulting it to Spideryarn's would mean a forgotten argument pushed
+    another repo's file under this repo's policy, silently.
+  - **GPT Sol's Stage 3 findings 5, 6 and 8, folded in with the wiring.**
+    - **5 — `applyGuards` was checking its own homework.** It read `item.disabled`, which is
+      `planChecklist`'s *output*, so a bug that produced a wrong `disabled` would have been honoured
+      by the function meant to catch it. It takes the guards themselves now (`Guards`, the same pair
+      handed to `planChecklist`) and runs them, so a name is sent only when two independent runs
+      agree. And a **duplicated name is a typed throw**, not a resolution: two rows called
+      `DATABASE_URL`, one disabled and one not, used to put the name in `refused` AND in `send` —
+      the CLI printed a red cross for a key it was in the middle of sending. Both were watched going
+      red: rows handed in with `disabled: false` and an innocent description are still refused, and
+      the duplicate throws whether or not it was ticked.
+    - **6 — the real call now goes over a stubbed transport into a real ledger.** Everything else
+      stubs `ProposalCall`, so the only thing proved about the real one was that it was a function.
+      Now `withLedger("cli", …)` runs for real with only `fetch` and the ledger's *store* replaced,
+      asserting the route, `PROPOSAL_MODEL`, `require_parameters`, `response_format`, the **absence
+      of the `temperature` key**, and exactly one row per attempt — including when the model answers
+      prose and when the provider returns 402. Removing the `withLedger` wrapper turns three of them
+      red, which is Sol's finding 7 with a test behind it at last.
+      - **A bug in the test's own double, worth keeping.** The first `costStore` mock returned
+        `undefined` where the contract says `Promise<void>`. The collector chained onto it, threw
+        inside the meter's `finally`, and the call came back **"the model could not be reached"** —
+        a stubbed transport that never failed, reported as a provider failure, with the row written
+        anyway. A double of the wrong SHAPE breaks the thing it stands in for, and it fails as the
+        real failure it is imitating.
+    - **8 — `{"keys": []}` for a file full of names is accepted, deliberately.** It means every row
+      says "no proposal for this key" and arrives unticked. Taken over the stricter reading because
+      the two fail in opposite directions: an omission costs a starting state and is visible on the
+      row, where demanding one decision per name would throw thirty-nine good answers away over one
+      missing one. Under `preTick: "proposal"` a gap can only send FEWER keys than intended.
+  - **The log line named the wrong model for one afternoon.** It printed `QUICK_MODEL_OPENROUTER`
+    from the CLI's own import while the request body was built in `gjd-remote-envpolicy.ts` on
+    `PROPOSAL_MODEL` — the capable model, since the spike. The name is exported and printed from
+    there now, so the line cannot disagree with the request. Re-proved live: `asking
+    anthropic/claude-sonnet-5 about 8 key NAMES`, `Spent: $0.0085 over 1 model call(s)`.
+  - **The locality guard is one function used by both halves** — `localityVerdict(name, value)` —
+    because the checklist greys a row out with it and the payload refuses on it, and two spellings
+    of "local" is how a row gets ticked and then rejected after every question has been answered.
+    It gained the plan's **hard guard by value**: a value that parses as a postgres URL is subject
+    to `isLocalDatabaseUrl` whatever it is called, which is the only arm that can catch
+    hellozenno's `DATABASE_URL_PROD`, a name no list in this repo will ever have heard of.
+- 2026-09-02 — **Stage 4 spike: the proposal is safe enough to pre-tick from, and it currently
+  cannot run at all** — [260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md).
+  Six runs over both repos' real `.env.local` key names produced **zero false positives**: no key
+  ground truth calls a production or infrastructure secret was ever put in a pre-tickable class, on
+  either model. But `buildProposalRequest` sends `temperature: 0` while `AI_JOB_ROUTE` sends
+  `require_parameters: true`, and no upstream serving `openai/gpt-5.6-luna` accepts a temperature —
+  OpenRouter 404s with `"failed_routing_step":"Filter by Parameters"`, `proposeEnvKeys` turns that
+  into "the model could not be reached", and the reader gets a blank checklist that looks like a bad
+  afternoon. Drop the temperature. The quick model also leaves a quarter of each file `unknown` and
+  twice failed to name a token that can delete the box, where Sonnet left none unknown on spideryarn
+  and named all four forbidden keys; at $0.023 against $0.0013 for a command run once per repo, the
+  spike recommends `env-proposal` on `CAPABLE_MODEL_OPENROUTER`. Web search was checked per name and
+  is not worth building — it resolves two names, both of which the capable model already got right.
 - 2026-09-02 — **GPT Sol's Stage 2 findings 1–5, 7 (the CLI half), 9, 10 and 11 are built**, and
   most of them are now reddenable: [`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts)
   holds the decisions that used to be unreachable inside an entrypoint that calls `main()` on

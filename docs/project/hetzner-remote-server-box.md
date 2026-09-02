@@ -185,9 +185,25 @@ setting it up would run — need to know which repo. Outside a repo it runs the 
 ones it skipped. `--box-only` asks for that on purpose. `doctor --dir` takes a box path and verifies
 it the way `push-env` does — same origin, not a symlink, a HEAD that resolves — before checking it.
 
-`push-env` refuses any repo without an entry in the policy map at the top of `cmdPushEnv` — the
-allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) is a list of key *names*
-and it is Spideryarn's.
+**`push-env` takes one of two paths, and which one is decided by the slug.** Spideryarn's keys come
+off the reviewed allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — a list
+of key *names*, with the reason for each written beside it, and no prompt. Every other repo gets a
+checklist: the names are read out of that repo's `.env.local`, a cheap model sorts them (names only —
+a value never reaches a prompt, a log or a request body), its answer is the checklist's starting
+state, and what you send is remembered in `~/.config/gjd-remote/repos/`, so the next push starts from
+what you approved. Two guards cannot be ticked past on either path: the two names that can delete
+infrastructure, and any value that is a database URL not pointing at a loopback host — by value, so a
+production database under a name nothing here has heard of is caught too.
+[`scripts/gjd-remote-envpolicy.ts`](../../scripts/gjd-remote-envpolicy.ts) holds the whole of it, and
+[260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md) is what was
+learned from trying the model on real key names.
+
+**That model call is billed to Spideryarn wherever you ran it from.** The OpenRouter key and the
+ledger it is written to both come from *this* repo's configuration, resolved from the tool's own
+location rather than the cwd ([`src/env.ts`](../../src/env.ts), [`src/cli-ledger.ts`](../../src/cli-ledger.ts)) —
+so proposing keys for hellozenno spends Spideryarn's credit and shows up in `npm run cost` here,
+under the `env-proposal` job ([ai-gateway.md](ai-gateway.md)). That is what makes the tool work from
+a repo that has never heard of OpenRouter, and it is worth knowing before the invoice.
 
 **A repo the box has never had is offered a clone and a setup**, and only by `new-claude` and
 `new-shell` — one question, defaulting to No, naming the directory and the exact command; off a
@@ -200,9 +216,15 @@ the attempt you just watched**, so `--no-attach` starts the setup and stops.
 For a checkout that *is* there, the setup status is printed whenever it is not `success` — a yellow
 line, and the session starts anyway, because `~/code/spideryarn2` was set up by hand long before this
 tool existed and ten live sessions work in it. The plan's end state is to refuse anything but
-`success`, held back by that one case; the policy is `foundGate()` in
-[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts), so flipping it is one edit. The one hard
-refusal is a setup that is running right now and holding the lock.
+`success`, held back by that one case; the policy is `foundGateDecision()` in
+[`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts), so flipping it is one edit. The
+hard refusals are a status file nobody can read, a box with no `flock`, a status about some other
+tree, and a setup that is running right now and holding the lock.
+
+**A session in a repo checkout is created on the box under that same setup lock**, against the very
+bytes of the status file the decision was read from — so it cannot start in a tree a setup took over
+while the question was on screen. `--dir` is the exception it always is: an arbitrary path is not a
+repo and has no status to be admitted against.
 
 The plan is
 [../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
@@ -222,8 +244,9 @@ written down:
   unpushed or unpulled, which is most of the time while somebody is editing one.
 - **Readiness is the status file, never the checkout's presence.** A failed setup leaves a perfectly
   ordinary-looking directory behind. `~/gjd-remote/setup/<owner>--<name>.json` records which attempt
-  wrote it and a hash of both commands, so a cut stream cannot read as success and a repo whose
-  `setup =` line changed since is `config-changed` rather than ready. `gjd-remote setup --status`
+  wrote it and a hash of the whole specification below — not of the two command strings — so a cut
+  stream cannot read as success and a repo whose setup changed since, *in the file behind the command
+  as much as in the command*, is `config-changed` rather than ready. `gjd-remote setup --status`
   reads it, and `doctor`'s `setup status` check is the same question.
 - **It is a tmux job under a per-repo `flock`**, because `npm ci` plus Docker pulls outlive an ssh
   from a laptop that sleeps. You are attached so you can watch, and detaching leaves it running.
@@ -240,7 +263,13 @@ setup` refuses when the box's copy of a repo and your laptop's disagree — and 
 the setup command, where it came from, the `check`, the warnings, the **sha256 of
 `.gjd-remote/setup`** when a script is what runs, and the **`package.json` `scripts.setup` body**
 when the convention is. Two entirely different setup scripts resolve to the same eight characters,
-`./.gjd-remote/setup`, so comparing commands alone said they agreed.
+`./.gjd-remote/setup`, so comparing commands alone said they agreed. **The script's hash and the
+package body travel whether or not `source` says they are what runs**, because a config may spell
+out the same path the convention would have found. That one specification, hashed by
+`setupFingerprint()`, is what the prompt, the status file, `--status`, `doctor` and the session gate
+all ask their question of — and the setup job re-derives both file facts *inside the lock* before it
+runs anything, so a `git pull` between the question and the job cannot slip different bytes past the
+answer.
 
 ### Cloning, and why it is one transaction
 

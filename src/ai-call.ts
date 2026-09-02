@@ -411,9 +411,9 @@ export const AI_JOB_ROUTE: Record<
     path: "/v1/chat/completions",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
-  /* **`gjd-remote push-env`'s key-name classifier** — the cheapest call in the
-     app, and the only one whose whole input is a list of variable *names*
-     (scripts/gjd-remote-envpolicy.ts).
+  /* **`gjd-remote push-env`'s key-name classifier** — the only call in the app
+     whose whole input is a list of variable *names*
+     (scripts/gjd-remote-envpolicy.ts). Two cents, once per repo.
 
      **No `order`, deliberately.** The three Anthropic pins above exist to keep
      repeat calls landing on one cached prefix; there is nothing cached here.
@@ -429,7 +429,15 @@ export const AI_JOB_ROUTE: Record<
      unclassified with no explanation, which reads like the model having a bad
      day rather than like a routing decision. Same reasoning as `pdf`, one
      notch weaker, because here a wrong answer costs a nicety rather than a
-     feature. */
+     feature.
+
+     **It also has teeth this table has not had before, and they drew blood.**
+     `require_parameters` turns an unsupported parameter from a silent no-op
+     into a hard 404 with no endpoints left: a `temperature: 0` in the request
+     body made every call fail that way, and the feature reported it as "the
+     model could not be reached". Anything added to that body has to be checked
+     against the chosen model's upstreams first —
+     docs/research/260902b-env-key-proposal-spike.md. */
   "env-proposal": {
     path: "/v1/chat/completions",
     provider: { require_parameters: true },

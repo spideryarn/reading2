@@ -33,15 +33,76 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * **The ledger's STORE is replaced, and nothing above it is.**
+ *
+ * `withLedger` runs for real in the last describe of this file — the collector,
+ * the attribution, the row-building and its own printed total — because those
+ * are the parts that were never exercised. Only the last inch is swapped: a real
+ * `costStore` would write into `data/_ai-calls.jsonl` or Postgres, and a test
+ * that spends money into the actual ledger is a test that corrupts the thing it
+ * is checking. `importOriginal` keeps every other export of that module real.
+ */
+const LEDGER_ROWS: { job: string; model: string; outcome: string }[] = [];
+vi.mock("../src/store/ai-calls.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/store/ai-calls.js")>();
+  return {
+    ...real,
+    costStore: {
+      describe: () => "an in-memory ledger, for tests",
+      /* `requestedModel`, which is what the row calls it — the field is not
+         `model`, and a mock that read `row.model` would record "undefined" for
+         every call and the assertion would be about nothing.
+
+         `async`, and that is not decoration: the contract says
+         `record(row): Promise<void>`, the collector chains onto what comes back,
+         and a version of this returning `undefined` threw inside the meter's
+         own `finally`. The call then reported "the model could not be reached"
+         — a stubbed transport that never failed, reported as a provider
+         failure, with the row written. A double that is the wrong SHAPE breaks
+         the thing it is standing in for. */
+      record: async (row: { job?: unknown; requestedModel?: unknown; outcome?: unknown }) => {
+        LEDGER_ROWS.push({
+          job: String(row.job),
+          model: String(row.requestedModel),
+          outcome: String(row.outcome),
+        });
+      },
+      read: async () => [],
+      forJob: async () => [],
+      size: async () => LEDGER_ROWS.length,
+    },
+  };
+});
+
+/** The rows written since the last reset. Read through a function so the
+ *  hoisted mock above and the tests below cannot hold different arrays. */
+function recordedRows(): { job: string; model: string; outcome: string }[] {
+  return [...LEDGER_ROWS];
+}
+
+beforeEach(() => {
+  LEDGER_ROWS.length = 0;
+  /* The gateway refuses without a key, and the owner is required before a row
+     can be attributed. Both are fixtures: the transport is stubbed, so nothing
+     here can reach a provider even if the key were real. */
+  process.env.OPENROUTER_API_KEY = "sk-or-fixture-never-sent-anywhere";
+  process.env.SPIDERYARN_OWNER_ID ??= "6b1d9f3a-2c4e-4d7b-8a5f-9e0c1b2d3f4a";
+});
+
+import { withLedger } from "../src/cli-ledger.js";
 import { AI_JOB_ROUTE } from "../src/ai-call.js";
 import type { AiRequestBody, ChatJob, JsonCall } from "../src/ai-call.js";
-import { QUICK_MODEL_OPENROUTER } from "../src/models.js";
+import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { ALLOWLIST, FORBIDDEN_NAMES } from "../scripts/gjd-remote-env.js";
 import {
   applyGuards,
   buildProposalRequest,
   type ChecklistInput,
+  type ChecklistItem,
+  type Guards,
   defaultConfigHome,
   defaultProposalCall,
   EnvPolicyError,
@@ -53,7 +114,9 @@ import {
   parseProposal,
   planChecklist,
   policyPath,
+  type Proposal,
   type ProposedKey,
+  PROPOSAL_MODEL,
   proposeEnvKeys,
   PROPOSAL_JOB,
   readPolicy,
@@ -95,6 +158,14 @@ function checklistInput(over: Partial<ChecklistInput> = {}): ChecklistInput {
     valueGuard: allLocal,
   };
   return { ...base, ...over };
+}
+
+/** The guards out of a checklist input, so a test hands `applyGuards` the SAME
+ *  pair `planChecklist` was given. Passing a different pair is a legitimate
+ *  thing to do — see the test that does it on purpose — but it must be done on
+ *  purpose. */
+function guardsFrom(input: ChecklistInput): Guards {
+  return { forbiddenNames: input.forbiddenNames, valueGuard: input.valueGuard };
 }
 
 // --------------------------------------------------------- the one that matters
@@ -147,16 +218,15 @@ describe("no value reaches any sink", () => {
     const proposal = new Map<string, ProposedKey>(
       names.map((n) => [n, { class: "unknown", reason: "cannot tell from the name" }] as const),
     );
-    const items = planChecklist(
-      checklistInput({
-        names,
-        proposal,
-        approved: new Set(["LOCAL_PORT"]),
-        valueGuard: (n) => (n === "SIGNING_SECRET" ? "not-local" : "ok"),
-      }),
-    );
+    const rowsInput = checklistInput({
+      names,
+      proposal,
+      approved: new Set(["LOCAL_PORT"]),
+      valueGuard: (n) => (n === "SIGNING_SECRET" ? "not-local" : "ok"),
+    });
+    const items = planChecklist(rowsInput);
     forbidden(JSON.stringify(items), "the checklist");
-    forbidden(JSON.stringify(applyGuards(names, items)), "the guard outcome");
+    forbidden(JSON.stringify(applyGuards(names, items, guardsFrom(rowsInput))), "the guard outcome");
 
     // Sink 5: the file that gets written, through the real writer.
     const home = tempDir();
@@ -218,14 +288,34 @@ describe("extractEnvKeyNames", () => {
 // ------------------------------------------------------------ part 2: the model
 
 describe("buildProposalRequest", () => {
-  it("sends the names and the quick model, and nothing that could carry a value", () => {
+  it("sends the names and the measured model, and nothing that could carry a value", () => {
     const body = buildProposalRequest(["ALPHA", "BETA"]);
-    expect(body.model).toBe(QUICK_MODEL_OPENROUTER);
+    expect(body.model).toBe(PROPOSAL_MODEL);
+    expect(PROPOSAL_MODEL).toBe(CAPABLE_MODEL_OPENROUTER);
     const wire = JSON.stringify(body);
     expect(wire).toContain("ALPHA");
     expect(wire).toContain("BETA");
-    expect(body.temperature).toBe(0);
     expect(body.response_format).toEqual({ type: "json_object" });
+  });
+
+  it("sends exactly these three parameters and no others", () => {
+    /* **The guard for a bug that cost two ledger rows and produced nothing.**
+       `AI_JOB_ROUTE["env-proposal"]` sets `require_parameters: true`, so a
+       parameter no upstream of the chosen model accepts does not get quietly
+       dropped the way it does everywhere else in this app — OpenRouter filters
+       every endpoint away and answers 404. A `temperature: 0` here did exactly
+       that, and `proposeEnvKeys` reported it as "the model could not be
+       reached", which is indistinguishable from a provider having a bad
+       afternoon. docs/research/260902b-env-key-proposal-spike.md.
+
+       Pinned as an exact set rather than as "no temperature", because the next
+       one will not be called temperature. Adding a key here means checking
+       first that the model's upstreams accept it. */
+    expect(Object.keys(buildProposalRequest(["ALPHA"])).sort()).toEqual([
+      "messages",
+      "model",
+      "response_format",
+    ]);
   });
 
   it("refuses an empty list rather than asking a model about nothing", () => {
@@ -332,7 +422,7 @@ describe("the call itself", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]?.job).toBe("env-proposal");
     expect(PROPOSAL_JOB).toBe("env-proposal");
-    expect(seen[0]?.body.model).toBe(QUICK_MODEL_OPENROUTER);
+    expect(seen[0]?.body.model).toBe(PROPOSAL_MODEL);
   });
 
   it("names a job the routing table actually knows, and pins no upstream", () => {
@@ -367,6 +457,146 @@ describe("the call itself", () => {
 
   it("lets its own refusal through rather than dressing it as a provider failure", async () => {
     await expect(proposeEnvKeys([], { call: async () => envelope("{}") })).rejects.toThrow(EnvPolicyError);
+  });
+});
+
+/**
+ * **The whole call, for real, from `defaultProposalCall` down to the bytes on
+ * the wire and the row in the ledger** — GPT Sol's Stage 3 finding 6.
+ *
+ * Everything above this stubs `ProposalCall`, so the only thing proved about the
+ * real one was `typeof defaultProposalCall === "function"`. That leaves the
+ * whole of `openRouterJson` untested here: the route it picks, the `provider`
+ * block it attaches, the body it actually serialises, and — the expensive one —
+ * whether one attempt writes exactly one spend row. `npm run labels` and `npm
+ * run pdf` each spent for weeks with no ledger open, and a test that stops at
+ * the seam cannot see that.
+ *
+ * So: the real `withLedger("cli", …)`, the real gateway, and only `fetch` and
+ * the ledger's STORE replaced. The store is mocked rather than the collector,
+ * so `collectSpend`, the attribution and the row-building all run.
+ *
+ * **`temperature` has its own assertion**, and it is the reason this test exists
+ * at the wire rather than at the seam: `require_parameters: true` turns an
+ * unsupported parameter into a 404 with every upstream filtered out, and the
+ * feature reported that as "the model could not be reached". A stub of
+ * `ProposalCall` cannot notice, because the parameter is legal all the way to
+ * OpenRouter's router — docs/research/260902b-env-key-proposal-spike.md.
+ */
+describe("the real call, on a stubbed transport and a real ledger", () => {
+  const NAMES = ["LOCAL_PORT", "PROVIDER_KEY"];
+  const GOOD = JSON.stringify({
+    keys: [
+      { name: "LOCAL_PORT", class: "local-dev-only", reason: "a port" },
+      { name: "PROVIDER_KEY", class: "shared-provider-key", reason: "a paid key" },
+    ],
+  });
+
+  /** One canned chat/completions reply, with usage so the meter has something
+   *  to price and the row is not empty by accident. */
+  function reply(content: string, status = 200): Response {
+    const body = JSON.stringify({
+      id: "gen-fixture",
+      model: PROPOSAL_MODEL,
+      choices: [{ message: { content } }],
+      usage: { prompt_tokens: 120, completion_tokens: 40, total_tokens: 160 },
+    });
+    return new Response(body, { status, headers: { "content-type": "application/json" } });
+  }
+
+  type Sent = { url: string; body: Record<string, unknown> };
+
+  /** Run one proposal with the ledger open, and hand back everything it
+   *  touched: the requests, the rows, the answer, and anything printed. */
+  async function runOne(response: () => Response): Promise<{
+    sent: Sent[];
+    rows: { job: string; model: string; outcome: string }[];
+    result: Proposal | undefined;
+    printed: string;
+  }> {
+    const sent: Sent[] = [];
+    const printed: string[] = [];
+    const fetchStub = vi.fn(async (url: unknown, init: unknown) => {
+      const body = (init as { body?: string } | undefined)?.body ?? "{}";
+      sent.push({ url: String(url), body: JSON.parse(body) as Record<string, unknown> });
+      return response();
+    });
+    const realFetch = globalThis.fetch;
+    // Both streams: `withLedger` prints its total on stdout, and a leak into a
+    // warning on stderr would be just as bad as one into the answer.
+    const outSpy = vi.spyOn(console, "log").mockImplementation((...a) => void printed.push(a.join(" ")));
+    const errSpy = vi.spyOn(console, "warn").mockImplementation((...a) => void printed.push(a.join(" ")));
+    const errSpy2 = vi.spyOn(console, "error").mockImplementation((...a) => void printed.push(a.join(" ")));
+    globalThis.fetch = fetchStub as unknown as typeof fetch;
+    let result: Proposal | undefined;
+    try {
+      await withLedger("cli", async () => {
+        result = await proposeEnvKeys(NAMES, { call: defaultProposalCall });
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+      outSpy.mockRestore();
+      errSpy.mockRestore();
+      errSpy2.mockRestore();
+    }
+    return { sent, rows: recordedRows(), result, printed: printed.join("\n") };
+  }
+
+  it("sends the job's route, the capable model, and no temperature", async () => {
+    const { sent, result } = await runOne(() => reply(GOOD));
+    expect(sent).toHaveLength(1);
+    const one = sent[0];
+    expect(one?.url).toContain("/v1/chat/completions");
+    expect(one?.body.model).toBe(PROPOSAL_MODEL);
+    expect(one?.body.response_format).toEqual({ type: "json_object" });
+    expect(one?.body.provider).toMatchObject({ require_parameters: true });
+    // THE ONE THAT COST AN AFTERNOON. `toBeUndefined` would pass on a body that
+    // carries `temperature: undefined` through JSON, so the KEY is what is
+    // asserted — the same reason `buildProposalRequest`'s own test pins the key
+    // set rather than the values.
+    expect(Object.keys(one?.body ?? {})).not.toContain("temperature");
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("writes exactly one ledger row for one attempt", async () => {
+    const { rows } = await runOne(() => reply(GOOD));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.job).toBe(PROPOSAL_JOB);
+    expect(rows[0]?.model).toBe(PROPOSAL_MODEL);
+  });
+
+  /* The two failures that must still cost a row. A call that failed is a call
+     that was paid for — or at least attempted — and a ledger that only counts
+     successes is a ledger that reads low exactly when something is wrong. */
+  it("still writes one row when the model's answer is not the JSON it was asked for", async () => {
+    const { rows, result } = await runOne(() => reply("I am afraid I cannot do that."));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.job).toBe(PROPOSAL_JOB);
+    expect(result?.ok).toBe(false);
+  });
+
+  it("still writes one row when the provider refuses outright", async () => {
+    const { rows, result } = await runOne(() => reply("{}", 402));
+    expect(rows).toHaveLength(1);
+    expect(result).toEqual({ ok: false, why: "the model could not be reached" });
+  });
+
+  /**
+   * The sentinel test above covers the pure sinks. This is the one sink it
+   * cannot reach: a value would have to travel through the real request, the
+   * real meter and the real ledger row to get here, and `withLedger` prints to
+   * stdout on its way out.
+   */
+  it("puts no value into the wire, the ledger row or anything printed", async () => {
+    const { sent, rows, printed } = await runOne(() => reply(GOOD));
+    const haystack = [JSON.stringify(sent), JSON.stringify(rows), printed].join("\n");
+    // Names travel; nothing else from a .env.local does. The sentinel never
+    // enters this test's inputs, so its absence is checked the same way the
+    // big test checks it: against a string that would be there if it leaked.
+    for (const sentinel of ["sk-or-", "postgres://", "hunter2"]) {
+      expect(haystack).not.toContain(sentinel);
+    }
+    expect(haystack).toContain("LOCAL_PORT");
   });
 });
 
@@ -441,28 +671,76 @@ describe("planChecklist", () => {
 
 describe("applyGuards re-applies after the reader has chosen", () => {
   const names = ["LOCAL_PORT", "DATABASE_URL", FORBIDDEN_NAMES[0] ?? ""];
-  const items = planChecklist(
-    checklistInput({ names, valueGuard: (n) => (n === "DATABASE_URL" ? "not-local" : "ok") }),
-  );
+  const input = checklistInput({ names, valueGuard: (n) => (n === "DATABASE_URL" ? "not-local" : "ok") });
+  const guards = guardsFrom(input);
+  const items = planChecklist(input);
 
   it("refuses a forbidden name the reader ticked anyway", () => {
-    const got = applyGuards(names, items);
+    const got = applyGuards(names, items, guards);
     expect(got.send).toEqual(["LOCAL_PORT"]);
     expect(got.refused.map((r) => r.name)).toEqual([FORBIDDEN_NAMES[0], "DATABASE_URL"].sort());
   });
 
   it("refuses a name that is not on the checklist at all", () => {
-    const got = applyGuards(["LOCAL_PORT", "SNEAKED_IN"], items);
+    const got = applyGuards(["LOCAL_PORT", "SNEAKED_IN"], items, guards);
     expect(got.send).toEqual(["LOCAL_PORT"]);
     expect(got.refused).toEqual([{ name: "SNEAKED_IN", why: "not on the checklist for this repo" }]);
   });
 
   it("a select-all can never produce a disabled name", () => {
-    expect(applyGuards(selectableNames(items), items).refused).toEqual([]);
+    expect(applyGuards(selectableNames(items), items, guards).refused).toEqual([]);
   });
 
   it("sends in checklist order however the ticks arrived, and once each", () => {
-    expect(applyGuards(["LOCAL_PORT", "LOCAL_PORT"], items).send).toEqual(["LOCAL_PORT"]);
+    expect(applyGuards(["LOCAL_PORT", "LOCAL_PORT"], items, guards).send).toEqual(["LOCAL_PORT"]);
+  });
+
+  /**
+   * **The guards are run here, not read off the row** — GPT Sol's Stage 3
+   * finding 5.
+   *
+   * `item.disabled` is `planChecklist`'s answer, so a check that reads it is
+   * checking the first application's homework: a bug that produced a wrong
+   * `disabled` would be honoured by the very function meant to catch it. The
+   * rows below are handed in with `disabled: false` and an innocent description
+   * — as if the drawing step had got it wrong, or had never run — and the
+   * predicates must still refuse them.
+   */
+  it("refuses a row the checklist wrongly marked as fine", () => {
+    const lying: ChecklistItem[] = names.map((name) => ({
+      name,
+      checked: true,
+      disabled: false,
+      description: "nothing to see here",
+      new: true,
+    }));
+    const got = applyGuards(names, lying, guards);
+    expect(got.send).toEqual(["LOCAL_PORT"]);
+    expect(got.refused.map((r) => r.name)).toEqual([FORBIDDEN_NAMES[0], "DATABASE_URL"].sort());
+    // And the reason given is the guard's own, not the row's fiction.
+    expect(got.refused.map((r) => r.why).join(" ")).not.toContain("nothing to see here");
+  });
+
+  /**
+   * **Two rows for one name is a stop, not a resolution.**
+   *
+   * Before this, the disabled row decided the refusal and the enabled row
+   * decided the send, so `DATABASE_URL` came back in `refused` AND in `send` —
+   * the CLI printed a red cross for a key it was in the middle of sending. There
+   * is no correct choice between the two rows; the checklist that has both is
+   * the thing that is broken.
+   */
+  it("throws on a duplicated name rather than both refusing and sending it", () => {
+    const doubled = [...items, ...items.filter((i) => i.name === "DATABASE_URL")];
+    expect(() => applyGuards(["DATABASE_URL"], doubled, guards)).toThrow(EnvPolicyError);
+    expect(() => applyGuards(["DATABASE_URL"], doubled, guards)).toThrow("two rows for 'DATABASE_URL'");
+  });
+
+  it("throws even when the duplicate is harmless and nothing was selected", () => {
+    // The bug is the checklist, not the tick. Refusing only when the duplicate
+    // happens to have been selected would leave it there for the next run.
+    const doubled = [...items, ...items.filter((i) => i.name === "LOCAL_PORT")];
+    expect(() => applyGuards([], doubled, guards)).toThrow(EnvPolicyError);
   });
 });
 

@@ -432,10 +432,12 @@ export type EvalAiJob = "eval";
  * **A model call made by a developer tool**, rather than for a reader or to
  * measure something.
  *
- * One member: `env-proposal`, which is `gjd-remote push-env` asking a cheap
- * model to sort a repo's `.env.local` **key names** — never a value — into
- * "safe on a shared box" and "absolutely not", so the checklist it then shows
- * starts somewhere better than blank. See
+ * One member: `env-proposal`, which is `gjd-remote push-env` asking a model to
+ * sort a repo's `.env.local` **key names** — never a value — into "safe on a
+ * shared box" and "absolutely not", so the checklist it then shows starts
+ * somewhere better than blank. It runs on `CAPABLE_MODEL_OPENROUTER`, which is
+ * a measured choice rather than the obvious one for a classification this
+ * small; the reasoning is beside the constant in
  * [`scripts/gjd-remote-envpolicy.ts`](../scripts/gjd-remote-envpolicy.ts).
  *
  * Its own category, and not a fourth `NonTaskAiJob`, for the reason `EvalAiJob`

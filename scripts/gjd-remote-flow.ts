@@ -35,6 +35,7 @@
  */
 import { createHash } from "node:crypto";
 import type { RepoConfig, SetupScriptState, SetupSource } from "./gjd-remote-config.js";
+import { requireOneLineCommand } from "./gjd-remote-setup.js";
 import type { SetupVerdict } from "./gjd-remote-setup.js";
 
 /**
@@ -261,17 +262,40 @@ export function parseCheckoutProbe(stdout: string): { ok: true; probe: CheckoutP
  *
  * Raw TOML equality was the other option and is too strict: a comment or a
  * blank line is not a change to what runs.
+ *
+ * **Both file facts are carried whenever the file exists, whatever `source`
+ * says** — GPT Sol's Stage 3 finding 2, and the second half of the same bug.
+ * The first version recorded `scriptSha256` only when `source === "script"` and
+ * `packageSetup` only for `"npm-convention"`, which means a config that names
+ * the wrapper EXPLICITLY —
+ *
+ * ```toml
+ * setup = "./.gjd-remote/setup"
+ * ```
+ *
+ * — resolves as `source: "config"` and drops the hash of the very file it is
+ * about to run. Two such configs, with entirely different scripts behind them,
+ * compared equal; so did two `setup = "npm ci && npm run setup"` configs over
+ * different `package.json` bodies. Reproduced before the fix, and it is the
+ * same class as the bug the hash was added for.
+ *
+ * The cost of carrying them unconditionally is a fingerprint that also changes
+ * when a file nothing runs changes — an ignored, non-executable
+ * `.gjd-remote/setup`, say. That reads as `config-changed`, whose remedy is to
+ * run setup again, so being too strict costs one setup run and being too loose
+ * costs a session in a tree set up by a different script. There is only one way
+ * round to have it.
  */
 export type SetupSpec = {
   setup: string | null;
   source: SetupSource | "none";
   check: string | null;
   warnings: readonly string[];
-  /** sha256 of `.gjd-remote/setup`, when that is the command being run. */
+  /** sha256 of `.gjd-remote/setup` whenever that file exists at all. */
   scriptSha256: string | null;
-  /** The `package.json` `scripts.setup` body, when the npm convention is what
-   *  resolved. The body itself rather than a hash: it is short, and printing it
-   *  is how somebody sees what actually differs. */
+  /** The `package.json` `scripts.setup` body whenever there is one. The body
+   *  itself rather than a hash: it is short, and printing it is how somebody
+   *  sees what actually differs. */
   packageSetup: string | null;
 };
 
@@ -292,14 +316,45 @@ export function setupSpec(cfg: RepoConfig, files: SetupSpecFiles): SetupSpec {
     source,
     check: cfg.check?.command ?? null,
     warnings: [...cfg.warnings],
-    // Carried only when it is the file that would RUN. A repo with a
-    // non-executable `.gjd-remote/setup` and an npm convention has the script's
-    // bytes as an irrelevance, and a difference in an irrelevance is not a
-    // difference worth stopping a clone for — the warning that it is being
-    // ignored is what carries that, and warnings are compared.
-    scriptSha256: source === "script" ? files.scriptSha256 : null,
-    packageSetup: source === "npm-convention" ? files.packageSetup : null,
+    // Unconditional, and that is the fix for Sol's Stage 3 finding 2: which
+    // file the command REACHES is not something `source` can be read off,
+    // because a config may spell out the same path the convention would have
+    // found. See the type above.
+    scriptSha256: files.scriptSha256,
+    packageSetup: files.packageSetup,
   };
+}
+
+/**
+ * The one hash that stands for "set up the way this repo asks for TODAY".
+ *
+ * Every execution input, in one canonical encoding, so that the three places
+ * that ask the question cannot answer it differently: the prompt that shows a
+ * difference before a clone, the durable `configSha256` in the status file, and
+ * the check the locked setup job runs against the tree it is standing in.
+ *
+ * It replaces `setupConfigSha256` in scripts/gjd-remote-setup.ts, which hashed
+ * the two command STRINGS and so could not see a changed script behind a
+ * constant command — the same blind spot, in the durable record rather than in
+ * the prompt.
+ *
+ * JSON of a fixed literal rather than joining with a separator: the encoding
+ * has to be one-to-one, and a separator that could appear in a value is not.
+ * `v: 2` because `setupConfigSha256`'s canonical form is `v: 1` and the two
+ * must never collide.
+ */
+export function setupFingerprint(spec: SetupSpec): string {
+  return sha256(
+    JSON.stringify({
+      v: 2,
+      setup: spec.setup,
+      source: spec.source,
+      check: spec.check,
+      warnings: [...spec.warnings],
+      scriptSha256: spec.scriptSha256,
+      packageSetup: spec.packageSetup,
+    }),
+  );
 }
 
 /** sha256 of some bytes, hex. The whole digest: it is compared, and only its
@@ -416,20 +471,72 @@ export function setupGateDecision(v: SetupVerdict, lock: LockState, force: boole
  * is `never-run` and always will be until somebody runs `npm ci` in a tree that
  * ten live sessions are working in. Refusing would stop all ten.
  *
- * Two things do refuse, because both mean the tree in front of you is not the
- * tree the status is about:
+ * Four things do refuse, and each of them means we do not know that the tree in
+ * front of us is the tree the status is about:
  *
- *  - **a setup holding the lock** — an agent started in a tree mid-`npm ci`
- *    gets a half-built repo and blames the repo;
+ *  - **a setup holding the lock, WHATEVER the verdict says** — an agent started
+ *    in a tree mid-`npm ci` gets a half-built repo and blames the repo. This
+ *    used to refuse only `in-progress + held`, which is GPT Sol's Stage 3
+ *    finding 1: a held lock and a `success` verdict is not exotic, it is the
+ *    window before a running job has written its `started` status and the
+ *    window after it has written its terminal one. In both, the old verdict is
+ *    true and irrelevant, and something is rewriting the tree right now.
+ *  - **`noflock`** — the box cannot serialise anything, so `held` and `free`
+ *    are both guesses, and `sessionAdmissionScript` cannot do its job either.
+ *    It is the same refusal `setupGateDecision` makes, for the same reason.
+ *  - **a status file we could not read or could not believe** (`unreadable`).
+ *    This used to print a yellow line and carry on. A status file that is there
+ *    and does not parse was written by something, and "I could not read the
+ *    evidence" is not evidence of readiness.
  *  - **`wrong-checkout`** — the status is about another slug, another
- *    directory, or a `.git` that no longer exists, which is Sol's finding 7:
- *    delete a checkout and clone it again at the same path and the old success
- *    still sits there.
+ *    directory, a `.git` that no longer exists, or no checkout at all, which is
+ *    Sol's finding 7 and Stage 3's finding 3: delete a checkout and clone it
+ *    again at the same path and the old success still sits there.
+ *
+ * **The decision is not the whole guarantee.** Between this gate and `tmux
+ * new-session` a setup can take the lock, so the session is created through
+ * `sessionAdmissionScript` below, which re-reads the status under that lock.
+ * This function decides; that script is what makes the decision still true when
+ * it is acted on.
  */
 export type FoundGateDecision = { kind: "go" } | { kind: "warn"; line: string } | { kind: "refuse"; why: string };
 
-export function foundGateDecision(v: SetupVerdict, lock: LockState): FoundGateDecision {
-  if (v.kind === "success") return { kind: "go" };
+/**
+ * @param unreadable Why the box's status file could not be believed, when it
+ *   could not: a read that failed, or a file that is there and does not parse.
+ *   The caller has to pass it rather than folding it into a verdict, because
+ *   "there is no status" and "there is one and it is not one" are different
+ *   facts and only the second means something wrote it.
+ */
+export function foundGateDecision(v: SetupVerdict, lock: LockState, unreadable?: string): FoundGateDecision {
+  if (unreadable !== undefined) {
+    return {
+      kind: "refuse",
+      why:
+        `I could not read this repo's setup status on the box: ${unreadable}\n` +
+        `  Something wrote that file, and a verdict I cannot parse is not one I may act on.\n` +
+        `  Look at it, or delete it, and then: gjd-remote setup`,
+    };
+  }
+  if (lock === "noflock") {
+    return {
+      kind: "refuse",
+      why:
+        "flock is not installed on the box, so I cannot tell whether a setup is running in this tree —\n" +
+        "  and starting a session in a tree mid-install gives an agent a half-built repo.\n" +
+        "  gjd-remote ssh 'sudo apt-get install -y util-linux'   # then try again",
+    };
+  }
+  if (lock === "held") {
+    return {
+      kind: "refuse",
+      why:
+        `a setup for this repo holds the box-side lock — one is running RIGHT NOW.\n` +
+        `  Starting a session in a tree mid-install gives an agent a half-built repo,\n` +
+        `  whatever the last verdict says (${v.kind}).\n` +
+        `  gjd-remote setup --status   # wait for it, then try again`,
+    };
+  }
   if (v.kind === "wrong-checkout") {
     return {
       kind: "refuse",
@@ -439,38 +546,188 @@ export function foundGateDecision(v: SetupVerdict, lock: LockState): FoundGateDe
         `  than none: it is evidence pointing somewhere else.\n  ${v.remedy}`,
     };
   }
-  if (v.kind === "in-progress" && lock === "held") {
-    return {
-      kind: "refuse",
-      why:
-        `${v.why}, and it holds the box-side lock — a setup for this repo is running RIGHT NOW.\n` +
-        `  Starting a session in a tree mid-install gives an agent a half-built repo.\n` +
-        `  gjd-remote setup --status   # wait for it, then try again`,
-    };
-  }
+  if (v.kind === "success") return { kind: "go" };
   if (v.kind === "never-run") {
     return { kind: "warn", line: "setup status: never run through gjd-remote — 'gjd-remote setup' to record it" };
   }
   return { kind: "warn", line: `setup status: ${v.why}` };
 }
 
+// --------------------------------------------------------- admitting a session
+
+/**
+ * The tag on every line of an admission reply. Its own sentinel rather than
+ * `BOX_OK`'s, because this script runs a caller's command whose output is
+ * loose in the same stream.
+ */
+export const ADMIT_FIELDS = ["admit", "state", "text", "code"] as const;
+
+export type SessionAdmission = {
+  /** The SAME lock file the setup job takes — `setupPaths().lockPath`. A
+   *  different path would serialise this against nothing. */
+  lockPath: string;
+  locksDir: string;
+  statusPath: string;
+  /**
+   * The base64 of the status file as the laptop last read it, or null for "the
+   * box said there was none".
+   *
+   * Base64 rather than the decoded text, and the box's own bytes rather than a
+   * re-encoding: the comparison is byte-for-byte and the two sides must not be
+   * separated by a round trip through anybody's idea of a string.
+   */
+  expect: string | null;
+  /** One line of shell to run if, and only if, the status is still that. */
+  command: string;
+};
+
+/**
+ * Create the session under the setup lock, or refuse — GPT Sol's Stage 3
+ * finding 1.
+ *
+ * `foundGateDecision` reads a status, decides, and then the CLI runs `tmux
+ * new-session` some seconds later. Between the two, another `gjd-remote setup`
+ * can take the lock and start rewriting the tree; the decision was true when it
+ * was made and false when it was acted on. That is a TOCTOU gap, and no amount
+ * of care in the gate closes it.
+ *
+ * So the session is created BY THIS SCRIPT, on the box, holding the lock:
+ *
+ *  1. `flock -n` on the setup lock. Held ⇒ `admit held`, nothing run. A
+ *     non-blocking take, because queueing a `new-claude` behind a twenty-minute
+ *     `npm ci` in silence is worse than saying so.
+ *  2. The status file is re-read UNDER THE LOCK and compared, byte for byte,
+ *     to what the laptop based its decision on. Different ⇒ `admit changed`,
+ *     nothing run, and the new bytes come back so the caller can say what it
+ *     now is. One round trip and no stdin: the laptop sends what it saw rather
+ *     than waiting to be asked.
+ *  3. Only then the command, and the lock is released when this script exits.
+ *
+ * **The command gets `9>&-`**, and that is not decoration. `tmux new-session`
+ * may START the tmux server, and a server that inherited fd 9 holds the setup
+ * lock for as long as the box is up — the same open-file-description trap as
+ * scripts/gjd-remote-setup.ts's `run_step`, but with a daemon on the end of it.
+ *
+ * Its stdout goes to stderr, because this stream is a wire format and `tmux`
+ * printing into the middle of it is a reply the parser would refuse.
+ */
+export function sessionAdmissionScript(o: SessionAdmission): string {
+  requireOneLineCommand("sessionAdmissionScript", "session", o.command);
+  if (o.expect !== null && !/^[A-Za-z0-9+/=]+$/.test(o.expect)) {
+    throw new Error("sessionAdmissionScript: the expected status is not base64");
+  }
+  const want = o.expect ?? "-";
+  return `
+    PATH="$PATH:/usr/local/bin:/usr/bin:/bin"
+    command -v base64 >/dev/null 2>&1 || { echo '${BOX_ERR} base64 is not on this box'; exit 0; }
+    command -v flock >/dev/null 2>&1 || { echo '${BOX_ERR} flock is not on this box, so a session cannot be admitted safely'; exit 0; }
+    s=${shq(o.statusPath)}
+    want=${shq(want)}
+    cmd=${shq(o.command)}
+    mkdir -p ${shq(o.locksDir)} 2>/dev/null || true
+    exec 9>>${shq(o.lockPath)} || { echo '${BOX_ERR} I could not open the setup lock'; exit 0; }
+    if ! flock -n 9; then
+      printf '${BOX_OK}\\n'
+      printf 'admit held\\n'
+      printf 'state unknown\\n'
+      printf 'text -\\n'
+      printf 'code -\\n'
+      printf '${BOX_END}\\n'
+      exit 0
+    fi
+    got=-
+    st=absent
+    if [ -e "$s" ]; then
+      # Two statements, because the exit status of 'a | b' is b's: a base64 that
+      # could not read the file would be invisible behind a happy 'tr'.
+      raw=$(base64 < "$s") || { echo '${BOX_ERR} I could not read the setup status on the box'; exit 0; }
+      got=$(printf %s "$raw" | tr -d "\\n")
+      st=present
+    fi
+    printf '${BOX_OK}\\n'
+    if [ "$got" = "$want" ]; then
+      # 9>&- so that a tmux server started here does not inherit the lock and
+      # hold it for ever; >&2 so its output is not in this reply.
+      bash -c "$cmd" >&2 9>&-
+      rc=$?
+      admit=ran
+    else
+      admit=changed
+      rc=-
+    fi
+    printf 'admit %s\\n' "$admit"
+    printf 'state %s\\n' "$st"
+    printf 'text %s\\n' "$got"
+    printf 'code %s\\n' "$rc"
+    printf '${BOX_END}\\n'`;
+}
+
+export type Admission =
+  /** The command ran, under the lock, against the status the caller had seen. */
+  | { kind: "ran"; code: number }
+  /** The status changed between the read and the lock. NOTHING ran. */
+  | { kind: "changed"; status: string | undefined }
+  /** A setup holds the lock. NOTHING ran. */
+  | { kind: "held" };
+
+export type AdmissionParse = { ok: true; admission: Admission } | { ok: false; refused: boolean; why: string };
+
+/**
+ * The admission's own report, or the reason we do not have one.
+ *
+ * FAILS CLOSED, and here that word has teeth: `ok: false` means the caller does
+ * not know whether the session was created, so it must say both. Only `ran`
+ * with a code says a command ran, and only `code` says how it went.
+ */
+export function parseAdmission(stdout: string): AdmissionParse {
+  const got = parseBoxRead(stdout, [...ADMIT_FIELDS]);
+  if (!got.ok) return { ok: false, refused: sawRefusal(stdout), why: got.why };
+  const f = (k: string) => got.fields.get(k) ?? "";
+  const admit = f("admit");
+  const state = f("state");
+  const code = f("code");
+  const text = f("text");
+
+  if (admit === "held") {
+    if (state !== "unknown" || text !== "-" || code !== "-") {
+      return { ok: false, refused: false, why: "the box said the lock was held and also said what it read, which cannot both be true" };
+    }
+    return { ok: true, admission: { kind: "held" } };
+  }
+  if (state !== "present" && state !== "absent") {
+    return { ok: false, refused: false, why: `the box said the status file is '${state}', which means nothing to me` };
+  }
+  if (state === "absent" && text !== "-") {
+    return { ok: false, refused: false, why: "the box said there is no status file and sent one anyway" };
+  }
+  if (admit === "changed") {
+    if (code !== "-") return { ok: false, refused: false, why: `the box said it ran nothing and reported exit ${code}` };
+    if (state === "absent") return { ok: true, admission: { kind: "changed", status: undefined } };
+    const decoded = decodeBoxField(text, "the setup status the box read under the lock");
+    if (!decoded.ok) return { ok: false, refused: false, why: decoded.why };
+    return { ok: true, admission: { kind: "changed", status: decoded.text } };
+  }
+  if (admit !== "ran") {
+    return { ok: false, refused: false, why: `the box said it did '${admit}', which means nothing to me` };
+  }
+  if (!/^[0-9]+$/.test(code)) {
+    return { ok: false, refused: false, why: `the box said the command exited '${code}', which is not a status` };
+  }
+  return { ok: true, admission: { kind: "ran", code: Number(code) } };
+}
+
 // ------------------------------------------------------------ the clone transaction
 
 /**
- * `clone`'s staging prefix, checked by EXACT BASENAME.
- *
- * GPT Sol's Stage 2 finding 2: the old guard was a shell `case` on the whole
- * path, matching any path with the prefix anywhere in it — including
- * `/home/greg/code/.gjd-remote-staging-x/src/anything`, an innocent child of a
- * staging directory, which the one `rm -rf` in the tool would then have run
- * against.
+ * `isStagingBasename` and `STAGING_PREFIX_FLOW` USED TO BE HERE, and they were
+ * deleted on 2026-09-02 — GPT Sol's Stage 3 finding 7. Nothing in production
+ * called either: the staging name is minted in `scripts/gjd-remote.ts` from
+ * `STAGING_PREFIX` in scripts/gjd-remote-repo.ts, and the guard that made the
+ * one `rm -rf` in the tool safe is not a pathname test at all any more — it is
+ * the `mkdir` reservation in the transaction below, which fails if anything is
+ * there. A tested function nothing calls is three green tests about the safety
+ * of a code path that does not exist.
  */
-export const STAGING_PREFIX_FLOW = ".gjd-remote-staging-";
-
-export function isStagingBasename(dir: string): boolean {
-  const base = (dir.replace(/\/+$/, "") || "/").split("/").pop() ?? "";
-  return base.startsWith(STAGING_PREFIX_FLOW) && base.length > STAGING_PREFIX_FLOW.length;
-}
 
 export type CloneTransaction = {
   /** Where the finished checkout must end up. */
@@ -484,6 +741,19 @@ export type CloneTransaction = {
   url: string;
   /** `~/gjd-remote/setup/<owner>--<name>.json`, archived on a fresh clone. */
   statusPath: string;
+  /**
+   * One line of shell run BETWEEN the locked re-check of the destination and
+   * the move into place. Nothing outside tests/gjd-remote-flow.test.ts passes
+   * it.
+   *
+   * A SEAM FOR THE TEST, and it earns its place the way `afterwards` does in
+   * scripts/gjd-remote-setup.ts. The race this transaction defends against is
+   * something appearing at the destination after the re-check, and a test that
+   * creates the destination BEFORE the script starts exercises the re-check
+   * instead — it is green whether or not `mv -n` and the inode comparison
+   * work at all. This is the only way to open the window from outside.
+   */
+  between?: string;
 };
 
 /** The steps the box reports, in the order it does them. */
@@ -516,6 +786,8 @@ export const CLONE_TAG = "GJDCLONE";
  * the only record of what that tree once was.
  */
 export function cloneTransactionScript(t: CloneTransaction): string {
+  if (t.between !== undefined) requireOneLineCommand("cloneTransactionScript", "between", t.between);
+  const between = t.between === undefined ? "" : `\n    bash -c ${shq(t.between)} >&2 || true`;
   return `
     PATH="$PATH:/usr/local/bin:/usr/bin:/bin"
     command -v git >/dev/null 2>&1 || { echo '${BOX_ERR} git is not on this box'; exit 0; }
@@ -566,7 +838,7 @@ export function cloneTransactionScript(t: CloneTransaction): string {
       printf 'origin %s\\n' "$(e "$got")"
       printf '${BOX_END}\\n'; exit 0
     fi
-    before=$(ls -di "$staging/.git" 2>/dev/null | awk '{print $1}' || true)
+    before=$(ls -di "$staging/.git" 2>/dev/null | awk '{print $1}' || true)${between}
     # -T (treat the destination as a name, never a directory to move INTO) is
     # GNU-only, and the box is Linux, so the box always takes the first branch.
     # BSD mv has -n but not -T, and these tests RUN this script on a Mac — a
@@ -591,6 +863,17 @@ export function cloneTransactionScript(t: CloneTransaction): string {
     if [ -f "$status" ]; then
       if mv -- "$status" "$status.stale-$(date -u +%Y%m%dT%H%M%SZ)" 2>/dev/null; then stale=archived; else stale=stuck; fi
     fi
+    # A status we could not move aside ENDS THE TRANSACTION — GPT Sol's Stage 3
+    # finding 3. The checkout is in place and fine; what is not fine is the old
+    # verdict still sitting at its usual path, about the tree that WAS here. It
+    # used to be a yellow line and the clone carried on into setup.
+    if [ "$stale" = stuck ]; then
+      printf 'step stale-stuck\\n'
+      printf 'inode %s\\n' "$after"
+      printf 'origin %s\\n' "$(e "$got")"
+      printf 'head %s\\n' "$(e "$head")"
+      printf '${BOX_END}\\n'; exit 0
+    fi
     printf 'step ok\\n'
     printf 'inode %s\\n' "$after"
     printf 'origin %s\\n' "$(e "$got")"
@@ -600,7 +883,15 @@ export function cloneTransactionScript(t: CloneTransaction): string {
 }
 
 export type CloneOutcome =
-  | { kind: "ok"; inode: string; origin: string; head: string; stale: "archived" | "none" | "stuck" }
+  | { kind: "ok"; inode: string; origin: string; head: string; stale: "archived" | "none" }
+  /**
+   * The checkout IS in place and verified, and the previous checkout's setup
+   * status could not be moved aside — so a session started here would read a
+   * success about a tree that no longer exists. Its own arm rather than a
+   * `stale` value on `ok`, because the caller must stop, and a field on the
+   * success arm is a field a caller can print and walk past. It did.
+   */
+  | { kind: "stale-stuck"; inode: string; origin: string; head: string }
   | { kind: "taken" }
   | { kind: "staging-taken" }
   | { kind: "clone-failed"; code: string; swept: "removed" | "kept" }
@@ -634,6 +925,7 @@ export function parseCloneTransaction(stdout: string): CloneParse {
     "verify-failed": ["step", "why", "origin"],
     "move-failed": ["step"],
     "move-declined": ["step", "before", "after"],
+    "stale-stuck": ["step", "inode", "origin", "head"],
     ok: ["step", "inode", "origin", "head", "stale"],
   };
   const fields = want[step];
@@ -666,19 +958,37 @@ export function parseCloneTransaction(stdout: string): CloneParse {
       return { ok: true, outcome: { kind: "move-failed" } };
     case "move-declined":
       return { ok: true, outcome: { kind: "move-declined", before: f("before"), after: f("after") } };
+    case "stale-stuck": {
+      const made = placed(f, text);
+      if (!made.ok) return made;
+      return { ok: true, outcome: { kind: "stale-stuck", ...made.made } };
+    }
     default: {
-      const origin = text("origin");
-      if (!origin.ok) return { ok: false, refused: false, why: origin.why };
-      const head = text("head");
-      if (!head.ok) return { ok: false, refused: false, why: head.why };
+      const made = placed(f, text);
+      if (!made.ok) return made;
       const stale = f("stale");
-      if (stale !== "archived" && stale !== "none" && stale !== "stuck") {
+      if (stale !== "archived" && stale !== "none") {
         return { ok: false, refused: false, why: `the box said the old status was '${stale}', which means nothing to me` };
       }
-      if (!/^[0-9]+$/.test(f("inode"))) return { ok: false, refused: false, why: `the box said the new checkout's inode is '${f("inode")}'` };
-      return { ok: true, outcome: { kind: "ok", inode: f("inode"), origin: origin.text, head: head.text, stale } };
+      return { ok: true, outcome: { kind: "ok", ...made.made, stale } };
     }
   }
+}
+
+/** The three things both terminal arms say about the checkout that is now at
+ *  the destination, validated once so the two cannot drift apart. */
+function placed(
+  f: (k: string) => string,
+  text: (k: string) => { ok: true; text: string } | { ok: false; why: string },
+): { ok: true; made: { inode: string; origin: string; head: string } } | { ok: false; refused: boolean; why: string } {
+  const origin = text("origin");
+  if (!origin.ok) return { ok: false, refused: false, why: origin.why };
+  const head = text("head");
+  if (!head.ok) return { ok: false, refused: false, why: head.why };
+  if (!/^[0-9]+$/.test(f("inode"))) {
+    return { ok: false, refused: false, why: `the box said the new checkout's inode is '${f("inode")}'` };
+  }
+  return { ok: true, made: { inode: f("inode"), origin: origin.text, head: head.text } };
 }
 
 /** Did the box say why it was not going to start? A refusal line is one the
@@ -722,6 +1032,69 @@ export function needsTerminalSetupRecord(
     if (r.outcome === "started") started = true;
   }
   return started;
+}
+
+// ------------------------------------------- the lock, the status, the inode
+
+/** The fields of one `setupReadScript` reply. */
+export const SETUP_READ_FIELDS = ["lock", "inode", "status", "text"] as const;
+
+/**
+ * The lock, the status file, and the checkout's own `.git` inode — in one round
+ * trip, framed at both ends.
+ *
+ * **`flock` is probed FIRST**, and that is GPT Sol's Stage 2 finding 9. The
+ * order used to be the other way round, so a box with no `flock` at all
+ * answered `none` — "there is no lock file" — whenever nothing had taken one,
+ * and the missing binary stayed invisible until a job died with exit 78 inside
+ * a pane that then vanished. The order is the whole of the fix, and it lives
+ * here rather than in scripts/gjd-remote.ts so that a test can RUN it with
+ * `flock` off the PATH and a lock file present, which is the one arrangement
+ * where the two answers differ. Asserting the state directly, which is what the
+ * matrix test did, cannot tell a producer that probes in the right order from
+ * one that does not probe at all.
+ *
+ * **`base64 | tr -d`, not `base64 -w0`.** `-w0` is GNU-only, and the version
+ * this replaces used it — so on a Mac the script printed nothing and the field
+ * came back empty. The box would never have noticed; the test would have been
+ * impossible to write.
+ *
+ * **The inode rides along** because the caller needs it for the same verdict
+ * and a second round trip to fetch it would be one nobody would keep. It is
+ * what tells a re-clone at the same path from the checkout that was there when
+ * setup last ran (finding 7).
+ */
+export function setupReadScript(o: { statusPath: string; lockPath: string; dir: string }): string {
+  return [
+    `PATH="$PATH:/usr/local/bin:/usr/bin:/bin"`,
+    `command -v base64 >/dev/null 2>&1 || { printf '${BOX_ERR} base64 is not on this box\\n'; exit 0; }`,
+    `if ! command -v flock >/dev/null 2>&1; then lock=noflock`,
+    `else`,
+    `  l=${shq(o.lockPath)}`,
+    // The `-e` test comes before taking the lock so that merely LOOKING does
+    // not create the lock file: `9>>"$l"` would, and "there is a lock file" is
+    // a fact worth keeping true only when something has actually taken one.
+    `  if [ ! -e "$l" ]; then lock=none`,
+    `  elif ( flock -n 9 ) 9>>"$l" 2>/dev/null; then lock=free`,
+    `  else lock=held; fi`,
+    `fi`,
+    `i=-`,
+    `if [ -e ${shq(o.dir)}/.git ]; then i=$(ls -di ${shq(o.dir)}/.git 2>/dev/null | awk '{print $1}') || i=-; fi`,
+    `[ -n "$i" ] || i=-`,
+    `s=${shq(o.statusPath)}`,
+    `st=absent; b=-`,
+    `if [ -e "$s" ]; then`,
+    `  raw=$(base64 < "$s") || { printf '${BOX_ERR} I could not read %s on the box\\n' "$s"; exit 0; }`,
+    `  b=$(printf %s "$raw" | tr -d "\\n")`,
+    `  st=present`,
+    `fi`,
+    `printf '${BOX_OK}\\n'`,
+    `printf 'lock %s\\n' "$lock"`,
+    `printf 'inode %s\\n' "$i"`,
+    `printf 'status %s\\n' "$st"`,
+    `printf 'text %s\\n' "$b"`,
+    `printf '${BOX_END}\\n'`,
+  ].join("\n");
 }
 
 // --------------------------------------------------- a repo's config, on the box
