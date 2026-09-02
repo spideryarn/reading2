@@ -25,8 +25,10 @@
  *
  * This file is types and one pure function. The file-backed adapter is
  * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
- * which exists but which nothing in production imports yet — see the header of
- * src/store/revisions.ts.
+ * which src/store/pg-session.ts imports and which a claimed job runs on
+ * wherever `SPIDERYARN_STORE=postgres` — see the header of
+ * src/store/revisions.ts. (It said "nothing in production imports yet" until
+ * 2026-09-02, which stopped being true at commit c42c940.)
  *
  * ## The key is `(step, kind)`, not `kind`
  *

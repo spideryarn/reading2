@@ -41,6 +41,14 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > `TableView` falls back to the root gist, which is exactly why it is worth writing down rather than
 > leaving to be noticed. The same applies to `tweets`, `glossary`, `summary` and `ideas` whenever a
 > reader asks for one. That is the hydration problem, and it is the next piece.
+>
+> **Fixed on 2026-09-01, and this paragraph is kept because the diagnosis was right.** `claimSession`
+> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under `SPIDERYARN_STORE=postgres` a claim
+> gets `openPgStoreSession`, whose reads are the article's own draft revision rather than a
+> job-scoped directory, and every late step's `run` takes the article through `readArticle(ctx.slug,
+> store)` instead of opening a path. `tests/claim-session-postgres.test.ts` § *"runs a late single
+> step that reads the article from the store, not from its empty root"* ingests under one job id and
+> then runs `["arc"]` under a second, which is exactly the shape above.
 
 > **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
 > saying it nearly does is the mistake worth not repeating."* Every stage still writes
