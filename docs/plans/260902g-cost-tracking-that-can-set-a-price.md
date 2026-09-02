@@ -530,6 +530,50 @@ allowance, an invoice, or a promise made to users."*
 
 ### Stage 3 — a report that answers the pricing question
 
+**✅ Built, 2026-09-02.** `npm run cost -- --owners` is the pricing report; `--price 20` adds the
+contribution margin at a candidate price. `/admin/users` has a spend column. The migration blockage
+that held 1b, 2A and 2B cleared during this stage, so the Postgres tests **ran** rather than skipping.
+
+What was built, and the five decisions inside it:
+
+- **The aggregate is Postgres-only and lives in
+  [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)**, not on `CostStore` —
+  Sol's instruction taken literally. It groups by `(owner, scope_kind, purpose, step_name)` over an
+  arbitrary half-open `[start, end)`, never by calendar month, and it never reads a whole row.
+- **The grouping keys are the raw columns, not a category**, so Postgres does the arithmetic and
+  TypeScript does the naming. Categorisation is a judgement about what the schema can honestly claim
+  and belongs where a unit test can reach it; a SQL `CASE` would put it where no test can and where a
+  peer writing their own query would not find it. The grouped result is tens of rows.
+- **Six categories, named for the mechanism** —
+  [`src/cost-categories.ts`](../../src/cost-categories.ts). *default-step work*, *on-demand
+  enrichment*, *interactive request work*, *voice*, *non-product*, *unknown*. The request-scope
+  branch **enumerates its jobs** rather than catching everything left, so a new `AiJob` next month
+  shows up in `unknown` instead of being absorbed by the widest `else`; a mutation making that branch
+  a catch-all turns the guard red. `interactive request work` rather than "interactive text and
+  search" because it also holds `pdf` and `embeddings`, which are neither text nor search.
+- **`assertCategoriesCoverRows` throws when the per-category counts stop adding up** to the ledger's
+  own, and deliberately does **not** throw merely because `unknown` has rows in it — that is an
+  expected state (retired names like `summarise`/`summary` are still in the ledger) and a check that
+  fired on it would be muted within a week, taking the useful half down with it. The report prints
+  the scope/job/step triples instead.
+- **The cash uplift applies to the credits pocket only.** A BYOK row was billed to somebody else's
+  key and a `computed` row never reached OpenRouter, so neither ever bought a credit. Never written
+  to a row; allocated in the report and called **model-cost contribution margin**.
+
+Two things found while building, both worth keeping:
+
+- **A margin spread must come from the *cost* spread, not from a spread of margins.** A nearest-rank
+  p95 over margins returns the largest margin, which is the cheapest account — the opposite of the
+  number anybody wants, and it would have printed reassuringly with nothing red anywhere.
+- **The SQL definition of "unpriced" is not `cost_source = 'none'`.** A BYOK row where OpenRouter
+  answered (their zero is an answer) but reported no upstream figure is settled *and* unpriced. The
+  shortcut passes every fixture that lacks that row, so the suite carries one deliberately.
+
+**What is not proved:** no live conversation has produced a realtime row on this box, so the voice
+category has never held real data and the "silent sessions" line has only ever printed zeroes. The
+per-minute economics that motivated the whole voice category are still Stage 2B's outstanding
+end-to-end run.
+
 A total is not an answer; a **distribution** is.
 
 - **Cost categories — but named honestly.** Sol found my five categories are *not currently
