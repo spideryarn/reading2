@@ -163,6 +163,20 @@ const COSTS: Partial<Record<Mode, string>> = {
    * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
    */
   timeline: "Timeline",
+  /**
+   * **Referee is `timeline`'s case, and it arrived here the slow way.**
+   *
+   * It reached the fall-through until 2026-09-02, which is fail-closed and so
+   * gave the right *policy* — but the fall-through has only the mode id to hand
+   * `ownersOnly`, and that wants a product noun. A visitor pressing the button
+   * was told "referee is for whoever added this article", lower-case, in the
+   * band and in the dock tooltip.
+   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
+   *
+   * It spends: the reader's own criteria go to the model along with the piece.
+   * docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+   */
+  referee: "Referee",
 };
 
 /**
@@ -215,7 +229,15 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
   /* Not reachable today — `Mode` is closed and every member is in one of the
      tables above. It is here rather than as a non-null assertion because a mode
      added later must fail closed: a visitor sees a boundary they can read
-     rather than a band that renders nothing. */
+     rather than a band that renders nothing.
+
+     **The claim above was untrue for two days and nothing said so**: `referee`
+     landed here from 2026-08-31, and the cost of falling through is that this
+     line has only the mode id to give `ownersOnly`, which wants the word on the
+     button. The visitor read "referee is for whoever added this article".
+     tests/visitor-gaps.test.ts now sweeps `MODES` and fails if any live mode's
+     sentence carries its own id, so the next one to arrive here is caught by
+     the wording rather than by somebody re-reading this comment. */
   return { kind: "owners-only", feature: mode };
 }
 

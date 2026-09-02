@@ -16,17 +16,15 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
-  ARTICLE_IS_BUSY,
   DRIVER_STALLED,
   RUNNING_A_WHILE,
   STEP_USUALLY_A_COUPLE_OF_MINUTES,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
-  WORKING_ON_THIS_ARTICLE,
 } from "../src/job-state.js";
 import type { Job, JobStep } from "../src/types.js";
 import { JobProgress } from "../src/web/JobProgress.js";
@@ -83,7 +81,7 @@ let stopped: string[] = [];
 
 function render(
   j: Job | null,
-  extra: { failed?: string; blocking?: Job; stalled?: boolean } = {},
+  extra: { failed?: string; stalled?: boolean } = {},
 ): void {
   stopped = [];
   act(() =>
@@ -91,7 +89,6 @@ function render(
       <JobProgress
         job={j}
         failed={extra.failed ?? null}
-        blocking={extra.blocking ?? null}
         stalled={extra.stalled ?? false}
         onRun={async () => undefined}
         onCancel={(id) => stopped.push(id)}
@@ -102,11 +99,6 @@ function render(
       />,
     ),
   );
-}
-
-/** The Stop button, wherever on the band it is. */
-function stopButton(): HTMLButtonElement | undefined {
-  return [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Stop"));
 }
 
 it("says how long the step has been going", () => {
@@ -212,95 +204,12 @@ it("does not call a run unusual when nothing measured what usual is", () => {
   );
 });
 
-/**
- * **The job that refused this run, on the surface that asked for it.**
- *
- * `POST /api/jobs {slug, steps}` answers 409 when the article already has an
- * active job doing different work, and the blocker is by definition a job whose
- * steps do **not** include the one this panel watches — so `useStepJob`'s own
- * filter (`writesStep`) can never surface it, and before 2026-09-01 the reader
- * was told to stop something with nothing on screen to stop.
- *
- * The words are `displayJob`'s, not a second vocabulary: whether the blocker is
- * *Building the hierarchy · 2m 14s* or *Waiting to continue.* is exactly the
- * question the card and the band already answer, and answering it a third way
- * here is how two surfaces come to disagree about one job.
- *
- * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
+/*
+ * **The job that refused this run** had a whole `describe` here — five cases
+ * over a second band drawn beside the button, `WORKING_ON_THIS_ARTICLE` and
+ * all. Deleted on 2026-09-02 with the refusal: `POST /api/jobs {slug, steps}`
+ * no longer answers 409 when an article already has different work in flight,
+ * it queues the second job, and that job appears in this band's *own* rows as
+ * `WAITING_TO_CONTINUE` — which the cases above already cover.
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g.
  */
-describe("the job that is in the way", () => {
-  /** An ingest holding the article. Nothing in it writes `sketch`. */
-  const blocker = (over: Partial<Job> = {}, step?: JobStep): Job => ({
-    ...job(),
-    id: "spya-blocker",
-    steps: [
-      step ?? {
-        name: "hierarchy",
-        label: "Building the hierarchy",
-        status: "running",
-        startedAt: ago(134_000),
-      },
-    ],
-    ...over,
-  });
-
-  it("shows it, and says what it is doing rather than what this panel does", () => {
-    render(null, { failed: ARTICLE_IS_BUSY, blocking: blocker() });
-
-    /* On screen first, and then what is on it — a negative assertion under a
-       card that never rendered passes for the wrong reason, which is how stage
-       5 shipped one. */
-    expect(host.textContent).toContain(ARTICLE_IS_BUSY);
-    expect(host.textContent).toContain("Building the hierarchy");
-    expect(host.textContent).toContain("2m 14s");
-    /* This panel's own running word, which would be a lie about somebody
-       else's job — the blocker is not drawing anything. */
-    expect(host.textContent).not.toContain("Drawing…");
-  });
-
-  it("offers Stop, and stops that job rather than this panel's", () => {
-    render(null, { failed: ARTICLE_IS_BUSY, blocking: blocker() });
-    const stop = stopButton();
-    expect(stop, "no Stop button on the blocking job").toBeDefined();
-    act(() => stop?.click());
-    expect(stopped).toEqual(["spya-blocker"]);
-  });
-
-  it("does not call a queued blocker running", () => {
-    render(null, {
-      failed: ARTICLE_IS_BUSY,
-      blocking: blocker(
-        { status: "queued" },
-        { name: "hierarchy", label: "Building the hierarchy", status: "pending" },
-      ),
-    });
-    /* The band is on screen — assert that before asserting what is not on it. */
-    expect(host.textContent).toContain(ARTICLE_IS_BUSY);
-    expect(host.textContent).toContain(WAITING_TO_CONTINUE);
-    expect(host.textContent).not.toContain("Building the hierarchy");
-  });
-
-  it("still offers the button the reader pressed, because it works once the blocker ends", () => {
-    render(null, { failed: ARTICLE_IS_BUSY, blocking: blocker() });
-    const run = [...host.querySelectorAll("button")].find(
-      (b) => b.textContent?.includes("Draw the argument"),
-    );
-    expect(run, "the run button disappeared behind the refusal").toBeDefined();
-  });
-
-  it("names the article rather than a step when the blocker is between steps", () => {
-    /* Running with no running step — a fraction of a second in practice, and
-       the one gap where there is no label to borrow. It must not fall through
-       to this panel's `runningLabel`. */
-    render(null, {
-      failed: ARTICLE_IS_BUSY,
-      blocking: blocker({}, {
-        name: "hierarchy",
-        label: "Building the hierarchy",
-        status: "done",
-      }),
-    });
-    expect(host.textContent).toContain(WORKING_ON_THIS_ARTICLE);
-    expect(host.textContent).not.toContain("Drawing…");
-  });
-});

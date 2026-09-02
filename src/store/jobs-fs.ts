@@ -50,6 +50,8 @@ import { processSingleton } from "../process-state.js";
 import type { Job, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
+  type EnqueueOutcome,
+  type EnqueueTicket,
   type ExpirySettlement,
   type JobEnding,
   type JobStore,
@@ -101,8 +103,16 @@ interface QueueState {
   index: Map<string, Job>;
   /** The attempt token each running job is held by. Never written to disk. */
   attempts: Map<string, { attempt: string; expires: number }>;
-  /** The work key each job was enqueued with. In memory, like the index it sits beside. */
-  keys: Map<string, string>;
+  /**
+   * What each job was enqueued with. In memory, like the index it sits beside.
+   *
+   * A whole `EnqueueTicket` rather than the bare work key it held until
+   * 2026-09-02: a name reservation and a source claim are two more facts that
+   * arbitrate an article's queue, and they belong beside the work key for the
+   * same reason it is not on `Job` — none of the three is something a reader is
+   * ever shown. See ./jobs.ts § `EnqueueTicket`.
+   */
+  tickets: Map<string, EnqueueTicket>;
   /** Jobs the reader has dismissed. A late write must not bring one back. */
   forgotten: Set<string>;
   /** One write at a time per job, and the last one in flight for each. */
@@ -115,11 +125,19 @@ interface QueueState {
 
 /* Bump the version whenever a field above is added or renamed: a dev server that
    restarts in place keeps the object an older copy made, and the alternative to
-   failing loudly is reading `undefined` out of the queue's own index. */
-const state = processSingleton<QueueState>("jobs-fs", "2026-09-02", () => ({
+   failing loudly is reading `undefined` out of the queue's own index.
+
+   **And bump it to something distinguishable, not to today's date.** This said
+   `"2026-09-02"` when `keys` became `tickets`, on 2026-09-02 — so the obvious
+   bump was to the value it already had, which reads like a version bump, passes
+   review, and guards nothing. `processSingleton` compares strings and cannot
+   tell a careful bump from a lazy one. Never touch the *name*: a second key is a
+   second lock universe with the first claimant still running inside the old one,
+   which is the bug src/process-state.ts exists to prevent. */
+const state = processSingleton<QueueState>("jobs-fs", "2026-09-02-tickets", () => ({
   index: new Map(),
   attempts: new Map(),
-  keys: new Map(),
+  tickets: new Map(),
   forgotten: new Set(),
   writes: new Map(),
   writeCounter: 0,
@@ -129,33 +147,36 @@ const state = processSingleton<QueueState>("jobs-fs", "2026-09-02", () => ({
 /* Bound locally so the rest of this file reads as it always did. These are the
    *same objects* every copy of the module sees, which is the whole point; the
    two scalars are reached through `state` because a `const` cannot be. */
-const { index, attempts, keys, forgotten, writes } = state;
+const { index, attempts, tickets, forgotten, writes } = state;
 
 function jobFile(id: string): string {
   return path.join(JOBS_DIR, `${id}.json`);
 }
 
 /**
- * What one file holds: the job, plus the work key beside it.
+ * What one file holds: the job, plus the enqueue ticket's fields beside it.
  *
- * **`workKey` is not on `Job` and must not be.** It is not the reader's
- * business — `publicJob` would have to strip it alongside `ownerId` — and it is
- * derived from the *request* rather than from the record, so putting it on the
- * type would invite somebody to recompute it from a job whose steps have since
- * moved. Postgres keeps it in a column of its own for the same reason; here it
- * is a sibling key in the same document, so the two land in one atomic rename
- * and cannot disagree.
+ * **None of these is on `Job` and none of them must be.** They are not the
+ * reader's business — `publicJob` would have to strip them alongside `ownerId` —
+ * and each is derived from the *request* rather than from the record, so putting
+ * them on the type would invite somebody to recompute one from a job whose steps
+ * have since moved, or to infer `reservesName` back out of `url`. Postgres keeps
+ * all three in columns for the same reason; here they are sibling keys in the
+ * same document, so they land in one atomic rename and cannot disagree with the
+ * job they belong to.
  *
- * Optional, because every file written before 2026-08-27 lacks it.
+ * Every field is optional, because files written before each was added lack it.
+ * **A record with no `reservesName` is read as not reserving**, which is the
+ * safe direction: it can never wrongly block a name.
  */
-type Stored = Job & { workKey?: string };
+type Stored = Job & Partial<EnqueueTicket>;
 
-async function writeOnce(job: Job, workKey: string | undefined): Promise<void> {
+async function writeOnce(job: Job, ticket: EnqueueTicket | undefined): Promise<void> {
   await mkdir(JOBS_DIR, { recursive: true });
   /* The suffix carries a counter as well as the pid — the pid alone is constant
      within a process, which is exactly the case that broke. */
   const tmp = `${jobFile(job.id)}.${process.pid}.${++state.writeCounter}.tmp`;
-  const stored: Stored = { ...job, ...(workKey !== undefined && { workKey }) };
+  const stored: Stored = { ...job, ...ticket };
   await writeFile(tmp, `${JSON.stringify(stored, null, 2)}\n`, "utf8");
   await rename(tmp, jobFile(job.id));
 }
@@ -168,9 +189,9 @@ async function writeOnce(job: Job, workKey: string | undefined): Promise<void> {
  * not nothing either — it is what the restart sweep reads — so a failure is said
  * out loud rather than swallowed.
  */
-function persist(job: Job, workKey = keys.get(job.id)): Promise<void> {
+function persist(job: Job, ticket = tickets.get(job.id)): Promise<void> {
   const next = (writes.get(job.id) ?? Promise.resolve())
-    .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job, workKey)))
+    .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job, ticket)))
     .catch((err: Error) => {
       /* `errorFields`, not `err.message`. This line used to print the message
          and throw the stack away — and the stack is the only part that says
@@ -290,7 +311,7 @@ async function loadFromDisk(): Promise<void> {
       unreadable.push(file);
       continue;
     }
-    const { workKey, ...job } = stored;
+    const { workKey, reservesName, urlKey, ...job } = stored;
     /**
      * **A job written before jobs had owners belongs to this installation.**
      *
@@ -308,15 +329,25 @@ async function loadFromDisk(): Promise<void> {
      * hid a third of the records.
      */
     if (!job.ownerId) job.ownerId = environmentOwnerId();
-    if (sweepStopped(job as Job)) await persist(job as Job, workKey);
+    /* **The ticket comes back with the job, or an active job survives a restart
+       unable to recognise its own repeat request.** Without the work key
+       `enqueueOrGet` cannot answer `sameWork` for a request identical to the one
+       already running, and `enqueue` — whose reallocation cannot move a URL off
+       a slug it legitimately owns — walks its whole retry budget and 409s a
+       request that should have been handed the job. GPT Sol, 2026-08-27.
+
+       **`reservesName` defaults to false for a record that predates it**, which
+       is the direction that can only fail to block a name rather than wrongly
+       block one — the plan's § 1e. A record with no work key at all keeps none:
+       an empty string would be a key, and every keyless job would then dedupe
+       onto every other one. */
+    const ticket: EnqueueTicket | undefined =
+      workKey === undefined
+        ? undefined
+        : { workKey, reservesName: reservesName === true, ...(urlKey !== undefined && { urlKey }) };
+    if (sweepStopped(job as Job)) await persist(job as Job, ticket);
     index.set(job.id, job as Job);
-    /* **The key comes back with the job, or an active job survives a restart
-       unable to recognise its own repeat request.** Without it `enqueueOrGet`
-       answers `sameWork: false` for a request identical to the one already
-       running, and `enqueue` — whose reallocation cannot move a URL off a slug
-       it legitimately owns — walks its whole retry budget and 409s a request
-       that should have been handed the job. GPT Sol, 2026-08-27. */
-    if (workKey !== undefined) keys.set(job.id, workKey);
+    if (ticket) tickets.set(job.id, ticket);
   }
 
   if (unreadable.length > 0) {
@@ -370,6 +401,54 @@ function runningCount(mine: string): number {
   return running;
 }
 
+/**
+ * Is another job in the way on this article — **older, or already running**?
+ *
+ * The Postgres `blockedByAnother`, over the in-memory index, and the two
+ * conditions are the two things it is: the article's order, and the article's
+ * mutex.
+ *
+ * **A running job blocks whatever its timestamp says.** A row that arrives
+ * after a newer one has already started has nothing older than it on the
+ * article, so an order-only rule lets it claim — and this adapter has no index
+ * underneath to refuse the second runner, so it would simply run two jobs on
+ * one `data/<slug>/` directory and report both as claimed. That is worse than
+ * the Postgres version of the same mistake, which at least ends in a `23505`.
+ * GPT Sol, reviewing the built stage 1, finding 2.
+ *
+ * Same order as Postgres — `(createdAt, id)` — and `createdAt` compares as a
+ * string because every writer of it is `new Date().toISOString()`, whose
+ * lexical order is its chronological one.
+ *
+ * **The id tie-break is equivalent to Postgres's only while Postgres orders the
+ * id alphabet the way JavaScript does.** `<` here is UTF-16 code units; there
+ * it is whatever collation `jobs.id` has, and src/db/schema.ts does not pin `C`.
+ * Job ids are `spya-` plus lower-case base36 (src/ids.ts), so every collation
+ * anybody is likely to have agrees — but nothing checks it, and a database
+ * created under a collation that sorts digits and letters differently would
+ * give the two adapters different answers for jobs queued in the same
+ * millisecond. Not a demonstrated failure; written down so the next person does
+ * not find it by being wrong. GPT Sol, 2026-09-02.
+ *
+ * **Global on the slug, with no owner in it**, exactly as the index is: two
+ * owners can build toward one name, and what the line protects is the article's
+ * shared `data/<slug>/` directory rather than one person's tidiness.
+ *
+ * **A predecessor that is stopping still counts.** Stop on a queued job settles
+ * it terminal at once, so it leaves by itself; a *running* one keeps
+ * `cancelling` until its claimant lets go, and until then it is still inside the
+ * article. See the contract in ./jobs.ts § `claim`.
+ */
+function blockedByAnother(job: Job): boolean {
+  for (const other of index.values()) {
+    if (other.id === job.id || other.slug !== job.slug || TERMINAL.has(other.status)) continue;
+    if (other.status === "running") return true;
+    if (other.createdAt < job.createdAt) return true;
+    if (other.createdAt === job.createdAt && other.id < job.id) return true;
+  }
+  return false;
+}
+
 export const fsJobStore: JobStore = {
   async list(owner: OwnerId): Promise<Job[]> {
     await ready();
@@ -387,31 +466,65 @@ export const fsJobStore: JobStore = {
     return job ? structuredClone(job) : undefined;
   },
 
-  async enqueueOrGet(
-    job: Job,
-    workKey: string,
-  ): Promise<{ job: Job; created: boolean; sameWork: boolean }> {
+  async enqueueOrGet(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome> {
     await ready();
-    /* `jobs_active_slug`, locally. Synchronous from here to `index.set`, with no
+    /* **The four unique indexes, locally**, asked in the order the Postgres
+       adapter asks them and with the same predicates — see `tryEnqueue` there
+       for why the address is asked before the name, and `EnqueueOutcome` for
+       what each answer means. Synchronous from here to `index.set`, with no
        `await` in between, which is what makes it airtight *within this process*.
        Across processes it is not, and this adapter does not claim to be. */
-    const held = [...index.values()].find(
-      (j) => j.ownerId === job.ownerId && j.slug === job.slug && !TERMINAL.has(j.status),
+    const active = [...index.values()].filter((j) => !TERMINAL.has(j.status));
+
+    const mine = active.find(
+      (j) =>
+        j.ownerId === job.ownerId &&
+        j.slug === job.slug &&
+        tickets.get(j.id)?.workKey === ticket.workKey &&
+        j.cancelling !== true,
     );
-    if (held) {
-      return { job: structuredClone(held), created: false, sameWork: keys.get(held.id) === workKey };
+    if (mine) return { kind: "sameWork", job: structuredClone(mine) };
+
+    if (ticket.reservesName && ticket.urlKey !== undefined) {
+      const source = active.find(
+        (j) =>
+          j.ownerId === job.ownerId &&
+          tickets.get(j.id)?.reservesName === true &&
+          tickets.get(j.id)?.urlKey === ticket.urlKey,
+      );
+      if (source) return { kind: "sourceTaken", job: structuredClone(source) };
     }
+
+    if (ticket.reservesName) {
+      const name = active.find(
+        (j) => j.slug === job.slug && tickets.get(j.id)?.reservesName === true,
+      );
+      if (name) return { kind: "nameTaken", job: structuredClone(name) };
+    }
+
     /* **Queued, always, whatever the caller handed us.** `enqueueOrGet` takes a
        whole `Job`, and keeping its `status` let a caller insert a `running` row
        that never passed the cap check and carries no attempt token — one more
        running job than the machine agreed to, arriving through the door marked
        "enqueue", and `runningCount` would then count it against everybody else.
        Nothing does that today; the contract simply should not allow it. The
-       Postgres adapter is sealed the same way. GPT Sol, reviewing stage 1. */
-    index.set(job.id, { ...job, status: "queued" });
-    keys.set(job.id, workKey);
-    await persist(job);
-    return { job: structuredClone(job), created: true, sameWork: true };
+       Postgres adapter is sealed the same way. GPT Sol, reviewing stage 1.
+
+       **One normalised object, used three times.** The first version of this
+       built the queued copy for the index and then persisted and returned
+       `job` — the caller's own object — so a `running` job came out queued in
+       memory, running in `data/_jobs/`, and running in the `created` outcome
+       the route answers with. Two of the three contradicted the paragraph above
+       them, and no test noticed because every caller already hands over a
+       queued job. The reload hides it too: `sweepStopped` turns a loaded
+       `running` record back into a queued one, so the only honest way to see
+       the file is to read it. GPT Sol, reviewing the built stage 1, finding 6;
+       tests/jobs-fs-load.test.ts. */
+    const queued: Job = { ...job, status: "queued" };
+    index.set(queued.id, queued);
+    tickets.set(queued.id, ticket);
+    await persist(queued);
+    return { kind: "created", job: structuredClone(queued) };
   },
 
   async claim(
@@ -427,6 +540,13 @@ export const fsJobStore: JobStore = {
     if (TERMINAL.has(job.status)) return { kind: "finished", job: structuredClone(job) };
     if (job.cancelling === true) return { kind: "stopping", job: structuredClone(job) };
     if (job.status === "running") return { kind: "busy", why: "another request is inside this job" };
+    /* **The article's line first, the cap second** — the order the Postgres
+       adapter takes, and for the reason written out there: both refuse, so the
+       order changes only which *reason* comes back, and the article is a fact
+       about this job while the cap is a fact about the machine this second. */
+    if (blockedByAnother(job)) {
+      return { kind: "busy", why: "another job on this article is ahead of it" };
+    }
     const running = runningCount(id);
     if (running >= maxRunning) {
       return { kind: "busy", why: `already running ${running} of ${maxRunning} jobs` };
@@ -538,14 +658,6 @@ export const fsJobStore: JobStore = {
     return settled;
   },
 
-  async activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined> {
-    await ready();
-    const held = [...index.values()].find(
-      (j) => j.ownerId === owner && j.slug === slug && !TERMINAL.has(j.status),
-    );
-    return held ? structuredClone(held) : undefined;
-  },
-
   async requestCancel(id: string, owner: OwnerId): Promise<Job | undefined> {
     await ready();
     const job = ownedBy(id, owner);
@@ -605,7 +717,11 @@ export const fsJobStore: JobStore = {
            anything can be held to. Postgres has ordered by `id` since it was
            written (src/store/pg-jobs.ts § trimFinished); this side had the
            opposite answer, and the parity suite was red before this line went
-           in. Lowest id goes, on both. */
+           in. Lowest id goes, on both.
+
+           The same collation caveat as `blockedByAnother` above applies to this
+           comparison: `<` is UTF-16 code units here and whatever collation
+           `jobs.id` carries there, and the schema does not pin `C`. */
         if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       })
@@ -650,7 +766,7 @@ async function removeJob(id: string): Promise<void> {
   forgotten.add(id);
   index.delete(id);
   attempts.delete(id);
-  keys.delete(id);
+  tickets.delete(id);
   await writes.get(id)?.catch(() => undefined);
   writes.delete(id);
   await unlink(jobFile(id)).catch(() => undefined);
@@ -721,7 +837,7 @@ export async function pauseForTests(id: string, from: number): Promise<void> {
 export async function reloadForTests(): Promise<void> {
   index.clear();
   attempts.clear();
-  keys.clear();
+  tickets.clear();
   state.loaded = null;
   await ready();
 }
@@ -746,7 +862,7 @@ export async function forgetForTests(ids: readonly string[]): Promise<void> {
   for (const id of ids) await removeJob(id).catch(() => undefined);
   index.clear();
   attempts.clear();
-  keys.clear();
+  tickets.clear();
   writes.clear();
   forgotten.clear();
 }
@@ -755,6 +871,6 @@ export async function forgetForTests(ids: readonly string[]): Promise<void> {
 export function resetForTests(): void {
   index.clear();
   attempts.clear();
-  keys.clear();
+  tickets.clear();
   writes.clear();
 }

@@ -138,4 +138,24 @@ describe("storeVerdict", () => {
   it("warns when the store is explicitly files", () => {
     expect(storeVerdict("files").ok).toBe(false);
   });
+
+  it("does not tell the reader to put the store in .env.local", () => {
+    /* It did until 2026-09-02, and following that advice turned 40 test files
+       and 146 tests red: `.env.local` is applied over `process.env`
+       (src/env.ts), so a value there overrides every test that sets
+       SPIDERYARN_STORE itself, and the shadowing warning is suppressed under
+       NODE_ENV=test so it happens in silence. The remedy is `npm run dev`.
+       This asserts the advice, because the advice is the thing that broke. */
+    for (const store of [undefined, "files"]) {
+      const advice = storeVerdict(store).lines.join(" ");
+      /* Every mention of .env.local must be a prohibition. Matching on "put …
+         .env.local" alone is not enough — it catches "DO NOT put … .env.local"
+         too, which is the sentence we want. */
+      for (const m of advice.matchAll(/[^.]*\.env\.local/gi)) {
+        expect(m[0]).toMatch(/DO NOT/);
+      }
+      expect(advice).toMatch(/\.env\.local/);
+      expect(advice).toContain("npm run dev");
+    }
+  });
 });

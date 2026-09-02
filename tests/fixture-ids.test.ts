@@ -96,11 +96,12 @@ const NOT_A_ROW: Record<string, string> = {
     "order to be told “unknown”, and `tests/store-artefacts-pg.test.ts` uses it as the job id " +
     "of a fixture that deliberately has no job. Neither one inserts it.",
   "00000000-0000-4000-8000-00000000c0de":
-    "the job card's owner, in six component and unit tests — `blocking-job-band`, " +
-    "`interrupted-job-card`, `job-card-progress`, `job-progress-band`, `job-state` and " +
-    "`step-job-driver-stalled`. Every one of them builds a `Job` object in memory and renders " +
-    "it; not one imports a store or a database module, so there is no row to delete. Six " +
-    "different owner ids would say that these fixtures differ in a way they do not.",
+    "the job card's owner, in five component and unit tests — `interrupted-job-card`, " +
+    "`job-card-progress`, `job-progress-band`, `job-state` and `step-job-driver-stalled`. " +
+    "(`blocking-job-band` was a sixth until 2026-09-02, when the refusal it drew was replaced " +
+    "by a queue.) Every one of them builds a `Job` object in memory and renders it; not one " +
+    "imports a store or a database module, so there is no row to delete. Five different owner " +
+    "ids would say that these fixtures differ in a way they do not.",
   "11111111-2222-3333-4444-555555555555":
     "two unrelated things that are both not rows: the signed-in reader in a stubbed Supabase " +
     "session in `feedback-mirror.test.ts`, and a provisioning attempt id inside a status file " +

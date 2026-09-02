@@ -111,7 +111,9 @@ describe("one job, two servers over the same data directory", () => {
     const job = aJob();
     /* `created`, or every assertion below could be a statement about a job
        some other run left behind under the same id. */
-    expect((await first.fsJobStore.enqueueOrGet(job, "work-key-1")).created).toBe(true);
+    expect((await first.fsJobStore.enqueueOrGet(job, { workKey: "work-key-1", reservesName: false })).kind).toBe(
+      "created",
+    );
 
     const held = await first.fsJobStore.claim(
       job.id,
@@ -153,7 +155,9 @@ describe("one job, two servers over the same data directory", () => {
     const job = aJob();
     /* `created`, or every assertion below could be a statement about a job
        some other run left behind under the same id. */
-    expect((await first.fsJobStore.enqueueOrGet(job, "work-key-2")).created).toBe(true);
+    expect((await first.fsJobStore.enqueueOrGet(job, { workKey: "work-key-2", reservesName: false })).kind).toBe(
+      "created",
+    );
 
     /* Warm and stale rather than swept — this copy read the directory *before*
        the claim. The other half of the same hazard, and the one a second dev
@@ -192,7 +196,9 @@ describe("one job, two servers over the same data directory", () => {
     const job = aJob();
     /* `created`, or every assertion below could be a statement about a job
        some other run left behind under the same id. */
-    expect((await first.fsJobStore.enqueueOrGet(job, "work-key-3")).created).toBe(true);
+    expect((await first.fsJobStore.enqueueOrGet(job, { workKey: "work-key-3", reservesName: false })).kind).toBe(
+      "created",
+    );
 
     const attempt = mintAttempt();
     expect(
@@ -234,7 +240,9 @@ describe("one job, two servers over the same data directory", () => {
     const job = aJob();
     /* `created`, or every assertion below could be a statement about a job
        some other run left behind under the same id. */
-    expect((await first.fsJobStore.enqueueOrGet(job, "work-key-4")).created).toBe(true);
+    expect((await first.fsJobStore.enqueueOrGet(job, { workKey: "work-key-4", reservesName: false })).kind).toBe(
+      "created",
+    );
 
     expect(
       (await first.fsJobStore.claim(job.id, job.ownerId, mintAttempt(), 1, MAX_RUNNING)).kind,

@@ -425,26 +425,6 @@ const adminOnFiles: AdminStore = {
       { status: 501 },
     );
   },
-  /* Same refusal, same reason, and stated separately rather than shared: an
-     empty array here would be a page saying *nobody has reported anything*,
-     which is the exact silent success `feedbackOnFiles` below is written to
-     avoid at the other end of the same feature. */
-  listFeedbackAcrossOwners: () => {
-    throw Object.assign(
-      new Error(
-        "The admin feedback page needs Postgres — the filesystem store has no " +
-          "feedback table, so there are no reports to show. Run with " +
-          "SPIDERYARN_STORE=postgres. See docs/project/admin.md.",
-      ),
-      { status: 501 },
-    );
-  },
-  readFeedbackScreenshotAcrossOwners: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
 };
 
 export const adminStore: AdminStore =

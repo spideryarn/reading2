@@ -17,19 +17,33 @@
  * *state*, on hover it shows *affordances*.** On an article you have never
  * marked it is empty all the way down until the pointer lands on a row.
  *
- * Three slots, top to bottom:
+ * Three slots for the owner, top to bottom:
  *
  *     1  permalink      every block, on hover
  *     2  comment mark   only when this block has comments
  *     3  chat           every block on hover; always when the block has chats
  *
+ * **A visitor's gutter is the permalink and nothing else** — one element in the
+ * flex column, not three with two of them blank, because none of these is a
+ * placeholder. The third is absent rather than dead: opening a conversation
+ * costs a model call, which is not theirs to spend, so `onChatAbout` is
+ * optional and the button exists only where the callback does. The second never
+ * draws for them either, for a different reason — the marks in it are the
+ * reader's own, and a visitor has none. The callback *is* the capability, the
+ * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
+ * handler that can disagree with it. It used to render for everybody and the
+ * press was swallowed in App, which is a button that can only fail. GPT Sol's
+ * review of the built code caught this paragraph claiming two.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C1.
+ *
  * **Two of them are fixed and the middle one is not**, which is the honest
- * version of a claim this file used to overstate. The permalink and the chat
- * button are rendered on every block whether or not they are visible, so
- * *hovering* never moves anything — which is the property that matters. Adding
- * or deleting a comment does move the chat button, between the second slot and
- * the third; that happens when the reader writes something, not when they wave
- * the pointer at a paragraph. GPT Sol, 2026-08-31.
+ * version of a claim this file used to overstate. The permalink, and the chat
+ * button wherever there is one, are rendered on every block whether or not they
+ * are visible, so *hovering* never moves anything — which is the property that
+ * matters, and it holds for a two-slot gutter as much as a three-slot one.
+ * Adding or deleting a comment does move the chat button, between the second
+ * slot and the third; that happens when the reader writes something, not when
+ * they wave the pointer at a paragraph. GPT Sol, 2026-08-31.
  *
  * **This is also where the chat button finally arrives in the gutter.** Until
  * today `.block-chat` had no `position` at all, so it was an in-flow box
@@ -63,7 +77,21 @@ interface Props {
   /** Conversations anchored anywhere in this block, whole-block or selection. */
   chatCount: number;
   onOpenComment(id: string): void;
-  onChatAbout(id: BlockId): void;
+  /**
+   * Open a conversation about this whole block — **and its absence is what
+   * says the reader may not.**
+   *
+   * Optional because a visitor has no way to pay for a model call, and the
+   * button is drawn only when this is here. See the header: the callback is the
+   * capability, so there is no second flag to fall out of step with it.
+   *
+   * `| undefined` spelled out, and it is not noise: `exactOptionalPropertyTypes`
+   * is on (docs/project/typechecking.md), so the shorthand `onChatAbout?(…)`
+   * means *absent*, and a caller choosing between a handler and `undefined` —
+   * which is exactly how App decides — would not typecheck. `comments` above
+   * carries the same annotation for the same reason.
+   */
+  onChatAbout?: ((id: BlockId) => void) | undefined;
   /**
    * Go to this block without a page load, writing `?at=` as it goes — App's
    * own jump, the one every gist cell and arrow key uses.
@@ -300,28 +328,31 @@ export function BlockGutter({
         </button>
       )}
 
-      {/* Unchanged in behaviour, class and count — it has only moved into a
-          container that positions it. */}
-      <button
-        type="button"
-        className={`block-chat${chatCount ? " has" : ""}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onChatAbout(id);
-        }}
-        title={
-          chatCount
-            ? `Chat about this paragraph (${chatCount} already)`
-            : "Chat about this paragraph"
-        }
-        aria-label="Chat about this paragraph"
-      >
-        <MessageSquare size={12} aria-hidden="true" />
-        {/* Every conversation anchored to this block, selections included —
-            counting only the whole-block ones would make the number disagree
-            with the marks sitting beside it. */}
-        {!!chatCount && <span className="block-chat-n">{chatCount}</span>}
-      </button>
+      {/* The third slot, and only for a reader who can use it — see the header.
+          Everything else about it is unchanged: same class, same count, same
+          reveal rules. */}
+      {onChatAbout && (
+        <button
+          type="button"
+          className={`block-chat${chatCount ? " has" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChatAbout(id);
+          }}
+          title={
+            chatCount
+              ? `Chat about this paragraph (${chatCount} already)`
+              : "Chat about this paragraph"
+          }
+          aria-label="Chat about this paragraph"
+        >
+          <MessageSquare size={12} aria-hidden="true" />
+          {/* Every conversation anchored to this block, selections included —
+              counting only the whole-block ones would make the number disagree
+              with the marks sitting beside it. */}
+          {!!chatCount && <span className="block-chat-n">{chatCount}</span>}
+        </button>
+      )}
     </div>
   );
 }
