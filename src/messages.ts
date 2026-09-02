@@ -1698,6 +1698,22 @@ export const REFEREE_TEXT_ALREADY_SENT =
   "open-review submissions, and drafts shared with you with the author's consent.";
 
 /**
+ * **The same fact in one line, for the shut state of the notice.**
+ *
+ * The notice in Referee mode is collapsed until a referee opens it — Greg,
+ * 2026-09-02 — and a collapse that took the fact away with the paragraph would
+ * be a dismissal wearing a chevron. So the fact itself is the label on the
+ * control: whatever the referee does, this sentence is on screen.
+ *
+ * It is the first clause of `REFEREE_TEXT_ALREADY_SENT` and nothing else. The
+ * long sentence is left exactly as it was reviewed — what is behind the
+ * disclosure is *which venues call that a breach, and which manuscripts this
+ * mode is for*, which is the part somebody reads once.
+ */
+export const REFEREE_TEXT_ALREADY_SENT_SHORT =
+  "This article's text has already been sent to a third-party model provider.";
+
+/**
  * **The second fact, and it applies to the venues that said yes.**
  *
  * A separate sentence rather than a fourth clause above, because it is for a

@@ -147,7 +147,7 @@ import {
    button, the dock's button and the browser tab cannot say three things.
    src/title-text.ts § MODE_LABEL. */
 import { MODE_LABEL } from "../title-text.js";
-import { ClipboardCheck, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck, X } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -188,7 +188,11 @@ import { markedModes, visitorGap } from "./visitor.js";
 import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
-import { REFEREE_DECLARE_IT, REFEREE_TEXT_ALREADY_SENT } from "../messages.js";
+import {
+  REFEREE_DECLARE_IT,
+  REFEREE_TEXT_ALREADY_SENT,
+  REFEREE_TEXT_ALREADY_SENT_SHORT,
+} from "../messages.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "./feedback-context.js";
 
 /**
@@ -4425,7 +4429,7 @@ function DiagramBand({
  * be built under — no accept/reject, no score, no per-criterion grade. Ranking
  * within the paper is the only ordering the mode offers.
  *
- * ## The notice is in the past tense, is not dismissible, and holds no state
+ * ## The notice is in the past tense, is shut until asked for, and is never dismissed
  *
  * All three are deliberate. **Past tense** because by the time anybody is
  * looking at this band the article's text has already gone to the model
@@ -4446,6 +4450,22 @@ function DiagramBand({
  * **Not dismissible**, for the reason `SharedNotice` in src/web/PublicChrome.tsx
  * gives about itself: *it is what this page is, and a control to make it go away
  * would say otherwise.*
+ *
+ * **Shut by default, though**, since 2026-09-02, when Greg asked for it:
+ * *"also default-collapse the message starting with 'This article's text has
+ * already been sent to a third-party model...'"* The three sentences above are
+ * unchanged and so is the reasoning; what changed is that the paragraph a
+ * referee reads once no longer costs the band 214px on every visit.
+ *
+ * **A collapse is not a dismissal, and the two differences are what keep the
+ * paragraph above true.** First, the *fact* is the label on the control —
+ * `REFEREE_TEXT_ALREADY_SENT_SHORT` — so shutting the box hides which venues
+ * call this a breach and which manuscripts the mode is for, never that the text
+ * has gone. Second, nothing is remembered: `noticeOpen` is a `useState` that
+ * dies with the mount, so every visit starts shut and one press opens it. That
+ * is also why the storage objection this comment used to make against a
+ * collapse — localStorage is banned (docs/project/url-state.md), and a column is
+ * a migration for a checkbox — does not apply: there is nothing to store.
  *
  * It is styled as a notice and not as an error — src/web/styles.css § referee
  * mode. Nothing has gone wrong.
@@ -4490,6 +4510,11 @@ function RefereeBand({
      not about a sub-mode, and a hook inside `RefereeSubMode` would re-run the
      scan every time the referee pressed a different chip. */
   const scan = useSourceScan(slug);
+  /* **Shut, and not remembered** — see the header. Local state rather than a
+     `?` parameter, for the reason `Section` in src/web/Metadata.tsx gives about
+     itself: a shut box is not view state, nothing about it is worth linking to,
+     and docs/project/url-state.md keeps the address bar for places you were. */
+  const [noticeOpen, setNoticeOpen] = useState(false);
 
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
@@ -4509,8 +4534,29 @@ function RefereeBand({
         {/* Always, above everything, and before any sub-mode has been pressed.
             src/messages.ts owns both sentences. */}
         <div className="ref-notice">
-          <p>{REFEREE_TEXT_ALREADY_SENT}</p>
-          <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+          {/* **The fact is the label on the control**, so shutting the box does
+              not take it away — only the venues and the audience, which is the
+              part a referee reads once. src/messages.ts owns all three
+              sentences. */}
+          <button
+            type="button"
+            className="ref-notice-toggle"
+            aria-expanded={noticeOpen}
+            onClick={() => setNoticeOpen((was) => !was)}
+          >
+            <span>{REFEREE_TEXT_ALREADY_SENT_SHORT}</span>
+            {noticeOpen ? (
+              <ChevronDown size={12} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={12} aria-hidden="true" />
+            )}
+          </button>
+          {noticeOpen && (
+            <>
+              <p>{REFEREE_TEXT_ALREADY_SENT}</p>
+              <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+            </>
+          )}
         </div>
 
         {/* **Above the chips, and outside `.ref-panel`**, so it is on screen

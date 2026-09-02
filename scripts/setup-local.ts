@@ -33,10 +33,20 @@
  * without an explicit opt-in, and `db:seed-owner` refuses any target that is not
  * this repo's own stack. This script adds no way around any of that.
  *
- * **It does not fetch article fixtures.** `data/` and `output/` are gitignored,
- * and about nineteen test files want an article that is not in git — the other
- * hole 260831x found. That is a real gap and it is not this script's to fill;
- * it is recorded there rather than papered over here.
+ * **It does not fetch article fixtures into `data/`.** Those directories are
+ * gitignored, and about nineteen test files want an article that a fresh clone
+ * does not have — the other hole 260831x found. Most of that closed on
+ * 2026-09-01, when the corpus was committed to `tests/fixtures/data-root/`
+ * (260901b) and `scripts/corpus-materialise.ts` became the thing that copies it
+ * into place for a worktree and the deploy gate. This script still does not call
+ * it: a shared checkout already has `data/`, and a worktree runs
+ * `npm run worktree:setup`, which does.
+ *
+ * What it *does* do since 2026-09-02 is put three of those committed articles
+ * into **Postgres**, on the account you sign in as, so the last step leaves a
+ * shelf with something on it rather than an empty one. That is `db:seed-dev`
+ * below, and it is a different problem from the `data/` one — same corpus, other
+ * end of the pipeline.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -82,6 +92,20 @@ const STEPS: Step[] = [
     ifItFails:
       "Read the message above — this step refuses rather than guessing, and every\n" +
       "  refusal it has says what to do. docs/project/supabase-local.md § Signing in.",
+  },
+  {
+    /* **Separate from the seed above, not folded into it.** That one talks to
+       GoTrue's admin API and prints a generated password once; this one talks to
+       Postgres and the committed fixture corpus. Different dependencies and
+       different failure surfaces, and `scripts/seed-accounts.ts` is deliberately
+       testable with no network at all — a property that would be lost by giving
+       it a database to reach. */
+    what: "put experimental features and a few articles on that account",
+    args: ["run", "db:seed-dev"],
+    ifItFails:
+      "It says which slug it could not seed and why. A slug owned by somebody else is\n" +
+      "  the usual answer on a shared database — `npm run db:reown` moves rows.\n" +
+      "  docs/project/supabase-local.md § A shelf with something on it.",
   },
 ];
 

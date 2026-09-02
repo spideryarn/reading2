@@ -1297,6 +1297,76 @@ describe("PATCH /api/search/:slug/:id", () => {
 });
 
 /**
+ * **Every PATCH route, against a body that is not an object.**
+ *
+ * This is the check the postmortem asked for, and it is deliberately a table
+ * rather than a case per route: the search PATCH had a per-route version of
+ * this test since 2026-08-27 and it protected exactly one route, while the
+ * comment beside it said in as many words that "the same hole is latent in the
+ * other PATCH routes here". It was, for six days, in the chat rename.
+ * docs/postmortems/260902e-a-comment-that-named-the-latent-hole-and-left-it-latent.md.
+ *
+ * **4xx, not a specific code**, because these routes legitimately differ: some
+ * refuse a non-object outright through `objectBody`, and the two comment routes
+ * read it through `fields`, which coerces to `{}` and then refuses for having
+ * no fields. What none of them may do is 500 — that is a malformed request
+ * reported as a server fault, and it is the shape a client bug takes, so it
+ * arrives looking like ours.
+ *
+ * No fixtures: every one of these validates the body before it touches a store,
+ * so a route that 404s here would be failing for the wrong reason and the
+ * assertion would still hold. If one ever needs a real row to reach its
+ * validation, that is itself worth knowing.
+ */
+describe("no PATCH route answers a malformed body with a 500", () => {
+  const PATCH_ROUTES = [
+    "/api/library/a-slug",
+    "/api/reader",
+    "/api/comments/a-slug/spya-k3m9qt",
+    "/api/comments/a-slug/spya-k3m9qt/mark",
+    "/api/chat/a-slug/t1",
+    "/api/search/a-slug/r1",
+    "/api/referee/criteria/a-slug/c1",
+  ];
+
+  for (const url of PATCH_ROUTES) {
+    for (const body of ["null", "[]", '"3"', "7"]) {
+      it(`${url} refuses ${body}`, async () => {
+        const r = await call("PATCH", url, body);
+        expect(r.status).toBeGreaterThanOrEqual(400);
+        expect(r.status).toBeLessThan(500);
+      });
+    }
+  }
+});
+
+/**
+ * **The hole the search PATCH beside it wrote down and nobody closed.**
+ *
+ * That route's comment has said since 2026-08-27 that "the same hole is latent
+ * in the other PATCH routes here". It was: renaming a chat thread destructured
+ * `readBody`'s result without first checking it was an object, so a body of
+ * bare `null` — valid JSON — threw a `TypeError` that the generic handler
+ * reported as a **500**. A malformed request answered as a server fault is the
+ * one thing validation must never do, and it is the shape a client bug takes,
+ * so it would have been reported as ours.
+ *
+ * Written down is not checked. Found by GPT Sol reviewing the rework plan,
+ * 2026-09-02; docs/reusable/written-down-is-not-checked.md.
+ *
+ * No thread has to exist for this: the destructure happened before any store
+ * call, so the 500 did not depend on the id being real.
+ */
+describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
+  for (const body of ["null", "[]", '"3"', "7"]) {
+    it(`answers ${body} with 400, not 500`, async () => {
+      const r = await call("PATCH", "/api/chat/test-routes-colour-fixture/t1", body);
+      expect(r.status).toBe(400);
+    });
+  }
+});
+
+/**
  * The gate, at the seam it actually sits at.
  *
  * tests/auth.test.ts covers `requireUser` on its own. These two cover the thing

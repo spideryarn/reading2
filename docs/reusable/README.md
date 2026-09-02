@@ -26,6 +26,7 @@ inventing a process.
 | [write-planning-doc.md](write-planning-doc.md) | starting a piece of work — the doc that holds the decisions and the stages, and what to call it |
 | [debrief-progress.md](debrief-progress.md) | reporting where a piece of work stands: what's done, what's left, whether it's still worth it |
 | [audit-architecture-mode.md](audit-architecture-mode.md) | a technical audit of an area or a plan — investigate and discuss, change nothing |
+| [improve-the-codebase.md](improve-the-codebase.md) | the doing counterpart to the audit — find the rework worth doing, cluster and prioritise it, and land the stages that fit |
 | [write-tutorial.md](write-tutorial.md) | explaining how something works to somebody who has never read the code — mental models first, spiral passes, diagrams you actually look at |
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |

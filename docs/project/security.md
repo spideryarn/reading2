@@ -947,8 +947,11 @@ a clean result means less than it looks:
 
 Every one of those is named in the result: `blindSpots` is **never empty** (`approximated-cascade`
 is always on it), so the list of what was not checked travels with the findings instead of being
-something a reader has to remember — and the panel prints it beside every clean result rather than
-behind a disclosure, which is the half a type cannot enforce.
+something a reader has to remember. The panel is collapsed by default (2026-09-02,
+[referee-mode.md § rule 5](referee-mode.md)), so the list itself is now one press away — and the
+rule survived by moving into the line that is on screen either way: a clean result reads *nothing
+found in the HTML source — which is not a clean bill*, never *nothing found* alone. That is the half
+a type cannot enforce, in both versions.
 `tests/source-scan-notice.test.tsx` is where that, the PDF branch, and the sorting of labelled
 findings are held; each was watched red against a mutated panel before it was believed.
 
