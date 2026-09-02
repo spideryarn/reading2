@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ADMIN_EMAIL,
+  ADMIN_EMAIL_LOCAL,
   ADMIN_USER_ID_LOCAL,
   ADMIN_USER_ID_PROD,
   ADMIN_USER_IDS,
@@ -38,7 +39,14 @@ describe("the administrator", () => {
        suite actually depends on: whatever the helper signs with, `isAdmin` says
        yes to it. That breaks if somebody points `TEST_SUB` somewhere else. */
     expect(isAdmin(TEST_SUB)).toBe(true);
-    expect(ADMIN_EMAIL).toBe(TEST_EMAIL);
+    /* **And the suite is not pretending to be Greg's real address.** It was,
+       until 2026-09-02, and `expect(ADMIN_EMAIL).toBe(TEST_EMAIL)` is what
+       pinned it there. The local account is a fixture with a generated password
+       (src/admin.ts § ADMIN_EMAIL_LOCAL); the production one is a person with a
+       Google sign-in, and the two sharing an address is how a screenshot of one
+       gets read as the other. */
+    expect(TEST_EMAIL).toBe(ADMIN_EMAIL_LOCAL);
+    expect(TEST_EMAIL).not.toBe(ADMIN_EMAIL);
   });
 
   it("is the same id however it was typed", () => {
@@ -118,9 +126,12 @@ describe("which refusals are worth a line in the log", () => {
 /**
  * **The id was read off a laptop and never checked against production.**
  *
- * `greg@gregdetre.com` is an account on the local Supabase stack *and* an
- * account on the production project, and they are two different accounts with
- * two different `auth.users(id)`s. The constant was the local one, so the Admin
+ * `greg@gregdetre.com` was an account on the local Supabase stack *and* an
+ * account on the production project, and they were two different accounts with
+ * two different `auth.users(id)`s. (Only production's is that address now — the
+ * local one was renamed to `ADMIN_EMAIL_LOCAL` on 2026-09-02 so that a
+ * screenshot of one could not be read as the other. The bug below is why the
+ * ids were never interchangeable either.) The constant was the local one, so the Admin
  * link never drew on spideryarn.com and `/api/admin/*` answered 403 to the
  * administrator — for a day, silently, exactly the lockout `describeAdminMiss`
  * was written to explain (it did fire; nobody was reading the log).

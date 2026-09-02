@@ -38,7 +38,7 @@ import { runInRequest } from "../src/owner.js";
 import { PUBLIC_ROUTES } from "../src/public/routes.js";
 import { handleApi, serveAuthenticatedApi } from "../src/routes.js";
 import { originalUrl } from "../src/vercel.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { acceptAny, AUTHED_HEADERS, TEST_EMAIL } from "./helpers/authed.js";
 
 /** Drive `handleApi` with a fake request/response pair, remembering the headers. */
 async function call(
@@ -266,7 +266,11 @@ describe("the authenticated dispatcher's one parameter", () => {
       headers: AUTHED_HEADERS,
     }) as unknown as IncomingMessage;
     const user = await requireUser(req, acceptAny);
-    expect(user.email).toBe("greg@gregdetre.com");
+    /* `TEST_EMAIL`, not the address longhand: this is asserting who
+       `AUTHED_HEADERS` authenticates as, and a copied string stops tracking
+       that the moment the fixture identity changes — which it did on
+       2026-09-02. */
+    expect(user.email).toBe(TEST_EMAIL);
 
     let status = 0;
     let text = "";

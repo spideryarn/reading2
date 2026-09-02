@@ -5,6 +5,7 @@ several tools that look perfect for this repo and are quietly wrong about it.
 
 ```
 npm run check          # everything below, gates first, ~20s (--fast skips the build)
+npm run check -- --offline   # the same, minus the database suites — NOT the real gate
 npm run knip           # unused files, exports, dependencies
 npm run cycles         # import cycles
 npm run complexity     # the functions worth looking at
@@ -92,6 +93,13 @@ tests, the production build, and cycles.
 CSS. Before it was here, that class of failure was only ever discovered by a deploy.
 
 A check earns promotion from advisory to gate on the day its findings reach zero, and not before.
+
+**The test gate runs under `REQUIRE_POSTGRES=1`.** About seventy test files turn themselves into
+`describe.skip` when Postgres is unreachable, so `npm test` is green having run none of them — and
+this is the command whose green result gets quoted as evidence, which is the run that flag exists
+for ([testing.md](testing.md#when-a-skip-is-not-acceptable-require_postgres1)). `npm run check --
+--offline` drops it, so the other checks still work on a machine with no Docker; it prints in the
+summary that the database suites were free to skip and that this is not the real gate.
 
 **The counted steps.** `complexity` and `dupes` both exit 0 while holding findings — Biome because
 `info` is not a failure, jscpd because it only fails above a `--threshold` we do not set. So

@@ -32,9 +32,10 @@ What is built:
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
-| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
-| [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote. See [Why not the remote](#why-a-worktree-branches-from-head-and-not-from-the-remote). |
+| [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 
 Still to build: an identity endpoint and `worktree:sweep` —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
@@ -66,7 +67,7 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 
 ```bash
 claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
-npm run worktree:setup         # inside it: dependencies + the article store
+npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
@@ -97,7 +98,7 @@ the primary. It asks git rather than guessing from the path — in a worktree `-
 identical. Verified by running it in the primary and checking `node_modules` came out with the same
 inode and mtime.
 
-### Why a worktree branches from `HEAD` and not from the remote
+### Why a worktree branches from `HEAD` and then merges the remote
 
 `worktree.baseRef: "head"` in [`.claude/settings.json`](../../.claude/settings.json), rather than the
 default `"fresh"`, which branches from the default branch **on the remote**. Measured on 2026-09-01:
@@ -116,6 +117,42 @@ A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) to land, on 2026-09-02, and
 the wait cost nothing: `"fresh"` would resolve through `origin/HEAD`, and `"head"` never asks. A
 worktree branches from this box's `dev` whatever GitHub says, and whatever a stale `origin/HEAD`
 says.
+
+**But `HEAD` is stale too, and since the flip to `dev` it is stale in the other direction.** The
+argument above was written when the trunk was `main`, which only a deploy moves. `dev` moves every
+time any agent finishes something, and the primary is only as current as the last time somebody
+pulled into it. Measured on 2026-09-02, minutes after Runbook A landed:
+
+```
+  local dev   ←  7 commits behind origin/dev
+```
+
+So a worktree created that minute started seven commits stale, and nothing said so. Greg, 2026-09-02:
+
+> When we start a new worktree, ideally it would initialise that worktree with the latest changes
+> from dev remote, rather than the primary checkout (because that might be stale).
+
+The fix is **not** to flip `baseRef` to `"fresh"`. Branching from the remote drops any commit the
+primary has and has not pushed, and this box has had both at once. Branching from `HEAD` and then
+**merging** `origin/dev` keeps both — and merge is what this repo does anyway
+([version-control.md](version-control.md#always-merge-never-rebase)). That merge is the first thing
+`worktree:setup` does, before `npm ci`, because the merge can move `package-lock.json` and installing
+the old one first leaves `node_modules` describing a lockfile that is gone.
+
+Three things it will not do, each because the alternative loses work:
+
+- **It will not merge over modified tracked files.** In a fresh worktree there are none; in one you
+  re-run setup in, there might be. It says so and carries on to the install.
+- **It will not resolve a conflict.** The tree is left mid-merge and setup stops, because a conflict
+  is a proposal before it is an edit —
+  [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md).
+- **It will not pretend a failed fetch means "current".** Offline, you get a `FAIL` line naming the
+  command to run by hand, not a green tick.
+
+[`tests/worktree-freshen.test.ts`](../../tests/worktree-freshen.test.ts) builds a real origin, a real
+primary that is behind it and a real worktree of that primary, and asserts the *number of commits
+recovered* rather than merely that a merge ran — a merge of a trunk you already contain passes the
+weaker test and proves nothing.
 
 ### What a worktree costs, measured rather than assumed
 

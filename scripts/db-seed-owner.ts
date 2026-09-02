@@ -14,8 +14,8 @@
  * `insert into articles` fails on the foreign key.
  *
  * **And why the second row.** A fresh stack — a `db:reset`, a new clone, the
- * Hetzner box — has no `greg@gregdetre.com`, so there is no session and no way
- * to get one that does not go through Google in a browser on that machine.
+ * Hetzner box — has nobody to sign in as, so there is no session and no way to
+ * get one that does not go through Google in a browser on that machine.
  * docs/plans/260831ab-seed-local-admin-user-for-remote-box.md is the whole of it.
  * The account is seeded with a password, so signing in is the email form that is
  * already on the landing page.
@@ -42,13 +42,15 @@ import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
 
-import { ADMIN_EMAIL } from "../src/admin.js";
+import { ADMIN_EMAIL_LOCAL } from "../src/admin.js";
 import { loadEnvLocal } from "../src/env.js";
 import {
   type PasswordVerdict,
   type SeededAccount,
   SEEDED_ACCOUNTS,
   parseStatusEnv,
+  planAccountEmail,
+  staleIdentities,
   readOrCreateAdminPassword,
   readPasswordVerdict,
   refuseMismatchedStack,
@@ -189,6 +191,8 @@ async function signInAs(
 interface AdminUser {
   id: string;
   email?: string;
+  /** One per sign-in method. Present on the single-user GET, not on the list. */
+  identities?: { provider?: string; identity_data?: { email?: string } }[];
 }
 
 /** The user at this id, or nothing. A 404 is an answer, not a failure. */
@@ -227,6 +231,98 @@ async function findByEmail(email: string): Promise<AdminUser | undefined> {
 }
 
 /**
+ * Make the account for the first time.
+ *
+ * Split out of `ensureAccount` rather than inlined, because that function's job
+ * is now to *decide* — which of the four plans applies — and the decision reads
+ * better without three fetches in the middle of it.
+ */
+async function createAccount(account: SeededAccount, password: string | undefined): Promise<void> {
+  const { id, email } = account;
+  const response = await fetch(`${url}/auth/v1/admin/users`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ id, email, email_confirm: true, ...(password ? { password } : {}) }),
+  });
+  if (response.ok) {
+    console.log(`✓ created ${email} (${id}) — ${account.why}`);
+    return;
+  }
+  /* **A conflict is a peer, not a failure.** Two agents share this tree and
+     both may run the setup; the loser of that race must not take the run down
+     with "already registered". Re-read rather than assume: what matters is
+     that the account that now exists is the one we wanted, and only the
+     database can say. */
+  if (response.status === 409 || response.status === 422) {
+    const now = await findById(id);
+    if (now && now.email?.trim().toLowerCase() === email.trim().toLowerCase()) {
+      console.log(`✓ created by a concurrent run: ${email} (${id})`);
+      return;
+    }
+  }
+  throw new Error(`creating ${email} failed: ${response.status} ${await response.text()}`);
+}
+
+/**
+ * **Catch up a machine seeded before the address changed.**
+ *
+ * Only reached on a `"rename"` plan, which `planAccountEmail` gives for exactly
+ * one id holding exactly one listed old address on a stack two separate fences
+ * have agreed is local — its comment is the argument for why writing an address
+ * onto an account this run did not create is safe *here* and would not be
+ * anywhere else.
+ *
+ * Cheap as well as safe: measured on GoTrue v2.195.0, 2026-09-02, an admin email
+ * change leaves the password alone and leaves open sessions valid. Its neighbour
+ * below is the opposite — a password write revokes every session — which is why
+ * that one is done only when it must be and this one can simply happen.
+ */
+async function renameTo(account: SeededAccount, was: string | undefined): Promise<void> {
+  const { id, email } = account;
+  const response = await fetch(`${url}/auth/v1/admin/users/${id}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ email, email_confirm: true }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `renaming ${was ?? id} to ${email} failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  /* Said out loud rather than done quietly. Somebody who has been signing in as
+     the old address needs one line about why it has stopped existing, and this
+     is the only place that line can appear. */
+  console.log(`✓ renamed ${was} to ${email} (${id}) — same account, same password`);
+
+  /**
+   * **And say what the rename did not reach.**
+   *
+   * A row that began as a Google sign-in keeps a `google` identity holding the
+   * address Google gave it, because the `PUT` updates only the `email` one — so
+   * leaving this silent would make the line above claim more than it did.
+   *
+   * **A fresh `GET`, not the `PUT`'s own response body**, and that distinction
+   * is the whole of whether this works. Measured, 2026-09-02: after renaming
+   * `probe-old@` to `probe-new@`, the `PUT` response still showed the `email`
+   * identity on the old address while a `GET` a moment later showed it updated.
+   * Reading the response would therefore have reported a stale identity on
+   * **every** rename — a check that cries wolf every time, which is worse than
+   * no check, because the one run where it means something reads exactly like
+   * the others.
+   *
+   * A warning, never a failure, and nothing is deleted. Removing an identity
+   * signs that method out for good and is Greg's call.
+   */
+  const after = await findById(id);
+  const left = staleIdentities(after?.identities, account.renamableFrom);
+  if (left.length > 0) {
+    console.log(`  note: the ${left.join(" and ")} identity still holds ${was}.`);
+    console.log("  Sign-in and ownership do not read it, but Studio and the profile page show it.");
+    console.log("  Removing it is destructive and is not done here — ask Greg.");
+  }
+}
+
+/**
  * Make one account exist, at its id, with its password. Idempotent.
  *
  * The two refusals are the interesting part, and both are cases where carrying
@@ -252,37 +348,24 @@ async function ensureAccount(account: SeededAccount): Promise<void> {
   }
 
   const byId = await findById(id);
-  if (byId && byId.email?.trim().toLowerCase() !== email.trim().toLowerCase()) {
+  const plan = planAccountEmail(byId, account);
+  if (plan === "refuse") {
     throw new Error(
-      `the id ${id} is already held by ${byId.email ?? "an account with no address"},\n` +
-        `  not by ${email}. Refusing to touch it.`,
+      `the id ${id} is already held by ${byId?.email ?? "an account with no address"},\n` +
+        `  not by ${email}. Refusing to touch it.` +
+        (account.renamableFrom.length
+          ? `\n  (It would have been renamed from ${account.renamableFrom.join(" or ")} without asking.)`
+          : ""),
     );
   }
 
-  if (!byId) {
-    const response = await fetch(`${url}/auth/v1/admin/users`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ id, email, email_confirm: true, ...(password ? { password } : {}) }),
-    });
-    if (response.ok) {
-      console.log(`✓ created ${email} (${id}) — ${account.why}`);
-      return;
-    }
-    /* **A conflict is a peer, not a failure.** Two agents share this tree and
-       both may run the setup; the loser of that race must not take the run down
-       with "already registered". Re-read rather than assume: what matters is
-       that the account that now exists is the one we wanted, and only the
-       database can say. */
-    if (response.status === 409 || response.status === 422) {
-      const now = await findById(id);
-      if (now && now.email?.trim().toLowerCase() === email.trim().toLowerCase()) {
-        console.log(`✓ created by a concurrent run: ${email} (${id})`);
-        return;
-      }
-    }
-    throw new Error(`creating ${email} failed: ${response.status} ${await response.text()}`);
-  }
+  /* Before the password block below, not after, because everything past this
+     point signs in *at the new address*: a rename left until later would
+     falsify its own precondition, and the run would report a wrong password on
+     an account whose password is fine. */
+  if (plan === "rename") await renameTo(account, byId?.email);
+
+  if (plan === "create") return await createAccount(account, password);
 
   if (!password) {
     console.log(`✓ already present: ${email} (${id})`);
@@ -398,10 +481,10 @@ try {
      terminal scrollback, CI logs and tmux history on a box several agents
      share; never printing it would leave somebody with no way to sign in. */
   if (admin.created) {
-    console.log(`\n  A password was generated for ${ADMIN_EMAIL}. It is shown once:\n`);
+    console.log(`\n  A password was generated for ${ADMIN_EMAIL_LOCAL}. It is shown once:\n`);
     console.log(`      ${admin.password}\n`);
   }
-  console.log(`  Sign in as ${ADMIN_EMAIL}. The password is in ${admin.path}`);
+  console.log(`  Sign in as ${ADMIN_EMAIL_LOCAL}. The password is in ${admin.path}`);
   console.log("  and `npm run db:admin-password` prints it again.");
 } catch (err) {
   console.error(`✗ ${err instanceof Error ? err.message : String(err)}`);

@@ -66,6 +66,14 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`infra/hetzner/README.md`](../../infra/hetzner/README.md) — Terraform and cloud-init: first run,
   what to check before every apply (`npx tsx scripts/check-cloud-init.ts`), the noVNC tunnel, and why
   the disposable-server/persistent-volume split exists.
+- **Claude Code itself** is installed **as `greg`**, by Anthropic's native installer, into
+  `~/.local/share/claude/versions/` with `~/.local/bin/claude` pointing at it — so it can update
+  itself without sudo. `/usr/local/bin/claude` is a symlink to that, and it is **load-bearing, not
+  cruft**: every context that runs work here (the tmux job scripts, `ssh <box> claude mcp list`,
+  cron) gets a stock PATH with no `~/.local/bin` in it. Installing it the obvious way instead — `sudo
+  npm install -g` — is what
+  [260902c-a-claude-that-could-never-update-itself.md](../postmortems/260902c-a-claude-that-could-never-update-itself.md)
+  is about.
 - [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) — the committed proof
   the browser stack works. `gjd-remote doctor` copies it up and runs it every time, so it is never a
   stale copy.
