@@ -406,6 +406,51 @@ when("the Postgres shelf and library search", () => {
     });
   });
 
+  describe("what the shelf knows about sharing", () => {
+    /**
+     * **The owner's own shelf has to be able to say which of these are out in
+     * the world**, and the card can only say it if the row reaches the card.
+     *
+     * Asserted through `listArticles` rather than by reading the column back,
+     * because the column was never in doubt: what this is about is the
+     * projection between `listArticlesQuery` — which selects `articles` whole —
+     * and the `LibraryEntry` the browser gets. A projection that drops the
+     * field typechecks, serialises, and leaves every card looking private.
+     * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
+     */
+    it("carries `public` on a shared article and says nothing at all on a private one", async () => {
+      const db = getDb();
+      /* On the fixture the suite owns, and put back in the `finally` — the two
+         articles here are shared by every test below, and a shelf fixture left
+         world-readable would be a lie sitting in the local database. */
+      await db
+        .update(articles)
+        .set({ visibility: "public", publicAt: new Date("2026-09-01T00:00:00.000Z") })
+        .where(eq(articles.id, OTHER_ARTICLE_ID));
+      try {
+        const entries = await pgArticleReader.listArticles();
+        const shared = entries.find((e) => e.slug === OTHER_SLUG);
+        const mine_ = entries.find((e) => e.slug === SLUG);
+
+        expect(shared?.visibility).toBe("public");
+
+        /* **Absent, not `"private"`.** `exactOptionalPropertyTypes` makes those
+           two different values and the wire makes them the same length of
+           nothing, so `toBeUndefined` alone cannot tell them apart — and the
+           filesystem store has no visibility column to answer with, so absence
+           is the one answer both stores can give. tests/store-parity.test.ts
+           compares whole entries. */
+        expect(mine_).toBeDefined();
+        expect(mine_ && "visibility" in mine_).toBe(false);
+      } finally {
+        await db
+          .update(articles)
+          .set({ visibility: "private", publicAt: null })
+          .where(eq(articles.id, OTHER_ARTICLE_ID));
+      }
+    });
+  });
+
   describe("the shelf's writes", () => {
     it("renames, and the reading view agrees with the card", async () => {
       const entry = await pgShelfStore.patch(SLUG, { title: "What I call it" });

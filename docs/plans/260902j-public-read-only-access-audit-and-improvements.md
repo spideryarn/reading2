@@ -476,6 +476,28 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   observationally identical to a no-op. Two overclaims fixed with it: the gutter header said a
   visitor has two slots when it has one, and the owner's control asserted `> 0` where one button on
   one paragraph would have satisfied "beside every paragraph"; it counts against the permalinks now.
+- 2026-09-02 — **Cluster E built: the badge.** A globe and the word *Shared* on the card's meta line
+  and in the table's title cell, one `SharedBadge` component in both, because a marker added to one
+  of the shelf's two renderers looks finished from wherever you happened to be standing. A private
+  article gets nothing at all. `docs/project/library.md` has the section.
+
+  The plan said *"visibility is already in the row `listArticlesQuery` selects"*, and it held —
+  `src/store/pg.ts:1489` selects `articles` whole, so this is a field of a row already on the wire
+  rather than a query change. The gap was one line further downstream than that phrasing implies:
+  the projection into `LibraryEntry`.
+
+  **`LibraryEntry.visibility` is present only when it is `"public"`.** Absence rather than
+  `"private"`, because absence is the only answer *both* stores can give — the filesystem store has
+  no visibility column and `visibilityStore.set` refuses there with a 501 — and
+  `tests/store-parity.test.ts` compares whole entries, so two spellings of one fact would be a
+  parity failure about nothing. That test now drops the field, with the reason written beside the
+  four exclusions it already had and an honest note that this one is weaker than those: they are
+  clocks and a live writer, this is a column one store cannot hold.
+
+  Four mutations, all killed, including one that proves the *private* row's assertion is
+  load-bearing rather than decorative. The browser pass shared a real local article through the
+  sharing card rather than through SQL, looked at both views, and unshared it again; the two rows it
+  left in `article_visibility_changes` are the honest record of that.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the
