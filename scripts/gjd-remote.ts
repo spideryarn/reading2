@@ -1250,9 +1250,10 @@ async function resolveTargetForSession(opts: {
  * under.
  *
  * `admit: null` means "run the command plainly", and it is the honest answer in
- * exactly two cases: a `--dir` target, which is an arbitrary path with no repo
- * and so no setup status to be admitted against, and a status read that failed
- * — where there is nothing to hold the box to.
+ * exactly one case: a `--dir` target, which is an arbitrary path with no repo
+ * and so no setup status to be admitted against. A status read that FAILED is
+ * not the other case — it used to be, and it was a session with no ticket in a
+ * tree nobody had checked; it refuses now, and `--dir` is the way past it.
  */
 type SessionStart = { target: Target; admit: AdmissionPlan | null };
 
@@ -1294,11 +1295,17 @@ function sayFoundSetupStatus(t: Target): SessionStart {
 
   const state = readSetupState(t.slug, t.dir);
   if (!state.ok) {
-    // Not fatal: this is a diagnostic about the tree, and a session in a repo
-    // that IS on the box is not made wrong by our failing to read a status file.
-    // No ticket either — there are no bytes to hold the box to.
-    console.log(yellow(`setup status: ${state.why}`));
-    return { target: t, admit: null };
+    // Fatal, and this used to be a yellow line. A status that cannot be READ is
+    // not a status that is absent: a cut ssh stream, a broken protocol and a
+    // box that is half-way through a rebuild all look like this, and starting
+    // a session on any of them is a session with no ticket in a tree nobody
+    // has checked. `--dir` is the deliberate bypass, and it prints `repo:
+    // unknown` so nobody mistakes it for the admitted kind.
+    die(
+      `could not read the setup status for ${t.slug} on the box: ${state.why}\n` +
+        `  No session started. gjd-remote resolve says what the box thinks; to start anyway,\n` +
+        `  name the directory yourself:  --dir ${t.dir}`,
+    );
   }
 
   // When the box has no setup command at all, the status's own hash stands in:
