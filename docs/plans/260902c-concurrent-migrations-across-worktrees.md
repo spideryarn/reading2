@@ -178,6 +178,15 @@ it protects (a lock file inside a worktree protects nothing), it releases when t
 the SIGKILL-then-`rm` cost disappears rather than being tolerated, and it is already this repo's
 mechanism twice over.
 
+**Two things this must not claim.** A single exclusive lock per migrator is the majority pattern
+(Rails since 5.2, Flyway by default; Django needs a third-party package). The **shared/exclusive
+split is ours** — no migration tool ships it — so it is sound use of the primitive and not an
+industry standard, and the plan should not imply otherwise. And these are **session**-scoped locks,
+which is why [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)'s existing rule — a direct or
+session connection, never the transaction pooler on 6543 — becomes load-bearing rather than
+incidental: Rails through PgBouncer in transaction mode is the textbook case of an advisory lock
+whose unlock lands on a different backend.
+
 `db:reset` is the wrinkle: `supabase db reset` kills connections, so the wrapper's own lock dies
 mid-reset. Acceptable — the wrapper still waits until no shared holders remain before it starts.
 
@@ -196,6 +205,60 @@ A non-additive migration — a dropped column — applied by one worktree breaks
 of every other worktree. That is inherent to one shared database, and it belongs in
 [worktrees.md](../project/worktrees.md) as a stated limit rather than something the lock pretends to
 cover.
+
+## What the wider world does, researched 2026-09-02
+
+Greg asked for this before deciding. Every link below was checked rather than taken from the report.
+
+**Stage 3 (timestamp prefixes) is the oldest fix there is.** Rails moved from `001_` to timestamps in
+2.1 for exactly this reason — collisions between developers on different branches.
+
+**Stage 2 (the loser regenerates) is the de facto drizzle answer, and there is no official tool.**
+[drizzle-orm discussion #1104](https://github.com/drizzle-team/drizzle-orm/discussions/1104), "Best
+way to deal with migration merge conflicts?" — 13 comments, answered 2024-10-02, with a maintainer
+saying to customise it per team. The official
+["migrations for teams"](https://orm.drizzle.team/docs/kit-migrations-for-teams) page is **literally
+a stub**: "This section will be updated right after our release of the next version of migrations
+folder structure." Checked by fetching it.
+
+**And the linear approach is a defensible choice, not a poor relation.** Alembic (`alembic merge`,
+`down_revision = ('rev_a','rev_b')`) and Django (`makemigrations --merge`) model migrations as a DAG
+and create an explicit merge node, keeping both branches. Drizzle's flat journal and linear snapshot
+chain cannot express that, so regenerate-and-delete is the only structurally available option here —
+**but** Adam Johnson, who maintains `django-linear-migrations`, argues forced-linear is *better* even
+where the DAG exists: merge migrations do not guarantee the same execution order across environments,
+so staging stops simulating production. Part of the Django world picks our approach on purpose.
+
+**Stage 1 fills a gap other tools close natively** — Alembic refuses on multiple heads, Django
+refuses with "multiple leaf nodes", and Prisma 8's migration graph anchors each migration to real
+schema states, which is structurally the same idea as walking `prevId`. Nobody says "don't check
+this"; they say "our tool does it for you".
+
+And our `exit(0)` sits in a **known, unfixed family**:
+[drizzle-orm#5774](https://github.com/drizzle-team/drizzle-orm/issues/5774) — *"drizzle-kit generate
+derives idx from journal alone — prefix collision + silent snapshot overwrite when journal is stale
+vs on-disk SQL"* — open since 2026-05-17 with **zero comments**. Verified via `gh`. The exact
+`exit(0)`-on-forked-snapshot behaviour is not filed verbatim anywhere; we found it by reading
+`bin.cjs`. Worth filing upstream.
+
+**Stage 4 needs one correction to its wording.** Rails has locked migrations since 5.2
+(`ActiveRecord::ConcurrentMigrationError`) and Flyway does by default; Django's core `migrate` does
+not, needing `django-pglocks`. So a single **exclusive** lock per migrator is the majority pattern.
+**The shared/exclusive split for test-runs-against-migrate is ours**, found in general Postgres
+how-tos and in no migration tool's playbook. Sound use of the primitive; do not write "standard" next
+to it.
+
+**The pooler trap is real and we are already clear of it.** Rails + PgBouncer in transaction mode is
+the textbook failure: session-scoped advisory locks break because the unlock can land on a different
+backend. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)'s header already requires a direct or
+session connection and never the transaction pooler on 6543 — so this is a reason that rule must
+*stay*, and stage 4 should say so rather than rediscover it.
+
+**Watch, do not build against**:
+[Commutative Migrations](https://github.com/drizzle-team/drizzle-orm/discussions/5005) (2025-10-31)
+would have drizzle-kit detect that two branches' migrations touch different tables and merge them
+automatically. Undocumented and unreleased as far as we can confirm. If it ships, stages 1–3 get much
+smaller.
 
 ## The simpler options passed over
 
