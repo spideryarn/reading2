@@ -21,8 +21,13 @@ which the gate runs).
 
 **The first one matters most and was not on anyone's list.** The gate always builds its worktree with
 `git worktree add --detach`, so `statusline` fails on *every gate run, at every commit*. The gate has
-been structurally unpassable since that test arrived. That is why `--force-gate=test` became the way
-people deploy, and it is why the other three could sit there unnoticed.
+been structurally unpassable since that test arrived in `28abfdf` on 2026-09-01.
+
+It did not *start* the forcing habit, and an earlier draft of this plan said it did.
+[deployment.md](../project/deployment.md) records the origin: the gate's first day materialised
+`data/` but not `output/`, giving 13 failures at every commit, and `--force-gate=test` became the only
+way anybody deployed. This test kept the gate red **after** that was fixed, so the habit outlived its
+cause — which is why the other three reds could sit there unread.
 
 ## The mechanism behind the artefact reds
 
@@ -122,6 +127,14 @@ filenames, different question.
 
 - Make the **stale** check and the exemption **arrival** check read the tracked corpus only. This is
   the actual root fix.
+
+**Work from the gate's list, not this laptop's — they differ, which is the whole point.** After
+stage 3, `npx vitest run tests/store-artefact-manifest.test.ts` on Greg's machine names two:
+`referee-criteria.json`, `referee-claims.json`. The gate names **four**: those two plus `raw.pdf` and
+`labels-progress.json`, because there `data/` *is* the corpus and the laptop's own copies of those two
+are not there to cover for them. Stage 3's report read the shorter list as "`raw.pdf` and
+`labels-progress.json` have dropped off", and they had not — they were never on the laptop's list.
+Anyone sizing stage 5 from a local run will build for half the problem.
 - Keep a narrowly named `PENDING_CORPUS_EXAMPLE` rather than deleting the escape hatch outright.
   Removing it entirely sounds principled but recreates the forced-gate habit: registration and the
   first real generation legitimately land in separate commits, and with no deterministic pending

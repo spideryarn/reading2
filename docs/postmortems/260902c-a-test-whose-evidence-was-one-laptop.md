@@ -71,10 +71,18 @@ prints the short sha and the worktree name, which is better than printing `HEAD`
 asserting against the wrong command.
 
 This is the same class wearing a different hat: the expectation was computed from the environment the
-test happened to run in, rather than from the contract. And its real cost was not one red test — it
-was that **a gate which can never pass teaches everyone to force it**. The three artefact failures
-could sit in plain sight for a day because the summary line they appeared in was one people had
-already learned to override.
+test happened to run in, rather than from the contract.
+
+**It did not start the habit of forcing the gate, and the first draft of this postmortem said it
+did.** [deployment.md § The gate needs both halves](../project/deployment.md) records the real origin:
+for the gate's first day it materialised `data/` but not `output/`, giving *"13 failures and 202
+cascade-skips at every commit — so the `test` gate could not go green, and `--force-gate=test` became
+the only way anybody deployed."* This test arrived later, in `28abfdf` on 2026-09-01. What it did was
+worse in its way: it **kept the gate permanently red after the corpus work had fixed the original
+cause**, so the habit outlived its reason. The three artefact failures could then sit in plain sight,
+because the summary line they appeared in was one people had already learned to override. GPT Sol
+caught the overclaim; the distinction matters, because "a gate went red and stayed red" and "a gate
+was never allowed to go green" call for different fixes.
 
 ## What would have caught it, ranked by ease and value
 

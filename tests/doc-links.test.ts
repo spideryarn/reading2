@@ -71,6 +71,55 @@ const EXTERNAL = new Set([
   "docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md",
 ]);
 
+/**
+ * The gitignored roots that pipeline runs write into: `/data/` and `/output/`
+ * in `.gitignore`, both anchored with a leading slash, so this is the whole of
+ * them and only the top level counts.
+ *
+ * Written out rather than parsed out of `.gitignore` at runtime. A parser would
+ * have to implement enough of gitignore's syntax — anchoring, negation, `**`,
+ * directory-only patterns — to be right about anything else in that file, and a
+ * parser that got it subtly wrong would silently stop banning things, which is
+ * the failure mode this whole test exists to close. Two names and a pointer are
+ * more honest. If a third runtime root ever appears in `.gitignore`, add it.
+ */
+const IGNORED_DATA_ROOTS = new Set(["data", "output"]);
+
+/**
+ * Why a resolved link target cannot be relied on to mean the same thing on two
+ * machines — or `null` if it can.
+ *
+ * Takes the **resolved** repo-relative path rather than the link text, and both
+ * halves of that matter. Reading the text cannot tell a top-level runtime root
+ * apart from a nested tracked one: `tests/fixtures/data-root/data/…` is the
+ * committed corpus and a perfectly good link target, while `../../data/…` from
+ * a doc is not, and the two are indistinguishable as strings. Resolving first
+ * settles it, because `.gitignore` anchors both roots with a leading slash, so
+ * only the top level counts.
+ *
+ * Exported as a function, and exercised by a table of its own below, because
+ * the assertion that uses it is a list that should be empty. Emptying
+ * `IGNORED_DATA_ROOTS`, or pointing the filter at the wrong field, would leave
+ * that assertion green and silent — which is the exact reporting failure the
+ * rule exists to close.
+ */
+function unportableTarget(resolved: string): string | null {
+  const segments = resolved.split(path.sep);
+  const root = segments[0] ?? "";
+  if (IGNORED_DATA_ROOTS.has(root)) {
+    return `${root}/ is gitignored runtime output — whether this resolves depends on what the reader has run`;
+  }
+  // `../../../x` normalises to `../x`, which is outside the repository
+  // altogether. No doc does this today; it is banned anyway because it fails in
+  // exactly the same way — green on the laptop that happens to have the file,
+  // red in a clean checkout — and the root check above cannot see it, since the
+  // first segment is `..` rather than a name.
+  if (root === "..") {
+    return "resolves outside the repository, so only a machine with that file could follow it";
+  }
+  return null;
+}
+
 /** Fenced code blocks hold `#` lines that are comments, not headings. */
 const stripFences = (md: string) => md.replace(/^```[\s\S]*?^```/gm, "");
 
@@ -205,13 +254,47 @@ describe("documentation links", () => {
    * The check above cannot tell those apart, because "the file is there"
    * is true for the wrong reason. So this asks the question that has one
    * answer everywhere: name a runtime path in prose, never as a link.
+   *
+   * The rule the first version of this check used matched `data/` in the link
+   * *text*, and it was wrong in both directions: it never mentioned `output`,
+   * so `open-questions.md`'s link into it survived and went on resolving by
+   * luck until 2026-09-02; and it would have banned a link to the tracked
+   * corpus under `tests/fixtures/data-root/data/`. `unportableTarget` judges
+   * the resolved path instead, which is what tells those two apart.
    */
   it("never link into gitignored runtime output", () => {
-    const intoData = allLinks
-      .filter((l) => /(^|\/)data\//.test(l.target))
+    const unportable = allLinks
       .filter((l) => !/^<?\//.test(l.target))
-      .map((l) => `${l.from} → ${l.target}`);
-    expect(intoData).toEqual([]);
+      // `l.file` is the link's own repo-relative path, so
+      // `docs/project/../../output/x` has already become `output/x`.
+      .map((l) => ({ l, why: unportableTarget(l.file) }))
+      .filter(({ why }) => why !== null)
+      .map(({ l, why }) => `${l.from} → ${l.target} (${why})`);
+    expect(unportable).toEqual([]);
+  });
+
+  /**
+   * The positive control for the rule above, which is a list that should be
+   * empty and so proves nothing about the classifier that fills it.
+   *
+   * Each case is a link exactly as it would be written in a doc under
+   * `docs/project/`, resolved the way `linksIn` resolves one, so the
+   * normalisation is under test too rather than assumed.
+   */
+  it("classifies each shape of link target", () => {
+    const asWrittenIn = (rel: string) => unportableTarget(path.normalize(path.join("docs/project", rel)));
+
+    // Gitignored runtime output, both roots, with and without a file part.
+    expect(asWrittenIn("../../output/noema.html")).toContain("gitignored");
+    expect(asWrittenIn("../../data/reader.json")).toContain("gitignored");
+    expect(asWrittenIn("../../data")).toContain("gitignored");
+    // Outside the repository altogether.
+    expect(asWrittenIn("../../../elsewhere.md")).toContain("outside the repository");
+    // The tracked corpus, which contains the literal segment `data/` and is a
+    // legitimate target. This is the case a text-matching rule got wrong.
+    expect(asWrittenIn("../../tests/fixtures/data-root/data/constitution")).toBeNull();
+    // And an ordinary link, so "rejects everything" would not pass either.
+    expect(asWrittenIn("architecture.md")).toBeNull();
   });
 
   it("point at anchors that exist", () => {
