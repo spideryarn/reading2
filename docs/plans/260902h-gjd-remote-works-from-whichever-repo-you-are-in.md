@@ -223,15 +223,29 @@ Not taken, or not whole — each a decision recorded here:
 | `clone` | yes, or an argument | — | — |
 | `GJD_REMOTE_REPO` | deprecated alias for `--dir`; **refuses** if it disagrees with the cwd's origin | | |
 
-## Open questions for Greg
+## Open questions for Greg — answered
 
-- **Pre-ticking (Stage 4).** Sol: a new key should never start ticked, because Enter on a model's
-  default is weaker than a deliberate tick, and today a new key is skipped until a person adds it.
-  Greg's ask: the model proposes and the user overrides, which reads as pre-ticked. Options: (a)
-  pre-tick the model's proposal, as asked; (b) pre-tick only keys approved on an earlier run, and
-  show the model's recommendation as a mark on each row; (c) as (a) but keys the model calls
-  *secret* or *production* are shown disabled. Orchestrator's lean: (b) on the first run of a repo
-  is thirty manual ticks, so **(a)**, with a final "send these N keys? y/N" that lists them.
+- **Pre-ticking (Stage 4).** Decided 2026-09-02:
+
+  > Re whether to pre-tick, I was thinking perhaps an LLM could do a quick inspection of the
+  > environment variable names (not values) and (perhaps with the help of a Sonnet web search),
+  > make a guess about which should/not be included (and why), and use that as a starting proposal
+  > for which to include.
+  >
+  > — Greg, 2026-09-02
+
+  So the model's proposal is the starting state of the checklist (`preTick: "proposal"`), with
+  the reason on each row, the two hard guards greyed out, and a final "send these N keys?" list.
+  Sol's objection (a new key should never start ticked) is recorded and overruled. Whether a web
+  search improves the proposal is a **spike**, not an assumption — see the Log.
+
+  > And can you make sure to run spikes and update docs as needed as part of this.
+  >
+  > — Greg, 2026-09-02
+
+- **A checkout set up by hand** (Stage 3's `foundGate`): warn in yellow and proceed for anything
+  but a setup that is running right now. Raised with Greg 2026-09-02; not yet answered, so v1
+  keeps the warning.
 
 ## Stages
 
@@ -293,15 +307,52 @@ keeps the plan, the briefs, the diffs and the commits.
   `Readable`; Ctrl-C ⇒ exit 130, nothing mutated. Tests: piped stdin, `-p -`, redirected output.
 - [ ] Docs + help. Sol review.
 
+### Stage 2 review — GPT Sol's findings, folded in during Stage 3
+
+Findings 6 and 8 were fixed in `gjd-remote-setup.ts` by another agent (commit `d6fdb93`). These are
+the rest, all in the CLI, and the ones that had to be moved to be testable at all.
+
+| Finding | What changed | What reddens it |
+|---|---|---|
+| 1 — the clone transaction was not serialised | One box-side script under a per-destination `flock`: re-resolve, reserve, clone, verify, rename, compare the `.git` inode across the rename | `cloneTransactionScript` run for real, with a fake `flock` that refuses; live, with a real `flock` held on the box |
+| 2 — `sweepStaging` could delete what it did not create | The staging name is reserved with `mkdir` before git is told about it; the failure path `rmdir`s an empty directory only; the basename guard is exact | "never touches a directory it did not create at the staging name"; "sweeps only the empty directory it reserved"; `isStagingBasename` and its child case |
+| 3 — `cloneFacts` accepted incomplete ssh replies | Deleted. Decisions come from the strict `inventory()`, a strict single-directory probe, and a separately tagged token probe | `checkoutProbeScript` run for real; the box-read tests below |
+| 4 — comparing command strings is insufficient | A normalised `SetupSpec`: command, source, check, warnings, the setup script's sha256, the `package.json` body. `diffSetupSpec` names the field | "notices that the setup SCRIPT differs, though the command is identical"; the same for `package.json`; live, `doctor` now fails on this repo's own source disagreement |
+| 5 — the box read was not fully fail-closed | `GJDBOXEND` required last, every field exactly once, nothing unasked-for, nothing after the end | "refuses a reply cut off after its last field" and five siblings |
+| 7 (CLI half) — readiness was not bound to the checkout | A fresh clone archives the old status in the same locked transaction; every `setupVerdict` call passes slug, dir and the `.git` inode | live: the archive line, and the restored status refused as `wrong-checkout` by both `setup --status` and `new-shell` |
+| 9 — the `noflock` cells started jobs that died | `flock` is probed before the lock file; `setupGateDecision` refuses every `noflock` run, `--force` included | "refuses every run when the box has no flock, including a forced one" |
+| 10 — settled attempts were never logged | `reconcileSetupLog` writes the terminal record once, by attempt | `needsTerminalSetupRecord`; live, on a `--no-attach` run and the `--status` after it |
+| 11 — none of it was reachable from a test | `scripts/gjd-remote-flow.ts`, with the generated shell run for real against temporary repos | `tests/gjd-remote-flow.test.ts`, 60 tests |
+
+Not taken: `setupGateDecision` **starts** on `wrong-checkout` rather than refusing, because the
+remedy for it is `gjd-remote setup` and a command may not name itself as the fix for its own
+refusal. `foundGateDecision` — the session's gate — does refuse on it, and that is where the guard
+matters.
+
 ### Stage 3 — clone-then-setup inside `new-claude` / `new-shell`
 
-- [ ] On `absent`: one prompt naming the repo, the path and the exact setup command (or script
+- [x] On `absent`: one prompt naming the repo, the path and the exact setup command (or script
   path + hash); clone; re-read config from the cloned commit and re-confirm on difference; setup as
   above; session only on a `success` status. Not a TTY ⇒ refuse with the two commands.
-- [ ] On `found` without a `success` status: refuse and say which (`pending`, `failed`, `never`).
-- [ ] Red tests: failed setup then a second `new-*` starts no session; concurrent second invocation
-  blocked by the lock and told so; truncated scan ⇒ no clone.
-- [ ] Live: a throwaway public repo end to end. Sol review.
+- [x] On `found` without a `success` status: **warn and proceed, not refuse** — and that is a
+  deliberate departure from the line above, taken with the orchestrator's brief, because
+  `~/code/spideryarn2` is `never-run` (set up by hand years before the tool) and ten live sessions
+  work in it. `never-run`, `failed`, `config-changed` and a dead `in-progress` print one yellow line
+  and start the session; an `in-progress` that **holds the lock** refuses, because that tree is
+  being installed into right now. The policy is `foundGate(verdict, lock)`, one function, so the
+  plan's stated end state is one edit away — **Greg's call, and it is an open question below**.
+- [x] Red tests: `truncated scan ⇒ no clone` is Stage 1's (`inventory()` rejects a non-zero ssh
+  before the parse, and nothing downstream sees `absent`). The other two are proved live below
+  rather than in vitest: both of the new decisions — `foundGate` and the clone-then-setup order —
+  live in `gjd-remote.ts`, which runs `main()` on import and so has no unit test at all. Moving
+  `foundGate` into `gjd-remote-setup.ts` to test it would drag `LockState` with it and touch a
+  module under Sol review; it is named here as the thing to do when that review lands.
+- [x] Live: `gregdetre/gjdutils` as the throwaway, both from a laptop checkout of it and via
+  `--repo` from `/tmp` — see the Log. **Not proved end to end**: an auto-clone whose *cloned commit*
+  carries a config, because the config only exists uncommitted on this laptop and gjdutils cannot be
+  pushed to. That leaves the "ask again, then run it" arm exercised only by `gjd-remote setup`,
+  which is the same `runSetup` function.
+- [ ] Sol review.
 
 ### Stage 4 — `push-env` for a repo without a policy
 
@@ -368,6 +419,94 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 
 ## Log
 
+- 2026-09-02 — **GPT Sol's Stage 2 findings 1–5, 7 (the CLI half), 9, 10 and 11 are built**, and
+  most of them are now reddenable: [`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts)
+  holds the decisions that used to be unreachable inside an entrypoint that calls `main()` on
+  import, and [`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) has 60 tests
+  against them — including running the generated shell for real, under the laptop's own bash,
+  against temporary git repositories.
+  - **The clone is one locked box-side transaction** (findings 1, 2, 7): it takes a per-destination
+    `flock`, **re-resolves the destination under the lock**, reserves the staging name with `mkdir`
+    (so the failure path can only ever remove a directory it made), clones, verifies origin and
+    HEAD, renames, and then **compares the `.git` inode across the rename** — a `mv` that declined
+    is otherwise a success with somebody else's tree at the end of it. A fresh checkout **archives
+    the old setup status** for that slug in the same transaction.
+  - **`cloneFacts` is gone** (finding 3). Clone decisions come from the strict `inventory()` and a
+    new strict single-directory probe; the token is its own tagged, status-checked read.
+  - **The box protocol is framed at both ends** (finding 5): `GJDBOXOK` first, `GJDBOXEND` last,
+    every field named up front and required exactly once, nothing unexpected, nothing after the end.
+  - **Configs are compared as a normalised specification** (finding 4) — command, source, check,
+    warnings, the sha256 of `.gjd-remote/setup` when a script is what runs, and the `package.json`
+    `scripts.setup` body when the convention is. Two different setup scripts used to compare equal,
+    because the command is `./.gjd-remote/setup` on both sides.
+  - **`flock` is probed before the lock file** and **the gate refuses every `noflock` run**
+    (finding 9). Every one of those cells used to start a job that died with exit 78 in a pane that
+    then vanished.
+  - **A settled attempt closes its own laptop log record, once** (finding 10).
+  - **Live**, with `gregdetre/gjdutils` as the throwaway: a clone through the transaction; a second
+    clone while another process held `clone-gjdutils.lock` ⇒ `✗ another clone of that destination is
+    running on the box right now.  Nothing was cloned and nothing at /home/greg/code/gjdutils was
+    touched.`; delete-and-re-clone ⇒ `a setup status from the checkout that used to be here was
+    moved aside`; the archived status copied back over the new checkout ⇒ `✗ the checkout at
+    /home/greg/code/gjdutils has been re-cloned since that setup ran (its .git was 2789215, and is
+    now 2789219)`, and `new-shell` refused on the same words and started nothing; `setup --status`
+    on a `--no-attach` run ⇒ `(recorded that attempt's outcome in the log, which only had its
+    start)`, written once and not repeated on the next `--status`.
+  - **Not proved live**: the `noflock` refusal (the box has `flock`, and removing it would break
+    every other agent's setup) and the `taken`/`staging-taken` race arms (they need a second process
+    inside a millisecond window). All three are unit tests that run the real script.
+  - **A bug this found in its own new code**: the first version of the box config probe printed the
+    base64 of `package.json`'s setup body, so "there is no setup script" and "the probe failed" were
+    both the empty string, and an ordinary `package.json` came back as unparseable. It was written
+    in `gjd-remote.ts`, where nothing could reach it; moving it into the tested module reddened it
+    in one run. That is finding 11 earning its keep on the same afternoon it was fixed.
+- 2026-09-02 — **Stage 3: `new-claude` and `new-shell` offer to clone and set up a repo the box has
+  never had, and no session is created that a setup did not earn.** Every arm was made to happen on
+  the box, with `gregdetre/gjdutils` as the throwaway and its `.gjd-remote/config.toml` left
+  deliberately uncommitted on the laptop.
+  - **No terminal ⇒ no clone.** Standing in a laptop checkout of gjdutils with stdin at `/dev/null`:
+    `gregdetre/gjdutils is not on the box. / clone to: /home/greg/code/gjdutils / setup: echo
+    hello-from-autoclone && node --version   (config)`, then `✗ 'Clone gregdetre/gjdutils to
+    /home/greg/code/gjdutils and run its setup, then start the session?' needs a yes or no, and there
+    is no terminal to ask on`, naming `gjd-remote clone` and `gjd-remote setup`. `resolve` afterwards
+    still said `absent`.
+  - **Yes ⇒ clone, and then the CLONED COMMIT's config decides.** On a pty, `y` cloned into
+    `.gjd-remote-staging-gjdutils-b3a81b44`, renamed it into place, printed remote/branch/HEAD — and
+    then refused: `setup:  (none known)` … `✗ cloned, but no setup known for gregdetre/gjdutils`. The
+    laptop's config is uncommitted, so the cloned commit has none, which is the entire point of GPT
+    Sol's blocker 4. The clone stayed; no session.
+  - **From outside a checkout** (`--repo gregdetre/gjdutils`, run from `/tmp`) the question reads
+    `setup command unknown until cloned (you are not in a local checkout of gregdetre/gjdutils)`, and
+    the same refusal follows the clone.
+  - **`found` + `never-run` ⇒ one yellow line and the session starts**: `setup status: never run
+    through gjd-remote — 'gjd-remote setup' to record it`, then `✓ shell 'sh-260902-185118' in
+    /home/greg/code/gjdutils`, which `ls` listed with REPO `gregdetre/gjdutils`.
+  - **`found` + `success` ⇒ nothing is said at all** and the session starts.
+  - **`found` + `config-changed` ⇒ yellow, session starts**: `setup status: the last setup was for a
+    different .gjd-remote config (1e6a558bd403…, now dbe437c2209a…)`.
+  - **`found` + `failed` ⇒ yellow, session starts**: `setup status: setup failed on attempt
+    a2519278-…, exit 3`. **This is where the plan said refuse**, and the departure is the open
+    question above.
+  - **`found` + a setup HOLDING THE LOCK ⇒ refused, nothing created**: `✗ a setup attempt
+    (745a3d8b-…) started at 2026-09-02T15:58:34Z and has not finished, and it holds the box-side lock
+    — a setup for this repo is running RIGHT NOW.` `ls` showed no new shell afterwards.
+  - **Not proved end to end, and it cannot be with a repo we cannot push to**: an auto-clone whose
+    cloned commit carries a config, so that the second confirmation and the setup run happen inside
+    `new-*`. The setup half of that is `runSetup`, the same function `gjd-remote setup` calls and the
+    one exercised above.
+- 2026-09-02 — **`runSetup()` is now the only place a setup job is started**, and `cloneVerified()`
+  the only place a clone is made. Both were extracted rather than copied, because the automatic path
+  is the one nobody is reading the output of: two clones with different guarantees, or two ways to
+  mint an attempt id, is exactly the drift that makes a status file mean two things. `cmdSetup` is
+  now the gate plus a call; `reportAfterAttach` hands back the verdict instead of exiting, so a
+  session can refuse on it.
+- 2026-09-02 — **A peer widened `SetupExpectation` mid-stage** (commit `d6fdb93`, Sol's Stage 2
+  findings 6–8: a verdict knows its checkout). It landed the module and its tests and left the CLI's
+  four `setupVerdict` call sites red; they now pass `slug` and `dir`. **`checkoutInode` is still not
+  passed by any of them**, so the re-clone arm of `wrongCheckout` cannot fire from the CLI yet — it
+  needs `setupReadScript` in `gjd-remote.ts` to `stat` the checkout's `.git`, which is one line and
+  belongs with whoever finishes that wiring. Named here rather than half-done quietly.
+
 - 2026-09-02 — **`gjd-remote setup` is wired up and was exercised end to end on the box against a
   throwaway checkout of `gregdetre/gjdutils`.** Every arm was made to happen rather than reasoned
   about: no config ⇒ `no setup known for gregdetre/gjdutils: add .gjd-remote/config.toml or
@@ -400,9 +539,15 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   The red cross is the true answer, and it is the one Sol's blocker 2 asked for: the checkout being
   there is not readiness.
 - 2026-09-02 — **The box's `spideryarn2` has no `.gjd-remote/` at all** — the config was added in
-  this worktree and has not been pushed and pulled. The authority check passed anyway, and that is
-  by design: it compares the *resolved commands*, not their source, and both sides resolve to
-  `npm ci && npm run setup` (the file on this laptop, the `package.json` convention on the box).
+  this worktree and has not been pushed and pulled. The authority check passed anyway, because it
+  compared the *resolved commands*, and both sides resolve to `npm ci && npm run setup` (the file on
+  this laptop, the `package.json` convention on the box). **That was recorded here as "by design",
+  and Sol's Stage 2 finding 4 says it was a hole**: the same reasoning made two different
+  `.gjd-remote/setup` scripts compare equal. The comparison is now a normalised specification —
+  command, source, check, warnings, the script's sha256, the `package.json` body — so this exact
+  case is caught, and `doctor` says so: `✗ setup status  the box and this laptop disagree about
+  source ('npm-convention' vs 'config') — gjd-remote setup refuses until they agree`. That is the
+  honest answer: the box is at a commit that does not have the config file.
 - 2026-09-02 — Stage 1's metadata joined up and exercised against the box. `ls` renders every
   session that existed before this as a dimmed `(unknown)` in the new REPO column and lists them
   all, so legacy rows are shown rather than refused. A `new-claude --wait` and a `new-shell` started

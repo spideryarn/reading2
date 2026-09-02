@@ -184,9 +184,10 @@ export function localRepo(cwd: string, git: GitRunner = runGit): LocalRepo {
  * EVERY entry, not only the checkouts — a plain directory, a file, a symlink
  * and a half-finished clone all get a row, because each of them is a different
  * reason not to start a session there and "no row" would make them all look
- * like an empty slot. The scan `cloneFacts()` does in scripts/gjd-remote.ts
- * only ever reported checkouts with a readable origin, which is why it could
- * not answer this question (see the plan's "Findings along the way").
+ * like an empty slot. The `cloneFacts()` scan this replaced only ever reported
+ * checkouts with a readable origin, which is why it could not answer this
+ * question (see the plan's "Findings along the way"). It is gone now — GPT
+ * Sol's Stage 2 finding 3 — and this listing is what `clone` decides on too.
  *
  * Each field is a separate fact for the same reason:
  *  - `realpath` is `undefined` when the box could not resolve it — a directory
@@ -398,7 +399,8 @@ function shq(s: string): string {
  * `--show-toplevel` alone is NOT "is this a checkout": inside a repo it happily
  * answers for an ancestor, so a plain subdirectory of one would read as a
  * checkout of its parent. It counts only when the toplevel is the directory we
- * asked about — the same guard `cloneFacts()` uses.
+ * asked about — the same guard `checkoutProbeScript()` in
+ * scripts/gjd-remote-flow.ts uses for one named directory.
  *
  * Every path and URL travels BASE64, so the wire format has no free text in it
  * at all: a directory name containing `|` or a newline cannot shift a field or

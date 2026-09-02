@@ -33,6 +33,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   and which directory on the box is that same repo. The box-side inventory script and its
   fail-closed parse live here too. See [Which repo, and where on the box](#which-repo-and-where-on-the-box)
   and [`tests/gjd-remote-repo.test.ts`](../../tests/gjd-remote-repo.test.ts).
+- [`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts) — the decisions about clones,
+  configs and setup runs, as pure functions and as generated shell: the box-read protocol, the setup
+  specification two machines are compared on, both gates, and the locked clone transaction. Split
+  out because `gjd-remote.ts` calls `main()` on import, so none of it could be tested where it was —
+  [`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) runs the real scripts
+  against temporary git repositories. See [Cloning, and why it is one transaction](#cloning-and-why-it-is-one-transaction).
 - [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
@@ -183,7 +189,22 @@ it the way `push-env` does — same origin, not a symlink, a HEAD that resolves 
 allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) is a list of key *names*
 and it is Spideryarn's.
 
-The plan, including the auto-clone that is not built yet, is
+**A repo the box has never had is offered a clone and a setup**, and only by `new-claude` and
+`new-shell` — one question, defaulting to No, naming the directory and the exact command; off a
+terminal it refuses and names `gjd-remote clone` and `gjd-remote setup` instead. The command in the
+question is the *laptop's* copy, because that is the one you can see, and **after the clone it is
+re-read from the cloned commit**: a different answer asks again, and no setup command at all leaves
+the clone in place with no session. **The session is created only for a `success` status file from
+the attempt you just watched**, so `--no-attach` starts the setup and stops.
+
+For a checkout that *is* there, the setup status is printed whenever it is not `success` — a yellow
+line, and the session starts anyway, because `~/code/spideryarn2` was set up by hand long before this
+tool existed and ten live sessions work in it. The plan's end state is to refuse anything but
+`success`, held back by that one case; the policy is `foundGate()` in
+[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts), so flipping it is one edit. The one hard
+refusal is a setup that is running right now and holding the lock.
+
+The plan is
 [../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
 
 ### Setting a repo up: `gjd-remote setup`
@@ -210,6 +231,37 @@ written down:
   shell that keeps the session readable, so a held lock means a setup is genuinely running. It did
   not until 2026-09-02, and the pane holding the lock after finishing made the next run fail as
   "the job did not survive starting" — the plan's Log has it.
+- **A box with no `flock` refuses every run**, rather than starting a job that dies with exit 78 in
+  a pane that then vanishes. There is no serialising to be had there, and two setups in one checkout
+  is what the lock exists to prevent.
+
+**What the two machines are compared on is a specification, not a command string.** `gjd-remote
+setup` refuses when the box's copy of a repo and your laptop's disagree — and the comparison covers
+the setup command, where it came from, the `check`, the warnings, the **sha256 of
+`.gjd-remote/setup`** when a script is what runs, and the **`package.json` `scripts.setup` body**
+when the convention is. Two entirely different setup scripts resolve to the same eight characters,
+`./.gjd-remote/setup`, so comparing commands alone said they agreed.
+
+### Cloning, and why it is one transaction
+
+`gjd-remote clone` — and the automatic clone inside `new-claude`/`new-shell` — is a single locked
+script on the box, not a sequence of round trips. It takes a per-destination `flock`, **re-resolves
+the destination under that lock**, reserves the staging name with `mkdir` (atomic, so a success is
+proof we made it, which is what makes the one `rm -rf` in the tool safe), clones, verifies the
+recorded origin and that `HEAD` resolves, renames with no-clobber, and **compares the `.git` inode
+across the rename** — a rename that declined is otherwise a success with somebody else's checkout at
+the end of it. A fresh checkout also **archives the setup status of whatever used to be at that
+path**, because an old success names the same repo and the same directory.
+
+Readiness is bound to the tree, not just the path: the status file records the checkout's `.git`
+inode, so deleting a checkout and cloning it again at the same path makes the old success read as
+`wrong-checkout` rather than as ready. Both guards were exercised on the box on 2026-09-02.
+
+The decisions, the generated shell and its parser live in
+[`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts), away from the CLI, because
+`gjd-remote.ts` calls `main()` on import and so nothing in it can be unit-tested;
+[`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) runs the real scripts against
+temporary git repositories.
 
 ## A change to the box is a change to a file
 
