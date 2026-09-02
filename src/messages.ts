@@ -1464,6 +1464,24 @@ export const SHARING_OFF = "Only you can read this.";
 /** The switch, on. */
 export const SHARING_ON = "Anyone with the link can read this, without signing in.";
 
+/**
+ * **The same fact, small enough for a corner of a card on the shelf.**
+ *
+ * The owner's own word for it — the sharing card says *"Shared since …"* — and
+ * deliberately not `VIEW_ONLY` above, which is the *visitor's* side of this one
+ * fact and says something else entirely: that one means *you may not change
+ * this*, this one means *anyone with the link can read this*. Collapsing them
+ * into one word would put the visitor's sentence on the owner's shelf.
+ *
+ * Only ever drawn on a shared article. There is no private twin, because the
+ * shelf is almost all private and a chip on every card is decoration rather
+ * than information — docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+ * § Cluster E, where Greg's decision is *a badge, not a filter*. `SHARING_ON`
+ * is what the badge says on hover, so the shelf and the sharing card give one
+ * sentence between them rather than two near-misses.
+ */
+export const SHARING_BADGE = "Shared";
+
 /** What a visitor gets, in one line, on the card rather than behind a hover. */
 export const SHARING_WHAT_VISITORS_SEE =
   "A visitor sees the article, its table of contents and every zoom level. They never see your " +

@@ -1985,6 +1985,17 @@ export const pgArticleReader: Pick<
             tweets: row.revision.hasTweets,
             glossary: row.revision.hasGlossary,
           },
+          /* **Which of these the owner has put out in the world.** Free:
+             `listArticlesQuery` selects `articles` whole, so this is a field
+             of a row already on the wire rather than a query, a join or a
+             projection change.
+
+             The cast is the same boundary `articleMetadata` below crosses and
+             for the same reason: a `text` column with a CHECK on it
+             (`articles_visibility`, drizzle/0024) is a two-member union that
+             TypeScript cannot see the guarantee for. `describeArticle` keeps
+             the key only when it says `public`. */
+          visibility: row.article.visibility as Visibility,
         }),
       );
     }

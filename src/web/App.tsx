@@ -24,9 +24,8 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
-import { PrivacyPage } from "./PrivacyPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -314,11 +313,6 @@ export function App() {
      docs/plans/260827ai-public-read-only-access.md § The seam. */
   if (!user) {
     if (route.kind === "login") return <SignInPage />;
-    /* **The third exception, since 2026-09-02.** The privacy policy is for
-       somebody deciding whether to sign in, so answering it with the pitch
-       would be answering the one question the pitch is trying to get past.
-       The landing page's footer links here. See PrivacyPage.tsx. */
-    if (route.kind === "privacy") return <PrivacyPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -394,16 +388,6 @@ function SignedIn({
         <DesignPage />
       </>
     );
-  // Signed in, the policy gets the corner logo like every other standalone
-  // page. Signed out it is rendered bare, above — there is no shelf to go back
-  // to and the logo would link at one.
-  if (route.kind === "privacy")
-    return (
-      <>
-        <HomeLogo />
-        <PrivacyPage />
-      </>
-    );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
   // has no article behind it. docs/project/reader-profile.md.
   if (route.kind === "profile")
@@ -427,13 +411,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        {route.page === "users" ? (
-          <AdminUsersPage />
-        ) : route.page === "feedback" ? (
-          <AdminFeedbackPage />
-        ) : (
-          <AdminHome />
-        )}
+        {route.page === "users" ? <AdminUsersPage /> : <AdminHome />}
       </>
     );
   }
@@ -2193,13 +2171,6 @@ function Reader({
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
         {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* **The way to the original is not in this bar**, and was for two
-            days. It sat here as an icon from 2026-08-31 until Greg pointed out
-            on 2026-09-02 that the masthead already carries one beside the title
-            — two controls, one destination, and the bar's was the one nobody
-            had asked for twice. `OriginMark` in Masthead.tsx is the survivor;
-            an owner's uploaded PDF is still reachable from the masthead's
-            transcription note (`SeeTheOriginal`). */}
         {/* Leftmost of the *view* controls, because the rail it names is
             leftmost — and before the mode/contents split, because it is the one
             control that survives both. See `spineToggle` above. */}

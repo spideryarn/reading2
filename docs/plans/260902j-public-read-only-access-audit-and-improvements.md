@@ -476,6 +476,62 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   observationally identical to a no-op. Two overclaims fixed with it: the gutter header said a
   visitor has two slots when it has one, and the owner's control asserted `> 0` where one button on
   one paragraph would have satisfied "beside every paragraph"; it counts against the permalinks now.
+- 2026-09-02 — **Cluster E built: the badge.** A globe and the word *Shared* on the card's meta line
+  and in the table's title cell, one `SharedBadge` component in both, because a marker added to one
+  of the shelf's two renderers looks finished from wherever you happened to be standing. A private
+  article gets nothing at all. `docs/project/library.md` has the section.
+
+  The plan said *"visibility is already in the row `listArticlesQuery` selects"*, and it held —
+  `src/store/pg.ts:1489` selects `articles` whole, so this is a field of a row already on the wire
+  rather than a query change. The gap was one line further downstream than that phrasing implies:
+  the projection into `LibraryEntry`.
+
+  **`LibraryEntry.visibility` is present only when it is `"public"`.** Absence rather than
+  `"private"`, because absence is the only answer *both* stores can give — the filesystem store has
+  no visibility column and `visibilityStore.set` refuses there with a 501 — and
+  `tests/store-parity.test.ts` compares whole entries, so two spellings of one fact would be a
+  parity failure about nothing. That test now drops the field, with the reason written beside the
+  four exclusions it already had and an honest note that this one is weaker than those: they are
+  clocks and a live writer, this is a column one store cannot hold.
+
+  Four mutations, all killed, including one that proves the *private* row's assertion is
+  load-bearing rather than decorative. The browser pass shared a real local article through the
+  sharing card rather than through SQL, looked at both views, and unshared it again; the two rows it
+  left in `article_visibility_changes` are the honest record of that.
+- 2026-09-02 — **Sol's review of stage 1b** ([-stage1b-review-sol.md](260902j-public-read-only-stage1b-review-sol.md))
+  returned **BLOCKED** on two, both fixed.
+
+  **The no-thread tweets page dropped the whole of C3.** `VisitorTweetsPage`'s two arms had diverged:
+  with a thread it drew `SharedNotice`, without one it fell through to `VisitorPage`, which had no
+  read-only chrome at all — so a reader in the 401 + public-200 state lost both the fact and the
+  *Continue signed out* action by clicking Tweets on a piece nobody has written a thread for, which
+  is most pieces. A comment called that deliberate on the grounds that `VisitorNotice` is about the
+  artefact rather than the page; both halves of that are true and the conclusion does not follow,
+  and `VisitorArticle` states the opposite guarantee in as many words. `VisitorPage` was the only
+  one of the four visitor pages without a `SharedNotice`; it has one now, below the artefact's
+  sentence rather than above it — stacked the other way the page invites the reader to read *nobody
+  has built a tweet thread* as a consequence of *we couldn't confirm you're signed in*, which is the
+  one thing it must not say.
+
+  **The signed-in visitor never pressed a mode.** The exhaustive sweep lived in the signed-out
+  block; the parity tests covered page load and hover and never clicked. Sol named a mutation that
+  survived both — a private request in `onMode` gated on `signedIn && !owner`, which is exactly the
+  branch that became plausible once `signedIn` and `sessionUnconfirmed` started crossing the visitor
+  seam for copy. Running it against the new sweep: **one failure, the new sweep, on the first press**,
+  every other test green. The gap was real and the test bites.
+
+  **And a third thing, which explains a day of noise.** All three sweeps measure 3.6–3.8s against
+  vitest's 5-second default, so a load spike fails one at random — and *that failure is not
+  contained*: a timeout inside `act()` leaves the React root mid-render and every later test in the
+  file renders an empty `host`. One spike produced **twenty** further failures with nothing wrong.
+  A named `SWEEP_MS = 30_000` on all three, with the measurement written down. This is most of why
+  the full-suite runs looked so much worse than the isolated ones.
+
+  **Known and not fixed:** a signed-out visitor on a no-thread tweets page now sees *Make a free
+  account* twice, from `VisitorNotice` and from `SharedNotice`. It is the app's existing pattern —
+  the reading view already shows `VisitorBand`'s ask and `SharedNotice`'s together for the same
+  reader — so this doubles an existing wart rather than inventing one. Worth one tidy in
+  `PublicChrome.tsx` when somebody is next in there.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the
