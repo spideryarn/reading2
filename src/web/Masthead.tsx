@@ -127,9 +127,9 @@ export function Masthead({ article, slug, onRenamed }: Props) {
    * `javascript:` or `data:` value is reachable here and this anchor would be an
    * active sink. `webSource` refuses those the same way `isWebUrl` does
    * (src/urls.ts, docs/project/security.md). GPT Sol found it while reviewing
-   * the plan that added a *second* link to the same field, 2026-08-31 — the new
-   * one is in the controls bar (SourceLink.tsx § TheOriginal) and checks the
-   * same way.
+   * the plan that added a *second* link to the same field, 2026-08-31 — that
+   * one lived in the controls bar and was removed on 2026-09-02, Greg having
+   * asked for one way to the original rather than two.
    */
   const source = webSource(meta);
 
