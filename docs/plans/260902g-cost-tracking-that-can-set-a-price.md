@@ -195,7 +195,21 @@ The call-site count in [ai-gateway.md](../project/ai-gateway.md) was first "corr
 to twenty — *"the same bug with a fresher number"*, Sol — and is now removed in favour of the grep
 and the enforced register.
 
-**1b — the schema and the population.** Not yet built.
+**1b — the schema and the population. ✅ Built, 2026-09-02; one step outstanding.**
+`upstream_inference_nanos` is `byok_upstream_nanos`, written only on BYOK rows, backfilled to null
+elsewhere, and governed by `ai_calls_byok_upstream_only`
+([the migration](../../drizzle/20260902141103_byok_upstream_nanos.sql)); the JSONL reader translates
+the old field under the same condition; `costStore` hands the disposable filesystem ledger to
+anything under the test harness; `npm run cost` names its database. Red-then-green for each.
+
+**Outstanding, and not mine to clear:** `npm run db:migrate` refuses in the main tree, because the
+shared local Postgres carries a ledger row for `0052_per_article_job_queue` — a peer's migration,
+applied to the shared database from the `article-job-queue` worktree and not yet pushed, so it is in
+no journal here. The guard is right to refuse (an unknown row could be the same DDL renumbered) and
+`scripts/migration-ledger.ts` says deliberately that another branch's row must not be "forgotten".
+It clears itself the moment that work lands. Until then the four Postgres tests in
+`tests/store-ai-calls.test.ts` skip loudly, because the suite's `pgReady` probe now names
+`byok_upstream_nanos`. Deleting the 4,714 fixture rows waits on the same unblocking.
 
 - **The double-count trap — normalise the row.** Write the upstream figure only on BYOK rows, null
   it elsewhere, backfill existing non-BYOK values to null, and **rename it `byok_upstream_nanos`**
@@ -258,6 +272,33 @@ Unpriceable rows stay honestly `none`.
 
 **Done:** `npm test`, `npm run typecheck`, `npm run check` green. The obvious SQL sum over the ledger
 agrees with `totalRows()`. `npm run cost` names its store and its database.
+
+#### The migration is committed and **not yet applied locally**, and that is a peer collision
+
+`npm run db:migrate` on this box refuses:
+
+```
+✗ the journal and this database's migration ledger do not reconcile
+  • 1 ledger row(s) belong to no migration in this journal: 1788351034981
+No migration has been applied and nothing has changed.
+```
+
+That row is **`0052_per_article_job_queue`**, a peer's migration living in
+`.claude/worktrees/article-job-queue/`, applied to the shared local Postgres and not yet on `dev`
+(origin's `drizzle/` stops at `0051`). The guard is right to refuse — `scripts/migration-ledger.ts`
+says deleting such a row *"destroys the one piece of evidence that would explain the refusal"* — and
+`scripts/db-repair-migration-ledger.ts` is for a different fault (drizzle's watermark), reporting
+*"Nothing to reconcile"* here.
+
+**What this does and does not affect.** Production is unaffected: the remote ledger has no foreign
+row, so this migration applies in order on deploy. **The shared dev box is affected** — until the
+peer lands `0052`, any agent here sees four `db-schema-drift` failures naming
+`ai_calls.byok_upstream_nanos`, which is the drift detector working correctly.
+
+The four Postgres tests for the CHECK **skip loudly** rather than failing confusingly
+(*"spideryarn.ai_calls.byok_upstream_nanos is missing — run npm run db:migrate"*). **Run
+`npm run db:migrate` and then `npx vitest run tests/store-ai-calls.test.ts` once `0052` lands** —
+that is the outstanding verification for this stage, and it is the only part of 1b not proved.
 
 ### Stage 2A — the server-owned journal and the acceptance seam
 

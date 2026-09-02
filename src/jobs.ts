@@ -785,7 +785,9 @@ export function jobSpendFields(
      an ingest cost. The conditional that makes a total correct lives in
      `totalRows` and nowhere else, which is why this adds its three answers
      rather than summing columns itself:
-     docs/project/ai-gateway.md, and the `upstream_inference_nanos` trap. */
+     docs/project/ai-gateway.md, and the `byok_upstream_nanos` trap — which was
+     spelt `upstream_inference_nanos` until 2026-09-02, and the rename is the
+     point: the old name did not say that adding it is conditional. */
   const { credits, upstream, computed, unpriced } = totalRows(rows);
   const nanos = credits + upstream + computed;
   return {
