@@ -9,7 +9,7 @@ working tree.
 |---|---|
 | Remote | `git@github.com:spideryarn/reading2.git` — **private**, in the `spideryarn` org |
 | Web | <https://github.com/spideryarn/reading2> |
-| Branch | `main`, and only `main`. No branch protection, no PRs, no CI |
+| Branch | `dev` is the trunk: commit and push there. `main` is **production**, written only by `npm run deploy` — see below. No branch protection, no PRs, no CI |
 | Local | `/Users/greg/dev/spideryarn/reading2`, beside the original app's `reading`. Out of Dropbox since 2026-09-01, see below |
 | Since | 2026-08-26. The first 239 commits, back to 2026-08-24, were pushed in one go when the remote was created |
 
@@ -24,10 +24,26 @@ directory was `spideryarn2` until 2026-09-01, when it was renamed to match —
 machine and goes live. [`scripts/deploy.ts`](../../scripts/deploy.ts) depends on exactly that: it
 pushes one gated sha by name and then polls for the production deployment *that push causes*.
 
-**So the invariant that matters is that only `npm run deploy` writes `main`.** Agents commit locally
-and do not push it. Anything that starts pushing to `main` — a worktree landing its work, say —
-turns every landing into an unreviewed production deploy, which is the thing the whole gate exists to
-prevent. Land on a branch that is not `main`; the wildcard above already stops those building.
+**So the invariant that matters is that only `npm run deploy` writes `main`.** Anything else that
+pushes to `main` — a worktree landing its work, say — turns every landing into an unreviewed
+production deploy, which is the thing the whole gate exists to prevent.
+
+**That is why the trunk is `dev`.** Since 2026-09-02 the primary checkout stands on `dev`, agents
+commit and push there, and the `**: false` wildcard above means such a push builds nothing. Two
+consequences worth having straight:
+
+- **`npm run deploy` now refuses to run from `main`** — `DEPLOY_SOURCE_BRANCHES` in
+  [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) is `["dev"]` alone. It accepted both
+  through the changeover. `main` had to go because it is the one deploy path with **no trunk
+  comparison**: `trunkGap` is scoped to the trunk, so a checkout still standing on `main` could
+  promote main-only work and leave `dev` silently behind production.
+- **Deploying still pushes to `main`, by sha and by name.** The trunk moving does not change where
+  production lives. `dev` is where work lands; `main` is what is live.
+
+**`origin/HEAD` is a local ref in every clone, and GitHub changing its default does not move it.**
+Run `git remote set-head origin dev` in each one — the explicit form, because the `-a` spelling asks
+GitHub, whose default branch is a separate setting that may not have been flipped yet. Miss this and
+a tool resolving `origin/HEAD` branches from production without saying so.
 
 > **This paragraph said the opposite until 2026-09-01**, and it was wrong rather than merely out of
 > date: *"There is no GitHub Action, nothing rebuilds on push, and Vercel is not connected to this

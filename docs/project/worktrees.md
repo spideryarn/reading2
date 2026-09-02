@@ -11,32 +11,34 @@ commands become ordinary again.
 
 The design, the measurements and everything that was considered and rejected are in
 [260828r-worktrees.md](../plans/260828r-worktrees.md). **This doc is the operational half**: what is
-true today, what was decided, and the two runbooks nobody has run yet.
+true today, what was decided, and the two runbooks — both now run.
 
 ## Where this stands
 
-**Nothing creates a worktree yet.** What exists is the safety layer and Step 0's deploy change:
+**`claude --worktree <name>` plus `npm run worktree:setup` works end to end**, including sign-in.
+The trunk is `dev` as of 2026-09-02 ([Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02)).
+What is built:
 
 | | |
 |---|---|
 | [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — so a `SIGKILL`ed holder leaves a file a human must `rm`, and the error message says which. Deliberate: never two writers. |
 | [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()` for the sweep that does not exist yet. |
-| [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts `dev` as well as `main`, and refuses a `worktree-*` branch by name. Plus `trunkGap`, below. |
-| the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, fails closed if the trunk cannot be read, and does nothing when you are on `main`. Forcible as `--force-gate='level with origin/dev'`. |
+| [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts **`dev` alone** since the flip, and refuses `main` and any `worktree-*` branch by name. Plus `trunkGap`, below. |
+| the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, and fails closed if the trunk cannot be read. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
-
 | [`.gitignore`](../../.gitignore) | `.claude/worktrees/` — where `claude --worktree <name>` puts a worktree. Ignored rather than merely untracked, because the primary would otherwise see every peer's whole checkout as untracked files and the commit recipe leans on `git status` being readable. |
 | [`.worktreeinclude`](../../.worktreeinclude) | `.env.local` and `.env`, copied into each new worktree. `.env.prod` deliberately absent, so an agent in a worktree cannot deploy. |
 | [`scripts/typecheck.ts`](../../scripts/typecheck.ts) | `.claude` added to `SKIP`. **The one scanner that actually walks in** — it recurses from the repository root and matches by basename, so a worktree's `tsconfig.json` became a project of the primary's. biome, knip and jscpd need nothing: their globs are anchored allowlists. |
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
-| [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange` and `parseDevPortEnv` — all still right. **The reservation half of it is to be deleted**: Greg redirected the design to dynamic allocation on 2026-09-01 and was right, see [Ports and the ceiling](#ports-and-the-ceiling). Nothing reads any of it yet. |
-
+| [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
+| [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
 | [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote. See [Why not the remote](#why-a-worktree-branches-from-head-and-not-from-the-remote). |
 
-Still to build: the auth allow-list, an identity endpoint, the database lease, and `worktree:sweep` —
-[the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do).
+Still to build: an identity endpoint, the database lease, and `worktree:sweep` —
+[the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
+done.
 
 ## Starting one
 
@@ -68,9 +70,10 @@ default `"fresh"`, which branches from the default branch **on the remote**. Mea
 stale* and cannot see anything done here today. `"head"` gives it the primary's current committed
 state; uncommitted peer edits do not travel, because a worktree is a fresh checkout of commits.
 
-It also removes a reason to change GitHub's default branch, which is the other half of the deferred
-trunk flip — so this one setting buys back most of what waiting for [Runbook
-A](#runbook-a-flip-the-trunk-to-dev-not-yet-run) would have delayed.
+It also means GitHub's default branch does not matter here, which is the one part of [Runbook
+A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) still outstanding: `"fresh"` would resolve
+through `origin/HEAD`, and `"head"` never asks. So a worktree created today branches from this box's
+`dev` regardless of what GitHub still says its default is.
 
 ### What a worktree costs, measured rather than assumed
 
@@ -321,77 +324,99 @@ twenty or thirty eventually, which needs a bigger box; generate the range from a
 `WORKTREE_PORT_RANGE` constant so raising the ceiling is one edit and a Supabase restart, not a
 hand-maintained list.
 
-## Runbook A: flip the trunk to `dev` (not yet run)
+## Runbook A: flip the trunk to `dev` (done, 2026-09-02)
 
-**Why it is waiting.** The last step changes the shared primary's branch, and a dozen agents have
-uncommitted work in it. `git switch -c dev` is genuinely safe — it creates the branch at the current
-`HEAD`, so no file in the tree changes and nobody's work is touched; it is a label move, not a
-checkout. But it is the exact command AGENTS.md tells you to ask about, and it changes GitHub's
-default branch, which every clone then has to be told about. Do it in a quiet moment, with Greg
-present.
-
-The parts that do **not** disturb anyone are already done and committed: `deploy.ts` accepts `dev`,
-and `vercel.json` disables builds for it.
+**Ran on this box at 06:23 on 2026-09-02**, once the other agents had committed and pushed and the
+tree was genuinely empty — `git status --porcelain=v1 --untracked-files=all` printed nothing, and
+`main` was level with `origin/main` at `ba6882a`.
 
 ```bash
-# 1. Confirm the primary is clean enough to reason about, and note the sha.
-git -C /home/greg/code/spideryarn2 rev-parse HEAD
-
-# 2. Create the trunk at the current HEAD and move onto it. Atomic; touches no file.
-git switch -c dev
-
-# 3. Publish it.
-git push -u origin dev
-
-# 4. On GitHub: Settings -> Branches -> default branch -> dev.
-#    Vercel's PRODUCTION branch stays `main`. They are separate settings.
-
-# 5. Teach THIS clone where the default went. GitHub changing it does not move
-#    the local ref, and Claude Code's --worktree resolves "fresh" through it.
-git fetch origin dev
-git remote set-head origin -a
-git symbolic-ref refs/remotes/origin/HEAD    # must print refs/remotes/origin/dev
+git switch -c dev                    # label move: HEAD sha unchanged, 0 files touched
+git push -u origin dev               # e3ef75f..ba6882a  (fast-forward, no force)
+git remote set-head origin dev       # NOT -a; see below
 ```
 
-**Step 5 is the one that bites if skipped.** `origin/HEAD` is a local ref in each clone and does not
-follow a change made on GitHub. Miss it and the first worktree created afterwards branches from
-`main` — production — and nothing says so. Repeat it on **every** clone, including the box and the
-Mac. And keep the plan's rule: printing the base is not checking it. Worktree setup should assert
-that its starting sha equals a freshly-fetched `origin/dev`.
+`git switch -c dev` is the command AGENTS.md tells you to ask about, and the reason it was safe here
+is worth stating rather than assuming: it creates a branch at the current `HEAD`, so it is a label
+move and not a checkout. That was **checked rather than trusted** — the sha before and after, and the
+dirty-file count before and after, both compared. In a tree with uncommitted work it would still be
+the wrong command to reach for without asking.
 
-Two things to do at the same time, both independent of worktrees:
+**No deployment fired.** All 20 most recent Vercel deployments carry `githubCommitRef: main`. The
+newest is the same sha as the `dev` push, which on its own proves nothing — so the check that counts
+is the timing: it was created at 06:18:21, and the `dev` push was at 06:23:05. The deployment
+predates the push it might have been mistaken for.
 
+### Two corrections to the runbook as it was written
+
+1. **`git remote set-head origin -a` was wrong, and wrong in the direction that hides.** `-a` means
+   *ask the remote*, and GitHub's default branch is a **separate setting** that had not been flipped
+   yet — so `-a` would have queried GitHub, been told `main`, and quietly set `origin/HEAD` straight
+   back to production. The explicit `git remote set-head origin dev` is what this step needs while
+   the two disagree. `-a` reads like the careful option, which is exactly the problem.
+2. **`origin/dev` already existed**, at `e3ef75f` from the previous day's spike, 57 commits behind.
+   It was a strict ancestor, so the push fast-forwarded and no force was needed — but the runbook
+   read as though it were creating the branch, and a diverged `origin/dev` would have needed a
+   decision rather than a `push -u`.
+
+### Still outstanding, and both are Greg's
+
+- **GitHub: Settings → Branches → default branch → `dev`.** There is no authenticated `gh` on this
+  box (`gh auth status`: *"You are not logged into any GitHub hosts"*), so this cannot be done from
+  here. Until it is, a fresh `git clone` checks out `main`, and `set-head -a` in any clone undoes
+  step 3. **Vercel's production branch stays `main`** — a different setting in a different place.
+- **The Mac**, whenever it is next in use:
+
+  ```bash
+  git fetch origin dev && git switch -c dev origin/dev && git remote set-head origin dev
+  ```
+
+  It is on `main` today, and `npm run deploy` now refuses from `main` (below), so a deploy attempted
+  there before this will stop with `on branch 'main', not dev`. That is a clear refusal rather than a
+  surprise, which is why the flip did not wait for it.
 - **Take `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` off the Vercel *Preview* environment.** They are
   present there today; `DATABASE_URL` and the service-role key are production-only, so a preview
   cannot reach the production database and fails cleanly at the store — but a preview build from an
   unreviewed commit currently carries spendable model keys. Removing an env var needs its value to put
   back, so this is Greg's to run, not an agent's.
-- **The `deploymentEnabled` rule is already default-deny**, and it is worth knowing why that is safe
-  rather than reading it as a risk. Vercel documents the precedence: *"If a branch matches multiple
-  rules and at least one rule is `true`, a deployment will occur"*
-  ([Git configuration](https://vercel.com/docs/project-configuration/git-configuration)). So the exact
-  `main: true` cannot be suppressed by the deny glob, and the production build the deploy script waits
-  for is safe. **`**`, not `*`** — minimatch's single star does not cross a slash, so `*: false` would
-  miss a branch named `agent/foo`; checked against the repo's installed minimatch, not assumed.
 
-### The AGENTS.md wording this needs, still to be approved
+### `npm run deploy` no longer accepts `main`
+
+`DEPLOY_SOURCE_BRANCHES` in [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) is `["dev"]`
+alone; it held both names through the changeover. Narrowing it was the point of the flip rather than
+tidying after it, because **`main` is the one deploy path with no trunk comparison**: `trunkGap` is
+scoped to `TRUNK_BRANCH` by design, so a checkout still standing on `main` could promote main-only
+work and leave `dev` silently behind production. The `origin/main` ancestry check would catch the
+*next* deploy and demand a merge — which is the divergence being found one deploy late.
+
+Deploying still writes `main`, by sha and by name. The trunk moving does not move production.
+
+**The `deploymentEnabled` rule is already default-deny**, and it is worth knowing why that is safe
+rather than reading it as a risk. Vercel documents the precedence: *"If a branch matches multiple
+rules and at least one rule is `true`, a deployment will occur"*
+([Git configuration](https://vercel.com/docs/project-configuration/git-configuration)). So the exact
+`main: true` cannot be suppressed by the deny glob, and the production build the deploy script waits
+for is safe. **`**`, not `*`** — minimatch's single star does not cross a slash, so `*: false` would
+miss a branch named `agent/foo`; checked against the repo's installed minimatch, not assumed.
+
+### The AGENTS.md wording this still needs
 
 Rule changes to AGENTS.md go one approved set at a time
-([edit-important-docs.md](../reusable/edit-important-docs.md)), and they would be wrong to land before
-`dev` exists. One is needed when it does:
-
-1. Under **Working in a tree several agents share** — commit and push to `dev`; `main` is written only
-   by `npm run deploy`.
+([edit-important-docs.md](../reusable/edit-important-docs.md)), so this is proposed rather than
+landed. The bullet under **Working in a tree several agents share** that says the primary *"is moving
+off `main` onto `dev`"* has now happened, and *"Pushing to `main` will still deploy"* is true but
+reads as permission. It wants replacing with: commit and push to `dev`; `main` is production and is
+written only by `npm run deploy`.
 
 **And that is the only one**, because the workflow merges rather than rebases. An earlier draft wanted
 a second change carving out a rebase exception for worktrees; choosing merge deletes it, and leaves the
 "never run a git command that throws work away" rule whole. That is an argument for merge in itself —
 [The workflow](#the-workflow) has the rest.
 
-And [version-control.md](version-control.md) is a **required** step of the runbook, not an
-afterthought: it currently says "`main`, and only `main`" and describes the old topology, so an agent
-following it after the flip could push to production or mistake which branch is authoritative. It is
-the source of truth for this, and a stale source of truth is worse than none.
+[version-control.md](version-control.md) was a **required** step of this runbook rather than an
+afterthought, and is done: its `Branch` row said "`main`, and only `main`", which would have led an
+agent following it to push to production or to mistake which branch is authoritative. A stale source
+of truth is worse than none.
 
 And the convention Greg asked for, which belongs in AGENTS.md and
 [engineering-manager.md](../reusable/engineering-manager.md): **push at the end of a piece of work.**
@@ -420,9 +445,10 @@ will need it: `git worktree repair` against the **recorded** paths from `git wor
 rather than a shell glob, and then verifying status, branch, common git dir and registered path from
 every worktree.
 
-The one step from [Runbook A](#runbook-a-flip-the-trunk-to-dev-not-yet-run) that the Mac will still
-need, whenever the trunk actually moves, is `git remote set-head origin -a` — but that is part of the
-flip, not of the move.
+The steps from [Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) the Mac still needs are
+listed there, and the spelling matters: **`git remote set-head origin dev`, not `-a`.** An earlier
+version of this line said `-a`, which would ask GitHub — whose default branch is still `main` — and
+put `origin/HEAD` back on production.
 
 ## Traps
 

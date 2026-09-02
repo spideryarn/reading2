@@ -58,7 +58,7 @@ const journal = (...whens: number[]): JournalEntry[] =>
 describe("deployBranchProblem", () => {
   it("refuses a worktree branch, which has no .env.prod to deploy with", () => {
     expect(deployBranchProblem("worktree-referee-mode")).toBe(
-      "on branch 'worktree-referee-mode', not main or dev",
+      "on branch 'worktree-referee-mode', not dev",
     );
   });
 
@@ -67,19 +67,26 @@ describe("deployBranchProblem", () => {
     expect(deployBranchProblem("")).toBe("HEAD is detached, so there is no branch to deploy from");
     // ...and the older `rev-parse --abbrev-ref HEAD` spelling said "HEAD",
     // which is still refused rather than mistaken for a branch.
-    expect(deployBranchProblem("HEAD")).toBe("on branch 'HEAD', not main or dev");
+    expect(deployBranchProblem("HEAD")).toBe("on branch 'HEAD', not dev");
   });
 
   it("accepts dev, the trunk agents commit and push to", () => {
     expect(deployBranchProblem("dev")).toBeNull();
   });
 
-  it("still accepts main, because the flip has not reached every checkout", () => {
-    expect(deployBranchProblem("main")).toBeNull();
+  it("refuses main, which after the flip is the unchecked path rather than a spare one", () => {
+    /* `main` was accepted through the changeover, and dropping it is the point of
+       the flip rather than tidying after it. `trunkGap` is scoped to
+       `TRUNK_BRANCH`, so a checkout still standing on `main` — the Mac, or a
+       clone made before GitHub's default moved — is the one deploy path with no
+       trunk comparison at all: it would promote main-only work and leave `dev`
+       silently behind production. Refusing costs a clear message; accepting
+       costs a divergence nobody sees. */
+    expect(deployBranchProblem("main")).toBe("on branch 'main', not dev");
   });
 
-  it("names both, so the message cannot drift from the list", () => {
-    expect([...DEPLOY_SOURCE_BRANCHES]).toEqual(["main", "dev"]);
+  it("names the one branch, so the message cannot drift from the list", () => {
+    expect([...DEPLOY_SOURCE_BRANCHES]).toEqual(["dev"]);
   });
 });
 
@@ -115,16 +122,22 @@ describe("trunkGap", () => {
     expect(trunkGap({ branch: "dev", sha: "a".repeat(40), trunkSha: "a".repeat(40) })).toBeNull();
   });
 
-  it("leaves the pre-flip main path alone, even when the trunk is unreadable", () => {
-    // Before the flip, `main` is trunk and production at once and the
-    // origin/main ancestry check already covers it. This must not start
-    // refusing deploys that work today.
+  it("stays scoped to the trunk, answering nothing about any other branch", () => {
+    /* Kept after the flip, when `deployBranchProblem` refuses `main` before this
+       is ever reached, because the scoping is the contract and not a detail of
+       who calls it: this function compares a candidate with the trunk, and a
+       branch that is not the trunk has no gap to report. Asserting `main`
+       specifically is what pins that the two guards are independent — the
+       refusal of `main` now lives in exactly one place. */
     expect(trunkGap({ branch: "main", sha: "a".repeat(40), trunkSha: null })).toBeNull();
   });
 
   it("keeps the trunk name and the deploy-source list as separate facts", () => {
-    // They overlap only during the changeover; conflating them is what made the
-    // gap invisible in the first place.
+    /* They overlapped only during the changeover, and conflating them is what
+       made the gap invisible in the first place. Now that the list is one name
+       they coincide, so this asserts the *relationship* rather than the
+       coincidence: the trunk must be deployable. It would still hold if a second
+       source were ever added back. */
     expect(TRUNK_BRANCH).toBe("dev");
     expect([...DEPLOY_SOURCE_BRANCHES]).toContain(TRUNK_BRANCH);
   });

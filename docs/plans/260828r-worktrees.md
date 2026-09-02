@@ -63,7 +63,22 @@ checkable property — which is what a sweep needs. Greg has chosen the dev-bran
 
 ### Status
 
-**Step 0 was split on 2026-09-01, and the half that disturbs nobody is built.** Greg:
+**The trunk flipped to `dev` on 2026-09-02, which closes Step 0.** The other agents had committed and
+pushed, the tree was empty, and Runbook A ran in one go: `git switch -c dev`, `git push -u origin dev`
+(a fast-forward of the previous day's spike branch), `git remote set-head origin dev`, and
+`DEPLOY_SOURCE_BRANCHES` narrowed to `["dev"]` alone. No deployment fired — the newest Vercel
+deployment predates the push by five minutes, which is the check that means anything, since it shares
+the pushed sha. Two runbook corrections came out of running it, both recorded in
+[worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02);
+the sharper one is that **`git remote set-head origin -a` was wrong**, because `-a` asks GitHub, whose
+default branch is a separate setting that had not moved, so it would have set `origin/HEAD` back to
+production while looking like the careful option.
+
+Still outstanding and both Greg's: GitHub's default branch (no authenticated `gh` on this box), and
+taking the model keys off Vercel Preview. Neither blocks a worktree, because `worktree.baseRef:
+"head"` never resolves `origin/HEAD`.
+
+**Step 0 was split on 2026-09-01, and the half that disturbs nobody was built first.** Greg:
 
 > There are a bunch of other agents working right now, and I'd prefer not to disrupt them. So let's
 > go as far as we can without messing up their work, which may block us on switching this primary
@@ -73,11 +88,12 @@ checkable property — which is what a sweep needs. Greg has chosen the dev-bran
 
 So: `deploy.ts` accepts `dev` (via a new pure judgement `deployBranchProblem` in
 `scripts/deploy-checks.ts`, with five tests, four of them watched failing first), and `vercel.json`
-gets `git.deploymentEnabled.dev = false`. What is **not** done, because it moves the shared primary's
-branch and GitHub's default: creating `dev`, switching to it, and `git remote set-head`. That is now a
-runbook in [worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run),
-to be run in a quiet moment with Greg present. The Mac's route out of Dropbox is Runbook B in the same
-doc.
+gets `git.deploymentEnabled.dev = false`. What was **not** done that day, because it moves the shared
+primary's branch and GitHub's default: creating `dev`, switching to it, and `git remote set-head`. That
+became a runbook in
+[worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02),
+and it ran on 2026-09-02 — see above. The Mac's route out of Dropbox was Runbook B in the same doc, and
+another agent did the move on 2026-09-01.
 
 **And four decisions arrived with it** — see [Open decisions](#open-decisions), where they are now
 marked. The one that changes this plan's design rather than merely settling a question is that **a
@@ -1127,14 +1143,13 @@ nothing disturbed the dozen agents in this tree.
 | `docs/project/worktrees.md` | The operational doc, including both runbooks. |
 | **always merge, never rebase** | Now a repo-wide rule in [version-control.md](../project/version-control.md#always-merge-never-rebase), signposted from `AGENTS.md`. See the Status section above for why, and what it deleted. |
 
-**Not done, deliberately, and written up rather than run:**
-[worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run) —
-create `dev`, `git switch -c dev` in the primary, the GitHub default-branch change, and
-`git remote set-head origin -a` on **every** clone. It needs a quiet moment and Greg present, because
-it moves the branch under every session in the tree. The runbook also carries the two independent
-jobs that belong with it: taking the model keys off Vercel Preview, and updating
-[version-control.md](../project/version-control.md)'s `Branch` row, which still says "`main`, and only
-`main`" (GPT Sol, finding 5).
+**Written up before it was run, and run on 2026-09-02:**
+[worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) —
+`git switch -c dev` in the primary, the push, and `git remote set-head`. Being written down first is
+what caught the `-a` mistake, since the command had to be justified rather than typed.
+[version-control.md](../project/version-control.md)'s `Branch` row is updated too — it said "`main`,
+and only `main`" (GPT Sol, finding 5). What did **not** get done from it, because neither is an
+agent's to do: GitHub's default-branch change, and taking the model keys off Vercel Preview.
 
 ### 1. The two `deploy.ts` bugs — done (`96c7661`)
 
@@ -1351,7 +1366,9 @@ deploy of unreviewed work. ([version-control.md](../project/version-control.md) 
 until 2026-09-01 — "Vercel is not connected to this repo" — which is how this nearly went unnoticed.)
 
 **So `dev` becomes a landing branch, and nothing else changes.** This splits the flip into two halves
-that are genuinely independent:
+that are genuinely independent. *Written 2026-09-01, as the interim scheme for using worktrees while
+the primary stayed put; the second half ran on 2026-09-02, so the bullets below describe how it was,
+not how it is:*
 
 - Worktrees push to `origin/dev`, which does not build — the `"**": false` wildcard already covers it.
 - The primary **stays on `main`**. GitHub's default **stays `main`**. No branch moves anywhere, so
@@ -1360,10 +1377,10 @@ that are genuinely independent:
   not a branch switch.
 - `npm run deploy` is untouched and remains the only writer of `main`.
 
-What stays deferred to [Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-not-yet-run)
-is only: move the primary onto `dev`, and change GitHub's default. Neither is needed to use worktrees,
-because `worktree.baseRef: "head"` makes worktrees branch from the primary's local `HEAD` rather than
-through `origin/HEAD`.
+[Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) moved the primary
+onto `dev` on 2026-09-02. GitHub's default branch is still `main` and stays outstanding — which changes
+nothing here, because `worktree.baseRef: "head"` makes worktrees branch from the primary's local `HEAD`
+rather than through `origin/HEAD`.
 
 **The one command, which an agent cannot run** — the permission classifier refuses a `git push` here,
 correctly:
@@ -1392,9 +1409,10 @@ worktree from **95 of 477 test files failing to 14**, which is about what the pr
 What is left of the original note, because it still applies to the next person:
 
 **This was the highest-information next step and it needed nothing from Greg.** `claude --worktree probe`
-works today: `origin/HEAD` is `main`, which is the current trunk, so the trunk flip is *not* a
-prerequisite for trying one. Write `worktree:setup`, create one, and find out what actually breaks
-instead of guessing.
+worked as it stood — on 2026-09-01 `origin/HEAD` was `main`, which was then the trunk, so the flip was
+*not* a prerequisite for trying one. Write `worktree:setup`, create one, and find out what actually
+breaks instead of guessing. (It was done, and it corrected four of this plan's numbers; `origin/HEAD`
+now resolves to `dev`.)
 
 What it would answer, none of which is currently known rather than assumed: whether `npm ci` in a
 worktree really is 4–5 s on this box; whether the dev server starts and lands on a sane port; whether
@@ -1531,10 +1549,21 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
    the real auth project. Recommendation: `deploymentEnabled: {"dev": false}`. Confirm that is wanted
    rather than previews-with-their-own-database, which is a bigger piece of work.
 
-0b. ~~**Change the GitHub default branch to `dev`?**~~ **Decided 2026-08-31: yes.** `dev` is both the
-   GitHub default and the working trunk, so `worktree.baseRef` stays `"fresh"` and needs no setting.
-   Vercel's production branch stays `main`. Remember `git remote set-head origin -a` on every clone —
-   the local `origin/HEAD` does not follow the change, and today still points at `main`.
+0b. ~~**Change the GitHub default branch to `dev`?**~~ **Decided 2026-08-31: yes** — and every
+   supporting clause of that decision has since been overtaken, so read the decision and ignore the
+   reasoning. Vercel's production branch stays `main`, which still holds. The rest does not:
+
+   - **`worktree.baseRef` is `"head"`, not `"fresh"`.** Deliberately reversed on 2026-09-01 after
+     measuring that `origin/main` was 60 commits behind this box, so `"fresh"` would have started
+     every worktree two months stale — [worktrees.md § Why not the
+     remote](../project/worktrees.md#why-a-worktree-branches-from-head-and-not-from-the-remote). That
+     also means the GitHub default no longer affects worktree creation at all, which is why the flip
+     could go ahead without it.
+   - **GitHub's default is still `main`** as of 2026-09-02. It needs an authenticated `gh` or the web
+     UI, and this box has neither.
+   - **`git remote set-head origin -a` is the wrong form.** `-a` asks GitHub, so while the two
+     disagree it sets `origin/HEAD` back to production. Use `git remote set-head origin dev`.
+     `origin/HEAD` on this box already resolves to `dev`.
 
 0e. ~~**How to split the fixture corpus from the artefact store**~~ — **decided 2026-09-01 and being
    built**: see [260901b-committed-fixture-corpus.md](260901b-committed-fixture-corpus.md). Scratch

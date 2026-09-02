@@ -140,10 +140,23 @@ export function scanSql(sql: string): SqlFindings {
  * (`git push origin <sha>:refs/heads/main`). So this list is only "where is it
  * legitimate to be standing when you ask for a deploy".
  *
- * `dev` is here because the trunk is moving to `dev`: agents commit and push
- * there, and `main` is written only by a gated deploy. `main` stays accepted
- * because the flip has not happened yet in every checkout, and a deploy that
- * refuses during the changeover is a deploy nobody can ship.
+ * **`dev` only, since the trunk flip on 2026-09-02.** Agents commit and push to
+ * `dev`; `main` is written by nothing but a gated deploy. `main` was accepted
+ * alongside it through the changeover, on the grounds that a deploy which
+ * refuses mid-flip is a deploy nobody can ship — and dropping it now is the
+ * point of the flip rather than tidying up after it.
+ *
+ * The reason it cannot stay is that **`main` is the one deploy path with no
+ * trunk comparison.** `trunkGap` is scoped to `TRUNK_BRANCH` by design, so a
+ * checkout still standing on `main` — the Mac, or a clone made before GitHub's
+ * default moved — could promote main-only work and leave `dev` silently behind
+ * production. The `origin/main` ancestry check in `deploy.ts` would catch the
+ * *next* deploy and demand a merge, which is the divergence being discovered
+ * one deploy late.
+ *
+ * The cost is real and it is the right way round: a checkout on `main` is now
+ * refused with `on branch 'main', not dev`, which says what to do. Deploying
+ * from `main` would have said nothing at all.
  *
  * A `worktree-*` branch is deliberately **not** here. Worktrees have no
  * `.env.prod`, so a deploy from one cannot work; refusing by name gives a
@@ -151,15 +164,17 @@ export function scanSql(sql: string): SqlFindings {
  *
  * See docs/project/worktrees.md and docs/plans/260828r-worktrees.md § Step 0.
  */
-export const DEPLOY_SOURCE_BRANCHES = ["main", "dev"] as const;
+export const DEPLOY_SOURCE_BRANCHES = ["dev"] as const;
 
 /**
  * The trunk agents commit and push to. `main` is production, not the trunk.
  *
  * Named separately from `DEPLOY_SOURCE_BRANCHES` because the two answer
- * different questions and only briefly overlap: during the changeover both
- * names may launch a deploy, but only one of them is the branch a candidate has
- * to match.
+ * different questions: one is "where may you be standing", the other is "what
+ * must the candidate equal". They held different values through the changeover,
+ * and they hold the same one now — which is exactly when conflating them starts
+ * to look harmless. Keep them apart: the day a second deploy source is added
+ * back, the trunk comparison must not silently widen with it.
  */
 export const TRUNK_BRANCH = "dev";
 

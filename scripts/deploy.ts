@@ -352,10 +352,16 @@ async function preflight(): Promise<string> {
     ok(`origin/main is an ancestor${ahead ? `, ${ahead} commit(s) to push` : ", nothing to push"}`);
   }
 
-  /* The check above proves the candidate contains current *production*. Once the
-     trunk is `dev`, it says nothing about whether it contains current *trunk* —
-     see `trunkGap`, which is where the whole reasoning lives. Only runs when
-     standing on the trunk, so the pre-flip `main` path is untouched. */
+  /* The check above proves the candidate contains current *production*, and that
+     is all it proves: it says nothing about whether the candidate contains
+     current *trunk* — see `trunkGap`, which is where the whole reasoning lives.
+
+     Since the trunk flip on 2026-09-02, `dev` is the only accepted source, so
+     this branch is always taken and the guard looks redundant. It stays because
+     it is the honest shape of the question rather than a leftover: `trunkGap`
+     compares a candidate with the trunk, and asking it about a branch that is
+     not the trunk is meaningless. Deleting the guard would make the two
+     independent gates one gate by accident. */
   if (branch === TRUNK_BRANCH) {
     const fetched = run("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"]);
     let trunkSha: string | null = null;
