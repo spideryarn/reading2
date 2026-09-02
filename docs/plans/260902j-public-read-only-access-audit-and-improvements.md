@@ -421,3 +421,17 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   Clusters A and B into two stages with A promoted to Tier 0, and added Cluster F's four
   requirements. Every claim it made was checked against the tree before it was adopted. Ready to
   build, stage 1 first.
+- 2026-09-02 — **S2 built**, pulled out of Cluster B and landed early because it touches nothing the
+  client work is in. `runInRequest` around `servePublicReadPage` in `src/vercel.ts`, and
+  `tests/public-page-request-scope.test.ts` is the guard: it drives the real `handler` at
+  `/read/:slug` with the page stubbed by a spy that asks `currentOwnerId()` on the caller's behalf.
+  **Red first, and the red was the finding** — `inRequest()` was `false`, so the page ran outside
+  any box and the tripwire the security map describes did not exist there. The wrap is in the
+  transport rather than in `src/public/page.ts`, which would have pulled `src/owner.ts` into the
+  import graph `tests/public-imports.test.ts` keeps closed. `security-map.md`'s tripwire bullet now
+  says out loud that a scope has to be open for it to be true, and that one was not.
+
+  One thing the test needed, and it is worth knowing before writing another like it: reaching
+  `handler` means importing `src/vercel.ts`, which pulls the whole of `src/routes.ts` behind it —
+  about eight seconds cold on this box, against vitest's five-second default. The first run
+  "failed" as a timeout that looked nothing like the bug.
