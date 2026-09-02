@@ -115,6 +115,24 @@ export type ReaderCapability =
        * could take it up.
        */
       signedIn: boolean;
+      /**
+       * **Whether we could confirm that session** — and it is on the chrome,
+       * not on what may be done.
+       *
+       * `GET /api/article/:slug` answered 401 (after `apiFetch` spent its one
+       * refresh and one retry) while the public route answered 200, so this
+       * reader is being served the shared article and told why it went
+       * read-only. A 401 says nothing about the public entitlement, and the two
+       * are kept independent on purpose — finding C3,
+       * docs/plans/260902j-public-read-only-access-audit-and-improvements.md.
+       *
+       * **It grants and withholds nothing.** A visitor is a visitor whichever
+       * way this reads: the owner-only hooks live inside `OwnedReader` and are
+       * unreachable rather than skipped, exactly as they are for a stranger. So
+       * it belongs beside `signedIn` — the other field here that only the
+       * wording depends on — rather than beside `artefacts`.
+       */
+      sessionUnconfirmed: boolean;
     };
 
 /**
