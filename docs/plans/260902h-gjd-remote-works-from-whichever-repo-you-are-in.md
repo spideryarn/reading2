@@ -705,3 +705,14 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   back; config format and prompt library decided. Sent to GPT Sol. Stage 1's pure module starts in
   parallel with that review, since both earlier Sol reviews already asked for it; its wiring into
   `gjd-remote.ts` waits for the findings.
+- 2026-09-02 evening — Stages 1–4 built, reviewed by GPT Sol three times (plan, Stage 1, Stage 2,
+  Stage 3; a landing review is running), every blocker fixed, all on branch
+  `worktree-gjd-remote-any-repo` (pushed). Trunk merged in twice; both conflicts were both-sides
+  additions (the box doc; `src/models.ts`'s `AiJob` union) and were resolved by keeping both.
+  **Trunk itself is red at the time of writing** on two things that are not this branch's:
+  `src/store/pg-admin.ts` imports `./ai-calls-spend-pg.js`, which nobody committed, and
+  `src/web/PrivacyPage.tsx` names `openrouter.ai`, which the spend tripwire refuses.
+  **Stage 5 waits on two things only Greg can do**: push hellozenno's `main` (its
+  `.gjd-remote/` and the https submodule URL are committed there but not pushed, and the box clones
+  from GitHub), and say yes to `gjd-remote provision` for `python3-venv` — a change to the box, per
+  [hetzner-remote-server-box.md § A change to the box is a change to a file](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
