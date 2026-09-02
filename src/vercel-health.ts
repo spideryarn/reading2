@@ -57,6 +57,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { sql } from "drizzle-orm";
 
+import { expectedLivemode, isLiveSecret } from "./billing/stripe.js";
 import { getDb } from "./db/client.js";
 import { sslDecisionFor } from "./db/ssl.js";
 import {
@@ -266,6 +267,37 @@ const EXPECTED: readonly Expected[] = [
     breaks: "request bodies arrive empty, and only POST /api/health notices",
   },
   { name: "LOG_LEVEL", breaks: null },
+  /**
+   * **Payments, and the one variable whose *presence* is the danger.**
+   *
+   * `breaks: null` because a deployment with no Stripe configured is a
+   * perfectly good deployment — everyone stays on the free tier and nothing
+   * else notices. What is never fine is a key from the *wrong mode*, so this
+   * pair carries a `valid` clause, which is checked whether or not there is a
+   * `breaks` (see `checkEnv`). A production deployment on `sk_test_…` would
+   * accept card `4242…`, write `active` subscription rows and grant real quota
+   * for money that does not exist, and every "is it set" check above would
+   * stay green throughout. The prefix is the mode, so the value answers the
+   * question — src/billing/stripe.ts, and the same reasoning guards the shared
+   * dev box in scripts/gjd-remote-env.ts.
+   */
+  {
+    name: "STRIPE_SECRET_KEY",
+    breaks: null,
+    valid: {
+      ok: (v) => isLiveSecret(v) === expectedLivemode(),
+      /* **One sentence covering both directions, because `must` is evaluated
+         once at module load and `ok` is evaluated per request.** A message
+         built from `expectedLivemode()` here would be frozen to whatever the
+         environment was when this file was imported, and would then confidently
+         name the wrong mode — which is worse than naming neither, since it
+         sends an operator to change the variable that is already right. */
+      must:
+        "match this deployment's mode — sk_live_… in production, sk_test_… everywhere else. " +
+        "A test key in production accepts test cards and grants real subscriptions",
+    },
+  },
+  { name: "STRIPE_PRICE_READER", breaks: null },
 ];
 
 /**
@@ -299,17 +331,28 @@ function checkEnv(warnings: string[]): Record<string, boolean> {
     const names = expected.or ? [expected.name, expected.or] : [expected.name];
     for (const name of names) env[name] = value(name) !== null;
 
+    const found = names.map(value).find((v) => v !== null);
+
+    /* **A wrong value is warned about even where a missing one is not**, and
+       the asymmetry is deliberate: `breaks: null` says "this deployment may
+       legitimately not want this", which is a statement about *absence*. A
+       variable somebody has actually set, to something this file knows is
+       wrong, is nobody's deliberate choice. That distinction earns its keep on
+       `STRIPE_SECRET_KEY`: a test-mode key on the production deployment takes
+       test cards and grants real subscriptions, and it is *present*, so every
+       check that asks "is it set" goes green over it
+       (docs/reusable/silent-success.md). The value is never echoed — that it
+       is wrong, and what it has to be, is the whole diagnosis. */
+    if (found !== undefined && expected.valid && !expected.valid.ok(found)) {
+      warnings.push(
+        `${expected.name} must ${expected.valid.must}${expected.breaks ? ` — ${expected.breaks}` : ""}`,
+      );
+      continue;
+    }
+
     if (!expected.breaks) continue;
     if (expected.where === "vercel" && !process.env.VERCEL) continue;
-
-    const found = names.map(value).find((v) => v !== null);
-    if (found === undefined) {
-      warnings.push(`${names.join(" or ")} is not set — ${expected.breaks}`);
-    } else if (expected.valid && !expected.valid.ok(found)) {
-      /* The value is never echoed. That it is wrong, and what it has to be, is
-         the whole diagnosis; the value itself may be a secret. */
-      warnings.push(`${expected.name} must ${expected.valid.must} — ${expected.breaks}`);
-    }
+    if (found === undefined) warnings.push(`${names.join(" or ")} is not set — ${expected.breaks}`);
   }
 
   return env;}

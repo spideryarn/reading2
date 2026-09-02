@@ -1,6 +1,29 @@
 # The gate that asked one laptop whether an artefact exists
 
-**Status, 2026-09-02: planning.** Written after a production deploy that needed `--force-gate=test`.
+**Status, 2026-09-02: stages 1–5 landed.** Written after a production deploy that needed
+`--force-gate=test`.
+
+```
+  the deploy gate's genuine test failures, measured in its own worktree
+  ─────────────────────────────────────────────────────────────────────
+  before   4     statusline (every commit, at any sha) · doc-links ·
+                 store-artefact-manifest · store-roundtrip coverage
+  after    0     with two caveats, below
+```
+
+What shipped: `b842fe4` the postmortem and plan · `17b7517` the statusline contract and the
+gitignored-link ban · `1465a9a` the real `quiz.json` fixture · `2190655` 48 unfollowable links in a
+peer's review docs · `5662308` the shared list and the corpus-only evidence.
+
+**Two things this did not fix, deliberately.** `raw.pdf` sits in `PENDING_CORPUS_EXAMPLE` and wants
+an end-to-end `exportArticle` test over synthetic PDF bytes — the tests that look like they cover it
+drive `writes`, whose source is `raw.html`. And `store-parity` remains non-hermetic; see below.
+
+**A third thing was fixed that was not on the list.** `tests/seed-admin-signin.test.ts` was failing
+on this laptop and in the gate, and it was neither a regression nor this plan's: `3003357` renamed
+the seeded local admin to `dev-admin@spideryarn.local`, and every machine seeded since 31 August
+needs `db:seed-owner` re-run to pick it up. Running it fixed all three. Worth knowing because it
+looks exactly like a code regression until you read the commit that caused it.
 
 ## What happened
 

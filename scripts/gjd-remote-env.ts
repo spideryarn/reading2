@@ -99,6 +99,10 @@ export const ALLOWLIST: readonly string[] = [
      minted per machine by `stripe listen`, so the laptop's value would be
      wrong on the box, like the admin password. Greg's call, 2026-09-02. */
   "STRIPE_SECRET_KEY",
+  /* The price the paid tier is sold at. Not a secret — it is in the Checkout
+     URL every customer sees — and a box without it cannot run a checkout at
+     all, so it travels with the key rather than being typed on each box. */
+  "STRIPE_PRICE_READER",
 ];
 
 /**
