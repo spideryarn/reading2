@@ -532,6 +532,32 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   the reading view already shows `VisitorBand`'s ask and `SharedNotice`'s together for the same
   reader — so this doubles an existing wart rather than inventing one. Worth one tidy in
   `PublicChrome.tsx` when somebody is next in there.
+- 2026-09-02 — **Sol's review of Cluster E** ([-cluster-e-review-sol.md](260902j-public-read-only-cluster-e-review-sol.md))
+  came back **not blocked**, with three changes, all made.
+
+  **`LibraryEntry.visibility` is `?: "public"`, not `?: Visibility`.** The doc comment was asserting
+  an invariant the type did not enforce, which is the house rule's own example. `describeArticle`
+  still *takes* the full union — it is normalising a database value — and narrows at the boundary.
+  Proved by mutation: passing the row's visibility straight through is now
+  `TS2375 … Type '"private"' is not assignable to type '"public"'` rather than a wrong key on every
+  card waiting for a parity test to notice it.
+
+  **One surviving mutation, and it was the sharpest kind.** The badge tests found the rendered badge
+  through `SHARING_BADGE`, so changing that constant to `"Private"` left every one of them green
+  while the shelf said the opposite of the truth — the test and the component wrong together. One
+  assertion pins the literal now; the constant stays rewordable in the sense that matters and cannot
+  silently become the other word.
+
+  **And the parity comment claimed too much.** "Nothing is lost by dropping it" is not literally
+  true: that comparison no longer catches Postgres emitting `"private"` where it should be silent.
+  Equality between the two stores could never have caught that anyway, so the comment now names
+  where the coverage actually lives — `tests/store-shelf-pg.test.ts`, against a known public and a
+  known private row.
+
+  **Offered and not taken:** `text("visibility").$type<Visibility>()` in `src/db/schema.ts` would
+  centralise the assertion and remove all three downstream casts. Sol called it a cheap cleanup and
+  not required for correctness; it ripples into every insert's types and the schema file is shared
+  with in-flight work, so it is written down here rather than slipped in.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the

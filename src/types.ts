@@ -1331,8 +1331,16 @@ export interface LibraryEntry {
    * shelf by this until there is enough shared material for it to be worth
    * anything.
    * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
+   *
+   * **`"public"` and not `Visibility`, so the paragraph above is a compile
+   * error rather than a convention.** `describeArticle` still *takes* the full
+   * union — it is normalising a database value — and narrows here, which is
+   * where the invariant belongs: an accidental pass-through of the row's
+   * `"private"` now fails to typecheck instead of putting a wrong key on every
+   * card and waiting for a parity test to notice. GPT Sol's review of this
+   * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
-  visibility?: Visibility;
+  visibility?: "public";
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 

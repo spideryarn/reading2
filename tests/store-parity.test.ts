@@ -755,10 +755,18 @@ when("the filesystem and Postgres stores agree", () => {
        Postgres and nowhere on disk. `visibilityStore.set` refuses with a 501 on
        the filesystem store (src/store/index.ts), so a shared article is
        `visibility: "public"` on one side and silent on the other, for ever and
-       correctly. Nothing is lost by dropping it: the filesystem side has no
-       value here that could disagree. Without this, sharing one local article
-       through the app — which is how anyone checks the shelf badge — turns this
-       suite red with a whole-entry diff that says nothing about parity.
+       correctly. Without this, sharing one local article through the app —
+       which is how anyone checks the shelf badge — turns this suite red with a
+       whole-entry diff that says nothing about parity.
+
+       **Something *is* lost, and it is worth naming rather than waving away**:
+       this comparison no longer catches Postgres emitting `"private"` where it
+       should be silent, or losing a `"public"` altogether. Equality between the
+       two stores could never have caught the first of those and cannot express
+       the second, so the coverage was never really here — it is in
+       tests/store-shelf-pg.test.ts, which asserts the projection against a
+       known public and a known private row. GPT Sol, reviewing Cluster E, on an
+       earlier draft of this comment that claimed nothing was lost.
        docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E. */
     const comparable = (entries: LibraryEntry[]) =>
       entries.map((e) => {

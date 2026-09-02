@@ -134,6 +134,23 @@ function badges(): HTMLElement[] {
   );
 }
 
+/**
+ * **The word itself, once, written out.**
+ *
+ * Everything below finds the badge through `SHARING_BADGE`, which is right —
+ * pinning the prose in six assertions would make the constant unrewordable. But
+ * it means the test and the component read the same variable, so changing
+ * `SHARING_BADGE` to `"Private"` leaves every one of them green while the shelf
+ * says the opposite of the truth. GPT Sol found that mutation surviving.
+ *
+ * One literal, here, is the whole fix: the constant stays rewordable in the
+ * sense that matters — *Shared with anyone*, *Public* — and cannot silently
+ * become a word that means the other thing.
+ */
+it("calls it Shared, and not the opposite", () => {
+  expect(SHARING_BADGE).toBe("Shared");
+});
+
 describe("the card", () => {
   it("marks an article anyone with the link can read", () => {
     paint(
