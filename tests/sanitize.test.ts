@@ -285,6 +285,27 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
+  it("does not let an article put a verdict on its own sentence", () => {
+    /* `data-dir` is the annotation that draws the `−` / `+` sign after a
+       marked phrase (`mark.hit[data-dir]::after`, styles.css), and it is the
+       only one of ours that puts a **judgement** on a passage rather than a
+       colour or an id. An article shipping its own would be a stranger's
+       document telling our reader that *we* had called their sentence bad — and
+       the class and the attribute have to go together, because the selector
+       needs both.
+
+       Asserted on the whole pair, and on the sign never being reachable:
+       dropping `data-dir` from `FORBID_ATTR` leaves `class="hit"` stripped but
+       the attribute standing, which is one edit away from a live rule if any
+       later selector stops requiring the class. GPT Sol's finding 8, 2026-09-02;
+       the change that added the attribute forgot to reserve it and forgot to
+       bump `SANITIZER_VERSION` with it. */
+    const out = sanitizeHtml(`<p><mark class="hit" data-dir="for">forged</mark></p>`);
+    expect(out).not.toContain("data-dir");
+    expect(out).not.toMatch(/\bhit\b/);
+    expect(out).toContain("forged"); // the words are still the author's
+  });
+
   it("does not let an article forge any of the four pressed-mark attributes", () => {
     // One per kind since 2026-08-26 — annotate.ts says why. Each is as
     // forgeable as `data-open` was, so each has to be forbidden.

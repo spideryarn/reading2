@@ -375,7 +375,9 @@ export function validateHits(
  * Three outcomes, not two, and the third is the one worth naming: an object
  * that starts and never finishes is a response cut off by `max_tokens`, and it
  * gets its own reader-facing sentence — `ANSWER_OVERFLOWED`, which says the
- * lever the reader actually has ("ask for something narrower") — rather than
+ * lever the reader actually has (another go, and a narrower ask where there is
+ * one to narrow — this parser also serves three Referee sub-modes that have no
+ * scoping control at all, which is why that clause is conditional) — rather than
  * sending them hunting for a JSON object that was never going to be there. It
  * is also the most likely real failure here, because the answer's size grows
  * with the number of hits and nothing else.
@@ -391,8 +393,8 @@ export function validateHits(
  * `{"hits":[{...one whole hit...},{"blockId":"spy` — read as a *complete*
  * object with trailing junk, fell into `JSON.parse` and failed there, and was
  * reported as `[ai-unreadable]` ("could not be read at all") rather than
- * `[ai-overflowed]` ("ask for something narrower") — sending the reader to
- * blame the provider for a limit this app itself set. See
+ * `[ai-overflowed]` ("the answer was longer than there was room for") — sending
+ * the reader to blame the provider for a limit this app itself set. See
  * tests/search.test.ts § "says cut off, not malformed, once a complete hit
  * has already streamed" for the case this fixes.
  *

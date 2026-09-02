@@ -59,6 +59,7 @@
  */
 import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from "../referee-mirror-types.js";
 import type { BlockId } from "../types.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { useMirror, type MirrorApi } from "./useMirror.js";
 import { signedValence } from "./valence.js";
 
@@ -308,8 +309,23 @@ const KIND_LABEL: Record<MirrorRemarkKind, string> = {
  * that decided to print one of these from the *kind* instead would still be
  * consistent, and a panel that forgot the distinction fails to compile.
  */
-const TESTED = "Tested in a trial";
-const UNTESTED = "Not tested in a trial";
+/**
+ * **"A kind" is the whole of the change, 2026-09-02.**
+ *
+ * These were *"Tested in a trial"* and *"Not tested in a trial"*, and beside one
+ * remark that reads as a claim about **this remark** — that somebody checked it
+ * and it held. It never meant that. What the trial tested is the *category*: a
+ * referee shown feedback of this shape revised their review more often than one
+ * who was not. Whether this particular sentence about this particular comment is
+ * any good is untested and untestable, and `EVIDENCE_NOTE` under the list says
+ * so in its last line — which is a line a referee in a hurry does not reach.
+ *
+ * So the noun moves into the label. Three words longer, and it is the smallest
+ * wording that puts the trial's subject where the reader can see it.
+ * tests/referee-tooltips.test.tsx pins both as literals.
+ */
+const TESTED = "A kind tested in a trial";
+const UNTESTED = "A kind not tested in a trial";
 
 const EVIDENCE_NOTE =
   "Three of these kinds — hard to act on, check against the passage, how this will land — come " +
@@ -331,9 +347,33 @@ function Remark({
     <li className="mir-remark" data-kind={remark.kind}>
       <p className="mir-head">
         <span className="mir-kind">{KIND_LABEL[remark.kind]}</span>
-        <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
-          {remark.trialTested ? TESTED : UNTESTED}
-        </span>
+        {/* **The card is on top of the word, never instead of it.** This file's
+            header says the distinction may not be a tooltip, and that stands:
+            the word is rendered, readable and on every row, and it is what a
+            referee in a hurry gets. What the card adds is the trial itself —
+            which trial, how big the effect was, and the line the note under the
+            list ends on, which is that none of it says whether *this* remark is
+            right. `EVIDENCE_NOTE` is imported into the card rather than
+            rewritten, so the row and the footnote cannot drift. */}
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={remark.trialTested ? TESTED : UNTESTED}
+              what={
+                remark.trialTested
+                  ? "A randomised trial tested feedback of this shape on real reviewers."
+                  : "No trial has tested feedback of this shape; it is here because it is cheap to check and easy to dismiss."
+              }
+              how={EVIDENCE_NOTE}
+            />
+          }
+        >
+          <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
+            {remark.trialTested ? TESTED : UNTESTED}
+          </span>
+        </Tooltip>
       </p>
 
       {remark.kind === "coverage" ? (
@@ -341,20 +381,57 @@ function Remark({
            coverage remark exists precisely because no comment took the
            criterion up, so there is nowhere in the piece it points at. A row
            that offered one would send the referee somewhere the model said
-           nothing about. */
-        <p className="mir-criterion">{remark.criterion}</p>
-      ) : (
-        <button
-          type="button"
-          className="mir-jump"
-          onClick={() => onJump(remark.blockId)}
-          title="Go to this passage"
+           nothing about.
+
+           **And the absence is what the card explains.** Rule 2 of the mode is
+           that every row is a door into the prose, so the one row that is not
+           reads as broken — the referee presses the criterion, nothing happens,
+           and the panel has said nothing about why. A missing control cannot
+           carry a tooltip, so this one sits on the words that stand in its
+           place. */
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={KIND_LABEL.coverage}
+              what="The criterion you wrote, printed as a reminder rather than as a link."
+              how="This row has nowhere to send you, and that is the whole of what it is saying: it exists because none of your comments took this criterion up, so there is no passage in the paper it is about. Every other row here jumps."
+            />
+          }
         >
-          {/* The referee's own words where we have them, so the remark sits
-              against the thing it is about. Rule 2 of the mode: every row is an
-              index into the piece. */}
-          <span className="mir-quote">{comment?.quote ?? remark.blockId}</span>
-        </button>
+          <p className="mir-criterion">{remark.criterion}</p>
+        </Tooltip>
+      ) : (
+        /* **A card, not a `title`.** It was `title="Go to this passage"` until
+           2026-09-02, which is precisely the anti-pattern Tooltip.tsx's own
+           docstring argues against: a second's wait, unstyleable, truncated at
+           the OS's idea of a line, and **not there at all on a touch device**.
+           The card also has room for the half a `title` had no space for — that
+           the words on the button are the referee's own, quoted back, rather
+           than anything the model wrote. */
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head="Go to this passage"
+              what="Scrolls the paper to the passage this remark is about."
+              how={
+                comment
+                  ? "The words on this button are your own comment's, quoted back — the model wrote only the line at the foot of the row."
+                  : "Your comment for this remark could not be found, so the button shows the passage's id instead of your words. The jump still lands in the right place."
+              }
+            />
+          }
+        >
+          <button type="button" className="mir-jump" onClick={() => onJump(remark.blockId)}>
+            {/* The referee's own words where we have them, so the remark sits
+                against the thing it is about. Rule 2 of the mode: every row is an
+                index into the piece. */}
+            <span className="mir-quote">{comment?.quote ?? remark.blockId}</span>
+          </button>
+        </Tooltip>
       )}
 
       {/* Their own comment, quoted back. The remark is about this sentence, and

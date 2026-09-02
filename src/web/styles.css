@@ -2173,6 +2173,113 @@ mark.hit:not([data-hues]) {
   background-repeat: no-repeat;
   background-size: 100% var(--hue-band);
 }
+/* ------------------------------------------------------- the direction ----
+   **A mark painted by valence carries a sign, and this is it.** `−` counts
+   against, `+` counts for, `·` counts neither way, `±` where two results point
+   opposite ways over one phrase and both stripes are drawn.
+
+   The stripes above say *which way* in colour, and colour-scales.md is blunt
+   that colour may never be the only carrier of a good/bad judgement. The panel
+   row meets that four times over — rank, direction in words, the referee's own
+   pole label, the signed number — but none of those is beside the mark. This
+   is. A minus sign is self-describing where a hue is not, and it survives
+   greyscale, deuteranopia and protanopia intact, which is the whole point of
+   it.
+
+   **Generated content, never text**, which is the one thing that made this
+   safe to build at all: it cannot be copied out of the article with the
+   author's sentence, and it cannot reach the block's rendered-text offsets —
+   the offset space every mark, comment anchor and block id resolves against
+   (docs/project/block-ids.md).
+
+   A real minus sign, U+2212, matching `signedValence` in src/web/valence.ts
+   rather than a hyphen.
+
+   **The alt text says the direction in words** — `content: "−" / "counts
+   against"`. It was empty for a day, on the argument that a stray minus
+   announced inside the author's sentence is worse than silence; GPT Sol's
+   finding 4 is that this makes the carrier inaudible to the one reader who most
+   needs a carrier that is not a colour, and it is right. The panel row is not a
+   substitute, because a screen-reader user reading the prose has not been
+   through the panel. The words are the ones `directionWords` produces in
+   src/web/valence.ts — criterion-neutral, so a mark drawn by two criteria at
+   once is not announced in one of their pole labels — and tests/valence.test.ts
+   reads this file off disk and compares the two, so the copy here cannot drift.
+   The plain declaration above each is the fallback for a browser that does not
+   parse the alt-text syntax: it drops that line and keeps this one, so the sign
+   is never lost, only unannounced. */
+mark.hit[data-dir]::after {
+  content: "−";
+  content: "−" / "counts against";
+  font-size: 0.7em;
+  /* `line-height: 0` with `vertical-align: super` raises the glyph without
+     growing the line box, so switching a criterion on cannot reflow the
+     article — the same rule the stripes follow by living in the leading. */
+  vertical-align: super;
+  line-height: 0;
+  padding-left: 0.05em;
+  color: var(--ink);
+  opacity: 0.75;
+  font-variant-numeric: normal;
+}
+mark.hit[data-dir="for"]::after {
+  content: "+";
+  content: "+" / "counts for";
+}
+mark.hit[data-dir="neither"]::after {
+  content: "·";
+  content: "·" / "counts neither way";
+}
+mark.hit[data-dir="mixed"]::after {
+  content: "±";
+  content: "±" / "counts both ways";
+}
+
+/* ------------------------------------ a comment and a sign on one mark ----
+   **An element has one `::after`, and two rules above wanted it.** A merged
+   `<mark>` carries every class that applies (src/web/annotate.ts), so a passage
+   the reader has commented on *and* a criterion has marked is
+   `class="cmt hit"` with both `data-mark-end` and `data-dir` — and
+   `mark.hit[data-dir]::after` is later in this file at equal specificity, so it
+   won and the reader's own `✳` silently disappeared. Their annotation, erased
+   by ours, on exactly the passages they cared enough to write on. GPT Sol's
+   finding 2.
+
+   The fix is one `::after` printing **both** glyphs, at a specificity that
+   beats both of the rules it replaces. The alternative — a real element inside
+   the mark to carry the second glyph — was refused outright: a text node inside
+   a mark moves the block's rendered-text offset space, which
+   docs/project/block-ids.md says is the one contract nothing may disturb.
+
+   **The sign first, then the asterisk**, so the sign sits where it does on
+   every other mark and the comment's marker stays outermost, where it is on
+   every other comment.
+
+   One element takes one colour, so the pair is drawn in the comment's
+   `--highlight` rather than in the sign's neutral ink. That is the right way
+   round: the `✳`'s colour is what ties it to the underline you can click,
+   while the sign's colour is decoration by design — its *glyph* is the carrier,
+   which is the whole reason it is a glyph. The alt text keeps the direction
+   words; the `✳` has never had an accessible name of its own. */
+mark.cmt.hit[data-mark-end][data-dir]::after {
+  content: "−✳";
+  content: "−✳" / "counts against";
+  color: var(--highlight);
+  opacity: 1;
+}
+mark.cmt.hit[data-mark-end][data-dir="for"]::after {
+  content: "+✳";
+  content: "+✳" / "counts for";
+}
+mark.cmt.hit[data-mark-end][data-dir="neither"]::after {
+  content: "·✳";
+  content: "·✳" / "counts neither way";
+}
+mark.cmt.hit[data-mark-end][data-dir="mixed"]::after {
+  content: "±✳";
+  content: "±✳" / "counts both ways";
+}
+
 /* The one the reader pressed in the panel, so the list and the passage are
    visibly the same thing after a jump. Same job `mark.cmt[data-cmt-open]` does.
    One attribute per kind, so an overlap cannot draw somebody else's mark as
@@ -6385,10 +6492,90 @@ td.text.has-hit[data-hues="8"] {
   overflow-y: auto;
 }
 
+/* **The explainer card, and the button in the header that brings it back.**
+   src/web/RefereeCard.tsx says what it is for; what matters here is that it is
+   inside `.ref-panel` and not in `.ref-brief`, so it scrolls away with the
+   sub-mode under it rather than eating the capped 40% the two undismissable
+   notices live in.
+
+   Quiet rather than loud: it is an explanation, not an alert, so it borrows the
+   surface the panel already uses and carries no accent colour of its own. A
+   card that shouted would make the confidentiality notice above it look
+   subordinate, which is the wrong way round.
+
+   **The width the copy is written against is this band's**, so the type is the
+   panel's small size and the list is unbulleted — four rows of two words and a
+   dash read as a table at this width, and a bullet column would cost a
+   character of every line. */
+.ref-how-card {
+  margin: 0.45rem 0.35rem 0.2rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-how-head { display: flex; align-items: baseline; gap: 0.4rem; }
+.ref-how-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ref-how-close {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  line-height: 1;
+}
+.ref-how-close:hover { color: var(--ink); }
+.ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ref-how-p {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ref-how-p b { color: var(--ink); font-weight: 600; }
+.ref-how-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ref-how-list b { color: var(--ink); font-weight: 600; }
+
+/* In the mode header beside the title, where `.gloss-head h2` has `flex: 1` and
+   pushes it to the right edge. Text rather than an icon: a `?` in a circle is
+   the affordance nobody presses, and the card it opens is four sentences that
+   change what the rest of the band means. */
+.ref-how-btn {
+  flex: none;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.ref-how-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.ref-how-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
 /* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
 
-   Nothing here paints a valence. The swatch beside a row takes its colour from
-   an inline `--div-rg-*` / `--div-*` reference chosen by `valenceToken` in
+   Nothing here paints a valence. Every swatch takes its colour from an inline
+   `--div-rg-*` / `--div-*` reference chosen by `valenceToken` in
    src/web/valence.ts, so the ramp stays in styles/colourscales.css and this
    file never learns what red means. The rules below are layout, and the one
    thing they are opinionated about is that the rank, the words and the number
@@ -6399,7 +6586,10 @@ td.text.has-hit[data-hues="8"] {
 
 .crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
 .crit-label { font-size: 0.72rem; color: var(--ink-faint); }
-.crit-text, .crit-poles input, .crit-poles select {
+/* The poles' two inputs and the criterion box. There was a scale `<select>` in
+   here until 2026-09-02, when the ramp became a property of the mode
+   (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
+.crit-text, .crit-poles input {
   width: 100%;
   font: inherit;
   font-size: 0.82rem;
@@ -6450,7 +6640,11 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink);
   cursor: pointer;
 }
-.crit-run:disabled { opacity: 0.5; cursor: default; }
+/* **`aria-disabled`, not `:disabled`** — CriteriaPanel.tsx § the run button
+   says why the button stays hoverable and focusable while the form is
+   incomplete, and where its inertness actually lives. This rule is the whole of
+   what `:disabled` was doing for it. */
+.crit-run[aria-disabled="true"] { opacity: 0.5; cursor: default; }
 
 .crit-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
 .crit-retry {
@@ -6464,13 +6658,40 @@ td.text.has-hit[data-hues="8"] {
   padding: 0;
 }
 
+/* **What the tick does**, above the list. Claims says the same thing inside its
+   checkbox's own label; here the label is the criterion's words, so the sentence
+   has to live beside the list rather than in it. */
+.crit-how { margin: 0.25rem 0; font-size: 0.72rem; color: var(--ink-faint); }
+
+/* **The key**, shown only while a for/against criterion is switched on —
+   `TheKey` in CriteriaPanel.tsx says what it is for and why it tracks the mode's
+   ramp instead of naming red and green. The sign is printed at full ink because
+   it is the carrier; the swatch is decoration beside it. */
+.crit-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  margin: 0.25rem 0;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+.crit-key-lead { color: var(--ink-faint); }
+.crit-key-end { display: inline-flex; align-items: center; gap: 0.2rem; }
+.crit-key-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; }
+.crit-key-sign { color: var(--ink); font-variant-numeric: tabular-nums; }
+
 .crit-list { margin: 0; padding: 0; list-style: none; }
 .crit-row { border-top: 1px solid var(--rule); padding: 0.4rem 0; }
 .crit-head { display: flex; align-items: flex-start; gap: 0.3rem; }
 .crit-tick { display: flex; align-items: flex-start; gap: 0.3rem; flex: 1; cursor: pointer; }
-/* The tick takes the criterion's own hue, so the control and the mark it draws
-   in the prose are visibly the same thing — the same call `.srch-saved-tick`
-   makes, and the same fallback for a row with no slot yet. */
+/* The tick takes the criterion's own hue where that hue is what the tick
+   actually draws — the same call `.srch-saved-tick` makes. The fallback is not
+   only for a row with no slot yet: a **for/against** criterion deliberately
+   sets no `--cat-rgb` at all, because its phrase marks are painted by direction
+   from the ramp and its categorical hue reaches only the paragraph bar and the
+   rail. A coloured tick there would be pointing at the wrong thing
+   (CriteriaPanel.tsx § `identityPaintsProse`). */
 .crit-tick input { margin-top: 0.15rem; accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 .crit-criterion { font-size: 0.82rem; color: var(--ink); }
 
@@ -6512,6 +6733,15 @@ td.text.has-hit[data-hues="8"] {
 
 .crit-results { margin: 0; padding: 0; list-style: none; }
 .crit-result { padding: 0.25rem 0; }
+/* The row the referee last pressed, so the panel and the ringed phrase in the
+   prose are visibly the same thing after a jump — the panel's half of
+   `mark.hit[data-hit-open]`. A rule down the side rather than a background,
+   because a background here would be a fifth thing wearing a colour in a panel
+   whose colours all already mean something. */
+.crit-result.on {
+  box-shadow: inset 2px 0 0 rgb(var(--hit-wash-rgb) / 0.8);
+  padding-left: 0.3rem;
+}
 .crit-jump {
   display: flex;
   align-items: baseline;
@@ -6819,6 +7049,31 @@ td.text.has-hit[data-hues="8"] {
 .cnd-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-quiet { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+
+/* **The one press that spends money**, and the line under it that says so.
+   `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a
+   `useEffect`. Drawn like a real action — filled, full width, an icon that names
+   the web — because a quiet link would be the sub-mode looking broken until
+   somebody found it. */
+.cnd-start { display: flex; flex-direction: column; gap: 0.25rem; }
+.cnd-start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cnd-start-btn:hover { border-color: var(--ink-faint); }
+.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-start-note { margin: 0; font-size: 0.7rem; line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
   display: flex;

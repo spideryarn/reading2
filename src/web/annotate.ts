@@ -35,6 +35,7 @@
 
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
+import type { ValenceDirection } from "./valence.js";
 import type { Block, BlockId } from "../types.js";
 
 /**
@@ -132,15 +133,52 @@ export const HUE_STRIPES = 6;
  */
 export const BAR_HUES = 8;
 
-export interface Mark {
+/**
+ * **A hue that is not an identity** — the two fields a valence-painted mark
+ * carries, and the reason they are a union rather than two more optionals.
+ *
+ * A referee's for/against criterion paints its marks by *direction* rather than
+ * by which criterion found them (docs/project/referee-mode.md § Criteria, and
+ * the plan that reversed the earlier rule). `hue` is the resolved ramp token —
+ * `var(--div-rg-0-rgb)`, from `valenceRgbToken` — and `dir` is the same number
+ * said in a word, which styles.css draws as a small sign so the colour is never
+ * the only carrier.
+ *
+ * **The two arms make four wrong states unrepresentable.** `hue` without `dir`
+ * would paint a judgement with nothing beside it; `dir` without `hue` would
+ * print a sign on an identity mark; `hue` with a `null` slot would be a mark
+ * whose paragraph bar has no colour to draw; and — since 2026-09-02 — a
+ * `hue` on anything that is not a `hit`, which is why `kind` is on the union
+ * rather than on `MarkBase`. Only a search-shaped mark is ever painted by
+ * direction, and a `cmt` carrying a `dir` would have printed a sign after
+ * somebody's own comment. GPT Sol's finding 11.
+ *
+ * A `hit` mark with neither is the ordinary identity case, and every `cmt`,
+ * `chat` and `term` mark is the second arm by construction — `kind` stays
+ * optional there because it always has been: absent means `cmt`, which is what
+ * every mark was before the glossary.
+ *
+ * **What the type still does not decide is whether the slot is a *usable*
+ * one** — an integer inside the palette — and that is deliberate. A nominal
+ * `PaletteSlot` would need a validator called at every construction site, for a
+ * value `assignSlots` already promises and that only ever reaches a
+ * custom-property name through the guard in `annotateHtml` below. So the guard
+ * is where a fractional or out-of-range slot is caught, and this comment says
+ * so rather than claiming the compiler does it.
+ */
+type MarkValence =
+  | { kind: "hit"; hue: string; dir: ValenceDirection; slot: number }
+  | { kind?: MarkKind; hue?: undefined; dir?: undefined; slot?: number | null };
+
+export type Mark = MarkBase & MarkValence;
+
+interface MarkBase {
   /** The comment, or the glossary term, this mark belongs to. */
   id: string;
   /** Inclusive, in the block's rendered-text offset space. */
   start: number;
   /** Exclusive. */
   end: number;
-  /** Defaults to `cmt`, which is what every mark was before the glossary. */
-  kind?: MarkKind;
   /**
    * The comment whose dialog is open — or the search result the reader has
    * pressed in the panel — so the prose can say which one it is.
@@ -176,6 +214,9 @@ export interface Mark {
    * searches finding the same sentence is exactly the thing worth showing, and
    * a winner-takes-all rule here would hide it. See `annotateHtml` for what the
    * markup does with more than one.
+   *
+   * **A mark that carries a `hue` narrows this to a real number** — see
+   * `MarkValence` above, which is the half of `Mark` that says so.
    */
   slot?: number | null;
 }
@@ -345,9 +386,34 @@ export function annotateHtml(html: string, marks: Mark[]): string {
            Two hits from *one* search covering one phrase is one rule, which is
            right: the question was asked once.
 
-           Only the slot number crosses this seam; `--h0` … `--h5` name palette
-           entries, and styles.css turns them into a stripe of the right height
-           at the right offset. See `HUE_STRIPES` for why six. */
+           Only a *token* crosses this seam; `--h0` … `--h5` hold palette or
+           ramp references, never colours, and styles.css turns them into a
+           stripe of the right height at the right offset. See `HUE_STRIPES` for
+           why six.
+
+           **Two kinds of stripe, deduplicated on two different keys**, which is
+           GPT Sol's finding 3 and is the whole of why this is not one `Set` of
+           slots any more. An identity stripe answers *which source found this*
+           and two hits from one search are one stripe; a valence stripe answers
+           *which way this cuts* and two results from one criterion pointing
+           opposite ways are two. Keyed on the slot for both, one criterion's
+           −90 and +70 over one phrase would collapse into a single stripe and a
+           direction would be silently dropped, and two criteria that landed on
+           the same ramp step would draw one uninterrupted band while
+           `data-hues` said two. Keying each kind on the thing it means costs
+           one array and removes both.
+
+           The tokens cannot collide across the two kinds — `--cat-*` and
+           `--div*` are different families — so the dedup below is one `Set` per
+           kind rather than one shared one only because the *order* differs:
+           identity ascending by slot, valence ascending by ramp step, which for
+           `--div-rg-0` … `--div-rg-8` is the same as sorting the strings. Both
+           are stable and arbitrary, which is what makes the same pair of
+           sources draw the same pair of rules wherever they meet.
+
+           **And the cap is shared between the two rather than applied to the
+           concatenation** — `shareStripes` below, GPT Sol's finding 3 on the
+           built code. */
         /* `Number.isInteger` and the range check, not just `typeof number`.
            The slot is interpolated straight into a custom-property *name*
            (`--cat-3-rgb`), so a `NaN` or a `2.5` arriving here would emit
@@ -359,7 +425,17 @@ export function annotateHtml(html: string, marks: Mark[]): string {
            comparison. `assignSlots` already promises an integer in range; this
            is here because *this* is the line that would be silent about it. */
         const usable: number[] = [];
+        const valences: string[] = [];
         for (const m of hits) {
+          /* A valence mark's hue is already resolved (`valenceRgbToken`, via
+             `hitMarks`), and its slot is not interpolated into anything — so it
+             skips the validation below rather than being subject to it. The
+             type is what keeps the two apart: a `hue` cannot arrive without a
+             `dir` or with a null slot. */
+          if (m.hue !== undefined) {
+            valences.push(m.hue);
+            continue;
+          }
           const slot = m.slot;
           /* Both ends of the range, not just the bottom. A slot of 8 in an
              eight-hue palette emits `var(--cat-8-rgb)` — a reference to a
@@ -377,14 +453,47 @@ export function annotateHtml(html: string, marks: Mark[]): string {
           }
           usable.push(slot);
         }
-        const slots = [...new Set(usable)].sort((a, b) => a - b).slice(0, HUE_STRIPES);
-        if (slots.length > 0) {
-          el.setAttribute("data-hues", String(slots.length));
-          for (const [i, slot] of slots.entries()) {
-            style.push(`--h${i}:var(--cat-${slot}-rgb)`);
+        const tokens = shareStripes(
+          [...new Set(usable)].sort((a, b) => a - b).map((slot) => `var(--cat-${slot}-rgb)`),
+          [...new Set(valences)].sort(),
+        );
+        if (tokens.length > 0) {
+          el.setAttribute("data-hues", String(tokens.length));
+          for (const [i, token] of tokens.entries()) {
+            style.push(`--h${i}:${token}`);
           }
         }
         el.setAttribute("style", style.join(";"));
+        /* **The sign, which is what pays for painting a judgement in colour.**
+           docs/project/colour-scales.md forbids colour being the only carrier
+           of a good/bad judgement, and the prose has no words — so a mark drawn
+           by valence carries `−`, `·` or `+` after it, through
+           `mark.hit[data-dir]::after` in styles.css.
+
+           **Printed on the run where a valence mark ends, exactly as the
+           comment asterisk is**, so a phrase broken across an `<em>` gets one
+           sign rather than three.
+
+           **But derived from every valence mark *covering* that run, not only
+           from the ones ending on it** — GPT Sol's finding 5, and the two are
+           not the same question. An against range over the whole sentence,
+           overlapped by a for range over its first half, ends the `for` mark at
+           the halfway cut: the run there is drawn in *both* colours, and a sign
+           taken from the ending mark alone would print `+` over it and hide the
+           against direction entirely. `hits` is already filtered to the marks
+           covering this run, so the fix is to ask it rather than `ending`.
+
+           `mixed` is the fourth value and it is not a tidy-up: two results of
+           one criterion, or two criteria, can point opposite ways over one
+           phrase — the case Sol's finding 3 is about — and both stripes are
+           drawn. Printing one of the two signs there would be this file
+           choosing a verdict, so it prints `±` and lets the panel say which is
+           which. */
+        const directed = hits.filter((m) => m.dir !== undefined);
+        if (directed.some((m) => m.end === nodeStart + to)) {
+          const dirs = new Set(directed.map((m) => m.dir));
+          el.setAttribute("data-dir", dirs.size === 1 ? [...dirs][0]! : "mixed");
+        }
       }
       /* The one the reader has pressed — the comment whose dialog is open, the
          search hit they clicked in the panel, the conversation on screen, the
@@ -423,6 +532,50 @@ export function annotateHtml(html: string, marks: Mark[]): string {
     node.parentNode?.replaceChild(fragment, node);
   }
   return root.innerHTML;
+}
+
+/**
+ * **How the six stripes are shared out when a phrase carries both kinds.**
+ *
+ * The obvious spelling is `[...identity, ...valence].slice(0, HUE_STRIPES)`,
+ * and it is what shipped first. It has a failure that is worse than losing a
+ * stripe: six single-ended criteria over one phrase fill every lane, so a
+ * diverging result over the same words draws **no valence colour at all** while
+ * still printing its `−` or `+` — the sign and the colours then describe
+ * different facts, which is the one thing this mark must never do, because the
+ * sign is what pays for painting a judgement in colour in the first place.
+ * GPT Sol's finding 3 on the built code.
+ *
+ * So each kind is guaranteed its share of the lanes before either is allowed to
+ * spill into the other's:
+ *
+ * - whichever kind is absent costs nothing, and the other takes the whole cap,
+ *   which is every case before referee mode existed and most cases after it;
+ * - with both present each is guaranteed `⌊HUE_STRIPES / 2⌋`, and whatever the
+ *   other kind does not use is handed back rather than left empty.
+ *
+ * **Identity first, and both lists already sorted**, so the ordering property
+ * the block above claims still holds: the same pair of sources draws the same
+ * pair of rules, in the same order, wherever they meet. The arithmetic below
+ * depends on nothing but the two lengths, so it is stable for the same reason.
+ *
+ * What is *lost* past the cap is unchanged and is the same loss `HUE_STRIPES`
+ * describes: the knowledge that a further source matched **here**. Every one of
+ * them keeps its row in the panel and its segment in the paragraph bar.
+ */
+function shareStripes(identity: string[], valence: string[]): string[] {
+  if (identity.length === 0 || valence.length === 0) {
+    return [...identity, ...valence].slice(0, HUE_STRIPES);
+  }
+  const share = Math.floor(HUE_STRIPES / 2);
+  /* Valence is measured against identity's *guaranteed* share rather than
+     against what it actually took, and then identity is re-measured against
+     what valence took. That order is what lets either side use the whole
+     remainder while neither can be starved: one valence stripe beside eight
+     identity ones is 5 + 1, not 3 + 1. */
+  const takeValence = Math.min(valence.length, HUE_STRIPES - Math.min(identity.length, share));
+  const takeIdentity = Math.min(identity.length, HUE_STRIPES - takeValence);
+  return [...identity.slice(0, takeIdentity), ...valence.slice(0, takeValence)];
 }
 
 /**

@@ -86,6 +86,9 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
+const { hitMarks } = await import("../src/web/search-hits.js");
+const { directionWords } = await import("../src/web/valence.js");
+type Found = import("../src/web/search-hits.js").Found;
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, so a plausible-looking
    `spya-aaa111` is not one of ours. docs/project/block-ids.md § the alphabet. */
@@ -143,6 +146,36 @@ function diverging(
 let host: HTMLDivElement;
 let root: Root;
 
+/**
+ * What the band pushed up, and what it asked to be opened — the two things the
+ * prose would be drawn from.
+ *
+ * Collected rather than ignored because the band's whole job is to hand these
+ * to `Reader`: the marks are where a valence becomes a colour, and the open key
+ * is what rings the phrase a pressed row is about. A test that stubbed them both
+ * with `() => {}` could not see either.
+ */
+let pushed: Found[] = [];
+let opened: (string | null)[] = [];
+
+/**
+ * **Stable identities, because `mount()` is also how this file re-renders.**
+ *
+ * `CriteriaBand` keys two effects on these callbacks — the one that pushes the
+ * marks up and the one that clears them on unmount — so a fresh arrow function
+ * per render makes the cleanup of the second run *after* the first has pushed,
+ * and the marks arrive and are wiped in the same frame. That is a fact about
+ * this harness and not about the band: `Reader` passes callbacks that keep
+ * their identity. Written as consts so a re-render is a re-render.
+ */
+const collectFound = (next: Found[]): void => {
+  pushed = next;
+};
+const collectOpened = (key: string | null): void => {
+  opened.push(key);
+};
+const noJump = (): void => {};
+
 function mount(): void {
   act(() => {
     root.render(
@@ -156,8 +189,10 @@ function mount(): void {
              file is about — the model's own row. tests/referee-gap.test.tsx is
              where the two judgements meet. */
           comments: [],
-          onJump: () => {},
-          onFound: () => {},
+          onJump: noJump,
+          onFound: collectFound,
+          openKey: opened.at(-1) ?? null,
+          onOpenKey: collectOpened,
         }),
       ),
     );
@@ -277,6 +312,9 @@ function click(el: Element): void {
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   answer = () => Promise.resolve(json({ criteria: [] }));
+  pushed = [];
+  opened = [];
+  history.replaceState(null, "", `/read/${SLUG}`);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -372,14 +410,23 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
     expect(spoken(row)).not.toContain(POLES.favour);
   });
 
-  it("paints the swatch from the ramp the criterion chose, and only ever as a token", async () => {
+  it("paints the swatch from the mode's ramp, and only ever as a token", async () => {
     /* The fourth carrier, and the one that must not be a colour: a hex value
        here would be beyond the reach of the theme (src/web/valence.ts § "It
        returns a token name, never a colour"). Both ramps, because `--div-rg-0`
        and `--div-0` are opposite ends of opposite scales — a swatch wired to
        the wrong one paints "clearly against" in the favourable colour and
-       nothing errors. */
-    await paint([-100, 100], "rg");
+       nothing errors.
+
+       **The ramp comes from `?refscale=` and no longer from the criterion**,
+       and this test asserted the opposite until 2026-09-02. It is Sol's finding
+       4: the two ramps put red at opposite ends of the truth, so once the prose
+       is painted by direction a per-criterion choice means one red underline
+       meaning opposite verdicts in one document. The stored `scale` is
+       deliberately the *wrong* one in each half below, so a swatch that had gone
+       on reading `config.scale` reddens here rather than passing by
+       coincidence. */
+    await paint([-100, 100], "br");
     const swatches = [...host.querySelectorAll(".crit-valence-swatch")] as HTMLElement[];
     expect(swatches).toHaveLength(2);
     expect(swatches[0]?.style.background).toBe("var(--div-rg-0)");
@@ -387,10 +434,167 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
 
     await act(async () => root.unmount());
     root = createRoot(host);
-    await paint([-100], "br");
+    history.replaceState(null, "", `/read/${SLUG}?refscale=br`);
+    await paint([-100], "rg");
     expect(
       (host.querySelector(".crit-valence-swatch") as HTMLElement | null)?.style.background,
     ).toBe("var(--div-0)");
+  });
+
+  it("prints a key saying what a colour in the paper means, in words and glyphs", async () => {
+    /* **What pays for painting a judgement in colour**, together with the sign
+       after each mark. docs/project/colour-scales.md permits red↔green only
+       where the direction is readable from something else, and the prose has no
+       words — so the mapping is stated on screen rather than only in a card
+       somebody dismissed.
+
+       It has to track the mode's ramp: on `br` the ends are blue and red, and a
+       key that said "red counts against" there would be exactly wrong. Asserted
+       through the swatch's token rather than through a colour name for that
+       reason. */
+    await paint([-80]);
+    /* Ticked, because the key is about marks that are actually painted. */
+    click(host.querySelector(".crit-tick input") as Element);
+    await flush();
+    const key = host.querySelector(".crit-key");
+    expect(key, "no key, so the colours in the paper are unexplained").toBeTruthy();
+    const said = flat(key?.textContent);
+    expect(said).toContain("−");
+    expect(said).toContain("counts against");
+    expect(said).toContain("+");
+    expect(said).toContain("counts for");
+    /* **All four glyphs, not the two ends** — Sol's finding 5. A reader meets
+       `·` more often than either pole (zero is the commonest answer) and `±`
+       where two marks over one phrase point opposite ways, and neither is
+       guessable from a key that shows only red and green. The wording is
+       `directionWords`', so the legend and the alt text on the mark itself
+       cannot come apart. */
+    expect(said).toContain("·");
+    expect(said).toContain(directionWords("neither"));
+    expect(said).toContain("±");
+    expect(said).toContain(directionWords("mixed"));
+    const ends = [...(key?.querySelectorAll(".crit-key-swatch") ?? [])] as HTMLElement[];
+    /* Three swatches and four entries: `±` deliberately has none, because the
+       phrase it describes wears both stripes and there is no one colour for it.
+       A fourth swatch appearing here would be the key inventing a colour. */
+    expect(ends.map((e) => e.style.background)).toEqual([
+      "var(--div-rg-0)",
+      "var(--div-rg-4)",
+      "var(--div-rg-8)",
+    ]);
+  });
+
+  it("says what the tick does, because its own label is the criterion", async () => {
+    /* Sol's finding 8. Claims labels its identical checkbox in visible text —
+       *"Mark these passages in the paper"* — and this one's label is the
+       referee's own words, so nothing on screen said that the box is what
+       paints the paper.
+
+       **The second sentence changed on 2026-09-02 and the change is the point.**
+       It read *"Nothing is marked until you do"*, which the panel then went and
+       contradicted on the very next frame: a finished run ticks itself on
+       (`onShow`). A copy test is worth writing only if it can catch copy that is
+       *false*, so the literal asserted here is the corrected one — Sol's finding
+       7 on the built code — and the old sentence is asserted absent, because a
+       later edit that put it back would otherwise pass. */
+    await paint([-80]);
+    const said = flat(host.querySelector(".crit")?.textContent);
+    expect(said).toContain("A criterion marks its passages while its tick is on");
+    expect(said).toContain("New runs turn it on automatically");
+    expect(said).not.toContain("Nothing is marked until you do");
+  });
+});
+
+/* ------------------------------------------------- pressing a result row -- */
+
+describe("pressing a result rings that phrase rather than washing the block", () => {
+  it("opens the key the marks were minted under", async () => {
+    /* **The defect this fixes was silent in the worst way**: Referee mode
+       hard-coded the open key to `null`, so pressing a criterion result scrolled
+       to the *block* and the phrase the row was about was never distinguished —
+       while Search's identical rows had the `mark.hit[data-hit-open]` ring all
+       along. Nothing errored and the page moved, so it looked like it worked.
+
+       The key is built in two places — `resolveCriterion` mints it, the row
+       rebuilds it — so what is asserted is that the two agree. Comparing the
+       pressed key against a literal string would let both drift together, so it
+       is compared against the marks the band actually pushed up. */
+    answer = () => Promise.resolve(json({ criteria: [diverging([-80, 40])], sourceHash: "h" }));
+    mount();
+    await flush();
+    /* Tick it, or nothing is marked at all — which is the rule the sentence
+       above the list now states. */
+    click(host.querySelector(".crit-tick input") as Element);
+    await flush();
+
+    const second = rows()[1];
+    expect(second, "no second result row").toBeTruthy();
+    click(second!.querySelector(".crit-jump") as Element);
+    await flush();
+
+    const key = opened.at(-1);
+    expect(key, "pressing a result opened nothing").toBeTruthy();
+    expect(pushed.map((f) => f.key)).toContain(key);
+    /* And it is the *second* passage's key, not the first — a row that opened
+       whichever passage sorted first would pass every assertion above. */
+    expect(key).toBe(pushed[1]?.key);
+    /* Which is the mark that gets the ring, once `Reader` hands the key back. */
+    const marks = hitMarks(pushed, key ?? null, "rg").get(BLOCK) ?? [];
+    expect(marks.filter((m) => m.open).map((m) => m.id)).toEqual([key]);
+  });
+
+  it("switches an unticked criterion on rather than ringing a mark that is not there", async () => {
+    /* **GPT Sol's finding 1, and it is the case a referee actually meets.**
+       Marks are default-off, every result row is clickable from the moment the
+       run lands, and an unticked criterion contributes no `Found` — so pressing
+       a row set an open key that named a mark nothing was drawing. The page
+       still scrolled, so it looked like it worked; the band's own "a pressed
+       passage that is no longer drawn cannot stay pressed" effect then cleared
+       the key on the next frame, and the referee arrived at a paragraph with
+       nothing in it distinguished.
+
+       Deliberately **without** ticking first, which is the whole difference
+       from the test above — that one ticks, and passed throughout the defect.
+
+       The second `mount()` is not a remount: it re-renders with the open key
+       fed back in, which is what `Reader` does and what makes the absence
+       effect run at all. Assert before it as well as after, so a fix that
+       pushed the marks and then let them be cleared still fails here. */
+    answer = () => Promise.resolve(json({ criteria: [diverging([-80, 40])], sourceHash: "h" }));
+    mount();
+    await flush();
+    const tick = host.querySelector(".crit-tick input") as HTMLInputElement;
+    expect(tick.checked, "the premise is that nothing is ticked yet").toBe(false);
+    expect(pushed, "and that nothing is marked yet").toEqual([]);
+
+    click(rows()[0]?.querySelector(".crit-jump") as Element);
+    await flush();
+
+    const key = opened.at(-1);
+    expect(key, "pressing a result opened nothing").toBeTruthy();
+    expect(tick.checked, "pressing a result left its criterion unticked").toBe(true);
+    expect(pushed.map((f) => f.key), "the key names a mark nothing is drawing").toContain(key);
+
+    mount();
+    await flush();
+    expect(opened.at(-1), "the ring was cleared on the frame after it was set").toBe(key);
+    expect(pushed.map((f) => f.key)).toContain(key);
+  });
+
+  it("does not turn the marks off when the same row is pressed twice", async () => {
+    /* The reason the press calls `onShow` rather than `onToggle`. Pressing a
+       passage is not a switch, and a second press that unpainted the paper
+       would be the fix above introducing a worse bug than the one it closed. */
+    answer = () => Promise.resolve(json({ criteria: [diverging([-80])], sourceHash: "h" }));
+    mount();
+    await flush();
+    const jump = () => click(rows()[0]?.querySelector(".crit-jump") as Element);
+    jump();
+    await flush();
+    jump();
+    await flush();
+    expect((host.querySelector(".crit-tick input") as HTMLInputElement).checked).toBe(true);
+    expect(pushed.length).toBe(1);
   });
 });
 
@@ -469,7 +673,11 @@ describe("a criterion deleted while the model is thinking stays deleted", () => 
 describe("two colour choices for one row cannot land out of order", () => {
   /** Open the picker and press the swatch at `position` (1-based, as labelled). */
   function pick(position: number): void {
-    click(byLabel("Colour"));
+    /* "Bar and rail colour" rather than "Colour" since 2026-09-02: on a
+       for/against row the categorical hue no longer reaches the prose, so the
+       control says what it does colour (Sol's finding 6). The rows here are
+       `diverging`, so this is the label they carry. */
+    click(byLabel("Bar and rail colour"));
     click(byLabel(`Colour ${position}`));
   }
 

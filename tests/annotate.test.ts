@@ -473,14 +473,21 @@ describe("search hits — the third kind of mark", () => {
 describe("annotateHtml — the colours of the searches that found the words", () => {
   const HTML = "<p>the mind is software running on wet hardware</p>";
 
-  const hitMark = (over: Partial<Mark> = {}): Mark => ({
-    id: "h1",
-    start: 4,
-    end: 8,
-    kind: "hit",
-    strength: 1,
-    ...over,
-  });
+  /* `as Mark` because `Mark` became a union on 2026-09-02 — a mark carrying a
+     valence hue must also carry its direction and a real slot, which the type
+     now refuses to let a caller get wrong (annotate.ts § `MarkValence`).
+     Spreading a `Partial` of a union produces a union of partials that TS
+     cannot narrow back, and the invariant is enforced where marks are actually
+     built (`hitMarks` in search-hits.ts) rather than here. */
+  const hitMark = (over: Partial<Mark> = {}): Mark =>
+    ({
+      id: "h1",
+      start: 4,
+      end: 8,
+      kind: "hit",
+      strength: 1,
+      ...over,
+    }) as Mark;
 
   it("names the palette slot rather than a colour", () => {
     /* The seam this whole design rests on: annotate.ts knows which *search*,
@@ -606,6 +613,106 @@ describe("annotateHtml — the colours of the searches that found the words", ()
     const out = annotateHtml(HTML, [hitMark({ slot: Number.NaN })]);
     expect(out).not.toContain("data-hues");
     expect(out).not.toContain("NaN");
+  });
+
+  /* ------------------------------- the two kinds of stripe share the band -- */
+
+  /** A mark painted by direction — the shape `hitMarks` builds for a valence. */
+  const valenceMark = (over: { id: string; hue: string; dir: "against" | "for" | "neither" }): Mark =>
+    ({ id: over.id, start: 4, end: 8, kind: "hit", strength: 1, slot: 0, hue: over.hue, dir: over.dir }) as Mark;
+
+  it("keeps a lane for the direction when six identities would fill the band", () => {
+    /* **The starvation GPT Sol's finding 3 found in the built code.** The cap
+       used to be applied to `[...identity, ...valence]`, so six single-ended
+       criteria over one phrase took every lane and a diverging result over the
+       same words drew **no colour at all** — while still printing its `−`,
+       because the sign is written from a different branch. The stripes would
+       then have said *six criteria matched here* and the sign *this counts
+       against*, describing different facts side by side, which is the one thing
+       this mark must never do: the sign is what pays for painting a judgement
+       in colour in the first place.
+
+       Six identities exactly, so this is the boundary rather than a case
+       comfortably past it. Derived from `HUE_STRIPES` because the cap has moved
+       once already. */
+    const out = annotateHtml(HTML, [
+      ...Array.from({ length: HUE_STRIPES }, (_, i) => hitMark({ id: `h${i}`, slot: i })),
+      valenceMark({ id: "v", hue: "var(--div-rg-0-rgb)", dir: "against" }),
+    ]);
+    expect(out).toContain(`data-hues="${HUE_STRIPES}"`);
+    expect(out, "the sign says 'against' and no lane is drawn in the against colour").toContain(
+      "var(--div-rg-0-rgb)",
+    );
+    expect(out).toContain('data-dir="against"');
+    /* And identity keeps the rest of the band rather than being cut to half of
+       it: the guarantee is a floor for each kind, not a fixed split. */
+    expect(out).toContain("--h4:var(--cat-4-rgb)");
+  });
+
+  it("keeps a lane for the criterion when six directions would fill the band", () => {
+    /* The same reservation the other way round, which is the half a fix written
+       only for the case that was reported would miss. A phrase inside six
+       diverging results, marked by one ordinary search, must still show that
+       the search found it. */
+    const out = annotateHtml(HTML, [
+      ...Array.from({ length: HUE_STRIPES }, (_, i) =>
+        valenceMark({ id: `v${i}`, hue: `var(--div-rg-${i}-rgb)`, dir: "against" }),
+      ),
+      hitMark({ id: "h", slot: 6 }),
+    ]);
+    expect(out).toContain(`data-hues="${HUE_STRIPES}"`);
+    expect(out).toContain("var(--cat-6-rgb)");
+  });
+
+  it("gives one kind the whole band when the other is absent", () => {
+    /* The case that must not regress: every mark before referee mode existed,
+       and most of them after. A reservation that always held three lanes back
+       would silently halve the stripes on an eight-search phrase. */
+    const out = annotateHtml(
+      HTML,
+      Array.from({ length: HUE_STRIPES + 2 }, (_, i) => hitMark({ id: `h${i}`, slot: i })),
+    );
+    expect(out).toContain(`data-hues="${HUE_STRIPES}"`);
+    expect(out).toContain(`--h${HUE_STRIPES - 1}:var(--cat-${HUE_STRIPES - 1}-rgb)`);
+  });
+
+  /* ------------------------------------------ the sign over a partial overlap -- */
+
+  it("says ± on a run two opposite directions both cover, not the one that ends there", () => {
+    /* **GPT Sol's finding 5.** The sign is printed on the run where a valence
+       mark *ends* — so a phrase broken across an `<em>` shows one sign rather
+       than three — but it used to be *derived* from the ending marks alone. An
+       against range over the whole sentence, overlapped by a for range over its
+       first half, ends the `for` mark at the halfway cut: that run is drawn in
+       both colours and used to print a bare `+`, hiding the against direction
+       behind a plus sign. Which is worse than saying nothing, because it is a
+       verdict this renderer invented.
+
+       Two runs and two different answers, which is the assertion: `±` where
+       both cover, `−` where only one does. Reverting the derivation to `ending`
+       turns the first into "for". */
+    const out = annotateHtml(HTML, [
+      { id: "a", start: 0, end: 10, kind: "hit", strength: 1, slot: 0, hue: "var(--div-rg-0-rgb)", dir: "against" } as Mark,
+      { id: "b", start: 0, end: 5, kind: "hit", strength: 1, slot: 0, hue: "var(--div-rg-8-rgb)", dir: "for" } as Mark,
+    ]);
+    const host = document.createElement("div");
+    host.innerHTML = out;
+    const marks = [...host.querySelectorAll("mark")];
+    expect(marks.map((m) => m.getAttribute("data-dir"))).toEqual(["mixed", "against"]);
+    /* And the overlapping run really is drawn in both colours, so the sign and
+       the stripes are describing the same fact. */
+    expect(marks[0]?.getAttribute("data-hues")).toBe("2");
+  });
+
+  it("still says one direction on a run only one mark covers", () => {
+    /* The control for the case above: deriving from every *covering* mark must
+       not turn an ordinary single-direction phrase into `±`, which would be a
+       renderer that had stopped being able to answer at all. */
+    const out = annotateHtml(HTML, [
+      valenceMark({ id: "a", hue: "var(--div-rg-8-rgb)", dir: "for" }),
+    ]);
+    expect(out).toContain('data-dir="for"');
+    expect(out).not.toContain("mixed");
   });
 
   it("still carries the confidence alongside the colours", () => {

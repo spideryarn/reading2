@@ -52,7 +52,7 @@
  *
  * docs/project/referee-mode.md § 4.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Globe, LoaderCircle, SendHorizontal, Square } from "lucide-react";
 import type { Block, BlockId, ChatMessage, ChatThread, Citation } from "../types.js";
 import {
@@ -76,6 +76,7 @@ import {
   withoutShortlist,
 } from "../referee-candidates.js";
 import { CitedMarkdown } from "./Cited.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
@@ -115,31 +116,41 @@ export function CandidatesBand({
   const thread = useMemo(() => firstCandidatesThread(threads), [threads]);
 
   /**
-   * **The thread opens with the fit brief, before the editor says anything.**
+   * **The thread opens with the fit brief — and it opens on a press.**
    *
-   * The safe half of the feature: what a competent reviewer of this paper would
-   * need to know, every requirement anchored to the passage that motivates it.
-   * It has no hallucinated-person failure mode, it is useful on its own, and it
-   * is the query the conversation then refines — so if the names layer
-   * disappoints, this still stands.
+   * The brief itself is the safe half of the feature: what a competent reviewer
+   * of this paper would need to know, every requirement anchored to the passage
+   * that motivates it. It has no hallucinated-person failure mode, it is useful
+   * on its own, and it is the query the conversation then refines — so if the
+   * names layer disappoints, this still stands.
    *
-   * `loaded` is what makes the latch safe, exactly as it is in
-   * `ConversationBand`: without it, "no Candidates thread" and "the fetch has
-   * not come back" are the same state, and every visit would start a paid model
-   * call before the reader's real thread arrived. `started` is a ref so this
-   * fires once per mount; leaving the sub-mode and coming back finds the stored
-   * thread and does nothing.
+   * **What changed on 2026-09-02 is when it runs.** It used to fire from a
+   * `useEffect` the moment this sub-mode first mounted, which made Candidates
+   * the one chip in the radiogroup that spends money on being looked at — the
+   * other three are inert to a press. A first-time referee clicking along the
+   * row to find out what the four words mean paid for a run and, worse, sent
+   * search terms drawn from an unpublished manuscript to a search engine. That
+   * is **a different third party at a different time** from the model provider
+   * the band's notice is about, and the notice cannot cover it: the notice is in
+   * the past tense, and this had not happened yet.
+   * docs/plans/260902f-make-referee-mode-understandable.md § Stage 3.
+   *
+   * So `startBrief` is what the button below calls, and nothing else calls it.
+   * `loaded` still guards it for `ConversationBand`'s reason — without it "no
+   * Candidates thread" and "the fetch has not come back" are the same state, and
+   * a press in that window would mint a second thread beside the stored one —
+   * but it now also guards the *button*, which is not drawn until the fetch has
+   * answered. Everything after the first press is exactly as it was: the thread
+   * is stored, and coming back to the sub-mode finds it and asks nothing.
    */
-  const started = useRef(false);
-  useEffect(() => {
-    if (!loaded || started.current || thread) return;
-    started.current = true;
+  const startBrief = () => {
+    if (!loaded || thread) return;
     /* `null` for the thread id mints one; `false` for the profile because this
        answer is for an editor deciding who to invite, and how the reader likes
        their own reading explained has no bearing on it. No `at`: the brief is
        about the whole paper. */
     send(null, CANDIDATES_OPENING, null, false, undefined, undefined, "candidates");
-  }, [loaded, thread, send]);
+  };
 
   return (
     <CandidatesPanel
@@ -154,6 +165,7 @@ export function CandidatesBand({
         send(thread.id, question, null, false, undefined, undefined, "candidates");
       }}
       onStop={(messageId) => thread && stop(thread.id, messageId)}
+      onStart={startBrief}
       onJump={onJump}
     />
   );
@@ -191,6 +203,7 @@ export function CandidatesPanel({
   error,
   onAsk,
   onStop,
+  onStart,
   onJump,
 }: {
   thread: ChatThread | null;
@@ -201,6 +214,14 @@ export function CandidatesPanel({
   error: string | null;
   onAsk(question: string): void;
   onStop(messageId: string): void;
+  /**
+   * **Start the first turn** — the one press that spends the money.
+   *
+   * Only ever called from `StartBrief` below, and only while there is no
+   * thread. See `CandidatesBand` for what used to call it and why that was
+   * wrong.
+   */
+  onStart(): void;
   onJump(id: BlockId): void;
 }) {
   const messages = thread?.messages ?? [];
@@ -244,6 +265,12 @@ export function CandidatesPanel({
       {loadFailed && <p className="cnd-error">Could not load this conversation.</p>}
       {error && <p className="cnd-error">{error}</p>}
 
+      {/* **Nothing has been asked yet, and nothing will be until this is
+          pressed.** Drawn only once the fetch has answered, so it never appears
+          in front of a thread that is on its way — a press in that window would
+          mint a second thread beside the stored one. */}
+      {loaded && !loadFailed && !thread && <StartBrief onStart={onStart} />}
+
       {/* **The shortlist above the transcript**, because it is the thing being
           compared and the transcript is the thing being steered. See the header. */}
       <Shortlisted shortlist={shortlist} byline={byline} onJump={onJump} />
@@ -264,6 +291,51 @@ export function CandidatesPanel({
       </ol>
 
       <Composer busy={busy} disabled={!thread} onAsk={onAsk} />
+    </div>
+  );
+}
+
+/**
+ * **The press that starts it**, and the sentence that says what the press costs.
+ *
+ * Two facts, both of them before the money rather than after it, and the second
+ * is the one a cost line would normally leave out: this is the only place in
+ * Referee mode that reaches a **search engine**, which is a different third
+ * party from the model provider the band's notice is about. A referee who has
+ * read that notice has not been told about this one.
+ *
+ * **The words are on the screen, not in a card.** There is a card as well, for
+ * the detail — but a tooltip is not read by anybody in a hurry, and what it
+ * would be hiding here is that pressing this sends terms drawn from an
+ * unpublished manuscript out to be searched. docs/project/copy.md.
+ *
+ * No `disabled` state and no busy state: the button is unmounted the moment a
+ * thread exists, which `send` makes true synchronously (`useChat` § the
+ * optimistic insert), so there is no window in which it can be pressed twice.
+ */
+function StartBrief({ onStart }: { onStart(): void }) {
+  return (
+    <div className="cnd-start">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Find reviewers"
+            what="Asks the model who could review this paper and what expertise it would take, and searches the web for the names."
+            how="One model call over the paper plus web searches run for you, so it takes a few seconds and costs something. The search terms are drawn from the paper, and they go to a search engine — a different third party from the model. Nothing here has run until you press it."
+          />
+        }
+      >
+        <button type="button" className="cnd-start-btn" onClick={onStart}>
+          <Globe size={13} aria-hidden="true" /> Find reviewers — one model call and a web search
+        </button>
+      </Tooltip>
+      <p className="cnd-start-note">
+        Nothing has been asked yet. Pressing this sends search terms drawn from the paper to a
+        search engine, as well as to the model.
+      </p>
     </div>
   );
 }
@@ -367,12 +439,31 @@ function Shortlisted({
   const { candidates, dropped, omitted } = shortlist;
   return (
     <section className="cnd-list-box" aria-label="Shortlist">
-      <h3 className="cnd-list-head">
-        Shortlist
-        <span className="cnd-count">
-          {candidates.length} {candidates.length === 1 ? "name" : "names"}
-        </span>
-      </h3>
+      {/* **Each turn replaces this list; it does not add to it.** That is a
+          property of how the shortlist is read rather than stored — it is parsed
+          out of the newest answer that carries one (`latestShortlist`) — and it
+          is invisible on screen: an editor who says *"prefer early-career"* and
+          watches four of the five names disappear has no way to tell a revision
+          from a bug. The heading is where that belongs, because the heading is
+          the thing the list is under. */}
+      <Tooltip
+        placement="left"
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Shortlist"
+            what="Who the model thinks could review this paper, from the newest answer in the conversation below."
+            how="Every answer that carries a list replaces this one whole — nothing accumulates, so steering the conversation can drop a name you liked. The order is the model's and is not a ranking, and no conflict-of-interest check has run."
+          />
+        }
+      >
+        <h3 className="cnd-list-head">
+          Shortlist
+          <span className="cnd-count">
+            {candidates.length} {candidates.length === 1 ? "name" : "names"}
+          </span>
+        </h3>
+      </Tooltip>
       {candidates.length === 0 ? (
         <p className="cnd-quiet">{ALL_DROPPED}</p>
       ) : (
@@ -569,28 +660,47 @@ function Tools({ tools }: { tools: ChatMessage }) {
   const searches = tools.searches ?? 0;
   if (runs.length === 0 && searches === 0) return null;
   return (
-    <ul className="chat-tools">
-      {searches > 0 && (
-        <li className="chat-tool">
-          <Globe size={12} aria-hidden />
-          <span className="chat-tool-label">
-            searched the web{searches > 1 ? ` (${searches} searches)` : ""}
-          </span>
-        </li>
-      )}
-      {runs.map((run, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the same tool can legitimately run twice in one answer, so name-plus-label is not unique; useChat assigns into this array by index, so the index IS the row's identity. Same call as ChatPanel's ToolStrip.
-        <li key={`${i}-${run.name}`} className={`chat-tool${run.status === "running" ? " running" : ""}`}>
-          {run.status === "running" ? (
-            <LoaderCircle className="cmt-spinner" size={12} aria-hidden />
-          ) : (
+    /* **The strip is the evidence for a rule, and nothing on it says so.** It
+       reads as a progress indicator — a globe and the words "searched the web" —
+       where what it actually is is the enforcement of `CANDIDATES_SYSTEM`'s
+       "never claim a tool you did not run": the rule's whole force is that the
+       reader is shown exactly which tools ran, so a strip nobody understands is
+       a rule nobody can check. The card is on the list rather than on each row,
+       because the fact is about the list. */
+    <Tooltip
+      placement="left"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head="What this answer actually ran"
+          what="Every tool call the model made while writing the answer below, listed as it ran."
+          how="This is the check on the names, not decoration: the model is told never to claim a search it did not run, and this is where you see whether it did. A search sends terms drawn from the paper to a search engine — a third party the rest of Referee mode does not reach."
+        />
+      }
+    >
+      <ul className="chat-tools">
+        {searches > 0 && (
+          <li className="chat-tool">
             <Globe size={12} aria-hidden />
-          )}
-          <span className="chat-tool-label">{run.label}</span>
-          {run.detail && <span className="chat-tool-detail">{run.detail}</span>}
-        </li>
-      ))}
-    </ul>
+            <span className="chat-tool-label">
+              searched the web{searches > 1 ? ` (${searches} searches)` : ""}
+            </span>
+          </li>
+        )}
+        {runs.map((run, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the same tool can legitimately run twice in one answer, so name-plus-label is not unique; useChat assigns into this array by index, so the index IS the row's identity. Same call as ChatPanel's ToolStrip.
+          <li key={`${i}-${run.name}`} className={`chat-tool${run.status === "running" ? " running" : ""}`}>
+            {run.status === "running" ? (
+              <LoaderCircle className="cmt-spinner" size={12} aria-hidden />
+            ) : (
+              <Globe size={12} aria-hidden />
+            )}
+            <span className="chat-tool-label">{run.label}</span>
+            {run.detail && <span className="chat-tool-detail">{run.detail}</span>}
+          </li>
+        ))}
+      </ul>
+    </Tooltip>
   );
 }
 

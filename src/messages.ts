@@ -514,12 +514,34 @@ export const NOT_CONFIGURED: ReaderFacingFailure = {
  * Distinct from `ENDED_UNFINISHED`, which is a connection ending early. This is
  * the ceiling we set being reached, and the reader's lever is different: a
  * narrower ask returns a shorter answer that fits.
+ *
+ * **It said *"Asking for something narrower usually fits"* flatly until
+ * 2026-09-02, and for three of its four callers that was an instruction to press
+ * a control that does not exist.** `parseHits` in src/search.ts raises this, and
+ * `parseHits` is search's parser *and* Referee mode's: a criterion run, a claims
+ * pull and a Mirror run all end here. Only Search has an ask to narrow — the
+ * reader typed it. Claims pulls the paper's own claims and has no scoping
+ * control of any kind, Mirror reads the referee's comments and has none either,
+ * and a criterion's words are a saved row rather than a box on this screen.
+ * Found in a browser pass on Claims, 2026-09-02
+ * (docs/plans/260902f-make-referee-mode-understandable.md § four things the pass
+ * turned up).
+ *
+ * So the advice is **conditioned rather than deleted**, which is the smallest
+ * honest fix: the retry is named first, because it is the lever every caller
+ * actually has and the `retry` kind already puts a button under it, and the
+ * narrowing keeps its clause where there is something to narrow. A second
+ * message for the referee callers was the alternative and was passed over —
+ * three call sites to thread it through, one more code for a reader to quote,
+ * and rule 3 of docs/project/copy.md asks for what to do next, not for a
+ * different sentence per screen.
  */
 export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "The answer was longer than there was room for, so it arrived incomplete and could not be used. " +
-    "Asking for something narrower usually fits. [ai-overflowed]",
+    "Trying again sometimes gets one that fits; where you asked a question of your own, asking " +
+    "something narrower usually does. [ai-overflowed]",
 };
 
 /**
