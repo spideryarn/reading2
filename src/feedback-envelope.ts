@@ -93,6 +93,7 @@ export interface AllowedAttachment {
 export const FEEDBACK_TAG_KEYS = [
   "report_id",
   "route_kind",
+  "kind",
   "consented",
   "has_screenshot",
   "slug",

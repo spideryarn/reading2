@@ -230,21 +230,30 @@ export const DECLARATIONS: readonly Declaration[] = [
  *
  * `DECLARATIONS` above is a table about *this app's two seams*: every entry has
  * a `ProviderAccount` that bills it and a `Wire` it speaks, because every entry
- * is a call that could in principle have gone through one of them. The three
+ * is a call that could in principle have gone through one of them. The two
  * things below cannot be written down that way at all:
  *
- * - `ProviderAccount` is `"openrouter" | "anthropic"` and `Wire` is
- *   `"messages" | "chat" | "embeddings"`. There is nowhere to say "OpenAI, over
- *   realtime", which is what live conversation and its evals are.
+ * - **A realtime session is not a request.** `ProviderAccount` and `Wire` do now
+ *   hold `"openai"` and `"realtime"` — Stage 2A widened them — but a
+ *   `Declaration` is spent through `declaredFetch`, which wraps a `fetch` and
+ *   hands an `Observer` the response body. `evals/live/*.mts` opens a live
+ *   session and talks over it; there is no response body anywhere in that, so
+ *   there is nothing for the wrapper to wrap.
  * - `scripts/run-codex.ts` does not make an HTTP call at all. It spawns another
  *   vendor's CLI, on a third account, and there is no response body for an
  *   `Observer` to read.
  *
- * **Widening the unions is not the reason this table exists, and reading it that
- * way is the mistake to avoid.** Stage 2 of
- * docs/plans/260902g-cost-tracking-that-can-set-a-price.md widens them for the
- * realtime entries, and those two will move into `DECLARATIONS` when it does.
- * `run-codex` will not: no seam is ever going to own a subprocess.
+ * **Live conversation itself left this table on 2026-09-02**, and how it left is
+ * the point: not by starting to use a seam, but because the browser now posts
+ * what each turn cost to `/api/live/:sessionId/usage`, where the server prices
+ * it and writes an ordinary `ai_calls` row — Stage 2B of
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md. The WebRTC
+ * connection from the tab to OpenAI is unchanged and is still a sanctioned
+ * provider bypass, named in the `ALLOWED` map of
+ * tests/no-undeclared-spend.test.ts. Only the *accounting* moved. An entry here
+ * is a claim that money leaves and **no row appears**, so keeping one for a
+ * feature that now writes rows would make this register overclaim in the one
+ * direction it exists to prevent.
  *
  * The point of the table is narrower and it is the whole of why it was added on
  * 2026-09-02: until then these files were named only in the `ALLOWED` map of
@@ -272,17 +281,10 @@ export interface UnmeteredSpend {
 
 export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
   {
-    file: "src/live.ts",
-    account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
-    what: "Live conversation mode. The audio is a WebRTC connection from the browser straight to OpenAI, so no row is written and no figure above includes it. Roughly $0.06–$0.46 a minute on gpt-realtime-2.1, capped at 20 minutes a session and uncapped in sessions.",
-    why: "The usage exists only in the reader's browser tab, so there is no response body this process ever receives — every Observer method takes one. Closing it needs a way for a tab to report what it spent and a reason for the server to believe it. Greg accepted the gap knowingly on 2026-08-31; docs/plans/260831g-live-conversation.md says what closing it needs, and Stage 2 of docs/plans/260902g-cost-tracking-that-can-set-a-price.md is the job.",
-    since: "2026-08-31",
-  },
-  {
     file: "evals/live/hallucination-on-noise.mts, evals/live/jargon-recovery.mts",
-    account: "OPENAI_API_KEY — the same separate bill",
+    account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
     what: "The live-mode evals. Realtime sessions on gpt-realtime-2.1 plus transcription arms, and jargon-recovery also buys text-to-speech from /v1/audio/speech to say the test sentences. A few cents a run, on a key nothing else in this report can see.",
-    why: "Same untypeable realtime wire as src/live.ts, so declaredFetch cannot cover them either — `declarationFor` refuses an id that is not in DECLARATIONS, and no Declaration for a realtime call can be written yet.",
+    why: "An eval opens its own realtime session and talks over it, with no server of ours in the middle and no browser to report from — so neither seam applies: declaredFetch wraps a fetch and reads a response body, and the acceptance endpoints that meter the app’s own live conversation (Stage 2B, 2026-09-02) are authenticated and expect a session this server journalled.",
     since: "2026-09-02",
   },
   {

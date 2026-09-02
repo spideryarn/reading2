@@ -159,6 +159,27 @@ this, 2026-09-02.
 or two steps; the most complete covers 6 of 13 steps for $0.909. A full ingest is *extrapolated* at
 $1.50–$3. **We do not have the number this whole job exists to produce.**
 
+## Turned up on the way, and deliberately not fixed
+
+**Database-backed test files collide with themselves across processes.** Every such file here takes
+a fixed fixture id and `rm`s it in `afterAll` — `tests/live-session-routes.test.ts` uses
+`const SLUG = "test-live-session-routes"`. Two *concurrent full-suite runs*, which happen routinely
+in this shared tree, have each other's fixtures deleted mid-run and present as a broad sweep of
+unrelated 404s. It cost one subagent an entire discarded measurement here: a 40-file/133-test
+failure set that was four vitest runs against one Postgres, not a fact about the code. Run alone,
+the same file passes 15/15 three times over.
+
+[`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) guards the *adjacent* case — two
+different files claiming one id — and says why that needed a test rather than a convention:
+*"It presents as a flake in somebody else's work."* The same-file-twice case is outside it.
+
+**Not fixed, on purpose.** This is a repo-wide idiom, not a defect in the file this job happened to
+add. Changing one instance would leave every other one and leave the next reader believing it was
+handled — the failure [improve-the-codebase.md](../reusable/improve-the-codebase.md) names as
+*"a dedup that leaves a copy alive is worse than none"*. If it is worth doing it is worth doing as
+its own job: per-run minted fixture ids across the suite, which is the remedy `fixture-ids.test.ts`
+already points at.
+
 ## The pricing-structure finding
 
 [`src/pipeline.ts:235`](../../src/pipeline.ts) `DEFAULT_INGEST_STEPS` is five steps — fetch,
@@ -302,6 +323,77 @@ that is the outstanding verification for this stage, and it is the only part of 
 
 ### Stage 2A — the server-owned journal and the acceptance seam
 
+**✅ Built, 2026-09-02; one step outstanding.** `spideryarn.realtime_sessions` and thirteen nullable
+realtime columns on `ai_calls`
+([the migration](../../drizzle/20260902150952_realtime_sessions_and_usage.sql)); the session row
+written between minting the secret and returning the token; `connected` / `usage` / `close` under
+`/api/live/:sessionId/`; `parseRealtimeUsage` and `acceptRealtimeUsage` in
+[`src/live.ts`](../../src/live.ts), pure and tested without HTTP; `REALTIME_PRICES` and
+`TRANSCRIPTION_PRICES` in [`src/pricing.ts`](../../src/pricing.ts), effective-dated; `Wire`,
+`Provider`, `ProviderAccount`, `AiJob`, `AI_JOB_WIRE` and `ChatJob` all widened. 63 new tests, each
+guard watched to fail first.
+
+**Four decisions taken in the build that the plan left open, and one thing left out:**
+
+- **`AiJob` gains `live_conversation` as its own category, not a fourth `NonTaskAiJob`.** Those three
+  each have one fixed model that the profile page lists; a live session buys two on two rate cards,
+  and their ids live in `src/live.ts`, which imports `src/converse.ts`, which imports
+  `src/models.ts` — so naming them there would close an import cycle and `npm run cycles` is a gate.
+- **`ai_calls.duration_ms` loses its `NOT NULL`**, narrowed straight back by
+  `ai_calls_duration_known_off_realtime`. A transcription event has no matching start event, and both
+  alternatives were invisible lies: a `0` reads as an instant call, and the session's wall-clock is
+  the length of a conversation rather than of a call.
+- **A report carrying image tokens is refused**, not priced. `liveSession` configures no image input
+  and there is no image rate; inventing one is what `src/pricing.ts` spends four paragraphs
+  forbidding.
+- **The session journal gets both store adapters, not a filesystem refusal.** `AdminStore`,
+  `VisibilityStore` and `FeedbackStore` refuse on files because there is genuinely nothing on a
+  filesystem to hold them; a session journal is a file quite happily, and refusing would have turned
+  off a working feature on every default checkout — including the suite that covers the ticket route.
+- **No `usageSource` column.** The design proposed `"client_report" | "sideband"`; today
+  `wire = 'realtime'` *is* "a browser reported this", so it would carry one value. An additive
+  migration on the day a sideband exists is cheaper than a column nothing distinguishes.
+
+**This is a laptop problem, not a shipping one.** The `.sql`, its snapshot and its journal entry are
+on `dev`, and `npm run deploy` applies every pending migration to the remote and **refuses to ship
+while any is still pending** — `--skip-migrations` included
+([deployment.md § Deploying](../project/deployment.md#deploying)). So production gets this at the
+next deploy without anybody doing anything, and the one way it could go wrong announces itself: if a
+later-stamped migration ever reached the remote first, the preflight would refuse out loud rather
+than skip in silence. Deploying `dev` as a whole cannot hit that, because drizzle reads its watermark
+once and then applies every pending entry in journal order in the same run.
+
+**Outstanding on the shared box, and not mine to clear — the same peer collision as 1b, twice over.**
+The migration has been applied nowhere, and the reason changed under it on 2026-09-02. First `npm run db:migrate`
+refused on one orphan ledger row, `1788351034981`, which was `0052_per_article_job_queue` applied to
+the shared local Postgres from a worktree whose journal entry had not been pushed. That cleared when
+`0052` landed. What refuses now is worse and is the defect
+[database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger)
+exists to catch:
+
+```
+✗ 1 migration(s) can never be applied: the newest ledger row is stamped 1788365753441,
+  and drizzle only applies entries stamped after it —
+  20260902150952_realtime_sessions_and_usage (1788361792046)
+✗ 2 ledger row(s) belong to no migration in this journal: 1788365729661, 1788365753441
+```
+
+Both orphan rows are stamped **later** than this migration, so even once they are accounted for,
+drizzle's single-watermark loop would skip `20260902150952` for ever in silence. **The remedy is not
+to delete this file and regenerate**, tempting as the table in database.md makes it look, until
+somebody has worked out what those two rows did — they are the feedback/privacy work applied under
+numbers that have since been regenerated, and a regeneration now merely chases their stamps. Whoever
+clears them should then check that this entry still clears the new watermark before running
+`npm run db:migrate`.
+
+Until it runs, `tests/store-realtime-sessions.test.ts` skips its Postgres half loudly
+(*"spideryarn.realtime_sessions is not there — run npm run db:migrate"*) and the filesystem half of
+the same parity suite runs; `tests/store-ai-calls.test.ts`, `tests/db-schema.test.ts` and
+`tests/db-schema-drift.test.ts` fail on the missing realtime columns. **Run `npm run db:migrate` and
+then
+`npx vitest run tests/store-realtime-sessions.test.ts tests/store-ai-calls.test.ts tests/db-schema.test.ts tests/db-schema-drift.test.ts`**
+— that is the whole of what is unverified here. Everything that does not need a database passes.
+
 Sol split Stage 2 in two, **at the server/client contract** — deliberately not between responses and
 transcription, because that would ship a meter known to omit a cost source.
 
@@ -374,6 +466,43 @@ modality.
 client starts posting.
 
 ### Stage 2B — browser delivery, and proof
+
+**✅ Built, 2026-09-02; the end-to-end run is outstanding and cannot happen on this box.**
+[`src/web/live/meter.ts`](../../src/web/live/meter.ts) is the whole of the browser half — the two
+projections and the queue — driven from `useLiveConversation.ts`, which now records
+`response.created` times, reports `response.done` and the completed transcription event, posts
+`connected` when the data channel opens, and posts `close` with the browser's own word for why the
+conversation ended (twelve reasons, from `reader` to `idle-cap` to `pagehide`). The three accounting
+calls are **required** methods on `LiveWiring`, not optional ones: an optional method is one a new
+wiring forgets, and the failure would be a session that silently meters nothing.
+[`tests/live-meter.test.ts`](../../tests/live-meter.test.ts) hands what the client builds to the
+server's real `parseRealtimeUsage` and `acceptRealtimeUsage` — imported, never mocked, because that
+seam is the point — and six new tests in `tests/live-session-flow.test.tsx` cover what only the hook
+can get wrong. Each guard was watched to fail first.
+
+**Three decisions taken in the build:**
+
+- **An event whose numbers cannot be read is not reported, and is counted.** `response.done` without
+  its modality split (openai-agents-js#538) would, if the gaps were filled with zeros, produce a
+  report the server *accepts* and prices at approximately nothing — a turn that cost real money
+  landing in the ledger as free, with nothing red anywhere. The two counts that are allowed to be
+  missing are the cached ones and image tokens, and both can only bias the figure up.
+- **The transcription is priced from `usage.seconds` only.** That event's `usage` comes in a
+  `duration` shape and a `tokens` shape, and there is no per-token rate for the transcriber; a
+  conversion factor would be a made-up number in a table built to hold settled ones. A token-shaped
+  usage is counted and said out loud instead. **Which shape `gpt-live-transcribe` actually sends is
+  the first thing a real session will settle.**
+- **`sendBeacon` is not used at all.** It cannot set an `Authorization` header and every route under
+  `/api/` takes a bearer token and no cookie, so a beacon would be a 401 that looks like a send.
+  `keepalive` on the last pass is the hint, and it is a hint rather than the path.
+
+**Outstanding, and the same peer collision as 1b and 2A:** `npm run db:migrate` still refuses, so
+`spideryarn.realtime_sessions` exists in no database and **no real conversation has produced a real
+Postgres row**. The plan's "Done" below is therefore half-met. What *is* proved is everything
+between: `tests/live-session-routes.test.ts` now takes a raw provider event through the client's own
+projection, over the HTTP route as JSON, and out as a priced row in the filesystem ledger — for the
+spoken turn and the transcription both. What is left is a browser and a database. Run a real live session once `0052` lands, and check `npm run cost` shows
+`computed` spend on `gpt-realtime-2.1` **and** on `gpt-live-transcribe` — two rate cards, not one.
 
 - Handle `response.done` and the completed input-transcription event; track event timestamps and
   provider outcomes.

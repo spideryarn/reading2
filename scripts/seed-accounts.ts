@@ -13,12 +13,12 @@
  * does its work at import time, so a test that imported it would seed a database
  * rather than read a rule.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
-import { DEV_OWNER_EMAIL, DEV_OWNER_ID } from "../src/owner.js";
+import { DEV_OWNER_EMAIL, DEV_OWNER_ID, EVAL_OWNER_EMAIL, EVAL_OWNER_ID } from "../src/owner.js";
 
 /**
  * Where the seeded administrator's password lives.
@@ -63,6 +63,36 @@ export const ADMIN_PASSWORD_BASENAME = "local-admin-password";
 /** The file, under a home directory. Resolved when called, never at import. */
 export function adminPasswordPath(home: string): string {
   return path.join(home, ADMIN_PASSWORD_DIRNAME, ADMIN_PASSWORD_BASENAME);
+}
+
+/**
+ * Where this machine records **which address** its seeded account is on.
+ *
+ * ## Why the email needs a file at all
+ *
+ * The password has been per-machine since 2026-08-31, and the address next to it
+ * was still `ADMIN_EMAIL_LOCAL` — a constant compiled into whatever commit the
+ * caller happens to be standing on. So the account is per-machine state (a row
+ * in a shared database, a file under `$HOME`) described half by machine state
+ * and half by a per-checkout constant, and the two halves are free to disagree.
+ *
+ * They did. `dev-admin@spideryarn.local` replaced `greg@gregdetre.com` on
+ * 2026-09-02, and every checkout behind that commit went on typing the old
+ * address into a database that no longer had it — `Invalid login credentials`,
+ * from code that had not changed, for a reason not visible anywhere in it.
+ * That is the class, not the instance: any future rename does it again.
+ *
+ * A **separate file, not a second line in the password file**. A stale checkout
+ * reads that file whole and treats it as the password, so appending to it would
+ * break the very checkouts this exists to protect.
+ *
+ * **Only the seed writes this**, because only the seed knows what it just
+ * ensured. A reader that helpfully wrote its own constant here would record a
+ * stale address on a stale checkout and hand it to a current one — the same bug
+ * with the arrow reversed.
+ */
+export function adminEmailPath(home: string): string {
+  return path.join(home, ADMIN_PASSWORD_DIRNAME, "local-admin-email");
 }
 
 /**
@@ -118,6 +148,43 @@ export function readOrCreateAdminPassword(home: string): AdminPassword {
 }
 
 /**
+ * Record the address the seed just ensured, for readers on other commits.
+ *
+ * **Throws rather than swallowing**, and writes through a temporary file.
+ * The first draft did neither, and GPT Sol found the ordering that makes both
+ * necessary: if this file already holds an old address, the seed renames the row
+ * and then fails to overwrite it — a read-only `$HOME`, a full disk — then every
+ * reader goes on preferring the stale address over its own correct constant, and
+ * the seed printed success. That is *worse* than the constant this replaced. A
+ * torn half-write is the same failure with a shorter string, hence the rename,
+ * which is atomic within a directory.
+ */
+export function writeAdminEmail(home: string, email: string): void {
+  const file = adminEmailPath(home);
+  const tmp = `${file}.tmp-${process.pid}`;
+  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  writeFileSync(tmp, `${email}\n`, { mode: 0o600 });
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, file);
+}
+
+/** Does this look like a whole address, rather than a torn one? */
+export function looksLikeEmail(value: string): boolean {
+  const at = value.indexOf("@");
+  return at > 0 && at === value.lastIndexOf("@") && at < value.length - 1 && !/\s/.test(value);
+}
+
+/** The address this machine recorded, if it recorded a whole one. */
+export function readAdminEmail(home: string): string | undefined {
+  try {
+    const contents = readFileSync(adminEmailPath(home), "utf8").trim();
+    return looksLikeEmail(contents) ? contents : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * This machine's sign-in, for anything that has to sign in **without a human** —
  * `npm run db:admin-password` prints it, `scripts/browser-sign-in.ts` types it
  * into the form.
@@ -134,7 +201,24 @@ export function readOrCreateAdminPassword(home: string): AdminPassword {
  * is one the other gets wrong.
  */
 export type AdminCredentials =
-  | { ok: true; email: string; password: string; path: string }
+  | {
+      ok: true;
+      email: string;
+      password: string;
+      path: string;
+      /**
+       * A second address to try if `email` is refused, or `undefined` when there
+       * is only one candidate.
+       *
+       * This is what stops the recorded file from ever being *worse* than the
+       * constant it takes precedence over. The file can go stale — a seed that
+       * renamed the row and then could not write, or two seeds racing during a
+       * rename (GPT Sol, findings 1 and 3) — and the reader has no privileged
+       * access with which to ask the database who is right. So it does not have
+       * to be right: it is tried first, and the constant is tried after.
+       */
+      alsoTry?: string;
+    }
   | { ok: false; why: string };
 
 export function readAdminCredentials(home: string): AdminCredentials {
@@ -158,7 +242,19 @@ export function readAdminCredentials(home: string): AdminCredentials {
         "  set it on the account. Every open session for that account ends.",
     };
   }
-  return { ok: true, email: ADMIN_EMAIL_LOCAL, password: contents.trim(), path: file };
+  /* The machine's own record wins over this checkout's constant: the constant
+     is only as current as the commit you are standing on, and the row it names
+     lives in a database shared with checkouts standing elsewhere. Falls back to
+     the constant when nothing has recorded one, which is every machine seeded
+     before 2026-09-02 and is exactly the old behaviour. */
+  const recorded = readAdminEmail(home);
+  return {
+    ok: true,
+    email: recorded ?? ADMIN_EMAIL_LOCAL,
+    password: contents.trim(),
+    path: file,
+    ...(recorded !== undefined && recorded !== ADMIN_EMAIL_LOCAL ? { alsoTry: ADMIN_EMAIL_LOCAL } : {}),
+  };
 }
 
 /** One row `db:seed-owner` guarantees, and what it is for. */
@@ -198,12 +294,18 @@ export interface SeededAccount {
 }
 
 /**
- * The two local accounts, and the reason there are two.
+ * The three local accounts, and the reason there are three.
  *
  * They are different people and merging them would be a real change:
  *
  * - **The owner** is what rows written *outside* a request belong to — the CLI,
  *   the pipeline, `db:import`. src/owner.ts.
+ * - **The eval owner** is what `npm run eval:cost` puts its throwaway articles
+ *   under. Separate from the owner above because an open dev tab drives every
+ *   queued job of the owner it is signed in as (`src/web/jobEngine.ts`), and a
+ *   browser winning a claim on an eval job would run a paid step through the
+ *   production registry and bill it to Product. `src/owner.ts § EVAL_OWNER_ID`
+ *   has the whole argument.
  * - **The administrator** is who signs in. `/api/admin/*` gates on a uuid rather
  *   than an email address (src/admin.ts explains why at length), so signing up
  *   through the email form gets the right address on a random id and is refused
@@ -224,6 +326,21 @@ export const SEEDED_ACCOUNTS: readonly SeededAccount[] = [
     mismatchAdvice:
       "Rows already written point at one id or the other, so do not just delete it.\n" +
       "  Set SPIDERYARN_OWNER_ID to the id above and leave the account alone.",
+    renamableFrom: [],
+  },
+  {
+    id: EVAL_OWNER_ID,
+    email: EVAL_OWNER_EMAIL,
+    /* Nothing ever signs in as it — that is the entire point. A password would
+       be a credential existing for no reason, and worse: an eval owner somebody
+       *could* sign in as is an eval owner whose jobs a browser tab could drive,
+       which is the failure this account exists to prevent. */
+    signsIn: false,
+    why: "the owner npm run eval:cost puts its throwaway articles under, so no dev tab drives them",
+    mismatchAdvice:
+      "The eval creates and deletes its own articles under this id and nothing else uses it.\n" +
+      "  If it holds somebody else's account, change EVAL_OWNER_ID in src/owner.ts rather than\n" +
+      "  pointing the eval at an id a browser might be signed in as.",
     renamableFrom: [],
   },
   {

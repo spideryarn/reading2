@@ -79,7 +79,7 @@ import { isSpideryarnId } from "../ids.js";
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users";
+export type AdminPage = "home" | "users" | "feedback";
 
 export type Route =
   | { kind: "library" }
@@ -146,6 +146,17 @@ export type Route =
    * server's, on `/api/admin/`.
    */
   | { kind: "admin"; page: AdminPage }
+  /**
+   * What we do with a reader's data — `/privacy`. See PrivacyPage.tsx and
+   * docs/project/website-text.md.
+   *
+   * **Reachable signed out**, which is the only interesting thing about it and
+   * the reason it is a route rather than a section of the landing page: the
+   * person most likely to want it is somebody deciding whether to sign in at
+   * all, and a policy you have to have an account to read is not a policy. So
+   * it joins `login` in App.tsx's signed-out branch.
+   */
+  | { kind: "privacy" }
   /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
@@ -223,13 +234,28 @@ export function parseRoute(pathname: string): Route {
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
   if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
+  // Beside `design` and `profile`, and for the same reason. Above `/read/`
+  // because it is not about an article, and above the sign-in gate in App.tsx
+  // because it is not about being signed in either.
+  if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to the shelf, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users))?\/?$/.exec(pathname);
-  if (adminPath) return { kind: "admin", page: adminPath[1] === "users" ? "users" : "home" };
+  const adminPath = /^\/admin(?:\/(users|feedback))?\/?$/.exec(pathname);
+  if (adminPath) {
+    /* The captured segment *is* the page name for every page but the index,
+       which has no segment. Written as a lookup rather than a chain of
+       ternaries so that adding the next one is an edit to the alternation and
+       nothing else — a chain is where the fourth page ends up silently reading
+       as `home`. */
+    const page = adminPath[1];
+    return {
+      kind: "admin",
+      page: page === "users" || page === "feedback" ? page : "home",
+    };
+  }
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
   // whole other URL, slashes and all. A bare /add — nothing to add — falls
   // through to the shelf, which is where the add box is.
@@ -321,8 +347,14 @@ export const LIBRARY_HREF = "/";
  */
 export const ADMIN_HREF = "/admin";
 export const ADMIN_USERS_HREF = "/admin/users";
+export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
+/**
+ * The privacy policy. Linked from the landing page's footer and from
+ * `/profile`, so both a stranger and a reader can find it.
+ */
+export const PRIVACY_HREF = "/privacy";
 /**
  * Spelled once, and read by both `parseRoute` above and main.tsx's rewrite
  * exemption.

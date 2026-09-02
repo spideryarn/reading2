@@ -49,7 +49,7 @@ import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { readHref } from "./router.js";
+import { PRIVACY_HREF, readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { SettingsSection } from "./SettingsSection.js";
@@ -360,6 +360,19 @@ export function ProfilePage() {
           ideas" has an answer.
         </p>
       </Section>
+
+      {/* **Where a signed-in reader finds the policy.** The landing page's
+          footer is the other one, and a reader who signed in months ago will
+          never see that again. Here rather than in the masthead because it is
+          not something anybody needs mid-article — it is a thing you go and
+          look up, and this is the page you already come to for "what does this
+          know about me". */}
+      <p className="tw:mt-10 tw:mb-0 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
+        <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+          Privacy
+        </Link>{" "}
+        — what we keep, and who it goes to.
+      </p>
     </main>
   );
 }

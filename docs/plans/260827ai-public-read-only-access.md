@@ -1033,6 +1033,18 @@ It is tested, it is in the route inventory, and it is the honest small answer to
 article have* for any later consumer — stage 2's link-preview function among them. Removing a working
 public endpoint to save nothing is churn, and the win here was never the route: it was the request.
 
+> **Superseded, 2026-09-02.** `GET /api/public/metadata/:slug` was deleted, along with `loadMetadata`,
+> the `metadata` projection, the `publicMetadata` DTO, the `PublicMetadata` type and the client's
+> `loadPublicMetadata`. The paragraph above was wrong about *why* it should stay: stage 2's link
+> preview reads `loadHead`, never this route, so for eight days the endpoint had one caller in the
+> world — `scripts/check-public-shell.ts`, which used it as an independent second opinion on a
+> deployed `<title>`. That check now reads `meta.title` off `GET /api/public/article/:slug`, which is
+> the *more* independent of the two: metadata and head shared one `PUBLIC_HEADING_TITLE` SQL
+> expression, while the article read derives its heading title from the sanitised blocks. An
+> unauthenticated production route whose only caller is a deployment checker is a surface we keep for
+> nothing. [260902j](260902j-public-read-only-access-audit-and-improvements.md) § Cluster B, finding
+> S8.
+
 ### Stage 2 — the link looks like something
 
 *Where the marketing value actually lives, and larger than the first draft said.*
@@ -1324,6 +1336,12 @@ from `f6d5d98` to `4bbed5d`. What exists: the migration, `PUT /api/article/:slug
 `publicSlug()`, a hardwired public reader, the closed `/api/public/` namespace with
 `GET article/:slug` and `GET metadata/:slug`, allowlist DTOs, the branded `VerifiedUser` and the
 `serveApi` split, and seven test files. Typecheck is clean across all three projects.
+
+> **Superseded in one part, 2026-09-02.** `GET metadata/:slug` is gone; the namespace has one route.
+> The vertical cut below still describes how 1a shipped — *article and metadata end to end* was true
+> of the slice — but the metadata half of it survives only as the visitor's `/read/:slug/metadata`
+> page, which draws from the article payload.
+> [260902j](260902j-public-read-only-access-audit-and-improvements.md) § Cluster B.
 
 ### What the build changed about the plan
 
@@ -2163,6 +2181,7 @@ stray `?` out of the serialisation. The test was right to fail and wrong about w
 
 The second piece of stage 2 that needs no routing: a `head` projection beside `article` and
 `metadata` in [`public-reader.ts`](../../src/store/public-reader.ts), and `loadHead(slug)`.
+*(The `metadata` projection was deleted on 2026-09-02; there are two projections now.)*
 
 Six values — `title`, the `<h1>` fallback, `root_gist`, `final_url`, `hasTree`, `hasBlocks` — and the
 shape is the guard. **The function must not become a second renderer**, and the cheapest place to
@@ -2219,6 +2238,12 @@ only a reader who owns the article may read the absence as the first.
 exists that passes the metadata bar and is a page React cannot draw — and a head that answered 200
 there would put a title and a description on a link to a blank screen, which is worse than no preview
 because a preview is a claim. Sol found it by reading both readers.
+
+> **The disagreement was resolved by deletion, 2026-09-02.** `loadMetadata` went with its route, so
+> the two reads that remain agree — and they still reach the bar by two different mechanisms, which
+> is why the fixture below now asserts both: `loadArticle` counts the block rows it fetched,
+> `loadHead` asks Postgres `has_blocks` because it fetches none.
+> [260902j](260902j-public-read-only-access-audit-and-improvements.md) § Cluster B.
 
 **Deleting that bar left every assertion in the file green**, because the fixture has blocks: the
 guard was unreachable from the corpus that existed. So there is now a second fixture — a genuinely

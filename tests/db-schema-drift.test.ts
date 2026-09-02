@@ -203,12 +203,19 @@ describe("declaredTables", () => {
        to make somebody look at. `checkpoints` arrived 2026-08-29 (drizzle/0028,
        docs/plans/260827aa-delete-the-importer.md § B3) and did exactly that: it went red
        here, and red in `is green on a fully migrated database`, before the
-       migration had been applied anywhere. */
+       migration had been applied anywhere. `realtime_sessions` arrived
+       2026-09-02 (drizzle/20260902150952_realtime_sessions_and_usage.sql,
+       docs/plans/260902g-cost-tracking-that-can-set-a-price.md § Stage 2A) and
+       did the same. `billing_accounts` and `ingest_events` arrived 2026-09-02
+       (drizzle/20260902172813_billing_quota.sql,
+       docs/plans/260902i-stripe-payments-and-subscription-tiers.md) and did it
+       a third time, which is three for three. */
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
       "article_visibility_changes",
       "articles",
+      "billing_accounts",
       "block_identities",
       "chat_messages",
       "chat_threads",
@@ -216,10 +223,12 @@ describe("declaredTables", () => {
       "comments",
       "feedback",
       "glossary_lookups",
+      "ingest_events",
       "jobs",
       "queue_state",
       "raw_sources",
       "reader_profiles",
+      "realtime_sessions",
       "referee_claims",
       "referee_criteria",
       "revision_blocks",
@@ -297,7 +306,7 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(21);
+      expect(report.declaredTables).toBe(24);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

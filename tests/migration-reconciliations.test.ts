@@ -416,11 +416,13 @@ live("every probe, against the schema this laptop actually has", () => {
     ).toContain("jobs_at_most_one_busy");
   });
 
-  it("does not mistake the per-owner, per-slug unique index for a global cap", async () => {
-    /* `jobs_active_slug` is unique over (owner_id, slug) with a predicate that
+  it("does not mistake the per-article unique index for a global cap", async () => {
+    /* `jobs_one_running_per_slug` is unique on (slug) with a predicate that
        mentions `running`, and it is on the live schema — so the probe above
        passing at all is the assertion. Stated separately because a probe that
-       flagged it would make every future run of this repair refuse. */
+       flagged it would make every future run of this repair refuse.
+       (It was `jobs_active_slug`, unique over (owner_id, slug), until
+       2026-09-02; the hazard is identical and the name moved.) */
     const p = probe("0032_jobs_concurrency_cap", "no other unique index");
     expect(await ask(p)).toBeNull();
   });

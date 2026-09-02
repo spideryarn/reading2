@@ -112,6 +112,83 @@ async function assertStoreReachable(): Promise<void> {
  * still lands at **server boot**. A store misconfiguration must not first show
  * up as a 500 on somebody's first request.
  */
+/**
+ * Has a dev server in **this process** ever come up? Kept on `globalThis`, not in
+ * a module-level `let`.
+ *
+ * Vite re-bundles and re-imports this config on every restart, so module state
+ * is reset exactly when the question is asked, and a flag that always reads
+ * `false` would answer "first boot" for ever — a guard whose failure mode is
+ * silence, which is the thing this whole file keeps meeting. The process is the
+ * scope the question is actually about.
+ */
+const BOOTED = Symbol.for("spideryarn.devServerHasBooted");
+
+function hasBooted(): boolean {
+  return (globalThis as Record<symbol, unknown>)[BOOTED] === true;
+}
+
+function markBooted(): void {
+  (globalThis as Record<symbol, unknown>)[BOOTED] = true;
+}
+
+/**
+ * The API middleware, or — on a **restart** — one that answers 503 and says why.
+ *
+ * ## Why a restart must not throw, when first boot must
+ *
+ * `assertStoreReachable` throwing at first boot is right: nothing is serving, and
+ * a dev server that silently reads from the wrong place is worse than one that
+ * refuses. On a restart the same throw is a resource leak. Vite wires its file
+ * watcher 23 lines *before* it awaits `configureServer`, and `restartServer`'s
+ * failure path logs and returns without closing the half-built server it can no
+ * longer reach. So a throw here abandons a live, watching, restart-capable
+ * orphan: a second independent restart chain in one process. The next config
+ * change fires both, the real one rebinds its port, and the orphan walks up to
+ * the next free one. Every failed restart adds a chain, so with N chains one
+ * failure adds N.
+ *
+ * That is not theory. On 2026-09-02 this process reached **eleven live dev
+ * servers on 5273-5283**, all answering 200 for the SPA and 401 for `/api`, from
+ * thirteen failed restarts — nine of them `timed out after 5s` while Postgres was
+ * busy, and the first one somebody deliberately breaking the query to prove this
+ * very guard fired. Reproduced in an isolated Vite project.
+ * docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md
+ *
+ * The class: **a hook that runs inside somebody else's lifecycle must not throw
+ * once that lifecycle is already running.** At startup a throw is a refusal; at
+ * restart the same throw is a leak, because the framework's error path abandons
+ * the half-built object rather than dismantling it.
+ *
+ * Degrading rather than refusing also loses nothing. The old server is still
+ * serving either way — the difference is only whether a twin of it is too.
+ */
+async function mountApi(logger: {
+  error: (msg: string, opts?: { timestamp?: boolean }) => void;
+}): Promise<Connect.NextHandleFunction> {
+  try {
+    const api = await createApiMiddleware();
+    markBooted();
+    return api;
+  } catch (err) {
+    if (!hasBooted()) throw err;
+    const why = err instanceof Error ? err.message : String(err);
+    logger.error(
+      `\n  The API did not come up on this reload: ${why}\n` +
+        "  Keeping the dev server alive and answering 503 on /api rather than throwing —\n" +
+        "  a throw here leaves a second live server behind, see\n" +
+        "  docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md\n" +
+        "  Fix the cause (usually: is Postgres up?) and save any file to reload.\n",
+      { timestamp: true },
+    );
+    return (_req, res) => {
+      res.statusCode = 503;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end(`The dev server's API failed to reload: ${why}\n`);
+    };
+  }
+}
+
 async function createApiMiddleware(): Promise<Connect.NextHandleFunction> {
   await assertStoreReachable();
   const { handleApi } = await import("./src/routes.js");
@@ -197,6 +274,26 @@ export default defineConfig(() => {
             } catch {
               /* No config to read: say nothing rather than cry wolf. */
               return;
+            }
+            /* **Did we get the port we asked for?** Asked first, because the
+               allow-list question below cannot answer it: 5274-5283 are all
+               allow-listed, so eleven leaked dev servers accumulated in one
+               process on 2026-09-02 while this plugin said nothing — it was
+               asked "is this port allowed?" when the useful question was "is
+               this the port I wanted?". A server that quietly landed somewhere
+               else is either a peer holding the port or this process leaking a
+               twin, and both are worth one line on the way past.
+               docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md */
+            const wanted = server.config.server.port;
+            if (wanted !== undefined && actual !== wanted) {
+              server.config.logger.warn(
+                `\n  Asked for ${wanted}, got ${actual}. Something already holds ${wanted}.\n` +
+                  "  Usually another agent's dev server. If it is THIS process, a failed config\n" +
+                  "  reload has left a second server behind and both are now serving —\n" +
+                  "  docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md\n" +
+                  `  Check with:  ss -ltnp | grep $$\n`,
+                { timestamp: true },
+              );
             }
             if (allowed.length === 0 || allowed.includes(actual)) return;
             const plan = portInRange(actual)
@@ -294,7 +391,8 @@ export default defineConfig(() => {
         // Vite awaits both hooks, so the `await` here is what keeps a store
         // misconfiguration a boot-time refusal rather than a first-request 500.
         async configureServer(server) {
-          server.middlewares.use(await createApiMiddleware());
+          const mounted = await mountApi(server.config.logger);
+          server.middlewares.use(mounted);
         },
         /* The same API in front of the built bundle, so `vite preview` serves
            something a reader could actually use.

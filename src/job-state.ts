@@ -182,39 +182,25 @@ export const STOPPING_AFTER_STEP = "Stopping after the current step…";
 export const KEEP_A_TAB_OPEN =
   "Keep a Spideryarn tab open while this imports. If you close them all, it will continue when you return.";
 
-/**
- * **One job per article, said without claiming it is running.**
+/*
+ * **`ARTICLE_IS_BUSY` and `WORKING_ON_THIS_ARTICLE` were here, and both are
+ * gone**, on 2026-09-02 with the refusal they were written for.
  *
- * The refusal `enqueue` answers with when the article the reader named already
- * has an active job doing different work (src/jobs.ts § `JobConflict`). It
- * replaced *"That article already has a job running. Wait for it, or stop it
- * first."*, which was wrong twice over: a blocker sitting in `queued` with
- * nothing driving it is not running, and a sentence that names no job tells the
- * reader to stop something they cannot see.
+ * *"Spideryarn is already busy with this article. Wait for that to finish, or
+ * stop it and ask again."* was `enqueue`'s answer when the article a reader
+ * named already had an active job doing different work — the sentence Greg hit
+ * pressing Ideas while Glossary was running. There is nothing left to say it
+ * about: a second, different job for one article is queued now rather than
+ * refused, and the card it gets already reads *Waiting to continue.*
+ * `WORKING_ON_THIS_ARTICLE` was the label the blocker's band borrowed when it
+ * sat between two steps, and there is no blocker's band either.
  *
- * **It deliberately says nothing about which state the blocker is in**, and
- * that is not vagueness. The state is a live fact that changes while the reader
- * looks at it, and the client already has the job — the 409 carries it — so
- * `displayJob` says *Building the hierarchy · 2m 14s* or *Waiting to continue.*
- * beside a Stop button, from the same record and the same vocabulary as every
- * other surface. A state word baked into this sentence would be a second
- * account of the same thing, arriving stale and free to disagree.
+ * Deleted rather than left, because dead copy for a refusal that cannot happen
+ * is the next agent's wrong turn. `docs/project/copy.md` used `ARTICLE_IS_BUSY`
+ * as its worked example of *a refusal that is an answer and therefore gets no
+ * code*; the rule survives there without it.
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g.
  */
-export const ARTICLE_IS_BUSY =
-  "Spideryarn is already busy with this article. Wait for that to finish, or stop it and ask again.";
-
-/**
- * The blocking job's label when it has no running step to borrow one from.
- *
- * A job between two steps has no `JobDisplay.step` — a fraction of a second in
- * practice, and the one gap where the band that shows a *blocker* has nothing
- * to name. The panel's own `runningLabel` is the wrong answer there and a
- * confidently wrong one: "Finding…" over an ingest says the glossary is running
- * when it is precisely what the reader was refused.
- *
- * No full stop, because it stands where a step label stands.
- */
-export const WORKING_ON_THIS_ARTICLE = "Working on this article";
 
 /**
  * What a measured step usually takes. **One step has earned one of these.**

@@ -26,7 +26,8 @@ the foot of that file is the layout's own documentation — it ships inside ever
 file-by-file list, and the thing to edit when the layout changes.
 
     index.html        what is in the zip, as a page a person double-clicks
-    manifest.json     what this export is, when it was made, and what was left out
+    manifest.json     what this export is, when it was made, what was left out, and both
+                      addresses — the original's and this article's on Spideryarn
     article.json      the article on your shelf: your title, your purpose, sharing state
     README.md         the above, for whoever writes an importer
     content/          revision.json, stamped.html, extracted.html, blocks.json,
@@ -52,9 +53,9 @@ Greg asked for "perhaps also with a human-readable index .html", and the review 
 >
 > — GPT Sol, 2026-09-01
 
-So the page says **what you have got**, not what it says: the title, byline, site and source URL;
-a table of every file with a few words and its size; counts taken off the rows; and the same
-`omitted` list the manifest carries, read from the same function so the two cannot disagree. It
+So the page says **what you have got**, not what it says: the title, byline, site, both addresses
+(below); a table of every file with a few words and its size; counts taken off the rows; and the
+same `omitted` list the manifest carries, read from the same function so the two cannot disagree. It
 renders **no article prose, no comment bodies and no chat**, and in particular neither
 `extractedHtml` nor `stampedHtml` — the reader has both as files and the browser opens either.
 
@@ -70,6 +71,44 @@ nothing external, so it works with the network unplugged. A URL only becomes an 
 
 The file table doubles as the guard against drift: a file the bundle writes and `FILE_NOTES` has no
 words for turns that test red, so a new file cannot arrive undescribed.
+
+## Two addresses, and the way back in
+
+> Can you make sure it provides a link back to the article on spideryarn.com … e.g. in index.html
+> and main metadata?
+>
+> — Greg, 2026-09-02
+
+A zip is read months later, out of a folder, with no memory of which article it was. Until this
+landed the only address in the bundle was the publisher's, so the only route back into Spideryarn
+was searching the library for the title. Both `manifest.json` and `index.html` now carry two, and
+they are labelled apart because an unlabelled pair of URLs under a title is a puzzle:
+
+- **`url`** — where the article came from, as the fetcher finally landed on it. Untrusted: it was
+  written by the site, so `index.html` only makes it an `href` if [`isWebUrl`](../../src/urls.ts)
+  accepts it, and the `file:///…/source.pdf` a local PDF import carries prints as text.
+- **`spideryarnUrl`** — `https://www.spideryarn.com/read/<slug>`, composed by
+  [`articleUrl`](../../src/urls.ts). Always written, and trusted because we built it; the only
+  reader-supplied part is the slug, which is percent-encoded there and escaped again at the markup
+  boundary.
+
+**The origin is a constant, not a `Host` header**, and that argument now lives in `src/urls.ts`
+beside it — it moved out of [`src/public/page-head.ts`](../../src/public/page-head.ts) on
+2026-09-02, when this became its second caller. `page-head.ts` composes `og:url` from the same
+function, and [`src/web/page-title.ts`](../../src/web/page-title.ts) parses the slug back out of
+that tag, so the path is spelled in exactly one place on purpose.
+
+The link is written whatever the article's sharing state, and that is safe rather than merely
+convenient: only the owner can download the zip, they can forward it afterwards, and a private URL
+is not a capability — anyone holding the file already has the article and the slug. What it is not
+is guaranteed to *work* for whoever opens it, so `README.md` says plainly that it wants the account
+the export came from.
+
+`spideryarnUrl` is **additive**, and `BUNDLE_FORMAT` did not move: nothing an importer already
+understood changed meaning, so the rule in `export-bundle.ts` ("bump it when an importer written
+against the old layout would get something wrong") does not fire. An importer should treat the
+field as optional, because format 1 exports written before 2026-09-02 have only `url` — the zip's
+own `README.md` says so.
 
 ## Why there are two exporters
 

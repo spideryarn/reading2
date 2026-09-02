@@ -148,10 +148,50 @@ function translateByokUpstream(r: Record<string, unknown>): void {
   r.byokUpstreamNanos = r.isByok === true ? old : null;
 }
 
+/**
+ * **Fill in the realtime block on a line written before it existed.**
+ *
+ * Same move as `backfillPre0023`, same reason, and the reason is worth stating
+ * once more because it is the one that keeps catching people: this ledger is
+ * append-only and never rewritten, so every line ever written is still in the
+ * file. A property that arrives on `AiCallRow` and is merely *absent* from an
+ * old line is `undefined` at runtime where the type says `| null` — which
+ * nothing notices until something writes `?? 0` or serialises the row back out
+ * and the two shapes stop matching.
+ *
+ * `null` rather than a guess, and that is the honest value: a call made before
+ * live conversation existed had no session, no modality split and no
+ * transcription seconds. There is nothing to reconstruct.
+ */
+function backfillRealtime(r: Record<string, unknown>): void {
+  for (const key of [
+    "realtimeSessionId",
+    "providerEventId",
+    "eventKind",
+    "providerStatus",
+    "inputTextTokens",
+    "inputAudioTokens",
+    "inputImageTokens",
+    "cachedTextTokens",
+    "cachedAudioTokens",
+    "outputTextTokens",
+    "outputAudioTokens",
+    "transcriptionSeconds",
+  ]) {
+    if (r[key] === undefined) r[key] = null;
+  }
+  /* **`durationMs` became nullable in the same change** (src/ai-spend.ts says
+     why), so an old line that has one keeps it and a hypothetical line without
+     one reads as unknown rather than as a `0` that would drag a latency average
+     down. */
+  if (r.durationMs === undefined) r.durationMs = null;
+}
+
 function looksLikeRow(v: unknown): v is AiCallRow {
   if (!v || typeof v !== "object") return false;
   const r = v as Record<string, unknown>;
   backfillPre0023(r);
+  backfillRealtime(r);
   /* Before the shape check, not after it: an untranslated line fails
      `money(r.byokUpstreamNanos)` on an `undefined`, and would be counted as
      damage rather than as history. */
@@ -163,7 +203,18 @@ function looksLikeRow(v: unknown): v is AiCallRow {
     typeof r.ownerId === "string" &&
     typeof r.startedAt === "string" &&
     typeof r.job === "string" &&
-    (r.providerAccount === "openrouter" || r.providerAccount === "anthropic") &&
+    /* **All three accounts, and this list is a trap that has already sprung
+       once.** It read `openrouter || anthropic` until 2026-09-02, so the day
+       live conversation started writing `openai` rows every one of them would
+       have been counted `unreadable` and dropped from the total — the shape of
+       failure this whole reader is organised against, arriving through its own
+       shape check. It mirrors `ai_calls_provider_account_known` in Postgres,
+       which had the same two-member list and needed the same widening
+       (drizzle/20260902150952_realtime_sessions_and_usage.sql). Two hand-written
+       copies of one union; `ProviderAccount` in src/ai-spend.ts is the third. */
+    (r.providerAccount === "openrouter" ||
+      r.providerAccount === "anthropic" ||
+      r.providerAccount === "openai") &&
     (r.costSource === "provider" ||
       r.costSource === "computed" ||
       r.costSource === "none") &&

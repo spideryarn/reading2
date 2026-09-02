@@ -483,6 +483,14 @@ export type ChatJob = Exclude<
   /* Generation only. `quiz-mark` is a separate `Task` and stays IN — it is a
      request-path call on chat/completions and needs a route below. */
   | "quiz"
+  /* **Not a pipeline stage, and still not on this wire.** A live session is a
+     WebRTC connection the browser holds open to OpenAI; this file never sends
+     it anything and never sees a response, so there is no OpenRouter path to
+     route it to and `AI_JOB_ROUTE` must not demand one. It was the compile
+     error above that made this the third reason a job is excluded here rather
+     than the second, which is the type doing exactly what the docstring says.
+     src/live.ts, and docs/project/ai-gateway.md. */
+  | "live_conversation"
 >;
 
 /**

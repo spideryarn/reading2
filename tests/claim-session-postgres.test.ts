@@ -120,9 +120,10 @@ import type { AdvanceParts } from "../src/jobs.js";
 import type { LabelsFile } from "../src/labels.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { DATA_ROOT_ENV } from "../src/store/data-root.js";
 import { STORE } from "../src/store/live.js";
+import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { ArtifactKind, ArtifactStore } from "../src/store/artifacts.js";
@@ -160,8 +161,12 @@ afterAll(async () => {
 });
 
 /**
- * A slug per case, so `jobs_active_slug` — one in-flight job per article —
- * cannot make one case wait on another's teardown.
+ * A slug per case, so one article's **line** of jobs — `claim`'s predecessor
+ * rule, src/store/pg-jobs.ts — cannot make one case wait on another's teardown.
+ *
+ * (This said *"`jobs_active_slug` — one in-flight job per article"* until
+ * 2026-09-02, when that index became four narrower ones and an article started
+ * holding a queue rather than a single job.)
  */
 const SLUGS = {
   ingest: "claim-session-pg-ingest",
@@ -169,6 +174,7 @@ const SLUGS = {
   late: "claim-session-pg-late-step",
   retry: "claim-session-pg-retry",
   openFailure: "claim-session-pg-open-failure",
+  requeue: "claim-session-pg-requeue",
 } as const;
 
 /* ------------------------------------------------------- the scratch roots -- */
@@ -396,7 +402,12 @@ const INGEST: StepName[] = ["extract", "blocks", "hierarchy"];
  * starts the local pump and would be a second driver racing the one thing under
  * test. The one case that must go through `enqueue` is the retry, and it says so.
  */
-async function queueJob(slug: string, names: StepName[], force = false): Promise<Job> {
+async function queueJob(
+  slug: string,
+  names: StepName[],
+  force = false,
+  createdAt?: string,
+): Promise<Job> {
   const wanted: Job = {
     id: mintId(),
     ownerId: DEV_OWNER_ID,
@@ -410,9 +421,14 @@ async function queueJob(slug: string, names: StepName[], force = false): Promise
       }),
     ),
     status: "queued",
-    createdAt: new Date().toISOString(),
+    /* **An argument, for the one case that puts two jobs in one article's
+       line.** `claim` orders on `(created_at, id)` and `id` is random, so two
+       rows written inside one millisecond queue in whichever order their ids
+       happened to sort — which would be a test asserting what `mintId` did
+       rather than what the rule does. GPT Sol, 2026-09-02. */
+    createdAt: createdAt ?? new Date().toISOString(),
   };
-  const { job } = await pgJobStore.enqueueOrGet(wanted, `claim-session-${wanted.id}`);
+  const { job } = await pgJobStore.enqueueOrGet(wanted, { workKey: `claim-session-${wanted.id}`, reservesName: false });
   return job;
 }
 
@@ -483,6 +499,22 @@ async function stepRunsOf(revisionId: string): Promise<Record<string, string>> {
     .from(revisionStepRuns)
     .where(eq(revisionStepRuns.revisionId, revisionId));
   return Object.fromEntries(rows.map((r) => [r.name, r.status]));
+}
+
+/**
+ * The `input_hash` each step run on a revision was stamped with — *what this
+ * step read*, as the database recorded it.
+ *
+ * The field the re-extraction case asserts on, and the reason it asserts on
+ * this rather than on whether an artefact exists: an artefact written from last
+ * week's blocks is present, current-looking and wrong.
+ */
+async function stepHashesOf(revisionId: string): Promise<Record<string, string>> {
+  const rows = await db()
+    .select({ name: revisionStepRuns.stepName, hash: revisionStepRuns.inputHash })
+    .from(revisionStepRuns)
+    .where(eq(revisionStepRuns.revisionId, revisionId));
+  return Object.fromEntries(rows.map((r) => [r.name, r.hash]));
 }
 
 async function arcTextOf(revisionId: string): Promise<string | null> {
@@ -1018,4 +1050,142 @@ when("a claim under Postgres", () => {
 
     await assertScratchUntouched(root, "the claim whose session would not open");
   }, 120_000);
+
+  /* ------------------------------------------------------------------ 6 -- */
+
+  /**
+   * **A job queued behind a re-extraction reads the new article, not the old
+   * one.**
+   *
+   * The question the per-article queue has to answer before it is safe to let
+   * two jobs share an article —
+   * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
+   * § 1k.10. B is queued *while A is still queued*, so B has never seen the
+   * article A is about to rewrite; when B finally claims, its draft must be
+   * opened from the revision A published rather than from anything B could have
+   * captured when it was asked for.
+   *
+   * **It asserts the stored fingerprint, not the existence of an artefact**, and
+   * that distinction is the whole of the test. An `ideas` written from last
+   * week's blocks is present, non-null, and current-looking; only the hash the
+   * step was stamped with says which article it actually read. The plan's first
+   * draft asked whether a file existed, and GPT Sol pointed out that it would
+   * have gone green over exactly the fault it was written for.
+   *
+   * The fixture `ideas` step therefore **computes its own stamp from what it
+   * read**, through the store it is handed. A hard-coded hash would be the
+   * test writing down the answer.
+   */
+  it("lets a job queued behind a re-extraction read the new revision", async () => {
+    const slug = SLUGS.requeue;
+
+    /* R1 — the article as it was. */
+    const before = articleSteps(slug, "rqa", "before the re-extraction");
+    const ingest = await queueJob(slug, INGEST);
+    await advanceInFreshScratch(ingest.id, {
+      session: claimSession,
+      steps: { ...STEPS, ...before.steps } as never,
+    });
+    const r1 = await currentRevisionOf(slug);
+    expect(r1, "the fixture ingest published nothing").not.toBeNull();
+
+    /* A rewrites the article; B asks for ideas about it. **B is queued while A
+       is still queued**, which is the state a reader produces by pressing
+       Refresh and then Ideas. A second apart, so the order is the rule's rather
+       than two random ids'. */
+    const after = articleSteps(slug, "rqa", "after the re-extraction");
+    const stamp = new Date();
+    const rewrite = await queueJob(slug, INGEST, true, stamp.toISOString());
+    const ideas = await queueJob(
+      slug,
+      ["ideas"],
+      false,
+      new Date(stamp.getTime() + 1000).toISOString(),
+    );
+
+    /* **B cannot claim while A is ahead of it**, and this is asserted before
+       anything runs: neither job is `running`, so the mutex is not what is
+       keeping B out — the line is. */
+    /* `mintAttempt`, not `mintId`: `jobs.attempt_id` is a uuid column, and a
+       `spya-` id only survives here while the refusal short-circuits before the
+       UPDATE — so the probe would be green for a reason that has nothing to do
+       with the line, and red with a `22P02` the moment it was not. */
+    const early = await pgJobStore.claim(ideas.id, DEV_OWNER_ID, mintAttempt(), 60_000, 4);
+    expect(early.kind, "the queued job claimed past an older one on its article").toBe("busy");
+
+    await advanceInFreshScratch(rewrite.id, {
+      session: claimSession,
+      steps: { ...STEPS, ...after.steps } as never,
+    });
+    const r2 = await currentRevisionOf(slug);
+    expect(r2, "the re-extraction published nothing new").not.toBe(r1);
+
+    /* What the `ideas` step read, as it read it. */
+    let sawFirstBlockText: string | null = null;
+    const { result: advanced, root } = await advanceInFreshScratch(ideas.id, {
+      session: claimSession,
+      steps: {
+        ...STEPS,
+        ideas: {
+          name: "ideas",
+          label: STEPS.ideas.label,
+          outputs: () => [],
+          produces: STEPS.ideas.produces,
+          async run(_ctx: unknown, store: ArtifactStore) {
+            const file = await store.read(slug, "hierarchy", "blocks");
+            const tree = await store.read(slug, "hierarchy", "tree");
+            const meta = await store.read(slug, "extract", "meta");
+            if (!file?.blocks || !tree) throw new Error("the queued job could not read the article");
+            sawFirstBlockText = file.blocks[0]?.text ?? null;
+            /* The real `ideas` stamps `inputFingerprint` over exactly these
+               three (src/pipeline.ts § `articleInputHash`), so a fixture that
+               computes it the same way is stamping what it read rather than
+               what the test hoped for. */
+            const hash = articleFingerprint(file.blocks, tree, meta ?? null);
+            return {
+              parts: {
+                ideas: {
+                  version: "ideas/1",
+                  generator: "fixture",
+                  slug,
+                  sourceHash: hash,
+                  ideas: [],
+                  generatedAt: new Date().toISOString(),
+                  elapsedMs: 0,
+                },
+              },
+              stamp: { inputHash: hash },
+              detail: "ideas ran",
+            };
+          },
+        },
+      } as never,
+    });
+
+    expect(advanced?.job.error).toBeUndefined();
+    expect(advanced?.done).toBe(true);
+    expect(advanced?.ran).toBe("ideas");
+
+    /* **The reading, first.** The blocks the queued job saw are the rewritten
+       ones — asserted on the text, so a failure says which generation it got
+       rather than which hash. */
+    expect(sawFirstBlockText, "the queued job read the article as it was before the rewrite").toBe(
+      after.blocks[0]?.text,
+    );
+
+    /* **And the stamp the database kept.** This is the half that cannot be
+       satisfied by an artefact merely existing: the fingerprint names the new
+       revision's inputs and is not the old one's. */
+    const meta = { slug, title: "A fixture article" };
+    const expected = articleFingerprint(after.blocks, treeFor(slug, after.blocks), meta as never);
+    const stale = articleFingerprint(before.blocks, treeFor(slug, before.blocks), meta as never);
+    expect(expected, "the fixture's two generations hash the same — nothing is being tested").not.toBe(
+      stale,
+    );
+
+    const r3 = await currentRevisionOf(slug);
+    expect((await stepHashesOf(r3!)).ideas).toBe(expected);
+    expect((await stepHashesOf(r3!)).ideas).not.toBe(stale);
+    await assertScratchUntouched(root, "the job queued behind a re-extraction");
+  }, 180_000);
 });

@@ -4,6 +4,34 @@ The **Feedback** button in the top-right corner, the dialog behind it, and the t
 report ends up. Part of
 [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
 
+## One box, since 2026-09-02
+
+It asked three questions in three boxes for two days. Greg:
+
+> It has three input boxes. I worry that will be intimidating/off-putting to users, so let's combine
+> them into one, with combined instructions (and perhaps a tooltip with extra guidance/reassurance).
+> And add some kind of indication of our appreciation for them making the effort to provide feedback
+> at the top of the dialog box.
+>
+> Maybe also add toggle for "Bug/problem" vs "Suggestion".
+>
+> — Greg, 2026-09-02
+
+Three boxes is a form, and a form is what you fill in once you have *decided* to file a bug. The
+reader this whole feature exists for is the one who was merely annoyed. So: one `body`, a `kind`
+that is **a problem, a suggestion, or nothing at all** (Greg: *"don't default to Problem. Default to
+null/unknown"*), a line of thanks above it, a "Not sure what to write?" disclosure below it, and a
+microphone — [dictation.md](dictation.md), the same three lines as every other box.
+
+The three old columns were backfilled into `body` under their old headings and **dropped**, so there
+is one shape in the table rather than two. The route still accepts the old three from a tab loaded
+before the deploy and folds them into `body` the same way; sending both shapes at once is refused.
+[260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md](../plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md)
+has the reasoning, the GPT Sol review that changed five things about it, and the deploy window Greg
+accepted knowingly.
+
+## Where it came from
+
 Greg asked for it on 2026-08-31:
 
 > I want to add a `Feedback` button somewhere, perhaps top-right. It should pop up a dialog box,
@@ -42,6 +70,7 @@ failed send, so the reader still has their words and somewhere to put them.
 |---|---|
 | the corner button, and who sees it | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
+| the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |
 | the route | [`src/routes.ts`](../../src/routes.ts), § feedback |
@@ -60,8 +89,8 @@ that: [security-map.md](security-map.md) and [logging.md](logging.md) are built 
 article text and reader text do not go to third parties.
 
 So this is an **exception, and it is stated out loud rather than smuggled in**. What makes it
-legitimate is consent: the reader typed those three answers into a box labelled with what happens to
-them. Nothing else gets the same permission, and the exception does not widen `safeEvent` by one
+legitimate is consent: the reader typed what they typed into a box labelled with what happens to
+it. Nothing else gets the same permission, and the exception does not widen `safeEvent` by one
 byte — the feedback path builds its own payload rather than relaxing the scrubber.
 
 That gives the rule for anyone adding a field:
@@ -69,6 +98,11 @@ That gives the rule for anyone adding a field:
 > Everything in a report is either **something the reader typed into this dialog**, or **a value
 > from a closed vocabulary we wrote**. There is no third category, and "it is probably fine" is not
 > one.
+
+`kind` is the second sort: two values and a null, `FEEDBACK_KINDS` in
+[`src/types.ts`](../../src/types.ts). It rides to Sentry as a tag, and **as no tag at all when the
+reader did not say** — a tag whose value is `""` is one Sentry will group by, while "the ones nobody
+classified" is a filter on the tag being missing.
 
 Three things follow, and each of them was got wrong once before it was got right:
 

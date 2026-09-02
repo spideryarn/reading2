@@ -1,0 +1,336 @@
+// @vitest-environment jsdom
+/**
+ * **The bottom bar picks its own rung, and `scrollWidth` is a liar if you ask
+ * it the wrong question.**
+ *
+ * `src/web/dock-fit.ts` replaced a pixel breakpoint — `@media (max-width:
+ * 1100px)`, measured when there were six modes — with a measurement, because at
+ * thirteen modes the spelled-out row wants 1416px and every window between
+ * 1101 and 1416 was drawing its last buttons off the right-hand edge of the
+ * screen where they could not be pressed. Greg found it at two thirds of a
+ * laptop screen, 2026-09-02.
+ *
+ * jsdom has no layout engine, so what is faked here is the one thing the
+ * browser is being asked and **the exact way it answers**:
+ *
+ *     scrollWidth === max(clientWidth, what the content needs)
+ *
+ * That clamp is the whole reason this file exists. It means a row with room to
+ * spare and a row that fits exactly are indistinguishable — both report
+ * `scrollWidth === clientWidth` — so the only sound test is the strict
+ * `scrollWidth > clientWidth`, and **any slack term makes the comparison
+ * always true**. A `scrollWidth <= clientWidth - 8` was written first and would
+ * have stripped every label off every bar at every width; `fits with room to
+ * spare` below is the assertion that catches it.
+ *
+ * The needs are the real ones, measured in Chrome against the dev server at
+ * thirteen modes and sixteen buttons (see dock-fit.ts § the rungs). They are
+ * illustrative rather than pinned — a new mode moves all three, which is the
+ * point of the change these tests cover.
+ *
+ * ## What this file cannot see, and what stands in for it
+ *
+ * jsdom is not a browser, so `chooseDockFit` can be tested and the CSS it
+ * depends on cannot. GPT Sol, reviewing the built code, listed what would stay
+ * green here while the bar was broken on screen: the root losing the ref, a rung
+ * losing one of the bar's two DOM shapes, the `.always` exception losing a
+ * specificity contest, the scroll floor going back inside a media query. Every
+ * one of those had actually happened at some point during the change.
+ *
+ * The last two describes go after them — reading `styles.css` and rendering
+ * `Dock` — for the reason `tests/spine-width.test.ts` gives at length: a check
+ * standing where the compiler cannot is worth having even when it is cruder than
+ * the real thing.
+ */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { Dock } from "../src/web/Dock.js";
+import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
+
+/** What the row needs at each rung, in px. Rung 0 spells every label out. */
+const NEED = [1425, 814, 557];
+
+/**
+ * A `.dock` whose width you set and whose overflow follows the rung it is
+ * wearing — answering exactly as a browser does, clamp included.
+ */
+function fakeDock(need = NEED): { el: HTMLElement; setWidth(px: number): void } {
+  const el = document.createElement("div");
+  el.className = "dock";
+  let width = 0;
+  Object.defineProperty(el, "clientWidth", { get: () => width });
+  Object.defineProperty(el, "scrollWidth", {
+    /* The clamp. A browser never reports a scroll width below the client
+       width, however much room is going spare. */
+    get: () => Math.max(width, need[wearing(el)] ?? 0),
+  });
+  return {
+    el,
+    setWidth(px) {
+      width = px;
+    },
+  };
+}
+
+/** The rung a `.dock` is wearing, read back off its class list.
+ *
+ * Backwards, because rung 0 is the *absence* of a class: a forward scan of
+ * `DOCK_FIT_CLASSES` would match its empty first entry every time. */
+function wearing(el: HTMLElement): number {
+  for (let i = DOCK_FIT_CLASSES.length - 1; i > 0; i--) {
+    const c = DOCK_FIT_CLASSES[i];
+    if (c && el.classList.contains(c)) return i;
+  }
+  return 0;
+}
+
+describe("the bar chooses the widest rung that fits", () => {
+  let dock: ReturnType<typeof fakeDock>;
+  beforeEach(() => {
+    dock = fakeDock();
+  });
+
+  it("spells everything out when there is room", () => {
+    dock.setWidth(1600);
+    expect(chooseDockFit(dock.el, 0)).toBe(0);
+    expect(wearing(dock.el)).toBe(0);
+  });
+
+  /**
+   * The bug, at the width Greg was actually sitting at. The old rule kept every
+   * label down to 1100px, so this window drew a labelled row 264px wider than
+   * the screen.
+   */
+  it("drops the mode labels at two thirds of a laptop screen", () => {
+    dock.setWidth(1152);
+    expect(chooseDockFit(dock.el, 0)).toBe(1);
+    expect(wearing(dock.el)).toBe(1);
+  });
+
+  it("drops every label once even the glyphs do not fit", () => {
+    dock.setWidth(700);
+    expect(chooseDockFit(dock.el, 0)).toBe(2);
+    expect(wearing(dock.el)).toBe(2);
+  });
+
+  it("stops at the last rung and lets the row overflow — the scroll is the floor", () => {
+    dock.setWidth(390);
+    expect(chooseDockFit(dock.el, 0)).toBe(DOCK_FIT_CLASSES.length - 1);
+  });
+
+  /**
+   * **No slack term.** With the clamp, a row that fits with room to spare and a
+   * row that fits exactly both report `scrollWidth === clientWidth` — so any
+   * `- slack` in the comparison is true at every width and compacts everything.
+   * This is also the real behaviour of a coarse-pointer bar, where the buttons
+   * `flex-grow` to fill whatever room is going (styles.css § a coarse pointer).
+   */
+  it("fits with room to spare: a bar whose buttons grow to fill it keeps its labels", () => {
+    const grown = fakeDock([0, 0, 0]); // content always fills exactly
+    grown.setWidth(1024);
+    expect(chooseDockFit(grown.el, 0)).toBe(0);
+  });
+
+  /**
+   * The rung is decided every time from rung 0 down, so it never depends on the
+   * rung it was already wearing. Without that the bar could stick compact after
+   * a window was widened again.
+   */
+  it("goes back up when the window does", () => {
+    dock.setWidth(700);
+    expect(chooseDockFit(dock.el, 0)).toBe(2);
+    dock.setWidth(1600);
+    expect(chooseDockFit(dock.el, 2)).toBe(0);
+    expect(wearing(dock.el)).toBe(0);
+  });
+
+  /**
+   * A bar with no layout — detached, `display: none`, or every jsdom test in
+   * this repo that renders `Dock`. Measuring a zero-width box would answer
+   * "nothing fits" and strip the labels off a bar nobody is looking at.
+   */
+  it("leaves an unlaid-out bar alone", () => {
+    dock.setWidth(0);
+    expect(chooseDockFit(dock.el, 1)).toBe(1);
+    expect(dock.el.className).toBe("dock");
+  });
+});
+
+
+const CSS = readFileSync(path.join(import.meta.dirname, "../src/web/styles.css"), "utf8");
+
+/** Selectors in a stylesheet that set `display: none` on a bar label. */
+function labelHiders(css: string): string[] {
+  const out: string[] = [];
+  /* Rule by rule: a selector list, then a block. Good enough for a stylesheet
+     we own and that has no `@supports` around these rules. */
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = m[1] ?? "";
+    if (!/display:\s*none/.test(m[2] ?? "")) continue;
+    for (const sel of selectors.split(",")) {
+      const one = sel.trim();
+      if (one.includes("dock-btn-label")) out.push(one);
+    }
+  }
+  return out;
+}
+
+/** Selectors that put a `keepLabel` label back. */
+function labelShowers(css: string): string[] {
+  const out: string[] = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = m[1] ?? "";
+    if (!/display:\s*(inline|flex|inline-flex|block)/.test(m[2] ?? "")) continue;
+    for (const sel of selectors.split(",")) {
+      const one = sel.trim();
+      if (one.includes("dock-btn-label") && one.includes(".always")) out.push(one);
+    }
+  }
+  return out;
+}
+
+/** Class-count specificity, which is all these selectors use. */
+function classes(sel: string): number {
+  return (sel.match(/\.[a-z0-9-]+/gi) ?? []).length;
+}
+
+/** Label-hiding selectors that beat the `.always` exception on their own rung. */
+function outSpecified(css: string): string[] {
+  const always = labelShowers(css);
+  return labelHiders(css).filter((hider) => {
+    const rung = /dock-fit-\d/.exec(hider)?.[0];
+    if (!rung) return false;
+    const best = Math.max(...always.filter((a) => a.includes(rung)).map(classes), 0);
+    return best < classes(hider);
+  });
+}
+
+/** Is `.dock`'s `overflow-x: auto` at the top level, or inside a query? */
+function floorIsUnconditional(css: string): boolean {
+  const floor = /\.dock \{[^}]*overflow-x:\s*auto/.exec(css);
+  if (!floor) return false;
+  const before = css.slice(0, floor.index);
+  /* Media queries in this file are the only thing that indents a rule, so a
+     closing brace in column 0 is a query closing. */
+  return (before.match(/^\}/gm) ?? []).length >= (before.match(/@media/g) ?? []).length;
+}
+
+describe("the stylesheet backs the ladder", () => {
+  /**
+   * A rung with no rule is a rung that measures as fitting and changes nothing,
+   * so the ladder walks straight past it to the next one.
+   */
+  it("gives every rung at least one rule", () => {
+    for (const cls of DOCK_FIT_CLASSES) {
+      if (!cls) continue;
+      expect(CSS, `no rule for ${cls}`).toContain(`.dock.${cls} `);
+    }
+  });
+
+  /**
+   * The bar has two shapes — one `.dock-modes` segment on the reading view,
+   * thirteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
+   * knew only the first until GPT Sol found it, so on those pages it did nothing
+   * and the ladder went straight to rung 2, taking every label with it.
+   */
+  it("rung 1 knows both of the bar's shapes", () => {
+    const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-1"));
+    expect(hiders.some((x) => x.includes(".dock-modes"))).toBe(true);
+    expect(hiders.some((x) => x.includes(".dock-mode "))).toBe(true);
+  });
+
+  /**
+   * **The bug a browser found and the unit tests above could not.**
+   * `.dock.dock-fit-1 .dock-btn.dock-mode .dock-btn-label` is five classes; the
+   * `.always` exception is four, and lost — so Plain, the way *out* of a mode,
+   * gave up its word on the metadata page at rung 1 while keeping it at rung 2.
+   * Ties are fine, because the exception is declared last; being out-specified
+   * is not.
+   */
+  it("the keepLabel exception is never out-specified", () => {
+    expect(outSpecified(CSS)).toEqual([]);
+  });
+
+  /**
+   * The floor. It lived inside `@media (max-width: 731px)` until 2026-09-02,
+   * which left the ladder's last rung free to overflow at any wider width with
+   * nothing underneath it — the same silent clip the ladder exists to end.
+   */
+  it("the bar scrolls at every width, not inside a media query", () => {
+    expect(floorIsUnconditional(CSS)).toBe(true);
+  });
+
+  /**
+   * **And every one of those goes red on the thing it is about.** Each of the
+   * three above passed the moment it was written, which is the state
+   * docs/reusable/silent-success.md warns about: a check that has never failed
+   * may be counting nothing at all. So each is fed the broken stylesheet it
+   * exists to catch — two of which this change actually shipped for a while.
+   */
+  it("...and each check fails on the stylesheet it is about", () => {
+    expect(
+      outSpecified(`
+        .dock.dock-fit-1 .dock-btn.dock-mode .dock-btn-label { display: none; }
+        .dock.dock-fit-1 .dock-btn-label.always { display: inline; }
+      `),
+    ).toHaveLength(1);
+
+    const segmentOnly = ".dock.dock-fit-1 .dock-modes .dock-btn-label { display: none; }";
+    expect(labelHiders(segmentOnly).some((x) => x.includes(".dock-mode "))).toBe(false);
+
+    expect(floorIsUnconditional("@media (max-width: 731px) {\n  .dock { overflow-x: auto; }\n}")).toBe(
+      false,
+    );
+  });
+});
+
+/**
+ * The wiring, in both of the bar's shapes. jsdom has no layout, so the rung is
+ * always 0 here — what is checked is that the ladder has something to act on:
+ * the root the hook measures, the class that tells rung 1 which buttons are
+ * modes, the tail it measures against, and Plain's word.
+ */
+describe("Dock gives the ladder something to work with", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  function render(props: Record<string, unknown>): void {
+    // biome-ignore lint/suspicious/noExplicitAny: the shapes differ by which props are present, which is the thing under test
+    act(() => root.render(createElement(Dock as any, { slug: "x", view: "article", ...props })));
+  }
+
+  it("the reading view: one segment, and Plain keeps its word", () => {
+    render({ mode: "plain", onMode: () => {} });
+    expect(host.querySelector(".dock")).not.toBeNull();
+    expect(host.querySelector(".dock-modes")).not.toBeNull();
+    expect(host.querySelector(".dock-tail")).not.toBeNull();
+    expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+  });
+
+  /**
+   * Off the reading view the modes are loose links. Both of these were missing
+   * until GPT Sol's review: without `dock-mode` rung 1 does nothing here, and
+   * without the `always` label Plain lost its word on the page you are most
+   * likely to be looking for the way back from.
+   */
+  it("the metadata page: loose links that say they are modes", () => {
+    render({ view: "metadata" });
+    expect(host.querySelector(".dock-modes")).toBeNull();
+    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(10);
+    expect(host.querySelector(".dock-tail")).not.toBeNull();
+    expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+  });
+});

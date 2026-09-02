@@ -205,9 +205,8 @@ async function call(
 function minimal(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: mintId(),
-    steps: "Open an article and press the button",
-    expected: "a dialog",
-    actual: "nothing at all",
+    body: "Open an article and press the button and nothing at all happens",
+    kind: "problem",
     consented: false,
     routeKind: "read",
     slug: "an-article",
@@ -308,9 +307,8 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(1);
     expect(submitted[0]).toMatchObject({
       id: body.id,
-      steps: "Open an article and press the button",
-      expected: "a dialog",
-      actual: "nothing at all",
+      body: "Open an article and press the button and nothing at all happens",
+      kind: "problem",
       consented: false,
       routeKind: "read",
       slug: "an-article",
@@ -364,9 +362,8 @@ describe("POST /api/feedback", () => {
       report: {
         ...(body as unknown as NewFeedback),
         reporterEmail: TEST_EMAIL,
-        steps: "what they wrote the first time",
-        expected: null,
-        actual: null,
+        body: "what they wrote the first time",
+        kind: null,
         environment: "test",
         requestVercelId: null,
         diagnostics: null,
@@ -422,10 +419,13 @@ describe("POST /api/feedback", () => {
   it("takes the largest report the validator accepts", async () => {
     const body = minimal({
       consented: true,
-      /* Six bytes per unit once escaped, at the cap, three times over. */
+      /* Six bytes per unit once escaped, at the cap, three times over — the
+         *legacy* shape, because that is the largest body this route still takes
+         and therefore the one the outer limit has to clear. */
       steps: "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS),
       expected: "\u0002".repeat(MAX_FEEDBACK_ANSWER_CHARS),
       actual: "\u0003".repeat(MAX_FEEDBACK_ANSWER_CHARS),
+      body: undefined,
       /* `isSlug` caps a slug at 60 characters — src/ingest.ts. */
       slug: `a${"b".repeat(59)}`,
       buildCommit: "c".repeat(64),
@@ -481,8 +481,75 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(1);
   });
 
+  it("takes a report with no kind at all", async () => {
+    /* Greg asked for the toggle to start unset, so an absent `kind` is a valid
+       report rather than a client that forgot a field. */
+    const reply = await call(minimal({ kind: undefined }));
+    expect(reply.status).toBe(201);
+    expect(submitted[0]?.kind).toBeNull();
+  });
+
+  it("refuses a kind that is not one of ours", async () => {
+    const reply = await call(minimal({ kind: "grumble" }));
+    expect(reply.status).toBe(400);
+    expect(String(reply.body.error)).toMatch(/\[fb-kind\]/);
+    expect(submitted).toHaveLength(0);
+  });
+
+  it("still takes the old three-box shape, and folds it into one body", async () => {
+    /* **A reader whose tab was loaded before the deploy.** `FEEDBACK_FIELDS`
+       refuses an unknown key outright, so without the legacy vocabulary this
+       reader is told "a report has a field this endpoint does not take" at the
+       exact moment they are trying to report that something is broken. GPT Sol's
+       review of the plan, 2026-09-02. The headings are the ones the migration
+       used, so a stale report and a backfilled one read the same. */
+    const reply = await call(
+      minimal({
+        body: undefined,
+        kind: undefined,
+        steps: "Pressed the button",
+        expected: "a dialog",
+        actual: "nothing at all",
+      }),
+    );
+    expect(reply.status).toBe(201);
+    expect(submitted[0]?.body).toBe(
+      "Steps to reproduce:\nPressed the button\n\n" +
+        "What you expected to see:\na dialog\n\n" +
+        "What you saw instead:\nnothing at all",
+    );
+    expect(submitted[0]?.kind).toBeNull();
+  });
+
+  it("refuses a body that carries both shapes at once", async () => {
+    /* Not an old client — an old client has no `body` — so there is no right
+       answer about which of the two to keep, and guessing one would store half
+       of what somebody sent. */
+    const reply = await call(minimal({ steps: "Pressed the button" }));
+    expect(reply.status).toBe(400);
+    expect(String(reply.body.error)).toMatch(/\[fb-shape\]/);
+    expect(submitted).toHaveLength(0);
+  });
+
+  it("decides which shape a report is on its keys, not on which of them are empty", async () => {
+    /* `{body: null, steps: "…"}` carries both vocabularies, and the first
+       version read it as a well-formed old client because it asked whether each
+       field held *text*. A shape is a set of keys. GPT Sol's code review,
+       2026-09-02. */
+    const reply = await call(minimal({ body: null, steps: "Pressed the button" }));
+    expect(reply.status).toBe(400);
+    expect(String(reply.body.error)).toMatch(/\[fb-shape\]/);
+    expect(submitted).toHaveLength(0);
+
+    /* And the mirror image: a real body beside empty legacy keys. */
+    const other = await call(minimal({ steps: null, expected: null, actual: null }));
+    expect(other.status).toBe(400);
+    expect(String(other.body.error)).toMatch(/\[fb-shape\]/);
+    expect(submitted).toHaveLength(0);
+  });
+
   it("refuses a report with nothing in it", async () => {
-    const reply = await call(minimal({ steps: "  ", expected: null, actual: "" }));
+    const reply = await call(minimal({ body: "  " }));
     expect(reply.status).toBe(400);
     expect(String(reply.body.error)).toMatch(/\[fb-empty\]/);
     expect(submitted).toHaveLength(0);
@@ -490,7 +557,7 @@ describe("POST /api/feedback", () => {
 
   it("refuses an answer past the cap, and never quotes it back", async () => {
     const prose = "The unbearable lightness of a very long paragraph. ".repeat(200);
-    const reply = await call(minimal({ actual: prose }));
+    const reply = await call(minimal({ body: prose }));
     expect(reply.status).toBe(400);
     expect(String(reply.body.error)).toMatch(/\[fb-long\]/);
     expect(String(reply.body.error)).not.toContain("unbearable");
@@ -764,9 +831,7 @@ describe("POST /api/feedback", () => {
     const written = await logLinesWhile(async () => {
       await call(
         minimal({
-          steps: "I clicked the thing about MY SECRET MANUSCRIPT",
-          expected: "SOMETHING ELSE ENTIRELY",
-          actual: "A CONFIDENTIAL PARAGRAPH",
+          body: "I clicked the thing about MY SECRET MANUSCRIPT and got A CONFIDENTIAL PARAGRAPH",
         }),
       );
     });

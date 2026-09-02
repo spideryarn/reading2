@@ -190,11 +190,14 @@ export function unopenable(expected: readonly string[], readable: readonly strin
  * reporting completion over that is the failure this file exists to prevent. The
  * caller fails **after** the durable work, so a re-run costs a second.
  *
- * It cannot be fixed from in here either. The value belongs in `.env.local`,
- * which `gjd-remote push-env` **rebuilds** from the laptop's copy
- * ([scripts/gjd-remote-env.ts](gjd-remote-env.ts)), so a line written on the box
- * would be destroyed by the next push and would have looked fine in between —
- * the same reason `setup-local.ts` only warns about `SPIDERYARN_OWNER_ID`.
+ * It cannot be fixed from in here either. **And it must not be fixed in
+ * `.env.local`**, which is what this advised until 2026-09-02: that file is
+ * applied *over* `process.env` ([src/env.ts](../src/env.ts)), so a value there
+ * beats the ~30 tests that set `SPIDERYARN_STORE` themselves to test the other
+ * store. Following the old wording turned 40 test files and 146 tests red, and
+ * `src/env.ts` suppresses its own "shadowed" warning under `NODE_ENV=test`, so
+ * it did it in silence. The remedy is `npm run dev`, which sets the variable
+ * itself; `.env.local` now carries a comment saying why the line is absent.
  */
 export function storeVerdict(store: string | undefined): { ok: boolean; lines: string[] } {
   if (store === "postgres") {
@@ -204,12 +207,13 @@ export function storeVerdict(store: string | undefined): { ok: boolean; lines: s
     ok: false,
     lines: [
       `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset in this script's own environment"}.`,
-      "  A dev server that reads SPIDERYARN_STORE=files, or is started some other way than a plain",
-      "  `npm run dev` (which itself now defaults to postgres), will serve articles off data/ and",
-      "  these rows will be invisible in the browser — the seed will have worked and the shelf will",
-      "  look empty. Put SPIDERYARN_STORE=postgres in .env.local on the LAPTOP so every process",
-      "  agrees: push-env rebuilds the box's copy from that one, so a line added here is destroyed",
-      "  by the next push.",
+      "  A dev server started as a bare `vite`, or with SPIDERYARN_STORE=files, serves articles",
+      "  off data/ instead — the seed will have worked and the shelf will look empty.",
+      "  Start it with `npm run dev`, which sets SPIDERYARN_STORE=postgres itself.",
+      "  DO NOT put SPIDERYARN_STORE=postgres in .env.local. That file is applied over",
+      "  process.env (src/env.ts), so it overrides every test that sets the store itself:",
+      "  it turned 40 test files and 146 tests red on 2026-09-02, silently, because",
+      "  src/env.ts suppresses its shadowing warning under NODE_ENV=test.",
     ],
   };
 }

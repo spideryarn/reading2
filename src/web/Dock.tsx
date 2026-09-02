@@ -118,6 +118,7 @@ import {
   Quote,
 } from "lucide-react";
 import type { Comment } from "../types.js";
+import { useDockFit } from "./dock-fit.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
@@ -303,10 +304,11 @@ const MODES_UI: {
   /**
    * **Keep the word when every other button loses one.**
    *
-   * The labels are dropped below 1100px and again at phone widths, because they
-   * are said twice — in the tooltip and in the `aria-label` — so dropping them
-   * costs a sighted reader a hover and a screen-reader user nothing (styles.css
-   * § the modes segment). Exactly one button is worth the width anyway: the one
+   * The labels are dropped as soon as the row stops fitting, and again when
+   * even the icons are tight, because they are said twice — in the tooltip and
+   * in the `aria-label` — so dropping them costs a sighted reader a hover and a
+   * screen-reader user nothing (dock-fit.ts, styles.css § the bar's fit
+   * ladder). Exactly one button is worth the width anyway: the one
    * that gets you *out*, which a reader is reaching for precisely when they do
    * not want to hover ten icons to find it. So on a phone the row is thirteen
    * glyphs and one word, and the word is the exit.
@@ -322,7 +324,7 @@ const MODES_UI: {
      Not drawn larger, and that is a deliberate departure from the ask. A
      radiogroup of ten peers with one of them enlarged reads as a mistake before
      it reads as emphasis. What it gets instead is its label, kept at narrow
-     widths where every other button loses one (styles.css § the modes segment) —
+     widths where every other button loses one (styles.css § the bar's fit ladder) —
      so on a phone the bar is eight icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
 
@@ -484,6 +486,36 @@ const MODES_UI: {
   },
 ];
 
+/**
+ * What the bar has in it, as one string, so `useDockFit` re-measures when the
+ * row's width could have changed and not on every render of the page it sits on.
+ *
+ * The three things that vary: the modes are one segment on the reading view and
+ * thirteen loose links elsewhere; Comments is a drawer trigger here and a link
+ * elsewhere; and its count grows a digit. `MODES_UI.length` cannot change
+ * without a reload — it is in here because it is the term that keeps growing,
+ * and this is the line a fourteenth mode would want somebody to have read.
+ *
+ * **If a change makes the row wider without changing this string, add it here.**
+ * There is no backstop for content: the `ResizeObserver` in dock-fit.ts watches
+ * the bar's own box, which is `100vw` and does not move when the row inside it
+ * grows. What catches the mistake instead is the floor — the bar scrolls rather
+ * than clipping — so the cost of forgetting is a draggable row, not a button
+ * nobody can press.
+ *
+ * Its own function rather than four ternaries in `Dock`, which is already at
+ * Biome's cognitive-complexity ceiling.
+ */
+function fitSignature(
+  mode: Mode | undefined,
+  onMode: Props["onMode"],
+  drawer: Props["drawer"],
+  own: { comments: Comment[] } | null,
+): string {
+  const shape = mode !== undefined && onMode ? "seg" : "links";
+  return `${MODES_UI.length}|${shape}|${drawer ? "drawer" : "link"}|${own ? own.comments.length : ""}`;
+}
+
 export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, drawer }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
@@ -495,6 +527,16 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
      view already passes it that way. */
   const isVisitor = visitor === true || drawer?.visitor === true;
   const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
+
+  /* **How much of itself the bar spells out is measured, not guessed** — the
+     row is asked whether it overflows and drops labels until it does not. It
+     was a `max-width: 1100px` media query until 2026-09-02, and that number was
+     measured when there were six modes; at thirteen the labelled row wants
+     1416px, so every window between 1101 and 1416 was showing its labels and
+     running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
+     automatic/dynamic (so that we don't have to keep tweaking some
+     constant)"*. */
+  const { ref: dockRef, fitClass } = useDockFit(fitSignature(mode, onMode, drawer, own));
 
   /**
    * The view state the bar's links carry across, so leaving the article to look
@@ -604,7 +646,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
           has not dismissed it — install-hint.ts. */}
       <InstallHint />
 
-      <div className="dock">
+      <div className={`dock${fitClass}`} ref={dockRef}>
         {/* **The modes, as one control, and first in the bar.** Chat and
             Glossary used to be two independent toggles beside each other, with
             `toc` unrepresented — you left a mode by pressing the one you were
@@ -630,7 +672,14 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
               current={false}
               icon={m.icon}
               label={m.label}
-              className={marked?.has(m.mode) ? MARKED : ""}
+              /* `dock-mode` says *this is one of the modes* on a page where
+                 they are thirteen loose links rather than one segment, so
+                 § the bar's fit ladder can take their labels at rung 1 the way
+                 it takes the segment's. Without it rung 1 does nothing on the
+                 metadata and tweets pages, and the bar there skips straight
+                 from every label to none. GPT Sol, reviewing the design. */
+              className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
+              keepLabel={m.keepLabel}
               title={`${m.blurb} — back in the article itself`}
             />
           ))
@@ -714,6 +763,15 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
           label="Metadata"
           title="Where this article came from, what shape it is, and what the pipeline wrote"
         />
+
+        {/* **The trailing gutter, and the ladder's font-metric probe.** It is a
+            child rather than the bar's `padding-right` because the fit
+            measurement cannot see padding: Chrome leaves a flex container's
+            trailing padding out of its scrollable overflow, so the last button
+            was free to sit in it — six pixels on a laptop, and `--safe-right`
+            on a phone held landscape, which is the cutout the inset exists to
+            keep clear. styles.css § the floor, and dock-fit.ts. */}
+        <span className="dock-tail" aria-hidden="true" />
       </div>
     </>
   );
@@ -966,7 +1024,7 @@ function DockModes({
                   tooltip above and in its accessible name below, so hiding the
                   text costs the sighted reader a hover and costs a screen
                   reader nothing — which is why the label is the thing that
-                  gives way rather than the button. See § the modes segment. */}
+                  gives way rather than the button. See § the bar's fit ladder. */}
               <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{m.label}</span>
             </button>
           </Tooltip>
@@ -990,14 +1048,27 @@ function DockLink({
   label,
   title,
   className = "",
+  keepLabel,
 }: {
   href: string;
   current: boolean;
   icon: typeof Info;
   label: string;
   title: string;
-  /** Extra classes — today, `MARKED` for a mode a visitor cannot have. */
+  /** Extra classes — `MARKED` for a mode a visitor cannot have, and
+   *  `dock-mode` for the loose mode links off the reading view. */
   className?: string | undefined;
+  /**
+   * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
+   * `MODES_UI`, which is Plain, the way out.
+   *
+   * It only reaches here off the reading view, where the modes are thirteen
+   * loose links rather than a segment. Passing it was missed until GPT Sol
+   * found it: the word survived every narrow window on the reading view and
+   * vanished on the metadata page, which is the page you are *most* likely to
+   * be looking for the way back from.
+   */
+  keepLabel?: true | undefined;
 }) {
   return (
     <Link
@@ -1005,24 +1076,27 @@ function DockLink({
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       title={title}
-      /* Explicit, for the reason DockModes gives: § a narrow window hides the
-         visible label, and an accessible name computed from the text would go
+      /* Explicit, for the reason DockModes gives: § the bar's fit ladder hides
+         the visible label, and an accessible name computed from the text would go
          with it. `title` would step in as a fallback, but `title` is the long
          sentence — a screen reader would read the whole blurb where the name
          is wanted. Not hypothetical since 2026-08-27: these three lose their
-         labels at 390px too, not just the six modes.
+         labels on rung 2 too, not just the modes.
 
          So `title` is now the hover description and **not** the accessible
          name — this attribute is. Anything below claiming otherwise is stale. */
       aria-label={label}
     >
       <Icon size={15} />
-      {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all thirteen of the bar's labels with one rule rather than with
+      {/* Same class the modes segment gives its label, so § the bar's fit ladder
+          can drop all sixteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
-          somebody wrapped the text. The name is still announced: the `title`
-          above is the accessible name on both of these. */}
-      <span className="dock-btn-label">{label}</span>
+          somebody wrapped the text. The name is still announced: the explicit
+          `aria-label` above is the accessible name on both of these, and the
+          `title` beside it is the long hover sentence. A comment here used to
+          name `title` as the accessible name — it was the fallback before the
+          `aria-label` was added, and it stopped being true then. GPT Sol. */}
+      <span className={`dock-btn-label${keepLabel ? " always" : ""}`}>{label}</span>
     </Link>
   );
 }
@@ -1066,11 +1140,14 @@ function DockTab({
       onClick={() => onPanel(on ? null : panel)}
     >
       <Icon size={15} />
-      {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all thirteen of the bar's labels with one rule rather than with
+      {/* Same class the modes segment gives its label, so § the bar's fit ladder
+          can drop all sixteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
-          somebody wrapped the text. The name is still announced: the `title`
-          above is the accessible name on both of these. */}
+          somebody wrapped the text. The name is still announced: the explicit
+          `aria-label` above is the accessible name on both of these, and the
+          `title` beside it is the long hover sentence. A comment here used to
+          name `title` as the accessible name — it was the fallback before the
+          `aria-label` was added, and it stopped being true then. GPT Sol. */}
       <span className="dock-btn-label">{label}</span>
       {children}
       <ChevronUp className={`dock-chev${on ? " open" : ""}`} size={12} />

@@ -7,7 +7,10 @@
  * The audio never touches our server. This hook opens a `RTCPeerConnection`
  * straight to OpenAI, using a short-lived token our server minted, and from
  * then on the conversation is between the reader's microphone and the model.
- * Our server is asked exactly two things: for the token, and to run a tool.
+ * Our server is asked for the token, for a tool to be run — and to be told what
+ * the session spent, because the `usage` object OpenAI puts on every turn is
+ * delivered to this tab and nowhere else. That last part is ./meter.ts, and
+ * everything about it that is a judgment call is written down there.
  *
  * That is not a shortcut, it is the only shape available. Audio relayed through
  * a Vercel function would need a long-lived socket, which a serverless function
@@ -86,6 +89,7 @@ import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
+import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
 import { apiWiring, type LiveWiring } from "./wiring.js";
 
@@ -226,10 +230,11 @@ const SPEECH_LATENCY_MS = 1_500;
 /**
  * **The two caps, and why a live session needs any.**
  *
- * Nothing meters this — no row is written for realtime audio and `npm run cost`
- * says so by name — so the only thing standing between a forgotten tab and an
- * hour of billed room noise is a clock in the browser. OpenAI ends a session at
- * sixty minutes, which bounds the damage and does not prevent it.
+ * The meter measures this now (./meter.ts), but measuring is not limiting:
+ * nothing on our server can end somebody's session, so the only thing standing
+ * between a forgotten tab and an hour of billed room noise is a clock in the
+ * browser. OpenAI ends a session at sixty minutes, which bounds the damage and
+ * does not prevent it.
  *
  * Two clocks rather than one, because they answer different questions. The idle
  * one is the useful one: a reader who has stopped talking has stopped having a
@@ -320,6 +325,39 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   /** The reader's microphone track, held so the hang-up can stop it first. */
   const micTrack = useRef<MediaStreamTrack | null>(null);
+
+  /**
+   * **What this conversation cost, on its way to our own ledger.** One per
+   * session, and `null` when the ticket carried no journal row to report
+   * against — see `LiveTicket.sessionId`.
+   *
+   * A ref for the same reason `ledger` is: it is fed from the event handler
+   * several times a minute and nothing renders it.
+   */
+  const meter = useRef<LiveMeter | null>(null);
+
+  /**
+   * **When each response began**, keyed on OpenAI's response id.
+   *
+   * Realtime events carry no timestamps of their own, so the only start time
+   * that exists is the moment this tab saw `response.created`. Without it every
+   * realtime row would have a null duration and the ledger could not say how
+   * long a turn took — and inventing one from the session's wall-clock would be
+   * the duration of a *conversation* recorded as the duration of a call, which
+   * is the mistake `ai_calls.duration_ms` losing its NOT NULL exists to avoid.
+   */
+  const responseStarts = useRef(new Map<string, string>());
+
+  /**
+   * **Why this session ended**, for the journal row.
+   *
+   * Free text with a length bound on the server (`realtimeCloseReason` in
+   * src/live.ts), deliberately, so the list can live here and grow without a
+   * server-side union lagging it and refusing a true report. Set at each place
+   * that ends a session; `reader` is the default because pressing Stop is the
+   * one ending nothing else has to announce.
+   */
+  const endedBecause = useRef<string>("reader");
 
   /**
    * The turn assembler. One per session — see `ExchangeLedger`.
@@ -466,6 +504,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              already started a repair in the reducer, which reloads the
              conversation; the reader can press Live again and get a session
              seeded from what is actually there. */
+          endedBecause.current = "append-refused";
           setTimeout(() => void stopRef.current(), 0);
           return;
         }
@@ -593,6 +632,30 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     [send, slug],
   );
 
+  /**
+   * **Hand one paid event to the meter, or say why it could not be.**
+   *
+   * The `null` case is the one worth having a function for. It means an event
+   * that certainly cost money arrived in a shape this tab could not price —
+   * `response.done` without its modality split (openai-agents-js#538), or a
+   * transcription whose usage came as tokens rather than seconds. Reporting it
+   * with zeros in the gaps would put a real cost in the ledger as approximately
+   * free, so nothing is sent; the count and the console line are what stop that
+   * from being invisible. ./meter.ts § `responseReport`.
+   */
+  const meterEvent = useCallback((report: ReturnType<typeof responseReport>) => {
+    const m = meter.current;
+    if (!m) return;
+    if (report) {
+      m.report(report);
+      return;
+    }
+    m.couldNotRead();
+    console.error(
+      "[live-meter] a paid event arrived without the numbers needed to price it; this session's cost is understated",
+    );
+  }, []);
+
   const onEvent = useCallback(
     (raw: MessageEvent<string>) => {
       let e: Record<string, unknown>;
@@ -643,6 +706,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          transcript worth showing — the deltas on this one are the transcriber's
          partial guesses and they rewrite themselves. */
       if (type === "conversation.item.input_audio_transcription.completed") {
+        /* **And it is also a bill.** `gpt-live-transcribe` is a second model on
+           a second rate card, billed per audio minute, and this event is the
+           only place its usage appears — a meter that watched `response.done`
+           alone would price half of live conversation at nothing.
+           `startedAt` is null because there is no matching start event: the
+           transcription of a sentence arrives long after the sentence, and the
+           server's `duration_ms` is nullable for exactly this. */
+        meterEvent(transcriptionReport(e, { startedAt: null, finishedAt: new Date().toISOString() }));
         put(String(e.item_id ?? ""), "reader", String(e.transcript ?? "").trim(), "set", true);
         return;
       }
@@ -706,6 +777,17 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         return;
       }
 
+      /* **When this turn began.** The only start time that exists — see
+         `responseStarts`. Kept whatever else this event is, because a turn that
+         ends in a function call is billed exactly like one that ends in
+         speech. */
+      if (type === "response.created") {
+        const id = (e.response as { id?: unknown } | undefined)?.id;
+        if (typeof id === "string" && id !== "") {
+          responseStarts.current.set(id, new Date().toISOString());
+        }
+      }
+
       /* **`response.done` also carries the function call**, as a complete item
          in `response.output`. The streaming event above has fired for every
          call observed so far, so this is a safety net rather than the path —
@@ -723,6 +805,18 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          "have we started this one?" at all. */
       if (type === "response.done") {
         setSpeaking(false);
+        /* **The usage is on this event and nowhere else, and until Stage 2B it
+           was read for its function calls and thrown away.** Every turn — a
+           spoken answer, a cancelled one the reader talked over, a
+           tool-calling one — carries what it cost, and `response.done` is the
+           only place OpenAI says so. docs/project/live-conversation.md § The
+           meter. */
+        const id = (e.response as { id?: unknown } | undefined)?.id;
+        const startedAt =
+          typeof id === "string" ? (responseStarts.current.get(id) ?? null) : null;
+        if (typeof id === "string") responseStarts.current.delete(id);
+        meterEvent(responseReport(e, { startedAt, finishedAt: new Date().toISOString() }));
+
         const output = (e.response as { output?: unknown[] } | undefined)?.output ?? [];
         for (const item of output) {
           const it = item as { type?: string; call_id?: string; name?: string; arguments?: string };
@@ -731,7 +825,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       }
     },
-    [answerTool, put, commit],
+    [answerTool, put, commit, meterEvent],
   );
 
   /**
@@ -852,6 +946,20 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (audio.current) {
         audio.current.srcObject = null;
         audio.current = null;
+      }
+
+      /* **The last thing the ledger hears from this tab.** After the channel is
+         closed, so nothing else can arrive to be reported, and **not awaited**:
+         `stop` is awaited by Send before it starts a typed turn, and making the
+         reader wait on an accounting round trip would spend the one thing they
+         notice on the one thing they do not. Anything still queued gets a final
+         keepalive attempt inside `flush`, which is a hint and not the path —
+         every turn was posted as it happened. */
+      const ending = meter.current;
+      meter.current = null;
+      if (ending) {
+        ending.end(endedBecause.current);
+        void ending.flush();
       }
 
       setSpeaking(false);
@@ -975,6 +1083,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       setThreadId(opts.threadId);
       began.current = Date.now();
       lastHeard.current = Date.now();
+      /* **A fresh meter per session, always**, and it is created below rather
+         than here because it needs the session id off the ticket. The starts
+         are keyed on response ids, which belong to one connection, so a carried
+         map would only ever be a slow leak of times nothing will ask for. */
+      meter.current = null;
+      responseStarts.current.clear();
+      endedBecause.current = "reader";
 
       /**
        * **This session's number, and the check that goes after every `await`.**
@@ -991,6 +1106,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       let track: MediaStreamTrack | null = null;
       let channel: RTCDataChannel | null = null;
       let held: MicClaim | null = null;
+      /** This attempt's meter, so `abandon` can clear it only if it is still ours. */
+      let installedMeter: LiveMeter | null = null;
       /**
        * **Every shared ref is cleared on identity, and nothing else is touched.**
        *
@@ -1013,6 +1130,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (pc.current === conn) pc.current = null;
         if (dc.current === channel) dc.current = null;
         if (micTrack.current === track) micTrack.current = null;
+        /* On identity, like everything else here. A session abandoned between
+           the ticket and the connection has a journal row and nothing to report
+           against it — which is exactly the "issued, never connected" row the
+           server keeps that fact for. */
+        if (installedMeter && meter.current === installedMeter) meter.current = null;
         if (held && claim.current === held) {
           releaseMicrophone(held);
           releasedResolve.current?.();
@@ -1044,16 +1166,31 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           if (stale()) return abandon();
           setPlacement(where);
 
-          const ticket = await (wired.current.wiring ?? apiWiring).ticket(
-            slug,
-            opts.threadId,
-            where.placement,
-          );
+          const wiring = wired.current.wiring ?? apiWiring;
+          const ticket = await wiring.ticket(slug, opts.threadId, where.placement);
           /* **The tail travels with the history it belongs to**, and the first
              exchange claims exactly this. Read separately they would be a claim
              about a conversation that never existed. */
           if (stale()) return abandon();
           tail.current = ticket.tailId;
+          /* **The meter, or a sentence saying there will not be one** — and
+             after the staleness check, with everything else that writes a
+             shared ref. An abandoned attempt that installed its own meter would
+             leave the running session reporting to a journal row it does not
+             own, which is the class of bug `abandon` exists to prevent.
+
+             The session id is our own journal row, minted before the token was
+             released, and every report is addressed to it. A ticket without one
+             comes from the preview page's spike server, which writes no row, so
+             posting would be reporting spend against a session nobody owns.
+             Said out loud because the alternative is a feature that quietly
+             stops being metered. */
+          if (ticket.sessionId) {
+            installedMeter = new LiveMeter({ sessionId: ticket.sessionId, transport: wiring });
+            meter.current = installedMeter;
+          } else {
+            console.error("[live-meter] this session has no journal row, so its cost is not measured");
+          }
 
           /* Two: the peer connection, with the data channel created BEFORE the
              offer. A channel added afterwards is not in the SDP, so it never
@@ -1070,6 +1207,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           conn.addEventListener("connectionstatechange", () => {
             const state = conn?.connectionState;
             if (state === "failed" || state === "closed") {
+              endedBecause.current = "connection-lost";
               if (!stale()) void stopRef.current();
             }
           });
@@ -1087,6 +1225,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           /* The far end hung up. Without this the page stays `live`, holding
              the microphone, with nothing arriving and nothing saying why. */
           channel.addEventListener("close", () => {
+            endedBecause.current = "channel-closed";
             if (!stale() && !closing.current) void stopRef.current();
           });
 
@@ -1109,6 +1248,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
               setError(
                 "This conversation changed while the session was starting. Try Live again.",
               );
+              endedBecause.current = "thread-moved";
               void stopRef.current();
               return;
             }
@@ -1140,6 +1280,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             if (seeding.current.done) return;
             setError("The live session did not finish starting. Try again.");
             failed.current = true;
+            endedBecause.current = "seed-timeout";
             void stopRef.current();
           }, SEED_TIMEOUT_MS);
 
@@ -1147,6 +1288,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              later assignment to the mutable local. */
           const opened = channel;
           opened.addEventListener("open", () => {
+            /* **A minted token is not a conversation**, and this is the event
+               that tells the two apart. A reader can press Live and change
+               their mind, and a denominator built on issued sessions would
+               understate what a real conversation costs by however many of
+               those there are, with nothing looking wrong. src/routes.ts §
+               `liveConnected`. */
+            meter.current?.connected();
             seeding.current = {
               expected: ticket.seed.length,
               ids: new Set(),
@@ -1208,6 +1356,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
                  written down. See `stop` below. Nothing here has to wait for
                  that — the microphone is already theirs. */
               stop: () => {
+                endedBecause.current = "microphone-taken";
                 void stopRef.current();
               },
               released: new Promise<void>((res) => {
@@ -1291,6 +1440,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              GPT Sol, second review. */
           if (stale()) return abandon();
           failed.current = true;
+          endedBecause.current = "failed-to-start";
           /* **Awaited, and the report comes after.** `stop` is asynchronous now
              — it holds the channel open for a moment so the last words can
              land — so reporting first and tearing down afterwards would have
@@ -1362,11 +1512,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (midSentence.current) return;
       if (now - lastHeard.current > IDLE_CAP_MS) {
         setError("The live conversation ended after a few minutes of quiet. Press Live to carry on.");
+        endedBecause.current = "idle-cap";
         void stopRef.current();
         return;
       }
       if (now - began.current > SESSION_CAP_MS) {
         setError("The live conversation has been going a while and has ended. Press Live to carry on.");
+        endedBecause.current = "session-cap";
         void stopRef.current();
       }
     }, 10_000);
@@ -1380,7 +1532,25 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        having a conversation, not abandoning one, and hanging up on them would
        be the rudest possible reading of "hidden". */
     const leaving = () => {
-      if (pc.current || dc.current) void stopRef.current();
+      if (!(pc.current || dc.current)) return;
+      endedBecause.current = "pagehide";
+      /* **The hint, and it has to come first.** `stop` below is a chain of
+         awaits — a settle window, a grace window, the write queue — and a page
+         that is unloading will not run them, so anything the meter is still
+         holding would go with the tab. This flushes it now, with `keepalive`,
+         which is the one thing a browser will carry across an unload.
+
+         It is a hint and never the path: the budget is small, there is no
+         feedback about whether any of it arrived, and this is precisely the
+         accepted loss — the last turn can vanish on a crash or an instant
+         close. Every earlier turn was posted as it happened.
+         ./meter.ts § `LiveMeter`. */
+      const ending = meter.current;
+      if (ending) {
+        ending.end("pagehide");
+        void ending.flush();
+      }
+      void stopRef.current();
     };
     window.addEventListener("pagehide", leaving);
     return () => {
@@ -1392,6 +1562,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          microphone held by a session with no owner and no control on the page
          that could close it. GPT Sol, reviewing the built code. */
       epoch.current += 1;
+      endedBecause.current = "unmounted";
       if (pc.current || dc.current || claim.current) void stopRef.current();
     };
   }, []);

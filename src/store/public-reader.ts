@@ -50,20 +50,29 @@ import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
-import type { PublicArticle, PublicBlock, PublicMetadata } from "../public-types.js";
+import type { PublicArticle, PublicBlock } from "../public-types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isSlug } from "../ingest.js";
 import { publicSlug } from "./public-slug.js";
-import { publicArticle, publicMetadata } from "../public/dto.js";
+import { publicArticle } from "../public/dto.js";
 
 /**
  * What a public reader can be asked for.
  *
- * **Two methods, because two endpoints landed.** Sol's answer 5 sketched six —
- * tweets, glossary and ideas as well — and those are slice 1b of
- * docs/plans/260827ai-public-read-only-access.md, along with their DTOs and their tests.
- * Declaring four methods nothing implements would be four shapes nobody has
- * checked against a real row, which is the sort of thing that gets believed.
+ * **Two methods, and only one of them is a route.** Sol's answer 5 sketched six
+ * — tweets, glossary and ideas as well — and those became slice 1b of
+ * docs/plans/260827ai-public-read-only-access.md, which carried them on the
+ * article payload rather than as endpoints of their own. Declaring methods
+ * nothing implements would be shapes nobody has checked against a real row,
+ * which is the sort of thing that gets believed.
+ *
+ * A third, `loadMetadata`, was deleted on 2026-09-02 along with its route, its
+ * DTO and its projection: the client had stopped calling it in slice 1b, and
+ * the one thing left calling it was a deployment checker.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster B.
+ *
+ * `loadHead` is not a route either — the stage 2 page function calls it
+ * directly — which is why the interface is wider than the inventory.
  */
 /**
  * **What a document head is built from — server-side only, never a wire type.**
@@ -103,7 +112,6 @@ export interface PublicHead {
 
 export interface PublicArticleReader {
   loadArticle(slug: string): Promise<PublicArticle>;
-  loadMetadata(slug: string): Promise<PublicMetadata>;
   loadHead(slug: string): Promise<PublicHead>;
 }
 
@@ -167,8 +175,14 @@ async function scrubbed<T>(what: string, run: () => Promise<T>): Promise<T> {
  * `metaFrom` on the owner side is `title ?? headingTitle ?? slug`, and a public
  * page showing a slug where the owner sees a heading would be a visible
  * divergence for no reason. The article read has the blocks in memory and uses
- * `headingTitleOf`; the metadata read does not, so it asks Postgres for the one
+ * `headingTitleOf`; the head read does not, so it asks Postgres for the one
  * row.
+ *
+ * **Two chains that arrive at the same value separately, and that is worth
+ * keeping.** `scripts/check-public-shell.ts` compares a deployed `<title>`
+ * against the article route's `meta.title` precisely because one side of that
+ * comparison is this SQL and the other is `headingTitleOf(blocks)`; a single
+ * shared expression would have made the check agree with itself.
  *
  * Guarded by a `case`, so it runs for almost no articles: consulted only when
  * nothing stored a title. Without the guard, an article with no `<h1>` at all
@@ -221,13 +235,18 @@ const PUBLIC_PROJECTIONS = {
     finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
-    /* **The image manifest, and this is the half of the feature that is easy to
-       leave out.** Signed-out and non-owning readers cannot reach an
-       authenticated route at all, so an owner-only projection would leave every
-       public article hot-linking to the publisher — the privacy leak this whole
-       feature exists to close, happening on exactly the page we invite
-       strangers to, while looking finished from the owner's chair.
-       docs/plans/260829b-hosting-the-articles-images.md#delivery. */
+    /* **The image manifest, and it is not yet doing anything.** This comment
+       used to claim the projection was what stopped a public article
+       hot-linking to the publisher. It is not: nothing on the client reads
+       `assets`, there is no public asset route, and every image and lazy embed
+       on a shared page is still fetched from wherever it was published — the
+       audit's finding S3, proved by absence on 2026-09-02 and accepted by Greg.
+       What the projection does is put the manifest *within reach* of the
+       delivery half, which is Cluster D:
+       docs/plans/260902j-public-read-only-access-audit-and-improvements.md,
+       stages C, D and E of
+       docs/plans/260829b-hosting-the-articles-images.md#delivery. Fix this comment when
+       that lands, because then it becomes true. */
     assets: articleRevisions.assets,
     /**
      * **The artefacts slice 1b carries, off the same row.**
@@ -258,43 +277,6 @@ const PUBLIC_PROJECTIONS = {
     tweets: articleRevisions.tweets,
   },
   /**
-   * **A handful of booleans and a title, and not one document.**
-   *
-   * `is not null` in SQL rather than reading the JSONB and comparing it here.
-   * The metadata page asks whether a glossary exists, not how many terms are in
-   * it, and the owner's shelf spent two days dragging every artefact across the
-   * wire to answer exactly that question — docs/plans/260828c-library-read-latency.md.
-   * This one starts on the right side of that.
-   */
-  metadata: {
-    id: articleRevisions.id,
-    title: articleRevisions.title,
-    /**
-     * **In the projection, so that the one query helper can serve both reads.**
-     *
-     * It is not a column of `article_revisions`, and on the owner's side that
-     * would matter — `REVISION_READ_POLICY` in [pg.ts](pg.ts) is keyed by that
-     * table's columns and asserted exhaustive against it, so `listArticles`
-     * has to carry its own heading-title expression *beside* the projection
-     * rather than inside it. There is no such policy here, so there is nothing
-     * to make an exception in, and putting it here is what lets `loadMetadata`
-     * go through `publicCurrentRevisionQuery` like the article read does.
-     *
-     * That mattered more than it looks. Until 2026-08-28 `loadMetadata` built
-     * its own inline `select` and the SQL test exercised the helper — so the
-     * test passed against a query production never ran, and deleting the real
-     * `where publicSlug(slug)` left the whole suite green while a private
-     * article's metadata was reachable at a public URL. GPT Sol's finding 3.
-     */
-    headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
-    hasTree: sql<boolean>`${articleRevisions.tree} is not null`.as("has_tree"),
-    hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
-    hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
-    hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
-    hasIdeas: sql<boolean>`${articleRevisions.ideas} is not null`.as("has_ideas"),
-    hasQuotes: sql<boolean>`${articleRevisions.quotes} is not null`.as("has_quotes"),
-  },
-  /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
    *
    * Stage 2 serves `/read/:slug` from a function that fills in a `<title>`, a
@@ -305,18 +287,21 @@ const PUBLIC_PROJECTIONS = {
    * projection because the blocks are not in it.
    * docs/plans/260827ai-public-read-only-access.md § Stage 2.
    *
-   * Six values. `title` and `headingTitle` are the same pair the metadata read
-   * uses, for the same reason — an article whose `<h1>` is its only title still
-   * has one. `rootGist` is the description, and it is that column rather than
+   * Six values. `title` and `headingTitle` are a pair for the reason
+   * `metaFrom` gives — an article whose `<h1>` is its only title still has one.
+   * `rootGist` is the description, and it is that column rather than
    * `excerpt` because `deriveLibraryScalars()` already encodes the fallback we
    * want (`root?.gist ?? root?.summary ?? excerpt ?? null`) and its comment says
    * that is what a card wants; a preview card is a card.
    *
-   * **`hasBlocks` is not redundant with `hasTree`.** `loadArticle` refuses a
-   * tree with no blocks and `loadMetadata` only checks the tree, so a revision
-   * can pass the metadata bar and still be a page React cannot draw. A head
-   * that answered 200 there would put a title and a description on a link to a
-   * blank screen — which is worse than no preview, because it is a claim.
+   * **`hasBlocks` is not redundant with `hasTree`.** A revision can have a tree
+   * and no blocks, which is a page React cannot draw; a head that answered 200
+   * there would put a title and a description on a link to a blank screen —
+   * worse than no preview, because it is a claim. `loadArticle` refuses that
+   * revision by counting the blocks it fetched; this read has no blocks to
+   * count, so it asks in SQL. Until 2026-09-02 there was a third read that
+   * checked only the tree and served it, and the two bars disagreeing was
+   * written down rather than fixed; the disagreement went with the route.
    *
    * `finalUrl` never reaches the wire as-is here either: for a head it is the
    * *candidate* canonical, and `safePublicCanonical` in src/urls.ts decides
@@ -364,6 +349,14 @@ export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
  * is a public query that one day does `select({ article: articles })` and picks
  * up `owner_id`, `title_override` and `purpose` in one careless line. Only
  * `slug` comes off that table, and it is the one the caller already knows.
+ *
+ * **Every public read goes through here, and that is the rule rather than a
+ * convenience.** A read that builds its own `select` gets its predicate from
+ * itself, and the SQL test goes on reading this helper — which is exactly what
+ * happened until 2026-08-28: one read had an inline `select` that said the same
+ * thing, so the test passed against a query production never ran, and deleting
+ * the real `where publicSlug(slug)` left the whole suite green while a private
+ * article was reachable at a public URL. GPT Sol's finding 3.
  */
 export function publicCurrentRevisionQuery<K extends PublicRead>(
   db: Pick<ReturnType<typeof getDb>, "select">,
@@ -501,46 +494,18 @@ export const pgPublicReader: PublicArticleReader = {
     });
   },
 
-  async loadMetadata(slug: string): Promise<PublicMetadata> {
-    requireSlug(slug);
-    return scrubbed("metadata", async () => {
-      const db = getDb();
-      /* **Through the same helper the article read uses**, which is the whole
-         of GPT Sol's finding 3: this was an inline `select` that happened to say
-         the same thing, so the test that reads the generated SQL was reading a
-         query nothing ran. One `where publicSlug(slug)` in this file, exercised
-         by tests/public-reads.test.ts, reached by both reads. */
-      const [found] = await publicCurrentRevisionQuery(db, slug, "metadata");
-      if (!found) throw notShared(slug);
-      /* Same bar as the article read, and it has to be the same: a metadata page
-         for an article whose own page is a 404 is a page about nothing. */
-      if (!found.revision.hasTree) throw notShared(slug);
-
-      return publicMetadata({
-        slug: found.slug,
-        title: found.revision.title,
-        headingTitle: found.revision.headingTitle,
-        available: {
-          arc: found.revision.hasArc,
-          tweets: found.revision.hasTweets,
-          glossary: found.revision.hasGlossary,
-          ideas: found.revision.hasIdeas,
-          quotes: found.revision.hasQuotes,
-        },
-      });
-    });
-  },
-
   /**
    * The six values a `<head>` is filled in from, and the **two** bars a slug
    * has to clear to get them.
    *
-   * `hasTree` is the bar the other two reads use. `hasBlocks` is the one this
-   * read adds, and it is not belt-and-braces: `loadArticle` refuses a tree with
-   * no blocks while `loadMetadata` only checks the tree, so a revision exists
-   * that passes the metadata bar and is a page React cannot draw. Answering 200
-   * there would put a title and a description on a link to a blank screen —
-   * worse than no preview, because a preview is a claim. GPT Sol, 2026-08-29.
+   * `hasTree` is the bar the article read uses too. `hasBlocks` is the one this
+   * read adds in SQL, and it is not belt-and-braces: a revision with a tree and
+   * no blocks is a page React cannot draw, and answering 200 here would put a
+   * title and a description on a link to a blank screen — worse than no
+   * preview, because a preview is a claim. GPT Sol, 2026-08-29. `loadArticle`
+   * clears the same bar a different way, by refusing the blocks it fetched when
+   * there are none; this read never fetches them, which is the point of the
+   * projection, so it has to ask.
    *
    * **The same `notShared` for all of it**, so a private slug, an absent one and
    * a broken revision are one answer here exactly as they are everywhere else in

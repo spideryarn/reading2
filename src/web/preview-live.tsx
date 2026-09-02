@@ -66,7 +66,19 @@ const spikeWiring: LiveWiring = {
     /* No history and no tail: this page has no conversation behind it, so the
        seeding barrier lifts immediately. That is a real difference from the app
        and is why the barrier has its own tests rather than being checked here. */
-    return { token: body.token, expiresAt: 0, model: body.model ?? "", seed: [], tailId: null };
+    return {
+      token: body.token,
+      expiresAt: 0,
+      model: body.model ?? "",
+      seed: [],
+      tailId: null,
+      /* **No journal row, so nothing to report against.** The spike server
+         mints a token and writes nothing to `realtime_sessions` — it is not
+         behind the auth gate and has no owner to attribute spend to — so a
+         session opened from this page is honestly unmetered rather than metered
+         at an id nobody owns. The hook says so in the console once. */
+      sessionId: null,
+    };
   },
   async runTool(slug, name, args) {
     const res = await fetch(`${SPIKE}/tool`, {
@@ -78,6 +90,18 @@ const spikeWiring: LiveWiring = {
     if (!res.ok) throw new Error(out.label ?? `tool failed (${res.status})`);
     return { content: out.content ?? "", label: out.label ?? name, detail: out.detail ?? "" };
   },
+
+  /* **The three accounting calls, refused rather than left off.** They are
+     required on `LiveWiring` on purpose: an optional method is one a new wiring
+     forgets, and the failure would be a session that silently meters nothing.
+     Here the honest answer is that there is nothing to post to, and `refused`
+     is the outcome that tells the meter's queue to stop rather than retry. The
+     hook never builds a meter on this page anyway, because the ticket above
+     carries no session id — these exist so that if it ever did, it would fail
+     loudly rather than post to the app's API from the spike page. */
+  liveConnected: async () => "refused",
+  liveUsage: async () => "refused",
+  liveClose: async () => "refused",
 };
 
 /** A conversation id this page invents and nothing ever stores. */

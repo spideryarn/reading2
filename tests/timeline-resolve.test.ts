@@ -282,8 +282,6 @@ describe("the panel, rendered", () => {
       error: null,
       job: null,
       failed: null,
-      /* Stage 6's blocking job — src/web/useStepJob.ts. Nothing here is refused. */
-      blocking: null,
       /* The tab can reach the server — src/job-state.ts § `driverStalled`. */
       stalled: false,
       find: async () => {},

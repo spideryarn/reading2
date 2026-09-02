@@ -19,6 +19,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isSpideryarnId } from "../src/ids.js";
+import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
@@ -33,6 +34,35 @@ vi.mock("../src/web/lib/api.js", () => ({
 
 vi.mock("../src/web/router.js", () => ({
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
+}));
+
+/**
+ * **The microphone, as two booleans and a spy.**
+ *
+ * The real hook opens a device and reads a Floating UI tooltip; neither is what
+ * this file is about. What is: that Send refuses while either boolean is true,
+ * and that closing the dialog calls `toggle` — the guards GPT Sol's review of
+ * the plan asked for, both of which pass by accident if the mock is a constant.
+ */
+const mic = { supported: true, armed: false, transcribing: false };
+const micToggles: string[] = [];
+vi.mock("../src/web/useDictationField.js", () => ({
+  useDictationField: () => ({
+    dictation: {
+      ...mic,
+      toggle: () => {
+        micToggles.push("hook");
+      },
+    },
+    readOnly: mic.transcribing,
+    toggle: () => {
+      micToggles.push("field");
+    },
+  }),
+}));
+vi.mock("../src/web/DictationStrip.js", () => ({
+  DictationButton: () => createElement("button", { type: "button" }, "mic"),
+  DictationStrip: () => null,
 }));
 
 /* Re-encoding an image needs a canvas, which jsdom does not have. What matters
@@ -110,11 +140,9 @@ function firstBox(): HTMLTextAreaElement {
   return box;
 }
 
-function type(label: string, text: string) {
-  const fields = [...host.querySelectorAll<HTMLLabelElement>("label.fb-field")];
-  const field = fields.find((one) => one.textContent?.startsWith(label));
-  if (!field) throw new Error(`no field labelled ${label}`);
-  const box = field.querySelector("textarea");
+/** Type into the one box. There were three, each with its own label. */
+function type(text: string) {
+  const box = host.querySelector<HTMLTextAreaElement>("textarea.fb-body");
   if (!box) throw new Error("no textarea");
   act(() => {
     /* React tracks the last value it wrote on the node, so setting `.value`
@@ -154,18 +182,20 @@ afterEach(() => {
 });
 
 describe("the feedback dialog", () => {
-  it("posts the three answers, a minted report id, and no diagnostics", async () => {
+  it("posts one body, no kind, a minted report id, and no diagnostics", async () => {
     mount();
-    type("Steps to reproduce", "Pressed the button.");
+    type("Pressed the button.");
     send();
     await act(async () => {});
 
     expect(posts).toHaveLength(1);
     expect(posts[0]?.input).toBe("/api/feedback");
     const sent = body();
-    expect(sent.steps).toBe("Pressed the button.");
-    expect(sent.expected).toBeNull();
-    expect(sent.actual).toBeNull();
+    expect(sent.body).toBe("Pressed the button.");
+    /* **Null, not "problem".** Greg: "don't default to Problem. Default to
+       null/unknown" — so a reader who says nothing about the kind has said
+       nothing, and this is what proves the toggle starts unpressed. */
+    expect(sent.kind).toBeNull();
     expect(sent.consented).toBe(false);
     expect(sent.routeKind).toBe("read");
     expect(sent.slug).toBe("a-piece");
@@ -175,7 +205,7 @@ describe("the feedback dialog", () => {
     expect(sent.diagnostics).toBeNull();
   });
 
-  it("refuses to send when all three boxes are blank", () => {
+  it("refuses to send when the box is blank", () => {
     mount();
     const button = host.querySelector<HTMLButtonElement>("button.fb-send");
     expect(button?.disabled).toBe(true);
@@ -185,7 +215,7 @@ describe("the feedback dialog", () => {
 
   it("collects diagnostics only once the box is ticked", async () => {
     mount();
-    type("Steps to reproduce", "Pressed the button.");
+    type("Pressed the button.");
     const box = host.querySelector<HTMLInputElement>(".fb-consent input");
     if (!box) throw new Error("no tick-box");
     expect(box.checked).toBe(false);
@@ -202,7 +232,7 @@ describe("the feedback dialog", () => {
 
   it("files one report for two clicks in the same frame", async () => {
     mount();
-    type("Steps to reproduce", "Pressed the button twice.");
+    type("Pressed the button twice.");
     /* Both clicks inside one `act`, so neither has seen the other's render.
        `disabled` alone does not survive this — the ref latch does. */
     const button = host.querySelector<HTMLButtonElement>("button.fb-send");
@@ -216,7 +246,7 @@ describe("the feedback dialog", () => {
 
   it("keeps the reader's words and the same id when the send fails", async () => {
     mount();
-    type("Steps to reproduce", "It broke.");
+    type("It broke.");
     answer = async () => {
       throw new Error("offline");
     };
@@ -244,7 +274,7 @@ describe("the feedback dialog", () => {
 
   it("keeps the draft when the reader shuts it and opens it again", () => {
     mount();
-    type("Steps to reproduce", "Half a sentence so f");
+    type("Half a sentence so f");
     /* Escape, the backdrop, Cancel and the × all reach the same place: `open`
        goes false. Until 2026-09-01 reopening cleared every box, so a reader who
        shut it by accident lost the only copy of what they had written. */
@@ -254,7 +284,7 @@ describe("the feedback dialog", () => {
 
   it("keeps the same report id across a close and reopen, so a retry is still a retry", async () => {
     mount();
-    type("Steps to reproduce", "It broke.");
+    type("It broke.");
     answer = async () => {
       throw new Error("offline");
     };
@@ -274,7 +304,7 @@ describe("the feedback dialog", () => {
 
   it("mints a fresh id for the next report, but only after one is filed", async () => {
     mount();
-    type("Steps to reproduce", "The first thing.");
+    type("The first thing.");
     send();
     await act(async () => {});
     expect(host.querySelector(".fb-done")).not.toBeNull();
@@ -286,7 +316,7 @@ describe("the feedback dialog", () => {
     show(true);
 
     expect(firstBox().value).toBe("");
-    type("Steps to reproduce", "A different thing.");
+    type("A different thing.");
     send();
     await act(async () => {});
     expect(idOf(1)).not.toBe(idOf(0));
@@ -310,7 +340,7 @@ describe("the feedback dialog", () => {
      * throws those words away.
      */
     mount();
-    type("Steps to reproduce", "The abandoned one.");
+    type("The abandoned one.");
     let settle: ((res: Response) => void) | null = null;
     answer = () => new Promise<Response>((resolve) => (settle = resolve));
     send();
@@ -327,7 +357,7 @@ describe("the feedback dialog", () => {
     show(true);
 
     // A third report, half typed, not sent.
-    type("Steps to reproduce", "A completely different bug.");
+    type("A completely different bug.");
     expect(host.querySelector(".fb-done")).toBeNull();
 
     // Now the abandoned request finally answers.
@@ -348,7 +378,7 @@ describe("the feedback dialog", () => {
      * GPT Sol, 2026-09-01.
      */
     mount();
-    type("Steps to reproduce", "Look at the picture.");
+    type("Look at the picture.");
 
     const input = host.querySelector<HTMLInputElement>('.fb-shot-pick input[type="file"]');
     if (!input) throw new Error("no file input");
@@ -372,9 +402,125 @@ describe("the feedback dialog", () => {
     expect(body().screenshot).toBe("aGVsbG8=");
   });
 
+  it("sends the kind the reader picked, and lets them un-pick it", async () => {
+    mount();
+    type("The margin could hold the gist.");
+    const [problem, suggestion] = [...host.querySelectorAll<HTMLButtonElement>(".fb-kind-button")];
+    if (!problem || !suggestion) throw new Error("no kind buttons");
+    expect(problem.getAttribute("aria-pressed")).toBe("false");
+
+    act(() => suggestion.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(suggestion.getAttribute("aria-pressed")).toBe("true");
+
+    /* **Pressing the pressed one clears it**, which is the whole reason these
+       are `aria-pressed` buttons rather than a radio group: a reader who picks
+       the wrong one can put it back. GPT Sol, 2026-09-02. Before the send rather
+       than after, because a filed report replaces the form with the thank-you
+       and these buttons are no longer in the document. */
+    act(() => suggestion.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(suggestion.getAttribute("aria-pressed")).toBe("false");
+
+    act(() => suggestion.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    send();
+    await act(async () => {});
+    expect(body().kind).toBe("suggestion");
+  });
+
+  it("will not send while the microphone is still listening", async () => {
+    /* **`armed`, not `transcribing`.** `readOnly` is only the two seconds after
+       the reader presses stop; a guard on that alone lets Cmd+Enter file the
+       rough live guesses while they are still talking — or nothing at all on a
+       browser with no live recogniser. Two positive failures rather than one,
+       because the second passes while the first bug is still there. */
+    mic.armed = true;
+    mount();
+    type("Half a sentence, still speaking");
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+    mic.armed = false;
+  });
+
+  it("will not send while the transcript is still on its way", async () => {
+    mic.transcribing = true;
+    mount();
+    type("Said out loud, being written down");
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+    mic.transcribing = false;
+  });
+
+  it("stops the microphone when the dialog is shut", () => {
+    /* This component is mounted for the life of the page — FeedbackButton
+       renders it open or shut — so nothing unmounts on Escape and
+       `useDictation`'s own cleanup never runs. Without the effect this pins, the
+       recorder goes on running behind a closed dialog. GPT Sol, 2026-09-02. */
+    mic.armed = true;
+    mount();
+    micToggles.length = 0;
+    show(false);
+    expect(micToggles).toEqual(["hook"]);
+    mic.armed = false;
+  });
+
+  it("will not send a report past the character limit", async () => {
+    /* The counter under the box was a statement and not a rule: Send stayed
+       enabled at one character over, so the reader was told the limit, allowed
+       to press the button, and answered with a server-side `[fb-long]`. Both
+       paths, because `disabled` does not stop the keyboard chord. GPT Sol's code
+       review, 2026-09-02. */
+    mount();
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS));
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
+  });
+
+  it("lets the newest attempt have the last word, whatever order they settle in", async () => {
+    /**
+     * **Two requests, one report id.** The id survives a close and reopen on
+     * purpose, and reopening releases the send latch — so a reader who gives up
+     * on a slow send, comes back and presses Send again has two in flight, and
+     * they can answer in either order. Guarding on the id alone let the *older*
+     * one write to the screen: here it fails after the retry has succeeded, and
+     * without an attempt counter it paints the failure panel over "Thank you".
+     * GPT Sol's code review, 2026-09-02.
+     */
+    mount();
+    type("Said once, sent twice.");
+    let settleFirst: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settleFirst = resolve));
+    send();
+    await act(async () => {});
+
+    /* Give up on it and try again — same report, same id, second attempt. */
+    reopen();
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(host.querySelector(".fb-done"), "the retry should have been filed").not.toBeNull();
+
+    /* Only now does the first attempt come back, and it failed. */
+    await act(async () => {
+      settleFirst?.(new Response("nope", { status: 500 }));
+    });
+    expect(
+      host.querySelector(".fb-done"),
+      "an older attempt overwrote a newer success",
+    ).not.toBeNull();
+    expect(host.querySelector(".fb-failed")).toBeNull();
+  });
+
   it("says so when the browser refuses the clipboard", async () => {
     mount();
-    type("Steps to reproduce", "It broke.");
+    type("It broke.");
     answer = async () => {
       throw new Error("offline");
     };

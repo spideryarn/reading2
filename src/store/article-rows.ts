@@ -217,6 +217,26 @@ export const ARTICLE_TABLE_COVERAGE = {
         "merely absent — which is worse than saying nothing.",
     },
   },
+  realtime_sessions: {
+    rollback: {
+      exported: false,
+      why:
+        "The live-conversation journal — one row per issued session, and the parent " +
+        "the realtime `ai_calls` rows hang off. Accounting rather than article " +
+        "state, and it follows `ai_calls` straight above for the same reason: the " +
+        "filesystem store keeps it in data/_realtime-sessions.json, one file for " +
+        "the whole library, and an article's directory has nowhere to put it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The live-conversation journal. What the reader actually made in a spoken " +
+        "conversation is already in the bundle as chat rows (`withSpokenTurn` in " +
+        "src/chat.ts); this table is the accounting shadow of it — when a token was " +
+        "minted, when a channel opened, when it closed — which is our record of our " +
+        "own spending rather than anything of theirs.",
+    },
+  },
   article_visibility_changes: {
     rollback: {
       exported: false,

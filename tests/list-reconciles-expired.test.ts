@@ -134,7 +134,7 @@ function aJob(owner: OwnerId): Job {
 /** Queued, claimed, and then the claimant walks away and its lease runs out. */
 async function abandoned(owner: OwnerId): Promise<Job> {
   const job = aJob(owner);
-  await fsJobStore.enqueueOrGet(job, `k-${job.id}`);
+  await fsJobStore.enqueueOrGet(job, { workKey: `k-${job.id}`, reservesName: false });
   const claimed = await fsJobStore.claim(job.id, owner, mintAttempt(), LEASE, CAP);
   expect(claimed.kind).toBe("claimed");
   expireLeaseForTests(job.id);
@@ -200,7 +200,7 @@ describe("listing your jobs", () => {
    */
   it("reads the list once when there was nothing to settle", async () => {
     const quiet = aJob(ALICE);
-    await fsJobStore.enqueueOrGet(quiet, `k-${quiet.id}`);
+    await fsJobStore.enqueueOrGet(quiet, { workKey: `k-${quiet.id}`, reservesName: false });
     const reads = vi.spyOn(fsJobStore, "list");
     try {
       await as(ALICE, () => listJobs());
@@ -248,7 +248,7 @@ describe("listing your jobs", () => {
    */
   it("asks the store nothing extra when nothing is running", async () => {
     const idle = aJob(ALICE);
-    await fsJobStore.enqueueOrGet(idle, `k-${idle.id}`);
+    await fsJobStore.enqueueOrGet(idle, { workKey: `k-${idle.id}`, reservesName: false });
     const sweep = vi.spyOn(fsJobStore, "settleExpired");
 
     const listed = await as(ALICE, () => listJobs());

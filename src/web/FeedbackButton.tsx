@@ -89,6 +89,22 @@ const ROUTE_KINDS: Record<ReturnType<typeof useRoute>["kind"], FeedbackRouteKind
   admin: "admin",
   login: "login",
   callback: "callback",
+  /* **The one page that files as `unknown`, deliberately and temporarily.**
+     Adding `"privacy"` to the vocabulary means widening the CHECK on
+     `feedback.route_kind`, and that migration was written and then held back
+     on 2026-09-02: the journal it would land in also carries another agent's
+     in-flight migration, so committing mine would publish a journal entry
+     whose `.sql` nobody else has. Greg's call — wait for theirs to land.
+
+     `unknown` is exactly what this costs, and the comment above says why it is
+     survivable: a report filed under the wrong label is recoverable, a report
+     refused by a constraint is not. What it loses is the ability to count bug
+     reports from the policy page, which is not a thing anybody wants to count.
+
+     **The follow-up is a one-line migration**: add `'privacy'` to
+     `FEEDBACK_ROUTE_KINDS` (src/types.ts), to the CHECK in src/db/schema.ts,
+     and change this line. docs/project/website-text.md § What is still open. */
+  privacy: "unknown",
 };
 
 export function FeedbackButton({ readerEmail }: Props) {
@@ -101,7 +117,7 @@ export function FeedbackButton({ readerEmail }: Props) {
         type="button"
         className="fb-button"
         onClick={() => setOpen(true)}
-        title="Report a problem with this page"
+        title="Send feedback about this page"
       >
         <MessageSquareWarning size={15} />
         {/* Given up below the narrow breakpoint, the way the wordmark gives up

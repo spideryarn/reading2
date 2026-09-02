@@ -63,15 +63,10 @@ export interface UseIdeas {
   /** Why the job this session started stopped, if it stopped badly. */
   failed: string | null;
   /**
-   * The job that **refused** this run — an ingest already holding the article.
-   * `StepJob.blocking` in src/web/useStepJob.ts carries the reasoning.
-   */
-  blocking: Job | null;
-  /**
-   * This tab can see the job on screen and cannot move it. Pass-through, like
-   * `blocking` above — `StepJob.stalled` in src/web/useStepJob.ts carries the
-   * reasoning, and src/job-state.ts § Transport health is not a job state
-   * carries why it is not on the record.
+   * This tab can see the job on screen and cannot move it. A pass-through:
+   * `StepJob.stalled` in src/web/useStepJob.ts carries the reasoning, and
+   * src/job-state.ts § Transport health is not a job state carries why it is
+   * not on the record.
    */
   stalled: boolean;
   /**
@@ -175,7 +170,6 @@ export function useIdeas(slug: string): UseIdeas {
     error,
     job: queue.job,
     failed: queue.failed,
-    blocking: queue.blocking,
     stalled: queue.stalled,
     find,
     cancel: queue.cancel,

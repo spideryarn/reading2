@@ -31,8 +31,9 @@ listed here; the names under each are files in `docs/project/`.
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
-  `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
-  `database.md` · `sql.md` (columns over JSON, keys over good intentions) ·
+  `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
+  `prompt-caching.md` · `database.md` ·
+  `sql.md` (columns over JSON, keys over good intentions) ·
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
@@ -52,14 +53,16 @@ listed here; the names under each are files in `docs/project/`.
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
-  `copy.md` (reader-facing failure messages)
+  `copy.md` (reader-facing failure messages) ·
+  `website-text.md` (the privacy policy, the landing page, the contact address)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
   <br>↳ `colour-scales.md` · `icons.md`
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
-  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners)
+  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
+  `billing.md` (what a slot is, and what stops a script taking twenty)
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
@@ -136,6 +139,8 @@ the other docs and to the code. Not descriptions of code, which the code already
 - **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
   anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
   after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
+  **Signposting is not a rule**, so adding a new doc's line under its entry point, or tweaking a
+  pointer's wording, needs no approval — just do it. Greg, 2026-09-02.
 - **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
   somewhere that shouted. Rename on sight and fix the links.
 - **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
@@ -327,7 +332,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   add the complexity or the optimisation later, once something shows it is needed. When a choice
   would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan
   and in chat — so Greg decides it rather than inherits it.
-  [vision.md § Simpler first](docs/project/vision.md#simpler-first).
+  [vision.md § Simpler first](docs/project/vision.md#simpler-first). **Ask the other way round
+  too:** when a small product tweak — dropping a case, changing a default — would take a lot of the
+  engineering out, ask Greg before you build the hard version. Often that's the route we'll prefer.
 - **Let the types catch it.** Make a wrong state something the compiler refuses, not something a
   test finds later: a discriminated union rather than a bag of optionals, a `never` check where a
   `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`

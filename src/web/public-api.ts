@@ -29,7 +29,7 @@
  *
  * See docs/plans/260827ai-public-read-only-access.md § The seam.
  */
-import type { PublicArticle, PublicMetadata } from "../public-types.js";
+import type { PublicArticle } from "../public-types.js";
 import { readJson } from "./lib/api.js";
 
 /**
@@ -105,11 +105,14 @@ export async function loadPublicArticle(slug: string): Promise<PublicRead<Public
   return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`);
 }
 
-/** `GET /api/public/metadata/:slug` — which artefacts this piece has, and nothing more. */
-export async function loadPublicMetadata(slug: string): Promise<PublicRead<PublicMetadata>> {
-  return read<PublicMetadata>(`/api/public/metadata/${encodeURIComponent(slug)}`);
-}
-
+/**
+ * The one loader above, and the shape of any that follow.
+ *
+ * Kept generic though there is a single caller since 2026-09-02, when
+ * `loadPublicMetadata` was deleted with its route: what it holds is the
+ * 404-is-an-answer rule, and that belongs to the namespace rather than to the
+ * article.
+ */
 async function read<T>(path: string): Promise<PublicRead<T>> {
   const res = await publicFetch(path);
   /* Read before the body, because `readJson` throws on a 404 and this is the
