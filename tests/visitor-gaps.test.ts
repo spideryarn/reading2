@@ -34,6 +34,7 @@
  * from each other rather than that any of them says a particular thing.
  */
 import { describe, expect, it } from "vitest";
+import { ownersOnly } from "../src/messages.js";
 import type { PublicArticle, PublicArtefacts } from "../src/public-types.js";
 import { artefactsIn, artefactsOf } from "../src/web/public-artefacts.js";
 import { MODES, type Mode } from "../src/web/params.js";
@@ -129,7 +130,7 @@ describe("what a visitor is told, mode by mode", () => {
    * could not know from a payload that carries no timeline either way.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "remember", "diagram", "timeline"] as const) {
+    for (const mode of ["chat", "search", "remember", "diagram", "timeline", "referee"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -137,6 +138,45 @@ describe("what a visitor is told, mode by mode", () => {
         });
       }
     }
+  });
+
+  /**
+   * **No live mode falls through, and the sentence is the proof.**
+   *
+   * `visitorGap`'s last line is fail-closed by design and stays: a mode added
+   * next month is owners-only until somebody says otherwise. But it hands
+   * `ownersOnly` the bare mode id, and that function's contract is a *product
+   * noun* — "capitalised, because it names a control the visitor just pressed"
+   * — so anything reaching it reads to a visitor as *"referee is for whoever
+   * added this article…"*, lower-case, in the band and in the dock tooltip.
+   * That is what `referee` did until 2026-09-02.
+   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
+   *
+   * So the guard is: **the noun in the sentence is never the mode id**. Derived
+   * from `MODES` rather than listed, like `markedModes` itself, so the next
+   * mode is checked whether or not whoever adds it remembers this file. It
+   * pins no prose — `ownersOnly` stays rewritable — only that the word poured
+   * into it is one somebody chose.
+   */
+  it("never shows a visitor a bare mode id where a product noun belongs", () => {
+    for (const mode of MODES) {
+      for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
+        const gap = visitorGap(mode, flags);
+        if (gap?.kind !== "owners-only") continue;
+        expect(gap.feature, mode).not.toBe(mode);
+        expect(gap.feature, mode).toBe(gap.feature[0]?.toUpperCase() + gap.feature.slice(1));
+      }
+    }
+  });
+
+  /**
+   * Referee by name, because it is the mode that was wrong and a sweep that
+   * only forbids the mode id would go green on any other capitalised word.
+   */
+  it("calls referee Referee", () => {
+    expect(visitorSentence(visitorGap("referee", EVERYTHING_BUILT) as VisitorGap)).toBe(
+      ownersOnly("Referee"),
+    );
   });
 
   /** The owner's own annotations, which sharing an article does not share. */
@@ -224,10 +264,14 @@ describe("what a visitor is told, mode by mode", () => {
        the six that spend a model call. `timeline` is the fifth since
        2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
        marked however much has been built — and `referee` is the sixth, the same
-       night, for the same reason. It is marked by `visitorGap`'s fail-closed
-       fall-through rather than by a `COSTS` entry, and that is the arrangement
-       working rather than an omission: a mode arrives owners-only until
-       somebody says otherwise, and this one will spend money in stage 2.
+       night, for the same reason.
+
+       `referee` reached this list through `visitorGap`'s fail-closed
+       fall-through until 2026-09-02, and this comment used to call that the
+       arrangement working rather than an omission. It was both: the policy was
+       right and the *sentence* was not, because the fall-through has only the
+       mode id to name the button with. It has a `COSTS` entry now, and the
+       sweep above forbids any live mode going back to falling through.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       ["chat", "diagram", "referee", "remember", "search", "timeline"].sort(),

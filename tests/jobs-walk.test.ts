@@ -204,16 +204,22 @@ function fakeStep(
  * these cases are about. Inserting the row reaches the same state without the
  * race.
  */
-async function queueJob(slug: string, names: StepName[]): Promise<Job> {
+async function queueJob(slug: string, names: StepName[], createdAt?: string): Promise<Job> {
   const wanted: Job = {
     id: mintId(),
     ownerId: OWNER,
     slug,
     steps: names.map((name): JobStep => ({ name, label: STEPS[name].label, status: "pending" })),
     status: "queued",
-    createdAt: new Date().toISOString(),
+    /* **`createdAt` is an argument for the one case that puts two jobs on one
+       article.** The article's line orders on `(createdAt, id)` and `id` is
+       random, so two rows written in the same millisecond queue in whichever
+       order their ids happened to sort — which is a test asserting what
+       `mintId` did rather than what the rule does. Every other caller wants
+       now. GPT Sol, 2026-09-02, on the plan's § 1k.3. */
+    createdAt: createdAt ?? new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, `walk-${wanted.id}`);
+  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `walk-${wanted.id}`, reservesName: false });
   MADE.push(job.id);
   return job;
 }
@@ -551,5 +557,72 @@ describe("one claim walks the whole job", () => {
     expect(seen.before, "nothing outside a claim is in a job scope").toBeNull();
     expect(seen.inside, "and the step ran inside this job's").toBe(job.id);
     expect(currentJobId(), "and the scope closed again afterwards").toBeNull();
+  });
+  /**
+   * **Two jobs on one article: the second waits, and the first's work survives
+   * it.**
+   *
+   * The per-article queue's acceptance case at the coordinator's level —
+   * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
+   * § 1k.2. It has two halves and **the second is the one that matters**: a
+   * `busy` that is really a lost publication passes the first half perfectly
+   * well, so a test that stops at "the second one waited" is a test that would
+   * be green over the very corruption serialising exists to prevent
+   * (src/store/artifacts-fs.ts keys every artefact write on `(slug, step)` in
+   * one shared directory, with no job scoping).
+   *
+   * **The two jobs share one artefact store**, which is what makes the second
+   * half a real question. `fixture` builds a store per call, so this case wires
+   * its own.
+   *
+   * **`createdAt` is set explicitly**, a second apart. The order is
+   * `(createdAt, id)` and `id` is random, so two rows minted in one millisecond
+   * would settle it by luck and this would be asserting `mintId`'s output.
+   */
+  it("makes a second job wait, and leaves the first job's artefacts alone", async () => {
+    const slug = "test-walk-two-in-a-line";
+    const artifacts = memoryArtifacts();
+    const ranFirst: Ran & { names: StepName[] } = { names: [] };
+    const ranSecond: Ran & { names: StepName[] } = { names: [] };
+
+    const at = (ms: number) => new Date(Date.UTC(2026, 8, 2, 12, 0, 0) + ms).toISOString();
+    const first = await queueJob(slug, ["fetch", "extract"], at(0));
+    const second = await queueJob(slug, ["blocks"], at(1000));
+
+    /* **Before anything runs**, and this is the rule rather than the mutex: the
+       older job is not running either, so nothing but the line is keeping the
+       younger one out. */
+    const early = await fsJobStore.claim(second.id, OWNER, mintAttempt(), LEASE_MS, 4);
+    expect(early.kind, "the second job claimed while an older one was ahead of it").toBe("busy");
+    expect(early.kind === "busy" ? early.why : "").toMatch(/ahead of it/);
+
+    const firstParts = partsFor(artifacts, {
+      fetch: fakeStep("fetch", ranFirst),
+      extract: fakeStep("extract", ranFirst),
+    });
+    const advancedFirst = await advanceAsOwner(first.id, firstParts);
+    expect(advancedFirst?.job.status).toBe("done");
+    expect(ranFirst.names).toEqual(["fetch", "extract"]);
+
+    /* What the first job left behind, read before the second one starts. */
+    const html = await artifacts.store.read(slug, "extract", "extractedHtml");
+    const meta = await artifacts.store.read(slug, "extract", "meta");
+    expect(html, "the first job wrote nothing to compare against").not.toBeNull();
+
+    const secondParts = partsFor(artifacts, { blocks: fakeStep("blocks", ranSecond) });
+    const advancedSecond = await advanceAsOwner(second.id, secondParts);
+
+    /* The line drains: what was refused above runs now, unaided. */
+    expect(advancedSecond?.busy, "the second job never got its turn").toBe(false);
+    expect(advancedSecond?.job.status).toBe("done");
+    expect(ranSecond.names).toEqual(["blocks"]);
+
+    /* **The half that matters.** The second job published over the same article
+       and the first job's artefacts are byte-for-byte what they were. */
+    expect(await artifacts.store.read(slug, "extract", "extractedHtml")).toEqual(html);
+    expect(await artifacts.store.read(slug, "extract", "meta")).toEqual(meta);
+    /* And the second job's own output is there, so this is not green because
+       nothing happened. */
+    expect(await artifacts.store.read(slug, "blocks", "blocks")).not.toBeNull();
   });
 });

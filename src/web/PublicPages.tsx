@@ -73,12 +73,15 @@ export function PublicMetadataPage({
   article,
   available,
   signedIn,
+  sessionUnconfirmed,
 }: {
   slug: string;
   article: Article;
   available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
+  sessionUnconfirmed: boolean;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
@@ -113,7 +116,7 @@ export function PublicMetadataPage({
             page cannot tell which — src/web/Masthead.tsx § `OriginMark`. */}
         <SourceRow url={webSource(meta)} />
 
-        <SharedNotice signedIn={signedIn} />
+        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>
@@ -244,6 +247,7 @@ export function VisitorTweetsPage({
   thread,
   available,
   signedIn,
+  sessionUnconfirmed,
 }: {
   slug: string;
   article: Article;
@@ -251,6 +255,13 @@ export function VisitorTweetsPage({
   thread: PublicTweets | undefined;
   available: PublicArtefacts;
   signedIn: boolean;
+  /**
+   * For the notice at the foot of the page — reader-capability.ts §
+   * sessionUnconfirmed. The no-thread arm below draws `VisitorNotice` instead,
+   * which is about this artefact rather than about this page, so it does not
+   * take it.
+   */
+  sessionUnconfirmed: boolean;
 }) {
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "tweets" }));
 
@@ -282,7 +293,7 @@ export function VisitorTweetsPage({
             one of them spends a model call. What a visitor gets instead is the
             notice card, which says what a shared link is and what it carries. */}
         <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
-          <SharedNotice signedIn={signedIn} />
+          <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
         </div>
       </main>
       <VisitorDock slug={slug} view="tweets" available={available} signedIn={signedIn} />

@@ -924,15 +924,13 @@ describe("running a job", () => {
    * perfectly successfully. So the assertion that nothing was created under a
    * suffixed slug stays exactly as it was.
    */
-  /* **Stage 2, and it is skipped rather than absent.** This is the behaviour
-     Greg asked for and it is not built yet: it must not ship before late steps
-     read the published store, because a job queued behind an ingest claims on
-     some other instance and opens `blocks.json` in its own empty scratch
-     directory — docs/plans/260830ar-several-articles-at-once.md § The prerequisite, and
-     docs/plans/260830aq-late-steps-read-the-store.md, which is another session's.
-     Written and watched red first, so that turning it on is a one-word change
-     to something already known to fail for the right reason. */
-  it.skip("queues rather than renames when a late step lands on a busy article", async () => {
+  /* **It was `it.skip` from 2026-08-30 to 2026-09-02**, written and watched red
+     first, because the behaviour must not ship before late steps read the
+     published store: a job queued behind an ingest claims on some other
+     instance and opens `blocks.json` in its own empty scratch directory. That
+     prerequisite is built (docs/plans/260830aq-late-steps-read-the-store.md),
+     and turning this on was the one-word change it was written to be. */
+  it("queues rather than renames when a late step lands on a busy article", async () => {
     const slug = "test-enqueue-busy-article";
     /* A job holding the slug, doing different work from the one below. It never
        runs to completion here — `fetch` has no URL — which is exactly the
@@ -1084,14 +1082,19 @@ describe("freeSlug", () => {
 
   it("mints a slug with a short id when nothing has this article yet", async () => {
     const got = await freeSlug("why-trees", "https://example.com/why-trees", shelf({}));
-    expect(got).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
-    expect(isSlug(got)).toBe(true);
+    expect(got.slug).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
+    expect(isSlug(got.slug)).toBe(true);
+    /* **And it says that it minted.** That is the whole of `reserves_name`
+       (src/db/schema.ts), and the fact is known here and nowhere else — a
+       caller that had to infer it later would have to guess from `url`, which
+       a late step on a month-old article carries exactly as a paste does. */
+    expect(got.kind).toBe("minted");
   });
 
   it("gives two adds of two different articles two slugs", async () => {
     const a = await freeSlug("news", "https://a.example/news", shelf({}));
     const b = await freeSlug("news", "https://b.example/news", shelf({}));
-    expect(a).not.toBe(b);
+    expect(a.slug).not.toBe(b.slug);
   });
 
   it("reuses the slug when we already have this article, however it was spelled", async () => {
@@ -1109,7 +1112,10 @@ describe("freeSlug", () => {
       "https://example.com/why-trees#conclusion",
       "https://example.com/why-trees?utm_source=twitter",
     ]) {
-      expect(await freeSlug("why-trees", spelling, have), spelling).toBe("why-trees-spya-k3m9qt");
+      expect(await freeSlug("why-trees", spelling, have), spelling).toEqual({
+        kind: "adopted",
+        slug: "why-trees-spya-k3m9qt",
+      });
     }
   });
 
@@ -1121,15 +1127,16 @@ describe("freeSlug", () => {
   it("mints a new slug when only the path's capitalisation differs", async () => {
     const have = shelf({ "why-trees-spya-k3m9qt": "https://www.example.com/why-trees" });
     const got = await freeSlug("why-trees", "https://example.com/Why-Trees", have);
-    expect(got).not.toBe("why-trees-spya-k3m9qt");
-    expect(got).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
+    expect(got.slug).not.toBe("why-trees-spya-k3m9qt");
+    expect(got.slug).toMatch(/^why-trees-spya-[a-z0-9]{6}$/);
+    expect(got.kind, "a fresh name is a claim on it, and must reserve").toBe("minted");
   });
 
   it("keeps the whole slug inside the length a slug is allowed to be", async () => {
     const long = "a".repeat(60);
     const got = await freeSlug(long, "https://example.com/long", shelf({}));
-    expect(isSlug(got)).toBe(true);
-    expect(got).toMatch(/-spya-[a-z0-9]{6}$/);
+    expect(isSlug(got.slug)).toBe(true);
+    expect(got.slug).toMatch(/-spya-[a-z0-9]{6}$/);
   });
 });
 

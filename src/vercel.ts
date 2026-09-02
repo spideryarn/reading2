@@ -46,6 +46,7 @@ import {
   withMonitoringScope,
 } from "./monitoring.js";
 import { UNEXPECTED_FAILURE } from "./messages.js";
+import { runInRequest } from "./owner.js";
 import { readMode } from "./read-address.js";
 import { builtShell, servePublicReadPage } from "./public/page.js";
 import { handleApi } from "./routes.js";
@@ -305,8 +306,24 @@ async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
       /* `req.url` is `restored` — set above, and the same field `handleApi`
          routes on. Nothing about the address is passed separately, because a
          second copy of it is a second thing to get wrong; see the doc-comment
-         on `servePublicReadPage`. */
-      await servePublicReadPage({ req, res, slug, shell });
+         on `servePublicReadPage`.
+
+         **`runInRequest`, and it was missing until 2026-09-02.** `handleApi`
+         opens the owner box for `/api/*`, and this call sat beside it rather
+         than inside it — so on the one page we invite strangers to,
+         `currentOwnerId()` found no box at all and fell through to
+         `environmentOwnerId()`, which in production is Greg. That is the exact
+         answer src/owner.ts calls "a real person's data", and the tripwire
+         docs/project/security-map.md describes did not exist here.
+
+         **Wrapped here rather than in src/public/page.ts**, which would pull
+         src/owner.ts into the public import graph that tests/public-imports.ts
+         keeps closed. The transport does the wrapping; the closed room stays
+         closed. Nothing calls `setRequestOwner` on this path, so the box stays
+         empty and an owner-scoped read throws instead of succeeding against
+         somebody.
+         docs/plans/260902j-public-read-only-access-audit-and-improvements.md § S2. */
+      await runInRequest(() => servePublicReadPage({ req, res, slug, shell }));
       return;
     }
 

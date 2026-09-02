@@ -292,7 +292,6 @@ export function GlossaryPanel({
             <Progress
               job={owner.job}
               failed={owner.failed}
-              blocking={owner.blocking}
               stalled={owner.stalled}
               onRun={() => owner.find(withProfile)}
               onCancel={owner.cancel}
@@ -341,8 +340,7 @@ export function GlossaryPanel({
                 <Progress
                   job={owner.job}
                   failed={owner.failed}
-                  blocking={owner.blocking}
-                  stalled={owner.stalled}
+                      stalled={owner.stalled}
                   onRun={() => owner.find(withProfile)}
                   onCancel={owner.cancel}
                   label="Find them again"
@@ -367,8 +365,7 @@ export function GlossaryPanel({
                 <Progress
                   job={owner.job}
                   failed={owner.failed}
-                  blocking={owner.blocking}
-                  stalled={owner.stalled}
+                      stalled={owner.stalled}
                   onRun={() => owner.find(withProfile)}
                   onCancel={owner.cancel}
                   label="Find them again"
@@ -1442,12 +1439,10 @@ function Looked({
  * The confirm is the same shape as the thread page's rewrite: not a dialog, it
  * blocks nothing, and it says what the click costs before it is spent.
  *
- * **It does not show the job that refused it**, unlike the band's own run
- * button above (`blocking` in src/web/useStepJob.ts) — and for the same reason
- * `Rewrite` in src/web/Tweets.tsx does not: this is a confirm-then-spend strip
- * with two buttons and a provenance line in it, and a second running job's rows
- * want a layout of their own. It says the sentence and stops. A stated gap, not
- * an oversight; worth closing the day somebody hits it.
+ * It used to say here that it does not show the job that refused it, unlike the
+ * band's own run button above. Nothing refuses a run any more — a second job on
+ * one article queues (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
+ * § 1g) — so there is no gap left to state.
  */
 function Foot({
   glossary,
@@ -1485,7 +1480,6 @@ function Foot({
           failed={null}
           /* Unreachable here: this branch only renders with a job of our own,
              and one article cannot have two active ones. */
-          blocking={null}
           stalled={false}
           onRun={() => onMore(withProfile)}
           onCancel={onCancel}
@@ -1577,7 +1571,6 @@ function Foot({
 function Progress(props: {
   job: Job | null;
   failed: string | null;
-  blocking: Job | null;
   stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;
