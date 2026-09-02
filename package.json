@@ -99,6 +99,7 @@
     "@babel/parser": "^7.29.8",
     "@babel/types": "^7.29.8",
     "@biomejs/biome": "2.5.10",
+    "@inquirer/prompts": "8.7.0",
     "@sentry/vite-plugin": "^5.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/table-core": "^8.21.3",
