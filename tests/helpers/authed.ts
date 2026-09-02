@@ -41,7 +41,7 @@ export const TEST_EMAIL = "greg@gregdetre.com";
  * is invisible to a request `acceptAny` authenticated — which surfaces as a 404
  * that looks like a broken route rather than like a mismatched fixture.
  *
- * The cast is what tests/blocking-job-409.test.ts already does; `asOwnerId` is
+ * The cast is what tests/second-job-queues.test.ts already does; `asOwnerId` is
  * private to src/owner.ts.
  */
 export const TEST_OWNER = TEST_SUB as OwnerId;

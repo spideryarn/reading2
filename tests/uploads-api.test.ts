@@ -18,6 +18,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
 import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
+import { forgetForTests } from "../src/store/jobs-fs.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 /**
@@ -304,5 +305,80 @@ describe("the slug an upload gets", () => {
     expect(slugWithShortId("bergson-matter-memory-1911")).toMatch(
       /^bergson-matter-memory-1911-spya-[a-z0-9]{6}$/,
     );
+  });
+});
+
+/**
+ * **Reloading `/add/upload/<id>` hands back *this upload's* job.**
+ *
+ * The recovery: the claim on an upload is create-only, so a double-click or a
+ * reload arrives after the first request has taken it. That is the same request
+ * twice rather than a conflict, so the route looks for the job the first claim
+ * produced and returns it.
+ *
+ * It looked for it **by slug**, over every status — `all.find(j => j.slug ===
+ * slug)`. That was one answer while an article could hold one job. An article
+ * holds a *line* now, so the reader who imported a PDF and then pressed
+ * Glossary could reload their import page and be handed the **glossary run**,
+ * presented as their import: `listJobs` is newest first, and the glossary job is
+ * newer. It also depended on `noteSlug` having landed, where the upload id is on
+ * the job record from the moment `enqueue` returns.
+ *
+ * So it matches `job.upload.id === uploadId`, which is the thing it means.
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1h.
+ *
+ * **Watched red on 2026-09-02** with the slug lookup put back: *"the reload was
+ * handed a later mode job on the same article: expected 'spya-…' to be
+ * 'spya-…'"*.
+ */
+describe("the job a repeat claim finds", () => {
+  it("matches the upload rather than the article, so a later mode job cannot stand in", async () => {
+    const minted = await call("POST", "/api/uploads", {
+      filename: "repeat-claim.pdf",
+      bytes: 1024,
+      sha256: "b".repeat(64),
+    });
+    expect(minted.status).toBe(201);
+    const uploadId = String(minted.body.uploadId);
+
+    /* **`VERCEL`, so `enqueue` does not start driving what it queues.** `pump`
+       returns immediately when it is set (src/jobs.ts); without it the ingest
+       runs, fails looking for bytes nobody uploaded, and the job this case is
+       about is terminal before the second request arrives. The recovery has to
+       work either way, but a race is not what is being tested here. */
+    const was = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    const made: string[] = [];
+    try {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
+      const ingest = String(first.body.id);
+      const slug = String(first.body.slug);
+      made.push(ingest);
+
+      /* A mode job on the article the upload became, **queued afterwards** — so
+         it is the newer of the two and sorts first in the list the route reads.
+         This is what a reader produces by pressing Glossary and then reloading
+         the tab their import was in. */
+      const later = await call("POST", "/api/jobs", {
+        slug,
+        steps: ["glossary"],
+        useProfile: false,
+      });
+      expect(later.status, `refused with: ${String(later.body.error)}`).toBe(202);
+      made.push(String(later.body.id));
+      expect(later.body.id).not.toBe(ingest);
+
+      /* The reload. The claim is already taken, so this is the recovery path. */
+      const again = await call("POST", "/api/jobs", { uploadId });
+      expect(again.status, `refused with: ${String(again.body.error)}`).toBe(202);
+      expect(again.body.id, "the reload was handed a later mode job on the same article").toBe(
+        ingest,
+      );
+    } finally {
+      if (was === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = was;
+      await forgetForTests(made);
+    }
   });
 });

@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
-import { detailsOf, statusOf } from "./lib/api.js";
+import { statusOf } from "./lib/api.js";
 
 export interface UseJobs {
   jobs: Job[];
@@ -81,27 +81,6 @@ export interface UseJobs {
    * subscriber's that succeeds, and by nothing else.
    */
   lastFailure(): string | null;
-  /**
-   * The job that **refused** the most recent action, or null. Read it in the
-   * same breath as `lastFailure()`.
-   *
-   * `POST /api/jobs` answers 409 when the article already has an active job
-   * doing different work, and the refusal carries that job — `JobConflict` in
-   * src/jobs.ts, narrowed onto the wire by `publicJob`. Without it the reader
-   * is told to stop something no surface can show them, because the blocker is
-   * by definition a job whose steps are not the ones this panel watches, and
-   * `useStepJob` filters exactly those out.
-   *
-   * **Not derived from the polled list**, and that is the constraint rather
-   * than a preference. `listJobs` mutates, logs and sometimes re-reads since
-   * stage 3, its answer can be a poll behind, and "the active job on this slug"
-   * is a guess about which row actually refused. The identity comes from the
-   * atomic conflict result and nothing else. GPT Sol, 2026-09-01.
-   *
-   * A ref like `lastFailure`, in the same object as it, so no edit can set one
-   * and forget the other.
-   */
-  lastBlocker(): Job | null;
   /**
    * Queue a fresh add, and hand back the job so the caller can watch that one.
    *
@@ -198,29 +177,6 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
 }
 
 /**
- * The blocking job out of a refusal, or null if there was not one.
- *
- * **Checked rather than cast.** The body is our own server's, so the shape is
- * not really in doubt — but an old tab meets a new server and a cast that is
- * wrong once puts `undefined.steps` inside a render. Four fields are enough to
- * be sure this is a job rather than something else that happened to be called
- * `blocking`; the rest of `Job` is optional anyway.
- *
- * `detailsOf` rather than reading `err.details`, for the reason `statusOf`
- * gives: a test that mocks `lib/api.js` supplies its own `readJson`, and a
- * second copy of `HttpError` in the graph would make `instanceof` false for an
- * object that is one in every way that matters.
- */
-export function blockingJob(err: unknown): Job | null {
-  const found = detailsOf(err).blocking;
-  if (typeof found !== "object" || found === null) return null;
-  const job = found as Partial<Job>;
-  if (typeof job.id !== "string" || typeof job.slug !== "string") return null;
-  if (typeof job.status !== "string" || !Array.isArray(job.steps)) return null;
-  return job as Job;
-}
-
-/**
  * @param onFinished called once per job that reaches `done` **after this
  *   subscriber began observing**, so the caller can reload whatever that job
  *   changed. The library list, in practice: an article appears on the shelf the
@@ -294,7 +250,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
    * is the same "stop asking" as a final 401 from a poll, and passing only
    * `err.message` threw away the one field that says which refusal it was.
    */
-  const lastFailure = useRef<{ message: string; blocking: Job | null } | null>(null);
+  const lastFailure = useRef<string | null>(null);
   const act = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | null> => {
     const epoch = jobEngine.epoch();
     try {
@@ -303,11 +259,12 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
       jobEngine.actionSucceeded(epoch);
       return value;
     } catch (err) {
-      /* **One ref holding both halves**, rather than two set side by side. The
-         message and the job that produced it are one fact about one press, and
-         useStepJob.ts already records what a boolean beside a string cost this
-         area: two values that must move together and an edit that moves one. */
-      lastFailure.current = { message: (err as Error).message, blocking: blockingJob(err) };
+      /* **The server's own words**, kept where no poll can clear them — see
+         `lastFailure` on the interface. It held `{ message, blocking }` until
+         2026-09-02: the blocking job came out of a 409 that no longer exists,
+         and one field with nothing beside it cannot fall out of step with
+         itself. */
+      lastFailure.current = (err as Error).message;
       jobEngine.actionFailed((err as Error).message, statusOf(err), epoch);
       return null;
     }
@@ -325,8 +282,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     loaded: snapshot.loaded,
     error: snapshot.error,
     driverFailures: snapshot.driverFailures,
-    lastFailure: () => lastFailure.current?.message ?? null,
-    lastBlocker: () => lastFailure.current?.blocking ?? null,
+    lastFailure: () => lastFailure.current,
     add: (url) => act(() => post({ url })),
     addUpload: (uploadId) => act(() => post({ uploadId })),
     run: (request) => act(() => post(request)),

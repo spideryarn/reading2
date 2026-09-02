@@ -189,8 +189,8 @@ export interface MarkPatch {
  *
  * A numeric `status` is the door that wrapper already holds open, and it is
  * what every other store-side refusal in this codebase uses —
- * `PublishRefused`, `NotTheLiveAttempt`, `StepRunNotHeld`, `NoStoredDocument`,
- * `JobConflict`. The rejected alternative was a sixth `instanceof` line in
+ * `PublishRefused`, `NotTheLiveAttempt`, `StepRunNotHeld` and
+ * `NoStoredDocument`. The rejected alternative was a sixth `instanceof` line in
  * `mayPassThrough`: it works, and it leaves the trap exactly where it was,
  * because that list is an allowlist of *classes* and every new refusal type has
  * to remember to join it. This one did not, and it is the second not to.

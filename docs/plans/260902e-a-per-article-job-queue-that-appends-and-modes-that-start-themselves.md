@@ -1,9 +1,27 @@
 # A per-article job queue that appends, and modes that start themselves
 
-**Status:** planned 2026-09-02, reviewed by GPT Sol the same day and recut in response — not yet
-built. Worktree `article-job-queue`, branch `worktree-article-job-queue`. What the review changed is
-in [§ What the review changed](#what-the-review-changed); the four blockers are answered in § 1d,
-§ 1f, § 1g and § 2b.
+**Status:** planned 2026-09-02, reviewed by GPT Sol the same day and recut in response.
+**Stage 1 is built**, in two passes on 2026-09-02 — 1A the store layer (the four indexes, the
+`reserves_name`/`url_key` columns, the draining migration, the predecessor rule in `claim`, and
+`EnqueueOutcome`), 1B everything above it (slug allocation's discriminated return, `enqueue`'s four
+repairs, the ownership check, and the deletion of the 409 and every surface that rendered it).
+**Stage 2 is not built.** Worktree `article-job-queue`, branch `worktree-article-job-queue`. What the
+review changed is in [§ What the review changed](#what-the-review-changed); the four blockers are
+answered in § 1d, § 1f, § 1g and § 2b.
+
+**Two things stage 1 decided that the plan left open**, both recorded here rather than only in the
+code:
+
+- **A slug *nobody* has is allowed through the ownership check** (§ 1f). The check refuses a slug
+  that exists and belongs to somebody else; it does not refuse a name with no article under it. Such
+  a job is not a cross-owner blocker — every minted slug ends in a random short id, so no other
+  reader can ever come to want that name — and it blocks only itself. Refusing it would have been a
+  second, unrelated rule about what a slug may name, and would have refused every fixture that
+  queues a job against a slug it has not built yet.
+- **`urlKey` on the ticket comes from `request.url`, not from the URL `enqueue` reads off
+  `meta.json`** (§ 1b), for the reason `workKey` gives: it has to be a property of the *request*.
+  `jobs_active_source` is partial on `reserves_name` anyway, so a non-reserving row's `url_key` is
+  never read.
 
 > I got `Spideryarn is already busy with this article. Wait for that to finish, or stop it and ask
 > again.` when I tried to run Ideas while Glossary was already running. Can we always and by default
@@ -74,7 +92,7 @@ production imports yet"* — `pg-session.ts` imports it and production runs it.
 a *different* job id; the two run in the order they were asked for; nothing 409s; `npm test`,
 `npm run typecheck` and `npm run check` clean.
 
-### 1a. One index becomes three
+### 1a. One index becomes four, and a fifth to read them in order
 
 Today [`src/db/schema.ts`](../../src/db/schema.ts) § `jobs_active_slug` — unique on
 `(owner_id, slug)` `where status in ('queued','running')` — does three jobs at once: reserve the
@@ -86,6 +104,13 @@ of each is a separate decision**:
 | `jobs_one_running_per_slug` | `(slug)` | `status = 'running'` | the article mutex |
 | `jobs_reserved_slug` | `(slug)` | `status in ('queued','running') and reserves_name` | name reservation |
 | `jobs_active_work` | `(owner_id, slug, work_key)` | `status in ('queued','running') and not cancelling` | de-duplication |
+| `jobs_active_source` | `(owner_id, url_key)` | `status in ('queued','running') and reserves_name` | one address, one article — § 1d |
+| `jobs_slug_order` | `(slug, created_at, id)` | `status in ('queued','running')` | the predecessor query — not unique |
+
+Plus a check constraint, `jobs_cancelling_is_running`. A queued row carrying `cancelling` cannot be
+produced by the cancellation API, and if one existed nothing could clear it: it sits outside
+`jobs_active_work`, so no request de-duplicates onto it, while still blocking its article's line as
+a predecessor for ever. Decided while building, not planned.
 
 **The first two are global on `slug`, not `(owner_id, slug)`.** `articles.slug` is globally unique
 — *"because it is the URL contract (`/read/<slug>`)"*, [`src/db/schema.ts`](../../src/db/schema.ts)
@@ -257,14 +282,20 @@ the row that would remove itself in milliseconds sits at the head of A's line fo
 So **enqueue requires the caller to own the article a slug-named request targets.** A URL or upload
 mint is the exception, and reservation governs it.
 
-**It also closes something older and worse, which is why it is in stage 1 and not deferred.** Under
-the *filesystem* store — no owner segment in `data/<slug>/`, and `urlForSlug` reading `meta.json`
-off the path rather than through `ownedArticle` — there is no equivalent refusal, and B's job runs:
-it takes A's URL onto its own record and reads and overwrites A's artefacts. That is a genuine
-cross-owner read and write, gated only by which store an installation is running, and it exists
-today with nothing in this plan required to reach it. There is no test for it. There will be one.
-[security-map.md](../project/security-map.md) says the untrusted parties do not include another
-reader; this is a place where the code has been taking that for granted rather than enforcing it.
+**It is a queue bug and not a security one, and the first draft of this section said otherwise.**
+Under the *filesystem* store there is no equivalent refusal — no owner segment in `data/<slug>/`,
+and `urlForSlug` reads `meta.json` off the path rather than through `ownedArticle` — so B's job runs
+and reads and overwrites A's files. But **the filesystem store has no second reader by
+construction**: *"it has no owner column, so it has no second reader, and a store with no second
+reader cannot express 'somebody who is not the owner'"*
+([database.md](../project/database.md)), and `src/store/index.ts` refuses to boot on it in
+production ([auth.md](../project/auth.md)). There is no B. So this is a store that models one
+reader, not a hole in one that models two, and the check below is worth having for the queue rather
+than for the walls.
+
+`urlForSlug`'s own docstring ([`src/pipeline.ts`](../../src/pipeline.ts):1104) already points at
+*"the cross-owner case this deliberately does not fix"*, which is this one, seen from the slug side
+and correctly left alone.
 
 ### 1g. The 409, and everything that renders it, goes
 
@@ -600,6 +631,7 @@ over a broken feature and are rewritten in § 1k with a note saying what they re
 1. **The migration drains.** § 1e refuses to run while any job is `queued` or `running`, because the
    alternative is guessing what `reserves_name` and `url_key` mean for rows that predate them. On a
    one-reader alpha that is a wait of minutes. Say if it should be something else.
-2. **The cross-owner filesystem gap is a security fix riding along in stage 1** (§ 1f). It is small
-   and it is in the right place, but it is not what was asked for. Say if it should be its own
-   piece of work instead.
+2. **The enqueue ownership check rides along in stage 1** (§ 1f). It is small and it is in the right
+   place, and it is what stops another reader's abandoned job wedging your article's line. Say if it
+   should be its own piece of work instead. (It was written up first as a security fix; it is not
+   one — § 1f says why.)

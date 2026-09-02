@@ -27,20 +27,27 @@
  * All four live in src/store/job-fence.ts, shared with the draft fences in
  * src/store/pg-revisions.ts, which had dropped the same condition.
  *
- * ## `23505` is an answer, not an error
+ * ## `23505` is an answer, not an error — but never a *name*
  *
- * `jobs_active_slug` in src/db/schema.ts is load-bearing here and surfaces as a
- * unique violation rather than as zero rows: it makes "one job in flight per
- * article" a fact rather than a convention, and the insert treats the conflict
- * as an ordinary outcome — "somebody already has this slug" — because an index
- * doing its job is not an exception.
+ * Four partial unique indexes in src/db/schema.ts arbitrate an article's queue,
+ * and `enqueueOrGet` inserts against all of them with `on conflict do nothing`:
+ * a conflict is an ordinary outcome, because an index doing its job is not an
+ * exception.
  *
- * **There were two, and the other one has gone.** `jobs_only_one_running` gave
- * global concurrency 1 as a unique index on a constant, and `claim` caught its
- * `23505` by name. A constant cannot express *at most N*, so on 2026-08-30 the
- * index was dropped and the cap moved into a count taken inside the `queue_state`
- * lock — see `claim`. Nothing here catches that name any more, and a `catch` that
- * still did would be dead code reading as a live guard.
+ * **What the store must not do is read the constraint name and branch on it.**
+ * One insert can violate two of those indexes at once, and Postgres promises
+ * nothing about which it reports; read as the wrong one, the caller renames an
+ * article and pays for a second model call. So `tryEnqueue` re-reads the active
+ * rows and classifies from the data. GPT Sol, 2026-09-02.
+ *
+ * **The index that used to be here has gone twice over.** `jobs_only_one_running`
+ * gave global concurrency 1 as a unique index on a constant, and `claim` caught
+ * its `23505` by name; a constant cannot express *at most N*, so on 2026-08-30 it
+ * was dropped for a count taken inside the `queue_state` lock. `jobs_active_slug`
+ * gave one active job per article, and on 2026-09-02 it became four narrower
+ * indexes so that an article could hold a line. Nothing here catches either name
+ * any more, and a `catch` that still did would be dead code reading as a live
+ * guard.
  */
 
 import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
@@ -54,6 +61,9 @@ import type { FailureKind } from "../messages.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
+  type ClaimRefusal,
+  type EnqueueOutcome,
+  type EnqueueTicket,
   type ExpirySettlement,
   type JobEnding,
   type JobStore,
@@ -126,10 +136,7 @@ function toJob(row: Row): Job {
 }
 
 /** One insert-or-look. `null` means the holder finished in between; ask again. */
-async function tryEnqueue(
-job: Job,
-workKey: string,
-): Promise<{ job: Job; created: boolean; sameWork: boolean } | null> {
+async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome | null> {
   const db = getDb();
   const inserted = await db
     .insert(jobs)
@@ -145,7 +152,9 @@ workKey: string,
          marked "enqueue". Nothing does that today; the contract simply should
          not allow it. GPT Sol, reviewing the built stage 1. */
       status: "queued",
-      workKey,
+      workKey: ticket.workKey,
+      reservesName: ticket.reservesName,
+      urlKey: ticket.urlKey ?? null,
       createdAt: new Date(job.createdAt),
       url: job.url ?? null,
       title: job.title ?? null,
@@ -155,18 +164,106 @@ workKey: string,
     })
     .onConflictDoNothing()
     .returning();
-  if (inserted[0]) return { job: toJob(inserted[0]), created: true, sameWork: true };
+  if (inserted[0]) return { kind: "created", job: toJob(inserted[0]) };
 
-  const [held] = await db
+  /**
+   * **Re-read and decide. Never dispatch on the constraint name.**
+   *
+   * Two identical URL ingests violate `jobs_active_work` *and*
+   * `jobs_reserved_slug` in one insert, and Postgres promises nothing about
+   * which of them it names; read as the reservation, the caller renames and
+   * pays twice. So the indexes stay guarantees rather than a signalling
+   * channel, and one query answers all three questions. GPT Sol, 2026-09-02.
+   *
+   * **Both halves of the `or`, because the two conflicts live on different
+   * rows.** A duplicate of this work and a reserver of this name are on *this
+   * slug*; the simultaneous-paste holder is on a slug of its own, and only
+   * `url_key` connects the two.
+   *
+   * Ordered, so that when several rows could answer, the same one always does.
+   */
+  const rows = await db
     .select()
     .from(jobs)
     .where(
-      and(eq(jobs.ownerId, job.ownerId), eq(jobs.slug, job.slug), inArray(jobs.status, ACTIVE)),
+      and(
+        inArray(jobs.status, ACTIVE),
+        or(
+          eq(jobs.slug, job.slug),
+          ticket.urlKey === undefined
+            ? undefined
+            : and(
+                eq(jobs.ownerId, job.ownerId),
+                eq(jobs.reservesName, true),
+                eq(jobs.urlKey, ticket.urlKey),
+              ),
+        ),
+      ),
     )
-    .limit(1);
-  // The holder finished between the two statements. The caller asks again.
-  if (!held) return null;
-  return { job: toJob(held), created: false, sameWork: held.workKey === workKey };
+    .orderBy(jobs.createdAt, jobs.id);
+
+  /* **Exactly the predicates the indexes carry, and no looser.** `jobs_active_work`
+     excludes `cancelling` rows and is owner-scoped; `jobs_reserved_slug` and
+     `jobs_active_source` include them and are global and owner-scoped
+     respectively. A re-read that disagreed with an index would answer a question
+     the insert did not ask. */
+  const mine = rows.find(
+    (row) =>
+      row.ownerId === job.ownerId &&
+      row.slug === job.slug &&
+      row.workKey === ticket.workKey &&
+      !row.cancelling,
+  );
+  if (mine) return { kind: "sameWork", job: toJob(mine) };
+
+  /* **The address before the name**, when both could answer. Adopting the
+     holder's slug is what slug allocation would have done with full sight of
+     the other request, and it costs nothing; renaming mints a second article
+     for one address, which is the thing `jobs_active_source` exists to stop.
+     Only asked when *this* request reserves — an insert that did not is outside
+     that index and cannot have conflicted with it. */
+  if (ticket.reservesName && ticket.urlKey !== undefined) {
+    const source = rows.find(
+      (row) =>
+        row.ownerId === job.ownerId && row.reservesName && row.urlKey === ticket.urlKey,
+    );
+    if (source) return { kind: "sourceTaken", job: toJob(source) };
+  }
+
+  if (ticket.reservesName) {
+    const name = rows.find((row) => row.slug === job.slug && row.reservesName);
+    if (name) return { kind: "nameTaken", job: toJob(name) };
+  }
+
+  // Whoever held it finished between the two statements. The caller asks again.
+  return null;
+}
+
+/**
+ * Is an **older** active job already in this article's line?
+ *
+ * One statement, and the row's own `(created_at, id)` is read inside it rather
+ * than passed in as a parameter. That is not tidiness: `created_at` is a
+ * `timestamptz` with microsecond resolution, and a JavaScript `Date` carries
+ * milliseconds — so a round trip through the caller would round this job's own
+ * timestamp *down* and let it step in front of a predecessor it shares a
+ * millisecond with. Two claimants would then each believe they were first.
+ *
+ * Row-wise `<` rather than `created_at < … or (= and id <)`, because they are
+ * the same comparison and only one of them can be got wrong. `jobs_slug_order`
+ * is the index it reads.
+ */
+async function hasPredecessor(tx: Tx, id: string): Promise<boolean> {
+  const ahead = await tx.execute(sql`
+    select 1
+      from ${jobs} as older, ${jobs} as mine
+     where mine.id = ${id}
+       and older.slug = mine.slug
+       and older.status in ('queued', 'running')
+       and (older.created_at, older.id) < (mine.created_at, mine.id)
+     limit 1
+  `);
+  return ahead.rowCount === 1;
 }
 
 /**
@@ -245,6 +342,35 @@ async function claimIn(
     if (current.cancelling === true) return { kind: "stopping", job: current };
     return { kind: "busy", why: "another request is inside this job" };
   }
+
+/**
+ * **What this job is**, when `claim` is about to refuse it for some reason of
+ * the machine's rather than of the job's.
+ *
+ * `undefined` means *nothing about this job says no* — the caller's own reason
+ * stands. Anything else is the job's own answer and outranks it: at the cap, or
+ * behind an older job on its article, a finished job must still read `finished`
+ * and a missing one `gone`, or the answer to "what is this job doing" changes
+ * with how busy the machine is. `advanceJobWith` casts the `get()` behind its
+ * `busy` branch straight to `Job`, so a missing row read as `busy` becomes a 200
+ * where the route means a 404. GPT Sol, reviewing the built stage 1.
+ *
+ * One function because there are now two callers — the cap and the article's
+ * line — and two copies of a four-way classification is two chances to add a
+ * fifth state to one of them.
+ */
+async function refusalFor(tx: Tx, id: string, owner: OwnerId): Promise<ClaimRefusal | undefined> {
+  const current = await getIn(tx, id, owner);
+  if (!current) return { kind: "gone" };
+  if (TERMINAL.includes(current.status as (typeof TERMINAL)[number])) {
+    return { kind: "finished", job: current };
+  }
+  if (current.cancelling === true) return { kind: "stopping", job: current };
+  if (current.status === "running") {
+    return { kind: "busy", why: "another request is inside this job" };
+  }
+  return undefined;
+}
 
 /** `get`, on the caller's transaction — the classifier above must read inside the lock. */
 async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefined> {
@@ -351,34 +477,29 @@ const rawPgJobStore: JobStore = {
   },
 
   /**
-   * One insert, and the index is the arbitration.
+   * One insert, and the indexes are the arbitration.
    *
-   * `on conflict do nothing` over `jobs_active_slug` covers both cases the
-   * caller cares about in one round trip: nothing came back means somebody
-   * already holds this slug, and the read that follows says whether they are
-   * doing the same work (hand that job back) or different work (the caller
-   * moves to the next slug suffix).
+   * `on conflict do nothing` over all four of them, then a read that says which
+   * of three things is in the way — see `EnqueueOutcome`, and `tryEnqueue` for
+   * why the classification is a re-read rather than the constraint name.
    */
-  async enqueueOrGet(
-    job: Job,
-    workKey: string,
-  ): Promise<{ job: Job; created: boolean; sameWork: boolean }> {
+  async enqueueOrGet(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome> {
     /**
      * **Two statements, so the second can find nothing — retry rather than
      * throw.**
      *
-     * The insert conflicts on `jobs_active_slug`, then a select asks who holds
-     * it. Between the two, that holder can finish perfectly normally, at which
-     * point it is no longer active, the select comes up empty, and the first
-     * version of this threw — turning an ordinary finish into a 500 on somebody
-     * else's request. GPT Sol, reviewing the built queue.
+     * The insert conflicts, then a select asks who holds it. Between the two,
+     * that holder can finish perfectly normally, at which point it is no longer
+     * active, the select comes up empty, and the first version of this threw —
+     * turning an ordinary finish into a 500 on somebody else's request. GPT
+     * Sol, reviewing the built queue.
      *
-     * Retrying the insert is the whole fix: the slug is free now, so the second
+     * Retrying the insert is the whole fix: the way is clear now, so the second
      * attempt succeeds. Bounded, because a caller that loses this race twice in
      * a row against different holders is in a situation the loop cannot improve.
      */
     for (let attempt = 0; ; attempt++) {
-      const result = await tryEnqueue(job, workKey);
+      const result = await tryEnqueue(job, ticket);
       if (result) return result;
       if (attempt >= 3) {
         throw new Error(`Could not enqueue job ${job.id} for ${job.slug}, and nothing holds it.`);
@@ -475,28 +596,42 @@ const rawPgJobStore: JobStore = {
       const running = counted?.running ?? 0;
 
       if (running >= maxRunning) {
-        /* **Classify the job before blaming the cap**, or the answer to "what is
-           this job doing" changes depending on how busy the machine is. Without
-           this, a finished job reads `busy` at the cap and `finished` below it,
-           a deleted one reads `busy` rather than `gone` — and `advanceJobWith`
-           casts the `get()` behind its `busy` branch to `Job`, so a missing row
-           becomes a 200 where the route means a 404. The filesystem adapter
-           classifies first and would have disagreed with this one on all three.
-           GPT Sol, reviewing the built stage 1. */
-        const current = await getIn(tx, id, owner);
-        if (!current) return { kind: "gone" };
-        if (TERMINAL.includes(current.status as (typeof TERMINAL)[number])) {
-          return { kind: "finished", job: current };
-        }
-        if (current.cancelling === true) return { kind: "stopping", job: current };
-        if (current.status === "running") {
-          return { kind: "busy", why: "another request is inside this job" };
-        }
-        /* **Not "N of N".** The cap can be lowered under jobs that are already
+        /* **Classify the job before blaming the cap** — `refusalFor` above says
+           why, and the filesystem adapter classifies first for the same reason.
+           **Not "N of N".** The cap can be lowered under jobs that are already
            running, so this really can read `already running 5 of 3` — which is a
            true account of a machine that is over its new limit and draining, and
            a rounder-sounding sentence would be a false one. */
-        return { kind: "busy", why: `already running ${running} of ${maxRunning} jobs` };
+        return (
+          (await refusalFor(tx, id, owner)) ?? {
+            kind: "busy",
+            why: `already running ${running} of ${maxRunning} jobs`,
+          }
+        );
+      }
+
+      /**
+       * **The article's line, in the same lock as the cap and exact for the
+       * same reason.**
+       *
+       * Every transition into `running` takes the `queue_state` singleton
+       * first, so no other claimant can be between this read and the `UPDATE`
+       * below; a concurrent *finish* can only shorten the line, so the worst
+       * this produces is a conservative `busy`.
+       *
+       * The reason says *article*, because `busy` already means several things
+       * to the client loop and a log that cannot tell "waiting its turn on this
+       * piece" from "the machine is full" makes them one symptom. There is no
+       * queue position in it, and that is Greg's call: a waiting job shows as
+       * waiting, in the card it already has.
+       */
+      if (await hasPredecessor(tx, id)) {
+        return (
+          (await refusalFor(tx, id, owner)) ?? {
+            kind: "busy",
+            why: "another job on this article is ahead of it",
+          }
+        );
       }
       return claimIn(tx, id, owner, attempt, leaseMs);
     });
@@ -606,16 +741,6 @@ const rawPgJobStore: JobStore = {
     const moved = await db.update(jobs).set({ steps }).where(fence(id, attempt)).returning();
     if (!moved[0]) throw new StaleAttemptError(id);
     return toJob(moved[0]);
-  },
-
-  async activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined> {
-    const db = getDb();
-    const [row] = await db
-      .select()
-      .from(jobs)
-      .where(and(eq(jobs.ownerId, owner), eq(jobs.slug, slug), inArray(jobs.status, ACTIVE)))
-      .limit(1);
-    return row ? toJob(row) : undefined;
   },
 
   async requestCancel(id: string, owner: OwnerId): Promise<Job | undefined> {

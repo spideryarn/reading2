@@ -40,8 +40,8 @@ import type { Job } from "../src/types.js";
 /** What the posed queue answers with. A test moves these before mounting. */
 let jobs: Job[] = [];
 let driverFailures: Record<string, number> = {};
-/** The job a refused `run` reports as the one in the way. Stage 6's 409. */
-let refusedBy: Job | null = null;
+/** Whether the posed queue refuses the press. `null` from `run` is any failure. */
+let refuses = false;
 
 vi.mock("../src/web/useJobs.js", () => ({
   useJobs: () => ({
@@ -49,9 +49,8 @@ vi.mock("../src/web/useJobs.js", () => ({
     loaded: true,
     error: null,
     driverFailures,
-    lastFailure: () => (refusedBy ? "busy" : null),
-    lastBlocker: () => refusedBy,
-    run: async () => (refusedBy ? null : { id: "spya-drawing" }),
+    lastFailure: () => (refuses ? "The request did not reach the server." : null),
+    run: async () => (refuses ? null : { id: "spya-drawing" }),
     cancel: async () => {},
   }),
 }));
@@ -76,14 +75,14 @@ function sketching(over: Partial<Job> = {}): Job {
 let host: HTMLDivElement;
 let root: Root;
 /** What the hook answered on the last render. */
-let seen: { stalled: boolean; job: Job | null; blocking: Job | null } | null = null;
+let seen: { stalled: boolean; job: Job | null; failed: string | null } | null = null;
 /** The last hook value, so a test can press the button. */
 let press: (() => Promise<void>) | null = null;
 
 beforeEach(() => {
   jobs = [];
   driverFailures = {};
-  refusedBy = null;
+  refuses = false;
   seen = null;
   press = null;
   host = document.createElement("div");
@@ -98,7 +97,7 @@ afterEach(() => {
 
 function Probe(): null {
   const step = useStepJob("an-article", "sketch", () => undefined);
-  seen = { stalled: step.stalled, job: step.job, blocking: step.blocking };
+  seen = { stalled: step.stalled, job: step.job, failed: step.failed };
   press = () => step.start();
   return null;
 }
@@ -150,31 +149,31 @@ it("does not borrow another job's bad luck", () => {
 });
 
 /**
- * **And it speaks for the blocker too**, which is the case Sol's finding is
- * really about: a reader who pressed this button on an article somebody else's
- * import is holding is watching *that* job, and a driver that cannot advance it
- * leaves them exactly as stuck. `blocking` is the only job on screen there, so
- * it is the one whose driver health matters.
+ * **A refusal is not a stall**, and there is no longer a blocker to borrow one
+ * from.
+ *
+ * This case used to be *"it speaks for the job that is in the way"*: a 409
+ * carried the blocking job, `useStepJob` held it, and the band drew it — so its
+ * driver's health was the health that mattered. The refusal went on 2026-09-02
+ * with the per-article queue (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
+ * § 1g), and what is left is the invariant underneath it: `stalled` is about a
+ * job **on screen**, so a failed press with nothing running says the reason and
+ * nothing about transport.
  */
-it("speaks for the job that is in the way, when that is the one on screen", async () => {
-  /* An ingest holding the article. **Nothing in it writes `sketch`**, which is
-     what makes it a blocker rather than this panel's own job. */
-  refusedBy = {
-    ...sketching(),
-    id: "spya-blocker",
-    steps: [{ name: "hierarchy", label: "Building the hierarchy", status: "running" }],
-  };
-  driverFailures = { "spya-blocker": 4 };
+it("says nothing about transport when the press failed and nothing is running", async () => {
+  refuses = true;
+  driverFailures = { "spya-blocker": 4, "spya-drawing": 9 };
   mount();
-  /* Nothing of ours is running, and before the press there is nothing to say. */
   expect(seen?.job).toBeNull();
   expect(seen?.stalled).toBe(false);
 
   await act(async () => {
     await press?.();
   });
-  expect(seen?.blocking?.id, "the refusal never produced a blocker").toBe("spya-blocker");
-  expect(seen?.stalled).toBe(true);
+  expect(seen?.failed, "the refusal's own words are what the reader gets").toBe(
+    "The request did not reach the server.",
+  );
+  expect(seen?.stalled).toBe(false);
 });
 
 /**
@@ -186,4 +185,64 @@ it("says nothing when there is no job on screen", () => {
   mount();
   expect(seen?.job).toBeNull();
   expect(seen?.stalled).toBe(false);
+});
+
+/* --------------------------------------------------------------------------
+   **Which of several jobs this panel is about.**
+
+   An article holds a *line* of jobs since 2026-09-02
+   (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md),
+   so "the job for this slug and this step" stopped having one answer. Two
+   matching jobs is not exotic: a forced and an unforced glossary both write
+   `glossary` and their work keys differ, so `enqueueOrGet` does not collapse
+   them into one.
+
+   `queue.jobs` is **newest first** (`listJobs`, src/jobs.ts), and the hook took
+   the first active match out of it — so the panel bound to whichever job was
+   newer and silently dropped the other one's progress and its failure.
+
+   Watched red on 2026-09-02 with the old one-liner put back: the first two
+   cases fail, reading *"the panel bound to a queued job while one was running:
+   expected 'spya-newer' to be 'spya-running'"* and *"expected 'spya-newer' to
+   be 'spya-older'"*.
+   -------------------------------------------------------------------------- */
+
+/** A sketch job for this article, at a given moment. */
+function at(id: string, createdAt: string, over: Partial<Job> = {}): Job {
+  return { ...sketching(), id, createdAt, status: "queued", ...over };
+}
+
+it("takes the running job when there is one, whatever the list order", () => {
+  /* Newest first, as the engine hands them over: the queued one is the newer. */
+  jobs = [
+    at("spya-newer", "2026-09-02T12:00:02.000Z"),
+    at("spya-running", "2026-09-02T12:00:01.000Z", { status: "running" }),
+  ];
+  mount();
+  expect(seen?.job?.id, "the panel bound to a queued job while one was running").toBe(
+    "spya-running",
+  );
+});
+
+it("takes the oldest queued job when none is running, which is the one that runs next", () => {
+  jobs = [
+    at("spya-newer", "2026-09-02T12:00:02.000Z"),
+    at("spya-older", "2026-09-02T12:00:01.000Z"),
+  ];
+  mount();
+  /* The same order the claim uses — `(createdAt, id)`, src/store/pg-jobs.ts §
+     `hasPredecessor` — so the panel is about the run that is about to happen
+     rather than about whichever row sorted first. */
+  expect(seen?.job?.id).toBe("spya-older");
+});
+
+it("breaks a tie on the id, the same way the store does", () => {
+  /* Two rows written inside one millisecond. The panel and the claim must
+     agree, or the band watches one job while the server runs the other. */
+  jobs = [
+    at("spya-zzzzzz", "2026-09-02T12:00:01.000Z"),
+    at("spya-aaaaaa", "2026-09-02T12:00:01.000Z"),
+  ];
+  mount();
+  expect(seen?.job?.id).toBe("spya-aaaaaa");
 });

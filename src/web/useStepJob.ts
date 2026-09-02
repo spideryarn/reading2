@@ -51,7 +51,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { driverStalled } from "../job-state.js";
-import type { Job, JobStatus, StepName } from "../types.js";
+import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
 /**
@@ -114,25 +114,6 @@ export interface StepJob {
    */
   failed: string | null;
   /**
-   * The job that **refused** this run, live, or null.
-   *
-   * `POST /api/jobs` answers 409 when the article already has an active job
-   * doing different work — and that job is, by definition, one whose steps are
-   * not this panel's, so `job` above can never be it. The reader was told to
-   * *"stop it first"* with nothing on screen to stop.
-   *
-   * **Its identity comes from the refusal; its state comes from the list.** The
-   * 409 carries the whole record, so the band draws immediately rather than
-   * waiting a poll — and then the polled list wins, because a snapshot taken at
-   * the moment of the refusal would sit there reading *Building the hierarchy ·
-   * 2m 14s* for ever. What it must not come from is a lookup by slug: `listJobs`
-   * mutates and can be a poll behind, and which row actually refused is a fact
-   * only the atomic conflict knows. GPT Sol, 2026-09-01.
-   *
-   * Null again the moment that job is seen to be over — see `failed`.
-   */
-  blocking: Job | null;
-  /**
    * **This tab can see the job and cannot move it.** A separate question from
    * anything on the record, and the reason it comes through here.
    *
@@ -153,18 +134,12 @@ export interface StepJob {
    * the shelf card and not in the band: *"a reader drawing a sketch or
    * generating a glossary may never look at the shelf card; their only surface
    * can therefore spin indefinitely without the warning."*
-   *
-   * True of whichever job is on screen — this panel's or the blocker's — because
-   * a driver that cannot advance the blocker is exactly as stuck.
    */
   stalled: boolean;
   /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
   start(run?: StepRun): Promise<void>;
   cancel(id: string): void;
 }
-
-/** The two statuses that mean a job still holds its article. */
-const ACTIVE: ReadonlySet<JobStatus> = new Set<JobStatus>(["queued", "running"]);
 
 /** Is this job one that would write the artefact this step writes? */
 function writesStep(job: Job, step: StepName): boolean {
@@ -199,13 +174,49 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
   );
   const queue = useJobs(announce);
 
-  const job = useMemo(
-    () =>
-      queue.jobs
-        .filter((j) => j.slug === slug && writesStep(j, step))
-        .find((j) => j.status === "queued" || j.status === "running") ?? null,
-    [queue.jobs, slug, step],
-  );
+  /**
+   * **The job this panel is about**: the one running this step on this article,
+   * or — if none is running — the one that will run next.
+   *
+   * This was `.find(active)` over `queue.jobs` until 2026-09-02, and that was
+   * only ever right while an article could hold one active job. It can hold a
+   * *line* now, and `queue.jobs` is **newest first** (`listJobs`, src/jobs.ts),
+   * so a panel with two matching jobs bound to the newer one and silently
+   * dropped the older one's progress and its failure. Two matching jobs is not
+   * exotic: a forced and an unforced glossary both write `glossary`, and their
+   * work keys differ, so `enqueueOrGet` does not collapse them.
+   *
+   * **Running first, then the oldest queued.** A running job is the one whose
+   * progress there is anything to show. With none running, the oldest queued is
+   * the one `claim`'s predecessor rule will take next — same order,
+   * `(createdAt, id)` — so the panel is about the run that is about to happen
+   * rather than about whichever row sorted first.
+   *
+   * `queue.jobs` is not re-sorted, only scanned: the comparison is between the
+   * two or three rows that match, and building a sorted copy of every job on
+   * every poll to pick one of them is work nobody reads.
+   */
+  const job = useMemo(() => {
+    const mine = queue.jobs.filter((j) => j.slug === slug && writesStep(j, step));
+    const running = mine.find((j) => j.status === "running");
+    if (running) return running;
+    let oldest: Job | null = null;
+    for (const candidate of mine) {
+      if (candidate.status !== "queued") continue;
+      if (!oldest) {
+        oldest = candidate;
+        continue;
+      }
+      /* The same tie-break as the store's, so the panel and the claim cannot
+         disagree about which of two jobs queued in one millisecond goes first —
+         src/store/pg-jobs.ts § `hasPredecessor`. */
+      if (candidate.createdAt < oldest.createdAt) oldest = candidate;
+      else if (candidate.createdAt === oldest.createdAt && candidate.id < oldest.id) {
+        oldest = candidate;
+      }
+    }
+    return oldest;
+  }, [queue.jobs, slug, step]);
 
   /**
    * What went wrong, in the two quite different ways it can.
@@ -221,10 +232,7 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    * precisely how the four copies of this drifted in the first place. `null`
    * means the last press produced a job.
    */
-  const [postFailure, setPostFailure] = useState<{
-    reason: string | null;
-    blocking: Job | null;
-  } | null>(null);
+  const [postFailure, setPostFailure] = useState<{ reason: string | null } | null>(null);
   /**
    * **The last run this mount has anything to say about**, whoever started it.
    *
@@ -271,26 +279,6 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
     return null;
   }, [queue.jobs, watchedId]);
 
-  /**
-   * The blocking job as it is **now**, or null if nothing is in the way.
-   *
-   * The refusal seeds it, the list keeps it current, and a job the list says is
-   * over blocks nothing — so this goes null on its own the moment the import
-   * the reader was waiting for finishes, and `failed` goes with it.
-   *
-   * **Only a positive terminal reading clears it.** A blocker missing from the
-   * list is not a blocker that ended: the list can be a poll behind, and the
-   * server settles a dead claimant lazily (src/jobs.ts § `listJobs`). Falling
-   * back to the seed is the honest answer to "we do not know yet".
-   */
-  const blocking = useMemo(() => {
-    const seed = postFailure?.blocking;
-    if (!seed) return null;
-    const live = queue.jobs.find((j) => j.id === seed.id);
-    if (!live) return seed;
-    return ACTIVE.has(live.status) ? live : null;
-  }, [queue.jobs, postFailure]);
-
   const start = useCallback(
     async ({ force = false, useProfile = true }: StepRun = {}) => {
       setWatchedId(null);
@@ -305,11 +293,7 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
       /* **The reason is taken here, and kept.** See `failed` below: the two
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */
-      setPostFailure(
-        started === null
-          ? { reason: queue.lastFailure(), blocking: queue.lastBlocker() }
-          : null,
-      );
+      setPostFailure(started === null ? { reason: queue.lastFailure() } : null);
       if (started) setWatchedId(started.id);
     },
     [queue, slug, step],
@@ -345,30 +329,21 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    * and held until the next press.
    * `tests/refused-job-reason-survives.test.tsx` drives the real sequence.
    */
-  /**
-   * **A refusal lasts exactly as long as the job it was about.**
-   *
-   * Derived rather than cleared by an effect, so there is no instant in which
-   * the sentence and the band disagree: `blocking` going null *is* the refusal
-   * expiring. Without it the reader watches the import they were waiting for
-   * finish and is still told to wait for it.
-   *
-   * Only for a refusal that named a job. A quota refusal or a dead network has
-   * no blocker and is not on a clock.
-   */
-  const refusal = postFailure?.blocking && blocking === null ? null : postFailure;
-  const failed = refusal ? (refusal.reason ?? "Couldn't start the job.") : stopped;
+  /* **A refusal used to be on a clock**, because one of them named a job: the
+     409 for an article that already had different work in flight, which expired
+     when that job did. There is no such refusal any more — a second job on one
+     article is queued rather than turned away — so what is left is the ordinary
+     kind: a quota, a bad step, a dead network. Those are true until the next
+     press, which is when `start` clears this. */
+  const failed = postFailure ? (postFailure.reason ?? "Couldn't start the job.") : stopped;
 
   /* `driverStalled` rather than a comparison written out here, so the threshold
-     lives in one place — the shelf card asks the same function. Whichever job
-     the band is drawing is the one whose driver matters. */
-  const shown = job ?? blocking;
-  const stalled = shown !== null && driverStalled(queue.driverFailures, shown.id);
+     lives in one place — the shelf card asks the same function. */
+  const stalled = job !== null && driverStalled(queue.driverFailures, job.id);
 
   return {
     job,
     failed,
-    blocking,
     stalled,
     start,
     /* `void`, because the interface promises nothing to await: every surface

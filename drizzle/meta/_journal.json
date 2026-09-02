@@ -365,6 +365,13 @@
       "when": 1788271506934,
       "tag": "0051_referee_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788351034981,
+      "tag": "0052_per_article_job_queue",
+      "breakpoints": true
     }
   ]
 }

@@ -81,8 +81,9 @@
  * Not a simulation and not a `select count(*)`. It runs every `update` inside a
  * transaction and then rolls it back, so the counts are the counts and a unique
  * violation is found by Postgres rather than predicted by us — which matters,
- * because `jobs_active_slug` is a partial index and any prediction written here
- * would have to re-implement its predicate to avoid crying wolf.
+ * because the queue's unique indexes on `jobs` are **partial** — four of them,
+ * src/db/schema.ts — and any prediction written here would have to
+ * re-implement four predicates to avoid crying wolf.
  *
  * ## It can still leave rows behind, and it says so rather than claiming not to
  *

@@ -225,7 +225,7 @@ async function queueJob(slug: string, names: StepName[], force: boolean): Promis
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, `retry-guard-${wanted.id}`);
+  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `retry-guard-${wanted.id}`, reservesName: false });
   MADE.push(job.id);
   return job;
 }

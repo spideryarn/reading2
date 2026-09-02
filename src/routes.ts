@@ -249,7 +249,6 @@ import {
   enqueue,
   forgetJob,
   getJob,
-  JobConflict,
   listJobs,
   retryJob,
 } from "./jobs.js";
@@ -4272,7 +4271,7 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
     /* `taken`. If the first claim got as far as a job, that job is the answer —
        this is the same request arriving twice, not a conflict. */
-    const already = record.slug ? await jobForSlug(record.slug) : null;
+    const already = await jobForUpload(uploadId);
     if (already) return already;
     throw httpError(409, "That upload is already being turned into an article.");
   }
@@ -4282,21 +4281,43 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
   });
-  /* **Immediately, and this line is what makes the paragraph above true.** The
-     record's slug used to be written only by the acquisition step, on success —
-     so a reload of `/add/upload/<id>` while the job was still queued behind
-     another one found a claimed upload with no slug, could not find its job,
-     and answered 409. Every reload, for ever, if acquisition never began. The
-     doc claimed the recovery worked while the field it recovers through was
-     never set. GPT Sol, 2026-08-27. */
+  /* **Immediately**, so that `GET /api/uploads/:id` can say which article this
+     file became rather than only which one it might.
+
+     It used to be written by the acquisition step, on success — so a reload of
+     `/add/upload/<id>` while the job was still queued behind another one found
+     a claimed upload with no slug, could not find its job, and answered 409.
+     Every reload, for ever, if acquisition never began. GPT Sol, 2026-08-27.
+     The recovery no longer goes through this field — `jobForUpload` matches the
+     upload id — but the record still had a hole in it, and the reader's own
+     `/add/upload/<id>` page reads the slug from here. */
   await noteSlug(uploadId, job.slug);
   return job;
 }
 
-/** The job currently working on this article, if there is one. For the repeat-claim case above. */
-async function jobForSlug(slug: string): Promise<Job | null> {
+/**
+ * The job this upload became, whatever state it is in. For the repeat-claim
+ * case above.
+ *
+ * **It matches the upload id, which is the thing it actually means.** It asked
+ * `j.slug === record.slug` until 2026-09-02, over **every** status, and that
+ * was two guesses at once. An article holds a *line* of jobs now, so a reload
+ * of `/add/upload/<id>` could be handed whichever mode job on that article
+ * happened to sort first — a glossary run, presented to the reader as their
+ * import. And it depended on `noteSlug` having landed, where the upload id is
+ * on the job record from the moment `enqueue` returns.
+ *
+ * **Every status, deliberately.** The reader reloading `/add/upload/<id>` after
+ * their ingest has finished — or failed — must be shown *that* job, not a 409.
+ * That is the whole of the recovery, and narrowing this to the active statuses
+ * would take it away again a minute after each import ends.
+ *
+ * Newest first, because `listJobs` is (src/jobs.ts) and a retry of an upload
+ * ingest is the more recent of the two rows.
+ */
+async function jobForUpload(uploadId: string): Promise<Job | null> {
   const all = await listJobs();
-  return all.find((j) => j.slug === slug) ?? null;
+  return all.find((j) => j.upload?.id === uploadId) ?? null;
 }
 
 /**
@@ -5178,37 +5199,6 @@ function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: number }).status === "number";
 }
 
-/**
- * The structured fields an error is allowed to put beside `error`.
- *
- * **One class, one field, and no generic spread** — which is the whole of what
- * stops this becoming a hole. The handler above answers every throw in the API,
- * including a Drizzle failure whose `Error.message` carries bound parameters
- * (src/store/db-errors.ts) and a provider's own words (docs/project/copy.md
- * rule 4). Copying an error's own enumerable properties onto the wire would
- * have made every one of those a candidate; matching `JobConflict` and reading
- * its declared `Job` cannot.
- *
- * And the payload is narrowed by `publicJob`, the same call `GET /api/jobs`
- * makes, so this 409 carries nothing the same reader's next poll would not have
- * handed them a second later. The blocking row is always theirs:
- * `jobs_active_slug` is `(owner_id, slug)` in src/db/schema.ts and the
- * filesystem adapter filters on `ownerId` before it compares anything.
- *
- * **`instanceof` here, where `statusOf` in src/web/lib/api.ts deliberately
- * duck-types.** That one is defensive because a test can mock `lib/api.js` and
- * put a second copy of `HttpError` in the graph; nothing mocks `src/jobs.js` at
- * this seam, both files are server modules in one bundle, and being strict is
- * the point — a duck-typed check would let any object with a `blocking`
- * property onto the wire. `tests/blocking-job-409.test.ts` drives the real
- * import graph, so the identity is a fact rather than an assumption.
- *
- * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
- */
-function structuredDetail(err: unknown): Record<string, unknown> {
-  return err instanceof JobConflict ? { blocking: publicJob(err.blocking) } : {};
-}
-
 function logRequest(
   method: string,
   path: string,
@@ -5481,7 +5471,20 @@ async function serveApi(
        src/monitoring.ts decides what may be *said* about the error. This line
        only decides whether to say anything. */
     if (status >= 500) captureFailure(err, { method, path, status });
-    send(res, status, { error: (err as Error).message, ...structuredDetail(err) });
+    /* **The message and nothing else, and it must stay that way.** A
+       `structuredDetail(err)` used to be spread in beside it, carrying the
+       blocking `Job` out of a `JobConflict`; the per-article queue removed the
+       refusal, so it went with it
+       (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g).
+
+       Whatever brings a structured field back, it must match **one declared
+       class and read one declared field** — never copy an error's own
+       enumerable properties. This handler answers every throw in the API,
+       including a Drizzle failure whose `Error.message` carries bound
+       parameters (src/store/db-errors.ts) and a provider's own words
+       (docs/project/copy.md rule 4), and a generic spread would put every one
+       of those on the wire. */
+    send(res, status, { error: (err as Error).message });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);

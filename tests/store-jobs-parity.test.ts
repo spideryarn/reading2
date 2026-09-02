@@ -222,8 +222,16 @@ const LEASE = 60_000;
  * global cap never enters into what they are testing. The two cases that *are*
  * about the cap pass their own, small, on purpose — a suite-wide constant that
  * both sets shared would make one of them pass for the other's reason.
+ *
+ * **It was 4 until 2026-09-02, and 4 was not out of the way.** The count is
+ * taken over every `running` row in the table, so a peer's `npm test` in another
+ * worktree — which the run lock cannot exclude unless every one of its suites
+ * takes the same key — puts this suite over 4 and the cases about an article's
+ * *line* then answer `already running N of 4` instead of `ahead of it`. Watched
+ * happening while two other runs shared this laptop's database. A number nothing
+ * plausible reaches is the honest way to say "not what this case is about".
  */
-const CAP = 4;
+const CAP = 100;
 /** Prefixed so this file's rows can be found and removed without touching anybody else's. */
 const MINE = "test-store-jobs-";
 
@@ -336,8 +344,11 @@ for (const adapter of ADAPTERS) {
 
     it("hands back what it was given, with nothing turned into null", async () => {
       const job = aJob({ url: "https://example.test/a", profile: "a linguist" });
-      const { job: saved, created } = await store.enqueueOrGet(job, "k1");
-      expect(created).toBe(true);
+      const { job: saved, kind } = await store.enqueueOrGet(job, {
+        workKey: "k1",
+        reservesName: false,
+      });
+      expect(kind).toBe("created");
       expect(saved).toEqual(job);
       /* `Job`'s optional fields mean "we do not have this" and are read with
          `?.` and `!== undefined` all over. A null from the database is a
@@ -350,29 +361,69 @@ for (const adapter of ADAPTERS) {
 
     it("hands back the job already doing this work rather than paying twice", async () => {
       const first = aJob();
-      await store.enqueueOrGet(first, "k1");
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
 
       /* Two instances each scanning their own memory each find nothing and each
          start paying for the same article. */
       const again = { ...aJob(), slug: first.slug };
-      const { job, created, sameWork } = await store.enqueueOrGet(again, "k1");
-      expect(created).toBe(false);
-      expect(sameWork).toBe(true);
+      const { job, kind } = await store.enqueueOrGet(again, {
+        workKey: "k1",
+        reservesName: false,
+      });
+      expect(kind).toBe("sameWork");
       expect(job.id).toBe(first.id);
     });
 
-    it("says when the slug is held by different work, so the caller can move along", async () => {
+    /**
+     * **The de-duplication has to survive a slug holding several jobs**, and
+     * this is the case that says so.
+     *
+     * Both adapters used to answer this question against **one arbitrarily
+     * chosen row** — Postgres `.limit(1)` with no ordering, the filesystem
+     * `.find` in `Map` insertion order — which was correct only while a slug
+     * could hold a single active job. With a line, a request duplicating the
+     * *second* job in it was told the slug was held by different work, and the
+     * reader paid again for something already in flight. So the third request
+     * here matches the second job, never the first.
+     *
+     * Watched red against the `.limit(1)` read: `expected 'created' to be
+     * 'sameWork'` on Postgres.
+     */
+    it("finds the matching job in the line, not whichever row comes first", async () => {
       const first = aJob();
-      await store.enqueueOrGet(first, "k1");
-      const other = { ...aJob(), slug: first.slug };
-      const { created, sameWork } = await store.enqueueOrGet(other, "k2");
-      expect(created).toBe(false);
-      expect(sameWork).toBe(false);
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
+      const second = aJob({ slug: first.slug });
+      await store.enqueueOrGet(second, { workKey: "k2", reservesName: false });
+
+      const again = aJob({ slug: first.slug });
+      const found = await store.enqueueOrGet(again, { workKey: "k2", reservesName: false });
+      expect(found.kind).toBe("sameWork");
+      expect(found.job.id).toBe(second.id);
+    });
+
+    /**
+     * **This case used to be its own opposite**, and the inversion is the whole
+     * of what Greg asked for.
+     *
+     * It said *"says when the slug is held by different work, so the caller can
+     * move along"* — because `jobs_active_slug` covered `queued`, so a second,
+     * different request for one article could not be stored at all and the
+     * caller had to rename the article or refuse. Different work on one article
+     * now queues behind the first, and there is nothing to move along from.
+     */
+    it("takes different work on a held slug rather than turning it away", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
+      const other = aJob({ slug: first.slug });
+      const queued = await store.enqueueOrGet(other, { workKey: "k2", reservesName: false });
+      expect(queued.kind).toBe("created");
+      expect(queued.job.id).toBe(other.id);
+      expect(queued.job.status).toBe("queued");
     });
 
     it("reads somebody else's job as one that is not there", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       expect(await store.get(job.id, OWNER)).toBeDefined();
       expect(await store.get(job.id, STRANGER)).toBeUndefined();
       expect((await store.claim(job.id, STRANGER, mintAttempt(), LEASE, CAP)).kind).toBe("gone");
@@ -395,7 +446,7 @@ for (const adapter of ADAPTERS) {
      */
     it("accepts the token the caller actually mints", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.releaseStep(job.id, attempt, job.steps, {});
@@ -403,7 +454,7 @@ for (const adapter of ADAPTERS) {
 
     it("lets one claimant in and turns the second away", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
 
       expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
       expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("busy");
@@ -433,8 +484,8 @@ for (const adapter of ADAPTERS) {
     it("refuses a claim that would put the machine over its cap", async () => {
       const a = aJob();
       const b = aJob();
-      await store.enqueueOrGet(a, "k1");
-      await store.enqueueOrGet(b, "k2");
+      await store.enqueueOrGet(a, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(b, { workKey: "k2", reservesName: false });
 
       const held = mintAttempt();
       expect((await store.claim(a.id, OWNER, held, LEASE, 1)).kind).toBe("claimed");
@@ -482,7 +533,7 @@ for (const adapter of ADAPTERS) {
       "will not claim while another claimant holds the queue lock",
       async () => {
         const job = aJob();
-        await store.enqueueOrGet(job, "k1");
+        await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
 
         /* Its own connection, because a transaction cannot block on a lock it
            already holds — taking it through `getDb()` would prove nothing. */
@@ -529,8 +580,8 @@ for (const adapter of ADAPTERS) {
     it("runs two jobs on two different articles at the same time", async () => {
       const a = aJob();
       const b = aJob();
-      await store.enqueueOrGet(a, "k1");
-      await store.enqueueOrGet(b, "k2");
+      await store.enqueueOrGet(a, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(b, { workKey: "k2", reservesName: false });
 
       /* The tokens are kept rather than read back off the job: `toJob` does not
          carry `attempt_id`, deliberately, so the caller's own is the only
@@ -566,7 +617,7 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(missing, OWNER, mintAttempt(), LEASE, 0)).kind).toBe("gone");
 
       const over = aJob();
-      await store.enqueueOrGet(over, "k1");
+      await store.enqueueOrGet(over, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(over.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.finish(over.id, attempt, { status: "done", steps: over.steps });
@@ -576,40 +627,33 @@ for (const adapter of ADAPTERS) {
          below it — otherwise a full machine is an oracle for which job ids
          exist. */
       const mine = aJob();
-      await store.enqueueOrGet(mine, "k2");
+      await store.enqueueOrGet(mine, { workKey: "k2", reservesName: false });
       expect((await store.claim(mine.id, STRANGER, mintAttempt(), LEASE, 0)).kind).toBe("gone");
     });
 
     /**
-     * **And two jobs on ONE article do not**, which is the guarantee that pays
-     * for the one above.
+     * **And two jobs on ONE article take turns**, which is the guarantee that
+     * pays for the one above.
      *
-     * Not a nicety: a job publishes by copying whatever revision is current,
-     * writing into the copy and moving the pointer, and `publishRevisionIn`
-     * never compares what it branched from against what is current now. Two
-     * jobs on one article therefore lose one of the two results, silently, with
-     * both reporting success — docs/reusable/silent-success.md.
+     * Not a nicety: src/store/artifacts-fs.ts keys every artefact write, the
+     * attempt marker and `interrupted()` on `(slug, step)` in one shared
+     * `data/<slug>/` directory with no job scoping, and on Postgres a job
+     * publishes by copying whatever revision is current and moving the pointer.
+     * Two claimants on one article therefore overwrite each other, and both
+     * report success — docs/reusable/silent-success.md.
      *
-     * **This fails today at its second line**, before it reaches the claim:
-     * `jobs_active_slug` covers `queued`, so the second `enqueueOrGet` does not
-     * create a row at all. That is the refusal being moved from enqueue time to
-     * claim time, seen from the store.
+     * **Skipped until 2026-09-02**, because the second job had nowhere to be
+     * stored: `jobs_active_slug` covered `queued`, so this failed at its second
+     * line. It was written and watched red first so that turning it on was a
+     * one-word change to something already known to fail for the right reason.
      */
-    /* **Stage 2, and it is skipped rather than absent.** This is the behaviour
-       Greg asked for and it is not built yet: it must not ship before late steps
-       read the published store, because a job queued behind an ingest claims on
-       some other instance and opens `blocks.json` in its own empty scratch
-       directory — docs/plans/260830ar-several-articles-at-once.md § The prerequisite, and
-       docs/plans/260830aq-late-steps-read-the-store.md, which is another session's.
-       Written and watched red first, so that turning it on is a one-word change
-       to something already known to fail for the right reason. */
-    it.skip("queues a second job for one article rather than refusing it, and will not run both", async () => {
+    it("queues a second job for one article rather than refusing it, and will not run both", async () => {
       const first = aJob();
-      await store.enqueueOrGet(first, "k1");
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
       const second = aJob({ slug: first.slug });
 
-      const queued = await store.enqueueOrGet(second, "k2");
-      expect(queued.created).toBe(true);
+      const queued = await store.enqueueOrGet(second, { workKey: "k2", reservesName: false });
+      expect(queued.kind).toBe("created");
       expect(queued.job.id).toBe(second.id);
       expect(queued.job.status).toBe("queued");
 
@@ -627,12 +671,292 @@ for (const adapter of ADAPTERS) {
       await store.releaseStep(first.id, held, first.steps, {});
     });
 
+    /* ------------------------------------------- the line, and its order -- */
+
+    /**
+     * **Three jobs claim in the order they were asked for**, with the claims
+     * **attempted in reverse**.
+     *
+     * The reverse is the whole point: claiming them in order would pass against
+     * a `claim` that had no order rule at all, since each would simply be next.
+     *
+     * **And the timestamps are set a second apart, explicitly.** `createdAt` is
+     * the application's millisecond clock, so three inserts in one loop can
+     * share a millisecond and then order on a random id — and the test would be
+     * asserting whatever the ids happened to do, passing or failing by luck.
+     * GPT Sol, 2026-09-02, on a draft of this that used `aJob()`'s own `now`.
+     */
+    it("runs an article's jobs in the order they were asked for, whatever order they are claimed in", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const line = [0, 1, 2].map((n) =>
+        aJob({ slug, createdAt: new Date(base + n * 1000).toISOString() }),
+      );
+      for (const [n, job] of line.entries()) {
+        const put = await store.enqueueOrGet(job, { workKey: `k${n}`, reservesName: false });
+        expect(put.kind).toBe("created");
+      }
+
+      const pending = [...line];
+      while (pending.length > 0) {
+        const wanted = pending[0]!;
+        let heldBy = "";
+        /* Backwards, so the only thing that can produce the right answer is the
+           rule rather than the order of asking. */
+        for (const job of [...pending].reverse()) {
+          const attempt = mintAttempt();
+          const outcome = await store.claim(job.id, OWNER, attempt, LEASE, CAP);
+          if (job.id === wanted.id) {
+            expect(outcome.kind).toBe("claimed");
+            heldBy = attempt;
+          } else {
+            expect(outcome.kind).toBe("busy");
+            expect(outcome.kind === "busy" && outcome.why).toMatch(/ahead of it/);
+          }
+        }
+        /* Finished rather than released: a released job goes back to `queued`
+           and is still at the head of its own line. */
+        await store.finish(wanted.id, heldBy, { status: "done", steps: wanted.steps });
+        pending.shift();
+      }
+    });
+
+    /**
+     * **Stop lands on a running predecessor, and the successor still waits.**
+     *
+     * This replaces a case that asserted the opposite — *"a cancelling
+     * predecessor does not block its successor"* — against a `queued` row
+     * carrying `cancelling`, which the cancellation API cannot produce and the
+     * schema now forbids outright. It would have gone green while the real
+     * running path stayed broken.
+     *
+     * The rule: Stop on a *running* job leaves it `running` with `cancelling`
+     * set until its claimant releases, and `jobs_one_running_per_slug` still
+     * covers that row — so skipping it would buy the successor a unique
+     * violation rather than a claim. The successor unblocks when the
+     * cancellation becomes **terminal**, not when Stop is pressed.
+     */
+    it("keeps a successor waiting while a stopped predecessor is still running", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const first = aJob({ slug, createdAt: new Date(base).toISOString() });
+      const second = aJob({ slug, createdAt: new Date(base + 1000).toISOString() });
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(second, { workKey: "k2", reservesName: false });
+
+      const held = mintAttempt();
+      expect((await store.claim(first.id, OWNER, held, LEASE, CAP)).kind).toBe("claimed");
+
+      const stopped = await store.requestCancel(first.id, OWNER);
+      expect(stopped?.status).toBe("running");
+      expect(stopped?.cancelling).toBe(true);
+
+      const waiting = await store.claim(second.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(waiting.kind).toBe("busy");
+      expect(waiting.kind === "busy" && waiting.why).toMatch(/ahead of it/);
+
+      /* The claimant lets go, which is where the cancellation actually lands —
+         `releaseStep` settles a `cancelling` job as `cancelled` rather than
+         requeueing it. */
+      const settled = await store.releaseStep(first.id, held, first.steps, {});
+      expect(settled.status).toBe("cancelled");
+
+      expect((await store.claim(second.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+    });
+
+    /**
+     * **A predecessor belonging to somebody else blocks too**, because the line
+     * is the article's and `articles.slug` is global.
+     *
+     * An owner-scoped rule would let two people claim one article at once, and
+     * what that corrupts is a directory and a revision chain neither of them
+     * owns exclusively. The cost of getting this right — a queued row one owner
+     * cannot see or stop, holding up another's line — is closed at *enqueue* by
+     * the ownership check in `src/jobs.ts`, not here.
+     */
+    it("waits behind an older job on this article even when it belongs to somebody else", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const theirs = aJob({ slug, ownerId: OWNER_B, createdAt: new Date(base).toISOString() });
+      const mine = aJob({ slug, createdAt: new Date(base + 1000).toISOString() });
+      await store.enqueueOrGet(theirs, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(mine, { workKey: "k2", reservesName: false });
+
+      const blocked = await store.claim(mine.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(blocked.kind).toBe("busy");
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/ahead of it/);
+    });
+
+    /**
+     * **A finished job is history and holds nothing up.** The predicate is
+     * `status in ('queued','running')`, and the other direction — waiting on any
+     * older row at all — is an article that can never be worked on twice.
+     */
+    it("does not wait behind a job on this article that is already over", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const over = aJob({ slug, createdAt: new Date(base).toISOString() });
+      const next = aJob({ slug, createdAt: new Date(base + 1000).toISOString() });
+      await store.enqueueOrGet(over, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      await store.claim(over.id, OWNER, attempt, LEASE, CAP);
+      await store.finish(over.id, attempt, { status: "done", steps: over.steps });
+
+      await store.enqueueOrGet(next, { workKey: "k2", reservesName: false });
+      expect((await store.claim(next.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+    });
+
+    /* ---------------------------------- reserving a name, and an address -- */
+
+    /**
+     * **A request that is merely naming an article reserves nothing**, which is
+     * what lets a line exist at all.
+     *
+     * A re-ingest of a URL this owner already has an article for adopts that
+     * slug rather than minting — so it does not reserve, and it queues behind
+     * whatever that article is already doing instead of being turned away or
+     * given a second name. `reserves_name` is *the slug was minted*, and this is
+     * the half of that definition that the August draft — "the request carried a
+     * URL" — got wrong.
+     */
+    it("queues behind an article's own work when the slug was adopted rather than minted", async () => {
+      const first = aJob({ url: "https://example.test/paper" });
+      await store.enqueueOrGet(first, {
+        workKey: "k1",
+        reservesName: true,
+        urlKey: "example.test/paper",
+      });
+
+      const again = aJob({ slug: first.slug, url: "https://example.test/paper" });
+      const queued = await store.enqueueOrGet(again, {
+        workKey: "k2",
+        reservesName: false,
+        urlKey: "example.test/paper",
+      });
+      expect(queued.kind).toBe("created");
+      expect(queued.job.slug).toBe(first.slug);
+    });
+
+    /**
+     * **Two accounts cannot both be minting one name**, because `articles.slug`
+     * is the URL contract and there is only one `/read/<slug>`.
+     *
+     * The de-duplication index is owner-scoped and this one is not, and that
+     * asymmetry is deliberate: whose request it is decides de-duplication;
+     * nothing about whose request it is decides who gets the name.
+     */
+    it("refuses a second reserver of one name, in any account", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: true });
+
+      const theirs = aJob({ slug: first.slug, ownerId: OWNER_B });
+      const refused = await store.enqueueOrGet(theirs, { workKey: "k2", reservesName: true });
+      expect(refused.kind).toBe("nameTaken");
+      expect(refused.job.id).toBe(first.id);
+    });
+
+    /**
+     * **And a job that stopped but has not finished still holds its name**,
+     * where it no longer de-duplicates.
+     *
+     * The two predicates differ on purpose: a request that de-duplicated onto a
+     * job the reader had just stopped would vanish into a job about to end,
+     * while the name really is still spoken for — its claimant is inside it.
+     * Both halves are asserted here, because getting either one to match the
+     * other is a one-word change.
+     */
+    it("keeps a stopped job's name reserved while releasing its work key", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: true });
+      const held = mintAttempt();
+      await store.claim(first.id, OWNER, held, LEASE, CAP);
+      await store.requestCancel(first.id, OWNER);
+
+      // The same work, which must NOT collapse onto a job that is about to end.
+      const same = aJob({ slug: first.slug });
+      expect(
+        (await store.enqueueOrGet(same, { workKey: "k1", reservesName: false })).kind,
+      ).toBe("created");
+
+      // The same name, which is still taken.
+      const named = aJob({ slug: first.slug });
+      expect((await store.enqueueOrGet(named, { workKey: "k3", reservesName: true })).kind).toBe(
+        "nameTaken",
+      );
+
+      await store.releaseStep(first.id, held, first.steps, {});
+    });
+
+    /**
+     * **Two pastes of one URL at the same instant make one article.**
+     *
+     * This replaces *"two uploads called `paper.pdf` get two slugs"*, which
+     * passes today and would pass if `reserves_name` were never persisted at
+     * all: every minted slug ends in a random short id, so the two are separate
+     * whatever the store does. The race that is real is the one where **the
+     * slugs differ and the address does not** — both callers looked, both found
+     * nothing, and every unique key contains the slug. `jobs_active_source` is
+     * the only thing that catches it, and the loser adopts the winner's slug
+     * rather than minting a second name.
+     *
+     * `Promise.all` rather than one call after the other, because a sequential
+     * pair does not test a race — GPT Sol, 2026-09-02. On Postgres the two
+     * inserts really are concurrent; the filesystem adapter decides between
+     * `await ready()` and `index.set` with no `await` in between, which is its
+     * whole claim.
+     */
+    it("makes one article out of two simultaneous requests for one address", async () => {
+      const urlKey = `example.test/race-${mintId()}`;
+      const a = aJob({ url: `https://${urlKey}` });
+      const b = aJob({ url: `https://${urlKey}` });
+      // Different slugs, exactly as two independent mints produce.
+      expect(a.slug).not.toBe(b.slug);
+
+      const [first, second] = await Promise.all([
+        store.enqueueOrGet(a, { workKey: "k1", reservesName: true, urlKey }),
+        store.enqueueOrGet(b, { workKey: "k1", reservesName: true, urlKey }),
+      ]);
+
+      const kinds = [first!.kind, second!.kind].sort();
+      expect(kinds).toEqual(["created", "sourceTaken"]);
+      /* The loser is pointed at the winner's article, not merely refused — that
+         slug is what the caller adopts, and adopting the wrong one is how the
+         reader gets two articles for one address anyway. */
+      const won = first!.kind === "created" ? first! : second!;
+      const lost = first!.kind === "created" ? second! : first!;
+      expect(lost.job.slug).toBe(won.job.slug);
+    });
+
+    /**
+     * **A request that carries no address is outside the source rule**, and two
+     * of them are two articles.
+     *
+     * That is an upload: it has no URL to compare, so it always mints, and
+     * `url_key` is null. A null is never equal to anything in a unique index, so
+     * `jobs_active_source` ignores those rows — which is what Greg asked for:
+     * *"if it was previously uploaded by a different user, then reuse the source
+     * object, but add a new per-user article object"* (2026-08-26). Without it,
+     * a `coalesce(url_key, '')` anywhere would quietly make every upload one
+     * article, and the two here carry the same work key to prove that the
+     * absence of an address is what decides rather than the key.
+     */
+    it("lets two reserving requests with no address at all both go through", async () => {
+      const a = aJob();
+      const b = aJob();
+      expect((await store.enqueueOrGet(a, { workKey: "k1", reservesName: true })).kind).toBe(
+        "created",
+      );
+      expect((await store.enqueueOrGet(b, { workKey: "k1", reservesName: true })).kind).toBe(
+        "created",
+      );
+    });
+
     it("will not claim a job the reader has stopped, or one already over", async () => {
       /* Stop on a job somebody is **inside**. That is the only way to reach
          `stopping` since 2026-08-27: a *queued* job is cancelled outright by
          the same call, because nobody is there to notice a flag. */
       const stopping = aJob();
-      await store.enqueueOrGet(stopping, "k1");
+      await store.enqueueOrGet(stopping, { workKey: "k1", reservesName: false });
       const held = mintAttempt();
       await store.claim(stopping.id, OWNER, held, LEASE, CAP);
       await store.requestCancel(stopping.id, OWNER);
@@ -647,7 +971,7 @@ for (const adapter of ADAPTERS) {
       await store.releaseStep(stopping.id, held, stopping.steps, {});
 
       const over = aJob();
-      await store.enqueueOrGet(over, "k2");
+      await store.enqueueOrGet(over, { workKey: "k2", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(over.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.finish(over.id, attempt, { status: "done", steps: over.steps });
@@ -664,7 +988,7 @@ for (const adapter of ADAPTERS) {
      */
     it("lets the claim go after a step, so the next request can have it", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -685,7 +1009,7 @@ for (const adapter of ADAPTERS) {
          So: the steps move, the status stays `running`, and the token stays
          put — a `queued` here would let a second request in mid-step. */
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -709,7 +1033,7 @@ for (const adapter of ADAPTERS) {
          and still carries its token — which the schema permits, because
          `jobs_running_is_fenced` constrains `running` rows only. */
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -723,25 +1047,15 @@ for (const adapter of ADAPTERS) {
       );
     });
 
-    it("names the job holding a slug, and says nothing about a finished one", async () => {
-      /* What slug allocation asks. A job that has not written a `meta.json` yet
-         still owns its name, or two articles whose URLs end in the same segment
-         both take the bare one and the second is quietly handed the first's
-         job. A *finished* job owns nothing — its article speaks for it. */
-      const job = aJob();
-      await store.enqueueOrGet(job, "k1");
-      expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
-      // Somebody else asking learns nothing, exactly as with `get`.
-      expect(await store.activeForSlug(job.slug, STRANGER)).toBeUndefined();
+    /* **`activeForSlug` was tested here, and both are gone.**
 
-      const attempt = mintAttempt();
-      await store.claim(job.id, OWNER, attempt, LEASE, CAP);
-      expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
-
-      await store.finish(job.id, attempt, { status: "done", steps: job.steps });
-      expect(await store.activeForSlug(job.slug, OWNER)).toBeUndefined();
-    });
-
+       *"names the job holding a slug, and says nothing about a finished one"* —
+       a question that can no longer have one answer, since an article holds a
+       line. It had no production callers by the time it went, and inventing a
+       second ambiguous singular lookup to replace an unused one would be adding
+       the problem back. What replaced it is not a lookup at all: the name is
+       held by `jobs_reserved_slug` and reported as `nameTaken`, which is
+       asserted above. See src/store/jobs.ts. */
     /**
      * **The fence's third condition, tested on the state that needs it.**
      *
@@ -758,7 +1072,7 @@ for (const adapter of ADAPTERS) {
      */
     it("refuses a write onto a finished job that still carries its token", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -781,7 +1095,7 @@ for (const adapter of ADAPTERS) {
 
     it("refuses a write from a claimant whose job somebody else now holds", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const mine = mintAttempt();
       await store.claim(job.id, OWNER, mine, LEASE, CAP);
       await store.releaseStep(job.id, mine, job.steps, {});
@@ -818,7 +1132,7 @@ for (const adapter of ADAPTERS) {
      */
     it("refuses every write from a claimant whose lease has run out, with nothing having swept it", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -849,7 +1163,7 @@ for (const adapter of ADAPTERS) {
 
     it("fails a job whose lease ran out, and leaves a live one alone", async () => {
       const dead = aJob();
-      await store.enqueueOrGet(dead, "k1");
+      await store.enqueueOrGet(dead, { workKey: "k1", reservesName: false });
       await store.claim(dead.id, OWNER, mintAttempt(), LEASE, CAP);
       await adapter.expire(dead.id);
       /* **The ids, not a count.** A sweep that returns `1` cannot say *which* job
@@ -867,7 +1181,7 @@ for (const adapter of ADAPTERS) {
 
       // The running slot is free again, which is the other half of why this runs.
       const alive = aJob();
-      await store.enqueueOrGet(alive, "k2");
+      await store.enqueueOrGet(alive, { workKey: "k2", reservesName: false });
       await store.claim(alive.id, OWNER, mintAttempt(), LEASE, CAP);
       expect(await store.settleExpired()).toEqual([]);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
@@ -896,8 +1210,8 @@ for (const adapter of ADAPTERS) {
     it("settles this owner's expired job, and cannot reach anybody else's", async () => {
       const mine = aJob();
       const theirs = aJob({ ownerId: OWNER_B });
-      await store.enqueueOrGet(mine, "k1");
-      await store.enqueueOrGet(theirs, "k2");
+      await store.enqueueOrGet(mine, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(theirs, { workKey: "k2", reservesName: false });
       expect((await store.claim(mine.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
       expect((await store.claim(theirs.id, OWNER_B, mintAttempt(), LEASE, CAP)).kind).toBe(
         "claimed",
@@ -939,7 +1253,7 @@ for (const adapter of ADAPTERS) {
      */
     it("settles a stopped job as cancelled, rather than telling the reader they were interrupted", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -975,7 +1289,7 @@ for (const adapter of ADAPTERS) {
      */
     it("stops a job whose claimant is provably gone in one statement, rather than waiting out a lease nobody holds", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
       await adapter.expire(job.id);
 
@@ -1014,7 +1328,7 @@ for (const adapter of ADAPTERS) {
     it("settles the step that was running, and says why only when nobody asked", async () => {
       /** Claim it and leave one step visibly running, as any long step does. */
       async function midStep(job: Job, key: string): Promise<string> {
-        await store.enqueueOrGet(job, key);
+        await store.enqueueOrGet(job, { workKey: key, reservesName: false });
         const attempt = mintAttempt();
         expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
         const startedAt = new Date().toISOString();
@@ -1094,7 +1408,7 @@ for (const adapter of ADAPTERS) {
       const bystanders = [mixed[0], mixed[2], mixed[3]].map((step) => structuredClone(step));
 
       const job = aJob({ steps: structuredClone(mixed) });
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.noteProgress(job.id, attempt, structuredClone(mixed));
@@ -1114,7 +1428,7 @@ for (const adapter of ADAPTERS) {
 
     it("cancels a queued job outright, and only asks a running one — in one call", async () => {
       const queued = aJob();
-      await store.enqueueOrGet(queued, "k1");
+      await store.enqueueOrGet(queued, { workKey: "k1", reservesName: false });
       /* Nobody is inside a queued job, so there is no `cancelling` flag for
          anyone to notice — p-queue's own callback used to clear it and Postgres
          provides no such callback. It has to be terminal here or never. */
@@ -1123,7 +1437,7 @@ for (const adapter of ADAPTERS) {
       expect(stopped?.cancelling).toBeFalsy();
 
       const running = aJob();
-      await store.enqueueOrGet(running, "k2");
+      await store.enqueueOrGet(running, { workKey: "k2", reservesName: false });
       await store.claim(running.id, OWNER, mintAttempt(), LEASE, CAP);
       const asked = await store.requestCancel(running.id, OWNER);
       expect(asked?.status).toBe("running");
@@ -1146,7 +1460,7 @@ for (const adapter of ADAPTERS) {
      */
     it("ends a job whose Stop arrived while a step was running, rather than requeueing it", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
@@ -1179,11 +1493,11 @@ for (const adapter of ADAPTERS) {
      */
     it("frees the running slot once a claimant has stopped answering", async () => {
       const dead = aJob();
-      await store.enqueueOrGet(dead, "k1");
+      await store.enqueueOrGet(dead, { workKey: "k1", reservesName: false });
       expect((await store.claim(dead.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
 
       const waiting = aJob();
-      await store.enqueueOrGet(waiting, "k2");
+      await store.enqueueOrGet(waiting, { workKey: "k2", reservesName: false });
       /* Blocked, correctly, while the first job is genuinely running — and
          **at `maxRunning: 1`**, because that is the only thing that makes the
          dead claimant's slot *the* slot. Under the suite's ordinary `CAP` there
@@ -1206,7 +1520,7 @@ for (const adapter of ADAPTERS) {
 
     it("refuses to forget a job that is still going", async () => {
       const job = aJob();
-      await store.enqueueOrGet(job, "k1");
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
       expect(await store.forget(job.id, OWNER)).toBe(false);
       const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
@@ -1226,7 +1540,7 @@ for (const adapter of ADAPTERS) {
 
     /** Queue it, claim it, end it. The three lines every case below repeats. */
     async function endJob(job: Job, key: string, ending: "done" | "error"): Promise<void> {
-      await store.enqueueOrGet(job, key);
+      await store.enqueueOrGet(job, { workKey: key, reservesName: false });
       const attempt = mintAttempt();
       await store.claim(job.id, OWNER, attempt, LEASE, CAP);
       await store.finish(job.id, attempt, {
@@ -1348,7 +1662,7 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
         status: "queued",
         createdAt: new Date().toISOString(),
       },
-      `clock-${id}`,
+      { workKey: `clock-${id}`, reservesName: false },
     );
     return id;
   }
@@ -1364,7 +1678,7 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
       status: "queued",
       createdAt: new Date().toISOString(),
     };
-    await pgJobStore.enqueueOrGet(job, "clock");
+    await pgJobStore.enqueueOrGet(job, { workKey: "clock", reservesName: false });
 
     const attempt = mintAttempt();
     const HOUR = 60 * 60_000;

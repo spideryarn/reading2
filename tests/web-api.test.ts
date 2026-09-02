@@ -188,10 +188,12 @@ describe("the status on a thrown error", () => {
  * **The structured half of a refusal.**
  *
  * `readJson` used to keep the server's sentence and throw the rest of the body
- * away, which made a structured refusal impossible to act on: `POST /api/jobs`
- * answers 409 with the job that is in the way beside the message, and until
- * 2026-09-01 nothing downstream could see it. GPT Sol named this in the stage 1
- * review as the thing stage 6 would need.
+ * away, which made a structured refusal impossible to act on. The case it was
+ * built for is gone — `POST /api/jobs` answered 409 with the job that was in the
+ * way, and since 2026-09-02 a second job on one article queues instead
+ * (docs/project/ingest-queue.md) — but the parsing rule is general and stays, so
+ * the payloads below are a **synthetic** structured refusal rather than one any
+ * route sends today.
  *
  * `detailsOf` rather than reading `.details`, for the same reason `statusOf` is
  * duck-typed: a test that mocks `lib/api.js` supplies its own `readJson`, and a
@@ -204,15 +206,15 @@ describe("the structured fields beside the message", () => {
   it("keeps them, and keeps the sentence too", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const refused = await readJson(
-      json({ error: "Spideryarn is already busy with this article.", blocking: { id: "spya-k3m9qt" } }, 409),
+      json({ error: "That is being worked on.", holder: { id: "spya-k3m9qt" } }, 409),
     ).catch((e: unknown) => e);
 
-    expect((refused as Error).message).toBe("Spideryarn is already busy with this article.");
+    expect((refused as Error).message).toBe("That is being worked on.");
     expect(statusOf(refused)).toBe(409);
     /* `error` is the message and is not repeated here: `details` means *what
        the server sent beside the sentence*, so a caller reading it never has to
        know which key the prose lives under. */
-    expect(detailsOf(refused)).toEqual({ blocking: { id: "spya-k3m9qt" } });
+    expect(detailsOf(refused)).toEqual({ holder: { id: "spya-k3m9qt" } });
   });
 
   it("is an empty object rather than a guess when the body carried none", async () => {
