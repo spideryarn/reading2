@@ -5,7 +5,7 @@ the same family of questions. Who are you, what may you do, and what stops someb
 asking politely. The build is
 [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md).
 
-**Status: half built.** The Stripe side, the schema and the quota mechanism exist; the routes and
+**Status: half built.** Tiers are database rows as of 2026-09-02; The Stripe side, the schema and the quota mechanism exist; the routes and
 the reader-facing surface do not. What is not built is marked *not built* below rather than
 described in the present tense.
 
@@ -17,8 +17,10 @@ described in the present tense.
 | **Reader** | 20 / month | $10 | £8 | €9 |
 | **Researcher** | 150 / month | $50 | £40 | €45 |
 
-The table in code is [`PAID_TIERS`](../../src/billing/tiers.ts), and it is the only place these
-numbers live.
+These live in the **`billing_tiers` table**, not in code — see
+[Adding a tier or a currency](#adding-a-tier-or-a-currency). They are repeated here because a row
+is something a person can change, and a document that only says "look at the database" is no use to
+somebody deciding whether to.
 
 **The quotas moved on 2026-09-02, and the reason is worth keeping.** Reader started at 100 ingests
 for $10 because nobody had measured what an ingest costs. When measurement came back saying a full
@@ -28,9 +30,9 @@ lose £90 a month per user. Reader dropped to 20. Greg, 2026-09-02:
 > it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
 > (which we can always increase later)
 
-**Raising a quota is a one-line change** in `PAID_TIERS` — no Stripe object, no migration, no price
-change. That asymmetry is deliberate and worth preserving: we can be generous later cheaply, and
-being generous now is the expensive mistake to unwind.
+**Raising a quota is one `UPDATE`** — no deploy, no Stripe object, no migration. That asymmetry is
+deliberate and worth preserving: we can be generous later cheaply, and being generous now is the
+expensive mistake to unwind.
 
 ### Why three currencies rather than one
 
@@ -48,41 +50,88 @@ mainstream cards, which is invisible to us and a known conversion-killer.
 being shown somebody else's price. They were set at roughly GBP/USD 1.35 and EUR/USD 1.16, rounded
 up to whole units, which lands each about 4–8% above spot — headroom on purpose, because a price
 set at spot goes underwater the moment the rate moves and **Stripe prices cannot be edited**. Two
-properties `tests/billing-tiers.test.ts` pins: the ratio between tiers is **5× in every currency**,
-so the pricing page tells one story everywhere; and the amounts are whole units, which is the
-prosumer-tool convention (Linear, Copilot, Notion) rather than the `.99` of consumer subscriptions.
+properties `tests/billing-tiers.test.ts` pins against the real rows: every active tier is priced in
+every currency any tier offers, and the amounts are whole units — the prosumer-tool convention
+(Linear, Copilot, Notion) rather than the `.99` of consumer subscriptions. The seeded numbers also
+keep a 5× ratio between tiers in every currency, so the pricing page tells one story everywhere.
 
 ## Adding a tier or a currency
 
-Both are one edit to [`PAID_TIERS`](../../src/billing/tiers.ts) and a re-run of the setup script.
-The list is walked rather than hardcoded, so nothing else has a tier's name in it.
+**Tiers are rows, not code.** `billing_tiers` and `billing_tier_prices` are the source of truth,
+and Stripe follows them. Greg, 2026-09-02:
 
-**A new currency** — add it to `CURRENCIES`, add an amount to every tier's `amounts`, run
-`npx tsx scripts/stripe-setup.ts` (dry run) then `--apply`. The script sees the live price lacks the
-currency, creates a **new** price, and moves the lookup key onto it with `transfer_lookup_key`.
-Paste the new ids into `.env.local`.
+> instead of adding them as environment variables, could we add them to the database, so that it's
+> easier to modify (e.g. for agents, in UI, etc)
 
-**A new tier** — add an entry with a fresh `id`, `lookupKey` and `envVar`, then:
+So there is no `STRIPE_PRICE_*` environment variable and nothing to paste onto three machines.
 
-1. `npx tsx scripts/stripe-setup.ts --apply`, and paste the new `STRIPE_PRICE_…` into `.env.local`.
-2. Add that variable name to `.env.example`, to `ALLOWLIST` in
-   [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts), and to the env table in
-   [deployment.md](deployment.md#environment-variables).
-3. At go-live, create it in live mode and set the variable in Vercel.
+**Raise a quota** — one `UPDATE`, no deploy, no Stripe call, no migration:
 
-`tests/billing-tiers.test.ts` will fail if you miss a currency, reuse a lookup key or an
-environment variable, or make a dearer tier that allows fewer ingests.
+```sql
+update spideryarn.billing_tiers set ingests_per_period = 50 where id = 'reader';
+```
 
-### The three things that make this safe to change
+Live within thirty seconds (`src/store/pg-tiers.ts` caches the table for that long).
 
-- **Existing subscribers are never moved.** A replaced price stays alive and unarchived, so anyone
-  already billing on it keeps their terms. Migrating them is a separate, visible decision — not a
-  side effect of running a setup script.
-- **The lookup key is the identity, not the name.** Never change one. It is how a re-run finds what
-  it made last time instead of minting a second price that nobody notices until two customers are
-  on different ones.
-- **An unrecognised price falls to the free tier**, logged. So a price you created and forgot to
-  configure costs a customer an email, not us a hundred ingests a month.
+**Add a currency** — insert a price row, then run the script:
+
+```sql
+insert into spideryarn.billing_tier_prices (tier_id, currency, unit_amount)
+values ('reader', 'cad', 1400), ('researcher', 'cad', 7000);
+```
+
+**Add a tier** — insert the tier and its prices, then run the script:
+
+```sql
+insert into spideryarn.billing_tiers
+  (id, product_name, description, ingests_per_period, lookup_key, sort_order)
+values ('scholar', 'Spideryarn Scholar', '500 articles a month.', 500,
+        'spideryarn_scholar_monthly', 30);
+```
+
+Then, for either:
+
+```bash
+npx tsx scripts/stripe-setup.ts            # says what it would do
+npx tsx scripts/stripe-setup.ts --apply    # creates the Stripe objects, writes the id back
+```
+
+**Changing an amount works the same way** — edit the row, run the script. Stripe prices are
+immutable, so it creates a *new* price and moves the lookup key onto it with
+`transfer_lookup_key`. The old price stays alive and unarchived, so **anyone already subscribed
+keeps billing at the price they were sold**; moving them is a separate, deliberate act.
+
+### What holds these rows to account
+
+The invariants used to be TypeScript — a union of tier names, constants, and tests over them. Rows
+have no compiler, so they moved into the schema, where they hold for every writer including a
+hand-typed `UPDATE` at midnight:
+
+| | |
+|---|---|
+| `billing_tiers_ingests_positive` | a tier that allows nothing is not a tier, and a negative one puts every account instantly over its limit |
+| `billing_tiers_id_format` | the id reaches logs and URLs, so lower-case and no spaces |
+| `billing_tiers_lookup_key`, `billing_tiers_price_id` | unique. Two tiers sharing either would make `price → tier` ambiguous, and that lookup is what entitlement is decided by |
+| `billing_tier_prices_amount_positive` | free is the absence of a subscription, not a zero-priced one |
+| `billing_tier_prices_currency_format` | three lower-case letters, because `USD` would be accepted here and rejected by Stripe one script-run later |
+| FK with `on delete cascade` | deleting a tier takes its prices; nothing is orphaned |
+
+Two things a CHECK cannot say live in `tests/billing-tiers.test.ts` against the **real rows**: that
+a dearer tier allows more ingests (a statement about pairs of rows), and that every active tier is
+priced in every currency any tier offers — because a missing `currency_options` entry does not fail,
+it silently shows somebody the base-currency price.
+
+### Three things that are easy to get wrong
+
+- **`active`, not `DELETE`.** Retiring a tier is a flag. Deleting the row of a tier somebody is
+  subscribed to orphans their entitlement, and `tierForPrice` deliberately still matches an
+  inactive tier so existing subscribers keep their allowance until they cancel.
+- **`db:reset` reverts the seeded rows.** The two launch tiers are seeded by
+  `drizzle/20260902181004_seed_billing_tiers.sql`, so a reset puts the original numbers back. That
+  is inherent to seeding configuration in a migration, and it is why the numbers are also written
+  down at the top of this document.
+- **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
+  it is how a re-run finds the price it made last time instead of minting a second one.
 
 ### VAT, flagged rather than resolved
 
@@ -251,8 +300,9 @@ admin columns; comp subscriptions for journalists and QA; go-live. The order is 
 | | |
 |---|---|
 | [`src/billing/stripe.ts`](../../src/billing/stripe.ts) | The only place a Stripe client is constructed. Mode guards, pinned API version. |
-| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | What each tier allows, which statuses are entitled, which price sells what. Pure. |
+| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | What an entitlement *is*, which statuses are entitled, which price sells what. Pure — the tiers themselves are rows. |
+| [`src/store/pg-tiers.ts`](../../src/store/pg-tiers.ts) | Reading `billing_tiers` and its prices, cached for thirty seconds because admission asks on every ingest. |
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription into the fields entitlement needs, and refusing everything unrecognised. Pure. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
-| [`src/db/schema.ts`](../../src/db/schema.ts) | `billing_accounts`, `ingest_events`, `jobs.ingest_event_id`. |
+| [`src/db/schema.ts`](../../src/db/schema.ts) | `billing_tiers`, `billing_tier_prices`, `billing_accounts`, `ingest_events`, `jobs.ingest_event_id`. |

@@ -39,11 +39,12 @@ import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
+import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
 import { log } from "../log.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
-import { isEntitledStatus, priceTierMap } from "./tiers.js";
+import { isEntitledStatus } from "./tiers.js";
 
 const logger = log("store");
 
@@ -79,10 +80,9 @@ export type SyncResult =
  */
 export async function syncSubscriptionFromStripe(customerId: string): Promise<SyncResult> {
   const stripe = stripeClient();
-  /* Read once, outside the transaction: it is configuration, not state. An
-     empty map is a deployment with no paid tier configured, which must not turn
-     a webhook into a 500. */
-  const prices = priceTierMap();
+  /* Read once, before the transaction opens. An empty list is a deployment
+     whose setup script has not run, which must not turn a webhook into a 500. */
+  const tiers = await allTiers();
 
   return await getDb().transaction(
     async (tx) => {
@@ -132,7 +132,7 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
       }
 
       const chosen = chooseSubscription(subscriptions, isEntitledStatus, (priceId) =>
-        prices.has(priceId),
+        tiers.some((t) => t.stripePriceId === priceId),
       );
       for (const note of chosen.notes) {
         logger.warn({ customerId, ownerId: row.ownerId, note }, "reading a Stripe subscription");
