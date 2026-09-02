@@ -54,7 +54,8 @@ listed here; the names under each are files in `docs/project/`.
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·
-  `website-text.md` (the privacy policy, the landing page, the contact address)
+  `website-text.md` (the landing page, the contact address) ·
+  `privacy.md` (what we do with a reader's data, and the page that says so)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
