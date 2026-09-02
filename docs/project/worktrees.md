@@ -99,6 +99,25 @@ what `worktree:setup` buys, and it is the number that made a worktree worth havi
 *collected* 1,137 fewer tests, so its lower raw failure count was hiding the problem rather than
 showing it.
 
+**And then measured again on the Mac, 2026-09-02, because those are the Linux box's numbers and
+nobody had run this here.** It works end to end, and every figure is better:
+
+```
+  npm run worktree:setup        6.8 s      the npm cache was warm
+  the whole worktree           637 MB      558 MB of it node_modules
+  npm test, after setup          4 of 504 files fail
+  npm test, in the primary       4 of 504 files fail    at the same moment, 254 s against 65 s
+  npm run typecheck              clean, 989 files
+  npm run dev                    landed on 5274 and correctly said nothing
+```
+
+Two things worth keeping from it. **The primary's own count is the only baseline worth comparing
+to** — the failing files were not quite the same set in both, because peers are hitting the shared
+Supabase throughout, so an absolute number would have read as a worktree defect. And the port warning
+staying silent on 5274 is the *right* answer now rather than the old bug: the allow-list covers the
+range, so there was nothing to warn about. It was checked against the running container when that
+landed, not against the file.
+
 ## What Greg decided, 2026-09-01
 
 1. **This Linux box first.** The plan was written on the Mac, where the repo lives inside Dropbox and
