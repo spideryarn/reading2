@@ -32,6 +32,9 @@
  */
 import type { PublicArtefacts } from "../public-types.js";
 import { notBuiltYet, ownersOnly, readersOwnWork } from "../messages.js";
+/* The one name each mode has. The owners-only policy below carries no string of
+   its own precisely because this record exists and is total — see `POLICY`. */
+import { MODE_LABEL } from "../title-text.js";
 import { MODES, type Mode } from "./params.js";
 
 /**
@@ -65,23 +68,6 @@ export type VisitorGap =
   | { kind: "owners-only"; feature: string }
   /** It is the owner's own annotation, and sharing an article does not share it. */
   | { kind: "readers-own"; plural: string };
-
-/**
- * **The one answer about an artefact, and `null` is now one of the two.**
- *
- * Before slice 1b this had three answers and none of them was "you can have
- * it": every artefact was withheld, and the only question was which true
- * sentence to say about the withholding. Now the flag decides whether there is
- * a gap at all — a piece that has a glossary shows its glossary, and `null`
- * means nothing stands in the way.
- *
- * One function because three call sites need it: the two artefact modes and the
- * tweets *page*, which had a hardcoded gap constant and so claimed a thread
- * existed even when the wire said `tweets: false`. GPT Sol, 2026-08-28.
- */
-function artefactGap(has: keyof PublicArtefacts, available: PublicArtefacts): VisitorGap | null {
-  return available[has] ? null : notBuiltGap(has);
-}
 
 /**
  * **The noun phrase each artefact is called in a sentence, article included.**
@@ -123,21 +109,77 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
   return { kind: "not-built", noun: NOUN[what] };
 }
 
-/** Which of the flags each artefact mode asks about. */
-const ARTEFACT: Partial<Record<Mode, keyof PublicArtefacts>> = {
-  glossary: "glossary",
-  ideas: "ideas",
-  quotes: "quotes",
-};
+/**
+ * **What a visitor may have of one mode**, as a cause rather than a remedy.
+ *
+ * Three variants and no more, because there are three things that can be true
+ * of a mode: it costs nothing and draws only what the visitor already holds; it
+ * spends a model call, so it is the owner's; or it shows a stored artefact,
+ * which a shared payload either carries or does not.
+ *
+ *  - `owners-only` carries **no string**. The owner-facing word is
+ *    `MODE_LABEL[mode]`, which is total and compiler-checked, so renaming a
+ *    mode cannot leave the visitor's sentence saying the old word — which is
+ *    what six labels repeated here would have done.
+ *  - `artefact` carries the `PublicArtefacts` key, and nothing else: whether
+ *    that flag is set is a fact about *this piece*, not about the mode.
+ */
+type VisitorPolicy =
+  | { kind: "available" }
+  | { kind: "owners-only" }
+  | { kind: "artefact"; key: keyof PublicArtefacts };
 
-/** The modes that spend, and what the button that opens them is called. */
-const COSTS: Partial<Record<Mode, string>> = {
-  search: "Search",
-  chat: "Chat",
-  remember: "Remember",
+/**
+ * **Every mode's policy, and the record is total.**
+ *
+ * It was two `Partial` records and an if-chain with a fail-closed fall-through
+ * until 2026-09-02, and the fall-through's own comment is the argument for this
+ * shape: `referee` fell through it from 2026-08-31 to 2026-09-02, which gave
+ * the right *policy* and the wrong *sentence* — the fall-through has only the
+ * mode id to hand `ownersOnly`, so a visitor read "referee is for whoever added
+ * this article", lower-case, in the band and in the dock tooltip.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
+ *
+ * A total `Record<Mode, …>` makes that impossible rather than unlikely: a
+ * fourteenth mode does not fall anywhere, it fails to compile until somebody
+ * decides. Every "stated rather than defaulted into" comment below is therefore
+ * stronger than it was, not weaker — the row it defends is now required.
+ * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.3.
+ */
+const POLICY: Record<Mode, VisitorPolicy> = {
+  /* **Plain is the article and nothing else**, so there is nothing here a
+     visitor could be short of: no artefact is read, no model call is made, and
+     the prose is the payload they already hold. */
+  plain: { kind: "available" },
+  /* The table of contents, the granularity zoom and the spine are the whole
+     point of the feature and cost nothing: they are drawn from the tree in the
+     payload the visitor already has. */
+  hierarchy: { kind: "available" },
+  /* Outline is the same bargain and had to be named to get it. The old
+     fall-through was deliberately fail-closed, so a mode added later was
+     owners-only until somebody said otherwise — which meant the plan's claim
+     that this mode "costs nothing, so a visitor gets it" was the *intent* and
+     false in the code. GPT Sol's review, 2026-08-28. It draws the same tree
+     from the same payload the visitor already holds, and reaches no artefact at
+     all: without arc.json it simply skips the arc rung. */
+  outline: { kind: "available" },
+  /* And summary, since 2026-08-31. It used to be an artefact mode, gated on a
+     `summary.json` a visitor's payload might not carry. The generated ladder is
+     gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the
+     tree's own gists, which are in the payload the visitor already holds — so
+     there is nothing left to be missing. */
+  summary: { kind: "available" },
+
+  glossary: { kind: "artefact", key: "glossary" },
+  ideas: { kind: "artefact", key: "ideas" },
+  quotes: { kind: "artefact", key: "quotes" },
+
+  search: { kind: "owners-only" },
+  chat: { kind: "owners-only" },
+  remember: { kind: "owners-only" },
   /**
-   * **Diagram is here rather than under `ARTEFACT`, and it is the one judgement
-   * call in this table.**
+   * **Diagram is `owners-only` rather than `artefact`, and it is the one
+   * judgement call in this table.**
    *
    * The band itself fetches nothing — the default picture is drawn from the
    * tree that is already on the page, and a visitor could have it for free. But
@@ -150,41 +192,42 @@ const COSTS: Partial<Record<Mode, string>> = {
    * not slice 1a's. Marked whole, deliberately, and recorded here rather than
    * discovered later. 2026-08-28.
    */
-  diagram: "Diagram",
+  diagram: { kind: "owners-only" },
   /**
    * **Timeline is owners-only in v1, stated rather than defaulted into.**
    *
-   * The fall-through below would have made it owners-only anyway, which is
-   * exactly why it is named here: a mode that is private because nobody listed
-   * it and a mode that is private because somebody decided so are
+   * The fall-through this table used to have would have made it owners-only
+   * anyway, which is exactly why it was named: a mode that is private because
+   * nobody listed it and a mode that is private because somebody decided so are
    * indistinguishable in the code, and the second is what this is. Greg,
    * 2026-08-31: *"it would be nice to have the option for this to be
    * Public-readable, but that could be a follow-up"* — and doing it properly
    * wants a general answer for all the modes rather than a fifth hand-written
    * table, so it is a separate piece of work.
    *
-   * It is in `COSTS` rather than `ARTEFACT` because there is no
+   * It is `owners-only` rather than `artefact` because there is no
    * `PublicArtefacts` flag to read: a shared payload carries no timeline at
    * all. The sentence a visitor gets is therefore *this belongs to whoever
    * added the article*, which is true, rather than *nobody has built one*,
    * which we cannot know from here.
    * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
    */
-  timeline: "Timeline",
+  timeline: { kind: "owners-only" },
   /**
    * **Referee is `timeline`'s case, and it arrived here the slow way.**
    *
    * It reached the fall-through until 2026-09-02, which is fail-closed and so
-   * gave the right *policy* — but the fall-through has only the mode id to hand
+   * gave the right *policy* — but the fall-through had only the mode id to hand
    * `ownersOnly`, and that wants a product noun. A visitor pressing the button
    * was told "referee is for whoever added this article", lower-case, in the
-   * band and in the dock tooltip.
+   * band and in the dock tooltip. There is no fall-through left for the next
+   * mode to arrive in.
    * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
    *
    * It spends: the reader's own criteria go to the model along with the piece.
    * docs/plans/260831an-referee-mode-for-peer-reviewers.md.
    */
-  referee: "Referee",
+  referee: { kind: "owners-only" },
 };
 
 /**
@@ -199,54 +242,31 @@ const COSTS: Partial<Record<Mode, string>> = {
  * either. src/web/public-artefacts.ts.
  */
 export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap | null {
-  /* **Plain is the article and nothing else**, so there is nothing here a
-     visitor could be short of: no artefact is read, no model call is made, and
-     the prose is the payload they already hold. Named by hand rather than left
-     to the fall-through for the reason Outline had to be — the fall-through is
-     fail-closed, and the mode after next will be owners-only until somebody
-     says otherwise. */
-  if (mode === "plain") return null;
-
-  /* The table of contents, the granularity zoom and the spine are the whole
-     point of the feature and cost nothing: they are drawn from the tree in the
-     payload the visitor already has. */
-  if (mode === "hierarchy") return null;
-
-  /* Outline is the same bargain and had to be named to get it. The fall-through
-     below is deliberately fail-closed, so a mode added later is owners-only
-     until somebody says otherwise — which meant the plan's claim that this mode
-     "costs nothing, so a visitor gets it" was the *intent* and false in the
-     code. GPT Sol's review, 2026-08-28. It draws the same tree from the same
-     payload the visitor already holds, and reaches no artefact at all: without
-     arc.json it simply skips the arc rung. */
-  if (mode === "outline") return null;
-
-  /* And summary, since 2026-08-31. It used to be an `ARTEFACT` mode, gated on a
-     `summary.json` a visitor's payload might not carry. The generated ladder is
-     gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the
-     tree's own gists, which are in the payload the visitor already holds — so
-     there is nothing left to be missing. */
-  if (mode === "summary") return null;
-
-  const costs = COSTS[mode];
-  if (costs) return { kind: "owners-only", feature: costs };
-
-  const artefact = ARTEFACT[mode];
-  if (artefact) return artefactGap(artefact, available);
-
-  /* Not reachable today — `Mode` is closed and every member is in one of the
-     tables above. It is here rather than as a non-null assertion because a mode
-     added later must fail closed: a visitor sees a boundary they can read
-     rather than a band that renders nothing.
-
-     **The claim above was untrue for two days and nothing said so**: `referee`
-     landed here from 2026-08-31, and the cost of falling through is that this
-     line has only the mode id to give `ownersOnly`, which wants the word on the
-     button. The visitor read "referee is for whoever added this article".
-     tests/visitor-gaps.test.ts now sweeps `MODES` and fails if any live mode's
-     sentence carries its own id, so the next one to arrive here is caught by
-     the wording rather than by somebody re-reading this comment. */
-  return { kind: "owners-only", feature: mode };
+  const policy = POLICY[mode];
+  switch (policy.kind) {
+    case "available":
+      return null;
+    /* The word on the button, from the record that already has to name every
+       mode for the tab title. The policy carries no string of its own, so
+       there is nothing here to go stale. */
+    case "owners-only":
+      return { kind: "owners-only", feature: MODE_LABEL[mode] };
+    /* **The flag decides whether there is a gap at all**, which is what slice
+       1b turned round: before it, every artefact was withheld and the only
+       question was which true sentence to say about the withholding. A piece
+       that has a glossary shows its glossary. */
+    case "artefact":
+      return available[policy.key] ? null : notBuiltGap(policy.key);
+    default: {
+      /* There is no fall-through policy any more, and this is not one: it is
+         the compiler being made to say so. `POLICY` is total over `Mode`, so
+         the only way here is a fourth `VisitorPolicy` variant nobody handled,
+         and this line goes red at the point it is added rather than answering
+         a visitor with whatever the last branch happened to return. */
+      const unhandled: never = policy;
+      return unhandled;
+    }
+  }
 }
 
 /** The same question for the two things that are not modes. */

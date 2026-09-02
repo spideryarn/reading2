@@ -632,7 +632,8 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
   quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
-  /* The six that spend, each named by its own product noun in COSTS. */
+  /* The six that spend, each named by `MODE_LABEL[mode]` — the policy in
+     src/web/visitor.ts carries no string of its own. */
   search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },

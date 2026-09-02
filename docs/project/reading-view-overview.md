@@ -5,7 +5,7 @@ are in the article), the **prose** (what you are reading), and between them a **
 whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
 ideas, quotes, search, diagram and chat take turns in.
 
-**Two of the ten modes open no band at all**, and the default is one of them. `plain` is the article
+**Two of the thirteen modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
 2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
 to be. So *a mode is open* and *a band is open* are separate questions
@@ -43,6 +43,10 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
+- **[260828aw-outline-mode.md](../plans/260828aw-outline-mode.md)** — the whole document as one
+  nested list, deep where you are reading and shallow everywhere else. The plan is the reference:
+  there is no `outline.md` yet, and it shares the tree with
+  [granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
@@ -63,6 +67,10 @@ of compression, down the page for position and across for detail. Read that firs
   notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
   cannot promise, the five that were cut, and why nothing was installed to draw them.
+
+The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
+under the next heading instead, because what they are about is a passage rather than the whole piece.
+That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no band.
 
 ### Marking a passage, and asking about one
 

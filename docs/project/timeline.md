@@ -188,8 +188,8 @@ not be a fourth. `drizzle/0035_timeline.sql` is the shape to copy.
 
 ## Owners only, for now
 
-[`src/web/visitor.ts`](../../src/web/visitor.ts) names `timeline` in `COSTS` — stated deliberately
-rather than left to the fail-closed fall-through, so that *private because somebody decided* is
+[`src/web/visitor.ts`](../../src/web/visitor.ts) gives `timeline` an `owners-only` policy — stated
+deliberately rather than left to the fail-closed fall-through it had until 2026-09-02, so that *private because somebody decided* is
 distinguishable from *private because somebody forgot*. Greg, 2026-08-31:
 
 > it would be nice to have the option for this to be Public-readable, but that could be a follow-up.

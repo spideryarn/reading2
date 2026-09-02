@@ -2210,7 +2210,14 @@ function Reader({
         {inMode ? (
           <>
             <span className="controls-label">Mode</span>
-            <span className="mode on">{mode}</span>
+            {/* **The label, not the mode id.** `.mode { text-transform:
+                uppercase }` means these look identical for all thirteen today —
+                which is exactly the problem: the id is a URL token and the label
+                is a product noun, and the two are one rename apart. Renaming
+                Referee to Reviewer in `MODE_LABEL` and the Dock would have left
+                this bar saying REFEREE, in the one place on screen that names
+                the open mode. src/title-text.ts § MODE_LABEL is the one word. */}
+            <span className="mode on">{MODE_LABEL[mode]}</span>
             {/* **The way out, and it is an icon now.** It said `back to contents`
                 until 2026-08-31 — a 12px grey text link in a bar of pills, and
                 measured against the rest of the bar it was the quietest thing in
@@ -2741,7 +2748,7 @@ function Reader({
         />
       )}
       {/* **One branch, not the owner/visitor pair the ideas have.** Timeline is
-          owners-only in v1 (src/web/visitor.ts § COSTS), so a visitor never
+          owners-only in v1 (src/web/visitor.ts § POLICY), so a visitor never
           reaches this band at all — the dock marks the button and pressing it
           renders the boundary instead. There is deliberately no
           `VisitorTimelineBand` waiting for a payload field that does not
@@ -2896,8 +2903,13 @@ function Reader({
  * the same rule `SearchBand` follows. Resolution can drop occurrences (a block
  * the article no longer has), so a panel counting the stored list would say
  * "2 of 5" and step through three.
+ *
+ * **Exported for tests/passage-mode-cleanup.test.tsx**, which mounts this band,
+ * `TimelineBand` and `CriteriaBand` side by side to pin the one contract all
+ * three share — see the note on `TimelineBand`'s five effects. `RememberBand`
+ * and `ConversationBand` are exported for the same reason.
  */
-function IdeasBand({
+export function IdeasBand({
   slug,
   blocks,
   onJump,
@@ -3143,7 +3155,7 @@ function useIdeasMode({
  * will open.
  *
  * **Owner-only, so there is one of these and not two.** Timeline is in
- * `COSTS` in src/web/visitor.ts, so a visitor meets a boundary instead of a
+ * `owners-only` in src/web/visitor.ts § POLICY, so a visitor meets a boundary instead of a
  * band and there is no `VisitorTimelineBand` waiting on a payload field that
  * does not exist.
  *
@@ -3160,14 +3172,18 @@ function useIdeasMode({
  * `useIdeasMode`, and App.tsx is being rewritten by another session while this
  * lands; a shared hook over `{ found, openKey, onFound, onOpenKey, onJump }` is
  * the right shape and is a follow-up worth doing on a quiet file. Until then
- * **a fix to one of these belongs in both**, which is written here rather than
- * left to be discovered.
+ * **a fix to one of these belongs in all three** — `CriteriaPanel`'s cleanup
+ * became a third partial copy on 2026-08-31 and was half of this one until
+ * 2026-09-02 — which is written here rather than left to be discovered.
  *
  * The one real difference is that there are no colour slots. Timeline paints no
  * lane down the rail — deferred with the marks — so `resolveTimelineEvent`
  * hands every occurrence slot 0 and the prose gets the ordinary wash.
+ *
+ * **Exported for tests/passage-mode-cleanup.test.tsx**, which is the executable
+ * form of the "a fix to one of these belongs in all three" sentence above.
  */
-function TimelineBand({
+export function TimelineBand({
   slug,
   blocks,
   onJump,

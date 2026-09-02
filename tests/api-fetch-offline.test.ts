@@ -332,3 +332,85 @@ describe("the media type is parsed, not searched", () => {
     expect(writeCache).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * **A write that stores nothing must not throw away what we hold.**
+ *
+ * `POST /api/quiz/<slug>/mark` marks one answer against one question and
+ * streams the marking back; the server writes nothing at all
+ * (src/routes.ts § quiz — *"SSE, stateless"*). `resourceOf` maps it to
+ * `/api/quiz/<slug>` all the same, because it maps a URL to *its own* resource
+ * and cannot know that this one is read-only. So the reader's quiz was evicted
+ * by the act of answering a question of it, and adding `/api/quiz/` to
+ * `CACHEABLE` on its own would have bought them exactly one question offline.
+ * GPT Sol found it reviewing T0.1;
+ * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md.
+ *
+ * ## The store is real here, and that is the point
+ *
+ * Every other test in this file asserts on the `invalidate` **call**, which is
+ * the cause. The cause is what a wrong fix would go on looking right about: an
+ * exemption that names the wrong path still passes *"invalidate was not called
+ * with the string I expected"*. So this block gives the mocked store a Map and
+ * the real prefix semantics of `invalidate`, and asserts the **effect** the
+ * reader gets — the copy is still served when the network goes.
+ * docs/reusable/silent-success.md.
+ */
+describe("a stateless write keeps the copy it did not change", () => {
+  /** url → body, for the one user these tests have. */
+  let held: Map<string, unknown>;
+
+  /** A cacheable 200, the same one the block above uses. */
+  const jsonOk = () =>
+    new Response('{"a":1}', { status: 200, headers: { "content-type": "application/json" } });
+
+  beforeEach(() => {
+    held = new Map();
+    writeCache.mockImplementation(async (url: string, body: unknown) => {
+      held.set(url, body);
+    });
+    readCache.mockImplementation(async (url: string) =>
+      held.has(url) ? { body: held.get(url), savedAt: 1000 } : undefined,
+    );
+    /* The real thing deletes every row whose url starts with the prefix — see
+       `invalidate` in src/web/lib/offline-store.ts. Modelled rather than
+       stubbed, so a fix that exempts the quiz by invalidating some *other*
+       prefix is not silently harmless here. */
+    invalidateCache.mockImplementation(async (prefix: string) => {
+      for (const url of [...held.keys()]) if (url.startsWith(prefix)) held.delete(url);
+    });
+  });
+
+  it("still has the quiz offline after an answer was marked", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("data: ok\n\n", { status: 200 })));
+    await apiFetch("/api/quiz/gibbon/mark", { method: "POST", body: "{}" });
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const res = await apiFetch("/api/quiz/gibbon");
+
+    expect(res.headers.get("x-spideryarn-offline")).toBe("copy");
+    expect(await res.json()).toEqual({ a: 1 });
+  });
+
+  /* The other direction, so "never invalidate anything" is not a passing
+     implementation of the exemption. `PATCH /api/comments/<slug>/<id>/mark` is
+     the same last segment on a route that really does write — the referee's own
+     placement on a criterion — and its copy has to go. */
+  it("but a comment mark is a real write, and its copy goes", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));
+    await apiFetch("/api/comments/gibbon");
+    await settle();
+    expect(held.has("/api/comments/gibbon")).toBe(true);
+
+    await apiFetch("/api/comments/gibbon/c-1/mark", { method: "PATCH", body: "{}" });
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(apiFetch("/api/comments/gibbon")).rejects.toThrow();
+  });
+});

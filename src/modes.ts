@@ -65,9 +65,12 @@ export const MODES = [
      collision `toc`/`hierarchy` above cost this repo a rename to get out of.
      `referee` is also what journals call the person, so the word is the plainer
      one as well as the free one. The plan § The name is `referee`, not
-     `reviewer` records that Greg had not seen it: the button's word is one
-     string in `MODE_LABEL` (src/title-text.ts) and one in `MODES_UI`
-     (src/web/Dock.tsx) if he wants "Reviewer" there instead.
+     `reviewer` records that Greg had not seen it: since 2026-09-02 the button's
+     word is **one** string, `MODE_LABEL.referee` in src/title-text.ts, if he
+     wants "Reviewer" there instead. It was three until then — `MODES_UI` in
+     src/web/Dock.tsx and `COSTS` in src/web/visitor.ts each held their own copy,
+     and the controls bar in App.tsx said the raw mode id — so a rename here
+     would have left the dock, the visitor's sentence or the bar behind.
 
      It sits **after Search** because it is Search's kind of thing — a pass over
      the piece looking for passages — rather than a restatement of it. Its
