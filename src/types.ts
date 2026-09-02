@@ -3158,7 +3158,7 @@ export const ADMIN_FEEDBACK_DEFAULT_LIMIT = 200;
  * ## The one rule about what may be added
  *
  * The admin pages may show the account metadata documented for `/admin/users`,
- * and **the support report the reader submitted**: their answers, an attachment
+ * and **the support report the reader submitted**: what they wrote, an attachment
  * they deliberately added, diagnostics they ticked a box for, and Spideryarn's
  * own fixed correlation metadata. Identifiers may not be followed into articles,
  * comments or notes. docs/project/admin.md states the boundary; this is the
@@ -3177,14 +3177,28 @@ export interface AdminFeedbackReport {
   /** The address the reader held **when they wrote to us**, snapshotted, not joined. */
   reporterEmail: string;
   /**
-   * **What they wrote, in one field.** Three columns until 2026-09-02, when
-   * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
-   * collapsed *steps / expected / what you saw* into a single box on the
-   * argument that three boxes is a form, and a form is what a mildly annoyed
-   * person closes. `notNull` in the schema, so never blank here.
+   * **What the reader wrote, in one box.**
+   *
+   * `string`, never `string | null` — the column is `not null`, which is the
+   * whole of the old `feedback_says_something`: a report with nothing in it is
+   * not a report, and that is now the type rather than a constraint beside it.
+   *
+   * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
+   * the three old answers glued together with their headings, so a legacy body
+   * can legitimately be three times the dialog's current limit. A renderer that
+   * truncates to `MAX_FEEDBACK_ANSWER_CHARS` would silently cut the oldest
+   * reports — the ones most likely to be the reason somebody opened this page.
+   * GPT Sol, 2026-09-02.
    */
   body: string;
-  /** *Bug or suggestion*, if they used the toggle. `null` where they did not. */
+  /**
+   * *A problem* or *a suggestion*, or **`null` for "they did not say"**.
+   *
+   * Null is a real answer and not a missing one — Greg, 2026-09-02: *"don't
+   * default to Problem. Default to null/unknown."* It is also every report
+   * filed before the toggle existed, and the page must draw it as its own state
+   * rather than picking one.
+   */
   kind: FeedbackKind | null;
   /** Whether they ticked *Send extra diagnostics* — its own fact, never inferred. */
   consented: boolean;

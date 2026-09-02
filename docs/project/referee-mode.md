@@ -972,6 +972,73 @@ kind carries a `trialTested` flag, and `coverage` and `placement` both read `fal
 either is unlikely to be right, but because `trialTested` records *whether a trial has tested
 feedback of this shape*, which is a different question from how confident anyone is in it.
 
+## Website copy notes, kept for later
+
+The website leads with the general deep reader, not the referee — Greg, 2026-09-02, answering
+which person the homepage speaks to first:
+
+> make sure we have stored the notes for Peer Reviewer/Referee in our .md docs for when we add extra
+> website copy for them in future.
+
+This section is those notes. They are the raw material for a referee page when there is one, drawn
+from the 2025 marketing thinking in the original app and from the research behind this mode. The
+whole synthesis is [260902k-spideryarn-reading-intent-brief.md](../research/260902k-spideryarn-reading-intent-brief.md).
+
+**Why reviewers were the 2025 way in.** Greg, in an email quoted in the original app's vision doc:
+
+> I'm thinking of focusing on scientific peer reviewers & journal editors, where: the human has to
+> make a decision; based on evidence/criteria; it's a drudge job, where they don't want to do a
+> terrible job, but they also very much want to be efficient; I can think of lots of ways to speed
+> things up. It's not 100% aligned with the vision of helping experts to read & understand new
+> difficult material deeply, but a stepping stone in roughly the right direction with a fighting
+> chance of being enough of a pain that people might pay…
+
+And the same day he chose it, on why the pain is a sellable one (2025-07-14): reviewing *"doesn't
+feel like a creative act in quite the same way. So maybe they'll be less threatened by AI helping
+them with it … it feels more like a pain that they're going to want a painkiller for."* The
+marketing-persona AI's proposal, which Greg called plausible and worth an experiment: market to
+reviewers on efficiency, deliver the deep-reading experience underneath.
+
+**The feeling to preserve.** Greg, 2025-07-14, on what a couple of real reviewers told him:
+
+> My sense is that they want to feel like they have control, and this would preserve that feeling of
+> control and awareness, and that they're still in the driving seat. And yes, being able to see
+> specifics of the actual text verbatim, in context, and perhaps notice other related areas, and be
+> able to scan the actual text in a rapid assisted way (highlighting relevant passages, using
+> different colours for different criteria, say), feels potentially very helpful.
+
+Which is Criteria, described a year before it was built.
+
+**The 2025 messaging, for the record.** The original app's brand guidelines proposed a hierarchy for
+reviewers — lead with pain relief (*"Stop hunting through papers for methodology issues"*), build on
+efficiency (*"Review papers faster without missing critical details"*), reinforce control (*"Stay in
+the driver's seat with AI assistance"*) — and two sample lines: *"See exactly where authors support
+their claims"* and *"Your expertise drives the analysis — our AI just helps you get there faster."*
+One of those proposals, *"Review papers 3x faster"*, is a number nobody measured and the kind of
+claim the site does not make; time saved is acceptable but never emphasised
+([positioning.md](positioning.md)).
+
+**What the research changed.** Three findings from
+[260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md) that any
+referee copy has to be written around:
+
+- **Confidentiality is the bright line.** Nearly every publisher and funder treats uploading an
+  unpublished manuscript to a third-party AI service as a violation, whatever the AI does with it.
+  The honest v1 audience is preprints, open-review venues, public review, drafts shared with consent,
+  and journal clubs. The copy should say this plainly rather than leave it out — and the app already
+  does, in three tenses (§ *Confidentiality* above).
+- **Reviewers want help saying what they think, not being told what to think.** The one deployment
+  with trial evidence of doing good critiques the reviewer's *own draft* — which is Mirror. Copy that
+  promises "AI reviews the paper for you" is both off-principle and, on the evidence, unwanted.
+- **Showing an AI's judgment first biases the human toward it, mistakes included.** So the pitch is
+  structure, retrieval and a mirror, never a verdict. The mode's own rule — the AI on structure and
+  on the referee's output, the human on judgment — is the pitch.
+
+**The line between this and the general page.** A referee is a deep reader with a deadline and a
+form to fill in. Everything on the general page is true for them; what the referee page adds is the
+four sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
+for you.
+
 ## See also
 
 - [260831an-referee-mode-for-peer-reviewers.md](../plans/260831an-referee-mode-for-peer-reviewers.md)

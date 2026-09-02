@@ -39,7 +39,7 @@ Three things follow, and they are the argument for building the page:
 ## What this is
 
 A third admin page, `/admin/feedback`, listing every report across all owners, newest first, with
-the reader's three answers on it.
+the reader's own words on it. **Built 2026-09-02.**
 
 ## The one thing that makes it different from /admin/users
 
@@ -49,119 +49,121 @@ rule, stated as the thing that makes the cross-owner exception narrow:
 > **Counts and dates only.** No title, no URL, no filename, no sentence.
 
 **This page breaks that rule, and it has to.** A bug report is prose or it is nothing. So the rule
-does not get quietly widened — it gets a second clause, written where the first one lives:
+does not get quietly widened — it gets a second clause, written where the first one lives.
 
-> The admin pages show **counts and dates about accounts**, and **the words a reader deliberately
-> typed into the Feedback dialog** — nothing else, and never a third category.
+The first draft of that clause said *"the words a reader deliberately typed"*, and GPT Sol refused
+it as **not truthful**: the page also shows an email, an owner id, a route kind and slug, build and
+Vercel identifiers, an opt-in diagnostics blob, and a screenshot whose *pixels* may be article
+prose. The wording that shipped enumerates all of it, and says out loud the two things the short
+version hid — that a screenshot of somebody else's shared article is not that owner's consent, and
+that the `slug` travels whether or not the diagnostics box is ticked while the tick-box copy implies
+otherwise. [admin.md § What it deliberately does not show](../project/admin.md) is the text.
 
-That is defensible on exactly the ground [feedback.md](../project/feedback.md) § The one rule
-already stands on: consent. The reader typed those sentences into a box labelled with what happens
-to them, and one of the things that happens is that Greg reads them. Nothing else on an admin page
-gets that permission, and this page must not become the place where article prose, a comment or a
-note leaks in behind it.
+## What was built
 
-**Consequence for the store method's name.** `listUsersAcrossOwners` was named that way on GPT Sol's
-advice so the seam argues with its own call sites. Same trick: `listFeedbackAcrossOwners`.
+### The store — [`src/store/pg-admin-feedback.ts`](../../src/store/pg-admin-feedback.ts)
 
-## Stages
+A file of its own rather than a method on `pg-admin.ts`, whose header is a sustained argument that
+it never returns a sentence — five paragraphs of which would become false the moment a `body` column
+were selected in it.
 
-### Stage 1 — the store and the wire shape
+**A report is `(owner_id, id)`, never `id`.** The primary key is composite because the id is minted
+by a browser, and `tests/feedback-store.test.ts` already proves two readers may file under one id.
+The first draft keyed the screenshot route on the id alone, which serves the wrong person's
+screenshot — and the collision is *chosen*, not stumbled into. GPT Sol led its review with it.
 
-- `AdminFeedbackReport` in [`src/admin.ts`](../../src/admin.ts), beside `AdminUser` and for the same
-  two reasons that shape is there: it is one page's row, and `src/admin.ts` imports nothing.
-  It is `FeedbackReport` plus the fields a cross-owner reader needs and an owner-scoped one does
-  not — `ownerId` — and minus nothing. `screenshotBytes` is already the shape
-  [`REPORT_COLUMNS`](../../src/store/pg-feedback.ts) selects, so no row drags a PNG through memory.
-- `listFeedbackAcrossOwners(limit)` on `AdminStore` in
-  [`contracts.ts`](../../src/store/contracts.ts), and `readAcrossOwners(id)` beside it for the
-  screenshot route. Both implemented in a **new file**, `src/store/pg-admin-feedback.ts`, composed
-  into `pgAdminStore`.
+**The projection is written out by hand**, not shared with `REPORT_COLUMNS`. Sharing it would make
+every field added to a reader's own report cross owners the same day, with nothing to review. The
+duplication is the fence; `tests/admin-feedback-store.test.ts` pins the exact key set.
 
-  New file rather than a method in `pg-admin.ts`: that file's header is a sustained argument that
-  it never returns a sentence, and five paragraphs of it become false the moment a `steps` column
-  is selected in it. Two files, one contract.
-- `adminOnFiles` refuses it, loudly, in the shape `listUsersAcrossOwners` already refuses —
-  `feedbackOnFiles` in [`store/index.ts`](../../src/store/index.ts) has the sentence to copy.
-- `limit` is a bounded number with a default (200) rather than an unbounded select. This is the one
-  table in the app that a stranger with an account can add rows to, capped at ten an hour each.
+**Keyset pagination on the whole sort key** (`created_at`, `owner_id`, `id`), not an offset: an
+offset shifts under an inbox being written to while it is read, and the report this page exists to
+find is precisely an old one nobody knew about. `hasMore` is *seen* — the store asks for one row
+more than it returns — rather than inferred from `reports.length === limit`, which is wrong exactly
+on a boundary.
 
-### Stage 2 — the route
+> **The cursor's one real bug, found by a test written for something else.** `timestamptz` is
+> microseconds; a JavaScript `Date` is milliseconds. Building the cursor from
+> `createdAt.toISOString()` compared a rounded value against a precise one, so `created_at =
+> <cursor>` matched nothing and paging stopped dead at the first row of any group sharing an
+> instant. The fix carries a `to_char`-formatted exact timestamp for the cursor only — never on the
+> wire report, so the key fence stays exact.
 
-- `GET /api/admin/feedback` → `{ reports }`, with `Cache-Control: private, no-store`, exactly as
-  `/api/admin/users` sets it and for the reason recorded there.
-- Matched as an **exact path** (`path === "/api/admin/feedback"`), like `adminUsers`, so
-  `/api/admin/feedback/anything` is a 404 rather than a quiet match — and behind the namespace gate
-  either way, since that gate is above the route table.
-- `GET /api/admin/feedback/:id/screenshot` → `image/png`, or 404 when the row has no screenshot.
-  The id is validated with `isSpideryarnId` before it reaches the store.
-- `tests/routes.test.ts` already proves the namespace gate covers routes nobody has written yet;
-  add a case that a non-admin gets 403 on both of these, so the proof names them.
+### The routes — [`src/routes.ts`](../../src/routes.ts)
 
-### Stage 3 — the page
+- `GET /api/admin/feedback` → a page, with `?limit=` and `?before=`.
+- `GET /api/admin/feedback/:ownerId/:id` → one report *with* its diagnostics.
+- `GET /api/admin/feedback/:ownerId/:id/screenshot` → `image/png`.
 
-`AdminFeedbackPage` in [`AdminPage.tsx`](../../src/web/AdminPage.tsx), reusing `Shell`, and a
-`useAdminFeedback` hook shaped like [`useAdminUsers`](../../src/web/useAdminUsers.ts) — same
-callback, same `reload`, same "the old list stays on screen and the page says so" behaviour.
+All exact-matched, all behind the `/api/admin` namespace gate that sits above the route table, all
+`private, no-store`. `isUuid` and `isSpideryarnId` are the rules; the route patterns are only
+shapes. A malformed `?before=` is a **400**, not a silent restart from the top — that would hand
+back page 1 while the reader pressed *Load older*.
 
-**Not a `DataTable`.** The shelf and the users page are tables because their rows are numbers, and a
-table is the right shape for numbers. A bug report is three paragraphs; twelve of them in a
-`<td>` is a page you cannot read. So: a list of cards, newest first, each one
+### The page — [`AdminPage.tsx`](../../src/web/AdminPage.tsx), [`AdminFeedbackList.tsx`](../../src/web/AdminFeedbackList.tsx)
 
-- a header line — when (relative, `timeAgo`, with `exactly` in the `title`), who, environment, route
-  kind and slug;
-- the three answers, labelled, with a blank one saying so rather than collapsing;
-- a footer of the correlation handles: `report_id`, `build_commit`, `vercel_id`, and the mirror
-  state as **words** — *mirrored*, *sent, not acknowledged*, *not sent* — because
-  `mirror_attempted_at is not null and mirrored_at is null` is the whole reason a page like this
-  earns its place, and a raw pair of timestamps hides it;
-- the diagnostics blob behind a `<details>`, and the screenshot behind another, fetched lazily via
-  `apiFetch` → `blob()` → `URL.createObjectURL`, which is what
-  [`Metadata.tsx`](../../src/web/Metadata.tsx) and [`SourceLink.tsx`](../../src/web/SourceLink.tsx)
-  already do. `<img src="/api/admin/…">` cannot work: auth here is an `Authorization: Bearer`
-  header, not a cookie, and an `<img>` sends no header.
+Cards, not a `DataTable`: the shelf and the users page are tables because their rows are numbers, and
+*which report is longer* is not a question anybody has. Each card carries the body verbatim, the
+kind (including an explicit **not specified**, because `null` is a real answer), the correlation
+handles, and the mirror state **as words** — *mirrored*, *sent, not acknowledged*, *not sent* —
+because a raw pair of timestamps hides the one state this page exists to surface.
 
-Plus the wiring: `AdminPage` union in [`router.ts`](../../src/web/router.ts) gains `"feedback"` and
-the regex gains an alternation; `ADMIN_FEEDBACK_HREF`; `page-title.ts`; the branch in
-`App.tsx`; a second card on `AdminHome`.
+Diagnostics and the screenshot are fetched only when opened. The allowlist permits ~179 KB of JSON
+per report, so two hundred in one response is tens of megabytes over the platform's ceiling. The
+screenshot goes through `apiFetch` → `blob()` → `createObjectURL`, because auth here is a Bearer
+header and an `<img>` sends none; the fetch and the object URL's lifetime are **two effects**, after
+the first draft's single effect revoked the URL it had just handed to state.
 
-### Stage 4 — the docs
+## Landing it: two features met in the same table
 
-[admin.md](../project/admin.md) gets the second clause of the rule, in the section that currently
-states the first. [feedback.md](../project/feedback.md) gets a line saying where a report is read,
-which is the question it does not currently answer.
+While this was being built, a peer collapsed `steps`/`expected`/`actual` into one `body` plus a
+`kind` toggle ([260902m](260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md)) and landed
+it on `dev`. Greg's call, 2026-09-02, was to target the shape that was landing rather than the one
+on the trunk at the time, so the card renders one body and a kind chip. The merge itself is written
+up in the commit; `src/owner.ts` turned out to be an **add/add** conflict where two agents had
+independently invented `EVAL_OWNER_ID` with different uuids.
 
 ## The simpler options passed over
 
-- **Read it in Sentry and build nothing.** It is what happened today and it worked. It is refused
+- **Read it in Sentry and build nothing.** It is what happened on the day, and it worked. Refused
   because it makes a best-effort mirror the system of record: a report Sentry rate-limited, dropped
   or never received is filed correctly and invisible, and there is no way to notice.
-- **A script — `npx tsx scripts/feedback-ls.ts`.** Half a day cheaper, and it cannot run: nothing on
-  this box holds a production `DATABASE_URL`, which is the constraint that started this. A page
-  authenticated as Greg is the only reader that can reach the production row from a laptop.
-- **One `/admin/feedback/:id` detail page.** More routes, more addresses, and the list already fits
-  the whole report on a card. Revisit when there are enough reports that scrolling is the problem.
-- **Serving the screenshot as a data URL inside the list JSON.** One route instead of two, and it
-  drags every PNG in the list — up to 300 KB each, base64'd to 400 — into a response nobody has
-  asked to look at. `REPORT_COLUMNS` avoids exactly this and says why.
+- **A script — `npx tsx scripts/feedback-ls.ts`.** Cheaper, and it cannot run: nothing on this box
+  holds a production `DATABASE_URL`, which is the constraint that started this.
+- **One `/admin/feedback/:id` detail page.** More addresses, and the card already fits the report.
+- **The screenshot as a data URL in the list JSON.** One route instead of three, and it drags every
+  PNG into a response nobody has asked to look at.
+- **No pagination, just a cap.** Rejected by GPT Sol and rightly: an account-farming burst could
+  make an older legitimate report — including the Sentry-missed one this page exists to find —
+  unreachable.
 
 ## Checks
 
-- `tests/admin-feedback-store.test.ts` — two owners' reports come back from one call, and the
-  filesystem store refuses rather than returning `[]` (the silent-success shape this directory keeps
-  being bitten by).
-- `tests/routes.test.ts` — 403 for a non-admin on both new paths; 404 for
-  `/api/admin/feedback/nonsense`.
-- `tests/page-title.test.ts` / `tests/router.test.ts` — the new address parses and titles.
-- `npm test`, `npm run typecheck`, `npm run check`.
-- A browser pass in a Sonnet subagent against the local stack with `SPIDERYARN_STORE=postgres`,
-  after filing a report through the real dialog — and then, once deployed, against production, where
-  `spya-us5kzc` is the row that must appear.
+- `tests/admin-feedback-store.test.ts` — 12 cases: cross-owner reads, the shared-id collision, the
+  exact-key fence, the total order walked by cursor, `hasMore` at the boundary, the filesystem
+  refusal. The tie-break case was **watched red** with `desc(ownerId)` removed, and the cross-owner
+  case with an owner filter added.
+- `tests/routes.test.ts` — 403 for a non-admin on both new namespaces, 400 on either malformed half
+  of the key and on a malformed cursor, 404 on a path with anything extra.
+- `tests/router.test.ts`, `tests/page-title.test.ts` — the address parses, the tab is named, and
+  `/admin/FEEDBACK` and `/admin/feedback/extra` still fall through to the shelf.
+
+## Still to do
+
+- **A browser pass** against the local stack with `SPIDERYARN_STORE=postgres`, and against
+  production once deployed, where `spya-us5kzc` is the row that must appear.
+- **An index matching the sort key** — `(created_at desc, owner_id, id)`. Not added here: it needs a
+  migration, and at the current row count the sort is free. The moment the table is large enough for
+  this page to feel slow, that is the fix.
+- **The dialog's tick-box copy**, which implies the article is part of the *extra* diagnostics while
+  the `slug` is sent regardless. Named in [admin.md](../project/admin.md); it belongs to whoever owns
+  the dialog.
 
 ## Risks
 
-- **The one that matters: a column added later that is neither a count, a date, nor something the
-  reader typed into this dialog.** The rule is written in three places for that reason. There is no
-  mechanical enforcement and this plan does not invent one.
-- Reading the reports is all this page does. Nothing on it resolves, deletes or replies — the same
-  read-only posture as `/admin/users`, and the same reason: an admin page that can only look is a
-  much smaller thing to get wrong.
+- **The one that matters: a column added later that is neither account metadata nor part of the
+  report the reader submitted.** The rule is written in three places and **nothing enforces it
+  mechanically** — what the code does instead is refuse to make widening automatic.
+- Reading is all this page does. Nothing resolves, deletes or replies — the same read-only posture
+  as `/admin/users`, and the same reason: a page that can only look is a much smaller thing to get
+  wrong.

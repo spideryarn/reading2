@@ -67,11 +67,6 @@ import { getDb } from "../db/client.js";
 import { articles, chatThreads, comments, searchRuns, uploads } from "../db/schema.js";
 import type { AccountRow } from "./account-row.js";
 import { gotruePages, listAccounts } from "./admin-accounts.js";
-import {
-  type OwnerSpend,
-  currentUtcMonth,
-  productSpendByOwner,
-} from "./ai-calls-spend-pg.js";
 import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
@@ -110,19 +105,6 @@ export interface UserCounts {
   questions: CountRow[];
   chats: CountRow[];
   searches: CountRow[];
-  /**
-   * **Money, and the only entry here that is not a count of the reader's own
-   * things.** Keyed by owner id like the rest; absent means the account made no
-   * model calls in the period, which `mergeUsers` draws as zero calls rather
-   * than as zero dollars — see `AdminUser.spendCalls`.
-   *
-   * It comes from a sixth grouped aggregate rather than from the five above,
-   * because `ai_calls` shares nothing with them but an owner id: joining it in
-   * would multiply rows exactly as the header describes.
-   */
-  spend: Map<string, OwnerSpend>;
-  /** `YYYY-MM` (UTC) — the period `spend` covers, stated rather than implied. */
-  spendMonth: string;
 }
 
 /** Turn `[{owner, n}]` into something the merge can look up. */
@@ -168,7 +150,6 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
   const chats = tally(counts.chats);
   const searches = tally(counts.searches);
   const shelf = new Map(counts.shelf.map((r) => [r.owner, r]));
-  const spend = counts.spend;
 
   return people
     /* An account with no address cannot sign in here at all — the gate refuses
@@ -196,14 +177,6 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
         searches: searches.get(p.id) ?? 0,
         opens: mine?.opens ?? 0,
         ...optional("lastReadAt", iso(mine?.lastReadAt ?? null)),
-        /* `?? 0` on all three, for the reason stated above about every other
-           lookup here: a `group by` returns nothing at all for an owner with
-           nothing to count, and a missing field on a page whose content is
-           numbers is indistinguishable from a zero that means something. */
-        spendNanos: spend.get(p.id)?.nanos ?? 0,
-        spendCalls: spend.get(p.id)?.calls ?? 0,
-        spendUnpricedCalls: spend.get(p.id)?.unpricedCalls ?? 0,
-        spendMonth: counts.spendMonth,
       };
     });
 }
@@ -344,25 +317,14 @@ export const pgAdminStore: AdminStore = {
        **The accounts are asked of the Auth service over HTTP**, not of the
        database: `auth.users` is Supabase's and `spideryarn_app` has no grants
        into it. admin-accounts.ts has the why. */
-    /* **The period is decided once, here, before anything is asked.** Reading
-       the clock inside the query and again for the label would let a run that
-       straddles midnight on the 1st report September's money under an August
-       heading — a one-second-a-month bug that nothing would ever reproduce. */
-    const month = currentUtcMonth();
 
-    const [people, shelf, uploaded, questions, chats, searches, spend] = await Promise.all([
+    const [people, shelf, uploaded, questions, chats, searches] = await Promise.all([
       listAccounts(accountSource()),
       q.shelf,
       q.uploads,
       q.questions,
       q.chats,
       q.searches,
-      /* The sixth aggregate, and the pool is sized 5 (src/db/client.ts), so one
-         of the six now waits for a connection. Measured against the alternative
-         — a second round trip after the first five — that is still one wall
-         clock's worth of latency rather than two, and this is an admin page a
-         single person opens. */
-      productSpendByOwner(month.since, month.until),
     ]);
 
     return mergeUsers(people, {
@@ -371,8 +333,6 @@ export const pgAdminStore: AdminStore = {
       questions,
       chats,
       searches,
-      spend,
-      spendMonth: month.label,
     });
   },
 
