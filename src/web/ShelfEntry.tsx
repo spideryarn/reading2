@@ -16,11 +16,13 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Globe,
   MessageCircle,
   Pencil,
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import { SHARING_BADGE, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
@@ -33,6 +35,45 @@ import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
 
 export type Shelf = ReturnType<typeof useShelf>;
+
+/* ------------------------------------------------------------- shared ----- */
+
+/**
+ * **This one is out in the world** — the owner's marker, on the owner's shelf.
+ *
+ * Drawn by both renderers, from here, because the shelf has two of them and a
+ * marker added to one of them looks finished from wherever the reviewer
+ * happened to be standing. One component is also one hover sentence and one
+ * accessible name.
+ *
+ * `Globe` rather than `Lock`, matching the owner's own sharing card exactly —
+ * src/web/AccessSharing.tsx draws a globe when shared and a lock when not — and
+ * deliberately *unlike* `ViewOnlyChip` in src/web/PublicChrome.tsx, whose lock
+ * is the visitor's side of this same fact and means the other thing: *you may
+ * not change this*, where this means *anyone with the link can read this*. Two
+ * sentences, two components; collapsing them would put the visitor's sentence
+ * on the owner's shelf.
+ *
+ * **There is no private twin.** The shelf is almost all private, so a chip on
+ * every card is decoration rather than information — and it would cost this one
+ * the only thing it has, which is standing out. Greg's decision, along with a
+ * badge rather than a filter until there is volume:
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
+ *
+ * Visible text as well as the hover, for the reason `ViewOnlyChip`'s file gives
+ * at length: a `title` is unreachable by touch and by keyboard.
+ */
+export function SharedBadge() {
+  return (
+    <span
+      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
+      title={SHARING_ON}
+    >
+      <Globe size={11} />
+      {SHARING_BADGE}
+    </span>
+  );
+}
 
 /* -------------------------------------------------------------- card ------ */
 
@@ -124,6 +165,9 @@ export function ShelfCard({
             {f}
           </span>
         ))}
+        {/* Ahead of the fixture chip: of the two, this is the one that says
+            something about who else can see the article. */}
+        {entry.visibility === "public" && <SharedBadge />}
         {entry.fixture && (
           <span
             className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5"
