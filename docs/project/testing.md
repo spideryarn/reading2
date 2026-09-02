@@ -557,7 +557,12 @@ answering, `npm run db:migrate` for one that is behind. The suite itself still s
 `1 failed | N skipped` rather than thirty connection errors, and it exits non-zero. Unset, nothing
 changes: same verdict, same warning, same silence when there is no `DATABASE_URL` at all.
 
-Use it wherever a green run is about to be quoted as evidence — CI, the remote box (stage 3 of
+**`npm run check` sets it** on its `test` gate, because that is the command whose green result gets
+quoted ([static-analysis.md](static-analysis.md#the-gateadvisory-split)). So `npm run check` now needs
+a database; `npm run check -- --offline` runs the same steps without the flag, and says in its summary
+that the database suites were free to skip and that it is not the real gate.
+
+Use it wherever else a green run is about to be quoted as evidence — CI, the remote box (stage 3 of
 [260831x-remote-box-dev-environment.md](../plans/260831x-remote-box-dev-environment.md)), and any time you are about
 to tell somebody the tests passed.
 
