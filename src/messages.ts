@@ -1871,7 +1871,7 @@ export const REFEREE_DECLARE_IT =
 export const FEEDBACK_SEND_FAILED: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "That report did not get through. Your words are still in the boxes above — trying again in a " +
+    "That report did not get through. Your words are still in the box above — trying again in a " +
     "moment usually works, and if it does not, the Copy button puts the whole report on your " +
     "clipboard so you can send it by email instead. [fb-send]",
 };

@@ -76,9 +76,8 @@ let envelopes: Envelope[] = [];
 const REPORT: FeedbackReport = {
   id: "spya-k3m9qt",
   reporterEmail: "reader@example.com",
-  steps: "Pressed the button on the third paragraph",
-  expected: "a gist in the margin",
-  actual: "an empty column",
+  body: "Pressed the button on the third paragraph, expected a gist in the margin, got an empty column",
+  kind: "problem",
   consented: true,
   routeKind: "read",
   slug: "an-article",
@@ -279,7 +278,7 @@ describe("the Sentry mirror", () => {
     expect(blob).not.toContain("AMBIENT_DIAGNOSTICS_MARKER");
   });
 
-  it("carries the three answers, the gate's email and our own tags", async () => {
+  it("carries the reader's words as they wrote them, the gate's email and our own tags", async () => {
     startSentry();
     seedHostileScopes();
     await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
@@ -287,15 +286,30 @@ describe("the Sentry mirror", () => {
     const event = feedbackEvent(envelopes[0]!);
     const feedback = (event.contexts as { feedback: Record<string, unknown> }).feedback;
     expect(feedback.contact_email).toBe("reader@example.com");
-    expect(String(feedback.message)).toContain("Pressed the button on the third paragraph");
-    expect(String(feedback.message)).toContain("a gist in the margin");
-    expect(String(feedback.message)).toContain("an empty column");
+    /* **Exactly the body, with nothing added to it.** It used to be three
+       answers under three headings we wrote; there is one box now, and the kind
+       is a tag rather than a heading pushed into somebody's sentence. */
+    expect(feedback.message).toBe(REPORT.body);
 
     const tags = event.tags as Record<string, unknown>;
     expect(tags.report_id).toBe(REPORT.id);
     expect(tags.route_kind).toBe("read");
+    expect(tags.kind).toBe("problem");
     expect(tags.slug).toBe("an-article");
     expect(tags.leakyTag).toBeUndefined();
+  });
+
+  it("leaves the kind tag off entirely when the reader did not say", async () => {
+    /* Absent rather than empty. Greg asked for the toggle to start unset, so
+       "did not say" is a real answer — and a tag whose value is `""` is one
+       Sentry will happily group by, while "reports with no kind" is a filter on
+       the tag being missing. */
+    startSentry();
+    await mirrorFeedback({ report: { ...REPORT, kind: null }, user: USER, screenshot: null });
+
+    const tags = feedbackEvent(envelopes[0]!).tags as Record<string, unknown>;
+    expect(tags.route_kind).toBe("read");
+    expect("kind" in tags).toBe(false);
   });
 
   it("sends the diagnostics blob and the screenshot as attachments", async () => {

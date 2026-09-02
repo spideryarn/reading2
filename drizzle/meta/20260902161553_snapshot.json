@@ -1,6 +1,6 @@
 {
-  "id": "3e4c593f-cea3-4cd5-83e3-dfde0eeb3e5c",
-  "prevId": "db18b062-cb5e-443d-a39a-ea791ba45472",
+  "id": "01d0e200-b755-4dbb-a746-ae89a458bda3",
+  "prevId": "9ffbe2d7-c497-4748-9e89-21227f0b0e7c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1631,20 +1631,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "steps": {
-          "name": "steps",
+        "body": {
+          "name": "body",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "expected": {
-          "name": "expected",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "actual": {
-          "name": "actual",
+        "kind": {
+          "name": "kind",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1777,21 +1771,13 @@
           "name": "feedback_environment",
           "value": "\"spideryarn\".\"feedback\".\"environment\" in ('production', 'preview', 'development', 'test')"
         },
-        "feedback_steps_shape": {
-          "name": "feedback_steps_shape",
-          "value": "\"spideryarn\".\"feedback\".\"steps\" is null or (length(btrim(\"spideryarn\".\"feedback\".\"steps\")) > 0 and length(\"spideryarn\".\"feedback\".\"steps\") <= 4000)"
+        "feedback_body_shape": {
+          "name": "feedback_body_shape",
+          "value": "length(btrim(\"spideryarn\".\"feedback\".\"body\")) > 0 and length(\"spideryarn\".\"feedback\".\"body\") <= 12072"
         },
-        "feedback_expected_shape": {
-          "name": "feedback_expected_shape",
-          "value": "\"spideryarn\".\"feedback\".\"expected\" is null or (length(btrim(\"spideryarn\".\"feedback\".\"expected\")) > 0 and length(\"spideryarn\".\"feedback\".\"expected\") <= 4000)"
-        },
-        "feedback_actual_shape": {
-          "name": "feedback_actual_shape",
-          "value": "\"spideryarn\".\"feedback\".\"actual\" is null or (length(btrim(\"spideryarn\".\"feedback\".\"actual\")) > 0 and length(\"spideryarn\".\"feedback\".\"actual\") <= 4000)"
-        },
-        "feedback_says_something": {
-          "name": "feedback_says_something",
-          "value": "\"spideryarn\".\"feedback\".\"steps\" is not null or \"spideryarn\".\"feedback\".\"expected\" is not null or \"spideryarn\".\"feedback\".\"actual\" is not null"
+        "feedback_kind": {
+          "name": "feedback_kind",
+          "value": "\"spideryarn\".\"feedback\".\"kind\" is null or \"spideryarn\".\"feedback\".\"kind\" in ('problem', 'suggestion')"
         },
         "feedback_reporter_email": {
           "name": "feedback_reporter_email",

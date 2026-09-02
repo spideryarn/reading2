@@ -60,6 +60,7 @@ import type {
   Comment,
   FeedbackDiagnostics,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
@@ -1339,6 +1340,7 @@ export interface CostStore {
 export type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
 } from "../types.js";
 
@@ -1373,12 +1375,19 @@ export interface NewFeedback {
    * owner.
    */
   reporterEmail: string;
-  /** *Steps to reproduce.* Length-capped at `MAX_FEEDBACK_ANSWER_CHARS`. */
-  steps: string | null;
-  /** *What you expected to see.* */
-  expected: string | null;
-  /** *What you saw instead.* */
-  actual: string | null;
+  /**
+   * **What the reader wrote**, in one box. Length-capped at
+   * `MAX_FEEDBACK_ANSWER_CHARS`, non-empty, and `not null` — a report with
+   * nothing in it is not a report, and that is the column's type rather than a
+   * rule somebody remembers.
+   */
+  body: string;
+  /**
+   * *A problem* or *a suggestion*, or **null for a reader who did not say**.
+   * Greg asked for the toggle to start unset, so absence is an answer here
+   * rather than a missing one — src/types.ts § `FEEDBACK_KINDS`.
+   */
+  kind: FeedbackKind | null;
   /**
    * Whether the reader ticked *Send extra diagnostics*. Recorded as its own
    * fact rather than inferred from `diagnostics` being present: "they said yes

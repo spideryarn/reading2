@@ -305,6 +305,7 @@ import type {
   ChatThread,
   Comment,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
@@ -334,6 +335,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   FEEDBACK_ENVIRONMENTS,
+  FEEDBACK_KINDS,
   FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
@@ -384,8 +386,10 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - three answers at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per UTF-16
- *   unit `JSON.stringify` can produce for a control character;
+ * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
+ *   UTF-16 unit `JSON.stringify` can produce for a control character — times
+ *   three, because a stale client still sends the old three answers and folding
+ *   them into one `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -4873,6 +4877,14 @@ async function transcribeDictation(
  */
 const FEEDBACK_FIELDS = [
   "id",
+  "body",
+  "kind",
+  /* **The old three-box vocabulary, still accepted on purpose.** A reader whose
+     tab was loaded before the deploy posts these, and this is the one endpoint
+     where a client and a server disagreeing is likely to be the very thing the
+     reader is trying to report — so they are folded into `body` rather than
+     refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
+     old bundles are certainly gone. */
   "steps",
   "expected",
   "actual",
@@ -4907,7 +4919,7 @@ const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
 const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
 
 /**
- * One of the three answers, trimmed — or `null` for a box the reader left empty.
+ * What the reader wrote, trimmed — or `null` for an empty box.
  *
  * **No part of the answer reaches a thrown message**, and that is the rule this
  * whole function exists to keep rather than a nicety: an `httpError` message is
@@ -4929,6 +4941,64 @@ function feedbackAnswer(value: unknown, field: string): string | null {
     );
   }
   return trimmed;
+}
+
+/**
+ * **What the reader wrote**, from either shape of request body.
+ *
+ * The current dialog sends one `body`. A dialog loaded before 2026-09-02 sends
+ * `steps`, `expected` and `actual`, and those are glued here under the same
+ * headings the migration used, so a report from a stale tab is stored as the
+ * same text it would have been stored as the day before.
+ *
+ * Accepting both is deliberate and is GPT Sol's finding: `FEEDBACK_FIELDS`
+ * refuses an unknown key outright, so without this a reader with an open tab is
+ * told *"a report has a field this endpoint does not take"* at the exact moment
+ * they are trying to tell us something is broken. Refusing a body that carries
+ * **both** shapes is the other half — that is not an old client, it is a caller
+ * making something up, and there would be no right answer about which to keep.
+ */
+function feedbackBody(sent: Record<string, unknown>): string {
+  const written = feedbackAnswer(sent.body, "body");
+  const steps = feedbackAnswer(sent.steps, "steps");
+  const expected = feedbackAnswer(sent.expected, "expected");
+  const actual = feedbackAnswer(sent.actual, "actual");
+  const legacy = [
+    steps === null ? null : `Steps to reproduce:\n${steps}`,
+    expected === null ? null : `What you expected to see:\n${expected}`,
+    actual === null ? null : `What you saw instead:\n${actual}`,
+  ].filter((part): part is string => part !== null);
+  if (written !== null && legacy.length > 0) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+  const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
+  /* The database says the same thing — `body` is `not null` — and this is the
+     half that gets to explain itself. A `kind` on its own is not a report: it is
+     the row a mis-wired toggle would file. */
+  if (body === null) {
+    throw httpError(400, "A report needs something written in it. [fb-empty]");
+  }
+  return body;
+}
+
+/**
+ * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
+ * than a missing one.
+ *
+ * Greg asked for the toggle to start unset — *"don't default to Problem. Default
+ * to null/unknown"* — so an absent field is valid and an unrecognised one is
+ * not. A value outside the vocabulary is a client and a server that disagree,
+ * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
+ * refusal for every other writer.
+ */
+function feedbackKind(value: unknown): FeedbackKind | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
+    /* The list is ours and the value is not the reader's prose — but it is still
+       a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  return value as FeedbackKind;
 }
 
 /**
@@ -5068,14 +5138,17 @@ function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
  * and the Vercel id from this request's own headers. See each of them.
  */
 function parseFeedback(
-  body: unknown,
+  /* `raw` rather than `body`, which is now a *field* of the report — the request
+     body and the reader's words are two different things and were briefly one
+     name. */
+  raw: unknown,
   req: IncomingMessage,
   user: VerifiedUser,
 ): { report: NewFeedback; screenshot: FeedbackScreenshot | null } {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fb-type]");
   }
-  const sent = body as Record<string, unknown>;
+  const sent = raw as Record<string, unknown>;
   for (const key of Object.keys(sent)) {
     if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
       /* **Fixed prose. Not the key, not forty characters of it.**
@@ -5104,14 +5177,8 @@ function parseFeedback(
   const consented = sent.consented;
   const where = feedbackWhere(sent);
 
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
-  /* The database says the same thing (`feedback_says_something`); this is the
-     half that gets to explain itself. */
-  if (steps === null && expected === null && actual === null) {
-    throw httpError(400, "A report needs at least one of the three answers. [fb-empty]");
-  }
+  const body = feedbackBody(sent);
+  const kind = feedbackKind(sent.kind);
 
   if (
     sent.diagnostics !== undefined &&
@@ -5140,9 +5207,8 @@ function parseFeedback(
          `VerifiedUser` — the one type only `requireUser` can make — and this is
          a snapshot of the address it verified, taken at submit time. */
       reporterEmail: user.email,
-      steps,
-      expected,
-      actual,
+      body,
+      kind,
       consented,
       ...where,
       environment: feedbackEnvironment(),
@@ -5203,7 +5269,10 @@ async function fileFeedback(
     {
       id: report.id,
       kind: answer.kind,
-      chars: (report.steps?.length ?? 0) + (report.expected?.length ?? 0) + (report.actual?.length ?? 0),
+      /* The reader's own answer, next to the store's. Two different `kind`s in
+         one line would be a log nobody can read, so this one says whose it is. */
+      reportKind: report.kind,
+      chars: report.body.length,
       consented: report.consented,
       routeKind: report.routeKind,
       slug: report.slug,
