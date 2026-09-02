@@ -1,8 +1,8 @@
 # The remote box runs production migrations, with nobody in the loop
 
-**Status: step 1 mostly built, 2026-09-02.** See
-[Progress](#progress-and-what-step-1-found-on-its-first-run) — including the thing it found in
-production the first time it was pointed at it. Steps 2 and 3 are still proposals, and the
+**Status: step 1 mostly built and live, 2026-09-02.** See
+[Progress](#progress-and-what-step-1-found-on-its-first-run) — including the fifteen unapplied
+migrations it found in production on its first run, and the green it reports now they are applied. Steps 2 and 3 are still proposals, and the
 [open questions](#open-questions) are the parts still to settle.
 
 > I really want the remote-box to be able to kick off production migrations as part of its deploy
@@ -477,27 +477,36 @@ out loud.
 - The production grant was applied and **verified by asking afterwards**, `false → true`:
   `usage` on `spideryarn_migrations` and `select` on `__drizzle_migrations`, for `spideryarn_app`.
 
-### What it found
+### What it found, and what happened next
 
-Pointed at production for the first time, the check immediately reported the exact failure this
-whole document exists to prevent, already in progress:
+Pointed at production for the first time, at 06:50, the check reported the exact failure this
+document exists to prevent, already in progress: **37 migrations applied, 52 needed by the live
+commit** — fifteen missing, and `/api/health` answering 503 over 53 columns the code selected and
+could not see.
+
+Another agent deployed and migrated within the hour. As of 07:26 production answers:
 
 ```
-  production applied :  37 migrations
-  live commit ba6882a:  52 migrations
-  missing            :  15, from 0037_experimental_features… to 0051_referee_claims
+  expected : { count: 52, digest: 29d57bbb… }
+  applied  : { count: 52, digest: 29d57bbb… }
+  missing  : []        ahead : 0        warnings: []        ok: true
 ```
 
-**Code that needs fifteen unapplied migrations is live.** `/api/health` answers 503 and names 53
-columns it selects and cannot see; 45 of them belong to three tables that do not exist in production
-at all (`feedback`, `referee_criteria`, `referee_claims`). Reading still works — `/` answers 200 —
-so this is degraded rather than down: the newer features are broken and the article view is not.
+So the ledger, the schema and the code are in step, the grant works from the deployed function, and
+**the feature's first end-to-end run in production was a green one it had itself made legible.**
 
-Fourteen of the fifteen are additive by `scanSql`. **`0049_drop_raw_bytes` drops a column**, so this
-is not a run-it-and-see; it is exactly the class every postmortem in
-[the four options](#four-options-ruled-out-so-nobody-researches-them-again) says keeps a human.
+### One mistake worth recording, because the tooling built here is the fix for it
 
-Nothing has been applied. That is Greg's call, and the grant he approved was a grant.
+Between reading the ledger (37) and reading the columns, the other agent was migrating. So the
+columns came back showing `quiz`, `based_on_revision_id`, a dropped `raw_bytes` and a fully-formed
+`feedback` table — all from migrations the ledger snapshot said were unapplied. That looks exactly
+like a schema that has drifted ahead of its ledger, and it was nearly written up as one.
+
+It was not drift. It was **one reader taking several snapshots across a moving database** and
+comparing them to each other. The lesson is not "be careful" — it is that a single
+`GET /api/health` answers expected, applied, missing and ahead **atomically, in one response**,
+where a sequence of separate queries cannot. The instrument built in step 1 is the thing that
+would have prevented the misreading; reaching for `psql` instead is what caused it.
 
 ### Still to do in step 1
 
