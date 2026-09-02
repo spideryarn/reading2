@@ -137,6 +137,8 @@ the other docs and to the code. Not descriptions of code, which the code already
 - **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
   anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
   after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
+  **Signposting is not a rule**, so adding a new doc's line under its entry point, or tweaking a
+  pointer's wording, needs no approval — just do it. Greg, 2026-09-02.
 - **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
   somewhere that shouted. Rename on sight and fix the links.
 - **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
