@@ -27,6 +27,7 @@ import type { Entitlement, TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
 import { releaseReservation, reserveIngest, usageFor } from "../src/store/pg-billing.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /**
  * **Before `pgReady`, or this whole file skips for the wrong reason.**
@@ -89,14 +90,13 @@ const PAID: Entitlement = {
 
 async function seedOwner(): Promise<void> {
   if (!pool) return;
-  /* `auth.users` is Supabase's, and the owner FK points into it. Minimal row,
-     and `on conflict do nothing` so re-runs are cheap. */
-  await pool.query(
-    `insert into auth.users (id, instance_id, aud, role, email)
-     values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', $2)
-     on conflict (id) do nothing`,
-    [OWNER, `quota-race-${OWNER}@spideryarn.local`],
-  );
+  /* `auth.users` is Supabase's, and the owner FK points into it. `on conflict
+     do nothing` so re-runs are cheap. */
+  await seedAuthUser(pool, {
+    id: OWNER,
+    email: `quota-race-${OWNER}@spideryarn.local`,
+    onConflictDoNothing: true,
+  });
 }
 
 /**

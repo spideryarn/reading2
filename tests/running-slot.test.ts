@@ -38,6 +38,7 @@ import type { JobStep, OwnerId } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -258,13 +259,7 @@ if (reachable && pool) {
   await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
   await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
   for (const who of [OWNER, OWNER_B]) {
-    await pool.query(
-      `insert into auth.users
-         (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-       values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-               $2, 'x', now(), now())`,
-      [who, `running-slot-${who}@example.invalid`],
-    );
+    await seedAuthUser(pool, { id: who, email: `running-slot-${who}@example.invalid` });
   }
 }
 

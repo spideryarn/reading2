@@ -149,6 +149,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Exercises the guarded transport against a stubbed global fetch. Listed by name rather than by a blanket tests/ exemption, because a test that really did reach a provider is a thing worth being told about.",
   "tests/no-provider-calls-guard.test.ts":
     "The positive control for tests/setup/no-provider-calls.ts. It calls `fetch` at openrouter.ai on purpose, and the whole assertion is that the guard refuses it before a byte leaves — so the capability this scan sees is exactly the capability being proved absent. Listed by name for the same reason as the two above.",
+  "src/web/PrivacyPage.tsx":
+    "The privacy policy, which tells the reader where their text goes and links to the provider's own policy. Prose in the browser; it names the host and never calls it.",
 
   /* **Nine that only ask whether the key is configured.** Each reads
      `OPENROUTER_API_KEY` to fail with a sentence a person can act on, and then
