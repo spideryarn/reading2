@@ -111,3 +111,8 @@ the machinery is still open now.
 
 "Done, all tests pass" is a claim, not a result — read the diff, and run the gates yourself before
 you commit. See [silent-success.md](silent-success.md).
+
+## At the end
+
+Debrief: [debrief-progress.md](debrief-progress.md). Update the plan doc, then say out loud how the
+job went, what surprised you, what is left, and whether the rest is worth doing. Plainly and briefly.

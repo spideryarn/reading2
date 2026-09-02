@@ -53,8 +53,15 @@
  * top of the words, and there is no second colour ramp in this file.
  */
 import { useId } from "react";
+import { useQueryState } from "nuqs";
 
-import type { RefereeCriterionConfig, RefereePoles } from "../referee-criteria.js";
+import type {
+  DivergingScale,
+  RefereeCriterionConfig,
+  RefereePoles,
+} from "../referee-criteria.js";
+import { refScaleParam } from "./params.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { signedValence, valenceToken, valenceWords } from "./valence.js";
 import { type SavedCriterionState, useCriteria } from "./useCriteria.js";
 
@@ -209,6 +216,22 @@ interface Props {
  */
 export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) {
   const { criteria, loaded, loadFailed } = useCriteria(slug);
+  /**
+   * **The mode's ramp, and not the criterion's own** — `?refscale=`.
+   *
+   * Read here rather than threaded in, for the reason the criteria themselves
+   * are fetched here: this section is mounted from `CommentDialog` and
+   * `AnnotateDialog`, which are nowhere near `RefereeBand` and are open on all
+   * four sub-modes. A prop would have to be carried through two dialogs that
+   * have nothing else to do with Referee mode.
+   *
+   * It has to be the mode's, and that is GPT Sol's finding 4 rather than
+   * tidiness: this file paints the current placement *and* all five instrument
+   * positions, so a criterion stored as `br` under the default `rg` would show
+   * the referee two opposite palettes in one session — the panel saying red for
+   * *against* and this dialog saying red for *favour*, over the same passage.
+   */
+  const [scale] = useQueryState("refscale", refScaleParam);
   const pickerId = useId();
   const choices = divergingOnly(criteria);
   const chosen = choices.find((c) => c.id === value.criterionId) ?? null;
@@ -244,9 +267,34 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
               `SELECT` along with an `INPUT` and a `TEXTAREA`, so a stop here
               would buy nothing and would cost the reader Escape — which closes
               this dialog from a window listener. */}
-          <label className="place-pick" htmlFor={pickerId}>
-            <span className="place-pick-label">Criterion</span>
-            <select
+          {/* **The one thing on this dialog a referee cannot recover from by
+              looking**, and the highest-value sentence in the mode: changing the
+              criterion silently drops the position they already pressed. It is
+              deliberate, and the reasoning is in the `onChange` handler below —
+              −50 is not a quantity, it is *"leans underpowered"*, and carrying it
+              onto a criterion with different ends records the referee as having
+              said something they never read. But a referee who does not know
+              that meets it as five buttons going blank for no reason.
+
+              On the `<label>` rather than the `<select>`, so the card is reached
+              by hovering the word as well as the control, and the focus route
+              still works: the select inside is what takes focus, and a focus
+              event bubbles to the label `useFocus` is listening on. */}
+          <Tooltip
+            placement="top"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Criterion"
+                what="Which of your for/against criteria this passage is being placed on. Only criteria with two ends are listed, because a signed number needs two ends to be signed between."
+                how="Switching criterion clears the position you have chosen: the five positions are worded in one criterion's own ends, so the same press means something different under another one. You are asked again, in the new criterion's words."
+              />
+            }
+          >
+            <label className="place-pick" htmlFor={pickerId}>
+              <span className="place-pick-label">Criterion</span>
+              <select
               id={pickerId}
               value={value.criterionId ?? ""}
               onChange={(e) => {
@@ -286,14 +334,15 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
                 else onChange({ criterionId: id, valence: null });
               }}
             >
-              <option value="">Not placed</option>
-              {choices.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {pickerLabel(c)}
-                </option>
-              ))}
-            </select>
-          </label>
+                <option value="">Not placed</option>
+                {choices.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {pickerLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Tooltip>
 
           {chosen && (
             <>
@@ -307,7 +356,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
                   <span className="place-current-number">{signedValence(value.valence)}</span>
                   <span
                     className="place-swatch"
-                    style={{ background: valenceToken(chosen.config.scale, value.valence) }}
+                    style={{ background: valenceToken(scale, value.valence) }}
                     aria-hidden="true"
                   />
                 </p>
@@ -315,7 +364,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
 
               <Instrument
                 poles={chosen.config.poles}
-                scale={chosen.config.scale}
+                scale={scale}
                 criterion={chosen.criterion}
                 valence={value.valence}
                 onPick={(valence) => onChange({ criterionId: chosen.id, valence })}
@@ -363,7 +412,8 @@ function Instrument({
   onPick,
 }: {
   poles: RefereePoles;
-  scale: DivergingConfig["scale"];
+  /** The mode's ramp — `?refscale=`, not the criterion's stored one. */
+  scale: DivergingScale;
   criterion: string;
   valence: number | null;
   onPick(valence: number): void;

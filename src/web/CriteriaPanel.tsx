@@ -11,19 +11,26 @@
  *
  * ## The three visual rules, and they are the part most likely to go wrong
  *
- * **1. The prose stripe carries criterion identity, never valence.** Sol's
- * finding 7. `annotateHtml` keeps every identity slot on an overlapping mark
- * while collapsing strength to the strongest, so repainting the stripe by
- * valence destroys provenance: two negative criteria over one phrase would both
- * go red and the reader, mid-sentence, could not tell which said what. So
- * `resolveCriterion` drops the valence on the way to the marks (it says so at
- * length), and the valence appears **here, in the row**, and nowhere else.
+ * **1. The prose stripe carries the valence, and it did not used to.** It
+ * carried criterion identity until 2026-09-02, when Greg read a paper with it
+ * and found the panel and the prose saying opposite things about one phrase —
+ * *"So if extrapolation" counts against on the left, and yet it is highlighted
+ * with a green line in the text on the right.* Two palettes painted next to each
+ * other with nothing on screen saying they were two. So the stripe is now the
+ * ramp (`resolveCriterion` carries the number, `hitMarks` resolves the token),
+ * and the row below is where the same number is said in words.
  *
- * The plan also asked for it in the prose gutter, beside the marked block, and
- * that is **not built** — the gutter holds the permalink and the chat button
- * and nothing else. Recorded rather than quietly dropped: the row is the
- * simplest thing that satisfies rule 3 below, and the gutter is an addition to
- * make once somebody has read with this and found the panel too far away.
+ * What that gives up is *which criterion made this red phrase*, which the
+ * paragraph bar and the rail still answer coarsely because both still read
+ * `slot`. What pays for it is rule 3, extended into the prose: the mark carries
+ * a **sign**, and this panel prints a **key** whenever a for/against criterion
+ * is switched on.
+ * docs/plans/260902f-make-referee-mode-understandable.md has the argument and
+ * the two things it knowingly does not fix.
+ *
+ * The plan also asked for the valence in the prose gutter, beside the marked
+ * block, and that is **not built** — the gutter holds the permalink and the chat
+ * button and nothing else.
  *
  * **2. The pivot is anchored at zero.** `valenceStep` in src/web/valence.ts,
  * and the note there about what scaling to the data would silently do.
@@ -37,6 +44,22 @@
  * argues down — is permitted at all. If this panel ever stops printing the
  * direction in words, the default has to move to `--div-*`.
  *
+ * Since the prose is painted by valence too, the same rule has to be met *there*
+ * — where there are no words. Two things meet it: the sign after the mark
+ * (`data-dir`, drawn by styles.css as generated content), and `TheKey` below,
+ * which states the mapping in words and glyphs whenever a for/against criterion
+ * is switched on.
+ *
+ * ## One ramp for the whole mode
+ *
+ * `?refscale=rg|br`, and every swatch on this panel takes it — not the
+ * criterion's own `config.scale`, which is still stored and no longer read for
+ * display. The two ramps put red at opposite ends of the truth (`--div-rg-0` is
+ * red for *against*, `--div-8` is red for *favour*), so a per-criterion choice
+ * would have meant one red underline meaning opposite verdicts in one document
+ * the moment the prose started carrying it. `refScaleParam` in params.ts has
+ * the rest, including why it is in the URL rather than in the column.
+ *
  * ## And the rule that is about the reader rather than the pixels
  *
  * **Marks are default-off.** `?crits=` starts empty, exactly as `?runs=` does,
@@ -44,6 +67,13 @@
  * other time* — and here that is also the cheap 80% of the anchoring problem
  * the plan's § 1 is about: the referee reads the paper before the model paints
  * on it.
+ *
+ * Two acts switch a criterion on without the tick being pressed, and both are
+ * the referee asking: **running** it, and **pressing one of its results** (both
+ * go through `onShow`). The rule is about arriving at a paper with nothing
+ * painted on it, not about the tick being the only door — and the sentence
+ * above the list says so out loud, because its first draft claimed the opposite
+ * on the very screen where a finished run does it.
  *
  * ## The referee's own valence, which is here now, and the rule it is under
  *
@@ -83,14 +113,15 @@ import type {
   RefereePoles,
   RefereeResult,
 } from "../referee-criteria.js";
-import { DEFAULT_DIVERGING_SCALE } from "../referee-criteria.js";
 import type { Block, BlockId, Comment } from "../types.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
-import { critsParam } from "./params.js";
+import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
 import {
+  directionWords,
   signedValence,
   valenceLabel,
   valenceSentence,
@@ -182,6 +213,8 @@ export function CriteriaBand({
   comments,
   onJump,
   onFound,
+  openKey,
+  onOpenKey,
 }: {
   slug: string;
   blocks: Block[];
@@ -201,9 +234,24 @@ export function CriteriaBand({
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — see the seam described on `found` in App.tsx. */
   onFound(next: Found[]): void;
+  /**
+   * **Which marked passage the referee last pressed**, so the prose can ring
+   * that phrase rather than merely scrolling to its block.
+   *
+   * Held by `Reader` and not here, exactly as search's `openHit` is and for the
+   * same reason: `TableView` draws the ring, and a key held in this band would
+   * be a second thing that can disagree with the marks the band pushed up.
+   */
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   const api = useCriteria(slug);
   const [active, setActive] = useQueryState("crits", critsParam);
+  /* The mode's ramp, read here because this band owns the parameters and the
+     panel below it is a pure function of its props. Not written from here:
+     there is no control for it yet, and the composer's per-criterion `<select>`
+     was removed when this arrived. */
+  const [scale] = useQueryState("refscale", refScaleParam);
   /* Absent means the empty set — marks are default-off, and `critsParam` says
      why that is a rule rather than a nicety. */
   const on = useMemo(() => active ?? [], [active]);
@@ -226,6 +274,22 @@ export function CriteriaBand({
   }, [api.criteria, on, slots, blocks]);
 
   useLayoutEffect(() => onFound(found), [found, onFound]);
+
+  /* **A pressed passage that is no longer drawn cannot stay pressed.**
+     Unticking a criterion, deleting it, or re-running it and getting different
+     passages all take a key's mark out of the prose while the key survives — and
+     the ring then belongs to nothing, or worse, to whatever else minted that
+     key. Keyed on absence from `found`, so an ordinary tick is left alone.
+     `useIdeasMode` in App.tsx has the same effect for the same reason.
+
+     There is deliberately no counterpart that opens the *first* passage the way
+     Ideas does. An idea is one selection with a stepper over its occurrences;
+     several criteria can be switched on at once, so "the first" would be the
+     first of whichever criterion happened to sort first, and pressing a row is
+     the only thing here that means the referee chose a passage. */
+  useEffect(() => {
+    if (openKey !== null && !found.some((f) => f.key === openKey)) onOpenKey(null);
+  }, [found, openKey, onOpenKey]);
 
   /* Leaving referee mode must take the marks out of the prose with it. Its own
      effect, with no dependency on the results, so it runs on unmount and only
@@ -252,8 +316,11 @@ export function CriteriaBand({
       slots={slots}
       active={on}
       comments={comments}
+      scale={scale}
       onToggle={toggle}
       onJump={onJump}
+      openKey={openKey}
+      onOpenKey={onOpenKey}
       onShow={(id) => {
         /* **A criterion the referee has just run switches itself on**, which is
            the one exception to marks-are-default-off and is search's own: *a
@@ -286,25 +353,36 @@ function CriteriaView({
   slots,
   active,
   comments,
+  scale,
   onToggle,
   onJump,
+  openKey,
+  onOpenKey,
   onShow,
 }: {
   api: ReturnType<typeof useCriteria>;
   slots: Map<string, number>;
   active: string[];
   comments: readonly Comment[];
+  /** The mode's ramp — `?refscale=`. Every swatch below takes it. */
+  scale: DivergingScale;
   onToggle(id: string): void;
   onJump(blockId: BlockId): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
   onShow(id: string): void;
 }) {
+  /* Whether to print the key at all: it is about a mapping that only exists
+     once something is painted by direction, and a legend for marks nobody has
+     asked for would be an explanation of a thing that is not happening.
+     `config.kind` and not `results[0].kind`, because a criterion that is on and
+     still streaming is already painting. */
+  const anyDiverging = api.criteria.some(
+    (row) => active.includes(row.id) && row.config.kind === "diverging",
+  );
   return (
     <div className="crit">
-      <NewCriterion
-        onAsk={(criterion, config) => {
-          onShow(api.ask(criterion, config));
-        }}
-      />
+      <NewCriterion scale={scale} onAsk={(criterion, config) => onShow(api.ask(criterion, config))} />
 
       {api.error && <p className="crit-error">{api.error}</p>}
 
@@ -315,6 +393,25 @@ function CriteriaView({
           pass over the prose.
         </p>
       )}
+
+      {/* **What the tick does, in visible text above the list.** Claims labels
+          its identical checkbox in words — *"Mark these passages in the paper"* —
+          and this one's label is the criterion itself, so a first-time referee
+          had no way to know that the box is what paints the paper. Sol's finding
+          8. It says what a finished run does to the tick as well, because that
+          is the one thing the panel does *for* the referee and the sentence read
+          as a flat contradiction of it until Sol's finding 7 on the built
+          code. */}
+      {api.criteria.length > 0 && <p className="crit-how">{WHAT_THE_TICK_DOES}</p>}
+
+      {/* Only once a run has come back with something, so the sentence arrives
+          with the numbers it is about. `WHAT_THE_RANK_IS` says why this is here
+          and not on the numeral. */}
+      {api.criteria.some((row) => row.results.length > 0) && (
+        <p className="crit-how">{WHAT_THE_RANK_IS}</p>
+      )}
+
+      {anyDiverging && <TheKey scale={scale} />}
 
       <ul className="crit-list">
         {/* Newest first: the criterion you just wrote is the one you are looking
@@ -327,17 +424,168 @@ function CriteriaView({
             slot={slots.get(row.id)}
             showing={active.includes(row.id)}
             comments={comments}
+            scale={scale}
             onToggle={() => onToggle(row.id)}
             onRetry={() => api.retry(row.id)}
             onRemove={() => api.remove(row.id)}
             onRecolour={(colour) => api.recolour(row.id, colour)}
             onJump={onJump}
+            openKey={openKey}
+            /* **Pressing a result switches its criterion on**, and without this
+               the press did nothing at all: an unticked criterion contributes
+               no `Found`, so the key had no mark to ring — and the band's own
+               "a pressed passage that is no longer drawn cannot stay pressed"
+               effect then cleared it on the next frame. The row was clickable
+               throughout, so the referee pressed a passage, arrived at the
+               paragraph, and found nothing distinguished. GPT Sol's finding 1.
+
+               `onShow` rather than `onToggle`, because pressing a result is not
+               a toggle: pressing it twice must not turn the marks off. It is the
+               same call a finished run makes, for the same reason — *a result
+               you asked to see and cannot see is not a result*. Batched with the
+               open key in one event, so `found` and `openKey` land in the same
+               render and the absence effect never sees the gap. */
+            onOpenKey={(key) => {
+              if (key !== null) onShow(row.id);
+              onOpenKey(key);
+            }}
           />
         ))}
       </ul>
     </div>
   );
 }
+
+/**
+ * **What the tick does**, in one visible sentence above the list.
+ *
+ * Reader-facing copy, and a fact about *this app* rather than about the paper —
+ * docs/project/copy.md. Two sentences and both are load-bearing: the first names
+ * the control, because the checkbox's own label is the criterion's words and
+ * therefore says nothing about marking; the second states the exception,
+ * because there is one.
+ *
+ * **The first draft said "Nothing is marked until you do", and it was false** —
+ * `onShow` ticks a criterion the moment its run comes back, which is search's
+ * own rule that *a result the reader just paid for and cannot see is not a
+ * result*. So the visible sentence said the opposite of what the panel does, on
+ * the very screen where the referee watches it happen. GPT Sol's finding 7, and
+ * his replacement wording, which says the same rule the other way up: the tick
+ * is the switch, and a run flips it for you.
+ *
+ * Module-local rather than exported. tests/referee-criteria-panel.test.tsx
+ * asserts the sentence as a literal, which is the point: a copy test that read
+ * the constant would pass over any wording at all.
+ */
+const WHAT_THE_TICK_DOES =
+  "A criterion marks its passages while its tick is on. New runs turn it on automatically.";
+
+/**
+ * **What the big number on a result is**, in one visible sentence above the
+ * list — and the reason it is a sentence rather than the card that is already
+ * on the numeral.
+ *
+ * The card is real and says more (`CriterionResult`), but it is **hover-only**:
+ * the numeral is a `<span>` inside the jump button, so it takes no focus, and a
+ * `tabIndex` on it would put a tab stop inside a button. Stage 2 recorded that
+ * as a gap rather than accepting it, and named this as the fix — *if the gap is
+ * worth closing it wants a visible line above the list, not a card* — because a
+ * card nobody can reach by keyboard is not an answer to a numeral that reads
+ * like a severity score.
+ *
+ * Printed only when something has actually returned results, so a referee who
+ * has written one criterion and not run it is not told about a number they
+ * cannot see. Beside `WHAT_THE_TICK_DOES` rather than repeated above each
+ * criterion's own list: it is the same sentence about every list, and three
+ * copies of it in a narrow band is the wall this stage is against.
+ *
+ * Module-local and asserted as a literal in
+ * tests/referee-criteria-panel.test.tsx, for `WHAT_THE_TICK_DOES`'s reason: a
+ * copy test that read the constant would pass over any wording at all.
+ */
+const WHAT_THE_RANK_IS =
+  "The number beside a passage is the model's ordering of its own answers for that criterion. It is not a score, and nothing here ranks the paper.";
+
+/**
+ * **The key: what a coloured mark in the paper means**, shown only while a
+ * for/against criterion is switched on.
+ *
+ * This is the second half of what pays for painting the prose by direction. The
+ * first is the sign after each mark (`data-dir` — src/web/annotate.ts and the
+ * `::after` rules in styles.css); this states the mapping on screen, in words
+ * and glyphs, so a reader does not have to have read a card somebody dismissed.
+ * docs/project/colour-scales.md forbids colour being the only carrier of a
+ * good/bad judgement, and a legend printed where the judgements are is the
+ * plainest way to meet it.
+ *
+ * **It tracks the mode's ramp rather than naming red and green.** On `br` the
+ * two ends are blue and red, and a key that said "red counts against" there
+ * would be exactly wrong — which is the failure a hard-coded sentence invites
+ * and a swatch does not. The swatches take the same `valenceToken` every row
+ * does, at the two poles and the middle, so the key and the rows cannot drift.
+ *
+ * The glyphs are ordinary text here, unlike in the prose where they must be
+ * generated content: a legend is our own writing and copying it out of the panel
+ * copies nothing of the author's.
+ *
+ * **All four signs, not the two ends.** It printed the two poles alone until
+ * GPT Sol's finding 5, and a legend that stops short of the glyphs a reader
+ * will actually meet is worse than no legend. The middle one is the commonest
+ * answer of the three — zero is a real answer, src/web/valence.ts — and the
+ * fourth is the one nobody could guess, because it does not come from a valence
+ * at all: it is what the renderer prints where two marks cover one phrase and
+ * point opposite ways, and the whole point of it is that the panel, not the
+ * prose, says which is which.
+ *
+ * That fourth one gets no swatch, and that is the honest spelling rather than
+ * an omission: there is no one colour for it. The phrase wears **both** stripes,
+ * which is exactly what the sign is admitting.
+ */
+function TheKey({ scale }: { scale: DivergingScale }) {
+  return (
+    <p className="crit-key">
+      <span className="crit-key-lead">In the paper:</span>
+      {([-100, 0, 100] as const).map((valence) => (
+        <span className="crit-key-end" key={valence}>
+          <span
+            className="crit-key-swatch"
+            aria-hidden="true"
+            style={{ background: valenceToken(scale, valence) }}
+          />
+          {/* Not `aria-hidden`, unlike the swatch beside it. The swatch is a
+              colour and there is nothing to say about it; the sign is the
+              carrier itself, and a real minus (U+2212) is what a screen reader
+              pronounces as "minus" — src/web/valence.ts § `signedValence`. So
+              the key reads as *"minus counts against, plus counts for"*, which
+              is what it means. */}
+          <span className="crit-key-sign">{signOf(valence)}</span>
+          {valenceWords(valence)}
+        </span>
+      ))}
+      <span className="crit-key-end">
+        <span className="crit-key-sign">{MIXED_SIGN}</span>
+        {directionWords("mixed")}
+      </span>
+    </p>
+  );
+}
+
+/**
+ * The glyph for one valence — the same three characters
+ * `mark.hit[data-dir]::after` draws in the prose, which is the only reason this
+ * legend is worth printing at all.
+ *
+ * A real minus, U+2212, matching `signedValence` and the stylesheet rather than
+ * a hyphen.
+ */
+function signOf(valence: number): string {
+  if (valence < 0) return "−";
+  if (valence > 0) return "+";
+  return "·";
+}
+
+/** The fourth glyph, which no valence produces — `directionWords`' fourth word. */
+const MIXED_SIGN = "±";
 
 /* ------------------------------------------------------------- the form -- */
 
@@ -350,15 +598,30 @@ function CriteriaView({
  * they were halfway through asking.
  */
 function NewCriterion({
+  scale,
   onAsk,
 }: {
+  /**
+   * **The mode's ramp, written into the new row** — `?refscale=`.
+   *
+   * There was a `<select>` here until 2026-09-02 and it was a mistake nobody had
+   * noticed: the two ramps put red at opposite ends of the truth, so two
+   * criteria could paint opposite verdicts in the same colour. One scale for the
+   * whole mode fixes that, works retroactively over criteria already run, and
+   * needs no migration (`refScaleParam` in params.ts).
+   *
+   * The column is still written rather than left null, so
+   * `referee_criteria.scale` does not start lying about rows made after the
+   * switch. It is no longer read for display anywhere, and the day it is dropped
+   * is a decision rather than a discovery — the plan names it.
+   */
+  scale: DivergingScale;
   onAsk(criterion: string, config: RefereeCriterionConfig): void;
 }) {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<RefereeCriterionKind>("single");
   const [against, setAgainst] = useState("");
   const [favour, setFavour] = useState("");
-  const [scale, setScale] = useState<DivergingScale>(DEFAULT_DIVERGING_SCALE);
 
   const config: RefereeCriterionConfig =
     kind === "diverging"
@@ -399,24 +662,39 @@ function NewCriterion({
       />
 
       <div className="crit-kinds" role="radiogroup" aria-label="What kind of criterion">
-        {(["single", "diverging", "literature"] as const).map((k) => (
-          // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx, SearchPanel.tsx and App.tsx's RefereeViews already make
-          <button
-            key={k}
-            type="button"
-            role="radio"
-            aria-checked={k === kind}
-            /* Its own tab stop and no key handler — the arrows belong to the
-               article, which is what `RefereeViews` in App.tsx records Greg
-               asking for and what tests/arrows-belong-to-the-article.test.tsx
-               sweeps every `role="radio"` in the client for. */
-            tabIndex={0}
-            className={`crit-kind-btn${k === kind ? " on" : ""}`}
-            onClick={() => setKind(k)}
-          >
-            {KIND_LABEL[k]}
-          </button>
-        ))}
+        {/* **`KIND_NOTE` on the chip as well as under the row**, and that is the
+            point of wiring the same constant into both rather than writing a
+            second sentence: the paragraph below only ever describes the kind
+            that is *selected*, so the two chips a referee has not pressed
+            explain themselves nowhere. The card is what lets them explain
+            themselves before the press. One string, so the two cannot drift. */}
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {(["single", "diverging", "literature"] as const).map((k) => (
+            <Tooltip
+              key={k}
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={<ControlTip head={KIND_LABEL[k]} what={KIND_NOTE[k]} how={KIND_HOW[k]} />}
+            >
+              {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx, SearchPanel.tsx and App.tsx's RefereeViews already make */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={k === kind}
+                /* Its own tab stop and no key handler — the arrows belong to the
+                   article, which is what `RefereeViews` in App.tsx records Greg
+                   asking for and what tests/arrows-belong-to-the-article.test.tsx
+                   sweeps every `role="radio"` in the client for. */
+                tabIndex={0}
+                className={`crit-kind-btn${k === kind ? " on" : ""}`}
+                onClick={() => setKind(k)}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
       <p className="crit-kind-note">{KIND_NOTE[kind]}</p>
 
@@ -442,48 +720,104 @@ function NewCriterion({
             placeholder="the controls settle it"
             onChange={(e) => setFavour(e.target.value)}
           />
-          <label className="crit-label" htmlFor="crit-scale">
-            Scale
-          </label>
-          <select
-            id="crit-scale"
-            value={scale}
-            onChange={(e) => setScale(e.target.value === "br" ? "br" : "rg")}
-          >
-            <option value="rg">Red to green</option>
-            <option value="br">Blue to red</option>
-          </select>
         </div>
       )}
 
       <div className="crit-presets">
-        {CRITERION_PRESETS.map((p) => (
-          <button
-            key={p.label}
-            type="button"
-            className="crit-preset"
-            onClick={() => {
-              setText(p.criterion);
-              setKind(p.kind);
-              setAgainst(p.poles?.against ?? "");
-              setFavour(p.poles?.favour ?? "");
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
+        {/* **The card says what the press overwrites**, because the press is
+            destructive and nothing on screen says so: it replaces the box, the
+            kind and both poles at once, so a referee halfway through writing
+            their own criterion loses it to what looks like a suggestion chip.
+            The card also prints the criterion itself, which is the thing they
+            are actually choosing and which the label only gestures at. */}
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {CRITERION_PRESETS.map((p) => (
+            <Tooltip
+              key={p.label}
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={
+                <ControlTip
+                  head={p.label}
+                  what={`Fills the box with: “${p.criterion}”`}
+                  how={`Replaces whatever is in the form — the text, the kind and both ends — with this ${KIND_LABEL[p.kind].toLowerCase()} criterion. Nothing runs until you press Run this criterion, and the words stay yours to edit.`}
+                />
+              }
+            >
+              <button
+                type="button"
+                className="crit-preset"
+                onClick={() => {
+                  setText(p.criterion);
+                  setKind(p.kind);
+                  setAgainst(p.poles?.against ?? "");
+                  setFavour(p.poles?.favour ?? "");
+                }}
+              >
+                {p.label}
+              </button>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
 
-      <button type="submit" className="crit-run" disabled={!ready}>
-        Run this criterion
-      </button>
+      <Tooltip
+        placement="top"
+        keepSide
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Run this criterion"
+            what="Saves the criterion and asks the model to go through the paper for the passages that bear on it."
+            how="One model call over the whole paper, so it takes a few seconds and costs something. It is re-runnable afterwards, and the criterion is kept whether the run works or not."
+          />
+        }
+      >
+        {/* **`aria-disabled`, not `disabled`**, and the difference is the whole
+            point: a `disabled` button emits no pointer or focus events, so
+            Floating UI never hears about it and the card explaining what the
+            button costs is unreadable in exactly the state a referee wants it —
+            standing in front of a dead button, wondering what is missing. With
+            `aria-disabled` the control stays hoverable, focusable and tabbable,
+            and is announced as unavailable, which is what every screen reader
+            does with the attribute.
+
+            **`aria-disabled` on its own does not stop an activation**, so the
+            inertness is elsewhere and has to stay there: the `onSubmit` above
+            returns on `!ready` before it calls `onAsk`, which catches the click,
+            the Enter and the Space alike because all three arrive here as a
+            submit. `onClick` is *not* where that guard goes — Enter in a text
+            field submits a form without ever pressing the button.
+
+            The dead look is `.crit-run[aria-disabled="true"]` in styles.css,
+            which took over from `:disabled` in the same change. */}
+        <button type="submit" className="crit-run" aria-disabled={!ready}>
+          Run this criterion
+        </button>
+      </Tooltip>
     </form>
   );
 }
 
+/**
+ * **"Two ends" became "For / against" on 2026-09-02**, and the label is the fix
+ * rather than the card beside it: a tooltip is not read by anybody in a hurry,
+ * which is what a referee is (`MirrorPanel.tsx` says so about itself). *Two
+ * ends* is our vocabulary for the shape of the data — a pair of poles — and says
+ * nothing about what pressing it will ask for. *For / against* is the referee's
+ * own vocabulary, it is what the two fields underneath are actually called
+ * ("What counts against", "What counts for"), and it says what the chip does
+ * before those fields appear.
+ *
+ * `diverging` stays the stored kind and the type's name. This is the word on the
+ * screen, and it is pinned as a literal in tests/referee-tooltips.test.tsx,
+ * because a copy test that read this constant would pass over any wording at
+ * all.
+ */
 const KIND_LABEL: Record<RefereeCriterionKind, string> = {
   single: "Find passages",
-  diverging: "Two ends",
+  diverging: "For / against",
   literature: "Check the literature",
 };
 
@@ -494,6 +828,25 @@ const KIND_NOTE: Record<RefereeCriterionKind, string> = {
     "Also says which way each passage cuts, between two ends you name. It is not a score for the paper, and nothing adds them up.",
   literature:
     "Goes to the web and brings back sources. A passage with no source link is not shown, because you could not check it.",
+};
+
+/**
+ * **The half of each kind that pressing it would not tell you** — the second
+ * paragraph of its card, under `KIND_NOTE`.
+ *
+ * `ControlTip`'s rule: the first sentence is what a reader could have guessed by
+ * pressing the control, and this is the one they could not. Each of these is a
+ * cost or a refusal rather than a restatement — what the answer is drawn from,
+ * what the kind will not do, and (for `literature`) which third party it
+ * reaches, which is the one thing in this panel that leaves the app.
+ */
+const KIND_HOW: Record<RefereeCriterionKind, string> = {
+  single:
+    "The mark is the model's answer to your words, so a passage it did not return is not a passage it cleared. Every kind is one model call over the whole paper.",
+  diverging:
+    "You name the two ends, so the direction is measured against your words rather than against anything we think good or bad. The paper is painted red to green by direction, and each mark carries a sign as well.",
+  literature:
+    "The only kind that leaves this app: it searches the web, so the paper's terms reach a search engine. It brings back what it found, not a verdict on whether the paper cited it.",
 };
 
 /* ------------------------------------------- the referee's own placements -- */
@@ -682,21 +1035,28 @@ function CriterionRow({
   slot,
   showing,
   comments,
+  scale,
   onToggle,
   onRetry,
   onRemove,
   onRecolour,
   onJump,
+  openKey,
+  onOpenKey,
 }: {
   row: SavedCriterionState;
   slot: number | undefined;
   showing: boolean;
   comments: readonly Comment[];
+  /** The mode's ramp, not `row.config.scale` — see this file's header. */
+  scale: DivergingScale;
   onToggle(): void;
   onRetry(): void;
   onRemove(): void;
   onRecolour(colour: number | null): void;
   onJump(blockId: BlockId): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   const [picking, setPicking] = useState(false);
   /* Only a `diverging` criterion has two ends, so only a `diverging` criterion
@@ -705,6 +1065,27 @@ function CriterionRow({
   const poles = row.config.kind === "diverging" ? row.config.poles : null;
   const placements = poles === null ? [] : placementsOn(comments, row.id);
   const { paired, unpaired, missed } = pairPlacements(placements, row.results);
+  /**
+   * **Whether this row's hue still paints the marks in the prose** — and for a
+   * for/against criterion it no longer does.
+   *
+   * Since the reversal, a `diverging` criterion's phrase marks are drawn by
+   * *direction* from the mode's ramp; its categorical hue reaches only the bar
+   * down the left of the paragraph and the lane in the rail. So the two controls
+   * below stop claiming otherwise: the tick drops the hue rather than wearing a
+   * colour that has nothing to do with what the tick paints, and the colour
+   * button says what it actually colours. GPT Sol's finding 6, and the comment
+   * on the tick said the opposite in so many words until 2026-09-02.
+   *
+   * Every other kind is unchanged — a `single` or `literature` criterion still
+   * paints its stripes in its own hue, and there the tick wearing that hue is
+   * exactly right.
+   */
+  const identityPaintsProse = row.config.kind !== "diverging";
+  const hue =
+    slot === undefined
+      ? undefined
+      : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties);
   return (
     <li className="crit-row">
       <div className="crit-head">
@@ -713,32 +1094,64 @@ function CriterionRow({
             type="checkbox"
             checked={showing}
             onChange={onToggle}
-            /* The row's own hue, so the tick and the mark it draws are visibly
-               the same thing — `--cat-rgb` holds a palette *reference*, never a
-               colour, which is the seam hit-colours.ts keeps. */
-            style={
-              slot === undefined
-                ? undefined
-                : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties)
-            }
+            /* The row's own hue where the row's own hue is what the tick draws,
+               and nothing where it is not — see `identityPaintsProse` above.
+               `--cat-rgb` holds a palette *reference*, never a colour, which is
+               the seam hit-colours.ts keeps; with it absent the stylesheet falls
+               back to the neutral wash, which is the honest answer for a
+               criterion whose marks take their colour from a ramp. */
+            style={identityPaintsProse ? hue : undefined}
           />
           <span className="crit-criterion">{row.criterion}</span>
         </label>
-        <button
-          type="button"
-          className="crit-colour"
-          aria-label="Colour"
-          aria-expanded={picking}
-          onClick={() => setPicking((v) => !v)}
-          style={
-            slot === undefined
-              ? undefined
-              : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties)
+        {/* **The two controls that look like decoration.** The swatch is a
+            coloured square with an `aria-label` and no glyph, so nothing on
+            screen says it opens anything; the × is unambiguous about what it
+            does and silent about what it takes with it. Both cards say the half
+            a press would not. */}
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={identityPaintsProse ? "Mark colour" : "Bar and rail colour"}
+              what="Opens a palette, and picks which colour this criterion is drawn in."
+              how={
+                identityPaintsProse
+                  ? "It colours this criterion's marks in the paper, the bar down the left of each marked paragraph, and its lane in the rail. Colours are otherwise handed out automatically, one per criterion."
+                  : "A for/against criterion's phrase marks are painted red to green by direction, not by this — so this colours only the bar down the left of each marked paragraph and its lane in the rail."
+              }
+            />
           }
-        />
-        <button type="button" className="crit-del" aria-label="Delete" onClick={onRemove}>
-          ×
-        </button>
+        >
+          <button
+            type="button"
+            className="crit-colour"
+            /* Two labels, because the control does two different amounts. On a
+               for/against criterion it no longer reaches the prose at all, and
+               "Colour" beside a red-and-green paper is an invitation to change
+               the wrong thing and conclude the app is broken. */
+            aria-label={identityPaintsProse ? "Mark colour" : "Bar and rail colour"}
+            aria-expanded={picking}
+            onClick={() => setPicking((v) => !v)}
+            style={hue}
+          />
+        </Tooltip>
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head="Delete"
+              what="Removes this criterion, its answers, and its marks in the paper."
+              how="It goes straight away, with no confirmation and no undo: getting the answers back means running the criterion again, which is another model call over the whole paper."
+            />
+          }
+        >
+          <button type="button" className="crit-del" aria-label="Delete" onClick={onRemove}>
+            ×
+          </button>
+        </Tooltip>
       </div>
 
       {picking && (
@@ -761,16 +1174,33 @@ function CriterionRow({
               }}
             />
           ))}
-          <button
-            type="button"
-            className="crit-swatch-auto"
-            onClick={() => {
-              onRecolour(null);
-              setPicking(false);
-            }}
+          {/* **"Automatic" is the only place the default is nameable**, and the
+              word on its own does not say what it reverts *to* — nothing on this
+              panel ever says that a criterion with no chosen colour is given one
+              from its id. Without the card the referee cannot tell "automatic"
+              from "none". */}
+          <Tooltip
+            placement="left"
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Automatic"
+                what="Gives up the colour you chose and goes back to the one this criterion started with."
+                how="Colours are handed out from a hash of the criterion's own id rather than in the order you wrote them, so a criterion keeps its colour instead of shuffling when you add another. There are eight, so past eight criteria two of them wear the same one."
+              />
+            }
           >
-            Automatic
-          </button>
+            <button
+              type="button"
+              className="crit-swatch-auto"
+              onClick={() => {
+                onRecolour(null);
+                setPicking(false);
+              }}
+            >
+              Automatic
+            </button>
+          </Tooltip>
         </div>
       )}
 
@@ -787,9 +1217,32 @@ function CriterionRow({
       {row.status === "error" && (
         <p className="crit-error">
           {row.error}{" "}
-          <button type="button" className="crit-retry" onClick={onRetry}>
-            Try again
-          </button>
+          {/* "Try again" names nothing on its own, which is `DiagramPanel`'s
+              `TryAgain` finding: a reader arriving here by Tab hears "button,
+              Try again" and no object. The `aria-label` carries the name; the
+              card carries what the press costs, which is the same call as the
+              first one rather than a cheap resume. */}
+          <Tooltip
+            placement="top"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Try again"
+                what="Runs this criterion over the paper a second time."
+                how="A fresh model call at full price — nothing is resumed and nothing is cached, and the answer may not be the same one. The words of the criterion are unchanged; edit them by writing a new criterion instead."
+              />
+            }
+          >
+            <button
+              type="button"
+              className="crit-retry"
+              aria-label="Run this criterion again"
+              onClick={onRetry}
+            >
+              Try again
+            </button>
+          </Tooltip>
         </p>
       )}
       {row.status === "done" && row.results.length === 0 && (
@@ -825,7 +1278,21 @@ function CriterionRow({
             result={result}
             rank={i + 1}
             config={row.config}
+            scale={scale}
             placement={paired.get(result.blockId)}
+            /* **The key `resolveCriterion` mints for this same result**, and it
+               has to be built the same way here or pressing the row would ring
+               nothing at all: criterion id, block id, and the result's index in
+               the stored list — which is `i`, because this list is `row.results`
+               in its stored order and is replaced wholesale rather than
+               reordered. Two copies of one key shape is the thing to watch here:
+               if either side changes, the ring goes quiet rather than wrong,
+               which is the failure docs/reusable/silent-success.md is about, so
+               tests/referee-criteria-panel.test.tsx presses a row and looks for
+               the key in the marks. */
+            foundKey={`${row.id}:${result.blockId}:${i}`}
+            open={openKey === `${row.id}:${result.blockId}:${i}`}
+            onOpen={onOpenKey}
             onJump={onJump}
           />
         ))}
@@ -953,21 +1420,81 @@ function CriterionResult({
   result,
   rank,
   config,
+  scale,
   placement,
+  foundKey,
+  open,
+  onOpen,
   onJump,
 }: {
   result: RefereeResult;
   rank: number;
   config: RefereeCriterionConfig;
+  /** The mode's ramp, not `config.scale` — see this file's header. */
+  scale: DivergingScale;
   /** The referee's own placement of this same block, if they made one. */
   placement: Placement | undefined;
+  /** This passage's key in the marks — `resolveCriterion`'s, rebuilt. */
+  foundKey: string;
+  /** True when this is the row the referee last pressed. */
+  open: boolean;
+  onOpen(key: string): void;
   onJump(blockId: BlockId): void;
 }) {
   const diverging = result.kind === "diverging" && config.kind === "diverging";
   return (
-    <li className="crit-result">
-      <button type="button" className="crit-jump" onClick={() => onJump(result.blockId)}>
-        <span className="crit-rank">{rank}</span>
+    <li className={`crit-result${open ? " on" : ""}`}>
+      <button
+        type="button"
+        className="crit-jump"
+        onClick={() => {
+          /* **Both, and in this order.** The key is what draws the ring around
+             this exact phrase (`mark.hit[data-hit-open]`); the jump is what puts
+             it on screen. Referee mode passed `null` for the key until
+             2026-09-02, so a press scrolled to the paragraph and left the
+             passage indistinguishable from every other mark in it — while
+             Search's identical rows had the ring all along. Same call
+             `SearchBand` makes, including the "always jump, even when the block
+             is already on screen" part: a criterion result is a place the
+             referee has not been yet. */
+          onOpen(foundKey);
+          onJump(result.blockId);
+        }}
+      >
+        {/* **The numeral reads like a severity score and is not one**, which is
+            the single most misreadable thing on this row: it is large, it leads,
+            and a paper marked *1* beside a passage that counts against invites
+            exactly the reading the whole mode refuses. The card is on the
+            numeral rather than on the row, because the row is a jump and its own
+            card would fire every time the referee reads down the list.
+
+            Nested inside the button rather than wrapped around it, deliberately:
+            wrapping would make the whole quote a tooltip trigger, so a card
+            would cover the neighbouring rows every time the referee ran their
+            eye down the list, and `useFocus` would fire it on every keyboard
+            step through the results.
+
+            **The cost of that choice, said out loud: this card is hover-only.** A
+            `<span>` takes no focus, so the keyboard route `Tooltip` normally
+            gives for free is not there. A `tabIndex` on it would put a tab stop
+            *inside* a button, which is worse. What a screen reader gets instead
+            is the row's own `.sr-only` sentence, which leads with the same
+            ordinal (`valenceLabel`) — the number, not the warning that it is not
+            a score. If that gap is ever worth closing it wants a visible line
+            above the list, not a card. */}
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={`Passage ${rank} of this criterion's answers`}
+              what="Where the model put this passage in its own ordering of the passages it returned for this criterion."
+              how="Not a score and not a severity: nothing here ranks the paper, and 1 is only the passage the model thought most worth putting first. Two criteria's numbers have nothing to do with each other."
+            />
+          }
+        >
+          <span className="crit-rank">{rank}</span>
+        </Tooltip>
         <span className="crit-quote">{result.quote}</span>
       </button>
 
@@ -994,7 +1521,7 @@ function CriterionResult({
           <span
             className="crit-valence-swatch"
             aria-hidden="true"
-            style={{ background: valenceToken(config.scale, result.valence) }}
+            style={{ background: valenceToken(scale, result.valence) }}
           />
           <span className="crit-valence-words" aria-hidden="true">
             {valenceWords(result.valence)}

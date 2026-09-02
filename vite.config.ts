@@ -14,6 +14,17 @@ import {
   PRIMARY_PORT,
 } from "./scripts/worktree-port.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
+import { devWatchIgnored } from "./scripts/worktree-admin.js";
+
+/**
+ * What the dev server's file watcher ignores — decided by `devWatchIgnored` in
+ * `scripts/worktree-admin.ts`, which is where the reasoning and its test are.
+ *
+ * The config file's **own location**, not `process.cwd()`: which checkout is
+ * being served is a fact about where this file sits, not about where the command
+ * was typed.
+ */
+const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url)));
 
 /**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
@@ -314,10 +325,28 @@ export default defineConfig(() => {
       /* `.claude/worktrees/**` is a peer's entire checkout. Watching it would
          reload the primary's page on their every keystroke, and Vite *appends*
          this list to its own defaults (`resolveChokidarOptions`), so naming it
-         here cannot cost us the node_modules and .git exclusions. */
-      watch: {
-        ignored: ["**/data/**", "**/docs/**", "**/evals/**", "**/.claude/worktrees/**"],
-      },
+         here cannot cost us the node_modules and .git exclusions.
+
+         **And it must not be there when this server is running *inside* one.**
+         Chokidar matches these globs against absolute paths, and a worktree's
+         absolute path contains `.claude/worktrees/` — so in a worktree the
+         pattern meant to exclude the *neighbours* excludes the server's own
+         source tree, every file of it. Nothing errors. The page loads, the app
+         works, and every edit made after the server started is invisible to it:
+         the module graph is never invalidated, so Vite keeps transforming and
+         serving the version it read at boot. An agent then measures its own
+         change in a browser and finds it did not happen, which is exactly the
+         shape docs/reusable/silent-success.md collects. Found on 2026-09-02 by
+         a browser pass that proved it three ways, `curl` included —
+         docs/postmortems/260902a-a-dev-server-that-ignored-its-own-source.md.
+
+         Dropping it there costs nothing: worktrees live under the *primary's*
+         `.claude/`, so a worktree has no neighbours of its own inside it.
+
+         The list itself is `devWatchIgnored` in scripts/worktree-admin.ts, so
+         that the case nobody can reach from the primary checkout has a test
+         rather than a comment. */
+      watch: { ignored: WATCH_IGNORED },
     },
   };
 });

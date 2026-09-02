@@ -202,12 +202,23 @@ export interface DivergingResult extends Judged {
    * separate function from `clampConfidence` so that the mistake has to be typed
    * out deliberately.
    *
-   * It is also **never painted into the prose stripe**. The renderer's two
-   * channels are strength and identity (src/web/annotate.ts), and repainting the
-   * stripe by valence throws provenance away: two negative criteria over one
-   * phrase both go red and the reader cannot tell which said what. Valence lives
-   * in the panel row and the block gutter, in words as well as in colour. Sol's
-   * finding 7.
+   * **Since 2026-09-02 it is painted into the prose stripe**, at Greg's
+   * direction — *"I was thinking that it should match the colour of the
+   * left-hand panel. If that's set to red/green, so should the prose be."* This
+   * comment said the exact opposite for a week, and the reversal is deliberate
+   * rather than a drift: `Found.valence` carries the number, `hitMarks` turns it
+   * into a ramp token, and the stripe under the phrase is drawn by **direction**
+   * instead of by which criterion found it
+   * (docs/plans/260902f-make-referee-mode-understandable.md).
+   *
+   * What that gives up is prose→panel provenance, and it is given up knowingly:
+   * two negative criteria over one phrase both go red and the phrase alone no
+   * longer says which said what. The **bar down the left of the paragraph** and
+   * the rail still read `slot`, so they are what answers *which criteria are
+   * live around here* — coarser than the stripe was, and named as such in the
+   * plan. What pays for painting a judgement in colour at all is the sign after
+   * the mark (`data-dir`, src/web/annotate.ts) and the key in the panel, because
+   * docs/project/colour-scales.md forbids colour being the only carrier of one.
    */
   valence: number;
 }

@@ -103,6 +103,7 @@ let host: HTMLDivElement;
 let root: Root;
 const jumped: string[] = [];
 const asked: string[] = [];
+const started: string[] = [];
 
 function paint(t: ChatThread | null, byline?: string) {
   act(() => {
@@ -116,6 +117,10 @@ function paint(t: ChatThread | null, byline?: string) {
         error: null,
         onAsk: (q: string) => asked.push(q),
         onStop: () => {},
+        /* The one press that spends money, and this file never presses it —
+           every case here hands the panel a thread, which is the state after it.
+           tests/referee-candidates-press.test.tsx is where the press lives. */
+        onStart: () => started.push("start"),
         onJump: (id: string) => jumped.push(id),
       }),
     );

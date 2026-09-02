@@ -76,9 +76,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's three links, and the one place a tooltip's trigger is not a host element |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
-`Tooltip` is deliberately generic — nothing in it knows about the spine. The obvious second customer
-is a gist cell in [`TableView.tsx`](../../src/web/TableView.tsx), where a long summary is clipped by
-its column.
+`Tooltip` is deliberately generic — nothing in it knows about the spine.
 
 ### The second implementation, and why there is one
 
@@ -113,7 +111,56 @@ pointer and keep itself open. If a third customer ever has both properties — m
 not React elements — that is the point at which this becomes a shared hook rather than a second file.
 [glossary.md § The hover card](glossary.md#the-hover-card) has the rest.
 
+## `ControlTip`, which is what most of them are now
+
+The spine's card is a *place* described. The other shape — and by count the commoner one — is a
+**control** described: `ControlTip` in [`Tooltip.tsx`](../../src/web/Tooltip.tsx), a head and two
+paragraphs, with one rule that is the whole reason it is worth a hover.
+
+> The first sentence is what a reader could have guessed by pressing the control; the second is what
+> they could not — where the answer comes from, what it costs, or what the control does *not*
+> promise.
+
+A second paragraph that restates the first is the failure mode, and it is easy to write by accident.
+
+It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
+diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
+[Referee mode](referee-mode.md) on 2026-09-02, which is now the largest customer: about thirty
+controls across four sub-modes, where the unguessable half is a model call being spent, a
+placement being discarded, or a number that reads like a score and is not
+([referee-mode.md § Every control says what it does](referee-mode.md#every-control-says-what-it-does)).
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the idiom to copy: a row of chips wrapped in
+one `TooltipGroup`, each card `className="tip-soon"` and `keepSide`.
+
+**A `title` attribute is not a small version of this**, and that is the argument for every one of
+them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
+exist at all on a touch device. `title` attributes are a regression here rather than a shortcut, and
+they are invisible on a laptop because they still show *something* — so two test files assert their
+absence as well as the cards' presence
+([`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx),
+[`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx)).
+
+### Two things about testing a card in jsdom
+
+Both were measured rather than reasoned about, and both make a test that looks right assert nothing.
+
+- **Opening and closing do not take the same event.** A native `mouseenter` dispatched on the trigger
+  opens it — `useHover` binds that listener to the reference node rather than going through React, so
+  a bubbling `mouseover` never reaches it. Closing is React's synthetic `onMouseLeave`, which React
+  synthesises from a *bubbling* `mouseout` whose `relatedTarget` is outside the trigger; a native
+  `mouseleave` alone leaves the card up. Send both.
+- **The close needs two `act` blocks, not one long one.** Closing is two timers in series with a
+  render between them: the close delay sets `open` false, and only the render that follows schedules
+  the transition's unmount. Inside a single `act` the queued update is not applied until the block
+  exits, so the card is still in the DOM however long that block waits.
+
+A card left open is the failure that matters, because the panel is portalled to `<body>` rather than
+into the test's host: the next control's assertion then reads the previous control's words. Assert
+that **exactly one** card is open and that its head belongs to the control you hovered.
+
 ## What the card says, and why that
+
+*The spine's card, which is the one this file was written for.*
 
 Top to bottom: the **part** it belongs to, the section **title**, its **gist**, the **sub-sections**
 inside it, and a footer of **words** and **how far into the piece** it sits. That is the answer to
