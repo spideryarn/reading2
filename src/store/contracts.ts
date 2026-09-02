@@ -1150,7 +1150,7 @@ export interface AdminStore {
    * The one method in this file that returns a reader's own sentences, and the
    * one place the admin rule *"counts and dates, never a sentence"* has an
    * exception. What makes it legitimate is consent and nothing else: the reader
-   * typed those three answers into a box labelled with what happens to them.
+   * typed that report into a box labelled with what happens to them.
    * docs/project/feedback.md § The one rule is the boundary; it does not move
    * because a second page found it convenient.
    *
@@ -1175,9 +1175,12 @@ export interface AdminStore {
   readFeedbackAcrossOwners(ownerId: string, id: string): Promise<AdminFeedbackDetail | null>;
   /**
    * **One report's screenshot bytes, whoever filed it** — for
-   * `GET /api/admin/feedback/:id/screenshot`.
+   * `GET /api/admin/feedback/:ownerId/:id/screenshot`.
    *
-   * `null` for a report that has none *and* for an id that is not a report:
+   * Keyed on the **pair**, like `readFeedbackAcrossOwners` above and for the
+   * same reason.
+   *
+   * `null` for a report that has none *and* for a pair that is not a report:
    * both are a 404 from the route, and distinguishing them would buy the caller
    * nothing it is allowed to do anything with.
    *

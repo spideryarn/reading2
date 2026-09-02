@@ -1,140 +1,73 @@
 /**
- * **What we sell, as a table.** Every tier, every currency, every quota.
+ * **What entitlement means, given tiers that live in the database.**
  *
- * Pure: no database, no network, no environment except the price ids a caller
- * hands in. Everything here is a decision, so it is all in one small file that
- * can be read in a minute — docs/project/billing.md § Adding a tier or a
- * currency is the how-to, and this is the what.
+ * Pure: no database, no network, no environment. The rows come from
+ * `src/store/pg-tiers.ts`; everything here is a decision about what they mean,
+ * so it can be tested without either.
  *
- * ## Why a table rather than constants
+ * ## The tiers used to be constants here, and are now rows
  *
- * The first version had one paid tier written as two constants and a name in a
- * union, and adding a second meant editing five places — which is exactly the
- * shape of change that gets half done. `PAID_TIERS` below is the single list;
- * `scripts/stripe-setup.ts` creates Stripe objects by walking it, the price→tier
- * map is derived from it, and a new tier is one entry plus one environment
- * variable.
+ * Greg's call, 2026-09-02 — see `billing_tiers` in src/db/schema.ts for the
+ * request and the trade. What that removed from this file is the compile-time
+ * union of tier names and the constants for their quotas and prices. What it
+ * left is the part that was never configuration: **what an entitlement is, and
+ * which subscription statuses carry one.**
  *
- * ## The quota is an abuse boundary, not a margin
+ * ## The one thing the compiler still guarantees
  *
- * A subscription is a fixed monthly charge; the ingest count exists to stop one
- * account spending unbounded model money. **The numbers moved on 2026-09-02**,
- * when measurement came back saying a full article ingest can cost around £1 —
- * so the original "100 articles for $10" was not finger-in-the-air optimistic,
- * it was an invitation to lose £90 a month per user. Greg reset Reader to 20.
+ * `Entitlement` stays a discriminated union, and the discriminant is
+ * free-versus-paid rather than the tier's name. That is deliberate: the
+ * property worth keeping was never "the tier is called reader", it was **a paid
+ * entitlement has a period and a free one does not**. A caller must treat the
+ * free tier as "count everything ever" rather than "count nothing", and it
+ * still cannot get there by reading an absent field.
  *
- * They are still deliberately generous against typical use, and still expected
- * to be wrong. Greg, 2026-09-02: *"which we can always increase later"* — and
- * raising a quota is a one-line change here that needs no Stripe object and no
- * migration, which is the property to preserve.
- *
- * **Reading is never limited by any of this.** An account at its ceiling can
- * still read everything it has and everything public; what it cannot do is add
- * something new, which is the only action that spends.
+ * The tier's *identity* is now a plain string, because the database says what
+ * tiers exist. Everything that consumes one must therefore cope with a name it
+ * has never seen — which is the same discipline already applied to Stripe's
+ * subscription statuses, and for the same reason.
  */
 
-/** The currencies a price is offered in. USD is the default; the rest are `currency_options`. */
-export const CURRENCIES = ["usd", "gbp", "eur"] as const;
-export type Currency = (typeof CURRENCIES)[number];
+/** A tier's id, as typed by whoever wrote the row. `free` is not one of these. */
+export type TierId = string;
 
 /** Three, lifetime — enough to play with, and no period logic for people who never pay. */
 export const FREE_LIFETIME_INGESTS = 3;
 
-/** What a paid tier is, in full. One entry per thing we sell. */
-export interface TierSpec {
-  /** Internal id. Appears in code and in logs, never to a customer. */
-  readonly id: PaidTier;
-  /** Customer-visible, on the Stripe product and the Checkout page. */
+/**
+ * One row of `billing_tiers`, with its prices attached.
+ *
+ * The shape `src/store/pg-tiers.ts` returns and everything else consumes.
+ */
+export interface TierRow {
+  readonly id: TierId;
   readonly productName: string;
   readonly description: string;
-  /** New article ingests allowed per billing period. */
   readonly ingestsPerPeriod: number;
-  /**
-   * The price in each currency, in the **smallest unit** — cents, pence, cents.
-   *
-   * **Chosen, never converted at run time.** A customer seeing €8.62 knows they
-   * are being shown somebody else's price. The numbers were picked on
-   * 2026-09-02 at roughly GBP/USD 1.35 and EUR/USD 1.16, rounded up to whole
-   * units, which lands every currency about 4–8% above spot — deliberate
-   * headroom, because a price set at spot goes underwater the moment the rate
-   * moves and Stripe prices cannot be edited.
-   *
-   * Two properties worth keeping when these change: **the ratio between tiers
-   * is 5× in every currency**, so the pricing page tells the same story
-   * wherever you read it; and they are **whole units**, which is the
-   * prosumer-tool convention (Linear, Copilot, Notion) rather than the `.99`
-   * of consumer subscriptions. `tests/billing-tiers.test.ts` pins both.
-   */
-  readonly amounts: Readonly<Record<Currency, number>>;
-  /**
-   * The stable handle Stripe indexes, and what makes `scripts/stripe-setup.ts`
-   * idempotent. **Never change one**: it is how a re-run finds what it made
-   * last time rather than minting a second price nobody notices.
-   */
   readonly lookupKey: string;
-  /** Where the created `price_…` is read back from. */
-  readonly envVar: string;
-}
-
-/** The two paid tiers. `free` is not here: nothing is sold, so there is no price. */
-export type PaidTier = "reader" | "researcher";
-export type Tier = "free" | PaidTier;
-
-/**
- * **The list. Adding a tier is an entry here and an environment variable.**
- *
- * The names are ordinary words rather than Bronze/Silver: somebody deciding
- * between them should be able to tell which one they are from the name. They
- * are customer-visible and are a one-line change — nothing keys off them.
- */
-export const PAID_TIERS: readonly TierSpec[] = [
-  {
-    id: "reader",
-    productName: "Spideryarn Reader",
-    description: "20 articles a month. Reading what you have already added is always free.",
-    ingestsPerPeriod: 20,
-    amounts: { usd: 1000, gbp: 800, eur: 900 },
-    lookupKey: "spideryarn_reader_monthly",
-    envVar: "STRIPE_PRICE_READER",
-  },
-  {
-    id: "researcher",
-    productName: "Spideryarn Researcher",
-    description: "150 articles a month, for people who read for a living.",
-    ingestsPerPeriod: 150,
-    amounts: { usd: 5000, gbp: 4000, eur: 4500 },
-    lookupKey: "spideryarn_researcher_monthly",
-    envVar: "STRIPE_PRICE_RESEARCHER",
-  },
-];
-
-/** By id, for the places that have a tier and want its numbers. */
-export function tierSpec(id: PaidTier): TierSpec {
-  const found = PAID_TIERS.find((t) => t.id === id);
-  /* Unreachable while `PaidTier` is derived from this list, and a throw rather
-     than a default because a missing tier is a code fault, not a free account. */
-  if (!found) throw new Error(`no such paid tier: ${id}`);
-  return found;
+  /** Null until `scripts/stripe-setup.ts` has created the Stripe price. */
+  readonly stripePriceId: string | null;
+  readonly livemode: boolean | null;
+  readonly active: boolean;
+  readonly sortOrder: number;
+  /** Currency code → amount in the smallest unit. At least one entry. */
+  readonly amounts: Readonly<Record<string, number>>;
 }
 
 /**
  * What an owner may do right now.
  *
- * **A discriminated union, not a bag of optionals**, and the difference is the
- * whole point. The period is a **half-open** interval `[start, end)`; the free
- * tier has no period, because its allowance is lifetime. Written as two
- * optional fields, "a Reader entitlement with a start and no end" was a state
- * the compiler allowed and no code handled — and an earlier version of this
- * comment claimed the types made them optional *together*, which they did not.
- * GPT Sol caught the claim; this is the fix that makes it true.
- *
- * A caller must treat the free tier as "count everything ever" rather than
- * "count nothing", and now it cannot get there by reading an absent field.
+ * **A discriminated union, not a bag of optionals.** The period is a
+ * **half-open** interval `[start, end)`; the free tier has no period, because
+ * its allowance is lifetime. Written as two optional fields, "a paid
+ * entitlement with a start and no end" was a state the compiler allowed and no
+ * code handled.
  */
 export type Entitlement =
   | { readonly tier: "free"; readonly limit: number }
   | {
-      readonly tier: PaidTier;
+      readonly tier: "paid";
+      readonly tierId: TierId;
       readonly limit: number;
       readonly periodStart: Date;
       readonly periodEnd: Date;
@@ -156,8 +89,8 @@ export const FREE: Entitlement = { tier: "free", limit: FREE_LIFETIME_INGESTS };
  *
  * **Read as an allowlist over raw text**, not as a database enum. Stripe may
  * add a status, and a status this file has never heard of falls to the free
- * tier — which is the direction that costs a customer an email rather than
- * costing us an unbounded bill.
+ * tier — the direction that costs a customer an email rather than costing us an
+ * unbounded bill.
  */
 export const ENTITLED_STATUSES: readonly string[] = ["active", "trialing", "past_due"];
 
@@ -167,45 +100,55 @@ export function isEntitledStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * Which `price_…` sells which tier, read from the environment.
- *
- * Built per call rather than memoised: the variables are read at run time so a
- * test can set one, and building a two-entry map costs nothing. A tier whose
- * variable is unset is simply absent — a deployment with no Stripe configured
- * has an empty map and everybody is on the free tier, which is correct.
- */
-export function priceTierMap(env: NodeJS.ProcessEnv = process.env): ReadonlyMap<string, PaidTier> {
-  const map = new Map<string, PaidTier>();
-  for (const spec of PAID_TIERS) {
-    const priceId = env[spec.envVar]?.trim();
-    if (priceId) map.set(priceId, spec.id);
-  }
-  return map;
-}
-
-/**
  * Which tier a Stripe price sells, or `null` for a price we do not recognise.
  *
  * `null` rather than a throw or a default: an unrecognised price is a real
  * situation — an old price still on a grandfathered subscription, a price
- * created by hand in the dashboard — and the caller's job is to log it and fall
- * to free, never to hand out quota for a price nobody costed.
+ * created by hand in the dashboard, a tier whose row somebody deleted — and the
+ * caller's job is to log it and fall to free, never to hand out quota for a
+ * price nobody costed.
+ *
+ * **An inactive tier still matches.** `active` decides what is *offered*, not
+ * what is honoured: somebody already subscribed to a retired tier keeps their
+ * allowance until they cancel, which is the whole reason retiring is a flag
+ * rather than a delete.
  */
 export function tierForPrice(
   priceId: string | null | undefined,
-  prices: ReadonlyMap<string, PaidTier>,
-): PaidTier | null {
+  tiers: readonly TierRow[],
+): TierRow | null {
   if (!priceId) return null;
-  return prices.get(priceId) ?? null;
+  return tiers.find((t) => t.stripePriceId === priceId) ?? null;
 }
 
 /** What that tier allows over the period Stripe says the subscription is in. */
-export function entitlementFor(tier: Tier, period?: { start: Date; end: Date }): Entitlement {
-  if (tier === "free" || !period) return FREE;
+export function entitlementForTier(tier: TierRow, period: { start: Date; end: Date }): Entitlement {
   return {
-    tier,
-    limit: tierSpec(tier).ingestsPerPeriod,
+    tier: "paid",
+    tierId: tier.id,
+    limit: tier.ingestsPerPeriod,
     periodStart: period.start,
     periodEnd: period.end,
   };
+}
+
+/** The tiers a pricing page should offer, cheapest first. */
+export function offerableTiers(tiers: readonly TierRow[]): readonly TierRow[] {
+  return tiers
+    .filter((t) => t.active && t.stripePriceId !== null)
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Every currency this deployment can charge in — the union across all tiers.
+ *
+ * Derived rather than declared, because the currencies *are* the rows now. A
+ * currency offered by one tier and not another is a real (if odd) state, and
+ * `scripts/stripe-setup.ts` reports it rather than guessing.
+ */
+export function currenciesOffered(tiers: readonly TierRow[]): readonly string[] {
+  const seen = new Set<string>();
+  for (const tier of tiers) for (const c of Object.keys(tier.amounts)) seen.add(c);
+  return [...seen].sort();
 }

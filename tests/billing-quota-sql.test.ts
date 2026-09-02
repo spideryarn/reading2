@@ -27,7 +27,8 @@ const dialect = new PgDialect();
 const HOSTILE_OWNER = "'; drop table spideryarn.ingest_events; --";
 
 const PAID: Entitlement = {
-  tier: "reader",
+  tier: "paid",
+  tierId: "reader",
   limit: 100,
   periodStart: new Date("2026-09-01T00:00:00Z"),
   periodEnd: new Date("2026-10-01T00:00:00Z"),

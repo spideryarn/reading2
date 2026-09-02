@@ -24,7 +24,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { SignInPage } from "./SignInPage.js";
@@ -433,7 +433,13 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        {route.page === "users" ? <AdminUsersPage /> : <AdminHome />}
+        {route.page === "users" ? (
+          <AdminUsersPage />
+        ) : route.page === "feedback" ? (
+          <AdminFeedbackPage />
+        ) : (
+          <AdminHome />
+        )}
       </>
     );
   }

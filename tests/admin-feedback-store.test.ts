@@ -89,9 +89,15 @@ describe("the admin feedback read on the filesystem", () => {
  * answer this parser must never give is the *third* one read as the first.
  */
 describe("the page cursor", () => {
+  /* **This suite's own owner id, not a real one.** It was Greg's production
+     account for a while — the report that prompted this whole page — and
+     tests/fixture-ids.test.ts refused it, correctly: `admin.test.ts` already
+     declares that uuid, and the guard cannot tell a pure string from a row
+     somebody is about to insert. Nothing here touches a database; using a uuid
+     this file already owns keeps that true without an exemption. */
   const cursor = {
-    createdAt: "2026-09-02T15:22:01.000Z",
-    ownerId: "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a",
+    createdAt: "2026-09-02T15:22:01.000000Z",
+    ownerId: "00000000-0000-4000-8000-00000000fc01",
     id: "spya-us5kzc",
   };
 
@@ -148,13 +154,14 @@ const when = reachable ? describe : describe.skip;
 function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
   return {
     reporterEmail: "reporter@example.invalid",
-    /* One field since 2026-09-02 — docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
-       collapsed the three boxes into one. This fixture read three until the two
-       features met in a merge. */
-    body: "Open an article and press the button; I expected a dialog and got nothing at all",
-    /* Required rather than optional on `NewFeedback`, and `null` is a real
-       answer: the toggle has no default, so "they did not say" is a third
-       state and not a missing field. src/types.ts § FEEDBACK_KINDS. */
+    /* **One box since 2026-09-02** — docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
+       collapsed the three answers into one `body`. This fixture read three
+       until the two features met in a merge. */
+    body: "Open an article and press the button; I expected a dialog and got nothing",
+    /* **Unset, and that is the default a reader gets** — Greg, 2026-09-02:
+       *"don't default to Problem. Default to null/unknown."* The fixture
+       starts where a reader starts, so the null case is the one most tests
+       here exercise without having to ask for it. */
     kind: null,
     consented: false,
     url: "https://www.spideryarn.com/read/a-piece",
@@ -238,10 +245,14 @@ when("the admin feedback read on Postgres", () => {
     const aliceShot = Uint8Array.of(1, 1, 1, 1);
     const bobShot = Uint8Array.of(2, 2, 2, 2, 2, 2);
     await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id, body: "what Alice saw", screenshot: aliceShot })),
+      pgFeedbackStore.submit(
+        report({ id, body: "what Alice saw", kind: "problem", screenshot: aliceShot }),
+      ),
     );
     await runAsOwner(BOB, () =>
-      pgFeedbackStore.submit(report({ id, body: "what Bob saw", screenshot: bobShot })),
+      pgFeedbackStore.submit(
+        report({ id, body: "what Bob saw", kind: "suggestion", screenshot: bobShot }),
+      ),
     );
 
     /* Both are in the list, as two rows. A `key` on the id alone would draw
@@ -250,8 +261,15 @@ when("the admin feedback read on Postgres", () => {
     expect(seen.filter((r) => r.id === id)).toHaveLength(2);
 
     /* And each read gets its own owner's report and its own owner's bytes. */
-    expect((await readFeedbackAcrossOwners(ALICE, id))?.body).toBe("what Alice saw");
-    expect((await readFeedbackAcrossOwners(BOB, id))?.body).toBe("what Bob saw");
+    /* **Values, not just shapes.** `kind` is asserted here as well as `body`,
+       because a projection that dropped `kind` entirely — or mapped every
+       report to one value — would compile, and the exact-key fence below
+       would pass if it were updated to match the mistake. GPT Sol,
+       2026-09-02. */
+    const alice = await readFeedbackAcrossOwners(ALICE, id);
+    const bob = await readFeedbackAcrossOwners(BOB, id);
+    expect([alice?.body, alice?.kind]).toEqual(["what Alice saw", "problem"]);
+    expect([bob?.body, bob?.kind]).toEqual(["what Bob saw", "suggestion"]);
     expect(await readFeedbackScreenshotAcrossOwners(ALICE, id)).toEqual(Buffer.from(aliceShot));
     expect(await readFeedbackScreenshotAcrossOwners(BOB, id)).toEqual(Buffer.from(bobShot));
   });
@@ -277,13 +295,13 @@ when("the admin feedback read on Postgres", () => {
     const listed = (await ours()).find((r) => r.id === id);
     expect(Object.keys(listed ?? {}).sort()).toEqual(
       [
-        "actual",
+        "body",
         "buildCommit",
         "consented",
         "createdAt",
         "diagnosticsVersion",
         "environment",
-        "expected",
+        "kind",
         "id",
         "mirrorAttemptedAt",
         "mirroredAt",
@@ -294,13 +312,18 @@ when("the admin feedback read on Postgres", () => {
         "screenshotBytes",
         "sentryEventId",
         "slug",
-        "steps",
       ].sort(),
     );
     /* Size, not bytes; version, not blob. Both are size decisions with a real
        number behind them — see the store's header. */
     expect(listed?.screenshotBytes).toBe(3);
     expect(listed?.diagnosticsVersion).toBe(1);
+    /* **The values, because the key list alone cannot catch a projection that
+       selects the right column and hands back the wrong one.** `kind` is `null`
+       here — the fixture leaves the toggle unset, as a reader does — and `null`
+       must survive the round trip as itself rather than becoming a default. */
+    expect(listed?.body).toContain("press the button");
+    expect(listed?.kind).toBeNull();
 
     /* The blob comes from the one-report read, which is what the card opens. */
     const full = await readFeedbackAcrossOwners(ALICE, id);
@@ -338,10 +361,17 @@ when("the admin feedback read on Postgres", () => {
   });
 
   /**
-   * The tie-break, made to actually happen: three reports written at one
-   * instant, across two owners, one id shared. Without `owner_id` and `id` in
-   * both the order and the cursor, a page boundary landing inside this group
-   * repeats a row or skips one.
+   * The tie-break, made to actually happen: three reports at one instant, across
+   * two owners, one id shared. Without `owner_id` and `id` in both the order and
+   * the cursor, a page boundary landing inside this group repeats a row or skips
+   * one.
+   *
+   * **Moved to the front of the whole table rather than pinned to a fixed date.**
+   * `npm test` runs against a database other suites and other agents are writing
+   * to, so a walk from the top with a small page size may never reach a group
+   * parked in the middle — which is how the first version of this test failed:
+   * it asserted a real property and could not see it. One second past the newest
+   * row there is, so the group is the first page whatever else is in the table.
    */
   it("keeps a stable order when the timestamps are equal", async () => {
     const shared = mintId();
@@ -353,26 +383,27 @@ when("the admin feedback read on Postgres", () => {
     ] as const) {
       await runAsOwner(owner, () => pgFeedbackStore.submit(report({ id })));
     }
-    /* Forced to one instant, which is the case the order has to survive and
-       which a test cannot reliably produce by writing quickly. */
-    await getDb()
-      .update(feedbackTable)
-      .set({ createdAt: new Date("2026-09-01T00:00:00.000Z") })
-      .where(sql`${feedbackTable.ownerId} in (${ALICE}, ${BOB})`);
+    /* One instant, and ahead of everything — the case the order has to survive,
+       and one a test cannot reliably produce by writing quickly. */
+    await getDb().execute(sql`
+      update spideryarn.feedback
+         set created_at = (select max(created_at) from spideryarn.feedback) + interval '1 second'
+       where owner_id in (${ALICE}, ${BOB})
+    `);
 
+    const mine = (r: { ownerId: string }) => r.ownerId === ALICE || r.ownerId === BOB;
     const inOneGo = (await ours()).map((r) => `${r.ownerId}:${r.id}`);
-    /* Walked one at a time, the cursor must reproduce the same sequence
-       exactly. This is the assertion that fails if either half of the key is
-       missing from the order or from `after()`. */
+    expect(inOneGo).toHaveLength(3);
+
+    /* Walked one at a time, the cursor must reproduce that sequence exactly.
+       This is the assertion that fails if either half of the key is missing from
+       the order or from `after()` — verified by deleting `desc(ownerId)` and
+       watching it go red, 2026-09-02. */
     const walked: string[] = [];
     let cursor = null as Awaited<ReturnType<typeof listFeedbackAcrossOwners>>["nextCursor"];
-    for (let page = 0; page < 6; page++) {
+    for (let page = 0; page < 4; page++) {
       const got = await listFeedbackAcrossOwners(1, cursor);
-      walked.push(
-        ...got.reports
-          .filter((r) => r.ownerId === ALICE || r.ownerId === BOB)
-          .map((r) => `${r.ownerId}:${r.id}`),
-      );
+      walked.push(...got.reports.filter(mine).map((r) => `${r.ownerId}:${r.id}`));
       cursor = got.nextCursor;
       if (!cursor) break;
     }
@@ -380,22 +411,35 @@ when("the admin feedback read on Postgres", () => {
     expect(new Set(walked).size).toBe(walked.length);
   });
 
+  /**
+   * **`hasMore` is a fact about the whole table**, not about this suite's rows —
+   * so the boundary is measured against a real count rather than assumed.
+   *
+   * The first version of this test asked for three and expected `hasMore` to be
+   * false because it had written three. On a shared local database that is
+   * simply untrue, and the test was asserting something about the machine rather
+   * than about the store.
+   */
   it("says there are more only when it has seen one more", async () => {
-    await clear();
-    for (let i = 0; i < 3; i++) {
-      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() })));
-    }
-    /* **The boundary**, which is the whole reason `hasMore` is not
-       `reports.length === limit`. Asking for exactly as many as exist must say
-       there are no more — as long as this suite's rows are the only ones, which
-       `clear()` above and a fresh database make true. */
-    const exactly = await listFeedbackAcrossOwners(3, null);
-    if (exactly.reports.every((r) => r.ownerId === ALICE)) {
-      expect(exactly.hasMore).toBe(false);
-      expect(exactly.nextCursor).toBeNull();
-    }
-    const short = await listFeedbackAcrossOwners(2, null);
-    expect(short.reports).toHaveLength(2);
+    await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() })));
+    const [{ n = 0 } = {}] = (
+      await getDb().execute<{ n: number }>(
+        sql`select count(*)::int as n from spideryarn.feedback`,
+      )
+    ).rows;
+    expect(n).toBeGreaterThan(0);
+
+    /* Exactly as many as exist: nothing beyond the page, so no cursor. This is
+       the boundary `reports.length === limit` gets wrong, and the whole reason
+       the store asks for one row more than it returns. */
+    const exact = await listFeedbackAcrossOwners(n, null);
+    expect(exact.reports).toHaveLength(n);
+    expect(exact.hasMore).toBe(false);
+    expect(exact.nextCursor).toBeNull();
+
+    /* One short: there is more, and a cursor to reach it with. */
+    const short = await listFeedbackAcrossOwners(n - 1, null);
+    expect(short.reports).toHaveLength(n - 1);
     expect(short.hasMore).toBe(true);
     expect(short.nextCursor).not.toBeNull();
   });

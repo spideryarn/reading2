@@ -250,15 +250,15 @@
     {
       "idx": 35,
       "version": "7",
-      "when": 1788200000000,
-      "tag": "0035_timeline",
+      "when": 1788175229610,
+      "tag": "0036_drop_summary_column",
       "breakpoints": true
     },
     {
       "idx": 36,
       "version": "7",
-      "when": 1788175229610,
-      "tag": "0036_drop_summary_column",
+      "when": 1788200000000,
+      "tag": "0035_timeline",
       "breakpoints": true
     },
     {
@@ -417,6 +417,20 @@
     },
     {
       "idx": 59,
+      "version": "7",
+      "when": 1788372592443,
+      "tag": "20260902180952_billing_tiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788372604824,
+      "tag": "20260902181004_seed_billing_tiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
       "version": "7",
       "when": 1788372891919,
       "tag": "20260902181451_feedback_url_replaces_route_kind",

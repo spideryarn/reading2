@@ -3583,6 +3583,139 @@ export const checkpoints = spideryarn.table(
 /* --------------------------------------------------------------- billing -- */
 
 /**
+ * **What we sell — as rows, so it can be changed without a deploy.**
+ *
+ * Greg's call, 2026-09-02, asked for after the tiers had already been built as
+ * constants: *"instead of adding them as environment variables, could we add
+ * them to the database, so that it's easier to modify (e.g. for agents, in UI,
+ * etc)"*. He was offered ids-only, ids-and-quotas, or the whole table, and took
+ * the whole table with the costs stated.
+ *
+ * **This table is the source of truth and Stripe follows it.** Edit a row (or
+ * insert one), run `npx tsx scripts/stripe-setup.ts --apply`, and the script
+ * creates or replaces the Stripe product and price to match and writes
+ * `stripe_price_id` back. Nothing is ever pasted into an environment file, on
+ * any machine — which is the whole point, and why `STRIPE_PRICE_READER` and its
+ * siblings are gone.
+ *
+ * ## What that bought, and what it cost
+ *
+ * `PaidTier` used to be a TypeScript union of two literals, so the compiler
+ * refused an unknown tier and `tests/billing-tiers.test.ts` could check the
+ * invariants over constants. Tier ids are now strings from a database and none
+ * of that is available. The invariants did not go away; they moved **into the
+ * schema**, where they hold for every writer including a hand-typed `UPDATE` at
+ * midnight, which is what docs/project/sql.md § *Get the database to do the
+ * work* asks for. See the CHECKs below.
+ *
+ * The one invariant a CHECK cannot express — a dearer tier must not allow fewer
+ * ingests, which is a statement about *pairs* of rows — is asserted in
+ * `tests/billing-tiers.test.ts` against the seeded rows instead.
+ *
+ * ## Sold, not merely defined
+ *
+ * `stripe_price_id` is null until the setup script has run. A tier with no
+ * price cannot be sold and is not offered — `entitlementForRow` will never
+ * match a subscription to it, because matching happens by price id.
+ */
+export const billingTiers = spideryarn.table(
+  "billing_tiers",
+  {
+    /**
+     * Internal id — `reader`, `researcher`. Appears in logs and in
+     * `billing_accounts` reporting, never to a customer.
+     *
+     * The primary key rather than a surrogate uuid: it is a short stable name
+     * chosen by a person, it is what a human editing this table will type, and
+     * a second key would only add a number to remember.
+     */
+    id: text("id").primaryKey(),
+    /** Customer-visible, on the Stripe product and the Checkout page. */
+    productName: text("product_name").notNull(),
+    description: text("description").notNull(),
+    /** New article ingests allowed per billing period. */
+    ingestsPerPeriod: integer("ingests_per_period").notNull(),
+    /**
+     * The stable handle Stripe indexes, and what makes the setup script
+     * idempotent. **Never change one on a tier that has been sold**: it is how
+     * a re-run finds the price it made last time rather than minting a second
+     * one that nobody notices until two customers are on different prices.
+     */
+    lookupKey: text("lookup_key").notNull(),
+    /** Written back by the setup script. Null means "not yet created in Stripe". */
+    stripePriceId: text("stripe_price_id"),
+    /** Which side of Stripe's test/live divide the price above came from. */
+    livemode: boolean("livemode"),
+    /**
+     * Off the pricing page without deleting the row.
+     *
+     * Deleting a tier somebody is subscribed to would orphan their
+     * entitlement; this is how a tier stops being *offered* while existing
+     * subscribers keep working, which is the ordinary way tiers retire.
+     */
+    active: boolean("active").notNull().default(true),
+    /** Cheapest first on the pricing page. Nothing else reads it. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /* A tier that allows nothing is not a tier, and a negative one would make
+       every account instantly over its limit. */
+    check("billing_tiers_ingests_positive", sql`${t.ingestsPerPeriod} > 0`),
+    /* The id is typed by a person and reaches logs and URLs. Same shape as the
+       slug rules elsewhere: lower-case, no spaces, no surprises. */
+    check("billing_tiers_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_-]{1,30}$'`),
+    /* Two tiers sharing a lookup key would fight over one Stripe price on
+       every run of the setup script. */
+    unique("billing_tiers_lookup_key").on(t.lookupKey),
+    /* And two tiers sharing a price id would make `price_id → tier` ambiguous,
+       which is the lookup entitlement is decided by. */
+    unique("billing_tiers_price_id").on(t.stripePriceId),
+  ],
+);
+
+/**
+ * **What a tier costs, one row per currency.**
+ *
+ * A child table rather than `amount_usd`/`amount_gbp`/`amount_eur` columns, and
+ * the reason is the request this whole change came from: adding a currency has
+ * to be something a person or an agent can *do*, and with columns it is a
+ * migration. Here it is an insert.
+ *
+ * docs/project/sql.md prefers columns over JSON, and this is neither — it is
+ * the ordinary relational answer to a repeating group, which is what a set of
+ * per-currency amounts is.
+ *
+ * **Amounts are chosen, never converted at run time.** A customer seeing €8.62
+ * knows they are being shown somebody else's price. The seeded numbers were set
+ * at roughly GBP/USD 1.35 and EUR/USD 1.16 and rounded up to whole units,
+ * landing 4–8% above spot — headroom on purpose, because Stripe prices are
+ * immutable and one set at spot goes underwater on the next move.
+ */
+export const billingTierPrices = spideryarn.table(
+  "billing_tier_prices",
+  {
+    tierId: text("tier_id")
+      .notNull()
+      .references(() => billingTiers.id, { onDelete: "cascade" }),
+    /** ISO 4217, lower case, as Stripe spells it. */
+    currency: text("currency").notNull(),
+    /** In the smallest unit — cents, pence, cents. */
+    unitAmount: integer("unit_amount").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tierId, t.currency] }),
+    /* Free is the absence of a subscription, not a zero-priced one. */
+    check("billing_tier_prices_amount_positive", sql`${t.unitAmount} > 0`),
+    /* Stripe's currency codes are three lower-case letters. A `USD` here would
+       be accepted by us and rejected by Stripe, one run of the setup script
+       later and a long way from the row somebody typed. */
+    check("billing_tier_prices_currency_format", sql`${t.currency} ~ '^[a-z]{3}$'`),
+  ],
+);
+
+/**
  * **One row per owner, and every owner gets one** — the anchor the ingest quota
  * serialises on, whether or not anybody has ever paid.
  *

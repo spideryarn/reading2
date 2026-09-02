@@ -1,7 +1,8 @@
 # The admin page
 
-**`/admin`, and `/admin/users` under it.** One person can see them, and what they show is who has
-signed up and how much each of them has read — counts and dates, and nothing else.
+**`/admin`, with `/admin/users` and `/admin/feedback` under it.** One person can see them. The
+first shows who has signed up and how much each of them has read — counts and dates. The second
+shows the bug reports readers filed with the Feedback button, in their own words.
 
 Greg, 2026-08-27:
 
@@ -132,8 +133,42 @@ place.
 
 ## What it deliberately does not show
 
-**Limited account metadata, counts, and dates. Never a title, a URL, a filename, or a sentence of
-anybody's reading.**
+**Limited account metadata, counts, and dates — and, on `/admin/feedback` only, the support
+report a reader chose to send us. Never a title, a URL, a filename, or a sentence of anybody's
+reading.**
+
+### The second clause, added 2026-09-02, and why it is not a widening
+
+`/admin/feedback` shows prose, which the rule above otherwise forbids. What makes that legitimate
+is **consent, and only consent**: the reader typed those words into a box labelled with what
+happens to them, and one of the things that happens is that Greg reads them. So the boundary is
+drawn in full rather than left as "words the reader typed", which was the first draft's wording
+and was not truthful — GPT Sol, 2026-09-02:
+
+> The admin pages may show the explicitly enumerated account metadata documented for
+> `/admin/users`, and the support report the reader submitted: their answers, an attachment they
+> deliberately added, diagnostics they explicitly opted into, and Spideryarn's fixed correlation
+> metadata. Identifiers may not be followed into articles, comments or notes.
+
+Two things that boundary is honest about, rather than quiet about:
+
+- **A screenshot is pixels, and pixels can be article prose.** Re-encoding
+  ([`src/feedback-image.ts`](../../src/feedback-image.ts)) strips hidden metadata; it cannot strip
+  what is visible. The reporter pasted it deliberately, which is what makes it a support
+  attachment rather than a leak — but if the article on screen was *shared with them by somebody
+  else*, the reporter's consent is not that owner's. That is accepted as narrowly-scoped support
+  processing, and it is written down here rather than hidden inside the word "consent".
+- **The `slug` travels whether or not the diagnostics box is ticked**, while the dialog's tick-box
+  copy talks about "which article and passages" as the *extra* thing. Those two do not quite
+  agree, and the copy is the half that should change. Open, 2026-09-02.
+
+The rule is written in three places — here,
+[`src/store/pg-admin-feedback.ts`](../../src/store/pg-admin-feedback.ts) and
+[`src/types.ts`](../../src/types.ts) § `AdminFeedbackReport` — and **nothing enforces it
+mechanically**. What the code does instead is refuse to make widening automatic: the cross-owner
+projection is written out by hand rather than sharing `REPORT_COLUMNS` with the reader's own
+report, so a field added to a report does not reach this page until somebody decides it should,
+and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes back.
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, and the **providers** GoTrue records for it (`google`, `email`). Everything else on the
