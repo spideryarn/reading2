@@ -45,6 +45,38 @@ export function remoteSlug(url: string): string | undefined {
   return owner && name ? `${owner}/${name}`.toLowerCase() : undefined;
 }
 
+/** The value `GJD_REPO` — and the log's `repo` field — carries when the thing it
+ *  describes was started against an arbitrary `--dir` and so belongs to no repo
+ *  at all. */
+export const REPO_UNKNOWN = "unknown";
+
+/**
+ * One segment of a slug `remoteSlug()` above could have minted.
+ *
+ * Bounded, because an unbounded `+` accepts four hundred characters and this
+ * value is printed in a table and written to a durable log. A segment of only
+ * dots is refused separately: `..` matches the character class, and a repo
+ * identity that can climb a path is one somebody will eventually join onto a
+ * directory name.
+ */
+const REPO_SEGMENT = /^[a-z0-9._-]{1,100}$/;
+
+/**
+ * A `GJD_REPO` value: a slug, or the literal `unknown`.
+ *
+ * IT VALIDATES BOTH THE WIRE AND THE DURABLE RECORD — scripts/gjd-remote-tmux.ts
+ * checks a session's metadata with it and scripts/gjd-remote-log.ts checks the
+ * log's `repo` field with it — so the two answers to "which repo" cannot drift
+ * apart. It lives here, next to the function that produces slugs, because a
+ * validator that is not beside its producer is one that stops matching.
+ */
+export function isRepoValue(v: string): boolean {
+  if (v === REPO_UNKNOWN) return true;
+  const parts = v.split("/");
+  if (parts.length !== 2) return false;
+  return parts.every((seg) => REPO_SEGMENT.test(seg) && seg !== "." && seg !== "..");
+}
+
 // ------------------------------------------------------- the repo you are in
 
 /**

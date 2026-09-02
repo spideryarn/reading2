@@ -26,7 +26,7 @@
  */
 
 import path from "node:path";
-import { isRepoValue } from "./gjd-remote-tmux.js";
+import { isRepoValue } from "./gjd-remote-repo.js";
 
 /**
  * Bumped when the shape below changes in a way a reader must know about.

@@ -23,13 +23,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
 import {
+  META,
+  METADATA_VERSION,
   type Session,
+  type SessionKind,
   type SessionState,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
   formatWait,
   parseSessions,
+  sessionRepo,
   sessionState,
 } from "./gjd-remote-tmux.js";
 import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "./gjd-remote-provision.js";
@@ -57,6 +61,7 @@ import {
 import {
   type InventoryEntry,
   type OriginTransport,
+  REPO_UNKNOWN,
   type RemoteCheckout,
   describeLocalRepo,
   describeResolution,
@@ -794,6 +799,46 @@ function announce(t: Target): Target {
 }
 
 /**
+ * The slug to attribute a session to, or the admission that there is not one.
+ *
+ * ONLY THE `origin` PATH CLAIMS A REPO, and that is the whole of it: that is the
+ * arm where the box was asked which directory carries this origin and answered.
+ * `--dir` is an arbitrary path — `-d ~` is a home directory — and `t.slug` there
+ * is the repo the LAPTOP was standing in, which says nothing about the tree the
+ * session will open in. Writing it into `GJD_REPO` would make `ls` claim, in a
+ * column people will filter on, that a session in `~` belongs to Spideryarn.
+ *
+ * The deprecated env var is lumped in with `--dir` deliberately, even though its
+ * origin is compared when there is one to compare: it is the alias being retired,
+ * and a listing that says `(unknown)` for it is one more reason to stop using it.
+ */
+function targetRepo(t: Target): string {
+  return t.via === "origin" && t.slug !== null ? t.slug : REPO_UNKNOWN;
+}
+
+/**
+ * The `-e` flags that let `ls` say which repo a session is for, a whole session
+ * after everything that knew it has exited.
+ *
+ * Built from `META` and `METADATA_VERSION` rather than typed out, because the
+ * reader in scripts/gjd-remote-tmux.ts asks tmux for those exact names and a
+ * second spelling of one is a spelling that stops matching. Every value goes
+ * through `shq`: `dir` is a path somebody typed and the slug is validated but
+ * not by this process.
+ *
+ * `dir` is the directory the session actually starts in, which is the one
+ * `sessionDir()` proved enterable — not `t.dir`, so that the two cannot differ.
+ */
+function metaFlags(t: Target, dir: string, kind: SessionKind): string {
+  return [
+    `-e ${META.version}=${shq(METADATA_VERSION)}`,
+    `-e ${META.kind}=${shq(kind)}`,
+    `-e ${META.repo}=${shq(targetRepo(t))}`,
+    `-e ${META.dir}=${shq(dir)}`,
+  ].join(" ");
+}
+
+/**
  * The whole resolution, in the order the plan sets out: `--dir` wins, then the
  * deprecated env var, then the repo you are standing in.
  *
@@ -1252,11 +1297,22 @@ function cmdLs(): void {
     .sort((a, b) => a.label.rank - b.label.rank || a.s.name.localeCompare(b.s.name));
 
   const w = Math.max(4, ...list.map((s) => s.name.length));
+  // Widths are measured on the UNDIMMED text and the cells are padded with
+  // padVisible, because dim() wraps its argument in escape sequences that
+  // .length counts and a terminal does not — the bug that once made the STATE
+  // column ragged.
+  const rw = Math.max(4, ...list.map((s) => sessionRepo(s).text.length));
   const sw = Math.max(5, ...rows.map((r) => visibleWidth(r.label.text)));
-  console.log(bold(`${"NAME".padEnd(w)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
+  console.log(bold(`${"NAME".padEnd(w)}  ${"REPO".padEnd(rw)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
   for (const { s, label } of rows) {
+    // Dimmed when it is not a real answer, the same treatment the empty TITLE
+    // cell gets: a session started before the metadata existed, or against an
+    // arbitrary --dir, cannot be attributed to a repo and should not look like
+    // it has been.
+    const repo = sessionRepo(s);
     console.log(
-      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
+      `${s.name.padEnd(w)}  ${padVisible(repo.known ? repo.text : dim(repo.text), rw)}  ` +
+        `${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
         `${padVisible(label.text, sw)}  ${s.title ? s.title : dim("(no title yet)")}`,
     );
   }
@@ -1617,12 +1673,11 @@ function cmdNewClaude(
   // The id and the provisional flag live in the tmux session's own environment,
   // so they survive the rename that `ls` may later perform — a mapping file
   // keyed by name would go stale at exactly that moment.
-  // The `-e` flags are the session's own metadata. Stage 1's third bullet adds
-  // `GJD_METADATA_VERSION`, `GJD_KIND`, `GJD_REPO` and `GJD_REMOTE_DIR` here —
-  // `target` is the object holding the last two, in scope for exactly that.
+  // The rest of the `-e` flags are the session's own metadata — see metaFlags().
   ssh(
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
-      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${shq(`bash ${jobPath}`)}`,
+      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${metaFlags(target, dir, "claude")} ` +
+      shq(`bash ${jobPath}`),
   );
 
   confirmStarted(name);
@@ -1637,6 +1692,10 @@ function cmdNewClaude(
       name,
       id: sessionId,
       dir,
+      // The same value the session's own `GJD_REPO` carries, from the same
+      // function, so the durable record and the box agree about which repo this
+      // was — `dir` alone cannot answer it (see LogRecord.repo).
+      repo: targetRepo(target),
       host: host(),
       ...(opts.wait === undefined
         ? {}
@@ -1712,13 +1771,19 @@ function cmdNewShell(
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
   ssh(`mkdir -p ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
-  // As in cmdNewClaude: Stage 1's metadata bullet adds the `GJD_*` variables to
-  // this `-e` list, and `target` is where the repo and directory come from.
+  // As in cmdNewClaude, the `GJD_*` variables are what `ls` reads back — the
+  // kind differs, and nothing else does.
   ssh(
     `tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0 ` +
+      `${metaFlags(target, dir, "shell")} ` +
       shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
   );
   confirmStarted(name);
+  // A launch line, written after the session exists, the way cmdNewClaude
+  // writes one. main() has already logged the bare `new-shell` invocation; this
+  // is the record of a shell that actually started, and of where. No uuid and
+  // no prompt, because a shell has neither.
+  appendLog({ cmd: "new-shell", name, dir, repo: targetRepo(target), host: host() });
   console.log(green(`✓ shell '${name}'`) + dim(` in ${dir}`));
   attach(name, opts.transport);
 }
@@ -2683,7 +2748,7 @@ function runBrowserSmoke(): { ok: boolean; detail: string } {
 const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that never sleeps
 
 ${bold("SESSIONS")}
-  ls, (no args)           list sessions, each with Claude's own title for it
+  ls, (no args)           list sessions, each with its repo and Claude's own title
   new-claude [name]       start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
       -d, --dir DIR         a directory on the box, skipping the repo question
@@ -2798,6 +2863,14 @@ ${bold("THE LOG")}
   across checkouts, and the repo is inside Dropbox.
 
 ${bold("EXAMPLES")}
+  gjd-remote ls
+      ${dim("NAME             REPO                  AGE   ATT  STATE        TITLE")}
+      ${dim("fix-the-toc      spideryarn/reading2   17m   yes  ? needs you  Fix the ToC ordering")}
+      ${dim("scratch-shell    (unknown)             3h     no  - shell      (no title yet)")}
+      REPO is what the launcher pinned into the session, not a guess from its
+      directory — one repo is ${dim("reading2")} here and ${dim("spideryarn2")} on the box. It is
+      dimmed and reads ${dim("(unknown)")} for a session started with ${dim("--dir")}, which is an
+      arbitrary path and no repo at all, and for one started before this existed.
   gjd-remote new-claude -p "fix the ToC ordering bug"
       ${dim(`repo: spideryarn/reading2  (/Users/greg/dev/spideryarn/reading2)`)}
       ${dim(`box:  ${REMOTE_CODE}/spideryarn2`)}

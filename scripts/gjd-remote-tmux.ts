@@ -6,6 +6,8 @@
  * for the two bugs that made it worth separating.
  */
 
+import { REPO_UNKNOWN, isRepoValue } from "./gjd-remote-repo.js";
+
 export type Session = {
   name: string;
   created: Date;
@@ -65,35 +67,6 @@ export const METADATA_VERSION = "1";
 export type SessionKind = "claude" | "shell" | "setup";
 
 const SESSION_KINDS: readonly SessionKind[] = ["claude", "shell", "setup"];
-
-/** The value `GJD_REPO` carries when the session was started against an
- *  arbitrary `--dir` and so belongs to no repo at all. */
-export const REPO_UNKNOWN = "unknown";
-
-/**
- * `owner/name`, lower-cased, as `remoteSlug()` in scripts/gjd-remote-repo.ts
- * mints them — or nothing.
- *
- * Bounded, because an unbounded `+` accepts four hundred characters and this
- * value is printed in a table and written to a durable log. A segment of only
- * dots is refused separately: `..` matches the character class, and a repo
- * identity that can climb a path is one somebody will eventually join onto a
- * directory name.
- *
- * THIS IS ALSO THE LOG'S VALIDATOR — scripts/gjd-remote-log.ts imports it, so
- * that the wire and the durable record cannot drift apart. Its long-term home
- * is scripts/gjd-remote-repo.ts, next to the function that produces slugs; it
- * is here for now because that file is being written in parallel.
- */
-const REPO_SEGMENT = /^[a-z0-9._-]{1,100}$/;
-
-/** A `GJD_REPO` value: a slug, or the literal `unknown`. */
-export function isRepoValue(v: string): boolean {
-  if (v === REPO_UNKNOWN) return true;
-  const parts = v.split("/");
-  if (parts.length !== 2) return false;
-  return parts.every((seg) => REPO_SEGMENT.test(seg) && seg !== "." && seg !== "..");
-}
 
 /**
  * Which repo a session is for, or an admission that it cannot be known.

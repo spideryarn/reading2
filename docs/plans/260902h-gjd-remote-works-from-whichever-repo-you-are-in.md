@@ -252,21 +252,21 @@ keeps the plan, the briefs, the diffs and the commits.
 
 ### Stage 1 — identity, inventory, contract, metadata
 
-- [ ] **Strict inventory.** A new box-side script (in `gjd-remote-repo.ts` or a sibling, tested the
+- [x] **Strict inventory.** A new box-side script (in `gjd-remote-repo.ts` or a sibling, tested the
   way `gjd-remote-tmux.ts`'s script is): every entry directly under `~/code`, not following
   symlinks, each with realpath, is-checkout, origin, has-valid-HEAD; row count and `GJDOK` sentinel;
   parsed fail-closed. `resolveRemoteCheckout` grows the blocked states and the `HEAD` requirement.
   Red tests: truncated reply, wrong row count, symlink duplicate, non-checkout at the proposed
   path, partial clone (`.git` present, no `HEAD`), ssh origin ⇒ `found` + diagnostic.
-- [ ] **The contract**, wired: `localRepo(cwd)` in `main()`; `--repo` on the six commands;
+- [x] **The contract**, wired: `localRepo(cwd)` in `main()`; `--repo` on the six commands;
   `sessionDir()` through the resolution; `push-env`/`setup`/`doctor` verify `--dir`'s origin;
   `GJD_REMOTE_REPO` refuses on disagreement; `.env.local` from the local target; `.mcp.json` from
   the remote target. Every path printed. `REMOTE_REPO_DEFAULT` deleted.
-- [ ] **Metadata.** `-e GJD_METADATA_VERSION=1 -e GJD_KIND=… -e GJD_REPO=… -e GJD_REMOTE_DIR=…` on
+- [x] **Metadata.** `-e GJD_METADATA_VERSION=1 -e GJD_KIND=… -e GJD_REPO=… -e GJD_REMOTE_DIR=…` on
   every `tmux new-session`; the strict record carries them; `ls` gains `REPO`; legacy = no version
   and no repo ⇒ `(unknown)`; version 1 with a missing field fails the listing. Red test: a mixed
   reply with one legacy and one malformed new row. `LogRecord` gains validated `repo`.
-- [ ] Help text, [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md).
+- [x] Help text, [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md).
 - [ ] Live, from the laptop with the worktree's script: `new-shell` from this repo lands in
   `~/code/spideryarn2` found by origin; from `~` refuses with the options; from a scratch repo with
   a made-up origin reports `absent` and the proposed path; `ls` shows the column.
@@ -365,6 +365,13 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 
 ## Log
 
+- 2026-09-02 — Stage 1's metadata joined up and exercised against the box. `ls` renders every
+  session that existed before this as a dimmed `(unknown)` in the new REPO column and lists them
+  all, so legacy rows are shown rather than refused. A `new-claude --wait` and a `new-shell` started
+  from this worktree both came back as `spideryarn/reading2`, and a hand-made session carrying only
+  two of the four variables made `ls` refuse the whole listing by name — `session 's1-meta-bad' has
+  GJD_REPO='', which is neither an owner/name slug nor 'unknown'` — and list normally again once it
+  was killed.
 - 2026-09-02 — GPT Sol reviewed the plan: four blockers taken (strict inventory, durable setup,
   the target contract, config re-read after clone); stages reordered; pre-ticking held for Greg.
 - 2026-09-02 — plan written; questions answered by Greg (table above); research and seam map

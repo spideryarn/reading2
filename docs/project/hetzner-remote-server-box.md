@@ -201,13 +201,20 @@ a `cat >` would eat it on a re-run — at the one moment nobody is looking.
 ## What `gjd-remote ls` is telling you
 
 ```
-NAME                                     AGE   ATT  STATE          TITLE
-gjd-remote-ls-status-indicators          17m   yes  ? needs you    gjd-remote ls status indicators
-worktrees-migration-history              3h    yes  - idle         Worktrees migration history
-database-move-completion                 18h   yes  * working      Database move completion
-run-git-commit-changes-md-then-pull      20m    no  z waits 3h39m  (no title yet)
+NAME                                     REPO                 AGE   ATT  STATE          TITLE
+gjd-remote-ls-status-indicators          spideryarn/reading2  17m   yes  ? needs you    gjd-remote ls status indicators
+worktrees-migration-history              spideryarn/reading2  3h    yes  - idle         Worktrees migration history
+database-move-completion                 gregdetre/hellozenno 18h   yes  * working      Database move completion
+run-git-commit-changes-md-then-pull      (unknown)            20m    no  z waits 3h39m  (no title yet)
 — 1 needs you · 2 idle · 5 working · 1 waiting to start
 ```
+
+**`REPO` is what the launcher pinned into the session, not a guess from its directory.** One repo is
+`reading2` on the laptop and `spideryarn2` on the box, so the path cannot answer the question. It is
+dimmed and reads `(unknown)` for two kinds of session: one started with `--dir`, which is an
+arbitrary path and belongs to no repo, and one started before this metadata existed at all. A
+session that carries *half* the metadata is not shown as either — the whole listing is refused,
+naming the session and the variable, because a partial list is one whose absences get reasoned from.
 
 **The rows are sorted by who is being waited on**, not alphabetically. `needs you` is a session
 parked on a permission prompt or a question, going nowhere until somebody answers it, and it costs
