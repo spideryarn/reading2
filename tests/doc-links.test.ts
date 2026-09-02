@@ -192,6 +192,28 @@ describe("documentation links", () => {
     expect(broken).toEqual([]);
   });
 
+  /**
+   * **A link into `/data/` is wrong even on the machine where it resolves.**
+   *
+   * That directory is gitignored pipeline output, so whether a link into it
+   * works depends on which articles the reader happens to have run — and in a
+   * worktree, on which fixtures `worktree:setup` copied. Both states existed at
+   * once on 2026-09-02: `data/reader.json` was red in every worktree and green
+   * in the primary, while `data/noema-mythology-of-conscious-ai` was green in
+   * both and one corpus change away from red.
+   *
+   * The check above cannot tell those apart, because "the file is there"
+   * is true for the wrong reason. So this asks the question that has one
+   * answer everywhere: name a runtime path in prose, never as a link.
+   */
+  it("never link into gitignored runtime output", () => {
+    const intoData = allLinks
+      .filter((l) => /(^|\/)data\//.test(l.target))
+      .filter((l) => !/^<?\//.test(l.target))
+      .map((l) => `${l.from} → ${l.target}`);
+    expect(intoData).toEqual([]);
+  });
+
   it("point at anchors that exist", () => {
     const broken = allLinks
       .filter((l) => l.anchor && existsSync(l.file) && l.file.endsWith(".md"))
