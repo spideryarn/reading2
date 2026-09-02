@@ -256,6 +256,7 @@ import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -5460,6 +5461,26 @@ async function serveApi(
          the request object, so "the public routes ignore `Authorization`" is not a
          rule anybody has to keep. */
       await servePublicApi({ res, path, method });
+      return true;
+    }
+
+    /**
+     * **The Stripe webhook — the second thing on this server that runs before
+     * the gate, and the only one that is handed the request.**
+     *
+     * Stripe has no session and never will, so this cannot sit behind
+     * `requireUser`. An **exact** path rather than a namespace, unlike the
+     * public branch above: nothing else under `/api/webhooks/` should become
+     * reachable because somebody added a second provider without re-reading
+     * src/billing/webhook.ts.
+     *
+     * Inside the `try` for the reason the comment below gives at length, and
+     * before anything else touches `req`, because the signature is over the
+     * bytes as they arrived — something that had already consumed the stream
+     * would leave nothing to verify.
+     */
+    if (path === WEBHOOK_PATH) {
+      await serveStripeWebhook(req, res, method);
       return true;
     }
 

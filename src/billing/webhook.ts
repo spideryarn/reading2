@@ -33,9 +33,25 @@
  * - **A body larger than the cap is refused before it is read into memory.**
  */
 
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type Stripe from "stripe";
 
+import { errorFields, log } from "../log.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
+import { type SyncResult, syncSubscriptionFromStripe } from "./sync.js";
+
+/* `http`, because this is a request handler and its lines sit beside the
+   ordinary request log. Not `store` — nothing here writes anything; the sync it
+   calls does its own logging under `store`. */
+const logger = log("http");
+
+/**
+ * The one path, exactly.
+ *
+ * Exported so `src/routes.ts` matches on the same string this module documents,
+ * and so a test can assert that a sibling path is not reachable.
+ */
+export const WEBHOOK_PATH = "/api/webhooks/stripe";
 
 /**
  * The four events that mean "this customer's subscription state may have
@@ -171,4 +187,104 @@ export function customerOf(event: Stripe.Event): string | null {
   const customer = object.customer;
   if (!customer) return null;
   return typeof customer === "string" ? customer : customer.id;
+}
+
+/** The whole response this route ever sends. Never a Stripe message. */
+function answer(res: ServerResponse, status: number, body: Record<string, unknown>): void {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(body));
+}
+
+/**
+ * Serve `POST /api/webhooks/stripe`.
+ *
+ * ## What each status means to Stripe, which is the only reader
+ *
+ * **2xx is a promise**, not an acknowledgement: it tells Stripe this delivery
+ * never needs sending again. So it is returned only when the customer's row now
+ * matches Stripe, or when the event is one we deliberately ignore. Anything
+ * else — an unknown customer, a Stripe failure, a database failure — is 5xx, so
+ * the delivery is retried. Getting that backwards is how a cancelled
+ * subscription keeps its entitlement for ever: one 200 over a failed write and
+ * the event is gone.
+ *
+ * **An unmapped customer is 503 rather than 200**, and the window it covers is
+ * real: Checkout completes, Stripe fires immediately, and our own success
+ * callback has not yet written the mapping. A retry a few seconds later finds
+ * it. For a customer created by hand in the dashboard the retries eventually
+ * stop, which is the right end for an event about somebody who is not a reader
+ * here.
+ *
+ * **The response body never carries a reason.** Stripe does not read it, and
+ * the one other party who might is somebody probing the endpoint — for whom
+ * "signature verification failed: timestamp outside the tolerance zone" is a
+ * hint. Reasons go to the log.
+ *
+ * @param sync a seam, so tests exercise every branch without a database. The
+ * default is the real thing, so forgetting to inject cannot make a production
+ * build inert — the same reasoning as `verify` on `handleApi`.
+ */
+export async function serveStripeWebhook(
+  req: IncomingMessage,
+  res: ServerResponse,
+  method: string,
+  sync: (customerId: string) => Promise<SyncResult> = syncSubscriptionFromStripe,
+): Promise<void> {
+  if (method !== "POST") {
+    res.setHeader("Allow", "POST");
+    answer(res, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  let event: Stripe.Event;
+  try {
+    const raw = await readRawBody(req);
+    const signature = req.headers["stripe-signature"];
+    event = verifyEvent(raw, Array.isArray(signature) ? signature[0] : signature);
+  } catch (err) {
+    const status = err instanceof WebhookRefused ? err.status : 400;
+    /* Logged with the reason, answered without it. */
+    logger.warn({ status, ...errorFields(err) }, "refused a Stripe webhook delivery");
+    answer(res, status, { error: "Webhook refused" });
+    return;
+  }
+
+  if (!isHandled(event.type)) {
+    /* 200: we are certain we do not want it, so a retry would be pure cost. */
+    return answer(res, 200, { received: true, handled: false });
+  }
+
+  const customer = customerOf(event);
+  if (!customer) {
+    /* A handled event with no customer is malformed rather than unlucky, and a
+       retry would send the same malformed thing again. */
+    logger.error({ type: event.type, event: event.id }, "a handled Stripe event named no customer");
+    answer(res, 400, { error: "Webhook refused" });
+    return;
+  }
+
+  try {
+    const result = await sync(customer);
+    if (result.kind === "unmapped") {
+      logger.warn(
+        { type: event.type, customerId: customer },
+        "no billing account maps to this Stripe customer yet — asking Stripe to retry",
+      );
+      answer(res, 503, { error: "Not ready" });
+      return;
+    }
+    logger.info(
+      { type: event.type, ownerId: result.ownerId, status: result.status },
+      "synced a customer from Stripe",
+    );
+    answer(res, 200, { received: true, handled: true });
+  } catch (err) {
+    /* **5xx, so Stripe retries.** The handler awaits a durable write and
+       returns 2xx only when one happened; a 200 here would silently drop the
+       one event that said this subscription had changed. */
+    logger.error({ type: event.type, customerId: customer, ...errorFields(err) }, "webhook sync failed");
+    answer(res, 500, { error: "Sync failed" });
+  }
 }
