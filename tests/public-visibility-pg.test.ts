@@ -826,6 +826,22 @@ when("sharing one article", { timeout: 60_000 }, () => {
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
       personalised: ["tweets", "glossary", "ideas"],
+      /**
+       * **What a shared link would carry, against a real Postgres** — and the
+       * only place that claim is checked end to end.
+       *
+       * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
+       * row, and the fixture plants three artefacts and not the other two — so
+       * this asymmetry is the assertion. A unit test cannot make it: the whole
+       * question is whether the columns the projection publishes are the
+       * columns this field reports, and only a row answers that.
+       *
+       * The owner's sharing dialog lists these five
+       * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md),
+       * and the two `false`s are the half that matters — an inventory that said
+       * *arc* here would name a rung of Outline this article does not have.
+       */
+      available: { arc: false, tweets: true, glossary: true, ideas: true, quotes: false },
     });
   });
 

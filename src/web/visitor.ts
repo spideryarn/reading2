@@ -88,8 +88,16 @@ function artefactGap(has: keyof PublicArtefacts, available: PublicArtefacts): Vi
  *
  * One table, so that the tweet thread on its own page and the three modes in
  * the reading view cannot end up calling the same thing two names.
+ *
+ * **Exported since 2026-09-02**, because the visitor's own metadata page had
+ * written four of these out by hand and left `quotes` off — so a shared article
+ * with quotes told its reader nothing about them, under a heading that says
+ * *what has been built for it*. GPT Sol found it while reviewing the owner's
+ * inventory (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
+ * `PublicPages.tsx` now walks this record instead, so a sixth artefact appears
+ * there whether or not anybody remembers the page.
  */
-const NOUN: Record<keyof PublicArtefacts, string> = {
+export const NOUN: Record<keyof PublicArtefacts, string> = {
   arc: "an arc through the argument",
   glossary: "a glossary",
   ideas: "a list of ideas",

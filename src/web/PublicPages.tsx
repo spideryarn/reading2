@@ -26,7 +26,7 @@ import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
-import { markedModes, notBuiltGap, type VisitorGap } from "./visitor.js";
+import { markedModes, notBuiltGap, NOUN, type VisitorGap } from "./visitor.js";
 import { ThreadCounts, ThreadPosts } from "./Tweets.js";
 
 /**
@@ -138,11 +138,19 @@ export function PublicMetadataPage({
               this page is already drawing, so either it arrived or the reader is
               looking at *this document isn't shared*.
               src/web/public-artefacts.ts. */}
+          {/* **Walked, not written out**, since 2026-09-02. Four of the five
+              were listed here by hand and `quotes` was missing — so a visitor
+              reading a shared article that has quotes was told nothing about
+              them, under a heading promising what has been built. Nothing was
+              wrong with the flag; the list simply did not mention it. `NOUN`
+              (src/web/visitor.ts) is the same table the reading view's gap
+              sentences come from, so the two cannot call one artefact by two
+              names, and a sixth appears here without anybody remembering to
+              come back. */}
           <ul className="tw:m-0 tw:list-none tw:p-0 tw:text-sm tw:text-ink-faint">
-            <Artefact name="An arc through the argument" has={available.arc} />
-            <Artefact name="A glossary" has={available.glossary} />
-            <Artefact name="A list of ideas" has={available.ideas} />
-            <Artefact name="A tweet thread" has={available.tweets} />
+            {(Object.keys(NOUN) as (keyof typeof NOUN)[]).map((key) => (
+              <Artefact key={key} name={sentenceCase(NOUN[key])} has={available[key]} />
+            ))}
           </ul>
         </section>
 
@@ -156,6 +164,16 @@ export function PublicMetadataPage({
       <VisitorDock slug={slug} view="metadata" available={available} signedIn={signedIn} />
     </>
   );
+}
+
+/**
+ * `NOUN` is written for the middle of a sentence — *"nobody has built **a
+ * glossary** for this piece yet"* — and this list wants it at the start of a
+ * line. One capital, rather than a second table of the same five nouns with
+ * different capitals, which is the shape that let `quotes` go missing.
+ */
+function sentenceCase(noun: string): string {
+  return noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
 function Artefact({ name, has }: { name: string; has: boolean }) {
