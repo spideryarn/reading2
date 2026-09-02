@@ -1,8 +1,9 @@
 # The remote box runs production migrations, with nobody in the loop
 
-**Status: proposed, 2026-09-02. Not built.** Greg has chosen the shape; the detail below is what a
-first implementation would be, and the [open questions](#open-questions) are the parts still to
-settle.
+**Status: step 1 mostly built, 2026-09-02.** See
+[Progress](#progress-and-what-step-1-found-on-its-first-run) — including the thing it found in
+production the first time it was pointed at it. Steps 2 and 3 are still proposals, and the
+[open questions](#open-questions) are the parts still to settle.
 
 > I really want the remote-box to be able to kick off production migrations as part of its deploy
 > (which it can trigger simply with a push).
@@ -460,6 +461,52 @@ laptop. Two things about that number, in both directions:
 The honest summary for the decision: **this buys "most nights, not every night".** If that is not
 enough, the answer is the credential on the box, with the trade-off row *the gate: advisory* read
 out loud.
+
+## Progress, and what step 1 found on its first run
+
+**Built, 2026-09-02** — commits `2939f6d` (the reporting) and `b6be6a7` (the two bugs).
+
+- [`src/migration-digest.ts`](../../src/migration-digest.ts) — the canonical digest and the
+  two-direction comparison, used by **both** `/api/health` and `scripts/deploy.ts`, so the two
+  cannot drift into disagreeing about what "the same migrations" means.
+- `/api/health` reports `migrations.expected` (stamped in at build time from the commit's own
+  `drizzle/`) beside `migrations.applied` (read as the app role). `missing` warns and 503s; `ahead`
+  is silent, because the deploy order guarantees it during every deploy.
+- `--skip-migrations` no longer skips the *check*, and refuses to ship when anything is pending.
+- The post-apply verification compares hashes rather than a row count.
+- The production grant was applied and **verified by asking afterwards**, `false → true`:
+  `usage` on `spideryarn_migrations` and `select` on `__drizzle_migrations`, for `spideryarn_app`.
+
+### What it found
+
+Pointed at production for the first time, the check immediately reported the exact failure this
+whole document exists to prevent, already in progress:
+
+```
+  production applied :  37 migrations
+  live commit ba6882a:  52 migrations
+  missing            :  15, from 0037_experimental_features… to 0051_referee_claims
+```
+
+**Code that needs fifteen unapplied migrations is live.** `/api/health` answers 503 and names 53
+columns it selects and cannot see; 45 of them belong to three tables that do not exist in production
+at all (`feedback`, `referee_criteria`, `referee_claims`). Reading still works — `/` answers 200 —
+so this is degraded rather than down: the newer features are broken and the article view is not.
+
+Fourteen of the fifteen are additive by `scanSql`. **`0049_drop_raw_bytes` drops a column**, so this
+is not a run-it-and-see; it is exactly the class every postmortem in
+[the four options](#four-options-ruled-out-so-nobody-researches-them-again) says keeps a human.
+
+Nothing has been applied. That is Greg's call, and the grant he approved was a grant.
+
+### Still to do in step 1
+
+- **The pre-push refusal.** Now that the digest is on `/api/health`, this is an HTTPS request rather
+  than a database connection — which also gives `--skip-migrations` back a credential-free check.
+  Remember it must be **deleted** in step 2, or the push that triggers the migration is the push
+  that gets refused.
+- **The Vercel Deployment Check.** Needs a workflow file, which the box cannot push (fact 4) — so
+  landing it is Greg's, and it wants the live canary named in step 1 before it is load-bearing.
 
 ## See also
 
