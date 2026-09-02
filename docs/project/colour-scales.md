@@ -27,7 +27,7 @@ two of those neither can be changed.
 | **Categorical** | `--cat-0` … `--cat-15` (+ `-rgb`) | these are different things | in use — one per saved search. **The hash reaches the first eight; a reader can pick any of the sixteen** |
 | **Sequential (hot)** | `--heat-0` … `--heat-8` | this much of it, and it is hot | ready, unused |
 | **Sequential (neutral)** | `--vir-0` … `--vir-8` (+ `-rgb`) | this much of it | in use — how far through the article a paragraph is |
-| **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` | which side of the middle | ready, unused |
+| **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` (+ `-rgb`) | which side of the middle | in use — how a referee's for/against criterion cuts, in the panel row **and** in the prose |
 
 ## Two rules that apply to all three
 
@@ -222,6 +222,35 @@ WCAG 1.4.1 says the same thing, and it happens to be the right rule rather than 
 eight-colour legend nobody can hold in their head is a usability problem long before it is an
 accessibility one.
 
+**The one place a mark in the prose carries a judgement, and what it costs.** Since 2026-09-02 a
+referee's for/against criterion paints its passages by *direction* rather than by which criterion
+found them ([referee-mode.md § Criteria](referee-mode.md#1-criteria-the-referees-own-criteria-marked-in-the-prose)).
+Greg asked for it, because the panel and the prose were painting one phrase from two different
+palettes and contradicting each other. Everything else this page says still applies, and the prose
+has no words in it, so the rule had to be met at the mark itself rather than in the panel:
+
+- **The mark carries a sign** — `−` counts against, `+` counts for, `·` counts neither way, `±` for
+  two results pointing opposite ways over one phrase. Written as `data-dir` and drawn through a CSS
+  `::after`, so it is generated content: it survives greyscale and every dichromacy, and it cannot
+  be copied out of the article or reach the block's text offsets. Its **alt text is the direction in
+  words** (`content: "−" / "counts against"`), so a reader using a screen reader hears the carrier
+  where the judgement is rather than only in a panel they may not have opened — the wording is
+  `directionWords` in [`src/web/valence.ts`](../../src/web/valence.ts), and
+  `tests/valence.test.ts` reads this file's copy of it off disk so the two cannot drift.
+- **The Criteria panel prints a key** whenever such a criterion is switched on — all four glyphs, in
+  the ramp the reader is actually on rather than in the words "red" and "green".
+- **The identity hue stops being claimed where it is no longer true.** On a for/against criterion
+  the panel's colour control reaches only the paragraph bar and the rail, so the tick beside it is
+  neutral and the control says *bar and rail colour*. A tinted tick there would be pointing at
+  marks it no longer paints.
+
+The identity channel is not lost, only moved: the bar down the left of the paragraph and the spine
+rail still read the palette slot, which is the § below on *the two answer different questions* doing
+its job. What is knowingly given up is the phrase-level version of it — a red mark no longer says
+*which* criterion said so. That is written down in
+[260902e-make-referee-mode-understandable.md](../plans/260902e-make-referee-mode-understandable.md)
+rather than left to be rediscovered.
+
 ### One local collision worth knowing about
 
 Slot 6 is close to `--spideryarn-orange` (`#DB8A45`), which on this page means *highlight* and draws
@@ -366,6 +395,26 @@ Use it where the reader already knows which end is which from something other th
 printed number, a label, a position — so the hue is a shortcut rather than the message. Do not use
 it as the only carrier of a good/bad judgement. This is the same rule the categorical set follows,
 and for the same reason.
+
+**A sign counts as "something other than the colour", and that is how the prose meets this rule.**
+Referee mode's panel meets it four times over — rank, direction in words, the referee's own pole
+label, the signed number — and its marks in the prose meet it once, with the `−` / `·` / `+` after
+the marked phrase. One carrier is enough where it is *co-located with the mark itself*; four in a
+panel three inches away are not, which is the distinction the first draft of that plan got wrong and
+a cross-family review caught. See § *Colour is never the only carrier* above.
+
+**Both ramps are written as `-rgb` triples with the plain `--div-N` derived from them**, the same
+call `--vir-*` and the categorical set make: a component sets a custom property to one of these
+inline and the stylesheet interpolates it into `rgb(…)` — [`annotate.ts`](../../src/web/annotate.ts)
+does exactly that with `--h0` … `--h5`. Handing a mark the plain spelling, whose value is itself an
+`rgb(…)` expression, makes the declaration invalid at computed-value time and the stripe paints
+nothing at all, with no error anywhere; hence two functions with two names in
+[`valence.ts`](../../src/web/valence.ts) rather than one a caller can get subtly wrong.
+
+**Which of the two a criterion is drawn with is a property of the mode, not of the criterion** —
+`?refscale=rg|br`. The two ramps put red at opposite ends: `--div-rg-0` is red for *against* where
+`--div-8` is red for *favour*, so two criteria each choosing their own would have put opposite
+verdicts behind the same red underline.
 
 Blue against **orange** is actually the pair the literature cites most often — it is the
 Wong/Okabe–Ito opposition, and it is ColorBrewer's PuOr. It is not used here for a reason local to

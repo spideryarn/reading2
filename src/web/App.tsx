@@ -122,6 +122,7 @@ import {
   quoteParam,
   rankParam,
   refereeParam,
+  refScaleParam,
   REFEREE_VIEWS,
   type RefereeView,
   rememberParam,
@@ -1724,11 +1725,18 @@ function Reader({
   /* **A fifth state, for the reason the second, third and fourth have their
      own**: two modes sharing one `Found[]` clear each other on the way out, and
      which one wins is an accident of whether the outgoing mode's cleanup is
-     passive and the incoming mode's push is layout. Referee's Criteria has no
-     `openKey` of its own yet — stepping between marked passages is search's
-     control and this panel does not offer one, so nothing here can be open.
-     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1. */
+     passive and the incoming mode's push is layout.
+
+     **And an `openKey` of its own since 2026-09-02**, which it did not have and
+     should have: pressing a criterion result jumped to the *block*, and the
+     phrase the row was about was never distinguished, while Search's identical
+     rows have always got the `mark.hit[data-hit-open]` ring. That is the
+     panel→prose direction a referee actually travels, and it matters more now
+     the stripe carries a direction rather than an identity — the ring is what
+     says *this red phrase is the row you pressed*. GPT Sol's finding 2;
+     docs/plans/260902e-make-referee-mode-understandable.md. */
   const [refereeFound, setRefereeFound] = useState<Found[]>([]);
+  const [openRefereeKey, setOpenRefereeKey] = useState<string | null>(null);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1759,11 +1767,21 @@ function Reader({
         : mode === "timeline"
           ? openTimelineKey
           : mode === "referee"
-            ? null
+            ? openRefereeKey
             : openHit;
+  /* **One ramp for the whole of Referee mode**, read here because this is where
+     the marks are built. `?refscale=` and not `referee_criteria.scale`: the two
+     ramps put red at opposite ends of the truth, so a per-criterion choice
+     would have meant one red underline meaning opposite verdicts in one
+     document. `refScaleParam` in params.ts has the whole argument.
+
+     Read unconditionally rather than inside the referee branch — a hook cannot
+     be conditional — and it costs nothing in every other mode, where no passage
+     carries a valence and the scale is never consulted. */
+  const [refScale] = useQueryState("refscale", refScaleParam);
   const hitMarks = useMemo(
-    () => buildHitMarks(passages, openPassage),
-    [passages, openPassage],
+    () => buildHitMarks(passages, openPassage, refScale),
+    [passages, openPassage, refScale],
   );
   const hitStrength = useMemo(() => blockStrength(passages), [passages]);
   const hitHues = useMemo(() => blockHues(passages), [passages]);
@@ -2687,6 +2705,13 @@ function Reader({
           comments={comments}
           onJump={jumpTo}
           onFound={setRefereeFound}
+          /* Which marked passage the referee last pressed, so the prose rings
+             the exact phrase rather than washing the whole block. Search's
+             `openHit` exactly, and threaded rather than held in the band for the
+             same reason that one is: `TableView` draws the ring and it lives up
+             here. */
+          openKey={openRefereeKey}
+          onOpenKey={setOpenRefereeKey}
         />
       )}
 
@@ -4457,6 +4482,8 @@ function RefereeBand({
   comments,
   onJump,
   onFound,
+  openKey,
+  onOpenKey,
 }: {
   slug: string;
   blocks: Block[];
@@ -4483,6 +4510,15 @@ function RefereeBand({
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
+  /**
+   * The marked passage the referee last pressed — **Criteria's, and read
+   * nowhere else**, like `comments` above.
+   *
+   * Claims paints marks too and does not have one yet; it is the same wiring
+   * when somebody wants it. Mirror and Candidates paint nothing at all.
+   */
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("RefereeBand");
   const [view, setView] = useQueryState("referee", refereeParam);
@@ -4533,6 +4569,8 @@ function RefereeBand({
           comments={comments}
           onJump={onJump}
           onFound={onFound}
+          openKey={openKey}
+          onOpenKey={onOpenKey}
         />
       </div>
     </aside>
@@ -4629,6 +4667,8 @@ function RefereeSubMode({
   comments,
   onJump,
   onFound,
+  openKey,
+  onOpenKey,
 }: {
   view: RefereeView;
   slug: string;
@@ -4638,6 +4678,9 @@ function RefereeSubMode({
   comments: readonly Comment[];
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
+  /** Criteria's pressed passage. See `RefereeBand`, which says why. */
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   switch (view) {
     case "criteria":
@@ -4651,6 +4694,8 @@ function RefereeSubMode({
           comments={comments}
           onJump={onJump}
           onFound={onFound}
+          openKey={openKey}
+          onOpenKey={onOpenKey}
         />
       );
     case "claims":

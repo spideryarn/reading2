@@ -595,6 +595,10 @@ describe("orderFound", () => {
     start,
     end: start + 4,
     confidence,
+    /* Nothing here is a referee's for/against criterion, which is the only
+       source that carries one. Written out rather than left off, for the reason
+       the note above gives about the typed fixture being the gate. */
+    valence: null,
     reasoning: null,
     short: "",
     long: "",
@@ -655,6 +659,7 @@ describe("the prioritised threshold", () => {
     start: 0,
     end: 4,
     confidence,
+    valence: null,
     reasoning: null,
     short: "",
     long: "",
@@ -709,19 +714,27 @@ describe("the prioritised threshold", () => {
 describe("hitMarks", () => {
   const found = findLiteral(BLOCKS, "software");
 
+  /* Every case in this block is a *search*, which never carries a valence — so
+     the ramp handed in is inert here and `"rg"` is only what the parameter
+     requires. It is required rather than defaulted for the reason `hitMarks`
+     gives: forgetting to thread `?refscale=` would otherwise look exactly like
+     choosing red↔green on purpose. The ramp is exercised in
+     tests/referee-criteria-resolve.test.ts, where a passage actually has a
+     direction. */
+
   it("groups marks by the block they are in", () => {
-    const marks = hitMarks(found, null);
+    const marks = hitMarks(found, null, "rg");
     expect([...marks.keys()].sort()).toEqual(["spya-k3m9qt", "spya-w4x8bn"]);
   });
 
   it("tags every mark as a hit, so the stylesheet can tell it from a comment", () => {
-    for (const list of hitMarks(found, null).values()) {
+    for (const list of hitMarks(found, null, "rg").values()) {
       for (const m of list) expect(m.kind).toBe("hit");
     }
   });
 
   it("draws a literal match at full strength", () => {
-    const [first] = hitMarks(found, null).get("spya-k3m9qt")!;
+    const [first] = hitMarks(found, null, "rg").get("spya-k3m9qt")!;
     expect(first!.strength).toBe(1);
   });
 
@@ -735,7 +748,7 @@ describe("hitMarks", () => {
       BLOCKS,
       one([{ blockId: "spya-k3m9qt", quote: "mind is software", confidence: 0, reasoning: "" }]),
     );
-    const [mark] = hitMarks(weak, null).get("spya-k3m9qt")!;
+    const [mark] = hitMarks(weak, null, "rg").get("spya-k3m9qt")!;
     expect(mark!.strength).toBeGreaterThan(0.3);
     expect(mark!.strength).toBeLessThan(0.5);
   });
@@ -748,6 +761,7 @@ describe("hitMarks", () => {
           one([{ blockId: "spya-k3m9qt", quote: "mind is software", confidence, reasoning: "" }]),
         ),
         null,
+        "rg",
       ).get("spya-k3m9qt")![0]!.strength!;
     expect(make(100)).toBeGreaterThan(make(50));
     expect(make(50)).toBeGreaterThan(make(10));
@@ -755,13 +769,13 @@ describe("hitMarks", () => {
 
   it("marks only the pressed result as open", () => {
     const key = found[0]!.key;
-    const marks = hitMarks(found, key);
+    const marks = hitMarks(found, key, "rg");
     expect(marks.get("spya-k3m9qt")![0]!.open).toBe(true);
     expect(marks.get("spya-w4x8bn")![0]!.open).toBeUndefined();
   });
 
   it("is empty when nothing was found, so the prose is untouched", () => {
-    expect(hitMarks([], null).size).toBe(0);
+    expect(hitMarks([], null, "rg").size).toBe(0);
   });
 });
 

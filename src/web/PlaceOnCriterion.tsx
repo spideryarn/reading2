@@ -53,8 +53,14 @@
  * top of the words, and there is no second colour ramp in this file.
  */
 import { useId } from "react";
+import { useQueryState } from "nuqs";
 
-import type { RefereeCriterionConfig, RefereePoles } from "../referee-criteria.js";
+import type {
+  DivergingScale,
+  RefereeCriterionConfig,
+  RefereePoles,
+} from "../referee-criteria.js";
+import { refScaleParam } from "./params.js";
 import { signedValence, valenceToken, valenceWords } from "./valence.js";
 import { type SavedCriterionState, useCriteria } from "./useCriteria.js";
 
@@ -209,6 +215,22 @@ interface Props {
  */
 export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) {
   const { criteria, loaded, loadFailed } = useCriteria(slug);
+  /**
+   * **The mode's ramp, and not the criterion's own** — `?refscale=`.
+   *
+   * Read here rather than threaded in, for the reason the criteria themselves
+   * are fetched here: this section is mounted from `CommentDialog` and
+   * `AnnotateDialog`, which are nowhere near `RefereeBand` and are open on all
+   * four sub-modes. A prop would have to be carried through two dialogs that
+   * have nothing else to do with Referee mode.
+   *
+   * It has to be the mode's, and that is GPT Sol's finding 4 rather than
+   * tidiness: this file paints the current placement *and* all five instrument
+   * positions, so a criterion stored as `br` under the default `rg` would show
+   * the referee two opposite palettes in one session — the panel saying red for
+   * *against* and this dialog saying red for *favour*, over the same passage.
+   */
+  const [scale] = useQueryState("refscale", refScaleParam);
   const pickerId = useId();
   const choices = divergingOnly(criteria);
   const chosen = choices.find((c) => c.id === value.criterionId) ?? null;
@@ -307,7 +329,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
                   <span className="place-current-number">{signedValence(value.valence)}</span>
                   <span
                     className="place-swatch"
-                    style={{ background: valenceToken(chosen.config.scale, value.valence) }}
+                    style={{ background: valenceToken(scale, value.valence) }}
                     aria-hidden="true"
                   />
                 </p>
@@ -315,7 +337,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
 
               <Instrument
                 poles={chosen.config.poles}
-                scale={chosen.config.scale}
+                scale={scale}
                 criterion={chosen.criterion}
                 valence={value.valence}
                 onPick={(valence) => onChange({ criterionId: chosen.id, valence })}
@@ -363,7 +385,8 @@ function Instrument({
   onPick,
 }: {
   poles: RefereePoles;
-  scale: DivergingConfig["scale"];
+  /** The mode's ramp — `?refscale=`, not the criterion's stored one. */
+  scale: DivergingScale;
   criterion: string;
   valence: number | null;
   onPick(valence: number): void;

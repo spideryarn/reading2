@@ -49,6 +49,25 @@ npm test                        # expect ~14 of 477 files red, about what the pr
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
 
+### The dev server used to be blind in here — fixed 2026-09-02
+
+Worth knowing even though it is fixed, because for four days a worktree's `npm run dev` **could not
+see its own edits** and nothing said so. `vite.config.ts` ignores `**/.claude/worktrees/**` so the
+primary's page does not reload on a peer's every keystroke; chokidar matches that against absolute
+paths, and a worktree's absolute path contains `.claude/worktrees/` — so inside one, the pattern
+excluded the server's whole source tree. The app still loaded and still worked; it just served the
+source it read at boot, for ever. An agent measuring its own change in a browser was shown the code
+from before the change.
+
+`devWatchIgnored` in [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) now drops the
+glob inside a worktree, with the two cases tested. The reasoning, the three-way proof and the lesson
+about path rules that name a directory you can also be standing in are in
+[260902a-a-dev-server-that-ignored-its-own-source.md](../postmortems/260902a-a-dev-server-that-ignored-its-own-source.md).
+
+**Until a command does it for you: restart the dev server before you measure anything in a browser.**
+Any observation taken against a server started before your edits is worthless, and it does not look
+worthless.
+
 **`worktree:setup` refuses to run in the primary checkout**, and that guard is the most important line
 in it: it runs `npm ci`, which deletes `node_modules` and reinstalls it, and a dozen agents work out of
 the primary. It asks git rather than guessing from the path — in a worktree `--git-dir` is

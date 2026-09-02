@@ -328,26 +328,59 @@
        carrier of a good/bad judgement.
        ================================================================== */
 
+    /* **Triples first, hex derived** — the same call `--vir-*` and the
+       categorical block already make, and for the same reason they make it: a
+       component sets a custom property to one of these *inline* and the
+       stylesheet paints it, so the value has to survive being interpolated
+       into `rgb(…)`. `annotate.ts` does exactly that with `--h0` … `--h5` when
+       a for/against criterion paints its marks by direction
+       (docs/plans/260902e-make-referee-mode-understandable.md).
+
+       Written once, in the form that composes, with `--div-N` kept as the
+       plain-colour spelling for everything that just wants a background. Two
+       hand-kept copies of nine colours would be nine chances to drift, and
+       drift here is the failure this whole scale's test file exists for. */
+
     /* Blue (0) through neutral (4) to red (8). Hue 255 and 27. */
-    --div-0: #9cc7ff;
-    --div-1: #72a3e0;
-    --div-2: #5a7faf;
-    --div-3: #475e7b;
-    --div-4: #3b3d40;
-    --div-5: #78504b;
-    --div-6: #aa6962;
-    --div-7: #da867c;
-    --div-8: #ffaba1;
+    --div-0-rgb: 156 199 255;
+    --div-1-rgb: 114 163 224;
+    --div-2-rgb: 90 127 175;
+    --div-3-rgb: 71 94 123;
+    --div-4-rgb: 59 61 64;
+    --div-5-rgb: 120 80 75;
+    --div-6-rgb: 170 105 98;
+    --div-7-rgb: 218 134 124;
+    --div-8-rgb: 255 171 161;
+
+    --div-0: rgb(var(--div-0-rgb));
+    --div-1: rgb(var(--div-1-rgb));
+    --div-2: rgb(var(--div-2-rgb));
+    --div-3: rgb(var(--div-3-rgb));
+    --div-4: rgb(var(--div-4-rgb));
+    --div-5: rgb(var(--div-5-rgb));
+    --div-6: rgb(var(--div-6-rgb));
+    --div-7: rgb(var(--div-7-rgb));
+    --div-8: rgb(var(--div-8-rgb));
 
     /* Red (0) through neutral (4) to green (8). Hue 27 and 148.
        Read the note above before reaching for this one. */
-    --div-rg-0: #ffaba1;
-    --div-rg-1: #da867c;
-    --div-rg-2: #aa6962;
-    --div-rg-3: #78504b;
-    --div-rg-4: #403c3b;
-    --div-rg-5: #47654b;
-    --div-rg-6: #598b60;
-    --div-rg-7: #71b27a;
-    --div-rg-8: #8fd99a;
+    --div-rg-0-rgb: 255 171 161;
+    --div-rg-1-rgb: 218 134 124;
+    --div-rg-2-rgb: 170 105 98;
+    --div-rg-3-rgb: 120 80 75;
+    --div-rg-4-rgb: 64 60 59;
+    --div-rg-5-rgb: 71 101 75;
+    --div-rg-6-rgb: 89 139 96;
+    --div-rg-7-rgb: 113 178 122;
+    --div-rg-8-rgb: 143 217 154;
+
+    --div-rg-0: rgb(var(--div-rg-0-rgb));
+    --div-rg-1: rgb(var(--div-rg-1-rgb));
+    --div-rg-2: rgb(var(--div-rg-2-rgb));
+    --div-rg-3: rgb(var(--div-rg-3-rgb));
+    --div-rg-4: rgb(var(--div-rg-4-rgb));
+    --div-rg-5: rgb(var(--div-rg-5-rgb));
+    --div-rg-6: rgb(var(--div-rg-6-rgb));
+    --div-rg-7: rgb(var(--div-rg-7-rgb));
+    --div-rg-8: rgb(var(--div-rg-8-rgb));
 }

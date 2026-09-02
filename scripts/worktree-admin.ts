@@ -186,3 +186,47 @@ export function listWorktrees(cwd?: string): WorktreeEntry[] {
 export function ghosts(entries: readonly WorktreeEntry[]): WorktreeEntry[] {
   return entries.filter((e) => !e.main && !e.bare && (!e.present || e.prunable));
 }
+
+/* ------------------------------------------------ what a dev server watches -- */
+
+/**
+ * Where a linked worktree lives, relative to the primary checkout.
+ *
+ * Named once because four things key off it and none of them could see each
+ * other: `.gitignore` ignores it, `scripts/typecheck.ts` skips it,
+ * `scripts/worktree-setup.ts` writes into it, and `vite.config.ts` makes its
+ * file watcher ignore it — which is the one that went wrong.
+ */
+export const WORKTREES_PATH = "/.claude/worktrees/";
+
+/**
+ * **What `vite.config.ts` tells its file watcher to ignore**, given the
+ * directory the config itself sits in.
+ *
+ * A pure function with the path handed in, so the interesting case can be tested
+ * without running a dev server from inside a worktree — which is the only other
+ * way to find out, and is how this was found in the first place.
+ *
+ * ## The bug it exists to prevent
+ *
+ * `**​/.claude/worktrees/**` is there to stop the *primary's* dev server
+ * reloading a reader's page every time a peer types in their own checkout.
+ * Chokidar matches these globs against **absolute** paths, and a worktree's
+ * absolute path contains `.claude/worktrees/` — so a dev server started inside a
+ * worktree hands its watcher a pattern that excludes its own entire source tree.
+ *
+ * Nothing errors, and that is the whole problem. The server starts, the app
+ * loads, the app works. But the module graph is never invalidated, so Vite goes
+ * on transforming and serving the source it read at boot, and every edit made
+ * afterwards is invisible. An agent then measures its own change in a browser
+ * and finds that it did not happen — the shape
+ * docs/reusable/silent-success.md exists to name. Found 2026-09-02;
+ * docs/postmortems/260902a-a-dev-server-that-ignored-its-own-source.md.
+ *
+ * Dropping the pattern inside a worktree costs nothing, because worktrees live
+ * under the primary's `.claude/` and a worktree therefore never contains one.
+ */
+export function devWatchIgnored(configDir: string): string[] {
+  const always = ["**/data/**", "**/docs/**", "**/evals/**"];
+  return configDir.includes(WORKTREES_PATH) ? always : [...always, "**/.claude/worktrees/**"];
+}

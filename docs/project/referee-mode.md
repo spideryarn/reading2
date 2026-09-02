@@ -141,23 +141,89 @@ valence are two separate numbers that are never the same field —
 tested, and `referee_criteria` is its own table
 ([`src/db/schema.ts`](../../src/db/schema.ts) § *referee criteria*).
 
-Valence lives in the panel row, never in the prose stripe: the renderer has exactly two
-channels — the wash carries confidence, the categorical stripe carries which criterion — and
-repainting the stripe by valence would throw away *which* criterion made a judgement, leaving two
-negative criteria on one phrase indistinguishable. (The plan also asked for it in the prose gutter,
-beside the marked block. That is **not built**; the gutter holds the permalink and the chat button.)
+**The prose stripe carries the valence, and until 2026-09-02 it carried criterion identity
+instead.** Greg read a paper with the old rule and found the two halves of the screen contradicting
+each other:
 
-**The scale defaults to red ↔ green**
+> I'm not convinced that the highlighting colour in the text matches the colour in the Referee
+> Claims. Here, "So if extrapolation" counts against on the left, and yet it is highlighted with a
+> green line in the text on the right. … I was thinking that it should match the colour of the
+> left-hand panel. If that's set to red/green, so should the prose be.
+>
+> — Greg, 2026-09-02
+
+That was not a rendering glitch. A `diverging` criterion's passages were painted twice from two
+palettes with nothing on screen saying they were two: the mark in the prose from `Found.slot`, an
+Okabe–Ito identity hue one of which is green, and the swatch in the panel from `valenceToken`, red ↔
+green. A criterion that drew the green identity slot underlined *every* one of its passages green,
+including the ones the panel called "counts against" in red. So the stripe is the direction now —
+`resolveCriterion` carries the number, `hitMarks` resolves the ramp token, and
+[`src/web/annotate.ts`](../../src/web/annotate.ts) deduplicates hue-bearing marks on that token so a
+criterion's own −90 and +70 over one phrase stay two stripes rather than collapsing into one.
+(The plan also asked for the valence in the prose gutter, beside the marked block. That is **not
+built**; the gutter holds the permalink and the chat button.)
+
+**What that gives up, said plainly.** The stripe no longer answers *which criterion made this red
+phrase*. The **bar down the left of the paragraph** and the rail still read `slot` and are
+deliberately untouched, so they still say which criteria are live around here — but the bar is
+paragraph-wide, capped at eight, and collapses two criteria that share a slot, so it is a coarser
+answer than the stripe used to give. Pressing a result now rings its exact phrase
+(`mark.hit[data-hit-open]`, which Referee mode was passing `null` for and Search was not), which is
+the panel→prose direction a referee actually travels. Prose→panel is not fixed: seeing a red mark
+and asking which criterion said so still needs the bar or the panel. Marks are inert to the click by
+design, so that was never really answered before either — the old stripe answered it only for a
+reader who had memorised eight hues.
+[260902e-make-referee-mode-understandable.md](../plans/260902e-make-referee-mode-understandable.md)
+has the whole argument, including the alternative (one marked diverging criterion at a time) that
+was not taken and stays the fallback.
+
+**What pays for it.** [colour-scales.md](colour-scales.md) forbids colour being the only carrier of
+a good/bad judgement, and the panel's four carriers are not beside the mark. So a valence-painted
+mark also carries a **sign** — `−` counts against, `+` counts for, `·` counts neither way, `±` where
+two results point opposite ways over one phrase and both stripes are drawn. It is written as
+`data-dir` and drawn by CSS `::after`, so it is generated content rather than text: it cannot be
+copied out of the article and cannot reach the block's rendered-text offsets, which
+[block-ids.md](block-ids.md) would never forgive. Its **alt text is the direction in words** —
+`content: "−" / "counts against"`, from `directionWords` in
+[`src/web/valence.ts`](../../src/web/valence.ts) — so a reader using a screen reader hears the
+carrier at the mark rather than only in the panel they may never have opened. It was empty for a
+day, and the argument for that (a stray minus inside the author's sentence is worse than silence)
+lost to the plainer one: a carrier nothing announces is not a carrier. And the Criteria panel prints
+a **key** — *in the paper: a swatch, `−`, counts against; a swatch, `·`, counts neither way; a
+swatch, `+`, counts for; `±`, counts both ways* — whenever a for/against criterion is switched on,
+in the mode's own ramp rather than in the words "red" and "green".
+
+**Where the reader has commented on a phrase a criterion also marked**, the mark prints both the
+sign and the comment's `✳`, from one higher-specificity rule
+([`src/web/styles.css`](../../src/web/styles.css)). An element has one `::after`, and the two rules
+had equal specificity until 2026-09-02, so ours won and the reader's own marker silently
+disappeared. The cascade is the only place that is visible, so
+[`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts) reads the computed
+content out of a real browser.
+
+**One ramp for the whole mode**, `?refscale=rg|br`, defaulting to red ↔ green
 ([`--div-rg-*`](colour-scales.md#--div-rg--is-red-green-and-it-is-here-because-it-was-asked-for)),
-which Greg asked for three times, with
-[`--div-*`, blue ↔ red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) offered
-per-criterion. That is allowed only because **colour is never the carrier**: every row prints the
-ordinal rank, the direction in words, the referee's own pole label and the signed number beside the
-swatch. A browser pass on 2026-09-01 simulated deuteranopia and protanopia and confirmed both halves
-of that — every swatch collapses to the same khaki (a +70 green and a −60 red land within a few
-points of each other), and the four text carriers stay fully legible. `DEFAULT_DIVERGING_SCALE` in
-[`src/referee-criteria.ts`](../../src/referee-criteria.ts) writes down the condition under which
-this default has to move to `br`: if the panel ever stops printing the direction in words.
+which Greg asked for three times; [`--div-*`, blue ↔
+red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) is the other value. It used to be
+per-criterion, and that was a second bug nobody had noticed: `valenceStep` sends −100 → 0 and
++100 → 8, so `--div-rg-0` is red for *against* where `--div-8` is red for *favour*. While the prose
+carried identity the panel's words rescued it; once the prose carries direction, two criteria on one
+ramp each would have put opposite verdicts behind the same red underline. In the URL rather than in a
+column so it needs no migration, so a shared link carries it, and so the colour-vision switch works
+*retroactively* over criteria already run. Every surface that paints a valence takes it — the panel
+row's swatch, the key, and both the current-placement swatch and the five instrument positions in
+[`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx). `referee_criteria.scale` is still written
+by new rows so the column does not start lying, and is no longer read for display; there is no
+control for `?refscale=` yet.
+
+Red ↔ green is allowed only because **colour is never the carrier**: every row prints the ordinal
+rank, the direction in words, the referee's own pole label and the signed number beside the swatch,
+and every mark in the prose prints a sign. A browser pass on 2026-09-01 simulated deuteranopia and
+protanopia and confirmed the panel half of that — every swatch collapses to the same khaki (a +70
+green and a −60 red land within a few points of each other), and the four text carriers stay fully
+legible. `DEFAULT_DIVERGING_SCALE` in [`src/referee-criteria.ts`](../../src/referee-criteria.ts)
+writes down the condition under which this default has to move to `br`: if the panel ever stops
+printing the direction in words.
 
 #### The referee's own mark <a id="the-referees-own-mark"></a>
 

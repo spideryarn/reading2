@@ -29,7 +29,7 @@
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
 import type { ClaimPassage } from "../referee-claims.js";
-import type { RefereeResult } from "../referee-criteria.js";
+import type { DivergingScale, RefereeResult } from "../referee-criteria.js";
 import type {
   Block,
   BlockId,
@@ -38,6 +38,7 @@ import type {
   TimelineOccurrence,
 } from "../types.js";
 import type { HitOrder } from "./params.js";
+import { valenceDirection, valenceRgbToken } from "./valence.js";
 
 /**
  * Shorter than this and a literal search matches most of the article.
@@ -101,6 +102,26 @@ export interface Found {
   end: number;
   /** 0–100 for a meaning hit; `null` for a literal one. */
   confidence: number | null;
+  /**
+   * **Which way this passage cuts**, −100…+100 — a referee's for/against
+   * criterion and nothing else. `null` everywhere else, which is every other
+   * source: a search hit, an idea, a quote, a timeline event, a claim's passage
+   * and a literal match all say *this is here*, never *this is bad*.
+   *
+   * **The number, not a colour and not a token.** `Found` carries source facts
+   * — a slot, a confidence, offsets — and the palette is resolved later, in
+   * `hitMarks`, where the Reader already owns the display scale. A CSS token on
+   * this interface would put presentation state on a resolver and make
+   * `resolveCriterion` depend on the URL, which is GPT Sol's finding 5.
+   *
+   * It is **not** the wash and it is **not** the confidence. The wash carries
+   * how sure the model was that the passage is relevant; this carries what it
+   * said about it. Two results with opposite valences and equal confidence draw
+   * the same wash, which is pinned in tests/referee-criteria-resolve.test.ts,
+   * because a wash scaled by |valence| would look informative and mean
+   * something else entirely.
+   */
+  valence: number | null;
   /** The model's one line on why this matches; `null` for a literal match. */
   reasoning: string | null;
   /** What the list shows. */
@@ -293,6 +314,10 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
         index,
         ...span,
         confidence: null,
+        /* A literal match is the letters you typed appearing where they appear.
+           There is no judgement in it and there is nothing to be a judgement
+           *about*, which is what `null` says here. */
+        valence: null,
         reasoning: null,
         short: snippet(text, span, SHORT_SNIPPET),
         long: snippet(text, span, LONG_SNIPPET),
@@ -384,6 +409,14 @@ function resolveOne(
     quote: string;
     start?: number;
     confidence: number | null;
+    /**
+     * **Required, and `null` at five of the six call sites** — see `Found`.
+     *
+     * Written out by every caller rather than defaulted, so that a seventh
+     * source has to decide whether it is making a judgement about the passage
+     * instead of inheriting the answer of whichever resolver was copied.
+     */
+    valence: number | null;
     reasoning: string | null;
   },
 ): Found | null {
@@ -409,6 +442,7 @@ function resolveOne(
     index: i,
     ...span,
     confidence: spec.confidence,
+    valence: spec.valence,
     reasoning: spec.reasoning,
     short: whole
       ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET)
@@ -466,6 +500,9 @@ export function resolveIdea(
       quote: o.quote,
       ...(o.start !== undefined && { start: o.start }),
       confidence: null,
+      /* An idea is a proposition the piece assumes, and where it is assumed.
+         Nothing here judges it. */
+      valence: null,
       reasoning: o.reasoning,
     });
     if (one) out.push(one);
@@ -540,6 +577,9 @@ export function resolveQuote(
     slot: quote.slot,
     quote: quote.text,
     confidence: null,
+    /* A quote is a line worth keeping. Which is a judgement of a sort, and not
+       one with two ends. */
+    valence: null,
     reasoning: quote.reason ?? "",
   });
   return one ? [one] : [];
@@ -586,6 +626,8 @@ export function resolveTimelineEvent(
       quote: o.quote,
       start: o.start,
       confidence: null,
+      /* When the piece says a thing happened. There is no direction in a date. */
+      valence: null,
       reasoning: null,
     });
     if (one) out.push(one);
@@ -617,22 +659,36 @@ export function resolveTimelineEvent(
  *   quote's: these offsets come from a model naming a block, so the first
  *   rendered occurrence is not necessarily the one meant.
  *
- * ## What is deliberately not here: the valence
+ * ## The valence, which this function used to drop on purpose
  *
- * A `DivergingResult` carries a −100…+100 valence and **none of it reaches
- * `Found`**. That is Sol's finding 7 and it is the visual rule this whole
- * sub-mode is built around: the renderer has exactly two channels — the wash
- * carries strength, the categorical stripe carries *which* source found the
- * passage — and `annotateHtml` keeps every identity slot on an overlapping mark
- * while collapsing strength to the strongest. Repainting the stripe by valence
- * throws provenance away: two negative criteria over one phrase both go red and
- * the reader, mid-sentence, cannot tell which criterion said what.
+ * A `DivergingResult` carries a −100…+100 valence, and until 2026-09-02 **none
+ * of it reached `Found`**: the prose said which criterion and the panel said
+ * which way. Greg reversed that, having read a paper with it:
  *
- * So the prose keeps saying **which criterion**, and the panel row and the block
- * gutter say **which way** — in words and a signed number as well as in colour.
- * A `Found` with a valence field on it would be the first step back towards the
- * version this refuses, which is why the type has none and this function drops
- * it rather than carrying it "in case".
+ * > I'm not convinced that the highlighting colour in the text matches the
+ * > colour in the Referee Claims. Here, "So if extrapolation" counts against on
+ * > the left, and yet it is highlighted with a green line in the text on the
+ * > right. … I was thinking that it should match the colour of the left-hand
+ * > panel. If that's set to red/green, so should the prose be.
+ *
+ * He is describing a real defect rather than a preference. The two marks were
+ * painted from two palettes with nothing on screen saying they were two, so a
+ * criterion that happened to draw the green identity slot underlined *every* one
+ * of its passages green, including the ones the panel called "counts against" in
+ * red. So the valence comes through now, for `diverging` results only, and
+ * `hitMarks` turns it into a ramp token.
+ *
+ * **What that costs, said plainly.** The prose stripe no longer answers *which
+ * criterion said this* — the bar down the left of the paragraph and the rail
+ * still do, from `slot`, which is why `blockHues` and `spine-marks.ts` were
+ * deliberately left reading it. And a stripe that carries a verdict may not
+ * carry it in colour alone (docs/project/colour-scales.md), which is paid for by
+ * the sign glyph `annotateHtml` draws and the key in the Criteria panel.
+ * docs/plans/260902e-make-referee-mode-understandable.md has the whole argument,
+ * including the two things it knowingly does not fix.
+ *
+ * **The number and not a token**, for the reason `Found.valence` gives: this
+ * function must not learn which ramp the reader is looking at.
  */
 export function resolveCriterion(
   blocks: Block[],
@@ -653,6 +709,12 @@ export function resolveCriterion(
       quote: r.quote,
       ...(r.start !== undefined && { start: r.start }),
       confidence: r.confidence,
+      /* `diverging` only, and read off the result's own discriminant rather
+         than off the criterion's config — the two can disagree. A criterion
+         answered while it was `single` and later edited would have `single`
+         results under a `diverging` config, and `r.kind` is the field that
+         says what the model actually returned. */
+      valence: r.kind === "diverging" ? r.valence : null,
       reasoning: r.reasoning,
     });
     if (one) out.push(one);
@@ -714,6 +776,12 @@ export function resolveClaim(
       quote: p.quote,
       start: p.start,
       confidence: null,
+      /* **The identity-only path, and it stays that way.** A claim's passage
+         says the paper takes this claim up here; whether it carries the claim
+         is the referee's call and not the model's
+         (docs/project/referee-mode.md § Claims). There is no valence to carry
+         and a claim mark wears its claim's own hue. */
+      valence: null,
       reasoning: p.reasoning,
     });
     if (one) out.push(one);
@@ -747,6 +815,9 @@ export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
         quote: hit.quote,
         ...(hit.start !== undefined && { start: hit.start }),
         confidence: hit.confidence,
+        /* A search answers *is this what you asked for*, which the confidence
+           already carries. It never answers *is this good*. */
+        valence: null,
         reasoning: hit.reasoning,
       });
       if (one) found.push(one);
@@ -911,18 +982,46 @@ const MIN_STRENGTH = 0.35;
  * opened search, or has not typed anything, and the prose is untouched. Same
  * shape and the same principle as `termMarks` in annotate.ts: **the article
  * acquires marks when the reader asks for them and at no other time.**
+ *
+ * ## Where the palette is resolved, and why it is here
+ *
+ * A `Found` carrying a valence becomes a mark painted by **direction** rather
+ * than by which source found it, and this is the line where the number becomes
+ * a ramp token. Not in `resolveCriterion`, which would then have to know which
+ * ramp the reader is looking at (`Found.valence` says why); not in
+ * `annotateHtml`, which knows nothing about referees and should not start. This
+ * is where the Reader hands the display scale in, so this is where a `−64`
+ * becomes `var(--div-rg-1-rgb)` and the word `against`.
+ *
+ * **`scale` is required rather than defaulted**, although five of the six
+ * sources never produce a valence at all. A default would make forgetting to
+ * thread `?refscale=` through look exactly like passing `rg` deliberately, and
+ * the whole point of one scale for the whole mode is that the two ramps put red
+ * at opposite ends of the truth.
  */
-export function hitMarks(found: Found[], openKey: string | null): Map<BlockId, Mark[]> {
+export function hitMarks(
+  found: Found[],
+  openKey: string | null,
+  scale: DivergingScale,
+): Map<BlockId, Mark[]> {
   const byBlock = new Map<BlockId, Mark[]>();
   for (const f of found) {
     if (f.end <= f.start) continue;
     const list = byBlock.get(f.blockId) ?? [];
+    /* A valence with no slot cannot happen — `resolveCriterion` is the only
+       source of one and it always carries the criterion's slot — and `Mark`'s
+       type refuses it rather than trusting that. So the check is on both, and
+       an impossible pair falls back to the identity mark it would have been. */
+    const painted =
+      f.valence !== null && f.slot !== null
+        ? { slot: f.slot, hue: valenceRgbToken(scale, f.valence), dir: valenceDirection(f.valence) }
+        : { slot: f.slot };
     list.push({
       id: f.key,
       start: f.start,
       end: f.end,
       kind: "hit",
-      slot: f.slot,
+      ...painted,
       strength:
         f.confidence === null
           ? 1
