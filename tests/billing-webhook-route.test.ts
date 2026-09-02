@@ -26,7 +26,18 @@ import { handleApi } from "../src/routes.js";
 
 const SECRET = "whsec_testsecretfortestsonly000000000";
 const KEY = "sk_test_notarealkey000000000000000";
-const OWNER = "0b111a99-0000-4000-8000-00000000c0da";
+/**
+ * A fake owner id, and **its own** rather than shared with
+ * `tests/billing-quota-race.test.ts`.
+ *
+ * It was that file's id until `tests/fixture-ids.test.ts` caught the copy. It
+ * happens to be safe here — this value never reaches the database, only the
+ * inside of an injected `SyncResult` — so `NOT_A_ROW` would have been the other
+ * legitimate answer. A distinct id is better: it is one character of work, and
+ * it stays correct if somebody later makes this suite write a row, whereas a
+ * "nothing here is a row" declaration would quietly become a lie.
+ */
+const OWNER = "0b111a99-0000-4000-8000-00000000c0db";
 
 const SAVED = {
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
