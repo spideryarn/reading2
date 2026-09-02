@@ -554,14 +554,6 @@ const LOADING: ArticleAccess = { kind: "loading" };
  * the server half is built the same way round: `servePublicApi` is handed
  * `{res, path, method}` and never the request, so it cannot read a header even
  * by accident. docs/reusable/silent-success.md.
- *
- * ## One `try`, and the metadata request outside it
- *
- * The article is the page. The artefact flags are a detail on top of it, so a
- * metadata request that fails must not take the article down with it — it
- * degrades to `null`, which `visitorGap` reads as *"not on shared links yet"*,
- * which is unconditionally true in this slice whatever the flags would have
- * said.
  */
 function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
   /**
