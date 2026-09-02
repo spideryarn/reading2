@@ -90,8 +90,23 @@ export interface Usage {
  * **In-flight has no age limit**, and that is the correction that matters most
  * in this file. See `ingest_events` in src/db/schema.ts: an expiry here is a
  * quota bypass, because held-open jobs are something a caller can arrange.
+ *
+ * **Every interpolation here is a bind parameter, checked rather than assumed.**
+ * Drizzle's `sql` tag turns `${…}` into `$1`, `$2`, `$3`, so the values reach
+ * Postgres in the parameter array and never in the statement text. Asked of the
+ * builder on 2026-09-02 with `'; drop table spideryarn.ingest_events; --` as the
+ * owner id and a similar string as the period: the SQL came back with
+ * placeholders and the hostile text appeared only in `params`. Worth writing
+ * down because the period ultimately derives from Stripe-controlled data, so
+ * "surely it parameterises" is not a thing to be surely about.
+ *
+ * **Exported only so that claim has a test.** `tests/billing-quota-sql.test.ts`
+ * builds this with a hostile owner id and asserts the statement text contains
+ * placeholders and not the string — which is what stops somebody "simplifying"
+ * it into concatenation later, a change that would look completely ordinary in
+ * a diff and be invisible in every other test.
  */
-function usageSql(ownerId: string, entitlement: Entitlement) {
+export function usageSql(ownerId: string, entitlement: Entitlement) {
   const { periodStart, periodEnd } = entitlement;
   const inPeriod =
     periodStart && periodEnd
@@ -245,6 +260,12 @@ export async function settleReservation(
   outcome: "succeeded" | "released",
 ): Promise<void> {
   if (!ingestEventId) return;
+  /* **The one `sql.raw` in this file, and it can only ever be one of two
+     literals.** A column name cannot be a bind parameter, so it has to be
+     interpolated as text — which makes the closed union on `outcome` the thing
+     standing between this and an injection. It is not a string a caller
+     supplies, and it must never become one. `ingestEventId` beside it is an
+     ordinary parameter. */
   const column = outcome === "succeeded" ? sql.raw("succeeded_at") : sql.raw("released_at");
   await tx.execute(sql`
     update spideryarn.ingest_events
