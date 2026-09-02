@@ -33,10 +33,17 @@ article, 100 ingests for $10 loses about £90 a month per user who uses it. Greg
 
 > let's also add a $50 (and appropriate GBP) tier for 150 articles per month
 
-**Raising a quota later is one line** in `PAID_TIERS` — no Stripe object, no migration. Being
-generous later is cheap; being generous now is the expensive mistake to unwind. The currency
-reasoning, and the recipe for adding a tier, are in
-[billing.md](../project/billing.md#adding-a-tier-or-a-currency).
+**And then the tiers moved into the database entirely**, Greg's call the same evening:
+
+> instead of adding them as environment variables, could we add them to the database, so that it's
+> easier to modify (e.g. for agents, in UI, etc)
+
+He was offered ids-only, ids-and-quotas, or the whole table, with the costs of each stated, and
+took the whole table. So `billing_tiers` and `billing_tier_prices` are the source of truth, Stripe
+follows them, and **raising a quota is one `UPDATE`** — no deploy, no Stripe call, no migration.
+What that cost is the compile-time tier union and the invariant tests over constants; those moved
+into the schema as CHECKs, where they hold for every writer. The currency reasoning and the recipe
+are in [billing.md](../project/billing.md#adding-a-tier-or-a-currency).
 
 Cost-tracking and cost-estimating are **out of scope** — other agents are working on those. This
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota

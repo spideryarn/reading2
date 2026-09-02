@@ -17,14 +17,13 @@ import {
   expectedLivemode,
   isLiveSecret,
   isTestSecret,
-  priceIdFor,
   resetStripeClientForTests,
   stripeClient,
   stripeConfigProblem,
   stripeConfigured,
 } from "../src/billing/stripe.js";
 
-const KEYS = ["STRIPE_SECRET_KEY", "STRIPE_PRICE_READER", "STRIPE_PRICE_RESEARCHER", "VERCEL_ENV"] as const;
+const KEYS = ["STRIPE_SECRET_KEY", "VERCEL_ENV"] as const;
 const SAVED = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 
 /** Fake keys with the real prefixes; nothing here ever reaches Stripe. */
@@ -164,24 +163,8 @@ describe("the client and the price", () => {
     expect(stripeClient()).not.toBe(first);
   });
 
-  it("refuses a checkout with no price rather than an empty basket", () => {
-    setEnv({ STRIPE_SECRET_KEY: TEST_KEY });
-    expect(() => priceIdFor("reader")).toThrow(/STRIPE_PRICE_READER is not set/);
-    setEnv({ STRIPE_SECRET_KEY: TEST_KEY, STRIPE_PRICE_READER: " price_abc " });
-    expect(priceIdFor("reader")).toBe("price_abc");
-  });
-
-  /* Each tier reads its own variable, and one being configured says nothing
-     about the other — a deployment can sell Reader and not Researcher. */
-  it("names the missing variable for the tier that is missing it", () => {
-    setEnv({ STRIPE_SECRET_KEY: TEST_KEY, STRIPE_PRICE_READER: "price_r" });
-    expect(() => priceIdFor("researcher")).toThrow(/STRIPE_PRICE_RESEARCHER is not set/);
-    setEnv({
-      STRIPE_SECRET_KEY: TEST_KEY,
-      STRIPE_PRICE_READER: "price_r",
-      STRIPE_PRICE_RESEARCHER: "price_s",
-    });
-    expect(priceIdFor("reader")).toBe("price_r");
-    expect(priceIdFor("researcher")).toBe("price_s");
-  });
+  /* **There is no price lookup here any more.** Price ids live on
+     `billing_tiers` rows since 2026-09-02, so `STRIPE_PRICE_*` is gone and this
+     file is purely about the client and the mode guard. See
+     tests/billing-tiers.test.ts. */
 });

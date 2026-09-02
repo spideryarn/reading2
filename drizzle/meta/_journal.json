@@ -414,6 +414,20 @@
       "when": 1788370118538,
       "tag": "20260902172838_billing_owner_and_event_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788372592443,
+      "tag": "20260902180952_billing_tiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788372604824,
+      "tag": "20260902181004_seed_billing_tiers",
+      "breakpoints": true
     }
   ]
 }
