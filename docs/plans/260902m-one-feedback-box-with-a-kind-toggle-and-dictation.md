@@ -198,19 +198,44 @@ independently, about twenty minutes later.
       guard on both send paths, and the effect that stops the microphone when the dialog shuts.
 - [x] Three tests, and **each one watched to fail** with its guard removed before it was kept.
 
-### Stage 4 — check it, review it, ship it
+### Stage 4 — check it, review it, ship it ✅ (bar the deploy)
 
 - [x] `npm test` and `npm run typecheck` (the five reds are the shared tree's, not this change's —
       `store-ai-calls`, `pdf-bundle-trace`, `auth-user-seeding`, `pdf-chunk-concurrency`,
       `store-jobs-parity` and friends fail the same way on `origin/dev` here).
-- [ ] Browser pass in a Sonnet subagent against `npm run dev`: the dialog, the toggle, the
-      disclosure, a report filed, and the row's `kind`. The microphone permission dialog is browser
-      chrome and cannot be granted by an automated session
-      ([dictation.md](../project/dictation.md) § What a browser pass could and could not check).
-- [ ] Update [feedback.md](../project/feedback.md) and [dictation.md](../project/dictation.md) (the
-      count of boxes with a microphone becomes six).
-- [ ] GPT Sol code review of the diff; act on the findings.
-- [ ] Commit and push to `dev`.
+- [x] Browser pass in a Sonnet subagent, Playwright against system Chrome on the box. It reads as
+      one panel; the toggle starts on neither, presses, un-presses and moves; a report with a kind
+      landed as `kind: "suggestion"` and one sent without touching the toggle landed as `NULL`; no
+      console errors; nothing overflows inside the dialog at 380px. **One thing worth recording for
+      next time**: the microphone does not sit at *"Opening the microphone…"* on that box, it fails
+      fast with `[mic-no-start]`, because headless Chrome there has no microphone device at all —
+      so the permission prompt this doc expected never appears.
+- [x] Update [feedback.md](../project/feedback.md) and [dictation.md](../project/dictation.md) (six
+      boxes with a microphone now, and the `armed` guard written down where the next box will look).
+- [x] GPT Sol code review of the diff —
+      [the prompt](260902m-one-feedback-box-with-a-kind-toggle-and-dictation-code-review-prompt.md),
+      [the answer](260902m-one-feedback-box-with-a-kind-toggle-and-dictation-code-review-sol.md).
+      Four findings, three real, all fixed with a test watched failing first: the `jobs` table
+      missing from the snapshot chain (so the next `generate` would re-emit `0052` and fail), a
+      character counter the Send button did not enforce, two same-id sends able to settle out of
+      order, and `[fb-shape]` deciding a request's shape on its values rather than its keys.
+- [x] Commit and push to `dev`.
 - [ ] **Greg**: `npm run deploy`, which is what applies these two migrations to production.
 - [ ] **Somebody**: reconcile with the unlanded `/admin/feedback` work — see § What this collides
       with.
+
+### Three reds on `dev` that are not this change, found while checking it
+
+Written down because each one is somebody's, and none of them is visible from the work that caused
+it:
+
+- **`docs/project/website-text.md` is claimed by an entry-point doc and does not exist**, so
+  `tests/doc-links.test.ts` has been failing since it landed.
+- **`feedback_route_kind` in [`src/db/schema.ts`](../../src/db/schema.ts) admits `'privacy'`** and
+  `FEEDBACK_ROUTE_KINDS` in `src/types.ts` does not, and no migration carries it — added in
+  `fcb8b9a`. Harmless today (nothing can send it, and the drift test only walks the *smaller* list),
+  and it is what the next `db:generate` will emit.
+- **`tests/store-realtime-sessions.test.ts` fails on a foreign key**: its fixture owner is not in
+  `auth.users`. That is newly *visible* rather than newly broken — `20260902150952` had been
+  committed to `dev` without ever being applied to the shared local Postgres, so until this branch
+  applied it the table did not exist at all.

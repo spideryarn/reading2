@@ -5049,6 +5049,12 @@ async function transcribeDictation(
  * field at all in which to write a content type or a filename for the
  * screenshot.
  */
+/**
+ * The three fields the dialog sent before 2026-09-02, named once so that the
+ * allowlist and the shape check cannot disagree about what "the old shape" is.
+ */
+const LEGACY_ANSWER_FIELDS = ["steps", "expected", "actual"] as const;
+
 const FEEDBACK_FIELDS = [
   "id",
   "body",
@@ -5059,9 +5065,7 @@ const FEEDBACK_FIELDS = [
      reader is trying to report — so they are folded into `body` rather than
      refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
      old bundles are certainly gone. */
-  "steps",
-  "expected",
-  "actual",
+  ...LEGACY_ANSWER_FIELDS,
   "consented",
   "routeKind",
   "slug",
@@ -5133,6 +5137,17 @@ function feedbackAnswer(value: unknown, field: string): string | null {
  * making something up, and there would be no right answer about which to keep.
  */
 function feedbackBody(sent: Record<string, unknown>): string {
+  /* **Which shape this is, decided on the keys and before any value is looked
+     at.** The first version asked whether each field held text, so
+     `{body: null, steps: "…"}` — both vocabularies, one of them empty — was
+     read as a well-formed old client rather than as the muddle it is. A shape
+     is a set of keys. GPT Sol's code review, 2026-09-02. */
+  const hasBody = Object.hasOwn(sent, "body");
+  const hasLegacy = LEGACY_ANSWER_FIELDS.some((key) => Object.hasOwn(sent, key));
+  if (hasBody && hasLegacy) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+
   const written = feedbackAnswer(sent.body, "body");
   const steps = feedbackAnswer(sent.steps, "steps");
   const expected = feedbackAnswer(sent.expected, "expected");
@@ -5142,9 +5157,6 @@ function feedbackBody(sent: Record<string, unknown>): string {
     expected === null ? null : `What you expected to see:\n${expected}`,
     actual === null ? null : `What you saw instead:\n${actual}`,
   ].filter((part): part is string => part !== null);
-  if (written !== null && legacy.length > 0) {
-    throw httpError(400, "A report mixes two request shapes [fb-shape]");
-  }
   const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
   /* The database says the same thing — `body` is `not null` — and this is the
      half that gets to explain itself. A `kind` on its own is not a report: it is
