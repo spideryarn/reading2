@@ -310,7 +310,8 @@ export function postgresBlobStore(who: string): RawSourceStore {
       `${who}, but there is no Supabase Storage configured — SUPABASE_URL and ` +
         "SUPABASE_SERVICE_ROLE_KEY must both be set. The article rows are in Postgres, " +
         "and their source documents would be read from and written to data/_blobs/ on " +
-        "this machine, where nothing else can find them. See src/store/blobs.ts.",
+        "this machine, where nothing else can find them. Locally: npm run db:start, then " +
+        "these come from .env.local. See src/store/blobs.ts.",
     );
   }
 

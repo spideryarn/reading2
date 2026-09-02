@@ -343,9 +343,12 @@ and which two are courtesies.
 - **The ingest queue is not in Postgres.** `data/_jobs/` is on disk. It carries an owner now and is
   filtered by it, but `jobs.owner_id` in the schema is still unused and the queue does not work on
   Vercel at all — there is no writable disk.
-- **`SPIDERYARN_STORE=files` has no isolation at all**, and unset still means `files`. The production
-  boot refusal in [`src/store/index.ts`](../../src/store/index.ts) is the whole of the mitigation, so
-  on any non-production host two signed-in readers share the complete library, profile, comments,
+- **`SPIDERYARN_STORE=files` has no isolation at all**, and unset still means `files` for a CLI
+  script, a test, or anything that does not go through `npm run dev` — which itself now defaults to
+  `postgres`, since 2026-09-02. So reaching `files` on a laptop today needs it said explicitly,
+  in `.env.local` or the shell. The production boot refusal in
+  [`src/store/index.ts`](../../src/store/index.ts) is the whole of the mitigation on that path, so
+  two signed-in readers who both land on `files` share the complete library, profile, comments,
   chat and searches. Authentication does not make that configuration multi-user-safe, and nothing
   short of moving the filesystem store to per-owner directories would.
 - **Child rows are trusted to match their article.** Comments, chat threads, searches and lookups are

@@ -316,6 +316,13 @@ describe("the environment a deployment needs", () => {
        cannot change what these tests mean. */
     vi.stubEnv("NODEJS_HELPERS", "0");
     vi.stubEnv("VERCEL", "");
+    /* Payments. `VERCEL_ENV` is what decides which Stripe mode is correct
+       (src/billing/stripe.ts), so it is pinned here for the same reason as
+       `VERCEL` above: otherwise a machine that has it set changes what every
+       test in this block means. */
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture");
+    vi.stubEnv("STRIPE_PRICE_READER", "price_fixture");
   }
 
   /** Only the warnings, since ssl and store have their own tests above. */
@@ -518,6 +525,84 @@ describe("the environment a deployment needs", () => {
 
     expect(said).toContain("VITE_SUPABASE_URL");
     expect(said).toMatch(/blank page/i);
+  });
+
+  /**
+   * **The variable whose *presence* is the danger, so the usual pair of tests
+   * is the wrong pair.**
+   *
+   * Everything else in this block is warned about when it is missing. Stripe is
+   * the other way round: a deployment with no payments configured is fine and
+   * must stay quiet, while a key from the wrong *mode* is set, non-empty, and
+   * catastrophic — production on `sk_test_…` takes card `4242…`, writes
+   * `active` subscription rows and grants real quota, with every "is it set"
+   * line green (docs/reusable/silent-success.md). So `breaks` is null and
+   * `valid` does the work, which is why `checkEnv` checks `valid` even when
+   * there is no `breaks`.
+   */
+  it("stays quiet about a deployment that simply has no payments", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    vi.stubEnv("STRIPE_PRICE_READER", "");
+
+    const answer = await call("GET");
+
+    expect(warningsFrom(answer)).toEqual([]);
+    expect(answer.body.ok).toBe(true);
+    /* Still *reported*, so an operator can see it is unset without guessing. */
+    expect(Object.keys(answer.body.env as Record<string, boolean>)).toContain("STRIPE_SECRET_KEY");
+  });
+
+  it("refuses a TEST-mode Stripe key on the production deployment", async () => {
+    completeEnv();
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_wouldacceptfakecards");
+
+    const answer = await call("GET");
+    const said = warningsFrom(answer).join(" ");
+
+    expect(said).toContain("STRIPE_SECRET_KEY");
+    expect(said).toMatch(/test cards/);
+    expect(answer.body.ok).toBe(false);
+    /* The value is a credential; only its prefix was ever read. */
+    expect(said).not.toContain("sk_test_wouldacceptfakecards");
+  });
+
+  it("refuses a LIVE-mode Stripe key anywhere else", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_wouldchargerealcards");
+
+    const answer = await call("GET");
+    const said = warningsFrom(answer).join(" ");
+
+    expect(said).toContain("STRIPE_SECRET_KEY");
+    expect(answer.body.ok).toBe(false);
+    expect(said).not.toContain("sk_live_wouldchargerealcards");
+  });
+
+  /**
+   * The failure the mode-independent wording exists to prevent. `EXPECTED` is
+   * a module-level constant, so anything computed in it is frozen at import;
+   * the first version built `must` from `expectedLivemode()` and therefore
+   * told a production operator to install a *test* key, because this test file
+   * imports the module with `VERCEL_ENV` unset. Detection was right and the
+   * instruction was backwards, which is the worse of the two halves to get
+   * wrong.
+   */
+  it("gives the same instruction whichever mode the key was wrong in", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_x");
+    const outside = warningsFrom(await call("GET")).join(" ");
+
+    completeEnv();
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_x");
+    const inside = warningsFrom(await call("GET")).join(" ");
+
+    expect(outside).toContain("sk_live_… in production");
+    expect(inside).toContain("sk_live_… in production");
   });
 
   /* The regression guard proper: this is the literal response production

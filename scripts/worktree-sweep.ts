@@ -43,58 +43,82 @@
  * false for work that had definitely landed, and this whole tool would be
  * wrong — docs/project/worktrees.md § The workflow.
  *
- * ## Its overlap with `worktree:check`, which is real and deliberate
+ * ## It does not decide whether a tree holds work — `worktree:check` does
  *
- * `scripts/worktree-check.ts` answers *is it safe to delete this directory?* for
- * **one** tree, from inside it, and it answers it better than this file does on
- * the axis that matters most: it reads **gitignored** state. `data/` and
- * `output/` are gitignored, so a pipeline run that cost money is invisible to
- * the `git status` below, however many flags it is given.
+ * [`scripts/worktree-check.ts`](./worktree-check.ts) answers *is it safe to
+ * delete this directory?* for one tree, and it answers it far better than a
+ * `git status` here could: it reads **gitignored** state. `data/` and `output/`
+ * are gitignored, so a pipeline run that cost money is invisible to any number
+ * of `git status` flags. It also catches a half-finished merge, tracked edits
+ * hidden by `assume-unchanged`, and an `.env.local` that differs from the
+ * primary's.
  *
- * **So this file is not the authority on whether a tree holds work, and must not
- * become it.** The per-tree judgement belongs in `blockers()` over there; what
- * belongs here is the part that file deliberately refuses — enumerating every
- * tree, the age floor, ghosts, and the removal itself. The two should meet:
- * `classifyOne` should take that verdict rather than re-deriving a weaker one.
- * It does not yet only because `worktree-check.ts` was still uncommitted in the
- * shared tree when this landed, and importing an untracked file would have
- * broken every other checkout. Wire it up when it lands; until then, treat a
- * `removable` here as "git can see nothing", not as "nothing is here", and run
- * `npm run worktree:check` inside the tree before believing it.
+ * So this file calls `blockers(gather(path))` and **has no dirty or merged
+ * check of its own**. The earlier version kept cheap ones as a fast pre-filter;
+ * that was deleted rather than kept, because a cheaper duplicate of a safety
+ * judgement is one whose disagreements with the real judgement are invisible by
+ * construction — the shape in docs/reusable/silent-success.md. Once the fetch is
+ * hoisted (below) it saved nothing anyway.
+ *
+ * What stays here is what that file's one-tree contract has no business
+ * holding: enumerating every worktree, ghosts, "you are standing in it", the age
+ * floor, and the removal itself. `worktree:check` saying "not safe" inside a
+ * three-hour-old landed tree would be false for the person standing in it.
+ *
+ * ## One fetch, not one per tree
+ *
+ * `gather()` fetches the trunk for itself, which is right for one tree and
+ * quadratic-feeling across thirty: one shared ref, fetched thirty times,
+ * serially, over the network. So the sweep calls `fetchTrunkSha` **once** and
+ * passes the sha down. A sha and not a ref name — a ref can be moved under us by
+ * any peer in any worktree between the fetch and the test, which is the hazard
+ * `FETCH_HEAD` was chosen to dodge; a sha cannot move. A failed central fetch
+ * becomes `trunk: unknown` for every tree, which `blockers()` already treats as
+ * unsafe, so failing closed survives the optimisation.
  *
  * ## Where the independent check is
  *
- * Our own guards decide *merged* and *recent*. We do not let them decide
- * *unsaved work*: removal unlocks the worktree and then runs a plain
- * `git worktree remove`, with no `--force`, so **git refuses a dirty tree on its
- * own terms** rather than agreeing with a check that shares our assumptions —
- * docs/reusable/silent-success.md.
+ * Removal unlocks the worktree and then runs a plain `git worktree remove`, with
+ * no `--force`, so **git refuses a dirty tree on its own terms** rather than
+ * agreeing with a check that shares our assumptions.
+ *
+ * Its limit, because an overstated backstop is worse than none: git refuses on
+ * modified and untracked files, **not on ignored ones**. For the case that costs
+ * the most — a pipeline run in a gitignored `data/` — `blockers()` is the only
+ * guard, and this second pair of eyes is blind.
  */
 
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
-import { TRUNK_FETCH_TIMEOUT_MS } from "./worktree-freshen.js";
 import { forceRemoveThrowawayWorktree, listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
+/* `gather` is aliased: this file has one of its own, and two functions of the
+   same name at one seam is how the wrong one gets called. */
+import { blockers, type CheckFacts, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
 
 /** A worktree is never removable while it has been touched this recently. */
 export const MIN_IDLE_HOURS = 24;
 
-/** Everything the classifier is allowed to look at, gathered by `gather()`. */
+/** Everything the classifier is allowed to look at, gathered by `gatherAll()`. */
 export interface SweepFacts {
   entry: WorktreeEntry;
   /** `entry.branch` without its `refs/heads/` prefix, which is how git's
       porcelain spells it and is not what anyone types on a command line. */
   branch: string | undefined;
-  /** Uncommitted paths, untracked included. `null` when git could not be asked. */
-  dirty: string[] | null;
-  /** Is the branch an ancestor of the trunk? `null` when it could not be decided. */
-  merged: boolean | null;
   /** Unix seconds of the later of: HEAD's commit, the branch's reflog top. */
   lastActivity: number | null;
   /** Are we standing in it? */
   current: boolean;
+  /**
+   * `worktree:check`'s facts for this tree, or why they could not be got.
+   *
+   * There is deliberately no `dirty` or `merged` beside this. Keeping cheap
+   * copies of those was the first design, and the type is what now makes it
+   * impossible to consult one by accident.
+   */
+  check: CheckFacts | { error: string };
 }
 
 export type Verdict =
@@ -105,24 +129,29 @@ export type Verdict =
   /** Every guard passed. */
   | { kind: "removable" }
   /** Keep it, and here is each reason. */
-  | { kind: "keep"; reasons: string[] };
+  | { kind: "keep"; reasons: string[] }
+  /**
+   * Could not be judged at all. Never removable, and never dropped from the
+   * report — a tree that silently vanishes from the list is the failure mode
+   * where success is the absence of something.
+   */
+  | { kind: "unjudgeable"; why: string };
 
 export interface ClassifyOptions {
   /** Unix seconds. Injected so the age guard is testable. */
   now: number;
-  /** Did the fetch of the trunk succeed? When false, nothing with work is removable. */
-  trunkFetched: boolean;
   minIdleHours?: number;
 }
 
 /**
  * One worktree's verdict, from facts alone.
  *
- * Order matters. `skip` and `ghost` come before the trunk guard because neither
- * depends on the trunk: the primary is never a candidate, and a registration
- * whose directory is gone holds nothing that could be lost. Everything after
- * that is a reason to keep, and they accumulate rather than short-circuit — an
- * agent reading the output wants all of them, not the first one.
+ * Order matters. `skip` and `ghost` come first because neither depends on
+ * anything having been read successfully: the primary is never a candidate, and
+ * a registration whose directory is gone holds nothing that could be lost.
+ *
+ * Everything after that is a reason to keep, and they accumulate rather than
+ * short-circuit — an agent reading the output wants all of them, not the first.
  */
 export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
   const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
@@ -130,22 +159,13 @@ export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
   if (f.entry.main) return { kind: "skip", why: "the primary checkout" };
   if (f.entry.bare) return { kind: "skip", why: "a bare entry, which has no working tree" };
   if (!f.entry.present || f.entry.prunable) return { kind: "ghost" };
+  if ("error" in f.check) return { kind: "unjudgeable", why: f.check.error };
 
-  const reasons: string[] = [];
+  /* The whole "does this hold work" judgement, in one call, made by the file
+     that reads gitignored state. See the header. */
+  const reasons = blockers(f.check).map((b) => b.why);
 
-  if (!opts.trunkFetched) {
-    reasons.push(`could not read origin/${TRUNK_BRANCH} — refusing rather than assuming it agrees`);
-  }
   if (f.current) reasons.push("you are standing in it");
-  if (f.branch === undefined) {
-    reasons.push("detached HEAD — there is no branch to compare with the trunk");
-  }
-  if (f.dirty === null) reasons.push("could not read its working tree");
-  else if (f.dirty.length > 0) {
-    reasons.push(`${f.dirty.length} uncommitted change${f.dirty.length === 1 ? "" : "s"}, untracked included`);
-  }
-  if (f.merged === null) reasons.push(`could not tell whether it is merged into origin/${TRUNK_BRANCH}`);
-  else if (!f.merged) reasons.push(`not merged into origin/${TRUNK_BRANCH} — its work has not landed`);
 
   if (f.lastActivity === null) reasons.push("could not tell when it was last active");
   else {
@@ -173,20 +193,6 @@ function tryGit(args: string[], cwd?: string): string | null {
   return r.status === 0 ? `${r.stdout ?? ""}`.trim() : null;
 }
 
-/**
- * Fetch the trunk. Returns false rather than throwing, so the caller fails
- * closed — and takes the same timeout as `worktree:setup`'s fetch, because a
- * sweep that hangs is a sweep nobody runs. See `TRUNK_FETCH_TIMEOUT_MS`.
- */
-export function fetchTrunk(cwd: string): boolean {
-  const r = spawnSync("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"], {
-    cwd,
-    encoding: "utf8",
-    timeout: TRUNK_FETCH_TIMEOUT_MS,
-  });
-  return r.status === 0;
-}
-
 /** The worktree the process is standing in, resolved the way git reports paths. */
 function currentToplevel(cwd: string): string | null {
   const top = tryGit(["rev-parse", "--show-toplevel"], cwd);
@@ -200,26 +206,21 @@ export function shortBranch(ref: string | undefined): string | undefined {
 }
 
 /**
- * Is `branch` contained in the trunk?
+ * When this tree was last touched: the latest of three signals, because each
+ * one alone reports a live worktree as long idle.
  *
- * Exit 0 is ancestor and 1 is not; **anything else is a failure to answer** and
- * becomes `null`. Collapsing that into `false` would be safe here but dishonest
- * elsewhere, and collapsing it into `true` would delete work.
- */
-function mergedIntoTrunk(wt: string, branch: string | undefined, trunkSha: string | null): boolean | null {
-  if (trunkSha === null || branch === undefined) return null;
-  const r = spawnSync("git", ["merge-base", "--is-ancestor", branch, trunkSha], { cwd: wt });
-  return r.status === 0 ? true : r.status === 1 ? false : null;
-}
-
-/**
- * When this tree was last touched: the later of HEAD's commit date and the last
- * move of its branch ref.
+ * - **HEAD's commit date** is the obvious one and the weakest. A fast-forward
+ *   merge writes no commit, so HEAD's date is the date of whatever trunk commit
+ *   it landed on — a week old, in a worktree created a minute ago.
+ * - **The branch reflog's top entry** fixes that: it moves when the branch is
+ *   created and on every merge, fast-forward included.
+ * - **The worktree's git admin dir**, `.git/worktrees/<name>`, is the fallback
+ *   for a **detached** worktree, which has no branch and therefore no branch
+ *   reflog at all. Without it a detached tree checked out from an old commit is
+ *   born looking abandoned — the trap in worktrees.md § Traps, arriving through
+ *   the one door the reflog does not cover.
  *
- * The reflog entry is the load-bearing half. A fast-forward merge writes no
- * commit, so HEAD's date is the date of whatever trunk commit it landed on —
- * which can be a week old in a worktree created a minute ago. The branch ref
- * moves on creation and on every merge, fast-forward included.
+ * `null` only when all three fail, which is itself a keep.
  */
 function lastActivityAt(wt: string, branch: string | undefined): number | null {
   const times: number[] = [];
@@ -231,29 +232,55 @@ function lastActivityAt(wt: string, branch: string | undefined): number | null {
     const n = out === null ? Number.NaN : Number.parseInt(out, 10);
     if (Number.isFinite(n)) times.push(n);
   }
+
+  const adminDir = tryGit(["rev-parse", "--absolute-git-dir"], wt);
+  if (adminDir !== null) {
+    try {
+      times.push(Math.floor(statSync(adminDir).mtimeMs / 1000));
+    } catch {
+      /* Gone or unreadable; the other signals stand, and no signal is a keep. */
+    }
+  }
+
   return times.length === 0 ? null : Math.max(...times);
 }
 
-export function gather(cwd: string, entries: readonly WorktreeEntry[]): SweepFacts[] {
+/**
+ * Facts for every registered worktree, against one trunk sha fetched once.
+ *
+ * `checkFor` is injected so the awkward cases — a tree whose gather throws —
+ * can be arranged in a test without corrupting a real repository.
+ */
+export function gatherAll(
+  cwd: string,
+  entries: readonly WorktreeEntry[],
+  trunk: TrunkSha,
+  checkFor: (root: string, trunkSha: string) => CheckFacts = checkGather,
+): SweepFacts[] {
   const here = currentToplevel(cwd);
-  const trunkSha = tryGit(["rev-parse", `origin/${TRUNK_BRANCH}`], cwd);
 
   return entries.map((entry) => {
     const branch = shortBranch(entry.branch);
     const current = here !== null && path.resolve(entry.path) === here;
+    const base = { entry, branch, current };
+
     if (entry.main || entry.bare || !entry.present) {
-      return { entry, branch, dirty: null, merged: null, lastActivity: null, current };
+      return { ...base, lastActivity: null, check: { error: "not a live worktree" } };
+    }
+    if (trunk.kind === "failed") {
+      return { ...base, lastActivity: lastActivityAt(entry.path, branch), check: { error: trunk.why } };
     }
 
-    const status = tryGit(["status", "--porcelain", "--untracked-files=all"], entry.path);
-    return {
-      entry,
-      branch,
-      dirty: status === null ? null : status === "" ? [] : status.split("\n"),
-      merged: mergedIntoTrunk(entry.path, branch, trunkSha),
-      lastActivity: lastActivityAt(entry.path, branch),
-      current,
-    };
+    /* One tree's failure must not cost the operator the other twenty-nine
+       answers, and `gather` can throw for real: its directory walk meets
+       EACCES, or a peer deletes a directory underneath it mid-walk. */
+    let check: CheckFacts | { error: string };
+    try {
+      check = checkFor(entry.path, trunk.sha);
+    } catch (err) {
+      check = { error: `worktree:check could not judge this tree: ${(err as Error).message}` };
+    }
+    return { ...base, lastActivity: lastActivityAt(entry.path, branch), check };
   });
 }
 
@@ -263,12 +290,14 @@ export interface Classified {
 }
 
 export function classifyAll(cwd: string, opts?: { now?: number; minIdleHours?: number }): Classified[] {
-  const trunkFetched = fetchTrunk(cwd);
-  const facts = gather(cwd, listWorktrees(cwd));
+  /* Once, for the whole sweep. See the header: `gather()` fetches for itself,
+     which across thirty worktrees is one shared ref fetched thirty times. */
+  const trunk = fetchTrunkSha(cwd);
+  const facts = gatherAll(cwd, listWorktrees(cwd), trunk);
   const now = opts?.now ?? Math.floor(Date.now() / 1000);
   return facts.map((f) => ({
     facts: f,
-    verdict: classifyOne(f, { now, trunkFetched, ...(opts?.minIdleHours === undefined ? {} : { minIdleHours: opts.minIdleHours }) }),
+    verdict: classifyOne(f, { now, ...(opts?.minIdleHours === undefined ? {} : { minIdleHours: opts.minIdleHours }) }),
   }));
 }
 
@@ -308,6 +337,11 @@ export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean
   if (row.verdict.kind === "keep") {
     steps.push("refused, re-checked just now:");
     for (const r of row.verdict.reasons) steps.push(`  ${r}`);
+    return { ok: false, steps };
+  }
+  if (row.verdict.kind === "unjudgeable") {
+    steps.push("refused: this tree could not be judged, and unknown counts as unsafe");
+    steps.push(`  ${row.verdict.why}`);
     return { ok: false, steps };
   }
 
@@ -371,6 +405,12 @@ export function renderClassification(rows: readonly Classified[]): string {
       case "keep":
         lines.push(`  keep      ${name}`);
         for (const r of verdict.reasons) lines.push(`              ${r}`);
+        break;
+      /* Louder than a keep on purpose: an ordinary keep is the tool working,
+         and this is the tool admitting it does not know. */
+      case "unjudgeable":
+        lines.push(`  UNKNOWN   ${name} — kept, because this could not be judged`);
+        lines.push(`              ${verdict.why}`);
         break;
     }
   }

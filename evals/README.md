@@ -401,6 +401,26 @@ known product gap, not this eval's to fix. And the heading rule's thresholds wer
 dev corpus** — `--sensitivity` prints the carving at 0/10/20/40 stub words, and held-out documents
 judge the rule as it stands, never re-tuned.
 
+## `cost/` — what does one article actually cost us?
+
+**Not runnable yet**; the plan is
+[260902g](../docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md). Two
+pieces of it are already here and are worth reading before anybody re-derives them:
+
+- **`baseline/`** — what the ledgers we already had could be made to say, with the scripts that
+  say it. Every figure reproduces (`final-numbers.py`); the reproduction command is at the top of
+  `stage1-baseline.md`. Headline: an ingest plus first open is **$0.099** on a 2,500-word article
+  and **$0.61** on a 21,000-word one, and **a third of all the AI spend in our history was
+  duplicate execution** from a bug since fixed.
+- **`feasibility.md`** — how an eval drives the *production* queue and still keeps its spend out
+  of the Product bucket, without changing the cost machinery: wrap each step's `run` in
+  `withSpendAttribution({ scopeKind: "eval" })`. It also records the trap that `enqueue`'s
+  `pump()` will run the job with the production registry and silently ignore your overlay.
+
+The rule the rest of this file already follows applies double here: **eval rows are excluded from
+`npm run cost` by design**, so a cost eval has to report its own spend rather than read it out of
+the product report.
+
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
 ```

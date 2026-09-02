@@ -1385,8 +1385,9 @@ Five things about it are worth knowing before touching it.
   lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
   request ran `fetch` and handed the claim back holds that work in the draft, so the second request
   can skip the step and still publish it.
-- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session
-  is the filesystem one and behaves exactly as it always has: no draft, no publication, no database.
+- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop where the flag is `files` — set
+  explicitly, since `npm run dev` itself now defaults to `postgres` — the session is the filesystem
+  one and behaves exactly as it always has: no draft, no publication, no database.
   [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
   claim, and it proves it by taking `DATABASE_URL` away.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Two doors reach
