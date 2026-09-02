@@ -37,26 +37,14 @@ import { escapeHtml, headText } from "../html.js";
 import { DEFAULT_MODE, type Mode } from "../modes.js";
 import type { ArticleView } from "../read-address.js";
 import { APP_NAME, documentTitle } from "../title-text.js";
-import { safePublicCanonical } from "../urls.js";
+import { articleUrl, safePublicCanonical } from "../urls.js";
 import type { PublicHead } from "../store/public-reader.js";
 
-/**
- * **The production origin, written down rather than taken from the request.**
- *
- * `og:url` is published metadata: whatever goes in it is what a link preview,
- * a scraper and a search engine record as this article's address. Building it
- * from the `Host` header — or from `X-Forwarded-Host`, which is the version
- * that looks more careful — hands that choice to whoever sent the request. A
- * stranger can send any `Host` they like to an edge function, and the reply
- * would then contain their domain, attributed to us, in a tag whose entire
- * purpose is to be believed.
- *
- * So it is a constant. This is exactly the kind of line somebody later
- * "improves" into a header read so that preview deployments unfurl with their
- * own hostname; the cost of that convenience is above, and a preview
- * deployment's link previews are not worth it.
- */
-export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
+/* `PUBLIC_ORIGIN` was defined here, with the argument for why it is a constant
+   rather than a `Host` header. Both are in src/urls.ts since 2026-09-02, when
+   the export bundle became the second caller and a store file had no business
+   importing a page renderer to get an address. `articleUrl` composes it. */
+
 
 /**
  * **The `<title>` and the `og:title` are two different strings, on purpose.**
@@ -243,7 +231,7 @@ function tags(head: PublicHead, mode: Mode, view: ArticleView): string[] {
      same word twice. */
   out.push(meta("property", "og:title", cardTitle));
   if (description) out.push(meta("property", "og:description", description));
-  out.push(meta("property", "og:url", `${PUBLIC_ORIGIN}/read/${encodeURIComponent(head.slug)}`));
+  out.push(meta("property", "og:url", articleUrl(head.slug)));
   /* `summary`, not `summary_large_image`. There is no image in this slice —
      a third-party lead image would be an endorsement, a privacy contact and
      another untrusted `src` sink — and `summary_large_image` without one

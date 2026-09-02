@@ -59,7 +59,7 @@ import {
 } from "./article-rows.js";
 import { escapeHtml, normaliseText } from "../html.js";
 import { log } from "../log.js";
-import { isWebUrl } from "../urls.js";
+import { articleUrl, isWebUrl } from "../urls.js";
 
 const logger = log("store");
 
@@ -318,6 +318,25 @@ function manifestJson(
        here would lose whichever one lost. */
     title: revision.title,
     url: revision.finalUrl ?? revision.requestedUrl,
+    /* **Two different addresses, and the pair is the point.** `url` above is
+       where the article came from; this is where it lives on Spideryarn, with
+       every augmentation in this zip still attached to it. An importer that only
+       had `url` could find the piece again but not the reading of it, and a
+       person who kept the zip for a year would have no way back.
+
+       Composed rather than stored: `articleUrl` (src/urls.ts) is the one place
+       the path is spelled, and the origin is a constant there for the reason
+       that file gives.
+
+       **Written whatever the article's sharing state**, and that is safe rather
+       than merely convenient. Only the owner can download this zip
+       (`readArticleRows` scopes it), but they can forward it afterwards and a
+       private URL is not a capability — anyone holding the file already has the
+       article and the slug, and the address grants a stranger nothing. What it
+       is not is guaranteed to *work* for whoever opens it, so `README.md` says
+       plainly that it wants the account the export came from. GPT Sol,
+       2026-09-02. */
+    spideryarnUrl: articleUrl(article.slug),
     entries: [...entries].sort((a, b) => a.path.localeCompare(b.path)),
     omitted: omissions(),
   };
@@ -507,7 +526,8 @@ one thing that will make the rest of these files make sense.
     index.html             Open this first if you are a person rather than a program: the
                            article's title, what is in the zip, and how much of each. It is
                            an index, not a reader — it does not show you the article.
-    manifest.json          What this export is, when it was made, and what was left out.
+    manifest.json          What this export is, when it was made, what was left out, and the
+                           two addresses: the original's, and this article's on Spideryarn.
     article.json           The article on your shelf: your title for it, when you opened it,
                            your purpose for reading it, and whether it is shared.
     README.md              This file.
@@ -553,6 +573,22 @@ one thing that will make the rest of these files make sense.
 every file except itself, which cannot state its own size without changing it. \`index.html\`
 lists the same files for a person to read, minus itself and the manifest, for the same reason.
 
+## The two addresses
+
+\`manifest.json\` carries two URLs and they are not the same thing.
+
+- \`url\` is where the article came from: the publisher's page, as the fetcher finally landed on it.
+- \`spideryarnUrl\` is where this article lives on Spideryarn — \`https://www.spideryarn.com/read/<slug>\`
+  — with everything in this zip still attached to it, and more added since. Open that one to carry
+  on reading rather than to re-read. You will need to be signed in as the account this export came
+  from, unless the article has been shared publicly.
+
+\`index.html\` shows both, labelled.
+
+\`spideryarnUrl\` was added after the first exports were written, so treat it as optional: a
+format 1 manifest may have only \`url\`. The format number did not change, because nothing an
+importer already understood changed meaning.
+
 A file is absent when there is nothing in it. An article you never chatted about has no
 \`chat.json\`. That is not an error, and an importer should treat every file as optional —
 except \`index.html\`, \`manifest.json\`, \`article.json\`, \`README.md\`,
@@ -586,7 +622,7 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 ## What is not here, and why
 
 - **The original PDF or web page.** Deliberately left out — you already have the URL, in
-  \`manifest.json\`, and the original is easy to fetch again. What you get instead is
+  \`manifest.json\` as \`url\`, and the original is easy to fetch again. What you get instead is
   \`content/stamped.html\`, which is the version Spideryarn actually read.
 - **Image files.** \`content/assets.json\` names every image — its source URL, its content hash, its
   type and its size — but the image bytes themselves are not in this zip. The URLs in it are the
@@ -677,7 +713,7 @@ function safe(value: string): string {
  * map and the layout in step.
  */
 const FILE_NOTES: Readonly<Record<string, string>> = {
-  "manifest.json": "What this export is, when it was made, and what was left out.",
+  "manifest.json": "What this export is, when it was made, what was left out, and the two addresses \u2014 the original\u2019s and this article\u2019s on Spideryarn.",
   "article.json": "The article on your shelf: your title, your purpose, sharing state.",
   "README.md": "The format, file by file, for whoever writes an importer.",
   "index.html": "This page.",
@@ -862,12 +898,29 @@ function indexHtml(
      and this is a link a person clicks from a local file. `finalUrl` is where
      the fetcher actually landed; the escaping is the caller's job, done here. */
   const url = revision.finalUrl ?? revision.requestedUrl;
-  const link =
+  /* **Labelled, and it was not before.** One bare URL under a title reads fine;
+     two do not, and the reader cannot tell which of them is the publisher's and
+     which is ours. The label costs a word. */
+  const source =
     url && isWebUrl(url)
-      ? `<p class="sub"><a href="${safe(url)}" rel="noreferrer noopener nofollow">${safe(url)}</a></p>`
+      ? `<p class="sub">Original: <a href="${safe(url)}" rel="noreferrer noopener nofollow">${safe(url)}</a></p>`
       : url
-        ? `<p class="sub">${safe(url)}</p>`
+        ? `<p class="sub">Original: ${safe(url)}</p>`
         : "";
+
+  /* **The way back in** — Greg, 2026-09-02. A zip somebody keeps is read months
+     later, from a folder, with no memory of which article it was; without this
+     the only route back is searching the library for the title.
+
+     Unconditional, unlike `source` above, and it needs none of that line's
+     care: this string is composed by `articleUrl` (src/urls.ts) rather than
+     read from a row a website wrote, so there is no scheme to check — the only
+     untrusted part is the slug, and `encodeURIComponent` there plus `safe()`
+     here each handle it. `nofollow` would be wrong on our own address; the
+     `<meta name="referrer">` above already covers the rest, and `noreferrer`
+     stays for the browsers that honour the attribute and not the tag. */
+  const here = articleUrl(article.slug);
+  const back = `<p class="sub">On Spideryarn: <a href="${safe(here)}" rel="noreferrer">${safe(here)}</a></p>`;
 
   /* Joined rather than interpolated line by line, so an article with no byline
      and no URL leaves no blank lines behind in the file somebody opens. */
@@ -875,7 +928,8 @@ function indexHtml(
     `<p class="sub">Spideryarn export · ${safe(stampedTime(exportedAt))}</p>`,
     `<h1>${safe(title)}</h1>`,
     attribution ? `<p class="sub">${attribution}</p>` : "",
-    link,
+    back,
+    source,
   ]
     .filter(Boolean)
     .join("\n    ");
