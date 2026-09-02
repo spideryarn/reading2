@@ -4,21 +4,26 @@
 
 Know what one article costs us in AI spend — the full ingestion queue plus every AI-powered
 reading mode — for two or three representative articles (a ~1,000-word HTML page, a long/dense
-HTML article, a ~20-page PDF). Build it as a repeatable eval so we can run it again and compare
-models. Deliverables:
+HTML article, a ~20-page PDF). Build it as a repeatable eval so we can run it again; **model
+comparison requires the follow-up arms plan** (see the deferred stage at the end) — this plan
+delivers the baseline it would compare against. Deliverables:
 
-1. A **range** ("an article costs $X–$Y, with a tail to $Z"), per article shape.
+1. A **range** ("an article costs $X–$Y"), per article shape, with observed variation reported
+   where it lives (long-article hierarchy) rather than a claimed tail.
 2. A ranked list of **which bits are most expensive**.
 3. **Cost-reduction suggestions**, each with the product tradeoff it would require, named so Greg
    decides rather than inherits.
 
 This doc is the plan only (Greg, 2026-09-02: "For now, let's just write up a plan, with a review
-from GPT Sol, don't actually implement yet"). **Review round 1 is done**: GPT Sol returned
+from GPT Sol, don't actually implement yet"). **Reviewed twice by GPT Sol.** Round 1 returned
 *rework* with three blockers
 ([review](260902g-estimate-article-ingestion-and-mode-generation-costs-review-sol.md)); every
-blocker was verified against the code/ledger and confirmed, and this version folds them in. The
+blocker was verified against the code/ledger and confirmed, and this version folds them in — the
 biggest: what looked like a truncation-retry tail was actually **concurrent duplicate execution
-of one job** — see Context below.
+of one job** (see Context). Round 2 returned *approve with changes*
+([review 2](260902g-estimate-article-ingestion-and-mode-generation-costs-review-sol-2.md)), all
+applied — including its one substantive catch, that slug-attributed eval runs would land in
+`npm run cost`'s Product bucket.
 
 Other agents are concurrently building payments machinery and cost-tracking; this work reads the
 cost-tracking machinery and must not modify it.
@@ -168,7 +173,11 @@ The runner design has to answer three couplings before any money moves (Sol bloc
       requires agreeing the seam with the cost-tracking agents — or (b) an eval coordinator that
       faithfully does session begin/run/commit itself (probably over-built; say why if chosen).
       Also possible: attribute by run-prefixed slug + `job_step` rows rather than by
-      `scopeKind: "eval"` at all — evaluate this first, it may need no seam.
+      `scopeKind: "eval"` at all — evaluate this first, but note it solves attribution only:
+      slugged `job_step` rows are still classified as **Product spend** by
+      [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). **Acceptance criterion: eval spend must
+      not land in the Product bucket of `npm run cost`** — which may still require a coordinated
+      seam or a reporting change agreed with the cost-tracking agents (Sol round 2).
 - [ ] **How a checked-in HTML fixture enters stage 1.** `fetchDocument` accepts only HTTP(S) and
       rejects loopback; refetching live URLs doesn't hold bytes constant. Candidates: a
       fixture-input seam, or a tiny local static server on a non-loopback interface, or seeding
@@ -268,8 +277,8 @@ execution, not a cost any single ingest should pay.
 ### Cost-reduction candidates (Sol's re-ranking adopted; to be priced by the eval)
 
 1. **Duplicate job execution** — the largest historical waste. Root-cause/fix already in flight
-   (Opus agent, 2026-09-02). If the Postgres queue already prevents it, the deliverable is the
-   concurrency test that pins that.
+   (Opus agent, 2026-09-02) and **owned by that investigation, not this plan** — including the
+   concurrency test that pins the guarantee if the Postgres queue already prevents it.
 2. **Keep artefact modes on demand** (status quo, and the largest product-level saving already
    operating). One eager exception to reconsider: arc auto-fires on owner open
    (`src/web/useArc.ts`); tradeoff of changing it: the L0 column appears only after a press.
