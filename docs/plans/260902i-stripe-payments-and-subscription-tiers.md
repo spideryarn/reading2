@@ -56,7 +56,18 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 5. **The files-store hole**, which neither earlier review saw: see *Billing is a Postgres feature*
    below. It was the one unplanned thing that would have cost an afternoon.
 
-### Where the build stands, 2026-09-02 16:05
+### Where the build stands, 2026-09-02 16:30
+
+**Verdict: important work left.** Roughly half the plan is built and every piece of it is
+reviewed, tested and committed; the half that remains is the half a reader can see — admission
+wired into the ingest route, settlement wired into the publish transaction, the checkout and
+portal routes, and `/profile`. None of it is designed-but-unknown; all of it is blocked or
+sequenced behind one external thing.
+
+**84 billing tests pass, 8 skip** (the skips are the Postgres suite, waiting on the migration
+below — a real vitest skip, not a false pass).
+
+
 
 Worktree `stripe-payments`, branch `worktree-stripe-payments`.
 
@@ -80,9 +91,21 @@ Worktree `stripe-payments`, branch `worktree-stripe-payments`.
   foreign-key assertion in `tests/db-schema.test.ts` is red. Both go green when it lands. The
   mechanism itself was measured with two real connections before any of it was written, so it is
   not resting on an unrun test — but it is not finished until that suite has actually run.
-- **Next**, in order, once the migration applies: run the race suite; wire admission into
-  `POST /api/jobs` and the settlement into `settleIn`; then the webhook, then checkout and
-  `/profile`.
+- **Also committed locally**: `src/billing/webhook.ts` (signature verification over the exact
+  bytes, its own raw-body reader, fail-closed on an unset secret, event allowlist, live/test
+  assertion — 19 tests with real offline signatures) and `src/billing/subscription.ts` (the pure
+  Stripe→row reading, where the Basil period-move trap lives — 18 tests). Both were buildable
+  *because* they need no database, which is why they were done during the block rather than after
+  it. `api.stripe.com` is now refused by `tests/setup/provider-guard.ts`.
+- **Next**, in order, once the migration applies:
+  1. Merge `origin/dev`, delete and regenerate the two migrations onto the merged snapshot, apply.
+  2. Run `tests/billing-quota-race.test.ts` — the first time the mechanism is exercised through
+     the real code rather than through the standalone spike.
+  3. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
+     `ingestEventId` threaded through `EnqueueRequest` → `enqueue()` → the job INSERT.
+  4. `syncSubscriptionFromStripe` and the webhook route.
+  5. Checkout + portal routes, `/profile`, browser check.
+  6. `docs/project/billing.md`, admin columns, second Sol review of the whole diff.
 
 ## Picking this up
 
