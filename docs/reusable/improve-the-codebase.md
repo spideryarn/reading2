@@ -95,6 +95,15 @@ said had been deliberately reverted. Review is not a substitute: a reviewer chec
 wrote, not the greps you didn't run. Assume any line numbers in the audit are already stale, and
 locate everything by content.
 
+**And the proposed fix is a claim too — verify it separately.** A finding can be entirely true while
+the fix beside it is wrong, and that is the easier mistake to miss, because the evidence you just
+checked was for the finding. The first run of this doc found three identical copies of a query, each
+comment calling itself "the third copy", none of them tested — all true — and proposed a test pinning
+the three together. Greping the genre then found a fourth relative that was **already extracted,
+already exported and already tested**: the copies had a home built for them and nobody had moved
+them. The planned test would have been machinery whose only job was to protect duplication. Before
+you build a fix, ask what already exists that it duplicates.
+
 Tiers that have worked, and a good default:
 
 - **Tier 0 — live defects you tripped over on the way.** Not cleanup. Do these first, red test

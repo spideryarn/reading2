@@ -26,13 +26,14 @@
 import { describe, expect, it } from "vitest";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import { blockHashQuery, blocksQuery } from "../src/store/pg.js";
+import { blockHashQuery, blocksQuery, sourceHashQuery } from "../src/store/pg.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
 import type { Block } from "../src/types.js";
 
 const sql = blockHashQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 const renderSql = blocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
+const sourceSql = sourceHashQuery(new QueryBuilder() as never, "art-1").toSQL().sql;
 
 describe("the fingerprint read", () => {
   it("asks for the four columns the hash is made of", () => {
@@ -64,6 +65,57 @@ describe("the fingerprint read", () => {
        `hashBlocks` joins them in the order it is given — so a reordering
        silently changes the hash and every artefact reports itself stale. */
     expect(sql).toMatch(/order by "spideryarn"\."revision_blocks"\."ordinal" asc/i);
+  });
+});
+
+/**
+ * **The article-keyed fingerprint read** — `sourceHashQuery`, which is the
+ * query above plus the join that resolves the article's current revision.
+ *
+ * Until 2026-09-02 there was no such function and no such test. There were
+ * three byte-identical private copies of this query, in `pg-searches.ts`,
+ * `pg-referee-criteria.ts` and `pg-referee-claims.ts`, and each one's own
+ * comment called itself "the third copy" and listed the two things that must
+ * not drift — the four columns and the `order by`. Nothing compared them and
+ * nothing tested any of them, so all three comments were prose asserting a
+ * property that nothing held. The copies are now one function beside
+ * `blockHashQuery`, and this is the check the comments were asking for.
+ *
+ * The assertions read the generated SQL for the reason the header gives: a
+ * column constant can be right while the query says `.select()`, and an
+ * in-order fixture proves nothing about `order by`.
+ */
+describe("the article-keyed fingerprint read", () => {
+  it("asks for the same four columns as the revision-keyed one", () => {
+    expect(sourceSql).toContain('"block_id"');
+    expect(sourceSql).toContain('"text"');
+    expect(sourceSql).toContain('"role"');
+    expect(sourceSql).toContain('"treatment"');
+  });
+
+  it("does not ask for the HTML or the search vector", () => {
+    /* The two columns whose cost is the whole reason the narrow read exists.
+       `fts` in particular arrives on a bare `.select()` without being asked
+       for, which is how this query would regress. */
+    expect(sourceSql).not.toContain('"html"');
+    expect(sourceSql).not.toContain('"fts"');
+  });
+
+  it("orders by ordinal, because block ids carry no position", () => {
+    /* Without it the planner may return rows in any order and `hashBlocks`
+       joins them as given — so every saved search, criterion and claim would
+       report itself stale against prose that had not changed, and nothing
+       would say why. In development the rows usually come back in insertion
+       order, so this is precisely the drift a fixture-based test cannot see. */
+    expect(sourceSql).toMatch(/order by "spideryarn"\."revision_blocks"\."ordinal" asc/i);
+  });
+
+  it("reaches the article's CURRENT revision, not any revision it ever had", () => {
+    /* The join is the only difference from `blockHashQuery`, and it is what
+       makes the hash mean "what this article says now". Matched on the column
+       rather than the whole clause so a formatting change does not fail it. */
+    expect(sourceSql).toContain('"current_revision_id"');
+    expect(sourceSql).toMatch(/inner join/i);
   });
 });
 

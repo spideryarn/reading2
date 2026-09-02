@@ -1016,6 +1016,62 @@ export function blockHashQuery(
 }
 
 /**
+ * **The same fingerprint read, keyed on the article rather than the revision.**
+ *
+ * `blockHashQuery` above takes a revision id, which the caller already has.
+ * These callers do not: a saved search, a referee criterion and a referee claim
+ * each know only which article they belong to, and want the hash of whatever
+ * that article's *current* revision says now. So this is `blockHashQuery` plus
+ * the join that resolves `articles.currentRevisionId`, and it must keep the
+ * same four columns and the same `order by` for the reasons that query gives.
+ *
+ * **The same `hashBlocks`, not a second one that agrees today.** That is the
+ * whole reason src/source-hash.ts is its own module: two fingerprints of one
+ * article can only ever disagree, and the day they do, a run stored through one
+ * store reports itself current against the other's idea of current.
+ *
+ * It is one function because it was three. `pg-searches.ts`, `pg-referee-criteria.ts`
+ * and `pg-referee-claims.ts` each carried a byte-identical private copy, and
+ * each copy's own comment called itself "the third copy of this query" and
+ * named the two things that must not drift — while nothing compared them and no
+ * test named any of them. Written down is not checked; see
+ * docs/reusable/written-down-is-not-checked.md.
+ *
+ * Grepping the genre rather than the three the comments named turned up a fourth
+ * relative: `blockHashQuery` above, which is this query without the join and
+ * was already extracted and already tested. This one now sits beside it.
+ */
+export function sourceHashQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  articleId: string,
+) {
+  return db
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
+    .from(revisionBlocks)
+    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
+    .where(eq(articles.id, articleId))
+    .orderBy(asc(revisionBlocks.ordinal));
+}
+
+/**
+ * The hash of an article's current blocks, or `undefined` when it has none —
+ * which every caller's `isStale` treats as stale, the same answer the
+ * filesystem store gives for a `blocks.json` it cannot read.
+ */
+export async function sourceHashFor(
+  articleId: string,
+  db: Pick<ReturnType<typeof getDb>, "select"> = getDb(),
+): Promise<string | undefined> {
+  const rows = await sourceHashQuery(db, articleId);
+  return rows.length ? hashBlocks(rows) : undefined;
+}
+
+/**
  * Rebuild `Meta` from the revision's columns.
  *
  * The fallback matters: `src/api.ts` invents a title from the article's own
