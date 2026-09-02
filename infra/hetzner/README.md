@@ -192,10 +192,17 @@ noticing it, and we want cloud-init edits to land on the next build.
 So there are exactly two honest routes, and they are not alternatives — do both:
 
 1. **Now, by hand.** `provision.sh` is written to be re-runnable on a live box, so the change can be
-   applied directly. **Read it before you re-run the whole thing**: it does
-   `npm install -g @anthropic-ai/claude-code` *unpinned*, which swaps the `claude` binary under every
-   running session — there were ten live tmux sessions on 2026-08-31. Applying just the steps you
-   changed is usually the right call.
+   applied directly. **Read it before you re-run the whole thing**: it installs Claude Code
+   *unpinned*, so a re-run moves the box to whatever version shipped this morning — there were ten
+   live tmux sessions on 2026-08-31, and again on 2026-09-02. Applying just the steps you changed is
+   usually the right call.
+
+   That is less violent than it was. It used to be `npm install -g @anthropic-ai/claude-code`, which
+   overwrote the one binary every running session was executing. The native installer adds a new file
+   under `~/.local/share/claude/versions/` and repoints `~/.local/bin/claude` at it, so running
+   sessions keep the inode they started on and only new ones move —
+   [260902c-a-claude-that-could-never-update-itself.md](../../docs/postmortems/260902c-a-claude-that-could-never-update-itself.md)
+   for why it changed.
 2. **For the future, in the repo**, so the next build has it. It cannot be tested until that build,
    which is the cost of this design and the reason the preflight and shellcheck matter so much.
 

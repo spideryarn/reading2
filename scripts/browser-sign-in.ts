@@ -13,7 +13,7 @@
  * check.
  *
  * The credential was already there. `npm run db:seed-owner` has written a
- * password-holding `greg@gregdetre.com` since 2026-08-31, generated per machine
+ * password-holding `dev-admin@spideryarn.local` since 2026-08-31, generated per machine
  * into `~/.config/spideryarn/local-admin-password`
  * (docs/plans/260831ab-seed-local-admin-user-for-remote-box.md). No Google, no
  * dashboard, no human. Nothing knew how to hand it to a browser; this does.
@@ -48,7 +48,7 @@
  * token. docs/reusable/silent-success.md.
  *
  * **And a 200 does not say whose session it is**, which is the half the first
- * version of this file got wrong: it printed "signed in as greg@gregdetre.com"
+ * version of this file got wrong: it printed "signed in as" the seeded account
  * while having observed only that *some* accepted token reached the library
  * route. `/api/library` answers 200 for any authenticated user. GPT Sol, on the
  * built code, 2026-09-01.

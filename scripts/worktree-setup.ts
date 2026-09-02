@@ -4,8 +4,9 @@
  *     npm run worktree:setup
  *
  * Claude Code creates the worktree, checks out tracked files, takes a lock and
- * copies whatever `.worktreeinclude` names. It does not install dependencies and
- * it does not know about `data/`. That is this script.
+ * copies whatever `.worktreeinclude` names. It does not install dependencies, it
+ * does not know about `data/`, and it branches from the primary's local `HEAD`,
+ * which is usually behind `origin/dev`. That is this script.
  *
  * It has to be run by hand or by the agent rather than by a hook, because a
  * `WorktreeCreate` hook *replaces* worktree creation rather than following it —
@@ -36,6 +37,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
+import { TRUNK_BRANCH } from "./deploy-checks.js";
+import { describeFreshen, freshenFromTrunk, freshenIsFatal } from "./worktree-freshen.js";
 import { inLinkedWorktree, PRIMARY_PORT } from "./worktree-port.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,7 +83,32 @@ if (!linked) {
 ok("in a linked worktree");
 
 /* ------------------------------------------------------------------ */
-/* 2. Dependencies                                                     */
+/* 2. Level with the trunk on the remote                               */
+/* ------------------------------------------------------------------ */
+
+/* A worktree branches from the primary's local HEAD, and the primary is only as
+   current as the last time somebody pulled into it — seven commits behind
+   `origin/dev` when this was written. Merge before installing, because the merge
+   can move `package-lock.json`. scripts/worktree-freshen.ts has the reasoning. */
+info(`git fetch origin ${TRUNK_BRANCH} && git merge origin/${TRUNK_BRANCH}`);
+const freshened = freshenFromTrunk(ROOT);
+if (freshenIsFatal(freshened)) {
+  refuse(describeFreshen(freshened), [
+    "The tree is left mid-merge on purpose. Resolve it, commit, and run this again;",
+    "a conflict is a proposal before it is an edit — docs/reusable/git-resolve-merge-conflicts.md.",
+    "",
+    ...(freshened.kind === "conflict" ? freshened.out.split("\n").slice(-10) : []),
+  ]);
+}
+if (freshened.kind === "merged" || freshened.kind === "already-level") {
+  ok(describeFreshen(freshened));
+} else {
+  bad(describeFreshen(freshened));
+  info(`merge it yourself before landing anything:  git fetch origin ${TRUNK_BRANCH} && git merge origin/${TRUNK_BRANCH}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Dependencies                                                     */
 /* ------------------------------------------------------------------ */
 
 /* `--prefer-offline` because the npm cache is shared and warm; the flags after
@@ -105,7 +133,7 @@ if (`${install.stdout ?? ""}`.includes("install-scripts")) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 3. The article store the tests read                                 */
+/* 4. The article store the tests read                                 */
 /* ------------------------------------------------------------------ */
 
 const corpus = materialiseCorpus(ROOT, { note: info });
@@ -119,7 +147,7 @@ if (corpus.copied.length === 0) {
 ok(describeMaterialise(corpus));
 
 /* ------------------------------------------------------------------ */
-/* 4. What this script cannot fix, said out loud                       */
+/* 5. What this script cannot fix, said out loud                       */
 /* ------------------------------------------------------------------ */
 
 if (existsSync(path.join(ROOT, ".env.local"))) {

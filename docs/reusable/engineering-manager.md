@@ -111,3 +111,7 @@ the machinery is still open now.
 
 "Done, all tests pass" is a claim, not a result — read the diff, and run the gates yourself before
 you commit. See [silent-success.md](silent-success.md).
+
+## At the end
+
+Follow [debrief-progress.md](debrief-progress.md).

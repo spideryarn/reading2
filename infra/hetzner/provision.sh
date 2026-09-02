@@ -189,8 +189,68 @@ case "$NODE_V" in
 esac
 command -v npm >/dev/null || { echo "FATAL: node installed but npm is missing" >&2; exit 1; }
 
-run 300 "install claude code" npm install -g @anthropic-ai/claude-code
-command -v claude >/dev/null || { echo "FATAL: npm reported success but claude is not on PATH" >&2; exit 1; }
+# Claude Code, installed AS THE USER with Anthropic's native installer -- not
+# `npm install -g` as root, which is what this line used to be.
+#
+# npm's global prefix on this box is /usr, not /usr/local: NodeSource's
+# packaging computes it and no npmrc sets it, so nobody chose it and nothing
+# says it out loud. `npm install -g` as root therefore put claude in a
+# root-owned /usr/lib/node_modules, and Claude Code's self-updater -- which runs
+# as $USER_NAME -- could not write a byte of it. Every session opened with
+#   Auto-update failed: no write permission to npm prefix. Run claude doctor
+# and the box sat on 2.1.251 while 2.1.258 shipped.
+# docs/postmortems/260902c-a-claude-that-could-never-update-itself.md.
+#
+# The native installer is Anthropic's current recommendation and `claude doctor`
+# names it as the fix. It puts a versioned binary under
+# ~/.local/share/claude/versions/ and points ~/.local/bin/claude at it, all owned
+# by the user, so the updater can swap versions with no sudo at all. It REFUSES
+# to run under sudo (it installs into $HOME, which under sudo is root's), hence
+# `su -` rather than the plain `run` the npm line used.
+#
+# Downloaded in full and then run, rather than `curl | bash`. A pipe executes
+# the script as it arrives, so a connection that dies mid-transfer runs the
+# first half of an installer and stops -- and `set -o pipefail` reports that
+# correctly, long after the half-install already happened. This file pins node
+# and supabase for adjacent reasons.
+run 300 "install claude code" su - "$USER_NAME" -c 'set -eu; t=$(mktemp); curl -fsSL https://claude.ai/install.sh -o "$t"; rc=0; bash "$t" || rc=$?; rm -f "$t"; exit $rc'
+
+# Expose the user-owned binary at a path a stock PATH already contains.
+#
+# Every non-login context on this box gets a stock PATH with no ~/.local/bin in
+# it: the tmux job scripts gjd-remote writes (scripts/gjd-remote.ts, which sets
+# its own PATH and says why), the `ssh <box> claude mcp list` behind
+# `gjd-remote doctor`, cron. ~/.profile adds ~/.local/bin for login shells only,
+# and only once the directory exists. So without this line `claude` resolves in
+# an ssh login shell and nowhere that actually runs the work -- which is the
+# same wrong-tree failure gjd-remote's own guards exist to catch, and it would
+# pass the "claude runs" check below.
+#
+# /usr/local/bin is where FHS puts a local override, and it precedes /usr/bin in
+# every PATH on this box. One symlink, so there is exactly one answer to "which
+# claude" no matter who is asking.
+#
+# This is also the half that a rebuild needs. /home is the persistent volume, so
+# a new server arrives with ~/.local/bin/claude already on it and the install
+# step above is a no-op -- while /usr/local/bin is on the disposable root disk
+# and comes back empty. Without this line a rebuilt box would have a perfectly
+# good Claude that no job script could find.
+#
+# -T so that an unexpected real DIRECTORY at /usr/local/bin/claude fails loudly
+# rather than quietly becoming /usr/local/bin/claude/claude, which nothing would
+# ever find.
+ln -sfnT "/home/$USER_NAME/.local/bin/claude" /usr/local/bin/claude
+
+command -v claude >/dev/null || { echo "FATAL: installer reported success but claude is not on PATH" >&2; exit 1; }
+# `command -v` could not see the bug this replaced: a claude that runs perfectly
+# and can never update itself. So assert the property that was missing rather
+# than the one that was always true -- the user can WRITE what the updater has
+# to rewrite. Ownership is not that property: owning a symlink does not let you
+# repoint it, the parent directory does. Checked again, more fully, at the end
+# of the run.
+CLAUDE_BIN=$(readlink -f /usr/local/bin/claude)
+su - "$USER_NAME" -c "test -w '$(dirname "$CLAUDE_BIN")' && test -w '/home/$USER_NAME/.local/bin'" \
+  || { echo "FATAL: $USER_NAME cannot write $CLAUDE_BIN or its launcher dir - auto-update would fail exactly as it did before" >&2; exit 1; }
 
 echo "=== codex cli ==="
 # OpenAI's agent CLI, so scripts/run-codex.ts works here as it does on the
@@ -885,7 +945,35 @@ check "/home is the volume"      'test "$(stat -c %d /home)" = "$(stat -c %d /mn
 check "swap active"              'swapon --show | grep -q swapfile'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
-check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+# The check that would have caught the bug. `claude --version` stayed green for
+# two days on a box whose updater could not write a byte, because running and
+# being able to replace yourself are different facts and only one of them was
+# ever asserted.
+#
+# It asserts WRITABILITY OF THE DIRECTORIES, and as the user. An earlier version
+# of this check tested `stat -c %U` on the launcher and the binary, which was
+# the same mistake one level in: owning a symlink does not let you repoint it,
+# the parent directory does -- and a user-owned binary inside an unwritable
+# `versions/` cannot be joined by the next version. GPT Sol caught it, having
+# been handed this file's own postmortem about asserting the wrong property.
+#
+# `test -w` as root is meaningless (root passes on almost anything), hence `su -`.
+check "claude can auto-update (user can rewrite its install)" 'timeout 30 su - '"$USER_NAME"' -c "test -w /home/'"$USER_NAME"'/.local/bin && test -w /home/'"$USER_NAME"'/.local/share/claude/versions"'
+# ...and that the two links still point where the updater will move them. Both
+# were assumed by the check above and neither was tested: a launcher replaced by
+# a stray regular file, or a /usr/local/bin symlink left pointing at the old npm
+# path, both leave the directories perfectly writable.
+check "claude launcher points into the versions dir" 'case "$(readlink -f /home/'"$USER_NAME"'/.local/bin/claude)" in /home/'"$USER_NAME"'/.local/share/claude/versions/*) true ;; *) false ;; esac'
+check "/usr/local/bin/claude points at that launcher" 'test "$(readlink /usr/local/bin/claude)" = "/home/'"$USER_NAME"'/.local/bin/claude"'
+# And that the npm-global copy has not come back. A re-run of an OLD
+# provision.sh would resurrect it, and it would sit there winning nothing while
+# /usr/local/bin points at the native one -- two installs, one of them stale,
+# which is what `claude doctor` warns about.
+#
+# `npm root -g` rather than the literal /usr/lib/node_modules: the whole bug was
+# that npm's prefix here is computed rather than chosen, so hardcoding today's
+# answer would quietly stop checking anything if NodeSource ever changed it.
+check "no npm-global claude beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@anthropic-ai/claude-code"'
 # The loopback, end to end and as the user -- not "the key file exists". Three
 # separate things have to be true at once (a key, a line in authorized_keys, a
 # Host block that makes ssh actually OFFER a non-default key name), each of them
@@ -893,6 +981,27 @@ check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --ve
 # having is the connection. BatchMode is what stops a broken one hanging on a
 # password prompt until the run times out.
 check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 hostname"'
+# Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
+# reported as a broken ssh rather than as a missing Claude.
+#
+# `claude runs` used to be a LOGIN shell, and it passed throughout the
+# npm-prefix bug. What runs the work is non-interactive: the tmux job scripts,
+# and the `ssh <box> claude mcp list` behind `gjd-remote doctor`, source neither
+# .profile nor .bashrc and get a stock PATH with no ~/.local/bin in it. So this
+# is that path itself rather than an imitation of it. A claude only a login
+# shell can find leaves every tmux session with no Claude in it -- the same
+# wrong-tree failure gjd-remote's own job guards exist to catch.
+#
+# `ssh -n`: check() has no `</dev/null` of its own the way run() does, and ssh
+# forwards stdin, so without it this swallows the rest of whatever is feeding
+# the script and the run dies further down somewhere unrelated. Found by doing
+# exactly that to a heredoc while testing these three checks.
+# Captured and then matched, never piped into grep: check() runs without
+# pipefail, so through a pipe the verdict would be grep's alone and a claude
+# that printed its version and then died -- or an ssh that timed out after
+# printing it -- would pass. The statusline check below says the same thing for
+# the same reason; this file has been bitten by it before.
+check "claude runs over non-interactive ssh" 'out=$(timeout 30 su - '"$USER_NAME"' -c "ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 claude --version") && case "$out" in *"(Claude Code)"*) true ;; *) false ;; esac'
 # ...and the address it will use, which is the other half: the ssh above can
 # work perfectly and `gjd-remote ls` still die at "could not read the server
 # address from Terraform state", because the box has no tofu. A login shell,

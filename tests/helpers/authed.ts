@@ -14,7 +14,7 @@
  * makes a production build permissive is exactly the fail-open this whole area
  * is about. The real verifier is the default there; this is passed in.
  */
-import { ADMIN_USER_ID_LOCAL } from "../../src/admin.js";
+import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../../src/admin.js";
 import type { Verifier, VerifyResult } from "../../src/auth.js";
 import { type OwnerId, runAsOwner } from "../../src/owner.js";
 
@@ -30,7 +30,18 @@ import { type OwnerId, runAsOwner } from "../../src/owner.js";
  * caught the other three.
  */
 export const TEST_SUB = ADMIN_USER_ID_LOCAL;
-export const TEST_EMAIL = "greg@gregdetre.com";
+
+/**
+ * The address that id is called **on a local stack** — a fixture, not a person.
+ *
+ * Written out longhand as Greg's real `greg@gregdetre.com` until 2026-09-02,
+ * which is the very thing the comment above is about, one constant later. It
+ * mattered more here than it looks: `tests/feedback-route.test.ts` asserts a
+ * submitted report carries this as its `reporterEmail`, so the suite was
+ * manufacturing bug reports from Greg's real address and checking they came out
+ * intact.
+ */
+export const TEST_EMAIL = ADMIN_EMAIL_LOCAL;
 
 /**
  * The same identity, as the store's `OwnerId`.

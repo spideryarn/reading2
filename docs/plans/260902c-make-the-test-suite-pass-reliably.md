@@ -609,6 +609,23 @@ deletion, with a line that is hard to improve on now that it has fired:
   job cap is genuinely global. Deferred.
 - `tests/library.test.ts` still goes red if it scans `data/` while a peer builds a fixture. Deferred.
 
-Both of those point the same way: **the worktree-per-agent work already named in `CLAUDE.md`**, plus
-a database per worktree. That is the fix for this whole remaining class, and it is a bigger piece of
-work than this one.
+**And the obvious fix for that class is blocked, which we did not know when we wrote the line above.**
+A database per worktree was not merely deferred — it was considered and rejected, and
+[worktrees.md § The database: one stack, and a lease](../project/worktrees.md) records why:
+
+> One shared local Supabase, with a lease, for v1 — and a stack per worktree later if it earns it.
+
+RAM is not the blocker (~1.16 GB for an idle stack). **Eleven foreign keys point at `auth.users`**, so
+a fresh per-worktree database has no populated `auth` schema and the migrations fail; a template copy
+cannot fix it either, because Postgres cannot enforce a cross-database foreign key. A schema-level
+boundary was considered and rejected for the same reason. Four worktrees exist, and
+`.worktreeinclude` copies the *same* `.env.local` into each, so they all point at the one stack on
+port 54362 — by design.
+
+The chosen mitigation is a **lease**, not isolation. `db:migrate` already takes an advisory lock, but
+that covers migrator-vs-migrator only — not migrate-vs-running-suite, and not `db:reset`. That gap is
+tracked separately as `260902c-concurrent-migrations-across-worktrees`.
+
+So the honest statement is: **these two failures have no cheap fix available today.** They are the
+cost of one shared database, the sharing is deliberate, and the thing that would end it is blocked on
+the `auth.users` foreign keys rather than on anybody's time.

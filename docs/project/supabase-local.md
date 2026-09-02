@@ -57,12 +57,45 @@ sqlstate `23503`, a foreign key such as `uploads_owner_fk` with no owner row. Fo
 | | | |
 |---|---|---|
 | `dev@spideryarn.local` | `DEV_OWNER_ID` | what rows written *outside* a request belong to — the CLI and the pipeline. [`src/owner.ts`](../../src/owner.ts) |
-| `greg@gregdetre.com` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
+| `dev-admin@spideryarn.local` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
 
 The second has a password, so signing in is the email form on the landing page — no Google, nothing
 to click on a dashboard, and no browser on a machine you cannot reach. **That is what makes a fresh
 Hetzner box usable**, where the alternative was the noVNC tunnel
 ([260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md)).
+
+**Neither address is a real person's, and that is the point.** The sign-in account was
+`greg@gregdetre.com` until 2026-09-02 — the same address as Greg's *production* account, which is a
+different account on a different project reached by a different sign-in. Greg:
+
+> I worry about confusion, because greg@gregdetre.com is my real user on production with Google
+> login. So I'd like the dev-dummy user to be called something distinct and different, and that
+> highlights it's a dummy.
+>
+> — Greg, 2026-09-02
+
+**Nothing that decides anything read the address.** `/api/admin/*` compares uuids and
+`SPIDERYARN_OWNER_ID` is a uuid, so authorization and ownership are untouched. Plenty of things
+*display* it — the sign-in form, the profile page, `/admin/users`, a feedback report's reporter —
+which is the point: those are what a person reads.
+[`src/admin.ts` § `ADMIN_EMAIL_LOCAL`](../../src/admin.ts) has the reasoning.
+
+Two things the rename does not reach, both found by GPT Sol rather than by running it:
+
+- **A browser you are already signed in to keeps showing the old address** until its session
+  refreshes, because the email is a claim inside the JWT it is holding. Sign out and in, or wait for
+  the refresh.
+- **A `google` identity keeps the address Google gave it.** GoTrue stores one row per sign-in method
+  and the rename updates only the `email` one, so a machine whose local account began as a Google
+  sign-in — Greg's laptop may be one; this box is not — stays renamed on the surface and old
+  underneath, in Studio and on the profile page. `db:seed-owner` **says so** when it sees one, and
+  deliberately does not delete it: removing an identity is destructive and is Greg's call.
+
+**A machine seeded before then catches up on its own.** `db:seed-owner` renames the row rather than
+refusing, and says so; the password and every open session survive it. It is the one rename this
+repo performs unasked, and `planAccountEmail` in
+[`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts) is the four-part fence that makes it
+safe: local stack, one fixed id, one fixed old address, nothing destroyed.
 
 ```
 npm run db:admin-password

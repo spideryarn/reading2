@@ -136,8 +136,51 @@ export const ADMIN_USER_IDS: readonly string[] = [ADMIN_USER_ID_LOCAL, ADMIN_USE
  * **Not what the gate compares** — see the header. It is here so that the
  * constant above is legible, and so `describeAdminMiss` can tell "somebody
  * else" from "the right person on a new account" without a second lookup.
+ *
+ * **Greg's real address, and the only account that should answer to it is
+ * production's.** The local stack uses `ADMIN_EMAIL_LOCAL` below; the one place
+ * this constant is still named by the seed is `renamableFrom` in
+ * scripts/seed-accounts.ts, which exists precisely to move a local row *off* it.
  */
 export const ADMIN_EMAIL = "greg@gregdetre.com";
+
+/**
+ * What `ADMIN_USER_ID_LOCAL` is called on a local stack — **a dummy, and it
+ * says so.**
+ *
+ * ## Why it is not Greg's address
+ *
+ * It was, until 2026-09-02, and that was a confusion waiting to happen. Greg:
+ *
+ * > I worry about confusion, because greg@gregdetre.com is my real user on
+ * > production with Google login. So I'd like the dev-dummy user to be called
+ * > something distinct and different, and that highlights it's a dummy.
+ *
+ * The two accounts had the same address and nothing else in common: different
+ * projects, different ids, one signed in with Google by a human and one holding
+ * a generated password so that no human is needed. A screenshot, a Studio user
+ * table or an admin page therefore could not be read for which stack it came
+ * from — and the single worst mistake available in this repo is doing something
+ * to production while believing you are local.
+ *
+ * **Renaming it costs nothing, because the gate never read it.** `/api/admin/*`
+ * compares uuids (see the header at length), `SPIDERYARN_OWNER_ID` is a uuid,
+ * and `tests/helpers/authed.ts` signs with a uuid. The address is a label on a
+ * row, so this changes what a person sees and nothing that code decides.
+ *
+ * `.local` is reserved for link-local mDNS (RFC 6762), so it is not a domain
+ * anybody can hold and it reads as a fixture at a glance. It is **not** a
+ * guarantee that nothing will send to it — GPT Sol was right to correct that:
+ * the local stack runs Mailpit (`supabase/config.toml`), which will happily
+ * accept a message for it. What the choice buys is legibility, and that it
+ * matches `DEV_OWNER_EMAIL` in src/owner.ts — the two read as a matched set of
+ * local fixtures rather than as one real person and one not.
+ *
+ * `scripts/seed-accounts.ts` renames an existing row from `ADMIN_EMAIL` to this
+ * without being asked, so a machine seeded before 2026-09-02 needs nothing run
+ * by hand.
+ */
+export const ADMIN_EMAIL_LOCAL = "dev-admin@spideryarn.local";
 
 /**
  * Is this the administrator?

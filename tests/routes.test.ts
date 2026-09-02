@@ -1413,9 +1413,9 @@ describe("the gate", () => {
 /**
  * The second gate: `/api/admin/` is the administrator's, and nobody else's.
  *
- * `tests/helpers/authed.ts` signs every other test in this file in as
- * `greg@gregdetre.com`, who *is* the administrator — so the interesting case
- * needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
+ * `tests/helpers/authed.ts` signs every other test in this file in as the local
+ * administrator (`TEST_SUB`, which `isAdmin` says yes to) — so the interesting
+ * case needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
  */
 describe("the admin gate", () => {
   /** Somebody else entirely, signed in perfectly properly. */

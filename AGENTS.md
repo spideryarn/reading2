@@ -100,7 +100,10 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to
   do this kind of task well" instructions. **When a task matches one, follow it rather than
   inventing a process.** The index is [docs/reusable/README.md](docs/reusable/README.md); the one
-  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md).
+  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md). One of them is a
+  **ritual rather than a reaction**: [improve-the-codebase.md](docs/reusable/improve-the-codebase.md)
+  is a whole-tree sweep for the rework worth doing, run every week or so — suggest it when nobody has
+  run one lately.
 
 None of those first three is indexed here — there are a lot of files and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
@@ -166,9 +169,8 @@ can move. It is not the end of the world if something is briefly broken. What we
 away is design: write code that will still be good to work with in six months. It loosens nothing
 in **Real data belongs to the reader** below.
 
-**Explain plainly.** Whenever you explain, summarise or ask a question — in chat, in a doc, in a
-commit message — use plain words and short sentences. Say the thing itself, not a gesture at it. No
-jargon where an ordinary word will do, no hedging padding.
+**Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
+doc, in a commit message.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
