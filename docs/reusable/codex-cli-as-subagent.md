@@ -571,13 +571,18 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   file exists and is non-empty**, not just that the command succeeded.
 - **Any *other* exit 1** means reading the log before assuming the wrapper or the prompt is at fault.
 - **Codex cites code as absolute `/Users/…/file.ts:148`, usually as a markdown link.** Leave them
-  alone, or make them code spans. **Never rewrite them as relative links** — this bullet used to say
-  to do exactly that, and on 2026-09-02 following it put 48 broken links into two review docs and
-  turned the deploy gate red. It fails twice over: `src/x.ts:148` is not a file at *any* prefix,
-  because of the `:148`; and a path written from the repo root resolves wrongly from `docs/plans/`.
-  The premise was wrong too — a link checker that skips absolute targets never flags the originals,
-  so the advice converted a silent problem into a loud one. Both shapes are the same defect: a
-  citation that reads as a link and can only be followed on the machine that produced it.
+  alone, or make them code spans. This bullet used to say to rewrite them repo-relative, and on
+  2026-09-02 following it put 48 broken links into two review docs and reddened the deploy gate:
+  `src/x.ts:148` is not a file at *any* prefix, because of the `:148`, and a path written from the
+  repo root resolves wrongly from `docs/plans/` besides. Its premise was wrong too — a link checker
+  that skips absolute targets never flagged the originals, so the advice turned something silent
+  into something loud.
+
+  A repo may then exempt the citation shape from its link checker, as this one did the same
+  afternoon (`3f23a94`, a trailing `:<line>` is what marks a citation). **That settles the gate, not
+  the reader**: a link nobody can follow is still a link nobody can follow, and it will be followed
+  by somebody eventually. Prefer the code span; do not go back to relative links because the test
+  stopped objecting.
 - **A login shell undoes environment sanitising.** Codex's shell tool sources `~/.zprofile` and
   `~/.zshrc`, so anything they export reaches codex whatever the wrapper passes. Measured above.
 - **Don't export `OPENAI_API_KEY`.** `codex exec` doesn't read it (it wants `CODEX_API_KEY`), so it
