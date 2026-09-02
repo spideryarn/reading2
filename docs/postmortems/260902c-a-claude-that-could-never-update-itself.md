@@ -115,19 +115,83 @@ Ranked by value for the effort.
 A general form of (1): when provisioning installs something that maintains itself, the thing worth
 asserting is that it can perform its own maintenance — not that it starts.
 
-## Not fixed, deliberately
+## Deferred, then done
 
-The npm copy at `/usr/lib/node_modules/@anthropic-ai/claude-code` was **left in place** on the live
-box, dormant and shadowed by the symlink, because ten agent sessions were running and Greg asked that
-they not be disturbed. Removing it is safe for them — the package's own `install.cjs` says the
-executable is standalone with "no Node.js process stays resident", and `/proc/<pid>/exe` showed each
-session holding only that one inode, which survives unlink — but there was no reason to take even a
-residual risk for no gain.
+The npm copy at `/usr/lib/node_modules/@anthropic-ai/claude-code` was left in place at first, dormant
+and shadowed by the symlink, because ten agent sessions were running and Greg asked that they not be
+disturbed. Removing it was safe for them — the package's own `install.cjs` says the executable is
+standalone with "no Node.js process stays resident", and `/proc/<pid>/exe` showed each session
+holding only that one inode, which survives unlink — but there was no reason to take even a residual
+risk for no gain.
 
-Until somebody runs `sudo npm -g uninstall @anthropic-ai/claude-code`, the new
-`no npm-global claude beside the native one` check reports FAIL on this box. That is the check
-working: the migration is genuinely unfinished. A freshly built box passes it.
+**Both migrations were completed on 2026-09-02**, with all ten sessions still running and none
+disturbed. Claude's npm package was removed first; Codex's waited for the `/proc` scan below to come
+back empty, which it did once two in-flight reviews finished. `/usr/bin/claude`, `/usr/bin/codex` and
+both `node_modules` trees are gone; every check in this postmortem now passes, and a `run-codex.ts`
+review end-to-end confirms the standalone codex works rather than merely starting.
 
-**`@openai/codex` has the identical problem** — same `npm install -g` as root, same root-owned `/usr`
-prefix — and was left alone for the same reason. It matters less because codex does not self-update,
-so it fails loudly at install time rather than quietly forever. Its own cleanup.
+**`@openai/codex` had the identical problem** — same `npm install -g` as root, same root-owned `/usr`
+prefix — and was left alone in the first pass, on the stated grounds that it "does not self-update,
+so it fails loudly at install time rather than quietly forever".
+
+**That was wrong, and it was wrong in the direction that matters.** Codex has a real `codex update`
+subcommand, so it self-updates exactly as Claude Code does. What it does *not* have is Claude's
+complaint: `claude doctor` printed "no write permission to npm prefix" at every session start, which
+is the only reason anyone noticed. `codex doctor` reports `install: consistent` and prints
+`npm update target /usr/lib/node_modules/@openai/codex` **without ever checking whether that target
+is writable**. It had already fallen a version behind (0.151.0 against 0.152.1) and nothing on the
+box would ever have said so.
+
+So the quieter tool was the more urgent one, and "it fails loudly" was an assumption, not something
+checked. Provisioning now installs codex the same way — OpenAI's own standalone installer, as the
+user, into `~/.codex/packages/standalone/` with `~/.local/bin/codex` pointing at it, linked from
+`/usr/local/bin` — and asserts the writability that `codex doctor` does not.
+
+One thing is genuinely different, and it changes the migration rather than the install. Claude's
+binary is self-contained; **codex resolves its bundled ripgrep and its `codex-resources` out of the
+install tree at runtime**. So deleting the old npm tree is safe for a running Claude and is *not*
+safe for a running codex, which can carry on until its next tool call and then fail. The cutover
+order matters: link the new one first so nothing new starts from the old tree, and only remove the
+npm copy once no process is still running out of it.
+
+## Migrating a box that already exists
+
+Provisioning builds new boxes correctly, but **it never removes the old npm packages** — deliberately,
+because doing so under a running Codex review breaks it. A box built before 2026-09-02 therefore needs
+this once, and reports FAIL on the two `no npm-global …` checks until it gets it.
+
+Cut over first, remove afterwards. As `greg`:
+
+```bash
+# 1. Codex, the standalone installer, into the user's own home
+t=$(mktemp) && curl -fsSL https://chatgpt.com/codex/install.sh -o "$t" && \
+  CODEX_HOME="$HOME/.codex" CODEX_INSTALL_DIR="$HOME/.local/bin" CODEX_NON_INTERACTIVE=1 sh "$t"; rm -f "$t"
+
+# 2. Point the stock PATH at it, so nothing new starts from the npm tree
+sudo ln -sfnT "$HOME/.local/bin/codex" /usr/local/bin/codex
+
+# 3. Prove the cutover before removing anything
+env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin sh -c 'command -v codex; codex --version'
+```
+
+Claude's npm copy can go at any point after its own cutover — running sessions hold the executable's
+inode and need nothing else from the tree:
+
+```bash
+sudo npm -g uninstall @anthropic-ai/claude-code && /usr/local/bin/claude --version
+```
+
+Codex's must wait until nothing is still executing out of the old tree. This prints the offenders, or
+nothing when it is safe:
+
+```bash
+old="$(npm root -g)/@openai/codex"
+for p in /proc/[0-9]*; do
+  case "$(readlink "$p/exe" 2>/dev/null)" in "$old"/*) echo "still running: ${p##*/}";; esac
+done
+```
+
+When that is silent: `sudo npm -g uninstall @openai/codex`.
+
+You do **not** need every Claude session stopped for any of this. Only Codex processes actually
+running out of the old tree matter, and only for the last command.

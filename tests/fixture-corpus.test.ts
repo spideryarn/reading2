@@ -30,10 +30,26 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { isSpideryarnId } from "../src/ids.js";
+/* The quiz stage's OWN fingerprint function, not `articleWithIdsFingerprint`
+   underneath it. They are the same call today and the point of importing this
+   one is the day they are not: if `quiz` changes what it hashes over, this test
+   moves with it and the committed fixture is judged against the new rule rather
+   than against a copy of the old one. */
+import { inputFingerprint as quizFingerprint } from "../src/quiz.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { checkTree } from "../src/tree-invariants.js";
 import { REMEMBER_STANCES } from "../src/types.js";
-import type { Block, ChatThread, Comment, SearchRun, ShelfState, Tree } from "../src/types.js";
+import type {
+  Block,
+  ChatThread,
+  Comment,
+  Meta,
+  Quiz,
+  QuizEvidence,
+  SearchRun,
+  ShelfState,
+  Tree,
+} from "../src/types.js";
 import { FIXTURE_ROOT, fixturePath, requireFixture } from "./helpers/require-fixture.js";
 
 /* Module scope, above the describes, the way pg-ready is called — so a corpus
@@ -51,6 +67,7 @@ requireFixture("writes", [
   "tweets.json",
   "glossary.json",
   "ideas.json",
+  "quiz.json",
   "summary.json",
   "chat.json",
   "comments.json",
@@ -335,6 +352,131 @@ describe("the committed fixture corpus", () => {
       for (const hit of runs.flatMap((r) => r.hits)) {
         expect(ids.has(hit.blockId), `search hit on ${hit.blockId}`).toBe(true);
       }
+    });
+
+    /**
+     * **The corpus's only `quiz.json`, and provenance is not validation.**
+     *
+     * It is real output of the real step, which is what makes it worth
+     * committing — but the store's own check on the way in
+     * (src/store/artifacts.ts) proves one thing about it: that `questions` is a
+     * non-empty array. Everything else about the file could be wrong, or could
+     * drift out of step with the blocks committed beside it, and
+     * tests/store-roundtrip.test.ts would still round-trip it happily: it
+     * compares what came back out against what went in — parsed, normalised
+     * and sorted, not byte for byte (`preserves %s exactly`, :558) — so it can
+     * only ever say the export did not change the file. Whether the file means
+     * anything is a question nothing else in the repo asks.
+     *
+     * So the three ways this fixture can quietly stop being a quiz *of this
+     * article* are asserted here. Each is a way somebody re-copying one file
+     * without its neighbours would leave the corpus looking fine.
+     * docs/plans/260902g-corpus-evidence-for-artefact-coverage.md.
+     */
+    describe("quiz.json — the fixture the round trip needs", () => {
+      const quiz = () => read<Quiz>("writes", "quiz.json");
+
+      it("is a quiz of this article, with questions in it", () => {
+        /* `slug` is the artefact's own claim about which article it belongs to,
+           and it is the one field a copy-paste from another slug's folder would
+           get wrong while everything else still parsed. Non-empty is what the
+           step itself refuses to write without (src/quiz.ts § What the stage
+           refuses) — restated here because the committed bytes are checked by
+           nothing that ran the step. */
+        const q = quiz();
+        expect(q.slug).toBe("writes");
+        expect(q.questions.length).toBeGreaterThan(0);
+      });
+
+      it("was written from the blocks, tree and metadata committed beside it", () => {
+        /* **Not a hash of `blocks.json`'s bytes.** `quizFingerprint` is
+           `articleWithIdsFingerprint` — the semantic fields of each block, the
+           tree, and a metadata head carrying the URL (src/source-hash.ts) — so
+           a `blocks.json` reformatted by the corpus builder hashes the same and
+           a block whose text changed does not. That is the property worth
+           holding: this file is stale the moment the article it describes moves,
+           and a stale quiz in the corpus is a fixture asserting something false
+           about itself, the same defect `constitution`'s dropped `arc.json`
+           avoids one describe up.
+
+           It also ties the four files together. Re-copy `quiz.json` from a
+           laptop whose `writes` has been re-extracted, or re-copy `blocks.json`
+           without the quiz, and this is what says so. */
+        const q = quiz();
+        expect(q.sourceHash).toBe(
+          quizFingerprint(
+            blocksOf("writes"),
+            read<Tree>("writes", "tree.json"),
+            read<Meta>("writes", "meta.json"),
+          ),
+        );
+      });
+
+      it("anchors every question in a real block, at the offset it names", () => {
+        /* The stage drops a question whose evidence it cannot place — an id not
+           in `blocks.json`, or a quote `findQuote` cannot locate — and stores
+           **the block's own characters** rather than the model's typing:
+           `quote: block.text.slice(span.start, span.end)` (src/quiz.ts). So the
+           committed file must satisfy an exact slice, not a fuzzy match, and
+           checking the offset as well as the id matters — an id that exists
+           proves a paragraph exists, while the quote is what ties the reference
+           answer to the page a reader will be looking at.
+
+           **The four checks before the slice are the point, not padding**, and
+           the first draft of this test had none of them. It compared
+           `block.text.slice(e.start, e.start + e.quote.length)` against
+           `e.quote` and counted the entries it had looked at — which passes,
+           with all thirteen entries counted, on a file whose every `quote` is
+           `""`: an empty slice equals an empty string at any offset. GPT Sol
+           reproduced it, 2026-09-02. A test that a whole class of empty
+           evidence walks straight through is the silent-success shape this
+           corpus work exists to close, so the assertions here are the
+           producer's own invariant rather than the comparison it happens to
+           make: every question carries evidence, every quote has characters in
+           it, every `start` is a non-negative integer — `Number.isInteger`
+           because JSON can hold `"104"` or `104.5` and string arithmetic
+           would make `slice` agree with a nonsense offset — and only then the
+           exact slice.
+
+           Every evidence entry, not one per question: a question with two
+           quotes can have the second one wrong. */
+        const blocks = new Map(blocksOf("writes").map((b) => [b.id, b]));
+
+        /** What is wrong with one piece of evidence, or `null`. */
+        const fault = (e: QuizEvidence): string | null => {
+          const block = blocks.get(e.blockId);
+          if (!block) return `${e.blockId} is not a block of writes`;
+          if (typeof e.quote !== "string" || e.quote.length === 0) {
+            return `${e.blockId}: quote is ${JSON.stringify(e.quote)}`;
+          }
+          if (!Number.isInteger(e.start) || e.start < 0) {
+            return `${e.blockId}: start is ${JSON.stringify(e.start)}`;
+          }
+          const at = block.text.slice(e.start, e.start + e.quote.length);
+          if (at === e.quote) return null;
+          return (
+            `${e.blockId}+${e.start} reads ${JSON.stringify(at)}, ` +
+            `evidence says ${JSON.stringify(e.quote)}`
+          );
+        };
+
+        const wrong: string[] = [];
+        for (const q of quiz().questions) {
+          if (q.evidence.length === 0) {
+            wrong.push(`${q.id}: no evidence at all`);
+            continue;
+          }
+          for (const e of q.evidence) {
+            const bad = fault(e);
+            if (bad) wrong.push(`${q.id}/${bad}`);
+          }
+        }
+        expect(wrong).toEqual([]);
+        /* A quiz with no questions has nothing for the loop to reject. The
+           stage cannot write one — it throws on an empty batch — but this file
+           is judged on its bytes, not on the code that made it. */
+        expect(quiz().questions.length).toBeGreaterThan(0);
+      });
     });
   });
 

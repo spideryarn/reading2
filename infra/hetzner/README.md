@@ -357,11 +357,28 @@ left off, rather than showing a wrong `0%`.
 
 ### Codex, for cross-family review
 
-`provision.sh` installs `@openai/codex` alongside Claude Code, so
+`provision.sh` installs Codex alongside Claude Code, so
 [`scripts/run-codex.ts`](../../scripts/run-codex.ts) runs here exactly as it does on the laptop and
 a plan written on the box can be reviewed on the box —
 [codex-cli-as-subagent.md](../../docs/reusable/codex-cli-as-subagent.md) is the standing rule.
 Installing it is the whole change; the interesting part is the credential.
+
+It is installed **as `greg`, with OpenAI's standalone installer** — not `npm install -g` as root,
+which is what it used to be and which left `codex update` unable to write its own install. Same
+shape as Claude Code, and
+[260902c-a-claude-that-could-never-update-itself.md](../../docs/postmortems/260902c-a-claude-that-could-never-update-itself.md)
+is why both changed. Codex is the more dangerous of the two, because `codex doctor` reports
+`install: consistent` and never checks whether the update target is writable.
+
+**A box built before 2026-09-02 needs a one-time manual migration**, and until it has had one the
+`no npm-global claude beside the native one` and `no npm-global codex beside the native one` checks
+report FAIL — correctly, because two installs are present. The commands are in that postmortem.
+Re-running the whole provisioner does *not* do it: the old npm packages are not removed by anything
+here, on purpose, since removing Codex's tree from under a running review breaks it.
+
+The one box that existed was migrated on 2026-09-02 and passes both. **A box built from this file
+needs none of that** — it installs both tools the right way from the start, and the two checks pass
+trivially because nothing ever puts them on the npm prefix.
 
 **It already works with no login**, because `CODEX_API_KEY` is on `gjd-remote push-env`'s allowlist
 and the wrapper reads it out of the repo's `.env.local`. But the wrapper spends the ChatGPT

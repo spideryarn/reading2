@@ -206,9 +206,15 @@ exact webhook route over a namespace; hosted surfaces over any owned billing UI.
 
 ### Stage: Stripe account and environment plumbing (Greg + agent)
 
-- [ ] **Greg (manual, test mode)**: create the Stripe account at dashboard.stripe.com; copy the
-  **test-mode secret key** (`sk_test_…`) into `.env.local` as `STRIPE_SECRET_KEY`. That is the
-  whole blocking manual step — everything below it the agent does with that key.
+- ✅ **Greg (manual, test mode)**: Stripe account created; `STRIPE_SECRET_KEY` in `.env.local`
+  on the box and the laptop (2026-09-02).
+- ✅ `STRIPE_SECRET_KEY` added to the `gjd-remote push-env` allowlist
+  ([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)) so future boxes inherit it —
+  with a shape-based refusal of any **live**-mode Stripe secret (`sk_live_`/`rk_live_`), under
+  any variable name, mirroring the Supabase-JWT check. `STRIPE_WEBHOOK_SECRET` deliberately NOT
+  allowlisted: locally it is minted per machine by `stripe listen`, like the admin password.
+  Tests in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts), red first.
+  `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` documented in `.env.example`.
 - [ ] **Greg (dashboard-only, optional now)**: Settings → Customer emails — receipts for
   successful payments, notifications for failed ones. Billing → Subscriptions: enable automatic
   subscription cancellation on dispute; review dunning/retry schedule so `past_due` terminates.
@@ -245,11 +251,11 @@ the delivery.
 
 ### Stage: Quota ledger and atomic admission
 
-- [ ] **Greg (decision needed): backfill.** Do existing accounts' pre-launch articles count
-  against the 3-lifetime-free quota, or are they grandfathered (ledger starts empty)?
-  *Recommendation: grandfather — real readers put articles in before any pricing existed, and an
-  empty ledger is the simpler start.* Without a written answer, two implementations of "lifetime
-  count" can disagree.
+- ✅ **Backfill: decided — the ledger starts empty** (pre-launch articles are grandfathered and
+  never counted). Greg, 2026-09-02:
+
+  > We have no existing real users (probably only me) no production - I'm fine for you to do
+  > whatever's simplest for them.
 - [ ] Tests first: free owner blocked on 4th ingest; paid owner blocked on 101st in-period;
   **concurrent admissions** — launch more than the remaining allowance, prove no more than the
   allowance is admitted; step re-run never counts or blocks; failed/cancelled ingest frees its
@@ -296,6 +302,24 @@ the delivery.
 - [ ] Final health check: `npm test`, `npm run typecheck`, `npm run check`, lint on touched
   files.
 - [ ] Test consolidation pass (subagent).
+
+### Stage: Comp subscriptions (later — after go-live is stable)
+
+Greg, 2026-09-02:
+
+> it would be nice (as a later stage) for me to be able to give users a free 1-month (e.g. for
+> journalists) and/or lifetime subscription (for me, QA, close friends, etc).
+
+- [ ] **App-side comp, not Stripe coupons**: two nullable columns on `billing_accounts` —
+  `comp_until` (timestamptz; a far-future/`infinity` value or a separate lifetime flag for
+  lifetime) — granted from `/admin/users` (or a small script). `entitlementFor` treats an active
+  comp as Reader-tier quota; comp and a real subscription can coexist (take the better).
+  *Simpler option passed over: Stripe 100%-off promotion codes or trials — Stripe-native, but
+  they force the recipient through Checkout and (usually) a card form, which is exactly wrong for
+  a journalist you're trying to give frictionless access.*
+- [ ] Comp status visible on `/admin/users` and on the user's own `/profile`.
+- [ ] Tests: comp grants Reader quota; expiry reverts to free without touching articles; comp
+  plus subscription takes the better of the two.
 
 ### Stage: Go-live (when we ship this)
 

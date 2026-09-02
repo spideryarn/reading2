@@ -61,8 +61,10 @@ const WHOLE: Record<string, readonly string[]> = {
   /* The load-bearing one. tests/artefact-copy.test.ts hardcodes this slug and
      an explicit list of every file the artefact store owns, and
      scripts/deploy-checks.ts uses the same set as the deploy gate's sentinels.
-     19 blocks and 55 KB — small because the essay is short, not because
-     anything was cut. */
+     19 blocks and 63,481 bytes across the files listed here — small because
+     the essay is short, not because anything was cut. In bytes rather than a
+     rounded KB, because "55 KB" stood here after `quiz.json` was added and
+     nobody could tell whether it was stale or a different unit. */
   writes: [
     "raw.json",
     "raw.html",
@@ -74,6 +76,31 @@ const WHOLE: Record<string, readonly string[]> = {
     "tweets.json",
     "glossary.json",
     "ideas.json",
+    /* The corpus's only `quiz.json`, and the reason it is here is the reason
+       `sketch.json` is on noema below: tests/store-roundtrip.test.ts round-trips
+       every artefact it claims to preserve, and with no article carrying one
+       that row asserts only that the export invented nothing —
+       src/store/export.ts writing the quiz was untested for as long as no file
+       existed. It had none: `quiz.json` sat in the manifest's exemption list,
+       the exemption was cleared when a quiz appeared in a *gitignored* `data/`
+       folder, that folder's article has since gone, and the deploy gate went
+       red without anybody editing a line of code.
+       docs/plans/260902g-corpus-evidence-for-artefact-coverage.md.
+
+       Real output of the real step: 10 questions, 8 KB, generated 2026-09-02.
+       The documented way to ask for one is `POST /api/jobs { slug: "writes",
+       steps: ["quiz"], force: ["quiz"] }` and that is what to reproduce it
+       with; this file was made by calling `enqueue` with the same request
+       directly, in a throwaway script against the default filesystem store,
+       because minting a Supabase token for the HTTP route was blocked on the
+       machine it was generated on. Same queue, same step, same store write,
+       one HTTP hop short. **Not trimmed**: its `dropped` counts are a record of
+       what that batch threw away, so cutting questions afterwards would make
+       the artefact lie about itself. tests/fixture-corpus.test.ts checks it
+       against the blocks committed beside it: the `sourceHash` is
+       `quizFingerprint(blocks, tree, meta)`, so re-copying this file without
+       its neighbours, or those without it, is red. */
+    "quiz.json",
     /* Not an artefact any more — the `summary` kind went with stage 5e on
        2026-08-31 — but tests/store-artefact-manifest.test.ts enumerates the
        files beside an article and checks each one is either homed or knowingly

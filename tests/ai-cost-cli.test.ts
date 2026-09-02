@@ -117,4 +117,44 @@ describe("the breakdowns", () => {
     );
     expect(groups[0]?.nanos).toBe(4_000);
   });
+
+  it("carries how many calls in the line reported no cost at all", () => {
+    /* **The bug this pins.** `by` threw the unpriced count away, so only the
+       top-level pocket line could say the total was short — a day, a job, a
+       model, an article or an owner could not. GPT Sol's wording for why it
+       matters: *"'chat: $4.20, 16 calls unpriced' is useful; 'chat: $4.20' is
+       false precision."*
+
+       A row with `creditsUsedNanos: null` is a call that happened and reported
+       no money. It is not a free call, and a breakdown that shows it as one is
+       wrong in the direction that looks like good news. */
+    const groups = by(
+      [
+        row({ creditsUsedNanos: 1_000 }),
+        row({ creditsUsedNanos: null }),
+        row({ creditsUsedNanos: null }),
+      ],
+      (r) => r.job,
+    );
+    expect(groups[0]?.nanos).toBe(1_000);
+    expect(groups[0]?.calls).toBe(3);
+    expect(groups[0]?.unpriced).toBe(2);
+  });
+
+  it("keeps the count per line rather than per report", () => {
+    /* The whole point is that the shortfall is attributable. One job's unpriced
+       calls must not be smeared across every line, and a line with none must
+       say zero so that `table` can stay silent about it. */
+    const groups = by(
+      [
+        row({ job: "chat", creditsUsedNanos: null }),
+        row({ job: "pdf", creditsUsedNanos: 2_000 }),
+      ],
+      (r) => r.job,
+    );
+    const chat = groups.find((g) => g.name === "chat");
+    const pdf = groups.find((g) => g.name === "pdf");
+    expect(chat?.unpriced).toBe(1);
+    expect(pdf?.unpriced).toBe(0);
+  });
 });

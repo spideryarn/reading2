@@ -35,7 +35,7 @@ import { formatNanos } from "../src/ai-spend.js";
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
-import { DECLARATIONS } from "../src/spend-declarations.js";
+import { DECLARATIONS, UNMETERED_SPEND } from "../src/spend-declarations.js";
 import { isMain } from "../src/is-main.js";
 
 interface Args {
@@ -113,7 +113,7 @@ export function parseArgs(argv: string[]): Args {
 export function by(
   rows: readonly AiCallRow[],
   key: (r: AiCallRow) => string | null,
-): { name: string; calls: number; nanos: number }[] {
+): Breakdown[] {
   const groups = new Map<string, AiCallRow[]>();
   for (const r of rows) {
     const name = key(r) ?? "—";
@@ -130,19 +130,42 @@ export function by(
          an assertion, which is the same way `formatNanos` was caught rounding a
          real cost to zero. The pocket lines above keep them apart; a *breakdown*
          wants the whole of what a job or a day cost. */
-      const { credits, upstream, computed } = totalRows(list);
-      return { name, calls: list.length, nanos: credits + upstream + computed };
+      const { credits, upstream, computed, unpriced } = totalRows(list);
+      return { name, calls: list.length, nanos: credits + upstream + computed, unpriced };
     })
     .sort((a, b) => b.nanos - a.nanos);
 }
 
-function table(title: string, rows: { name: string; calls: number; nanos: number }[]): void {
+/**
+ * One line of a breakdown — and **`unpriced` is not decoration**.
+ *
+ * `by` computed it and threw it away until 2026-09-02, so a day, a job, a model,
+ * an article or an owner could show a total without being able to say the total
+ * was short. Only the top-level pocket line survived, which is the one place the
+ * shortfall is least useful. GPT Sol's wording for the rule: *"'chat: $4.20, 16
+ * calls unpriced' is useful; 'chat: $4.20' is false precision."*
+ */
+interface Breakdown {
+  name: string;
+  calls: number;
+  nanos: number;
+  /** Calls in this line that happened and reported no money at all. */
+  unpriced: number;
+}
+
+function table(title: string, rows: Breakdown[]): void {
   if (rows.length === 0) return;
   console.log(`\n${title}`);
   const width = Math.min(44, Math.max(...rows.map((r) => r.name.length)));
   for (const r of rows) {
     const name = r.name.length > width ? `${r.name.slice(0, width - 1)}…` : r.name.padEnd(width);
-    console.log(`  ${name}  ${formatNanos(r.nanos).padStart(10)}  ${String(r.calls).padStart(5)} call(s)`);
+    /* Only when it is not zero. A `0 unpriced` on every line is noise that
+       teaches the eye to skip the column, which costs exactly the signal this
+       was added for. */
+    const short = r.unpriced > 0 ? `  ${r.unpriced} unpriced` : "";
+    console.log(
+      `  ${name}  ${formatNanos(r.nanos).padStart(10)}  ${String(r.calls).padStart(5)} call(s)${short}`,
+    );
   }
 }
 
@@ -261,42 +284,63 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
 }
 
 /**
- * **The one hole that is not in `DECLARATIONS`, and cannot be put there.**
+ * **The holes that are not in `DECLARATIONS` and cannot be put there.**
  *
- * Live conversation mode (docs/plans/260831g-live-conversation.md) spends real money
- * that nothing in this report can see. It is not an oversight and it is not a
- * bypass that somebody forgot to declare — a `Declaration` for it **cannot be
- * typed**: `ProviderAccount` is `"openrouter" | "anthropic"` with no
- * `"openai"`, and `Wire` is `"messages" | "chat" | "embeddings"` with no
- * `"realtime"`. So it sits in the scan's `ALLOWED` list in
- * `tests/no-undeclared-spend.test.ts` instead, where a reason is written down
- * and no row is ever produced.
+ * A `Declaration` describes a call that could in principle have gone through one
+ * of this app's two seams: it has a `ProviderAccount` that bills it and a `Wire`
+ * it speaks. Live conversation, its evals and the Codex CLI are none of those —
+ * `ProviderAccount` has no `"openai"`, `Wire` has no `"realtime"`, and
+ * `scripts/run-codex.ts` spawns a subprocess rather than making a request at
+ * all. `UNMETERED_SPEND` in src/spend-declarations.ts is where they are written
+ * down, with the reason each one cannot be declared.
  *
- * **It is printed here anyway, because the alternative is this report lying.**
- * `undeclared()` reads `DECLARATIONS`, so the day the last `metered: false`
- * entry is wired up this script would have printed *"Every known way of
- * spending money in this repo writes a row"* — while a reader could be holding
- * a live conversation that bills audio by the minute into no total at all. A
- * report that goes silently complete while a hole is open is exactly the
- * failure docs/reusable/silent-success.md is about, and this is a report whose
- * whole value is being believed.
+ * **They are printed here because the alternative is this report lying.**
+ * `undeclared()` below reads `DECLARATIONS`, so the day the last
+ * `metered: false` entry is wired up this script would otherwise have printed
+ * *"Every declared way of spending money in this repo writes a row"* — while a
+ * reader could be holding a live conversation billing audio by the minute into
+ * no total at all, and every GPT Sol review on this repo was being bought on a
+ * third account. A report that goes silently complete while a hole is open is
+ * exactly the failure docs/reusable/silent-success.md is about, and this is a
+ * report whose whole value is being believed.
  *
- * Greg accepted the gap knowingly on 2026-08-31, with the ask that it be
- * commented here and in the docs rather than closed now. Closing it is not a
- * fourth `Observer` method: the usage exists only in the reader's browser tab,
- * so it needs a way for a tab to report what it spent and a reason for the
- * server to believe it — live-conversation.md § What is missing.
+ * Until 2026-09-02 only the live-conversation entry was here, and the other two
+ * were named solely in the `ALLOWED` map of tests/no-undeclared-spend.test.ts —
+ * **which prints nothing**. A green test is not a register.
+ *
+ * Greg accepted the live-conversation gap knowingly on 2026-08-31, with the ask
+ * that it be commented here and in the docs rather than closed now.
  */
-function liveConversationGap(): void {
-  console.log("\nNot counted here, and NOT in the table below — live conversation mode:");
-  console.log("  src/live.ts");
+/** Six-space-indented, wrapped to a terminal width — these reasons are sentences, not labels. */
+function wrapped(text: string, width = 84): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (line !== "" && `${line} ${word}`.length > width) {
+      lines.push(`      ${line}`);
+      line = word;
+    } else line = line === "" ? word : `${line} ${word}`;
+  }
+  if (line !== "") lines.push(`      ${line}`);
+  return lines;
+}
+
+function unmetered(): void {
   console.log(
-    "      the audio is a WebRTC connection from the browser straight to OpenAI, so no",
+    `\nNot counted here, and NOT in any table above — ${UNMETERED_SPEND.length} way(s) of spending that no seam can see:`,
   );
-  console.log(
-    "      row is written and no figure above includes it. Accepted 2026-08-31.",
-  );
-  console.log("  docs/plans/260831g-live-conversation.md says what closing it needs.");
+  const today = Date.now();
+  for (const u of UNMETERED_SPEND) {
+    /* The age, for the same reason a declaration's is printed: an admission
+       opened this morning and one open since the spring read the same in a list
+       and are not the same thing. */
+    const days = Math.floor((today - Date.parse(`${u.since}T00:00:00Z`)) / 86_400_000);
+    const age = days <= 0 ? "today" : days === 1 ? "1 day" : `${days} days`;
+    console.log(`  ${u.file}  —  open ${age}`);
+    for (const line of wrapped(`billed to: ${u.account}`)) console.log(line);
+    for (const line of wrapped(u.what)) console.log(line);
+  }
+  console.log("  src/spend-declarations.ts says why none of them can be declared.");
 }
 
 /**
@@ -309,9 +353,8 @@ function liveConversationGap(): void {
  * fails if a way of reaching a provider exists that is not in that table, so
  * this cannot go quietly out of date.
  *
- * It is **not** the whole story on its own — see `liveConversationGap` above,
- * which is why the "everything writes a row" line below is careful to say
- * *declared*.
+ * It is **not** the whole story on its own — see `unmetered` above, which is why
+ * the "everything writes a row" line below is careful to say *declared*.
  */
 function undeclared(): void {
   const open = DECLARATIONS.filter((d) => !d.metered);
@@ -364,7 +407,7 @@ async function main(): Promise<void> {
        being recorded at all", and the list of things that are knowably *not*
        is the most useful thing on the page. It was after the return until GPT
        Sol reproduced the output. */
-    liveConversationGap();
+    unmetered();
     undeclared();
     if (args.reconcile) await reconcile();
     return;
@@ -421,7 +464,7 @@ async function main(): Promise<void> {
         "\n  A read that falls to zero is the cache silently switching off — docs/project/prompt-caching.md.",
     );
 
-  liveConversationGap();
+  unmetered();
   undeclared();
 
   if (args.reconcile) await reconcile();
