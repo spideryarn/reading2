@@ -22,9 +22,14 @@ Cost-tracking and cost-estimating are **out of scope** — other agents are work
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota
 enforcement at the ingest choke points.
 
-**Status (2026-09-02)**: reviewed twice before building — GPT Sol on the plan (verdict: rework —
-[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)), then **Fable against the
-code**, which is the review that changed the design. Sol's hardening was sound but written in
+**Status (2026-09-02)**: reviewed three times before building — GPT Sol on the plan (verdict:
+rework — [review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)), **Fable against
+the code**, and then **Sol again on the quota mechanism alone**
+([review](260902i-quota-admission-design-review-sol.md),
+[prompt](260902i-quota-admission-design-review-prompt.md)) — that last one found a quota bypass and
+three lifecycle races in the design Fable's review had produced, and its findings are in *Quota
+accounting* below. Each round was cheap and each found something the one before could not; the
+pattern is worth copying rather than the specific findings. Sol's hardening was sound but written in
 mechanisms this repo does not use, and one of its rules could not be implemented as stated. Both
 sets of findings are folded in below and marked where they landed. Every product question is
 decided — nothing is waiting on Greg. The first stage is built (✅); the build is in the worktree
@@ -224,34 +229,58 @@ began. Documented in `docs/project/billing.md` rather than left to be discovered
   mutable slug is never its identity. One ledger, every environment — soft-archive is today's
   deletion story but hard deletes exist in maintenance/tests, and one mechanism beats two
   conditional ones.
-- **Durable `counts_as_ingest` provenance on jobs**, set only by the authenticated new-ingest
-  route. `Job.url` cannot carry this — re-runs recover the URL too (`src/jobs.ts` ~`:2068`,
-  checked). A **boolean**, not the nullable-timestamptz the schema's house style prefers for
-  "since when": the fact here is genuinely boolean, and `jobs.created_at` already says when.
-  **Three edits, not one** — the field goes on `EnqueueRequest` (`src/jobs.ts` ~`:1902`), is
-  threaded through `enqueue()` onto the job row, and is copied from the old job by `retryJob`
-  (~`:2558`), which builds a fresh request rather than reusing the old one.
-- **Two callers are deliberately outside the gate.** `POST /api/jobs/:id/retry` is a different
-  route and does not re-admit: the work was admitted once, and charging twice for one article
-  because the first attempt crashed is the wrong answer. CLI and script callers of `enqueue()`
-  never set the flag, so pipeline work and seeding are free. Both are properties to assert in
-  tests, not incidental.
-- **The ledger insert joins the same Postgres transaction** that publishes the revision and
-  finishes the job — `settleIn()` in `pg-session.ts` (~`:423`–`:471`), the `ending.status ===
-  "done"` branch, which is the single place a successful ingest is published and is already
-  wrapped in `db.transaction(…)` by both its callers. After-completion inserts have a crash gap;
-  before-publication inserts charge failures.
-- **Admission is serialised per owner at the route**, not inside the job store: take
-  `for update` on the owner's `billing_accounts` row, count successful events **plus active
-  quota-marked jobs**, then call `enqueue()` while still holding it. Failed/cancelled jobs stop
-  occupying a reservation but never become a success event. This replaces the earlier draft's
-  "small acknowledged race", which Sol correctly called a scripted bypass — N concurrent enqueues
-  against a zero success-count all pass a count-only check — and it replaces Sol's own
-  "insert in the same transaction", which `enqueueOrGet` cannot honour (see the status note).
-- **A stuck job pins a reservation, and that is the safe direction.** A job wedged `queued` or
-  `running` counts against the owner until it settles, so the failure is a *false block* rather
-  than free ingests. The lease machinery already reaps these; the admission count does not
-  second-guess it. Noted rather than solved.
+- **The reservation is written first and settled last.** A row is inserted at admission
+  (`reserved_at`), and gets exactly one of `succeeded_at` or `released_at` when the job ends. So
+  the ledger is both the record of what was charged *and* the mechanism that stops a burst: an
+  unsettled reservation counts against its owner, so a second concurrent request sees the first
+  one whether or not it has reached `enqueue()` yet.
+- **Provenance is `jobs.ingest_event_id`, written by the job's own INSERT.** No boolean on the
+  job, and no `job_id` on the ledger. Sol's third review, 2026-09-02, showed the reverse
+  direction — reserve, enqueue, then `update … set job_id` — is broken three ways: a job that
+  *published before* the follow-up update was never charged (the local pump starts immediately,
+  and an all-cached job finishes in milliseconds); a crash in that gap left a runnable job nobody
+  paid for; and two duplicate Adds that `enqueueOrGet` deduplicates into one job pointed two
+  reservations at it, so one publication settled both. Writing the id in the job's own INSERT is
+  atomic without needing a transaction, which is what makes it fit `enqueueOrGet` as it is.
+  `jobs_ingest_event_unique` (partial, on non-null) makes "one job per slot" a constraint rather
+  than an intention. A **null** id means "spends no quota": CLI work, a step re-run, seeding —
+  they settle nothing, and there was never a flag to forget.
+- **Settlement joins the transaction that ends the job** — `settleIn()` in `pg-session.ts`
+  (~`:423`–`:471`), *both* branches, not just `done`. Sol's finding: releasing from anywhere else
+  loses a race the code deliberately allows. A Stop during the last step may still finish as
+  `done`; if `/cancel` released the reservation from outside, the publication would then find it
+  released and charge nothing. Success and release in the same transaction as the terminal
+  transition means whichever one wins the job fence is the one whose settlement lands.
+- **Admission is serialised per owner at the route**, not inside the job store: `insert … on
+  conflict do nothing` the owner's `billing_accounts` row, `for update` it, count, insert the
+  reservation, commit — then call `enqueue()` outside. **The anchor row is created before it is
+  locked**, because a free reader has no billing row and
+  [a `for update` that matches nothing locks nothing](../postmortems/260901f-a-for-update-that-locks-nothing.md)
+  — which would leave the boundary decorative in exactly the case it exists for. Measured with two
+  real connections on 2026-09-02: the second transaction blocks for as long as the first holds the
+  row, then reads its committed value. `tests/billing-quota-race.test.ts` keeps that measurement.
+  This replaces Sol's own earlier "insert the job in the same transaction", which `enqueueOrGet`
+  cannot honour, and which would deadlock the pool at `DATABASE_POOL_MAX` (5) anyway.
+- **Nothing that opens its own transaction or touches the network may be called between the lock
+  and the commit.** That is the rule that keeps the pool argument true, and it is the one a later
+  change is most likely to break.
+- **An unsettled reservation never expires**, and an earlier draft of this plan gave it six hours.
+  Sol showed that was a plain bypass, not a safety valve: hold 100 jobs queued for six hours,
+  reserve 100 more, and 200 can succeed in one period — repeatable in cohorts, and *easier* the
+  more contended the queue is. So a leaked reservation costs its owner one slot for ever, which is
+  a support conversation; the bypass would have cost unbounded model spend. A reconciliation that
+  frees only reservations *provably* without a job is possible later, because `ingest_event_id`
+  makes "without a job" a query rather than a guess.
+- **Retry is an ordinary admission.** `POST /api/jobs/:id/retry` mints a *fresh* reservation, and
+  the failed attempt's was released when it failed — so a failure costs nothing and the eventual
+  success costs exactly one. No lineage column, no reactivating a released row. An earlier draft
+  exempted retries entirely; Sol was right that a retry which can incur spend must go through the
+  gate.
+
+**Known limit, stated rather than solved**: because a failure releases its slot, a caller who can
+reliably make expensive ingests *fail* can repeat for ever. That is true of every design we
+considered — the quota counts successes because that is the product rule — and the answer when it
+matters is a daily attempt cap, not a change here.
 - **Period arithmetic is half-open on database time**: `succeeded_at >= start AND < end`. If the
   stored period does not contain `now`, resync from Stripe once synchronously; if there is still
   no current period (or Stripe is down), **fail closed with 503** rather than allow spend — a

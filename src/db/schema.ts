@@ -1702,6 +1702,27 @@ export const jobs = spideryarn.table(
      */
     workKey: text("work_key").notNull(),
 
+    /**
+     * **The quota slot this job is spending, or null if it is spending none.**
+     *
+     * Set by the authenticated new-ingest route and written by *this row's own
+     * INSERT*, which is the entire point: the job and its provenance become
+     * true in one statement, so there is no moment where a job exists and
+     * nothing knows to charge for it. Every other shape was broken — see
+     * `ingest_events` § *Provenance lives on the job*.
+     *
+     * Null for everything that must not be charged: pipeline work from the CLI,
+     * a re-run of one step on an article already ingested, seeding. Those
+     * settle nothing, because there is nothing to settle, and no flag anywhere
+     * had to be remembered to make that true.
+     *
+     * **Not a foreign key**, and deliberately: `ingest_events` is the record of
+     * what an account was charged for, jobs are reader-deletable, and a
+     * cascade in either direction would be wrong. It is a plain uuid, exactly
+     * as `owner_id` is.
+     */
+    ingestEventId: uuid("ingest_event_id"),
+
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -1787,6 +1808,22 @@ export const jobs = spideryarn.table(
     uniqueIndex("jobs_active_slug")
       .on(t.ownerId, t.slug)
       .where(sql`${t.status} in ('queued','running')`),
+    /**
+     * **One job per quota slot, enforced rather than intended.**
+     *
+     * A slot buys one ingest. Without this, two jobs carrying one
+     * `ingest_event_id` would each be able to settle it, and the failure is
+     * silent in the direction that costs money: the second publication finds
+     * the row already `succeeded_at` and charges nothing. Unique rather than a
+     * plain index so that the mistake is a constraint violation at the insert,
+     * where somebody is looking.
+     *
+     * Partial, because null means "spends no quota" and there are a great many
+     * of those — every CLI run and every step re-run.
+     */
+    uniqueIndex("jobs_ingest_event_unique")
+      .on(t.ingestEventId)
+      .where(sql`${t.ingestEventId} is not null`),
   ],
 );
 
@@ -2995,5 +3032,206 @@ export const checkpoints = spideryarn.table(
     check("checkpoints_key_format", sql`${t.key} ~ '^[a-z0-9][a-z0-9_-]{0,127}$'`),
     /** The sweep's only query. */
     index("checkpoints_last_used_at").on(t.lastUsedAt),
+  ],
+);
+
+/* --------------------------------------------------------------- billing -- */
+
+/**
+ * **One row per owner, and every owner gets one** — the anchor the ingest quota
+ * serialises on, whether or not anybody has ever paid.
+ *
+ * docs/project/billing.md, and
+ * docs/plans/260902i-stripe-payments-and-subscription-tiers.md.
+ *
+ * ## Why a free reader has a row here
+ *
+ * It reads like waste — a table of subscriptions holding rows for people with
+ * no subscription — and it is the whole reason the quota cannot be bypassed.
+ * Admission takes `select … for update` on this row so that concurrent requests
+ * for one owner are counted one at a time, and **a row lock is taken on rows
+ * the statement returns, so a `for update` that matches nothing locks nothing**
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md). The free tier
+ * is exactly where the boundary matters, so exactly there the row must exist.
+ * Admission creates it with `on conflict do nothing` and then locks it, which
+ * is that postmortem's prescribed shape; measured on 2026-09-02, a second
+ * transaction blocks for as long as the first holds it and then reads the
+ * first's committed value.
+ *
+ * It is also where a comp subscription will live — a journalist given a free
+ * month has no Stripe subscription at all, so there is nowhere else to put it.
+ *
+ * ## What is stored, and what is deliberately not
+ *
+ * Opaque Stripe ids and the few fields entitlement is derived from. **No card
+ * data, ever** — hosted Checkout and the hosted Customer Portal mean none of it
+ * reaches this server, which is what keeps us in Stripe's lightest PCI scope.
+ * `status` is raw Stripe text rather than an enum or a CHECK: entitlement comes
+ * from an allowlist in src/billing/tiers.ts, so a status Stripe invents next
+ * year falls to the free tier instead of failing an insert inside a webhook.
+ */
+export const billingAccounts = spideryarn.table(
+  "billing_accounts",
+  {
+    /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").primaryKey(),
+    /**
+     * The Stripe customer, once one exists. Nullable because admission creates
+     * this row long before anybody visits Checkout, and **unique** because two
+     * owners sharing a customer would cross two people's billing — Postgres
+     * allows many nulls under a unique constraint, which is exactly the
+     * behaviour wanted here.
+     */
+    stripeCustomerId: text("stripe_customer_id").unique(),
+    /** The current subscription, if any. Unique for the same reason. */
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    /** Which price it is on — the key into the tier map. */
+    priceId: text("price_id"),
+    /** Raw Stripe status. See the header: an allowlist decides, not this column. */
+    status: text("status"),
+    /**
+     * The billing period, **read from the subscription item rather than the
+     * subscription** — Stripe's Basil release (2025-03-31) removed these from
+     * the Subscription object. Half-open `[start, end)` everywhere that reads
+     * them. src/billing/stripe.ts pins the API version that keeps this true.
+     */
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    /** Cancelled, but paid up until the period ends — still entitled until then. */
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    /**
+     * Which side of Stripe's test/live divide this row came from.
+     *
+     * Stored rather than inferred so that a row written by a misconfigured
+     * deployment can be *seen* afterwards. A production deployment on a test
+     * key would write `false` here while granting real quota, and this column
+     * is the only thing that would say so — src/billing/stripe.ts refuses such
+     * a key, and this is the record of what happened if it ever did not.
+     */
+    livemode: boolean("livemode"),
+    /** When Stripe was last asked. Diagnostic; entitlement never reads it. */
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /* A period that ends before it starts would make every half-open count
+       empty, which reads as "no ingests used" rather than as an error. */
+    check(
+      "billing_accounts_period_order",
+      sql`${t.currentPeriodStart} is null or ${t.currentPeriodEnd} is null or ${t.currentPeriodStart} < ${t.currentPeriodEnd}`,
+    ),
+    /* A subscription belongs to a customer. A row with the second and not the
+       first could only come from a bug, and it would leave the customer→owner
+       mapping — the authoritative one — unreachable from the subscription. */
+    check(
+      "billing_accounts_subscription_needs_customer",
+      sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
+    ),
+  ],
+);
+
+/**
+ * **Every new ingest an owner is charged for, reserved before it runs and
+ * settled when it ends.** One row per *attempt to spend* — not per article, and
+ * not per job.
+ *
+ * ## Why this is not a count of jobs, or of articles
+ *
+ * Jobs are reader-deletable (`DELETE /api/jobs/:id`), so a quota derived from
+ * job rows is erasable by the person being counted — which is the one thing an
+ * abuse boundary may not be. Articles answer a different question again: they
+ * can be archived, and deleting one does not refund the slot. Nothing deletes
+ * from this table.
+ *
+ * ## The three timestamps, and why they are not one status column
+ *
+ * `reserved_at` is set at admission, inside the transaction holding the owner's
+ * `billing_accounts` lock — that write is what makes a second concurrent
+ * request see the first one. `succeeded_at` is set in the *same* Postgres
+ * transaction that publishes the revision (src/store/pg-session.ts `settleIn`,
+ * the `done` branch), so there is no window in which an ingest has succeeded
+ * and not been counted, and none in which a failure has been charged.
+ * `released_at` is set when the job fails or is cancelled.
+ *
+ * Nullable timestamps rather than a status enum because a nullable timestamp
+ * says more than a boolean (docs/project/sql.md): each of these is genuinely an
+ * event with a moment, they can be read independently, and there is no second
+ * column to disagree with the first. The CHECK below rules out the one
+ * combination that is not a state.
+ *
+ * ## Usage, and why an unsettled reservation never expires
+ *
+ * An owner's usage is successes inside the period **plus** every reservation
+ * that has not settled:
+ *
+ *     succeeded_at >= start and succeeded_at < end        -- charged
+ *     succeeded_at is null and released_at is null        -- in flight
+ *
+ * **There is deliberately no age limit on the second clause**, and an earlier
+ * draft of this table had a six-hour one. GPT Sol's review, 2026-09-02, showed
+ * it was a straightforward bypass rather than a safety valve: with a limit of
+ * 100, hold 100 jobs queued for six hours, reserve 100 more, and all 200 can
+ * then succeed inside one period — repeatable in cohorts, and *easier* the more
+ * contended the job queue is, because contention is what ages the queue. Any
+ * expiry rule has to be able to prove the reservation never produced a job, and
+ * the honest v1 answer is not to have one: a leaked reservation costs its owner
+ * one slot, which is a support conversation, and the bypass costs unbounded
+ * model spend, which is the thing this table exists to stop.
+ *
+ * The leak needs the process to die between the reservation committing and
+ * `enqueue()` returning — every other path releases it. A reconciliation that
+ * frees only reservations *provably* without a job is possible later, because
+ * `jobs.ingest_event_id` makes "without a job" a query rather than a guess.
+ *
+ * ## Provenance lives on the job, not here
+ *
+ * The link is `jobs.ingest_event_id`, written by the same INSERT that creates
+ * the job, and this table has no `job_id` column. That direction is the whole
+ * safety argument, and the other way round was broken three ways: a job that
+ * published before a follow-up `update … set job_id` landed was never charged;
+ * a crash in that gap left a runnable job nobody paid for; and two duplicate
+ * Adds that `enqueueOrGet` deduplicates into one job would have pointed two
+ * reservations at it, so one publication settled both.
+ *
+ * A job with a null `ingest_event_id` — pipeline work from the CLI, a re-run of
+ * one step, seeding — settles nothing and is therefore free. That is the entire
+ * provenance mechanism: no flag to set, and none to forget.
+ */
+export const ingestEvents = spideryarn.table(
+  "ingest_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** `auth.users(id)`. FK in the custom migration. */
+    ownerId: uuid("owner_id").notNull(),
+    reservedAt: timestamp("reserved_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set inside the publish transaction. Null until the ingest succeeds. */
+    succeededAt: timestamp("succeeded_at", { withTimezone: true }),
+    /** Set when the job failed, was cancelled, or never became a job at all. */
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * What the article was called at the time — **diagnostic only**. A slug is
+     * mutable, so it could never be this row's identity; it is here so that a
+     * support conversation about "which article was that" has an answer.
+     */
+    slug: text("slug"),
+  },
+  (t) => [
+    /* A reservation settles once, and only one way. `num_nonnulls` rather than
+       a pair of `is null` disjunctions because it says the rule rather than
+       encoding it — GPT Sol, 2026-09-02. In the database rather than in
+       TypeScript because three separate code paths write these columns, and a
+       rule that lives in one of them is not a rule. */
+    check("ingest_events_settled_once", sql`num_nonnulls(${t.succeededAt}, ${t.releasedAt}) <= 1`),
+    /* Neither terminal moment can precede the reservation it settles. Cheap,
+       and it is the constraint that would catch a clock or a code path writing
+       one of these from somewhere unexpected. */
+    check(
+      "ingest_events_settled_after_reserved",
+      sql`(${t.succeededAt} is null or ${t.succeededAt} >= ${t.reservedAt})
+          and (${t.releasedAt} is null or ${t.releasedAt} >= ${t.reservedAt})`,
+    ),
+    /* The admission query, which runs on the critical path of every ingest. */
+    index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),
   ],
 );
