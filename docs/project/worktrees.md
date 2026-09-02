@@ -22,7 +22,8 @@ What is built:
 | | |
 |---|---|
 | [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — so a `SIGKILL`ed holder leaves a file a human must `rm`, and the error message says which. Deliberate: never two writers. |
-| [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()` for the sweep that does not exist yet. |
+| [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()`, which the sweep now uses. |
+| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed, and the removal of one that has. Owns only what one tree cannot see — enumeration, ghosts, the 24h age floor — and asks `worktree:check` everything else. See [Sweeping them up](#sweeping-them-up). |
 | [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts **`dev` alone** since the flip, and refuses `main` and any `worktree-*` branch by name. Plus `trunkGap`, below. |
 | the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, and fails closed if the trunk cannot be read. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
@@ -285,8 +286,43 @@ discovered: file modes under `data/`, a commit reachable only through this workt
 session's context.
 
 It answers for the tree you are standing in and takes no arguments. For every tree at once, and for
-the removal itself, see [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) — it calls
-`blockers(gather(path))` here rather than keeping a cheaper copy of the same judgement.
+the removal itself, see below — the sweep calls `blockers(gather(path))` here rather than keeping a
+cheaper copy of the same judgement.
+
+### Sweeping them up
+
+```bash
+npm run worktree:sweep                                    # read-only. Deletes nothing.
+npm run worktree:sweep -- remove --branch <name> --dry-run
+npm run worktree:sweep -- remove --branch <name>
+```
+
+**`remove` takes one branch and has no bulk form**, and re-runs the whole classification — fresh
+fetch included — before each deletion, so a verdict cannot be carried from an earlier decision into a
+later removal. Three things it owns that `worktree:check` deliberately does not, because they need the
+primary's vantage point or would be wrong inside a single tree:
+
+- **Ghosts** — a registration whose directory is gone. Unregistered, but its **branch is left alone**:
+  the tree is gone, and its commits are not this command's to judge.
+- **You are standing in it.**
+- **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
+  is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals
+  the trunk passes the merged check trivially, and since `worktree:setup` merges `origin/dev` that is
+  the *normal* state of every worktree here for its first day. `worktree:check` has no age floor and
+  should not — asked inside a three-hour-old landed tree it is right to say "safe", because the person
+  standing in it knows whether they are done.
+
+Two things worth knowing about how it is wired:
+
+**It fetches once, not once per tree.** `gather()` fetches the trunk for itself, which is right for
+one tree and is one shared ref fetched thirty times across thirty. The sweep calls `fetchTrunkSha`
+once and passes the **sha** down — a sha and not a ref name, because a ref can be moved under you by
+any peer between the fetch and the test, which is the hazard `FETCH_HEAD` was chosen to dodge. A
+failed central fetch makes every tree `UNKNOWN`, never removable.
+
+**A tree it cannot read is `UNKNOWN`, kept, and still printed.** One tree's failure never costs you
+the others' answers, and a tree that silently dropped out of the list would be the failure mode where
+success is the absence of something.
 
 ## The database: one stack, and a lease
 
@@ -649,7 +685,11 @@ moment that flipped. Either spelling lands on `dev` today.
   trunk by fast-forward, which writes no commit at all. Solved without the recorded creation timestamp
   this trap used to ask for: `lastActivityAt` in
   [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) takes the **branch reflog's** top
-  entry too — that moves when the branch is created and on every merge — and uses whichever is later.
+  entry too — that moves when the branch is created and on every merge — and the mtime of the
+  worktree's own `.git/worktrees/<name>`, which is the only one of the three a **detached** worktree
+  has. Without that third signal a detached tree checked out from an old commit is born looking
+  abandoned, which is this same trap arriving through the one door the reflog does not cover. Latest
+  of the three wins.
 - **`git diff origin/dev..HEAD` in a worktree shows other agents' landed commits as your deletions.**
   Two dots is a live comparison against wherever `origin/dev` has reached, so every commit it has that
   you do not reads as a deletion on your side. Use `git diff origin/dev...HEAD`, three dots, which

@@ -444,19 +444,52 @@ export function hiddenFromStatus(lsFilesV: string): string[] {
  * kills it, and a killed process is not a successful one.
  */
 export function standingAgainstTrunk(root: string, trunk: string = TRUNK_BRANCH): TrunkStanding {
+  const sha = fetchTrunkSha(root, trunk);
+  if (sha.kind === "failed") return { kind: "unknown", why: sha.why };
+  return standingAgainstSha(root, sha.sha);
+}
+
+/** A trunk sha that a fetch has **just** produced, or why it could not be got. */
+export type TrunkSha = { kind: "sha"; sha: string } | { kind: "failed"; why: string };
+
+/**
+ * Fetch the trunk and return the commit that fetch actually retrieved.
+ *
+ * Split out so a caller with many worktrees can fetch **once** — see
+ * `scripts/worktree-sweep.ts`, where `gather()` in a loop would otherwise fetch
+ * one shared ref once per tree, serially, over the network.
+ *
+ * The sha is resolved here, from this worktree's `FETCH_HEAD`, and not left to
+ * the caller to look up afterwards. That is the whole point of the shape: the
+ * value that gets used to justify a deletion has to come from a fetch we just
+ * did, never from a remote-tracking ref that a remapped or absent
+ * `remote.origin.fetch` refspec left untouched by a perfectly successful fetch
+ * (GPT Sol, finding 4). A sha travels safely between worktrees because they
+ * share one object store; a *ref name* would not.
+ */
+export function fetchTrunkSha(root: string, trunk: string = TRUNK_BRANCH): TrunkSha {
   const fetched = run(root, ["fetch", "origin", `refs/heads/${trunk}`], 120_000);
   if (!fetched.ok) {
-    return { kind: "unknown", why: `git fetch origin refs/heads/${trunk} failed: ${fetched.out.split("\n").slice(-3).join(" ")}` };
+    return { kind: "failed", why: `git fetch origin refs/heads/${trunk} failed: ${fetched.out.split("\n").slice(-3).join(" ")}` };
   }
-
   const head = run(root, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"]);
-  if (!head.ok) return { kind: "unknown", why: `the fetch reported success but FETCH_HEAD does not resolve: ${head.out}` };
+  if (!head.ok) return { kind: "failed", why: `the fetch reported success but FETCH_HEAD does not resolve: ${head.out}` };
+  return { kind: "sha", sha: head.out };
+}
 
-  const ancestor = run(root, ["merge-base", "--is-ancestor", "HEAD", "FETCH_HEAD"]);
+/**
+ * The comparison half, against a sha somebody has already fetched.
+ *
+ * Takes a **sha rather than a ref name** on purpose: a ref could be moved under
+ * us between the fetch and the test by any peer in any worktree, which is the
+ * hazard `FETCH_HEAD` was chosen to dodge in the first place. A sha cannot move.
+ */
+export function standingAgainstSha(root: string, trunkSha: string): TrunkStanding {
+  const ancestor = run(root, ["merge-base", "--is-ancestor", "HEAD", trunkSha]);
   if (ancestor.status === 0) return { kind: "landed" };
   if (ancestor.status !== 1) return { kind: "unknown", why: `git merge-base exited ${ancestor.status}: ${ancestor.out}` };
 
-  const log = run(root, ["log", "--oneline", "--no-decorate", "FETCH_HEAD..HEAD"]);
+  const log = run(root, ["log", "--oneline", "--no-decorate", `${trunkSha}..HEAD`]);
   if (!log.ok) return { kind: "unknown", why: `HEAD is not on the trunk, and git log could not say what is missing: ${log.out}` };
   return { kind: "ahead", commits: log.out === "" ? ["(git log listed nothing, which should not happen)"] : log.out.split("\n") };
 }
@@ -552,7 +585,14 @@ function corpusHalf(t: IgnoredTriage, root: string, linked: boolean, p: string):
   else t.unexplained.push(...strays);
 }
 
-export function gather(root: string): CheckFacts {
+/**
+ * Everything the judgement needs, for one tree.
+ *
+ * `trunkSha` is optional and skips the fetch: pass one when you are gathering
+ * across many worktrees and have already fetched (`fetchTrunkSha`). Omit it and
+ * this fetches for itself, which is what the single-tree CLI wants.
+ */
+export function gather(root: string, trunkSha?: string): CheckFacts {
   let linked = false;
   try {
     linked = inLinkedWorktree(root);
@@ -579,7 +619,7 @@ export function gather(root: string): CheckFacts {
     dirty,
     hidden,
     ...triaged,
-    trunk: standingAgainstTrunk(root),
+    trunk: trunkSha === undefined ? standingAgainstTrunk(root) : standingAgainstSha(root, trunkSha),
   };
 }
 
