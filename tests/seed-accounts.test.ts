@@ -14,11 +14,12 @@ import { describe, expect, it } from "vitest";
 
 import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
-import { mkdtempSync, chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  adminEmailPath,
   SEEDED_ACCOUNTS,
   adminPasswordPath,
   planAccountEmail,
@@ -31,6 +32,7 @@ import {
   readPasswordVerdict,
   refuseMismatchedStack,
   refuseNonLocalSeed,
+  writeAdminEmail,
 } from "../scripts/seed-accounts.js";
 
 const NOTHING_SET = {} as Record<string, string | undefined>;
@@ -264,6 +266,100 @@ describe("readAdminCredentials", () => {
        password file behind would make the SECOND run succeed, against an account
        that still does not exist. */
     expect(existsSync(adminPasswordPath(dir))).toBe(false);
+  });
+
+  it("prefers the address this MACHINE recorded over this checkout's constant", () => {
+    /* The bug this exists for: on 2026-09-02 the constant was renamed, and every
+       checkout behind that commit went on typing the old address at a database
+       that no longer had it. A checkout standing anywhere reads the same file. */
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    writeAdminEmail(dir, "whatever-this-machine-actually-has@spideryarn.local");
+
+    const found = readAdminCredentials(dir);
+
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.email).toBe("whatever-this-machine-actually-has@spideryarn.local");
+    expect(found.email).not.toBe(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("falls back to the constant on a machine seeded before the file existed", () => {
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    /* No email file — every machine seeded before 2026-09-02. Old behaviour. */
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.email).toBe(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("ignores a recorded value that is not an address", () => {
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    writeFileSync(adminEmailPath(dir), "\n");
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.email).toBe(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("keeps the recorded address readable only by its owner", () => {
+    const dir = home();
+    writeAdminEmail(dir, ADMIN_EMAIL_LOCAL);
+    expect(statSync(adminEmailPath(dir)).mode & 0o777).toBe(0o600);
+  });
+
+  it("offers the checkout's constant as a second candidate when they differ", () => {
+    /* The recorded address is a hint. If it is stale — a seed that renamed the
+       row and could not write, or two seeds racing — the caller still has the
+       constant to fall back on, so the file can never be worse than no file. */
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    writeAdminEmail(dir, "recorded@spideryarn.local");
+
+    const found = readAdminCredentials(dir);
+
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.email).toBe("recorded@spideryarn.local");
+    expect(found.alsoTry).toBe(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("offers no second candidate when the record agrees with the constant", () => {
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    writeAdminEmail(dir, ADMIN_EMAIL_LOCAL);
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.alsoTry).toBeUndefined();
+  });
+
+  it("THROWS when it cannot record the address, rather than reporting success", () => {
+    /* The failure that makes the file worse than the constant: the seed renames
+       the row, cannot overwrite an older address here, swallows it, and every
+       reader then prefers the stale one. Silent is the one thing this must not
+       be. GPT Sol, finding 1. */
+    const dir = home();
+    const conf = path.join(dir, ".config", "spideryarn");
+    mkdirSync(conf, { recursive: true });
+    chmodSync(conf, 0o500);
+    try {
+      expect(() => writeAdminEmail(dir, ADMIN_EMAIL_LOCAL)).toThrow();
+    } finally {
+      chmodSync(conf, 0o700);
+    }
+  });
+
+  it("ignores a torn half-written address", () => {
+    const dir = home();
+    readOrCreateAdminPassword(dir);
+    writeFileSync(adminEmailPath(dir), "dev-admin@");
+    const found = readAdminCredentials(dir);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.email).toBe(ADMIN_EMAIL_LOCAL);
   });
 
   it("refuses a truncated file, and still writes nothing", () => {

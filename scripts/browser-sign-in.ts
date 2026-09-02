@@ -68,12 +68,18 @@
  */
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Browser, BrowserContext, Page, Response } from "playwright-core";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { isMain } from "../src/is-main.js";
 import { readAdminCredentials } from "./seed-accounts.js";
+import { inLinkedWorktree, PRIMARY_PORT } from "./worktree-port.js";
+
+/** This file's own directory — see `baseUrl`, which must not trust `cwd`. */
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * System Chrome, named explicitly, because a bare `chromium.launch()` asks for
@@ -108,9 +114,60 @@ export function chromePath(): string {
  * saying much when another agent in this shared tree already holds the port, and
  * a check pointed at the wrong one fails in a way that reads as a broken app —
  * docs/project/browser-testing.md § and check the port, not just the server.
+ *
+ * ## In a worktree it refuses rather than defaulting
+ *
+ * 5273 is the **primary checkout's** port. A worktree that takes the default is
+ * therefore testing the primary's dev server — someone else's code — and gets a
+ * cheerful `ok` for it. Nothing about the number says whose tree it is, so the
+ * mistake is unobservable in the output; measured on 2026-09-02, *no* worktree
+ * on this box was running a dev server at all, so every browser check run from
+ * one had exercised none of its own changes.
+ *
+ * Refusing rather than warning, because the reader of this line is an agent
+ * moving quickly, and a warning above a success line is still a success line.
+ * The precedent is `parseDevPortEnv` in scripts/worktree-port.ts, which throws
+ * on a set-but-unusable port rather than falling back to a working default.
+ *
+ * Auto-detecting the worktree's own port would be better and cannot be done
+ * honestly yet: the port is allocated dynamically by vite with nothing recording
+ * it, so a probe can find *a* server but never *your* server. The identity
+ * endpoint that would fix that is item 4 of docs/plans/260828r-worktrees.md and
+ * is unbuilt. When it lands, this should become detection instead of refusal.
  */
-export function baseUrl(): string {
-  return process.env.SPIDERYARN_BASE_URL ?? "http://localhost:5273";
+export function baseUrl(from: string = SCRIPT_DIR): string {
+  const set = process.env.SPIDERYARN_BASE_URL;
+  if (set !== undefined && set !== "") return set;
+
+  /* Asked of **this file's** directory, not the process's cwd. cwd can be
+     anywhere — a library consumer, a test runner, `/` — and a cwd git cannot
+     place used to leave `linked` false and hand back the primary's port, which
+     is the exact silent success this guard exists to stop (GPT Sol, finding 2).
+     Where the script lives is what decides which checkout it belongs to. */
+  let linked: boolean;
+  try {
+    linked = inLinkedWorktree(from);
+  } catch (err) {
+    throw new Error(
+      `cannot tell which checkout ${from} belongs to, so refusing to guess a dev server.\n` +
+        `  ${(err as Error).message}\n` +
+        "  Name it explicitly: SPIDERYARN_BASE_URL=http://localhost:<port>",
+    );
+  }
+  if (linked) {
+    throw new Error(
+      `refusing to default to http://localhost:${PRIMARY_PORT} from inside a worktree.\n` +
+        `  ${PRIMARY_PORT} is the PRIMARY checkout's dev server, so this would test somebody\n` +
+        "  else's code and call it ok. Start your own and point at it:\n" +
+        "\n" +
+        "      npm run dev                     # in this worktree; it prints the port it took\n" +
+        "      SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/browser-sign-in.ts\n" +
+        "\n" +
+        "  If you really do mean the primary's server, say so explicitly with the same\n" +
+        `  variable: SPIDERYARN_BASE_URL=http://localhost:${PRIMARY_PORT}`,
+    );
+  }
+  return `http://localhost:${PRIMARY_PORT}`;
 }
 
 /**
@@ -126,10 +183,12 @@ export function devCredentials(home: string = homedir()): {
   email: string;
   password: string;
   id: string;
+  /** A second address to try if the first is refused. See `AdminCredentials`. */
+  alsoTry?: string | undefined;
 } {
   const found = readAdminCredentials(home);
   if (!found.ok) throw new Error(found.why);
-  return { email: found.email, password: found.password, id: ADMIN_USER_ID_LOCAL };
+  return { email: found.email, password: found.password, id: ADMIN_USER_ID_LOCAL, alsoTry: found.alsoTry };
 }
 
 /**
@@ -172,7 +231,36 @@ export interface SignedIn {
  * button, so there is a click before there is a field.
  */
 export async function signIn(page: Page, base: string = baseUrl()): Promise<SignedIn> {
-  const { email, password, id } = devCredentials();
+  const { email, password, id, alsoTry } = devCredentials();
+  /* Try what this machine recorded, then the constant this checkout was built
+     with. The recorded address is a hint, not an authority: it can be stale — a
+     seed that renamed the row and could not write the file, or two seeds racing
+     through a rename — and nothing here has the privileged access it would take
+     to ask the database which is right. Trying both is what guarantees the file
+     can never leave us worse off than the constant alone. GPT Sol, findings 1
+     and 3. Only on a refusal, so the ordinary path is still one attempt. */
+  const attempts = alsoTry === undefined ? [email] : [email, alsoTry];
+  let refusal: Error | undefined;
+  for (const [i, candidate] of attempts.entries()) {
+    try {
+      return await attemptSignIn(page, base, candidate, password, id);
+    } catch (err) {
+      refusal = err as Error;
+      const isCredentialRefusal = /Invalid login credentials/i.test(refusal.message);
+      if (!isCredentialRefusal || i === attempts.length - 1) throw refusal;
+    }
+  }
+  /* Unreachable: the loop either returns or throws. */
+  throw refusal ?? new Error("no sign-in was attempted");
+}
+
+async function attemptSignIn(
+  page: Page,
+  base: string,
+  email: string,
+  password: string,
+  id: string,
+): Promise<SignedIn> {
   const started = Date.now();
 
   await page.goto(new URL("/login", base).href, { waitUntil: "domcontentloaded" });
@@ -183,8 +271,20 @@ export async function signIn(page: Page, base: string = baseUrl()): Promise<Sign
   /* Both armed BEFORE the click. Either can answer before an `await` on the
      click resolves, and a listener attached afterwards would wait 30s for a
      response that had already been and gone. */
+  /* `grant_type=password`, not any `/auth/v1/token` call. A context with a
+     persisted session refreshes on its own, and a refresh for the expected admin
+     arriving alongside a password sign-in as somebody else would satisfy the id
+     check below while leaving the page signed in as that somebody else.
+     `signedInBrowser` makes a fresh context so it never saw this; exported
+     `signIn(page)` takes whatever page it is handed. GPT Sol, finding 4. */
   const grant = page
-    .waitForResponse((r: Response) => r.url().includes("/auth/v1/token"), { timeout: 30_000 })
+    .waitForResponse(
+      (r: Response) => {
+        const u = new URL(r.url());
+        return u.pathname.endsWith("/auth/v1/token") && u.searchParams.get("grant_type") === "password";
+      },
+      { timeout: 30_000 },
+    )
     .then(async (r) => ({ status: r.status(), body: await r.text() }))
     .catch(() => undefined);
   const library = page
@@ -224,8 +324,20 @@ export async function signIn(page: Page, base: string = baseUrl()): Promise<Sign
   if (outcome.kind === "alert") {
     throw new Error(
       `sign-in was refused: ${outcome.body.trim()}\n` +
-        "  If that is `Invalid login credentials`, the account and the password file have\n" +
-        "  drifted apart — run `npm run db:seed-owner`, which sets it and says what it did.\n" +
+        `  as ${email} at ${base}\n` +
+        "\n" +
+        "  If that is `Invalid login credentials`, the likeliest cause is a checkout that\n" +
+        "  is behind the trunk. The seeded account's address is a constant in this\n" +
+        "  checkout's code, and it was renamed on 2026-09-02 — so a stale copy types an\n" +
+        "  address the database no longer has. Bring the tree level and try again:\n" +
+        "      git fetch origin dev && git merge origin/dev      # or: npm run worktree:setup\n" +
+        "\n" +
+        "  If the tree is already level, the account and the password file have drifted\n" +
+        "  apart — run `npm run db:seed-owner` **from the primary checkout**, which sets it\n" +
+        "  and says what it did. Not from a worktree: a stale one runs the seeding code of\n" +
+        "  its own commit against the shared database, and re-creates whatever account that\n" +
+        "  commit believed in.\n" +
+        "\n" +
         "  If it mentions a rate limit, that is 30 sign-ins per five minutes on the local\n" +
         "  stack (supabase/config.toml). Wait five minutes; nothing here can hurry it.",
     );
@@ -413,15 +525,19 @@ async function open(page: Page, target: string): Promise<string[]> {
 }
 
 if (isMain(import.meta.url)) {
-  const base = flag("base") ?? baseUrl();
   const at = flag("at");
   const shot = flag("shot");
   let session: SignedInBrowser | undefined;
+  /* `baseUrl()` refuses inside a worktree, and that refusal is a message worth
+     reading rather than a stack trace. It is computed inside the try for that
+     reason alone — every other failure already lands in the same handler. */
+  let base = "(not resolved)";
   try {
+    base = flag("base") ?? baseUrl();
     session = await signedInBrowser({ base });
     const { page, who } = session;
     const lines = [
-      `ok  signed in as ${who.email} (${who.id}) in ${who.ms}ms, ` +
+      `ok  signed in as ${who.email} (${who.id}) at ${base} in ${who.ms}ms, ` +
         `GET /api/library → 200 with ${who.articles} article(s)`,
     ];
 
