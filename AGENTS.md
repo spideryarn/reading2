@@ -187,6 +187,11 @@ actually reaches is not always the one on its command line, and both mistakes pr
 - **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
   on the Hetzner remote box — [hetzner-remote-server-box.md](docs/project/hetzner-remote-server-box.md); `/Users/greg/` means
   you are on Greg's Mac.
+- **Use a worktree for anything non-trivial.** `claude --worktree <name>`, then
+  `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
+  [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in
+  your files and most of the sharing below stops applying to you. A one-line fix or a doc edit can
+  stay in the shared tree.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
@@ -195,7 +200,6 @@ actually reaches is not always the one on its command line, and both mistakes pr
   production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
   deploy to real readers, and **nothing mechanical stops you**:
   [version-control.md § What protects `main`](docs/project/version-control.md#what-protects-main-and-what-does-not).
-  We are also setting up a worktree per agent, so the sharing above gets less painful.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
